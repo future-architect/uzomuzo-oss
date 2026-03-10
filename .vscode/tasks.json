@@ -1,0 +1,64 @@
+{
+	// Deduplicated, cross-platform tasks with inputs
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run batch",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"${input:targets}",
+				"${input:sampleSize}"
+			],
+				// OS-specific shells to ensure consistent behavior
+				"windows": {
+					"options": {
+						"shell": {
+							"executable": "pwsh.exe"
+						}
+					}
+				},
+				"linux": {
+					"options": {
+						"shell": {
+							"executable": "/bin/bash"
+						}
+					}
+				},
+			"options": {
+				"env": {
+					"LOG_LEVEL": "${input:logLevel}"
+				}
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": [],
+			"detail": "Runs the CLI with customizable inputs and sample size (works on Windows and Linux)"
+		}
+	],
+	"inputs": [
+		{
+			"id": "targets",
+			"type": "promptString",
+			"description": "Enter inputs: file path (e.g., ./testdata/test_max.txt) or one/more PURLs/URLs",
+			"default": "./testdata/test_max.txt"
+		},
+		{
+			"id": "sampleSize",
+			"type": "promptString",
+			"description": "Sample size (integer). Use 0 or leave empty for no sampling",
+			"default": "500"
+		},
+		{
+			"id": "logLevel",
+			"type": "pickString",
+			"description": "Log level",
+			"options": ["info", "debug"],
+			"default": "info"
+		}
+	]
+}

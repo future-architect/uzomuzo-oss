@@ -1,0 +1,14 @@
+## Custom alias additions for SPDX normalization
+# Format: alias: canonical-ID
+# Lines beginning with # are comments.
+
+Apache License Version 2.0: Apache-2.0
+Apache License 2.0: Apache-2.0
+Apache 2.0: Apache-2.0
+MIT License: MIT
+BSD 3-Clause License: BSD-3-Clause
+BSD 3-Clause: BSD-3-Clause
+Mozilla Public License 2.0: MPL-2.0
+MPL 2.0: MPL-2.0
+GNU General Public License v3: GPL-3.0-only
+GNU General Public License v3.0: GPL-3.0-only

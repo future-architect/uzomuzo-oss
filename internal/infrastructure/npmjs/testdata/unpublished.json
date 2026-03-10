@@ -1,0 +1,6 @@
+{
+  "versions": {
+    "2.0.0": {}
+  },
+  "time": { "unpublished": { "name": "oldpkg" } }
+}

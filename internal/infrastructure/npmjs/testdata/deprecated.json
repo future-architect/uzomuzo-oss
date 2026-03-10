@@ -1,0 +1,6 @@
+{
+  "versions": {
+    "1.2.3": { "deprecated": "Use @scope/newpkg instead" }
+  },
+  "time": {}
+}

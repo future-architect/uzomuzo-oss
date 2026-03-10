@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -q '\\.github/instructions/'; then make -C \"$(git rev-parse --show-toplevel)\" sync-instructions >&2; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

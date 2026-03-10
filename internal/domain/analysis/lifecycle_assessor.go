@@ -1,0 +1,318 @@
+// Package analysis implements lifecycle assessment domain service logic.
+package analysis
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	cfg "github.com/future-architect/uzomuzo/internal/domain/config"
+)
+
+// LifecycleAssessmentRules holds runtime thresholds (config-driven) for lifecycle assessment decisions.
+type LifecycleAssessmentRules struct {
+	RecentStableWindowDays     int
+	RecentPrereleaseWindowDays int
+	MaxHumanCommitGapDays      int
+	LegacyFrozenYears          int
+	EolInactivityDays          int
+	MaintenanceScoreMin        float64
+	VulnerabilityScoreGoodMin  float64
+	VulnerabilityScorePoorMax  float64
+	ResidualAdvisoryThreshold  int
+}
+
+// LifecycleAssessorService implements lifecycle/activity assessment logic.
+// Focuses on repository lifecycle signals (activity, maintenance, vulnerability residuals, EOL overrides).
+type LifecycleAssessorService struct{ rules LifecycleAssessmentRules }
+
+// NewLifecycleAssessorService creates a new lifecycle assessor service with normalized default config.
+func NewLifecycleAssessorService() *LifecycleAssessorService {
+	c := cfg.GetDefaultLifecycle()
+	cfg.NormalizeLifecycleConfig(&c)
+	return NewLifecycleAssessorServiceWithConfig(c)
+}
+
+// NewLifecycleAssessorServiceWithConfig creates a new assessor service using injected LifecycleAssessmentConfig.
+func NewLifecycleAssessorServiceWithConfig(c cfg.LifecycleAssessmentConfig) *LifecycleAssessorService {
+	cfg.NormalizeLifecycleConfig(&c)
+	rules := LifecycleAssessmentRules{
+		RecentStableWindowDays:     c.RecentStableWindowDays,
+		RecentPrereleaseWindowDays: c.RecentPrereleaseWindowDays,
+		MaxHumanCommitGapDays:      c.MaxHumanCommitGapDays,
+		LegacyFrozenYears:          c.LegacyFrozenYears,
+		EolInactivityDays:          c.EolInactivityDays,
+		MaintenanceScoreMin:        c.MaintenanceScoreMin,
+		VulnerabilityScoreGoodMin:  c.VulnerabilityScoreGoodMin,
+		VulnerabilityScorePoorMax:  c.VulnerabilityScorePoorMax,
+		ResidualAdvisoryThreshold:  c.ResidualAdvisoryThreshold,
+	}
+	return &LifecycleAssessorService{rules: rules}
+}
+
+// Assess performs lifecycle assessment and returns an AssessmentResult using the lifecycle decision tree logic.
+func (s *LifecycleAssessorService) Assess(ctx context.Context, in AssessmentInput) (*AssessmentResult, error) {
+	return s.assessInternal(ctx, in)
+}
+
+// assessInternal contains the decision tree producing an AssessmentResult for the lifecycle axis with trace.
+func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in AssessmentInput) (*AssessmentResult, error) {
+	analysis := in.Analysis
+	scores := in.Scores
+	trace := []string{"start lifecycle assessment"}
+	// 0. Scheduled EOL (advance notice) – design: show scheduled if not yet archived/confirmed
+	if in.EOL.IsPlannedEOL() {
+		reason := "Scheduled EOL"
+		if in.EOL.ScheduledAt != nil {
+			reason = fmt.Sprintf("Scheduled EOL on %s", in.EOL.ScheduledAt.Format("2006-01-02"))
+		}
+		if in.EOL.Successor != "" {
+			reason = fmt.Sprintf("%s; successor: %s", reason, in.EOL.Successor)
+		}
+		trace = append(trace, "planned_eol override")
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLScheduled, Reason: reason, Trace: trace}, nil
+	}
+	// 1. Archive/disable check
+	if analysis != nil && (analysis.IsArchived() || analysis.IsDisabled()) {
+		trace = append(trace, "repo archived_or_disabled")
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLConfirmed, Reason: "Repository is archived or disabled on GitHub", Trace: trace}, nil
+	}
+
+	// 1.5 Primary-source EOL status override (provided by Infrastructure)
+	if in.EOL.IsEOL() {
+		reason := "Primary-source EOL"
+		if in.EOL.Successor != "" {
+			reason = fmt.Sprintf("%s; successor: %s", reason, in.EOL.Successor)
+		}
+		trace = append(trace, "primary_source_eol override")
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLConfirmed, Reason: reason, Trace: trace}, nil
+	}
+
+	// 2. Data validity check
+	if len(scores) == 0 {
+		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis) {
+			count, _ := s.getStableOrMaxAdvisory(analysis)
+			trace = append(trace, "scorecard_missing residual_vuln_override")
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective,
+				Reason: fmt.Sprintf("Scorecard data missing; open advisories (%d) and no human commits > %d yrs", count, s.rules.EolInactivityDays/365), Trace: trace}, nil
+		}
+	}
+
+	maintainedScore := s.getScoreValue(scores, "Maintained")
+	vulnScore := s.getScoreValue(scores, "Vulnerabilities")
+
+	if maintainedScore < 0 || vulnScore < 0 {
+		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis) {
+			count, _ := s.getStableOrMaxAdvisory(analysis)
+			trace = append(trace, "scorecard_incomplete residual_vuln_override")
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective,
+				Reason: fmt.Sprintf("Scorecard data incomplete; open advisories (%d) and no human commits > %d yrs", count, s.rules.EolInactivityDays/365), Trace: trace}, nil
+		}
+	}
+
+	// 3. Activity level determination
+	if analysis != nil {
+		hasRecentStable := analysis.HasRecentStableRelease(s.rules.RecentStableWindowDays)
+		hasRecentPrerelease := analysis.HasRecentPrereleaseRelease(s.rules.RecentPrereleaseWindowDays)
+		hasRecentHumanCommit := analysis.HasRecentHumanCommit(s.rules.MaxHumanCommitGapDays)
+
+		if hasRecentStable || hasRecentPrerelease || hasRecentHumanCommit {
+			trace = append(trace, "active_path")
+			res, _ := s.assessActiveState(analysis, scores)
+			if res != nil {
+				res.Trace = append(trace, res.Trace...)
+			}
+			return res, nil
+		}
+
+		// 3.5. Commit data validity check (for extremely old data)
+		threshold := s.rules.RecentStableWindowDays * s.rules.LegacyFrozenYears * 10
+		if analysis.GetDaysSinceLastCommit() >= threshold {
+			trace = append(trace, "commit_data_missing_threshold")
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: "Human commit data missing", Trace: trace}, nil
+		}
+
+		// 4. Detailed lifecycle classification of inactive state
+		trace = append(trace, "inactive_path")
+		res, _ := s.assessInactiveState(analysis, scores)
+		if res != nil {
+			res.Trace = append(trace, res.Trace...)
+		}
+		return res, nil
+	}
+
+	// Fallback when no analysis data available
+	trace = append(trace, "no_analysis_data")
+	return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: s.buildReviewNeededReason(nil, scores), Trace: trace}, nil
+}
+
+// shouldOverrideToEOLDueToResidualVulns returns true when Scorecard data is missing/incomplete
+// AND we have evidence of long-term dormancy plus unresolved advisories on the
+// latest stable version (or MaxSemver fallback when stable is absent).
+// Conditions:
+// - analysis not nil
+// - Days since last human commit > EolDays
+// - advisory count >= ResidualAdvisoryThreshold
+func (s *LifecycleAssessorService) shouldOverrideToEOLDueToResidualVulns(a *Analysis) bool {
+	if a == nil || a.RepoState == nil {
+		return false
+	}
+	// Commit dormancy check
+	if a.GetDaysSinceLastHumanCommit() <= s.rules.EolInactivityDays {
+		return false
+	}
+	count, _ := s.getStableOrMaxAdvisory(a)
+	return count >= s.rules.ResidualAdvisoryThreshold && count > 0
+}
+
+// getStableOrMaxAdvisory returns the advisory count and slice choosing Stable over MaxSemver fallback.
+// Order: Stable > MaxSemver > PreRelease > Requested (mirrors ReleaseInfo.LatestAdvisories logic
+// but we explicitly only use Stable or MaxSemver for override rationale text).
+func (s *LifecycleAssessorService) getStableOrMaxAdvisory(a *Analysis) (int, []Advisory) {
+	if a == nil || a.ReleaseInfo == nil {
+		return 0, nil
+	}
+	if a.ReleaseInfo.StableVersion != nil {
+		return len(a.ReleaseInfo.StableVersion.Advisories), a.ReleaseInfo.StableVersion.Advisories
+	}
+	if a.ReleaseInfo.MaxSemverVersion != nil {
+		return len(a.ReleaseInfo.MaxSemverVersion.Advisories), a.ReleaseInfo.MaxSemverVersion.Advisories
+	}
+	return 0, nil
+}
+
+// assessActiveState handles active repository states using domain models
+func (s *LifecycleAssessorService) assessActiveState(analysis *Analysis, scores map[string]*ScoreEntity) (*AssessmentResult, error) {
+	hasRecentStable := analysis.HasRecentStableRelease(s.rules.RecentStableWindowDays)
+	hasRecentPrerelease := analysis.HasRecentPrereleaseRelease(s.rules.RecentPrereleaseWindowDays)
+	hasRecentHumanCommit := analysis.HasRecentHumanCommit(s.rules.MaxHumanCommitGapDays)
+	isMaintenanceOk := analysis.IsMaintenanceOk()
+
+	// Detailed active-state logic (priority: stable > prerelease > commits)
+	if hasRecentStable {
+		if hasRecentHumanCommit && isMaintenanceOk {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: fmt.Sprintf("Stable package version & recent human commits; maintenance score ≥ %.0f", s.rules.MaintenanceScoreMin), Trace: []string{"active_stable_recent_commits_maintenance_ok"}}, nil
+		} else if hasRecentHumanCommit {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Stable package version & recent human commits, but maintenance score < %.0f", s.rules.MaintenanceScoreMin), Trace: []string{"active_stable_recent_commits_maintenance_low"}}, nil
+		} else {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Stable package version recent, but no human commits in last %d days", s.rules.MaxHumanCommitGapDays), Trace: []string{"active_stable_no_recent_commits"}}, nil
+		}
+	} else if hasRecentPrerelease {
+		if hasRecentHumanCommit && isMaintenanceOk {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: fmt.Sprintf("Development active via pre-release versions; maintenance score ≥ %.0f", s.rules.MaintenanceScoreMin), Trace: []string{"active_prerelease_recent_commits_maintenance_ok"}}, nil
+		} else if hasRecentHumanCommit {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Recent pre-release version, recent human commits, maintenance score < %.0f", s.rules.MaintenanceScoreMin), Trace: []string{"active_prerelease_recent_commits_maintenance_low"}}, nil
+		} else {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Recent pre-release version, but no human commits in last %d days", s.rules.MaxHumanCommitGapDays), Trace: []string{"active_prerelease_no_recent_commits"}}, nil
+		}
+	} else { // hasRecentCommit only
+		if isMaintenanceOk {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: fmt.Sprintf("Recent human commits but no recent package publishing; maintenance score ≥ %.0f", s.rules.MaintenanceScoreMin), Trace: []string{"active_commits_only_maintenance_ok"}}, nil
+		} else {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Recent human commits, no recent package publishing, maintenance score < %.0f", s.rules.MaintenanceScoreMin), Trace: []string{"active_commits_only_maintenance_low"}}, nil
+		}
+	}
+}
+
+// assessInactiveState performs detailed lifecycle classification of inactive states using domain models
+func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, scores map[string]*ScoreEntity) (*AssessmentResult, error) {
+	vulnScore := s.getScoreValue(scores, "Vulnerabilities")
+	maintainedScore := s.getScoreValue(scores, "Maintained")
+	hasVulnScore := vulnScore >= 0
+	hasMaintainedScore := maintainedScore >= 0
+	isMaintenanceOk := analysis.IsMaintenanceOk()
+	daysSinceLastCommit := analysis.GetDaysSinceLastCommit()
+	lastHumanCommitYears := analysis.GetLastHumanCommitYears()
+	// Note: Primary-source EOL is handled at entry (in.EOL). Do not re-evaluate here to avoid duplication.
+
+	// High vulnerability score (≥8): prioritize safety classification
+	if hasVulnScore && vulnScore >= s.rules.VulnerabilityScoreGoodMin {
+		if lastHumanCommitYears >= float64(s.rules.LegacyFrozenYears) {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelLegacySafe, Reason: fmt.Sprintf("No human commits ≥ %d yrs and almost no unpatched vulns", s.rules.LegacyFrozenYears)}, nil
+		}
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Few unpatched vulns, but no human commits within %d days", s.rules.MaxHumanCommitGapDays)}, nil
+	}
+
+	// Low maintenance score (<3): branch based on EOL_DAYS (2 years)
+	if hasMaintainedScore && !isMaintenanceOk {
+		if daysSinceLastCommit > s.rules.EolInactivityDays {
+			if hasVulnScore && vulnScore < s.rules.VulnerabilityScorePoorMax {
+				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective, Reason: fmt.Sprintf("Low maintenance, > %d yrs no human commits, many unpatched vulns", s.rules.EolInactivityDays/365)}, nil
+			}
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Low maintenance and no human commits for > %d yrs", s.rules.EolInactivityDays/365)}, nil
+		}
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Low maintenance; last human commit within %d yrs", s.rules.EolInactivityDays/365)}, nil
+	}
+
+	// Scores missing or inconclusive: no strong signal; default to manual review with actionable details
+	return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: s.buildReviewNeededReason(analysis, scores), Trace: []string{"inactive_fallback_review_needed"}}, nil
+}
+
+// getScoreValue safely gets a score value by name
+func (s *LifecycleAssessorService) getScoreValue(scores map[string]*ScoreEntity, name string) float64 {
+	if score, exists := scores[name]; exists && score != nil {
+		return float64(score.Value())
+	}
+	return -1.0
+}
+
+// buildReviewNeededReason composes an actionable reason string for "Review Needed" lifecycle classifications by
+// enumerating which key signals are missing or inconclusive.
+// This function stays within the domain layer and uses only domain models.
+func (s *LifecycleAssessorService) buildReviewNeededReason(a *Analysis, scores map[string]*ScoreEntity) string {
+	parts := make([]string, 0, 4)
+
+	// Scorecard presence and missing fields
+	maintained := s.getScoreValue(scores, "Maintained")
+	vuln := s.getScoreValue(scores, "Vulnerabilities")
+	if len(scores) == 0 {
+		parts = append(parts, "Scorecard: missing")
+	} else {
+		missing := make([]string, 0, 2)
+		if maintained < 0 {
+			missing = append(missing, "Maintained")
+		}
+		if vuln < 0 {
+			missing = append(missing, "Vulnerabilities")
+		}
+		if len(missing) > 0 {
+			parts = append(parts, "Scorecard: missing "+strings.Join(missing, " & "))
+		}
+	}
+
+	// Activity signals (releases/commits)
+	if a != nil {
+		hasStable := a.HasRecentStableRelease(s.rules.RecentStableWindowDays)
+		hasPre := a.HasRecentPrereleaseRelease(s.rules.RecentPrereleaseWindowDays)
+		hasCommit := a.HasRecentHumanCommit(s.rules.MaxHumanCommitGapDays)
+
+		sigsMissing := make([]string, 0, 3)
+		if !hasStable {
+			sigsMissing = append(sigsMissing, "stable release")
+		}
+		if !hasPre {
+			sigsMissing = append(sigsMissing, "pre-release")
+		}
+		if !hasCommit {
+			sigsMissing = append(sigsMissing, fmt.Sprintf("human commit (>%d days)", s.rules.MaxHumanCommitGapDays))
+		}
+		if len(sigsMissing) > 0 {
+			parts = append(parts, "Signals missing: "+strings.Join(sigsMissing, ", "))
+		}
+
+		// Commit recency details if available
+		if a.RepoState != nil && a.RepoState.LatestHumanCommit != nil {
+			days := a.GetDaysSinceLastCommit()
+			parts = append(parts, fmt.Sprintf("last human commit %d days ago", days))
+		} else {
+			parts = append(parts, "last human commit date unknown")
+		}
+	} else {
+		parts = append(parts, "Analysis data missing")
+	}
+
+	if len(parts) == 0 {
+		return "manual review suggested"
+	}
+	return "manual review suggested (" + strings.Join(parts, "; ") + ")"
+}

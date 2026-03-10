@@ -1,0 +1,222 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        // ── Direct Mode ──────────────────────────────────────
+        {
+            "name": "direct: PURL (npm)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "pkg:npm/express@4.18.2"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        {
+            "name": "direct: PURL (pypi)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "pkg:pypi/requests@2.28.1"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        {
+            "name": "direct: PURL (maven)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "pkg:maven/org.springframework/spring-core@5.3.8"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        {
+            "name": "direct: PURL (golang)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "pkg:golang/github.com/gin-gonic/gin"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        {
+            "name": "direct: GitHub URL",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "https://github.com/expressjs/express"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        {
+            "name": "direct: multiple inputs",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "pkg:npm/express@4.18.2",
+                "pkg:pypi/requests@2.28.1",
+                "https://github.com/gin-gonic/gin"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        // ── Batch Mode ───────────────────────────────────────
+        {
+            "name": "batch: purls.txt (sample 20)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "--sample=20",
+                "./testdata/purls.txt"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        {
+            "name": "batch: purls.txt (all)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "./testdata/purls.txt"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        {
+            "name": "batch: test_max.txt (sample 100)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "--sample=100",
+                "./testdata/test_max.txt"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        // ── Batch + Filters ──────────────────────────────────
+        {
+            "name": "batch: --ecosystem=npm",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "--ecosystem=npm",
+                "--sample=20",
+                "./testdata/purls.txt"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        {
+            "name": "batch: --only-eol",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "--only-eol",
+                "./testdata/purls.txt"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        {
+            "name": "batch: --only-review-needed",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "--only-review-needed",
+                "./testdata/purls.txt"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        {
+            "name": "batch: --line-range=1:50",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "--line-range=1:50",
+                "./testdata/purls.txt"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        // ── License CSV Export ────────────────────────────────
+        {
+            "name": "batch: license CSV export",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "--export-license-csv=./license_out.csv",
+                "./testdata/purls.txt"
+            ],
+            // "env": { "LOG_LEVEL": "debug" },
+            "env": {},
+            "showLog": false
+        },
+        // ── Subcommands ──────────────────────────────────────
+        {
+            "name": "subcmd: update-spdx",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": ["update-spdx"],
+            "env": {},
+            "showLog": false
+        },
+        // ── Examples ──────────────────────────────────────────
+        {
+            "name": "example: eol_detection",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/examples/eol_detection/main.go",
+            "env": {},
+            "showLog": false
+        }
+    ]
+}
