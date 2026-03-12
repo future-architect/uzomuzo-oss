@@ -234,3 +234,41 @@ func TestAnalysis_ErrorHelpers(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalysis_GetDaysSinceLatestPublish(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name string
+		a    *Analysis
+		want int
+	}{
+		{name: "nil_release_info", a: &Analysis{}, want: 9999},
+		{name: "empty_release_info", a: &Analysis{ReleaseInfo: &ReleaseInfo{}}, want: 9999},
+		{name: "stable_only", a: &Analysis{
+			ReleaseInfo: &ReleaseInfo{
+				StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: now.AddDate(0, 0, -100)},
+			},
+		}, want: 100},
+		{name: "prerelease_newer_than_stable", a: &Analysis{
+			ReleaseInfo: &ReleaseInfo{
+				StableVersion:     &VersionDetail{Version: "1.0.0", PublishedAt: now.AddDate(0, 0, -200)},
+				PreReleaseVersion: &VersionDetail{Version: "2.0.0-rc1", PublishedAt: now.AddDate(0, 0, -50)},
+			},
+		}, want: 50},
+		{name: "zero_publish_time_ignored", a: &Analysis{
+			ReleaseInfo: &ReleaseInfo{
+				StableVersion:    &VersionDetail{Version: "1.0.0"},
+				MaxSemverVersion: &VersionDetail{Version: "1.0.0", PublishedAt: now.AddDate(0, 0, -300)},
+			},
+		}, want: 300},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.a.GetDaysSinceLatestPublish()
+			// Allow ±1 day tolerance for time boundary
+			if got < tt.want-1 || got > tt.want+1 {
+				t.Errorf("GetDaysSinceLatestPublish() = %d, want ~%d", got, tt.want)
+			}
+		})
+	}
+}

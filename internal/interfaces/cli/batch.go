@@ -444,25 +444,8 @@ func configureAuthentication(inputs *ProcessingInputs, cfg *domaincfg.Config, op
 		return nil
 	}
 
-	// For batch processing (many inputs), show a prominent banner since
-	// almost all results will fail without a token.
-	if totalInputs > 1 || !options.IsDirectInput {
-		fmt.Fprintf(os.Stderr, "\n")
-		fmt.Fprintf(os.Stderr, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
-		fmt.Fprintf(os.Stderr, "  WARNING: GITHUB_TOKEN is not set (%d packages will fail)\n", totalInputs)
-		fmt.Fprintf(os.Stderr, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
-		fmt.Fprintf(os.Stderr, "\n")
-		fmt.Fprintf(os.Stderr, "  GitHub API authentication is required for repository analysis.\n")
-		fmt.Fprintf(os.Stderr, "  Without a token, most packages cannot be evaluated.\n")
-		fmt.Fprintf(os.Stderr, "\n")
-		fmt.Fprintf(os.Stderr, "  Fix: Set GITHUB_TOKEN in .env or run 'gh auth login'\n")
-		fmt.Fprintf(os.Stderr, "  Generate token: https://github.com/settings/tokens\n")
-		fmt.Fprintf(os.Stderr, "\n")
-	} else {
-		// Single direct input — short warning
-		fmt.Fprintf(os.Stderr, "\n⚠️  GITHUB_TOKEN is not set. Analysis will be limited.\n")
-		fmt.Fprintf(os.Stderr, "   Fix: Set GITHUB_TOKEN in .env or run 'gh auth login'\n\n")
-	}
+	fmt.Fprintf(os.Stderr, "\nNOTE: GITHUB_TOKEN is not set — analysis uses deps.dev and scorecard data only.\n")
+	fmt.Fprintf(os.Stderr, "  For higher precision (commit history, archive detection): set GITHUB_TOKEN in .env or run 'gh auth login'\n\n")
 
 	return nil
 }

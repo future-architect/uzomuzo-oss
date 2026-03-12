@@ -645,6 +645,9 @@ func isGemSystem(system string) bool {
 
 // fetchPackageInfoBatch fetches package information for multiple PURLs with internal parallelization
 func (c *DepsDevClient) fetchPackageInfoBatch(ctx context.Context, purls []string) (map[string]*PackageResponse, error) {
+	// Pre-flight: count suspicious Maven PURLs for a single summary warning
+	suspiciousMavenCount := countSuspiciousMavenPURLs(purls)
+
 	results := make(map[string]*PackageResponse)
 	resultMutex := sync.Mutex{}
 
@@ -673,8 +676,39 @@ func (c *DepsDevClient) fetchPackageInfoBatch(ctx context.Context, purls []strin
 	}
 
 	wg.Wait()
+	if suspiciousMavenCount > 0 {
+		slog.Warn("Suspicious Maven PURLs detected — namespace (groupId) may be missing or incorrect (set LOG_LEVEL=debug for details)",
+			"count", suspiciousMavenCount,
+			"hint", "Maven PURLs must be pkg:maven/<groupId>/<artifactId>@<version>",
+		)
+	}
 	slog.Debug("Package info batch completed", "requested", len(purls), "successful", len(results))
 	return results, nil
+}
+
+// countSuspiciousMavenPURLs counts Maven PURLs with missing or suspicious namespace.
+func countSuspiciousMavenPURLs(purls []string) int {
+	count := 0
+	for _, p := range purls {
+		pr, err := purlpkgToParsed(p)
+		if err != nil || pr == nil || !strings.EqualFold(pr.GetEcosystem(), "maven") {
+			continue
+		}
+		ns := strings.TrimSpace(pr.Namespace())
+		n := strings.TrimSpace(pr.Name())
+		// Apply same normalization as fetchPackageInfo
+		normalized := commonpurl.NormalizeMavenCollapsedCoordinates(p)
+		if normalized != p {
+			if pr2, err2 := purlpkgToParsed(normalized); err2 == nil && pr2 != nil {
+				ns = strings.TrimSpace(pr2.Namespace())
+				n = strings.TrimSpace(pr2.Name())
+			}
+		}
+		if ns == "" || strings.EqualFold(ns, n) || !strings.Contains(ns, ".") {
+			count++
+		}
+	}
+	return count
 }
 
 // fetchProjectsBatch fetches project information for multiple repository URLs using batch API
@@ -910,7 +944,7 @@ func (c *DepsDevClient) fetchPackageInfo(ctx context.Context, purlStr string) (*
 		}
 		// Re-check after normalization; suppress warning if now valid
 		if ns == "" || strings.EqualFold(ns, n) || !strings.Contains(ns, ".") {
-			slog.Warn("Suspicious Maven PURL - namespace (groupId) may be missing or incorrect",
+			slog.Debug("Suspicious Maven PURL - namespace (groupId) may be missing or incorrect",
 				"purl", original,
 				"effective", purlStr,
 				"namespace", ns,

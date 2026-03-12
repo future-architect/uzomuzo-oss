@@ -137,6 +137,12 @@ func (a *Analysis) HasRequestedVersionInfo() bool {
 		a.ReleaseInfo.RequestedVersion.Version != ""
 }
 
+// HasCommitData returns true when GitHub commit history was actually fetched.
+// When GITHUB_TOKEN is not set, RepoState is created but CommitStats remains nil.
+func (a *Analysis) HasCommitData() bool {
+	return a.RepoState != nil && a.RepoState.CommitStats != nil
+}
+
 // HasRecentCommit checks if there's a recent commit within the given days
 func (a *Analysis) HasRecentCommit(days int) bool {
 	if a.RepoState == nil {
@@ -177,6 +183,36 @@ func (a *Analysis) GetLastHumanCommitYears() float64 {
 		return 999.0 // Large number if no data
 	}
 	return float64(days) / 365.0
+}
+
+// HasPublishData returns true when at least one version slot has a non-zero publish date.
+func (a *Analysis) HasPublishData() bool {
+	return a.GetDaysSinceLatestPublish() != 9999
+}
+
+// GetDaysSinceLatestPublish returns the number of days since the most recently
+// published version across all known version slots (stable, prerelease, maxSemver, requested).
+// Returns 9999 when no publish date is available.
+func (a *Analysis) GetDaysSinceLatestPublish() int {
+	if a.ReleaseInfo == nil {
+		return 9999
+	}
+	minDays := 9999
+	candidates := []*VersionDetail{
+		a.ReleaseInfo.StableVersion,
+		a.ReleaseInfo.PreReleaseVersion,
+		a.ReleaseInfo.MaxSemverVersion,
+		a.ReleaseInfo.RequestedVersion,
+	}
+	for _, v := range candidates {
+		if v != nil && !v.PublishedAt.IsZero() {
+			days := int(time.Since(v.PublishedAt).Hours() / 24)
+			if days < minDays {
+				minDays = days
+			}
+		}
+	}
+	return minDays
 }
 
 // GetBotRatio gets the ratio of bot commits

@@ -254,7 +254,17 @@ func (c *Client) FetchDetailedRepositoryInfo(ctx context.Context, owner, repo st
 // - Solution: Proactive control via MaxConcurrency and RequestInterval
 func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]*domain.Analysis) error {
 	if c.token == "" {
-		slog.Debug("GitHub token not available - skipping repository state fetch")
+		repoCount := 0
+		for _, analysis := range analyses {
+			if analysis != nil && analysis.RepoURL != "" {
+				repoCount++
+			}
+		}
+		if repoCount > 0 {
+			slog.Debug("GitHub token not available - commit data will be missing for lifecycle assessment",
+				"affected_repos", repoCount,
+			)
+		}
 		// Set default values for all analyses instead of failing
 		for _, analysis := range analyses {
 			if analysis != nil {
@@ -299,7 +309,8 @@ func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]
 		}
 		if repoState, exists := repoStates[analysis.RepoURL]; exists {
 			analysis.RepoState = repoState
-		} else if repoError, hasError := repoErrors[analysis.RepoURL]; hasError {
+		}
+		if repoError, hasError := repoErrors[analysis.RepoURL]; hasError {
 			// Only set GitHub error if analysis has no pre-existing error.
 			// GitHub enrichment is best-effort; a prior error (e.g. deps.dev
 			// ResourceNotFoundError) carries typed semantics that downstream
