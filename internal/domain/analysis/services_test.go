@@ -92,7 +92,7 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 				}
 			}(),
 			scores:  map[string]*ScoreEntity{},
-			want:    LabelReviewNeeded,
+			want:    LabelLegacySafe, // zero advisories + dormant > EolInactivityDays → Legacy-Safe
 			wantErr: false,
 		},
 		{
@@ -392,6 +392,64 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				"Maintained": NewScoreEntity("Maintained", 8, 10, "Well maintained"),
 			},
 			want: LabelStalled, // proceed to activity evaluation with partial scores; recent commits, vuln unknown -> Stalled
+		},
+		{
+			name: "commit_data_no_scorecard_recent_publish_stalled",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 250,
+					LatestHumanCommit:   ptrTime(now.AddDate(0, 0, -250)),
+					CommitStats:         &CommitStats{},
+					IsArchived:          false,
+					IsDisabled:          false,
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: now.AddDate(0, 0, -400)}, // 400 days ≤ 730
+				},
+			},
+			scores: map[string]*ScoreEntity{},
+			want:   LabelStalled, // Path A: commit data + no scorecard + publish within 730 days → Stalled
+		},
+		{
+			name: "commit_data_partial_scorecard_maintained_ok_stalled",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 250,
+					LatestHumanCommit:   ptrTime(now.AddDate(0, 0, -250)),
+					CommitStats:         &CommitStats{},
+					IsArchived:          false,
+					IsDisabled:          false,
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: oldTime},
+				},
+			},
+			scores: map[string]*ScoreEntity{
+				"Maintained": NewScoreEntity("Maintained", 5, 10, "Medium maintenance"),
+				// Missing "Vulnerabilities" → partial scorecard
+			},
+			want: LabelStalled, // Path A: commit data + Maintained ≥ 3 but missing Vuln → Stalled (not ReviewNeeded)
+		},
+		{
+			name: "commit_data_no_scorecard_old_publish_old_commits_legacy_safe",
+			analysis: func() *Analysis {
+				jc := cfg.GetDefaultLifecycle()
+				inactivity := jc.EolInactivityDays
+				return &Analysis{
+					RepoState: &RepoState{
+						DaysSinceLastCommit: inactivity + 100,
+						LatestHumanCommit:   ptrTime(now.AddDate(0, 0, -(inactivity + 100))),
+						CommitStats:         &CommitStats{},
+						IsArchived:          false,
+						IsDisabled:          false,
+					},
+					ReleaseInfo: &ReleaseInfo{
+						StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: now.AddDate(-3, 0, 0)}, // ~1095 > 730
+					},
+				}
+			}(),
+			scores: map[string]*ScoreEntity{},
+			want:   LabelLegacySafe, // Path A: zero advisories + dormant > EolInactivityDays → Legacy-Safe
 		},
 		{
 			name: "nil_repo_state",

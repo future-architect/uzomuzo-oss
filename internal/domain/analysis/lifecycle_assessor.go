@@ -252,9 +252,21 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 		// High vulnerability score (≥8): prioritize safety classification
 		if hasVulnScore && vulnScore >= s.rules.VulnerabilityScoreGoodMin {
 			if lastHumanCommitYears >= float64(s.rules.LegacyFrozenYears) {
-				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelLegacySafe, Reason: fmt.Sprintf("No human commits ≥ %d yrs and almost no unpatched vulns", s.rules.LegacyFrozenYears)}, nil
+				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelLegacySafe, Reason: fmt.Sprintf("No human commits ≥ %d yrs and almost no unpatched vulns", s.rules.LegacyFrozenYears), Trace: []string{"inactive_legacy_safe_vuln_score_high"}}, nil
 			}
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Few unpatched vulns, but no human commits within %d days", s.rules.MaxHumanCommitGapDays)}, nil
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Few unpatched vulns, but no human commits within %d days", s.rules.MaxHumanCommitGapDays), Trace: []string{"inactive_stalled_vuln_score_high_recent"}}, nil
+		}
+
+		// Zero advisories + long-term inactive → Legacy-Safe
+		// Packages with no known advisories that have been dormant beyond EolInactivityDays
+		// are effectively "complete" — safe to use despite inactivity. This catches the
+		// common pattern of small, finished utility packages (e.g. function-bind, concat-map)
+		// that Scorecard penalizes for inactivity but pose no security risk.
+		advisoryCount, _ := s.getStableOrMaxAdvisory(analysis)
+		if advisoryCount == 0 && daysSinceLastHumanCommit > s.rules.EolInactivityDays {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelLegacySafe,
+				Reason: fmt.Sprintf("No known advisories; no human commits for > %d yrs", s.rules.EolInactivityDays/365),
+				Trace:  []string{"inactive_legacy_safe_no_advisories_dormant"}}, nil
 		}
 
 		// Low maintenance score (<3): branch based on EOL_DAYS (2 years)
@@ -268,7 +280,24 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Low maintenance; last human commit within %d yrs", s.rules.EolInactivityDays/365)}, nil
 		}
 
-		// Commit data present but scores inconclusive
+		// Commit data present but scores inconclusive — use commit age + publish recency
+		// to avoid unnecessary ReviewNeeded when we have sufficient activity signals.
+		if hasMaintainedScore && isMaintenanceOk {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
+				Reason: fmt.Sprintf("Scorecard Maintained(%.0f) ≥ %.0f but no recent activity; partial scorecard data", maintainedScore, s.rules.MaintenanceScoreMin),
+				Trace:  []string{"inactive_commit_maintenance_ok_partial_scores"}}, nil
+		}
+		daysSincePublish := analysis.GetDaysSinceLatestPublish()
+		if daysSincePublish <= s.rules.EolInactivityDays {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
+				Reason: fmt.Sprintf("Scorecard data incomplete; latest version published %d days ago (within %d-day threshold)", daysSincePublish, s.rules.EolInactivityDays),
+				Trace:  []string{"inactive_commit_no_scores_recent_publish"}}, nil
+		}
+		if daysSinceLastHumanCommit > s.rules.EolInactivityDays && daysSincePublish > s.rules.EolInactivityDays {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
+				Reason: fmt.Sprintf("No human commits for > %d yrs and no new release in %d days; scorecard data incomplete", s.rules.EolInactivityDays/365, daysSincePublish),
+				Trace:  []string{"inactive_commit_no_scores_old_publish"}}, nil
+		}
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: s.buildReviewNeededReason(analysis, scores), Trace: []string{"inactive_commit_data_scores_inconclusive"}}, nil
 	}
 
