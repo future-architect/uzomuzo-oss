@@ -223,11 +223,29 @@ func (s *LifecycleAssessorService) assessActiveState(analysis *Analysis, scores 
 		}
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: reason, Trace: []string{trace}}, nil
 	} else { // hasRecentCommit only
+		// VCS-direct ecosystems (Go, Composer): commits are the delivery mechanism,
+		// so recent commits alone are sufficient evidence of active maintenance.
+		if analysis.IsVCSDirectDelivery() {
+			reason := "Recent human commits (VCS-direct ecosystem; commits deliver updates to consumers)"
+			if isMaintenanceOk {
+				reason += fmt.Sprintf("; maintenance score ≥ %.0f", s.rules.MaintenanceScoreMin)
+			}
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: reason, Trace: []string{"active_commits_only_vcs_direct"}}, nil
+		}
+		// Registry-dependent ecosystems (npm, pypi, maven, etc.): commits without
+		// publishing do not reach consumers via the package manager.
+		hasMaintainedScore := s.getScoreValue(scores, "Maintained") >= 0
 		if isMaintenanceOk {
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: fmt.Sprintf("Recent human commits but no recent package publishing; maintenance score ≥ %.0f", s.rules.MaintenanceScoreMin), Trace: []string{"active_commits_only_maintenance_ok"}}, nil
-		} else {
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Recent human commits, no recent package publishing, maintenance score < %.0f", s.rules.MaintenanceScoreMin), Trace: []string{"active_commits_only_maintenance_low"}}, nil
 		}
+		if !hasMaintainedScore {
+			// Scorecard data unavailable — maintenance quality is unknown, not proven low.
+			// Recent human commits are direct evidence of an active maintainer, so we
+			// classify as Active rather than penalizing for missing third-party metrics.
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: "Recent human commits but no recent package publishing; maintenance score unavailable (Scorecard not found)", Trace: []string{"active_commits_only_maintenance_unknown"}}, nil
+		}
+		// Scorecard present AND Maintained < threshold — confirmed low maintenance.
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Recent human commits, no recent package publishing, maintenance score < %.0f", s.rules.MaintenanceScoreMin), Trace: []string{"active_commits_only_maintenance_low"}}, nil
 	}
 }
 

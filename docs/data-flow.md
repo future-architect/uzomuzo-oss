@@ -104,6 +104,37 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 - Grouping and batching (e.g., repo URL → project batch) reduces API calls and improves throughput
 - Repository URLs are normalized before GitHub / Scorecard calls to avoid duplicates and mismatches
 
+### Assessment Precision: Two-Path Architecture
+
+The lifecycle assessor uses two distinct decision paths depending on `GITHUB_TOKEN` availability:
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│ Path A: With GITHUB_TOKEN (high precision)                         │
+│                                                                     │
+│ Data: deps.dev + GitHub commits + OpenSSF Scorecard                │
+│                                                                     │
+│ Capabilities:                                                       │
+│  • Human commit recency → Active/Stalled/Legacy-Safe               │
+│  • VCS-direct ecosystem detection (Go, Composer)                   │
+│  • Scorecard absence vs. low score distinction                     │
+│  • Zero-advisory + dormant commit → Legacy-Safe                    │
+│  • Unpatched vulns + dormant → EOL-Effective                       │
+│  • Archive/disable status → EOL-Confirmed                          │
+├─────────────────────────────────────────────────────────────────────┤
+│ Path B: Without GITHUB_TOKEN (basic precision)                     │
+│                                                                     │
+│ Data: deps.dev only (publish dates, advisories)                    │
+│                                                                     │
+│ Capabilities:                                                       │
+│  • Publish recency + advisories → coarse classification            │
+│  • No commit signals → cannot detect active-but-unpublished        │
+│  • Packages with commits but no publish → misclassified as Stalled │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+The domain layer branches on `Analysis.HasCommitData()` to prevent sentinel values (9999 days) from leaking into commit-based comparisons when commit history is unavailable. See [Assessment Precision](../README.md#assessment-precision-by-data-availability) for the full capability comparison.
+
 ---
 
 ## EOL Detection

@@ -272,3 +272,28 @@ func TestAnalysis_GetDaysSinceLatestPublish(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalysis_IsVCSDirectDelivery(t *testing.T) {
+	tests := []struct {
+		name string
+		a    *Analysis
+		want bool
+	}{
+		{name: "golang", a: &Analysis{Package: &Package{Ecosystem: "golang"}}, want: true},
+		{name: "composer", a: &Analysis{Package: &Package{Ecosystem: "composer"}}, want: true},
+		{name: "npm", a: &Analysis{Package: &Package{Ecosystem: "npm"}}, want: false},
+		{name: "pypi", a: &Analysis{Package: &Package{Ecosystem: "pypi"}}, want: false},
+		{name: "maven", a: &Analysis{Package: &Package{Ecosystem: "maven"}}, want: false},
+		{name: "nuget", a: &Analysis{Package: &Package{Ecosystem: "nuget"}}, want: false},
+		{name: "cargo", a: &Analysis{Package: &Package{Ecosystem: "cargo"}}, want: false},
+		{name: "gem", a: &Analysis{Package: &Package{Ecosystem: "gem"}}, want: false},
+		{name: "nil_package", a: &Analysis{}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.a.IsVCSDirectDelivery(); got != tt.want {
+				t.Errorf("IsVCSDirectDelivery() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

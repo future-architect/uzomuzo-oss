@@ -143,6 +143,30 @@ func (a *Analysis) HasCommitData() bool {
 	return a.RepoState != nil && a.RepoState.CommitStats != nil
 }
 
+// IsVCSDirectDelivery returns true when the package ecosystem delivers updates
+// directly via VCS (git tags/commits) rather than requiring a registry publish.
+// For these ecosystems, recent commits are equivalent to a release from the
+// consumer's perspective.
+//
+// VCS-direct ecosystems:
+//   - golang: `go get` resolves modules from Git tags/commits via the Go module proxy
+//   - composer: Composer can resolve packages directly from VCS repositories (VCS mode)
+//
+// Registry-dependent ecosystems (npm, pypi, maven, nuget, cargo, gem):
+//
+//	Consumers install from a central registry; commits alone do not reach users.
+func (a *Analysis) IsVCSDirectDelivery() bool {
+	if a.Package == nil {
+		return false
+	}
+	switch a.Package.Ecosystem {
+	case "golang", "composer":
+		return true
+	default:
+		return false
+	}
+}
+
 // HasRecentCommit checks if there's a recent commit within the given days
 func (a *Analysis) HasRecentCommit(days int) bool {
 	if a.RepoState == nil {

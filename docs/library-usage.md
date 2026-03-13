@@ -30,7 +30,7 @@ import (
 func main() {
   ctx := context.Background()
 
-  // Create full evaluator (GitHub token optional but recommended for higher rate limits)
+  // Create full evaluator (GitHub token strongly recommended for commit-based assessment precision)
   client := uzomuzo.NewEvaluator(os.Getenv("GITHUB_TOKEN"))
 
   // Full evaluation (includes lifecycle heuristics + EOL / successor integration)
@@ -107,7 +107,7 @@ Centralizing this logic keeps UI / export layers deterministic. Avoid re-impleme
 
 ## Key Methods (Public API)
 
-- `NewEvaluator(token, opts...)` — Build a full evaluation client (accepts `WithEnricher` options)
+- `NewEvaluator(token, opts...)` — Build a full evaluation client (accepts `WithEnricher` options). Token enables commit history and Scorecard data for higher assessment precision (see [Assessment Precision](../README.md#assessment-precision-by-data-availability))
 - `EvaluatePURLs(ctx, purls)` — Full PURL evaluation (score + lifecycle + EOL)
 - `EvaluateGitHubRepos(ctx, urls)` — Full evaluation for GitHub repositories
 - `ExportCSV(results, path)` — Export full metrics as CSV

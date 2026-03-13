@@ -169,7 +169,7 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 				},
 			},
 			scores:  map[string]*ScoreEntity{},
-			want:    LabelStalled, // proceed to activity evaluation without Scorecard; recent commits but no maintenance score => Stalled
+			want:    LabelActive, // recent commits + Scorecard unavailable → Active (maintenance unknown, not proven low)
 			wantErr: false,
 		},
 		{
@@ -311,6 +311,103 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 			wantLabel:   LabelActive,
 			description: "Recent prerelease publish is a strong activity signal",
 		},
+		{
+			name: "golang_commits_only_no_publish_active",
+			analysis: &Analysis{
+				Package: &Package{Ecosystem: "golang"},
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 30,
+					LatestHumanCommit:   &recentTime,
+					CommitStats:         &CommitStats{},
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: oldTime}, // old publish
+				},
+			},
+			scores: map[string]*ScoreEntity{
+				"Maintained":      NewScoreEntity("Maintained", 1, 10, "Poorly maintained"),
+				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 5, 10, "Some vulnerabilities"),
+			},
+			wantLabel:   LabelActive,
+			description: "Go modules: commits deliver updates via go get; low maintenance score does not downgrade to Stalled",
+		},
+		{
+			name: "npm_commits_only_no_publish_low_maintenance_stalled",
+			analysis: &Analysis{
+				Package: &Package{Ecosystem: "npm"},
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 30,
+					LatestHumanCommit:   &recentTime,
+					CommitStats:         &CommitStats{},
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: oldTime},
+				},
+			},
+			scores: map[string]*ScoreEntity{
+				"Maintained":      NewScoreEntity("Maintained", 1, 10, "Poorly maintained"),
+				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 5, 10, "Some vulnerabilities"),
+			},
+			wantLabel:   LabelStalled,
+			description: "npm: commits without publish do not reach consumers; low maintenance → Stalled",
+		},
+		{
+			name: "composer_commits_only_no_publish_active",
+			analysis: &Analysis{
+				Package: &Package{Ecosystem: "composer"},
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 30,
+					LatestHumanCommit:   &recentTime,
+					CommitStats:         &CommitStats{},
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: oldTime},
+				},
+			},
+			scores: map[string]*ScoreEntity{
+				"Maintained":      NewScoreEntity("Maintained", 1, 10, "Poorly maintained"),
+				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 5, 10, "Some vulnerabilities"),
+			},
+			wantLabel:   LabelActive,
+			description: "Composer/Packagist: VCS-direct delivery; commits are sufficient for Active",
+		},
+		{
+			name: "npm_commits_only_no_scorecard_active",
+			analysis: &Analysis{
+				Package: &Package{Ecosystem: "npm"},
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 30,
+					LatestHumanCommit:   &recentTime,
+					CommitStats:         &CommitStats{},
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: oldTime},
+				},
+			},
+			scores:      map[string]*ScoreEntity{}, // no Scorecard at all
+			wantLabel:   LabelActive,
+			description: "npm: commits + no Scorecard → maintenance unknown → Active (not penalized for missing metrics)",
+		},
+		{
+			name: "npm_commits_only_maintained_explicitly_low_stalled",
+			analysis: &Analysis{
+				Package: &Package{Ecosystem: "npm"},
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 30,
+					LatestHumanCommit:   &recentTime,
+					CommitStats:         &CommitStats{},
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: oldTime},
+				},
+			},
+			scores: map[string]*ScoreEntity{
+				"Maintained":      NewScoreEntity("Maintained", 0, 10, "Not maintained"),
+				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 5, 10, "Some vulnerabilities"),
+			},
+			wantLabel:   LabelStalled,
+			description: "npm: commits + Scorecard confirms Maintained=0 → Stalled (proven low, not unknown)",
+		},
 	}
 
 	for _, tt := range tests {
@@ -375,7 +472,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 			scores: map[string]*ScoreEntity{
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, "Few vulnerabilities"),
 			},
-			want: LabelStalled, // proceed to activity evaluation with partial scores; recent commits, maintenance unknown -> Stalled
+			want: LabelActive, // recent commits + Maintained score absent → Active (maintenance unknown, not proven low)
 		},
 		{
 			name: "missing_vulnerabilities_score",
