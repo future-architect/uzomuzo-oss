@@ -3,8 +3,8 @@ package integration
 import (
 	"testing"
 
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/depsdev"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 )
 
 // TestPopulateAnalysisFromBatchResult_EnrichAdvisories ensures enrichment picks up advisory keys from package versions.

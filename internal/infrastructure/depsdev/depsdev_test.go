@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/future-architect/uzomuzo/internal/domain/config"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/maven"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/nuget"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/nuget"
 )
 
 func TestConvertRepoURLToProjectKey(t *testing.T) {

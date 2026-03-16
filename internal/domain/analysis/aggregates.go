@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common/purl"
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
 
 // Analysis represents the complete analysis result using domain entities (Aggregate Root)

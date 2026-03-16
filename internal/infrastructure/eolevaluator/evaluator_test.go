@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/maven"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/nuget"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/nuget"
 )
 
 func TestEvaluator_NuGet_CriticalBugs(t *testing.T) {

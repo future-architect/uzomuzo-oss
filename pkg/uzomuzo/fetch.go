@@ -6,9 +6,9 @@ package uzomuzo
 import (
 	"context"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	gh "github.com/future-architect/uzomuzo/internal/infrastructure/github"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/pypi"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	gh "github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
 )
 
 // FetchGitHubREADME fetches raw README text from a GitHub repository.

@@ -6,9 +6,9 @@ import (
 	"context"
 	"os"
 
-	"github.com/future-architect/uzomuzo/internal/application"
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	"github.com/future-architect/uzomuzo/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/application"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
 // Option configures an Evaluator.

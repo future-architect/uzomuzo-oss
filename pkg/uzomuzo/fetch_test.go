@@ -3,7 +3,7 @@ package uzomuzo_test
 import (
 	"testing"
 
-	uzomuzo "github.com/future-architect/uzomuzo/pkg/uzomuzo"
+	uzomuzo "github.com/future-architect/uzomuzo-oss/pkg/uzomuzo"
 )
 
 func TestIsGitHubURL(t *testing.T) {
@@ -40,7 +40,7 @@ func TestParseGitHubURL(t *testing.T) {
 		wantRepo  string
 		wantErr   bool
 	}{
-		{"https", "https://github.com/future-architect/uzomuzo", "future-architect", "uzomuzo", false},
+		{"https", "https://github.com/future-architect/uzomuzo-oss", "future-architect", "uzomuzo-oss", false},
 		{"with .git", "https://github.com/owner/repo.git", "owner", "repo", false},
 		{"with trailing slash", "https://github.com/owner/repo/", "owner", "repo", false},
 		{"with path", "https://github.com/owner/repo/tree/main", "owner", "repo", false},

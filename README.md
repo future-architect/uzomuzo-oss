@@ -48,7 +48,7 @@ trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
 ## Quick Start
 
 ```bash
-git clone https://github.com/future-architect/uzomuzo.git
+git clone https://github.com/future-architect/uzomuzo-oss.git
 cd uzomuzo
 go build -o uzomuzo main.go
 cp config.template.env .env  # Set GITHUB_TOKEN for best precision

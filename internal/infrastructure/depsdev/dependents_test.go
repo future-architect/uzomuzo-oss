@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/future-architect/uzomuzo/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
 func TestFetchDependentCount_Success(t *testing.T) {

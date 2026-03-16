@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
 )
 
 // RetryConfig defines retry configuration.

@@ -5,10 +5,10 @@ import (
 	"net/url"
 	"strings"
 
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	eoltext "github.com/future-architect/uzomuzo/internal/infrastructure/eoltext"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/npmjs"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/nuget"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	eoltext "github.com/future-architect/uzomuzo-oss/internal/infrastructure/eoltext"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/nuget"
 )
 
 // Normalized NuGet deprecation reason strings (lowercase).

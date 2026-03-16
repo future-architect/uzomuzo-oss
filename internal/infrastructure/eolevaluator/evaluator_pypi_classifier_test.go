@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/pypi"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
 )
 
 func TestEvaluator_PyPI_InactiveClassifier(t *testing.T) {

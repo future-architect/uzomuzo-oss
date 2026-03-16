@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	domainConfig "github.com/future-architect/uzomuzo/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	domainConfig "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
 // ConfigService implements domain config service interface

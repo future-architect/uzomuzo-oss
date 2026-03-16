@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/future-architect/uzomuzo/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
 func TestProcessPURLInputs(t *testing.T) {

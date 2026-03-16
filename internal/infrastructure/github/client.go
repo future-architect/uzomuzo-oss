@@ -31,10 +31,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	"github.com/future-architect/uzomuzo/internal/domain/config"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/httpclient"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
 // repoResult stores parallel processing results
@@ -716,7 +716,7 @@ func (c *Client) normalizeRepoURL(ctx context.Context, raw string) string {
 	if err != nil {
 		return ""
 	}
-	req.Header.Set("User-Agent", "uzomuzo-github-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-github-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := c.httpClient.Do(ctx, req)
 	if err != nil {
 		return ""
@@ -738,7 +738,7 @@ func (c *Client) FetchRepoLanguages(ctx context.Context, owner, repo string) (ma
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("User-Agent", "uzomuzo-github-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-github-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	req.Header.Set("Accept", "application/vnd.github+json")
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)

@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	packageurl "github.com/package-url/packageurl-go"
-	"github.com/future-architect/uzomuzo/internal/common/purl"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/golangresolve"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/goproxy"
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/golangresolve"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
 )
 
 // moduleRootResolver provides the minimal capability needed to resolve a Go import path

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	cfg "github.com/future-architect/uzomuzo/internal/domain/config"
+	cfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
 // ptrTime returns a pointer to the provided time.Time (test helper)

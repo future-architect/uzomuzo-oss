@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/httpclient"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
 // Client is a minimal Packagist API client for resolving repository URLs.
@@ -117,7 +117,7 @@ func (c *Client) fetchPackage(ctx context.Context, vendor, name string) (*packag
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to build request: %w", err)
 	}
-	req.Header.Set("User-Agent", "uzomuzo-packagist-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-packagist-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("http request failed: %w", err)

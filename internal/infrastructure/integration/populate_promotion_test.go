@@ -3,7 +3,7 @@ package integration
 import (
 	"testing"
 
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 // TestPromoteProjectLicenseFromVersion_Table consolidates promotion scenarios including edge cases.

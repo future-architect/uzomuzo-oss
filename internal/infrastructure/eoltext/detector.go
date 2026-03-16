@@ -26,7 +26,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/future-architect/uzomuzo/internal/common/eolphrases"
+	"github.com/future-architect/uzomuzo-oss/internal/common/eolphrases"
 )
 
 // Platform language/runtime version prefix (beginning of sentence) used to suppress generic

@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"github.com/future-architect/uzomuzo/internal/application"
-	"github.com/future-architect/uzomuzo/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/application"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
 // createAnalysisService creates an AnalysisService instance from configuration.

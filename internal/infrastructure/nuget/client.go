@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/httpclient"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
 // Defaults for nuget.org
@@ -179,7 +179,7 @@ func (c *Client) GetDeprecation(ctx context.Context, packageID string) (*Depreca
 			return nil, false, fmt.Errorf("failed to build NuGet request: %w", err)
 		}
 		// Be a good citizen: set a descriptive User-Agent
-		req.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+		req.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 		resp, err := c.http.Do(ctx, req)
 		if err != nil {
 			return nil, false, fmt.Errorf("NuGet HTTP error: %w", err)
@@ -229,7 +229,7 @@ func (c *Client) GetDeprecation(ctx context.Context, packageID string) (*Depreca
 			if err != nil {
 				return nil, false, fmt.Errorf("NuGet request (page) failed: %w", err)
 			}
-			piReq.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+			piReq.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 			piResp, err := c.http.Do(ctx, piReq)
 			if err != nil {
 				return nil, false, fmt.Errorf("NuGet HTTP (page) error: %w", err)
@@ -385,7 +385,7 @@ func (c *Client) GetRepoURL(ctx context.Context, packageID string, _ string) (st
 		if err != nil {
 			return "", fmt.Errorf("failed to build NuGet request: %w", err)
 		}
-		req.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+		req.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 		resp, err := c.http.Do(ctx, req)
 		if err != nil {
 			return "", fmt.Errorf("NuGet HTTP error: %w", err)
@@ -424,7 +424,7 @@ func (c *Client) GetRepoURL(ctx context.Context, packageID string, _ string) (st
 			if err != nil {
 				return "", fmt.Errorf("NuGet request (page) failed: %w", err)
 			}
-			piReq.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+			piReq.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 			piResp, err := c.http.Do(ctx, piReq)
 			if err != nil {
 				return "", fmt.Errorf("NuGet HTTP (page) error: %w", err)
@@ -566,7 +566,7 @@ func (c *Client) discoverRegistrationBases(ctx context.Context) []string {
 	if err != nil {
 		return nil
 	}
-	req.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
 		return nil
@@ -677,7 +677,7 @@ func (c *Client) followRedirect(ctx context.Context, startURL string) string {
 	if err != nil {
 		return ""
 	}
-	req.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
 		return ""
@@ -697,7 +697,7 @@ func (c *Client) scrapeFirstGitHubFromHTML(ctx context.Context, pageURL string) 
 	if err != nil {
 		return ""
 	}
-	req.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
 		return ""
@@ -744,7 +744,7 @@ func (c *Client) scrapeDeprecationFromNuGetHTML(ctx context.Context, id string) 
 	if err != nil {
 		return nil, false
 	}
-	req.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-nuget-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
 		return nil, false
