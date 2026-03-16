@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 func TestNewAnalysisService(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/future-architect/uzomuzo/internal/common/purl"
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
 
 // toDepsDevSystemAndName normalizes a parsed PURL into deps.dev system and package name

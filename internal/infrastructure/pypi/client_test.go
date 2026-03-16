@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/infrastructure/httpclient"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
 // TestGetProject_Cache verifies that a second call within TTL hits the cache and avoids an extra HTTP request.

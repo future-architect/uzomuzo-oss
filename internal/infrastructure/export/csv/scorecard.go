@@ -9,8 +9,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 // getLifecycleAssessmentResult returns a user-friendly lifecycle assessment result for reporting

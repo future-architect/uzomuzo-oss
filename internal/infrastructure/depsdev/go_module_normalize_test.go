@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/future-architect/uzomuzo/internal/common/purl"
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
 
 // fakeGoproxyClient implements only ResolveModuleRoot used in normalizeGoModuleForVersions.

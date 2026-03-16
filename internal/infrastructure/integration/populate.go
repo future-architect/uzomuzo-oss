@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	"github.com/future-architect/uzomuzo/internal/common/purl"
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/depsdev"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/links"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/links"
 )
 
 // populateAnalysisFromBatchResult populates a domain.Analysis from a deps.dev BatchResult.

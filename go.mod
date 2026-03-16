@@ -1,4 +1,4 @@
-module github.com/future-architect/uzomuzo
+module github.com/future-architect/uzomuzo-oss
 
 go 1.23.2
 

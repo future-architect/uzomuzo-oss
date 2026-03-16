@@ -5,7 +5,7 @@
 ## Installation
 
 ```bash
-go get github.com/future-architect/uzomuzo
+go get github.com/future-architect/uzomuzo-oss
 ```
 
 ## Basic Usage
@@ -24,7 +24,7 @@ import (
   "fmt"
   "os"
 
-  "github.com/future-architect/uzomuzo/pkg/uzomuzo"
+  "github.com/future-architect/uzomuzo-oss/pkg/uzomuzo"
 )
 
 func main() {
@@ -224,7 +224,7 @@ import (
   "fmt"
   "os"
 
-  "github.com/future-architect/uzomuzo/pkg/uzomuzo"
+  "github.com/future-architect/uzomuzo-oss/pkg/uzomuzo"
 )
 
 func main() {

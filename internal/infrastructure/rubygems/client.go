@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/httpclient"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
 // Client is a minimal RubyGems API client for metadata lookups.
@@ -102,7 +102,7 @@ func (c *Client) fetchRepoURLV1(ctx context.Context, name string) (string, error
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "uzomuzo-rubygems-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-rubygems-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
 		return "", err
@@ -134,7 +134,7 @@ func (c *Client) fetchRepoURLV2(ctx context.Context, name, version string) (stri
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "uzomuzo-rubygems-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-rubygems-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
 		return "", err
@@ -186,7 +186,7 @@ func (c *Client) GetReverseDependencyCount(ctx context.Context, name string) (in
 	if err != nil {
 		return 0, fmt.Errorf("failed to create reverse_dependencies request: %w", err)
 	}
-	req.Header.Set("User-Agent", "uzomuzo-rubygems-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-rubygems-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {

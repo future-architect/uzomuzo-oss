@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	cfg "github.com/future-architect/uzomuzo/internal/domain/config"
+	cfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
 // LifecycleAssessmentRules holds runtime thresholds (config-driven) for lifecycle assessment decisions.

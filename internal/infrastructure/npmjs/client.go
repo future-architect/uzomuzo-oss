@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/httpclient"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
 // Client is a minimal npm registry client used to resolve repository URLs.
@@ -89,7 +89,7 @@ func (c *Client) GetRepoURL(ctx context.Context, namespace, name, version string
 		return "", fmt.Errorf("npm request build failed: %w", err)
 	}
 	slog.Debug("npmjs request", "endpoint", endpoint, "namespace", ns, "name", pkg, "version", version)
-	req.Header.Set("User-Agent", "uzomuzo-npmjs-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-npmjs-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
 		return "", fmt.Errorf("npm http failed: %w", err)
@@ -258,7 +258,7 @@ func (c *Client) GetDeprecation(ctx context.Context, namespace, name, version st
 	if err != nil {
 		return nil, false, fmt.Errorf("npm request build failed: %w", err)
 	}
-	req.Header.Set("User-Agent", "uzomuzo-npmjs-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-npmjs-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
 		return nil, false, fmt.Errorf("npm http failed: %w", err)

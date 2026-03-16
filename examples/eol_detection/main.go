@@ -15,7 +15,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/future-architect/uzomuzo/pkg/uzomuzo"
+	"github.com/future-architect/uzomuzo-oss/pkg/uzomuzo"
 )
 
 func main() {

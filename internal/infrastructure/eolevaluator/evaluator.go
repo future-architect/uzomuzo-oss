@@ -6,13 +6,13 @@ import (
 	"strings"
 	"sync"
 
-	purl "github.com/future-architect/uzomuzo/internal/common/purl"
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/maven"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/npmjs"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/nuget"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/packagist"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/pypi"
+	purl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/nuget"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
 )
 
 // Evaluator implements domain.EOLEvaluatorPort by querying primary sources.

@@ -3,7 +3,7 @@ package common
 import (
 	"testing"
 
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 func TestNewResultProcessor(t *testing.T) {

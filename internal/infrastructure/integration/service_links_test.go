@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/depsdev"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 )
 
 // makeVersion is a helper to construct a deps.dev Version with minimal fields.

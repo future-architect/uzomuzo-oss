@@ -3,7 +3,7 @@ package integration
 import (
 	"testing"
 
-	"github.com/future-architect/uzomuzo/internal/infrastructure/depsdev"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 )
 
 // TestBuildVersionLicensesFromVersion validates normalization, deduplication, fallback, and SPDX filtering

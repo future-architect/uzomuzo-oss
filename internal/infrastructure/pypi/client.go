@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/infrastructure/httpclient"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
 // Client fetches PyPI project JSON metadata.
@@ -129,7 +129,7 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 	if err != nil {
 		return nil, false, fmt.Errorf("pypi request build failed: %w", err)
 	}
-	req.Header.Set("User-Agent", "uzomuzo-pypi-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-pypi-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
 		return nil, false, fmt.Errorf("pypi http failed: %w", err)

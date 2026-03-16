@@ -14,18 +14,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	commonpurl "github.com/future-architect/uzomuzo/internal/common/purl"
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	"github.com/future-architect/uzomuzo/internal/domain/config"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/goproxy"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/httpclient"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/maven"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/npmjs"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/nuget"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/packagist"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/pypi"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/rubygems"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/nuget"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
 )
 
 // DepsDevClient implements the deps.dev API client.
@@ -278,7 +278,7 @@ func (c *DepsDevClient) fetchLatestRelease(ctx context.Context, purlStr string) 
 		}, err
 	}
 	// Set descriptive User-Agent for deps.dev requests
-	req.Header.Set("User-Agent", "uzomuzo-depsdev-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-depsdev-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 
 	resp, err := c.client.Do(ctx, req)
 	if err != nil {
@@ -756,7 +756,7 @@ func (c *DepsDevClient) fetchProjectsBatch(ctx context.Context, repoURLs []strin
 				return nil, fmt.Errorf("failed to create batch request (page=%d, url=%s): %w", page, url, err)
 			}
 			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("User-Agent", "uzomuzo-depsdev-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+			req.Header.Set("User-Agent", "uzomuzo-depsdev-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 			resp, err := c.client.Do(ctx, req)
 			if err != nil {
 				slog.Debug("deps.dev HTTP batch request failed", "method", "POST", "url", url, "page", page, "error", err)
@@ -982,7 +982,7 @@ func (c *DepsDevClient) fetchPURLRaw(ctx context.Context, purlStr string) (*Pack
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request (url=%s): %w", apiURL, err)
 	}
-	req.Header.Set("User-Agent", "uzomuzo-depsdev-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-depsdev-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 
 	resp, err := c.client.Do(ctx, req)
 	if err != nil {
@@ -1138,7 +1138,7 @@ func (c *DepsDevClient) FetchDependentCount(ctx context.Context, purlStr string)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dependents request (url=%s): %w", endpoint, err)
 	}
-	req.Header.Set("User-Agent", "uzomuzo-depsdev-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-depsdev-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 
 	resp, err := c.client.Do(ctx, req)
 	if err != nil {

@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/future-architect/uzomuzo/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
 // RunMode enumerates high-level execution modes for batch CLI.

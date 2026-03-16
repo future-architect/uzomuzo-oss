@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 func TestExportLicenses_Basic(t *testing.T) {

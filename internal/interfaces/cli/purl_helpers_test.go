@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	analysispkg "github.com/future-architect/uzomuzo/internal/domain/analysis"
+	analysispkg "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 func TestPickVersionedPURL(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common/purl"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/goproxy"
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
 )
 
 // fakeGoProxyClient embeds goproxy.Client behavior we need via an interface-like stub.

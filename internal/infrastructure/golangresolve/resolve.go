@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common/purl"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/goproxy"
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
 )
 
 // githubRawBase is the base raw content host for GitHub. Overridden in tests.
@@ -90,7 +90,7 @@ func inferModuleFromGitHubRaw(ctx context.Context, rawPath, defaultBranch string
 		if err != nil {
 			continue
 		}
-		req.Header.Set("User-Agent", "uzomuzo-golangresolve/1.0 (+https://github.com/future-architect/uzomuzo)")
+		req.Header.Set("User-Agent", "uzomuzo-golangresolve/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 		resp, err := httpc.Do(req)
 		if err != nil {
 			continue

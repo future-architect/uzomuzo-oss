@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/future-architect/uzomuzo/internal/common/purl"
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
 
 func TestToDepsDevSystemAndName(t *testing.T) {

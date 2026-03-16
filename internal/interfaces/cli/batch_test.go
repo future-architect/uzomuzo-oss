@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 func TestFilterPackageTypes(t *testing.T) {

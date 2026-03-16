@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	"github.com/future-architect/uzomuzo/internal/common/purl"
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 // AnalyzeFromPURLs efficiently fetches analyses for multiple PURLs using optimized batch processing.

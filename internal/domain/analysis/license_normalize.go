@@ -4,7 +4,7 @@ import (
 	"regexp" // retained for fallback heuristic removal soon
 	"strings"
 
-	"github.com/future-architect/uzomuzo/internal/domain/licenses"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/licenses"
 )
 
 // NormalizeLicenseIdentifier normalizes a raw license string toward SPDX canonical IDs.

@@ -2,7 +2,7 @@ package depsdev
 
 import (
 	"github.com/Masterminds/semver/v3"
-	"github.com/future-architect/uzomuzo/internal/common/purl"
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
 
 // pickStableDevAndMax selects Stable, Dev, and the maximum SemVer version from the list.

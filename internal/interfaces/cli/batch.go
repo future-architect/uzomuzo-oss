@@ -11,13 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/application"
-	"github.com/future-architect/uzomuzo/internal/common"
-	"github.com/future-architect/uzomuzo/internal/common/collections"
-	commonpurl "github.com/future-architect/uzomuzo/internal/common/purl"
+	"github.com/future-architect/uzomuzo-oss/internal/application"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/common/collections"
+	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 
-	analysispkg "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	domaincfg "github.com/future-architect/uzomuzo/internal/domain/config"
+	analysispkg "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
 // maxDescriptionLen limits the length of repository/project descriptions in CLI output.

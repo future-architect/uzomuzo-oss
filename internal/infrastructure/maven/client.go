@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/httpclient"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
 // Client fetches Maven POM files (typically from Maven Central) to extract SCM information.
@@ -226,7 +226,7 @@ func (c *Client) fetchPOM(ctx context.Context, groupID, artifactID, version stri
 	if err != nil {
 		return nil, false, fmt.Errorf("maven build request: %w", err)
 	}
-	req.Header.Set("User-Agent", "uzomuzo-maven-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-maven-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	slog.Debug("maven: http get", "phase", "fetch_pom", "url", pomURL, "group", g, "artifact", a, "version", v)
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
@@ -385,7 +385,7 @@ func (c *Client) scrapeFirstGitHubFromHTML(ctx context.Context, pageURL string) 
 	if err != nil {
 		return ""
 	}
-	req.Header.Set("User-Agent", "uzomuzo-maven-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-maven-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	// Avoid known-dead legacy hosts that often hang (e.g., dev.java.net)
 	if u, parseErr := url.Parse(pageURL); parseErr == nil {
@@ -573,7 +573,7 @@ func (c *Client) SearchByArtifactID(ctx context.Context, artifactID string) (gro
 	if err != nil {
 		return "", false, fmt.Errorf("maven search build request: %w", err)
 	}
-	req.Header.Set("User-Agent", "uzomuzo-maven-client/1.0 (+https://github.com/future-architect/uzomuzo)")
+	req.Header.Set("User-Agent", "uzomuzo-maven-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 
 	resp, err := c.searchHTTP.Do(searchCtx, req)
 	if err != nil {

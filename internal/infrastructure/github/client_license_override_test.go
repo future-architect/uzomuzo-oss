@@ -3,7 +3,7 @@ package github
 import (
 	"testing"
 
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 // TestLicenseOverrideNonStandard ensures GitHub SPDX license overrides non-standard deps.dev project license.

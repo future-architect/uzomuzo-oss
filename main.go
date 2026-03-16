@@ -9,10 +9,10 @@ import (
 	"os/exec"
 	"strings"
 
-	domaincfg "github.com/future-architect/uzomuzo/internal/domain/config"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/config"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/spdx"
-	"github.com/future-architect/uzomuzo/internal/interfaces/cli"
+	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/spdx"
+	"github.com/future-architect/uzomuzo-oss/internal/interfaces/cli"
 
 	"github.com/joho/godotenv"
 )

@@ -9,17 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	"github.com/future-architect/uzomuzo/internal/common/purl"
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	"github.com/future-architect/uzomuzo/internal/domain/config"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/depsdev"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/github"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/golangresolve"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/goproxy"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/links"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/packagist"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/rubygems"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/golangresolve"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/links"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
 )
 
 // IntegrationService handles repository data fetching and analysis from external APIs

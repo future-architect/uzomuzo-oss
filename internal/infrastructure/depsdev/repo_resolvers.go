@@ -6,13 +6,13 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/future-architect/uzomuzo/internal/common/purl"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/maven"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/npmjs"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/nuget"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/packagist"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/pypi"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/rubygems"
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/nuget"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
 )
 
 // RepoResolver defines a strategy to resolve a repository URL from a deps.dev package response.

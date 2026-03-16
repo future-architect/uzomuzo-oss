@@ -6,14 +6,14 @@ import (
 	"log/slog"
 	"strings"
 
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
-	"github.com/future-architect/uzomuzo/internal/domain/config"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/depsdev"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/github"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/integration"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/maven"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/packagist"
-	"github.com/future-architect/uzomuzo/internal/infrastructure/rubygems"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/integration"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
 )
 
 // FetchService provides fetch-only operations for analyses without lifecycle assessment.

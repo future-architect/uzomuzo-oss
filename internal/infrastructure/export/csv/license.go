@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/future-architect/uzomuzo/internal/common"
-	domain "github.com/future-architect/uzomuzo/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 // ExportLicenses writes extended license analysis data to a CSV file.

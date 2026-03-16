@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/future-architect/uzomuzo/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
 )
 
 func Test_MapApacheHostedToGitHub_Common(t *testing.T) {
