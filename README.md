@@ -247,4 +247,4 @@ Developed by kotakanbe, creator of [Vuls](https://github.com/future-architect/vu
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+Apache License 2.0 — see [LICENSE](LICENSE) for details.
