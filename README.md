@@ -245,6 +245,12 @@ Modern software supply chains are exactly that: a vast universe of seen (direct)
 
 Developed by kotakanbe, creator of [Vuls](https://github.com/future-architect/vuls) — an open-source vulnerability scanner with 12,000+ GitHub stars. uzomuzo extends this mission from reactive vulnerability scanning to **proactive supply chain lifecycle governance**.
 
+## Sponsor
+
+If you find uzomuzo useful, consider [sponsoring the maintainer](https://github.com/sponsors/kotakanbe).
+
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/kotakanbe?style=for-the-badge&logo=github&label=Sponsor)](https://github.com/sponsors/kotakanbe)
+
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE) for details.
