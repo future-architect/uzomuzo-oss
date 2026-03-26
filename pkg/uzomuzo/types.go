@@ -50,6 +50,15 @@ type Repository = domain.Repository
 // PackageLinks holds canonical project links.
 type PackageLinks = domain.PackageLinks
 
+// CommitStats represents commit statistics (total, bot, user counts and ratios).
+type CommitStats = domain.CommitStats
+
+// ResolvedLicense represents normalized license information.
+type ResolvedLicense = domain.ResolvedLicense
+
+// NewScoreEntity creates a new ScoreEntity with the given name, value, maxValue, and reason.
+var NewScoreEntity = domain.NewScoreEntity
+
 // EOLStatus aggregates primary-source EOL evaluation + evidences.
 type EOLStatus = domain.EOLStatus
 
