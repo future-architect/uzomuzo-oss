@@ -4,6 +4,53 @@
 
 uzomuzo accepts PURLs and GitHub URLs as input. By combining it with SBOM generators like [Trivy](https://github.com/aquasecurity/trivy) or [Syft](https://github.com/anchore/syft), you can assess the lifecycle health of every dependency in a container image or repository.
 
+## Audit Subcommand (Recommended for CI)
+
+The `audit` subcommand accepts CycloneDX SBOM JSON directly — no `jq` extraction needed. It provides a summarized verdict view and exits with code 1 when any dependency is flagged as `replace`.
+
+### Filesystem Scan
+
+```bash
+# Trivy scans go.mod/package-lock.json/etc. and outputs CycloneDX SBOM
+trivy fs . --format cyclonedx | ./uzomuzo audit --sbom -
+```
+
+### Container Image Scan
+
+```bash
+trivy image my-app:latest --format cyclonedx | ./uzomuzo audit --sbom -
+```
+
+### Using with Syft
+
+```bash
+syft . -o cyclonedx-json | ./uzomuzo audit --sbom -
+```
+
+### CI Pipeline Example
+
+```bash
+# Fail the build if any dependency is EOL or archived
+trivy fs . --format cyclonedx | ./uzomuzo audit --sbom - --format json
+# Exit code 0 = all dependencies OK
+# Exit code 1 = at least one dependency needs replacement
+```
+
+### go.mod Shortcut
+
+For Go-only projects, `audit` can read `go.mod` directly without an SBOM tool:
+
+```bash
+./uzomuzo audit                    # auto-detect go.mod in cwd
+./uzomuzo audit --file go.mod      # explicit path
+```
+
+---
+
+## Pipe Mode (Detailed Per-Package Analysis)
+
+The examples below use the pipe mode for detailed per-package analysis. Use this when you need the full 17+ column output for each dependency rather than the summarized verdict view.
+
 ## Single Package Check
 
 ```bash
