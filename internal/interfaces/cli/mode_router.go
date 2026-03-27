@@ -52,50 +52,32 @@ func ResolveMode(o ProcessingOptions) (RunMode, error) {
 // CommandHandler encapsulates one mode's primary output behavior.
 type CommandHandler func(ctx context.Context, cfg *config.Config, inputs *ProcessingInputs, results *ProcessingResults, opts ProcessingOptions) error
 
-// CommandRouter maps modes to handlers & executes post hooks.
+// CommandRouter dispatches mode handlers and runs post hooks.
 type CommandRouter struct {
-	registry  *ModeRegistry
-	postHooks []func(cfg *config.Config, inputs *ProcessingInputs, results *ProcessingResults, opts ProcessingOptions)
+	postHooks []func(*config.Config, *ProcessingInputs, *ProcessingResults, ProcessingOptions)
 }
 
-// ModeRegistry provides a table-driven way to register and retrieve mode handlers.
-type ModeRegistry struct {
-	handlers map[RunMode]CommandHandler
-}
-
-func NewModeRegistry() *ModeRegistry {
-	return &ModeRegistry{handlers: map[RunMode]CommandHandler{
-		ModeDirect:    handleDirect,
-		ModeBatchFile: handleBatchFile,
-	}}
-}
-
-func (r *ModeRegistry) Add(mode RunMode, h CommandHandler) {
-	r.handlers[mode] = h
-}
-
-func (r *ModeRegistry) Get(m RunMode) (CommandHandler, bool) {
-	h, ok := r.handlers[m]
-	return h, ok
-}
-
-// NewCommandRouter builds a router with default handlers registered via registry.
+// NewCommandRouter builds a router with default post hooks.
 func NewCommandRouter() *CommandRouter {
-	reg := NewModeRegistry()
-	r := &CommandRouter{registry: reg}
-	r.postHooks = []func(*config.Config, *ProcessingInputs, *ProcessingResults, ProcessingOptions){
-		postErrors,
-		postSummary,
-		postDebugBlock,
-		postCSVExport,
+	return &CommandRouter{
+		postHooks: []func(*config.Config, *ProcessingInputs, *ProcessingResults, ProcessingOptions){
+			postErrors,
+			postSummary,
+			postDebugBlock,
+			postCSVExport,
+		},
 	}
-	return r
 }
 
-// Run executes the handler then appropriate post hooks.
+// Run executes the handler for the given mode, then runs post hooks.
 func (r *CommandRouter) Run(mode RunMode, ctx context.Context, cfg *config.Config, inputs *ProcessingInputs, results *ProcessingResults, opts ProcessingOptions) error {
-	h, ok := r.registry.Get(mode)
-	if !ok {
+	var h CommandHandler
+	switch mode {
+	case ModeDirect:
+		h = handleDirect
+	case ModeBatchFile:
+		h = handleBatchFile
+	default:
 		return fmt.Errorf("no handler for mode %s", mode)
 	}
 	if err := h(ctx, cfg, inputs, results, opts); err != nil {
