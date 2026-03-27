@@ -4,10 +4,13 @@ package main
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
+
+	cli "github.com/urfave/cli/v3"
 
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
@@ -15,10 +18,13 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/cyclonedx"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/gomod"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/spdx"
-	"github.com/future-architect/uzomuzo-oss/internal/interfaces/cli"
+	cliiface "github.com/future-architect/uzomuzo-oss/internal/interfaces/cli"
 
 	"github.com/joho/godotenv"
 )
+
+// version is set by goreleaser via ldflags.
+var version = "dev"
 
 func init() {
 	// Load .env file if available
@@ -27,9 +33,6 @@ func init() {
 	}
 }
 
-// main function: Entry point for Clean Architecture implementation
-// Processes PURLs for scorecard analysis using Clean Architecture patterns
-// Supports direct PURL/GitHub URL processing and batch file processing
 func main() {
 	ctx := context.Background()
 
@@ -49,76 +52,169 @@ func main() {
 		os.Setenv("LIFECYCLE_ASSESS_TYPE", cfg.Lifecycle.Type)
 	}
 
-	if len(os.Args) < 2 {
-		if !isTerminal(os.Stdin) {
-			processStdin(ctx, cfg, nil)
-			return
-		}
-		showUsage()
+	app := buildApp(cfg)
+	if err := app.Run(ctx, os.Args); err != nil {
+		slog.Error("command failed", "error", err)
 		os.Exit(1)
 	}
+}
 
-	// Separate flags (starting with '-') from positional args to decide mode based on first positional
-	var flags []string
-	var positional []string
-	for _, a := range os.Args[1:] {
-		if strings.HasPrefix(a, "-") {
-			flags = append(flags, a)
-		} else {
-			positional = append(positional, a)
-		}
+// buildApp constructs the urfave/cli v3 command tree.
+func buildApp(cfg *domaincfg.Config) *cli.Command {
+	// Shared ProcessingOptions populated by global flags.
+	var opts cliiface.ProcessingOptions
+	var lineRangeRaw string
+
+	return &cli.Command{
+		Name:    "uzomuzo",
+		Usage:   "OSS dependency health checker",
+		Version: version,
+		UsageText: strings.Join([]string{
+			"uzomuzo <purl_or_github_url> [more_inputs...] [flags]",
+			"uzomuzo <purl_file> [flags]",
+			"<command> | uzomuzo [flags]",
+			"uzomuzo audit [--sbom <file>] [--file <go.mod>] [--format table|json|csv]",
+			"uzomuzo update-spdx",
+		}, "\n   "),
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:        "only-review-needed",
+				Usage:       "Show only 'Review Needed' results",
+				Destination: &opts.OnlyReviewNeeded,
+			},
+			&cli.BoolFlag{
+				Name:        "only-eol",
+				Usage:       "Show only 'EOL-*' results (Confirmed/Effective/Planned)",
+				Destination: &opts.OnlyEOL,
+			},
+			&cli.StringFlag{
+				Name:        "ecosystem",
+				Usage:       "Filter to a single ecosystem (npm, pypi, maven, etc.)",
+				Destination: &opts.Ecosystem,
+			},
+			&cli.IntFlag{
+				Name:        "sample",
+				Usage:       "Randomly sample up to N inputs (file mode only)",
+				Destination: &opts.SampleSize,
+			},
+			&cli.StringFlag{
+				Name:        "export-license-csv",
+				Usage:       "Write license CSV to `path`",
+				Destination: &opts.LicenseCSVPath,
+			},
+			&cli.StringFlag{
+				Name:        "line-range",
+				Usage:       "Limit to line range START:END (file mode only)",
+				Destination: &lineRangeRaw,
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			// Apply line-range post-parse
+			if lineRangeRaw != "" {
+				ls, le, err := cliiface.ParseLineRange(lineRangeRaw)
+				if err != nil {
+					return err
+				}
+				opts.LineStart = ls
+				opts.LineEnd = le
+			}
+
+			args := cmd.Args().Slice()
+
+			// No positional args: try stdin pipe
+			if len(args) == 0 {
+				if !isTerminal(os.Stdin) {
+					return processStdin(ctx, cfg, &opts)
+				}
+				// Show help when invoked with no args and no pipe
+				cli.ShowAppHelp(cmd)
+				return cli.Exit("", 1)
+			}
+
+			first := strings.TrimSpace(args[0])
+			if first == "" {
+				return fmt.Errorf("input cannot be empty")
+			}
+
+			if isFilePath(first) {
+				return processFileMode(ctx, cfg, first, args[1:], &opts)
+			}
+
+			// Direct mode
+			opts.IsDirectInput = true
+			if opts.LineStart > 0 || opts.LineEnd > 0 {
+				return fmt.Errorf("--line-range is only valid in file mode")
+			}
+			cliiface.ProcessDirectMode(ctx, cfg, args, opts)
+			return nil
+		},
+		Commands: []*cli.Command{
+			buildAuditCommand(cfg),
+			buildUpdateSPDXCommand(),
+		},
 	}
+}
 
-	if len(positional) == 0 {
-		if !isTerminal(os.Stdin) {
-			processStdin(ctx, cfg, flags)
-			return
-		}
-		slog.Error("No positional input provided (need PURL/GitHub URL, file path, or subcommand)")
-		os.Exit(1)
+// processFileMode handles file mode from the root action.
+func processFileMode(_ context.Context, cfg *domaincfg.Config, filePath string, remaining []string, opts *cliiface.ProcessingOptions) error {
+	opts.IsDirectInput = false
+	if opts.SampleSize == 0 {
+		opts.SampleSize = cfg.App.SampleSize
 	}
+	// remaining positional args (e.g. legacy sample size) are ignored when --sample is set
+	cliiface.ProcessFileMode(cfg, filePath, *opts)
+	return nil
+}
 
-	first := strings.TrimSpace(positional[0])
-
-	// Subcommands
-	switch first {
-	case "audit":
-		// Derive audit args from os.Args starting after the "audit" token,
-		// so that global flags appearing before "audit" are not forwarded.
-		auditArgs := argsAfterSubcommand(os.Args[1:], "audit")
-		parsers := map[string]depparser.DependencyParser{
-			"sbom":  &cyclonedx.Parser{},
-			"gomod": &gomod.Parser{},
-		}
-		cli.RunAudit(ctx, cfg, auditArgs, parsers)
-		return
-	case "update-spdx":
-		if err := runUpdateSPDX(ctx); err != nil {
-			slog.Error("update-spdx failed", "error", err)
-			os.Exit(1)
-		}
-		return
+// buildAuditCommand constructs the "audit" subcommand.
+func buildAuditCommand(cfg *domaincfg.Config) *cli.Command {
+	var (
+		sbomPath string
+		filePath string
+		format   string
+	)
+	return &cli.Command{
+		Name:  "audit",
+		Usage: "Audit dependencies from SBOM or go.mod for lifecycle health",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:        "sbom",
+				Usage:       "Path to CycloneDX SBOM JSON (use '-' for stdin)",
+				Destination: &sbomPath,
+			},
+			&cli.StringFlag{
+				Name:        "file",
+				Usage:       "Path to go.mod file",
+				Destination: &filePath,
+			},
+			&cli.StringFlag{
+				Name:        "format",
+				Aliases:     []string{"f"},
+				Value:       "table",
+				Usage:       "Output format: table, json, csv",
+				Destination: &format,
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			parsers := map[string]depparser.DependencyParser{
+				"sbom":  &cyclonedx.Parser{},
+				"gomod": &gomod.Parser{},
+			}
+			cliiface.RunAudit(ctx, cfg, sbomPath, filePath, format, parsers)
+			return nil
+		},
 	}
-	if first == "" {
-		slog.Error("Input cannot be empty")
-		os.Exit(1)
-	}
+}
 
-	if isFilePath(first) {
-		// Reconstruct arg list for file mode: file path first, then flags, then remaining positional (e.g., sample size)
-		var fileModeArgs []string
-		fileModeArgs = append(fileModeArgs, first)
-		fileModeArgs = append(fileModeArgs, flags...)
-		if len(positional) > 1 { // potential sample size or ignored extras
-			fileModeArgs = append(fileModeArgs, positional[1:]...)
-		}
-		cli.ProcessFileMode(cfg, fileModeArgs)
-		return
+// buildUpdateSPDXCommand constructs the "update-spdx" subcommand.
+func buildUpdateSPDXCommand() *cli.Command {
+	return &cli.Command{
+		Name:  "update-spdx",
+		Usage: "Refresh embedded SPDX license list",
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			return runUpdateSPDX(ctx)
+		},
 	}
-
-	// Direct mode: combine flags and positional (order doesn't matter for our parser)
-	combined := append(flags, positional...)
-	cli.ProcessDirectMode(ctx, cfg, combined)
 }
 
 // runUpdateSPDX downloads latest SPDX licenses.json, writes it, and regenerates tables.
@@ -148,18 +244,6 @@ func runUpdateSPDX(ctx context.Context) error {
 	return nil
 }
 
-// argsAfterSubcommand returns the slice of args that follow the named subcommand token.
-// This ensures only args intended for the subcommand are forwarded, excluding
-// global flags that appeared before it (e.g., "uzomuzo --only-eol audit --sbom -").
-func argsAfterSubcommand(args []string, sub string) []string {
-	for i, a := range args {
-		if a == sub {
-			return args[i+1:]
-		}
-	}
-	return nil
-}
-
 // isTerminal reports whether f is connected to a terminal (not a pipe).
 func isTerminal(f *os.File) bool {
 	fi, err := f.Stat()
@@ -170,7 +254,7 @@ func isTerminal(f *os.File) bool {
 }
 
 // processStdin reads PURLs/GitHub URLs from stdin (one per line) and delegates to direct mode.
-func processStdin(ctx context.Context, cfg *domaincfg.Config, flags []string) {
+func processStdin(ctx context.Context, cfg *domaincfg.Config, opts *cliiface.ProcessingOptions) error {
 	var lines []string
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
@@ -181,16 +265,15 @@ func processStdin(ctx context.Context, cfg *domaincfg.Config, flags []string) {
 		lines = append(lines, line)
 	}
 	if err := scanner.Err(); err != nil {
-		slog.Error("Failed to read from stdin", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to read from stdin: %w", err)
 	}
 	if len(lines) == 0 {
-		slog.Error("No valid input read from stdin")
-		os.Exit(1)
+		return fmt.Errorf("no valid input read from stdin")
 	}
 	slog.Info("Read inputs from stdin", "count", len(lines))
-	combined := append(flags, lines...)
-	cli.ProcessDirectMode(ctx, cfg, combined)
+	opts.IsDirectInput = true
+	cliiface.ProcessDirectMode(ctx, cfg, lines, *opts)
+	return nil
 }
 
 // isFilePath determines if the input is a file path or a direct PURL/GitHub URL
@@ -217,30 +300,6 @@ func isFilePath(input string) bool {
 
 	// If it doesn't exist as a file but looks like a path, treat as file
 	return strings.Contains(input, "/") || strings.Contains(input, "\\") || strings.Contains(input, ".")
-}
-
-// showUsage displays usage information
-func showUsage() {
-	slog.Error("Usage error",
-		"usage", "Direct mode: uzomuzo <purl_or_github_url> [more_inputs...]",
-		"file_usage", "File mode: uzomuzo <purl_file> [sample_size]",
-		"pipe_usage", "Pipe mode: <command> | uzomuzo [flags]",
-		"subcommands", []string{
-			"audit          — Audit dependencies from SBOM or go.mod for lifecycle health",
-			"update-spdx    — Refresh embedded SPDX license list",
-		},
-		"examples", []string{
-			"uzomuzo pkg:npm/express@4.18.2 pkg:pypi/django@4.2.0",
-			"uzomuzo pkg:pypi/django@4.2.0",
-			"uzomuzo https://github.com/expressjs/express",
-			"uzomuzo github.com/django/django",
-			"uzomuzo test_max.txt 100",
-			"cat purls.txt | uzomuzo --only-eol",
-			"uzomuzo audit --sbom bom.json",
-			"syft . -o cyclonedx-json | uzomuzo audit --sbom -",
-			"uzomuzo audit                     # auto-detect go.mod in cwd",
-			"uzomuzo audit --format json",
-		})
 }
 
 // initializeLogger sets up structured logging based on configuration
@@ -272,4 +331,3 @@ func initializeLogger(logLevel string) {
 
 	slog.SetDefault(slog.New(handler))
 }
-
