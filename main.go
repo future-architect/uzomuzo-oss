@@ -20,6 +20,9 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// version is set by goreleaser via ldflags.
+var version = "dev"
+
 func init() {
 	// Load .env file if available
 	if err := godotenv.Load(); err != nil {

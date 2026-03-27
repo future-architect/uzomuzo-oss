@@ -2,14 +2,14 @@
 
 ## Available Agents
 
-| Agent | Purpose | When to Use |
-|-------|---------|-------------|
-| planner | Implementation planning | Complex features, refactoring |
-| architect | System design | Architectural decisions, package structure |
-| code-reviewer | Code review | After writing code |
-| refactor-cleaner | Dead code cleanup | Code maintenance |
-| doc-updater | Documentation | Updating docs, godoc |
-| deep-inspector | EOL batch evidence fetching | Deep Inspection orchestration |
+| Agent | Purpose | When to Use | Isolation |
+|-------|---------|-------------|-----------|
+| planner | Implementation planning | Complex features, refactoring | — |
+| architect | System design | Architectural decisions, package structure | — |
+| code-reviewer | Code review | After writing code | — |
+| refactor-cleaner | Dead code cleanup | Code maintenance | `worktree` |
+| doc-updater | Documentation | Updating docs, godoc | `worktree` |
+| deep-inspector | EOL batch evidence fetching | Deep Inspection orchestration | — |
 
 ## Available Skills
 
@@ -31,6 +31,26 @@ When the user requests a code review (e.g., "レビューして", "review this")
 2. **architect** — DDD layer compliance, dependency direction, package structure
 
 This ensures every review covers both implementation quality and architectural correctness.
+
+## Worktree Isolation Policy
+
+Agents that **write files** (Edit, Write) MUST be launched with `isolation: "worktree"` to prevent branch conflicts during parallel development. This gives each agent an isolated copy of the repository.
+
+**Rules:**
+- Agents with write tools (`refactor-cleaner`, `doc-updater`) → always `isolation: "worktree"`
+- Read-only agents (`planner`, `architect`, `code-reviewer`) → no isolation needed
+- If the worktree agent makes changes, review the returned branch and merge manually
+
+```markdown
+# GOOD: Write agent with worktree isolation
+Agent(subagent_type="refactor-cleaner", isolation="worktree", prompt="...")
+
+# GOOD: Read-only agent without isolation
+Agent(subagent_type="code-reviewer", prompt="...")
+
+# BAD: Write agent without isolation (can corrupt working tree)
+Agent(subagent_type="doc-updater", prompt="...")
+```
 
 ## Parallel Task Execution
 

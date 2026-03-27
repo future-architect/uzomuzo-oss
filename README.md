@@ -45,34 +45,53 @@ trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
 
 **59% of dependencies have lifecycle concerns invisible to SCA tools.** See the [full scan result](docs/assets/juice-shop-eol-result.txt).
 
-## Quick Start
+## Installation
+
+### Pre-built binaries (recommended)
+
+Download the latest release from [GitHub Releases](https://github.com/future-architect/uzomuzo-oss/releases).
+
+### Go install
+
+```bash
+go install github.com/future-architect/uzomuzo-oss@latest
+```
+
+> **Note:** `go install` produces a binary named `uzomuzo-oss`. Create an alias if you prefer the shorter name: `alias uzomuzo=uzomuzo-oss`
+
+### Build from source
 
 ```bash
 git clone https://github.com/future-architect/uzomuzo-oss.git
-cd uzomuzo
+cd uzomuzo-oss
 go build -o uzomuzo main.go
-cp config.template.env .env  # Set GITHUB_TOKEN for best precision
+```
+
+## Quick Start
+
+```bash
+export GITHUB_TOKEN=ghp_...  # optional; enables commit history and Scorecard
 ```
 
 ```bash
 # Single package
-./uzomuzo pkg:npm/express@4.18.2
+uzomuzo pkg:npm/express@4.18.2
 
 # GitHub repository
-./uzomuzo https://github.com/expressjs/express
+uzomuzo https://github.com/expressjs/express
 
 # Audit all project dependencies (CI-friendly)
-trivy fs . --format cyclonedx | ./uzomuzo audit --sbom -
-./uzomuzo audit                    # auto-detect go.mod in cwd
-./uzomuzo audit --format json      # JSON output for CI integration
+trivy fs . --format cyclonedx | uzomuzo audit --sbom -
+uzomuzo audit                    # auto-detect go.mod in cwd
+uzomuzo audit --format json      # JSON output for CI integration
 
 # Batch from Trivy SBOM (detailed per-package analysis)
 trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
   | jq -r '.components[].purl // empty' \
-  | ./uzomuzo --only-eol
+  | uzomuzo --only-eol
 
 # File input (one PURL per line)
-./uzomuzo --sample 500 input_purls.txt
+uzomuzo --sample 500 input_purls.txt
 ```
 
 See [Usage](docs/usage.md) for full CLI reference and [Integration Examples](docs/integration-examples.md) for Trivy, Syft, and Go module workflows.
