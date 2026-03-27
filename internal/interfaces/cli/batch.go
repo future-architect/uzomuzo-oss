@@ -82,22 +82,19 @@ func validateLineRange(opts *ProcessingOptions) error {
 //
 // Constraints:
 //   - --sample and --line-range are ignored / rejected (only file mode supports them)
-func ProcessDirectMode(ctx context.Context, cfg *domaincfg.Config, inputs []string, opts ProcessingOptions) {
+func ProcessDirectMode(ctx context.Context, cfg *domaincfg.Config, inputs []string, opts ProcessingOptions) error {
 	if len(inputs) == 0 {
-		slog.Error("No inputs provided for batch processing")
-		os.Exit(1)
+		return fmt.Errorf("no inputs provided for batch processing")
 	}
 	opts.IsDirectInput = true
 	if opts.LineStart > 0 || opts.LineEnd > 0 {
-		slog.Error("--line-range is only valid in file mode")
-		os.Exit(1)
+		return fmt.Errorf("--line-range is only valid in file mode")
 	}
 	purls, githubURLs := categorizeInputs(inputs)
 	if len(purls) == 0 && len(githubURLs) == 0 {
-		slog.Error("No valid PURLs or GitHub URLs found in inputs")
-		os.Exit(1)
+		return fmt.Errorf("no valid PURLs or GitHub URLs found in inputs")
 	}
-	processMixedContent(ctx, cfg, purls, githubURLs, opts)
+	return processMixedContent(ctx, cfg, purls, githubURLs, opts)
 }
 
 // categorizeInputs separates PURLs and GitHub URLs from mixed input
@@ -124,23 +121,20 @@ func categorizeInputs(inputs []string) (purls []string, githubURLs []string) {
 // ProcessFileMode handles file mode processing with unified line-by-line detection.
 //
 // DDD Layer: Interface (CLI handler, delegates to processMixedContent)
-func ProcessFileMode(ctx context.Context, cfg *domaincfg.Config, filePath string, opts ProcessingOptions) {
+func ProcessFileMode(ctx context.Context, cfg *domaincfg.Config, filePath string, opts ProcessingOptions) error {
 	opts.IsDirectInput = false
 	opts.Filename = filePath
 	if err := validateLineRange(&opts); err != nil {
-		slog.Error("Invalid line range", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("invalid line range: %w", err)
 	}
 	purls, githubURLs, err := categorizeFileLines(filePath, opts)
 	if err != nil {
-		slog.Error("Error reading file", "file", filePath, "error", err)
-		os.Exit(1)
+		return err
 	}
 	if len(purls) == 0 && len(githubURLs) == 0 {
-		slog.Error("No valid PURLs or GitHub URLs found in file", "file", filePath)
-		os.Exit(1)
+		return fmt.Errorf("no valid PURLs or GitHub URLs found in file '%s'", filePath)
 	}
-	processMixedContent(ctx, cfg, purls, githubURLs, opts)
+	return processMixedContent(ctx, cfg, purls, githubURLs, opts)
 }
 
 // categorizeFileLines reads file and categorizes each line (unified function)
@@ -215,7 +209,7 @@ type GitHubURLProcessingResult struct {
 // DDD Layer: Interface (unified processing entry point)
 // Dependencies: Application layer services
 // Reuses: All existing batch processing optimizations
-func processMixedContent(ctx context.Context, cfg *domaincfg.Config, purls []string, githubURLs []string, options ProcessingOptions) {
+func processMixedContent(ctx context.Context, cfg *domaincfg.Config, purls []string, githubURLs []string, options ProcessingOptions) error {
 
 	// Global Maven collapsed coordinate normalization
 	if len(purls) > 0 {
@@ -249,8 +243,7 @@ func processMixedContent(ctx context.Context, cfg *domaincfg.Config, purls []str
 	// Step 1: Validate and preprocess inputs
 	inputs, err := validateAndPreprocessInputs(ctx, cfg, purls, githubURLs, options)
 	if err != nil {
-		slog.Error("Input validation failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("input validation failed: %w", err)
 	}
 	defer func() {
 		if inputs.CancelFunc != nil {
@@ -261,15 +254,17 @@ func processMixedContent(ctx context.Context, cfg *domaincfg.Config, purls []str
 	// Step 2: Execute processing
 	results, svc, err := executeProcessing(inputs.ProcessingCtx, cfg, inputs.SupportedPURLs, inputs.ValidGitHubURLs)
 	if err != nil {
-		slog.Error("Processing failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("processing failed: %w", err)
 	}
 
 	// Step 3: Display results
-	displayResults(cfg, results, inputs, options)
+	if err := displayResults(cfg, results, inputs, options); err != nil {
+		return err
+	}
 
 	// Step 4: Print GitHub API rate limit summary (when at least one call was made)
 	printGitHubRateLimitSummary(svc)
+	return nil
 }
 
 // validateAndPreprocessInputs validates inputs and applies filtering, sampling, and validation
@@ -503,7 +498,7 @@ func executeProcessing(ctx context.Context, cfg *domaincfg.Config, supportedPURL
 }
 
 // displayResults handles the display of processing results and statistics
-func displayResults(cfg *domaincfg.Config, results *ProcessingResults, inputs *ProcessingInputs, options ProcessingOptions) {
+func displayResults(cfg *domaincfg.Config, results *ProcessingResults, inputs *ProcessingInputs, options ProcessingOptions) error {
 	// Single point of skipped PURL logging (start-phase duplicate removed per noise reduction policy)
 	if len(inputs.SkippedPURLs) > 0 {
 		slog.Debug("Skipped unsupported package types", "count", len(inputs.SkippedPURLs))
@@ -514,14 +509,13 @@ func displayResults(cfg *domaincfg.Config, results *ProcessingResults, inputs *P
 
 	mode, err := ResolveMode(options)
 	if err != nil {
-		slog.Error("Failed to resolve mode", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to resolve mode: %w", err)
 	}
 	router := NewCommandRouter()
-	if err := router.Run(mode, context.Background(), cfg, inputs, results, options); err != nil {
-		slog.Error("Mode execution failed", "error", err, "mode", mode.String())
-		os.Exit(1)
+	if err := router.Run(mode, inputs.ProcessingCtx, cfg, inputs, results, options); err != nil {
+		return fmt.Errorf("mode execution failed (%s): %w", mode.String(), err)
 	}
+	return nil
 }
 
 // printGitHubRateLimitSummary prints remaining GitHub API quota and reset time
