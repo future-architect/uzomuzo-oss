@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Go Version Policy
+
+The team and CI use **Go 1.26.1**. The `go` directive in `go.mod` tracks the minimum version required by our dependencies (currently `go 1.25.0`). **Do not downgrade this value** — it is set by `go mod tidy` based on dependency requirements and is intentional.
+
 ## Build & Run
 
 ```bash

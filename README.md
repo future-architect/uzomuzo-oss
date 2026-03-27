@@ -61,7 +61,12 @@ cp config.template.env .env  # Set GITHUB_TOKEN for best precision
 # GitHub repository
 ./uzomuzo https://github.com/expressjs/express
 
-# Batch from Trivy SBOM
+# Audit all project dependencies (CI-friendly)
+trivy fs . --format cyclonedx | ./uzomuzo audit --sbom -
+./uzomuzo audit                    # auto-detect go.mod in cwd
+./uzomuzo audit --format json      # JSON output for CI integration
+
+# Batch from Trivy SBOM (detailed per-package analysis)
 trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
   | jq -r '.components[].purl // empty' \
   | ./uzomuzo --only-eol
@@ -202,6 +207,7 @@ npm / PyPI / Maven / Cargo / Go modules / NuGet / RubyGems / Packagist
 - **Multi-ecosystem support**: 8 ecosystems with full PURL (Package URL) spec compliance
 - **OpenSSF Scorecard integration**: Automated security maturity metrics
 - **Parallel-optimized batch processing**: 5,000+ PURLs/run with concurrent API orchestration
+- **Audit subcommand**: Bulk dependency health check from CycloneDX SBOM or go.mod with CI exit code gating
 - **Flexible input**: Direct PURL / GitHub URL / file list / mixed / stdin pipe
 - **CSV / CLI reports**: Comprehensive output of metrics, licenses, and lifecycle status
 - **Extensible via AnalysisEnricher hook**: Inject custom EOL catalog logic without modifying core — [details](docs/library-usage.md)

@@ -95,7 +95,54 @@ Input filtering and output control options:
 
 | Subcommand | Description |
 |------------|-------------|
+| `audit` | Bulk dependency health evaluation from CycloneDX SBOM or go.mod |
 | `update-spdx` | Update and regenerate the embedded SPDX license list from upstream |
+
+### `audit` — Dependency Health Audit
+
+Evaluates all project dependencies in bulk and derives a per-dependency verdict: **ok**, **caution**, **replace**, or **review**. Designed for CI pipelines — exits with code 1 when any dependency receives a `replace` verdict.
+
+```bash
+# CycloneDX SBOM input (recommended)
+./uzomuzo audit --sbom bom.json
+trivy fs . --format cyclonedx | ./uzomuzo audit --sbom -
+trivy image my-app:latest --format cyclonedx | ./uzomuzo audit --sbom -
+syft . -o cyclonedx-json | ./uzomuzo audit --sbom -
+
+# go.mod fallback
+./uzomuzo audit                    # auto-detect go.mod in cwd
+./uzomuzo audit --file go.mod
+
+# Output formats
+./uzomuzo audit --format table     # default: human-readable table
+./uzomuzo audit --format json      # structured JSON with summary
+./uzomuzo audit --format csv       # CSV for spreadsheet/pipeline processing
+```
+
+**Flags:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--sbom <path>` | Path to CycloneDX SBOM JSON file (use `-` for stdin) | — |
+| `--file <path>` | Path to go.mod file | — |
+| `--format <fmt>` | Output format: `table`, `json`, `csv` | `table` |
+
+**Input resolution order:**
+
+1. `--sbom` flag (CycloneDX JSON)
+2. `--file` flag (go.mod)
+3. Auto-detect `go.mod` in current working directory
+
+**Verdict mapping:**
+
+| Verdict | Lifecycle states | Action |
+|---------|-----------------|--------|
+| `ok` | Active, Legacy-Safe | No action needed |
+| `caution` | Stalled, EOL-Scheduled | Monitor; plan migration |
+| `replace` | EOL-Confirmed, EOL-Effective, Archived | Migrate immediately |
+| `review` | Insufficient data, analysis error | Manual investigation |
+
+**Difference from pipe mode:** The `audit` subcommand accepts structured SBOM files directly (no `jq` extraction needed), provides a summarized verdict view optimized for quick scanning, and exits with code 1 for CI gating. Use the existing pipe mode (`trivy ... | jq -r '.components[].purl' | ./uzomuzo`) when you need detailed per-package analysis.
 
 ## License CSV Column Reference (`--export-license-csv`)
 

@@ -23,6 +23,16 @@ You are a senior Go software architect specializing in DDD-based CLI tool design
 - Identify circular dependencies or layer violations
 - Assess interface usage and testability
 - **Read relevant ADRs in `docs/adr/`** before proposing changes
+- **Concrete import verification**: Run the following to detect layer violations in changed files:
+  ```bash
+  # Interfaces must NOT import Infrastructure
+  grep -rn '"github.com/future-architect/uzomuzo-oss/internal/infrastructure' internal/interfaces/
+  # Application must NOT import Infrastructure
+  grep -rn '"github.com/future-architect/uzomuzo-oss/internal/infrastructure' internal/application/
+  # Domain must NOT import any other internal layer
+  grep -rn '"github.com/future-architect/uzomuzo-oss/internal/\(infrastructure\|application\|interfaces\)' internal/domain/
+  ```
+- **Composition root check**: Infrastructure implementations should be wired in `main.go` (composition root), not in Interfaces or Application layers. Verify that `main.go` is the only file importing both Interfaces and Infrastructure packages
 
 ### 2. Design Proposal
 - Package responsibilities within DDD layers
@@ -91,7 +101,8 @@ uzomuzo/
 
 ## ADRs
 
-- **Location**: `docs/adr/NNNN-kebab-case-title.ja.md`
+- **Location**: `docs/adr/NNNN-kebab-case-title.md`
 - **MUST READ** before proposing architectural changes
 - **Rejected alternatives** are documented — do NOT re-propose without addressing rejection rationale
-- When implementing, add: `// Design decision: see docs/adr/NNNN-title.ja.md`
+- When implementing, add: `// Design decision: see docs/adr/NNNN-title.md`
+- **Verify ADR accuracy**: When reviewing code that has an associated ADR, cross-check that ADR claims (dependency counts, "stdlib only", performance claims) match the actual implementation. Flag any discrepancies as HIGH issues
