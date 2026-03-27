@@ -55,6 +55,7 @@ func TestGetDeprecation_NotFound(t *testing.T) {
 
 	c := NewClient()
 	c.SetBaseURL(srv.URL + "/v3/registration5-semver2")
+	c.SetHTMLBase(srv.URL) // prevent HTML fallback from hitting real nuget.org
 
 	info, found, err := c.GetDeprecation(context.Background(), "NoSuch")
 	if err != nil {
@@ -116,7 +117,8 @@ func TestGetDeprecation_NoCacheNotFound_AllowsFreshLookup(t *testing.T) {
 
 	c := NewClient()
 	c.SetBaseURL(srv.URL + "/v3/registration5-semver2")
-	c.SetCacheTTL(1) // enable caching
+	c.SetHTMLBase(srv.URL)   // prevent HTML fallback from hitting real nuget.org
+	c.SetCacheTTL(time.Hour) // enable caching with a long TTL
 	c.NoCacheNotFound = true
 
 	// First attempt: 404 -> found=false
