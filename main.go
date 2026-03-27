@@ -93,8 +93,7 @@ func buildApp(cfg *domaincfg.Config) *urfcli.Command {
 						"sbom":  &cyclonedx.Parser{},
 						"gomod": &gomod.Parser{},
 					}
-					cli.RunAudit(ctx, cfg, cmd.String("sbom"), cmd.String("file"), cmd.String("format"), parsers)
-					return nil
+					return cli.RunAudit(ctx, cfg, cmd.String("sbom"), cmd.String("file"), cmd.String("format"), parsers)
 				},
 			},
 			{
@@ -135,13 +134,11 @@ func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 		if opts.SampleSize == 0 {
 			opts.SampleSize = cfg.App.SampleSize
 		}
-		cli.ProcessFileMode(ctx, cfg, first, opts)
-		return nil
+		return cli.ProcessFileMode(ctx, cfg, first, opts)
 	}
 
 	// Direct mode: all positional args are PURLs/GitHub URLs
-	cli.ProcessDirectMode(ctx, cfg, args, opts)
-	return nil
+	return cli.ProcessDirectMode(ctx, cfg, args, opts)
 }
 
 // buildProcessingOptions maps urfave/cli flags to ProcessingOptions.
@@ -220,8 +217,7 @@ func processStdin(ctx context.Context, cfg *domaincfg.Config, opts cli.Processin
 		return fmt.Errorf("no valid input read from stdin")
 	}
 	slog.Info("Read inputs from stdin", "count", len(lines))
-	cli.ProcessDirectMode(ctx, cfg, lines, opts)
-	return nil
+	return cli.ProcessDirectMode(ctx, cfg, lines, opts)
 }
 
 // isFilePath determines if the input is a file path or a direct PURL/GitHub URL
