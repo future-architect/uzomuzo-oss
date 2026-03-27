@@ -109,6 +109,20 @@ if err != nil {
 - Buffered I/O (`bufio.Writer`) for large outputs
 - No goroutine leaks (context cancellation, done channels)
 
+### OSS Dependency Health (HIGH)
+
+When `go.mod` is part of the changed files, check new or updated dependencies:
+
+1. Run `git diff go.mod` to identify added/changed dependencies
+2. Convert new module paths to PURLs: `pkg:golang/<module-path>` (include `/v2`, `/v3` suffixes!)
+3. Run `GOWORK=off go run . <purls...>` to evaluate with uzomuzo
+4. Report findings:
+   - **EOL-Confirmed / EOL-Effective**: BLOCK — must replace with actively maintained alternative
+   - **Stalled**: HIGH — document justification for using a stalled package (e.g., "feature-complete, no changes needed")
+   - **Active**: OK
+   - Include the successor package if uzomuzo provides one
+5. Skip self-owned packages (`future-architect/*`)
+
 ## Output Format
 
 For each issue:
