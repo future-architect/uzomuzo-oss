@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -21,11 +20,11 @@ import (
 // RunAudit is the entry point for the "audit" subcommand.
 //
 // Input resolution order:
-//  1. --sbom <file> or "-" for stdin (CycloneDX SBOM JSON)
-//  2. --file <go.mod path> (go.mod convenience fallback)
+//  1. sbomPath (non-empty): CycloneDX SBOM JSON file, or "-" for stdin
+//  2. filePath (non-empty): go.mod convenience fallback
 //  3. Auto-detect: look for go.mod in current working directory
 //
-// Output: table (default), json, or csv via --format flag.
+// Output: table (default), json, or csv via format parameter.
 // Exit code: 1 if any verdict is "replace".
 //
 // The parsers parameter provides available DependencyParser implementations,
@@ -33,23 +32,7 @@ import (
 // importing Infrastructure directly (DDD layer compliance).
 //
 // DDD Layer: Interfaces (CLI handler, delegates to Application)
-func RunAudit(ctx context.Context, cfg *domaincfg.Config, args []string, parsers map[string]depparser.DependencyParser) {
-	fs := flag.NewFlagSet("audit", flag.ContinueOnError)
-	fs.SetOutput(io.Discard) // suppress default FlagSet error/usage output
-	var (
-		sbomPath string
-		filePath string
-		format   string
-	)
-	fs.StringVar(&sbomPath, "sbom", "", "Path to CycloneDX SBOM JSON file (use '-' for stdin)")
-	fs.StringVar(&filePath, "file", "", "Path to go.mod file")
-	fs.StringVar(&format, "format", "table", "Output format: table, json, csv")
-
-	if err := fs.Parse(args); err != nil {
-		slog.Error("failed to parse audit flags", "error", err)
-		os.Exit(1)
-	}
-
+func RunAudit(ctx context.Context, cfg *domaincfg.Config, sbomPath, filePath, format string, parsers map[string]depparser.DependencyParser) {
 	data, parser, err := resolveAuditInput(sbomPath, filePath, parsers)
 	if err != nil {
 		slog.Error("failed to resolve audit input", "error", err)

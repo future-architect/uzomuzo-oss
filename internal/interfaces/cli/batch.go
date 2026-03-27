@@ -77,46 +77,26 @@ func validateLineRange(opts *ProcessingOptions) error {
 //
 // DDD Layer: Interface (unified entry point for direct multi-input processing)
 // Responsibilities:
-//   - Parse flags relevant to direct mode (ignores sampling & line-range)
 //   - Categorize raw inputs into PURLs and GitHub URLs
 //   - Delegate to shared processing pipeline (processMixedContent)
 //
 // Constraints:
 //   - --sample and --line-range are ignored / rejected (only file mode supports them)
-func ProcessDirectMode(ctx context.Context, cfg *domaincfg.Config, inputs []string) {
+func ProcessDirectMode(ctx context.Context, cfg *domaincfg.Config, inputs []string, opts ProcessingOptions) {
 	if len(inputs) == 0 {
 		slog.Error("No inputs provided for batch processing")
 		os.Exit(1)
 	}
-	flagTokens, positional := parseFlags(inputs)
-	opts := ProcessingOptions{IsDirectInput: true}
-	fs := buildFlagSet(&opts, "direct", cfg.App.SampleSize)
-	if err := fs.Parse(flagTokens); err != nil {
-		slog.Error("Failed to parse flags", "error", err)
-		os.Exit(1)
-	}
-	if err := applyPostParseLineRange(fs, &opts); err != nil {
-		slog.Error("Invalid --line-range", "error", err)
-		os.Exit(1)
-	}
-	if len(positional) == 0 {
-		slog.Error("No inputs provided for batch processing (after flag parsing)")
-		os.Exit(1)
-	}
-	if err := validateLineRange(&opts); err != nil {
-		slog.Error("Invalid line range", "error", err)
-		os.Exit(1)
-	}
+	opts.IsDirectInput = true
 	if opts.LineStart > 0 || opts.LineEnd > 0 {
 		slog.Error("--line-range is only valid in file mode")
 		os.Exit(1)
 	}
-	purls, githubURLs := categorizeInputs(positional)
+	purls, githubURLs := categorizeInputs(inputs)
 	if len(purls) == 0 && len(githubURLs) == 0 {
 		slog.Error("No valid PURLs or GitHub URLs found in inputs")
 		os.Exit(1)
 	}
-	// mutual exclusion validated in ResolveMode via Normalize()
 	processMixedContent(ctx, cfg, purls, githubURLs, opts)
 }
 
@@ -141,44 +121,26 @@ func categorizeInputs(inputs []string) (purls []string, githubURLs []string) {
 	return purls, githubURLs
 }
 
-// ProcessFileMode handles file mode processing with unified line-by-line detection
-func ProcessFileMode(cfg *domaincfg.Config, args []string) {
-	if len(args) == 0 {
-		slog.Error("File mode requires a file argument")
-		os.Exit(1)
-	}
-	flagTokens, positional := parseFlags(args)
-	opts := ProcessingOptions{IsDirectInput: false, SampleSize: cfg.App.SampleSize}
-	fs := buildFlagSet(&opts, "file", cfg.App.SampleSize)
-	if err := fs.Parse(flagTokens); err != nil {
-		slog.Error("Failed to parse flags", "error", err)
-		os.Exit(1)
-	}
-	if err := applyPostParseLineRange(fs, &opts); err != nil {
-		slog.Error("Invalid --line-range", "error", err)
-		os.Exit(1)
-	}
-	if len(positional) == 0 {
-		slog.Error("File mode requires a file argument (after flag parsing)")
-		os.Exit(1)
-	}
-	filename := positional[0]
-	// Validate line-range usage in file mode here (direct mode handled earlier)
+// ProcessFileMode handles file mode processing with unified line-by-line detection.
+//
+// DDD Layer: Interface (CLI handler, delegates to processMixedContent)
+func ProcessFileMode(ctx context.Context, cfg *domaincfg.Config, filePath string, opts ProcessingOptions) {
+	opts.IsDirectInput = false
+	opts.Filename = filePath
 	if err := validateLineRange(&opts); err != nil {
 		slog.Error("Invalid line range", "error", err)
 		os.Exit(1)
 	}
-	purls, githubURLs, err := categorizeFileLines(filename, opts)
+	purls, githubURLs, err := categorizeFileLines(filePath, opts)
 	if err != nil {
-		slog.Error("Error reading file", "file", filename, "error", err)
+		slog.Error("Error reading file", "file", filePath, "error", err)
 		os.Exit(1)
 	}
 	if len(purls) == 0 && len(githubURLs) == 0 {
-		slog.Error("No valid PURLs or GitHub URLs found in file", "file", filename)
+		slog.Error("No valid PURLs or GitHub URLs found in file", "file", filePath)
 		os.Exit(1)
 	}
-	opts.Filename = filename
-	processMixedContent(context.Background(), cfg, purls, githubURLs, opts)
+	processMixedContent(ctx, cfg, purls, githubURLs, opts)
 }
 
 // categorizeFileLines reads file and categorizes each line (unified function)
@@ -1131,7 +1093,6 @@ func displayBatchAnalysesSummary(analyses map[string]*analysispkg.Analysis) {
 		}
 	}
 
-
 	// Extra: Surface README-based EOL candidates to allow quick manual verification
 	// We list all evidences where Source == "GitHubREADME".
 	var readmeHits []struct{ pkg, url, phrase string }
@@ -1174,7 +1135,6 @@ func displayBatchAnalysesSummary(analyses map[string]*analysispkg.Analysis) {
 		}
 	}
 }
-
 
 // displayBatchErrors displays processing errors for failed analyses
 func displayBatchErrors(analyses map[string]*analysispkg.Analysis) {
@@ -1238,7 +1198,6 @@ func displayBatchErrors(analyses map[string]*analysispkg.Analysis) {
 	}
 	fmt.Printf(strings.Repeat("!", separatorLength) + "\n")
 }
-
 
 // ecosystemFromPURL extracts the ecosystem from a PURL string (e.g. "pkg:npm/foo" -> "npm").
 func ecosystemFromPURL(purl string) string {

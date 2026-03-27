@@ -22,7 +22,7 @@ func TestParseLineRange(t *testing.T) {
 		{"5", 0, 0, true, "missing colon"},
 	}
 	for _, c := range cases {
-		start, end, err := parseLineRange(c.in)
+		start, end, err := ParseLineRange(c.in)
 		if c.wantErr {
 			if err == nil {
 				t.Fatalf("%s: expected error for input %q", c.name, c.in)
