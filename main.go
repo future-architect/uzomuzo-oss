@@ -132,6 +132,9 @@ func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 	}
 
 	if isFilePath(first) {
+		if opts.SampleSize == 0 {
+			opts.SampleSize = cfg.App.SampleSize
+		}
 		cli.ProcessFileMode(ctx, cfg, first, opts)
 		return nil
 	}
@@ -150,9 +153,8 @@ func buildProcessingOptions(cfg *domaincfg.Config, cmd *urfcli.Command) (cli.Pro
 		SampleSize:       int(cmd.Int("sample")),
 		LicenseCSVPath:   cmd.String("export-license-csv"),
 	}
-	if opts.SampleSize == 0 {
-		opts.SampleSize = cfg.App.SampleSize
-	}
+	// SampleSize default from config is applied later in ProcessFileMode;
+	// leave zero here so direct/stdin modes are not affected.
 	if raw := cmd.String("line-range"); raw != "" {
 		ls, le, err := cli.ParseLineRange(raw)
 		if err != nil {

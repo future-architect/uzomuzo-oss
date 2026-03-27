@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// parseLineRange parses START:END or START: format. START must be >=1. END optional or >= START.
+// ParseLineRange parses START:END or START: format. START must be >=1. END optional or >= START.
 func ParseLineRange(raw string) (int, int, error) {
 	if !strings.Contains(raw, ":") { // enforce colon presence
 		return 0, 0, fmt.Errorf("invalid --line-range format (expected START:END)")
