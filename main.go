@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -57,6 +58,10 @@ func main() {
 
 	app := buildApp(cfg)
 	if err := app.Run(ctx, os.Args); err != nil {
+		// ErrAuditReplaceFound is a signal, not a failure — exit silently with code 1.
+		if errors.Is(err, cli.ErrAuditReplaceFound) {
+			os.Exit(1)
+		}
 		slog.Error("command failed", "error", err)
 		os.Exit(1)
 	}

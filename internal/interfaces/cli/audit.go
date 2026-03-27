@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,7 +20,7 @@ import (
 
 // ErrAuditReplaceFound is returned by RunAudit when at least one dependency
 // has a "replace" verdict, signaling the caller to exit with code 1.
-var ErrAuditReplaceFound = fmt.Errorf("audit: one or more dependencies require replacement")
+var ErrAuditReplaceFound = errors.New("audit: one or more dependencies require replacement")
 
 // RunAudit is the entry point for the "audit" subcommand.
 //

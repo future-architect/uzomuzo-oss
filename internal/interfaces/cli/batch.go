@@ -512,7 +512,7 @@ func displayResults(cfg *domaincfg.Config, results *ProcessingResults, inputs *P
 		return fmt.Errorf("failed to resolve mode: %w", err)
 	}
 	router := NewCommandRouter()
-	if err := router.Run(mode, context.Background(), cfg, inputs, results, options); err != nil {
+	if err := router.Run(mode, inputs.ProcessingCtx, cfg, inputs, results, options); err != nil {
 		return fmt.Errorf("mode execution failed (%s): %w", mode.String(), err)
 	}
 	return nil
