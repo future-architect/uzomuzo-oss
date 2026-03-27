@@ -129,7 +129,7 @@ func ProcessFileMode(ctx context.Context, cfg *domaincfg.Config, filePath string
 	}
 	purls, githubURLs, err := categorizeFileLines(filePath, opts)
 	if err != nil {
-		return fmt.Errorf("failed to read file '%s': %w", filePath, err)
+		return err
 	}
 	if len(purls) == 0 && len(githubURLs) == 0 {
 		return fmt.Errorf("no valid PURLs or GitHub URLs found in file '%s'", filePath)
