@@ -68,6 +68,19 @@ func buildApp(cfg *domaincfg.Config) *urfcli.Command {
 		Name:    "uzomuzo",
 		Usage:   "OSS dependency health checker",
 		Version: version,
+		UsageText: `uzomuzo <purl> [more...]          Direct mode
+   uzomuzo <file>                    File mode
+   <command> | uzomuzo [flags]       Pipe mode
+
+Examples:
+   uzomuzo pkg:npm/express@4.18.2 pkg:pypi/django@4.2.0
+   uzomuzo https://github.com/expressjs/express
+   uzomuzo input_purls.txt
+   uzomuzo --line-range 1:10 input_purls.txt
+   cat purls.txt | uzomuzo --only-eol
+   uzomuzo audit --sbom bom.json
+   syft . -o cyclonedx-json | uzomuzo audit --sbom -
+   uzomuzo audit --format json`,
 		Flags: []urfcli.Flag{
 			&urfcli.BoolFlag{Name: "only-review-needed", Usage: "Show only 'Review Needed' results"},
 			&urfcli.BoolFlag{Name: "only-eol", Usage: "Show only 'EOL-*' results"},
