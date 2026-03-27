@@ -7,6 +7,7 @@ package gomod
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	"golang.org/x/mod/modfile"
@@ -43,10 +44,15 @@ func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDepend
 		modPath := req.Mod.Path
 		version := req.Mod.Version
 
-		// Apply replace directive if present
+		// Apply replace directive if present.
+		// Skip local-path replacements (empty version or relative path) as they
+		// produce invalid PURLs like "pkg:golang/../foo@".
 		if rep, ok := replaces[modPath]; ok {
-			modPath = rep.New.Path
-			version = rep.New.Version
+			if rep.New.Version != "" && !strings.HasPrefix(rep.New.Path, ".") && !strings.HasPrefix(rep.New.Path, "/") {
+				modPath = rep.New.Path
+				version = rep.New.Version
+			}
+			// Local-path replacement: keep original module path and version
 		}
 
 		deps = append(deps, depparser.ParsedDependency{

@@ -53,6 +53,11 @@ const maxNestingDepth = 100
 // Recursion stops at maxNestingDepth to guard against malicious input.
 func extractPURLs(components []component, seen map[string]struct{}, deps *[]depparser.ParsedDependency, depth int) {
 	if depth > maxNestingDepth {
+		slog.Warn(
+			"max CycloneDX SBOM component nesting depth exceeded; dependency extraction truncated",
+			"maxDepth", maxNestingDepth,
+			"depth", depth,
+		)
 		return
 	}
 	for _, c := range components {

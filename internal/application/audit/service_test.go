@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/future-architect/uzomuzo-oss/internal/application/audit"
-	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 )
 
@@ -21,13 +20,6 @@ func (m *mockParser) Parse(_ context.Context, _ []byte) ([]depparser.ParsedDepen
 }
 
 func (m *mockParser) FormatName() string { return "mock" }
-
-func TestDeriveVerdict_Integration(t *testing.T) {
-	got := domainaudit.DeriveVerdict(nil)
-	if got != domainaudit.VerdictReview {
-		t.Errorf("DeriveVerdict(nil) = %q, want %q", got, domainaudit.VerdictReview)
-	}
-}
 
 func TestMockParser_Parse(t *testing.T) {
 	p := &mockParser{
@@ -47,8 +39,31 @@ func TestMockParser_Parse(t *testing.T) {
 	}
 }
 
+func TestService_Run_NilAnalysisService(t *testing.T) {
+	svc := audit.NewService(nil)
+	parser := &mockParser{
+		deps: []depparser.ParsedDependency{
+			{PURL: "pkg:npm/express@4.18.2"},
+		},
+	}
+
+	_, _, err := svc.Run(context.Background(), parser, nil)
+	if err == nil {
+		t.Fatal("expected error for nil analysisService, got nil")
+	}
+}
+
+func TestService_Run_NilParser(t *testing.T) {
+	svc := audit.NewService(nil)
+
+	_, _, err := svc.Run(context.Background(), nil, nil)
+	if err == nil {
+		t.Fatal("expected error for nil parser, got nil")
+	}
+}
+
 func TestService_Run_ParserError(t *testing.T) {
-	svc := audit.NewService(nil) // AnalysisService not needed — parser fails first
+	svc := audit.NewService(nil)
 	parser := &mockParser{err: fmt.Errorf("parse error")}
 
 	_, _, err := svc.Run(context.Background(), parser, nil)
@@ -71,25 +86,4 @@ func TestService_Run_EmptyDeps(t *testing.T) {
 	if hasReplace {
 		t.Error("expected hasReplace=false for empty deps")
 	}
-}
-
-func TestService_Run_Deduplication(t *testing.T) {
-	// Service.Run cannot be fully tested without a real AnalysisService (concrete type),
-	// but we can verify that the parser is invoked and deduplication works by checking
-	// that a parser returning duplicates doesn't cause issues before the ProcessBatchPURLs call.
-	// The ProcessBatchPURLs call will fail with nil service, so we test up to that point.
-	svc := audit.NewService(nil)
-	parser := &mockParser{
-		deps: []depparser.ParsedDependency{
-			{PURL: "pkg:npm/express@4.18.2"},
-			{PURL: "pkg:npm/express@4.18.2"}, // duplicate
-			{PURL: "pkg:npm/lodash@4.17.21"},
-		},
-	}
-
-	// This will panic/fail at ProcessBatchPURLs since analysisService is nil,
-	// but we can verify dedup works by testing with empty deps first (above).
-	// Full integration testing requires network access.
-	_ = svc
-	_ = parser
 }

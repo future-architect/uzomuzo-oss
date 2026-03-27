@@ -31,12 +31,20 @@ func NewService(analysisService *application.AnalysisService) *Service {
 //
 // Returns audit entries and a boolean indicating whether any verdict is "replace".
 func (s *Service) Run(ctx context.Context, parser depparser.DependencyParser, data []byte) ([]domainaudit.AuditEntry, bool, error) {
+	if parser == nil {
+		return nil, false, fmt.Errorf("audit service not initialized: parser is nil")
+	}
+
 	deps, err := parser.Parse(ctx, data)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to parse dependencies (%s): %w", parser.FormatName(), err)
 	}
 	if len(deps) == 0 {
 		return nil, false, nil
+	}
+
+	if s.analysisService == nil {
+		return nil, false, fmt.Errorf("audit service not initialized: analysisService is nil")
 	}
 
 	// Deduplicate and collect PURLs

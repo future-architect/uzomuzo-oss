@@ -20,3 +20,6 @@ scorecard.csv
 # Deep Inspection temp files
 .github/tmp/
 
+# Temporary plans
+docs/plans/
+

@@ -10,7 +10,10 @@ import (
 	"strings"
 
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/cyclonedx"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/gomod"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/spdx"
 	"github.com/future-architect/uzomuzo-oss/internal/interfaces/cli"
 
@@ -80,10 +83,14 @@ func main() {
 	// Subcommands
 	switch first {
 	case "audit":
-		// Combine flags and remaining positional args for the audit subcommand.
-		// This avoids passing global flags (e.g., --log-level debug) that appear before "audit".
-		auditArgs := append(flags, positional[1:]...)
-		cli.RunAudit(ctx, cfg, auditArgs)
+		// Derive audit args from os.Args starting after the "audit" token,
+		// so that global flags appearing before "audit" are not forwarded.
+		auditArgs := argsAfterSubcommand(os.Args[1:], "audit")
+		parsers := map[string]depparser.DependencyParser{
+			"sbom":  &cyclonedx.Parser{},
+			"gomod": &gomod.Parser{},
+		}
+		cli.RunAudit(ctx, cfg, auditArgs, parsers)
 		return
 	case "update-spdx":
 		if err := runUpdateSPDX(ctx); err != nil {
@@ -138,6 +145,18 @@ func runUpdateSPDX(ctx context.Context) error {
 		return err
 	}
 	slog.Info("SPDX update complete")
+	return nil
+}
+
+// argsAfterSubcommand returns the slice of args that follow the named subcommand token.
+// This ensures only args intended for the subcommand are forwarded, excluding
+// global flags that appeared before it (e.g., "uzomuzo --only-eol audit --sbom -").
+func argsAfterSubcommand(args []string, sub string) []string {
+	for i, a := range args {
+		if a == sub {
+			return args[i+1:]
+		}
+	}
 	return nil
 }
 

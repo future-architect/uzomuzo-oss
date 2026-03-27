@@ -21,6 +21,7 @@ When invoked:
 - **Parallel processing placement**: goroutines/channels only in `internal/infrastructure/`, never in `internal/interfaces/` or `internal/domain/`
 - **Dependency direction**: No reverse imports (domain must not import infrastructure)
 - **Interface definitions**: Defined in domain layer, implemented in infrastructure
+- **Import verification**: Actually inspect import blocks of changed files. Run `grep -n 'infrastructure' internal/interfaces/cli/*.go` and `grep -n 'infrastructure' internal/application/**/*.go` to detect forbidden cross-layer imports
 
 ### Language Policy (CRITICAL)
 
@@ -28,7 +29,7 @@ When invoked:
 - **No Japanese** in source code identifiers or comments
 - **ADR compliance**: Related ADRs referenced in comments where applicable
 
-### Go Idioms (CRITICAL)
+### Go Idioms & Common Footguns (CRITICAL)
 
 - Error handling: errors returned, not ignored. Wrapped with context via `%w`
 - No `panic` in library code (only in main/init for truly unrecoverable cases)
@@ -37,6 +38,9 @@ When invoked:
 - Receiver names: short, consistent (not `this` or `self`)
 - Package names: short, lowercase, no underscores
 - No stuttering: `config.Config` is fine, `config.ConfigManager` is not
+- **Range variable pointer**: Never take `&e` where `e` is a `for _, e := range` variable and pass/store the pointer. Use index loop `for i := range` with `&slice[i]` instead
+- **flag.FlagSet output**: When using `flag.NewFlagSet` with `ContinueOnError`, call `fs.SetOutput(io.Discard)` to suppress duplicate error/usage output (check existing patterns in the codebase)
+- **Nil receiver/field panic**: If a struct method dereferences fields that could be nil at runtime, add a nil guard returning a descriptive error before the dereference
 
 ### Error Handling (CRITICAL)
 
@@ -82,6 +86,20 @@ if err != nil {
 - `t.Parallel()` where safe
 - Testable design: functions accept interfaces, return errors
 - Test with `-race` flag
+- **No empty tests**: Every test function MUST have at least one assertion (`t.Error`, `t.Fatal`, or comparison). Flag any test that only assigns to `_` or has no assertions
+- **No duplicate tests**: Flag tests that duplicate assertions already covered by another test in the same or lower layer (e.g., application-layer test that only calls a domain function already tested in domain_test)
+- **Edge case coverage**: For parsers and input handling, check that tests cover malformed/empty/adversarial input (e.g., local-path replace directives, deeply nested SBOM, missing required fields)
+
+### Defensive Coding (HIGH)
+
+- **Silent data loss**: Operations that skip/truncate data (e.g., depth limits, dedup, filtering) MUST log a warning so users know the output may be incomplete
+- **Invalid output generation**: When constructing structured identifiers (PURLs, URLs, paths) from external input, validate that the inputs produce a well-formed result. Flag cases where empty strings, relative paths, or unexpected values could produce broken output
+- **Subcommand argument isolation**: When a CLI has subcommands, verify that only the subcommand's own args are forwarded — global/parent flags must not leak into subcommand flag parsing
+
+### Documentation Integrity (HIGH)
+
+- **ADR accuracy**: When an ADR makes claims about dependencies (e.g., "zero dependencies", "stdlib only"), verify against actual import statements. Flag discrepancies
+- **Godoc accuracy**: Verify that function signatures described in godoc comments match the actual function parameters
 
 ### Performance (MEDIUM)
 

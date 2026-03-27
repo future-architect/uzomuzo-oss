@@ -14,10 +14,8 @@ import (
 
 	auditapp "github.com/future-architect/uzomuzo-oss/internal/application/audit"
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
-	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
-	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/cyclonedx"
-	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/gomod"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 )
 
 // RunAudit is the entry point for the "audit" subcommand.
@@ -30,9 +28,14 @@ import (
 // Output: table (default), json, or csv via --format flag.
 // Exit code: 1 if any verdict is "replace".
 //
+// The parsers parameter provides available DependencyParser implementations,
+// keyed by input type ("sbom" and "gomod"). This avoids the Interfaces layer
+// importing Infrastructure directly (DDD layer compliance).
+//
 // DDD Layer: Interfaces (CLI handler, delegates to Application)
-func RunAudit(ctx context.Context, cfg *domaincfg.Config, args []string) {
+func RunAudit(ctx context.Context, cfg *domaincfg.Config, args []string, parsers map[string]depparser.DependencyParser) {
 	fs := flag.NewFlagSet("audit", flag.ContinueOnError)
+	fs.SetOutput(io.Discard) // suppress default FlagSet error/usage output
 	var (
 		sbomPath string
 		filePath string
@@ -47,7 +50,7 @@ func RunAudit(ctx context.Context, cfg *domaincfg.Config, args []string) {
 		os.Exit(1)
 	}
 
-	data, parser, err := resolveAuditInput(sbomPath, filePath)
+	data, parser, err := resolveAuditInput(sbomPath, filePath, parsers)
 	if err != nil {
 		slog.Error("failed to resolve audit input", "error", err)
 		os.Exit(1)
@@ -73,7 +76,7 @@ func RunAudit(ctx context.Context, cfg *domaincfg.Config, args []string) {
 }
 
 // resolveAuditInput determines the input data and parser based on flags.
-func resolveAuditInput(sbomPath, filePath string) ([]byte, depparser.DependencyParser, error) {
+func resolveAuditInput(sbomPath, filePath string, parsers map[string]depparser.DependencyParser) ([]byte, depparser.DependencyParser, error) {
 	// Priority 1: SBOM input
 	if sbomPath != "" {
 		var data []byte
@@ -86,7 +89,7 @@ func resolveAuditInput(sbomPath, filePath string) ([]byte, depparser.DependencyP
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read SBOM from '%s': %w", sbomPath, err)
 		}
-		return data, &cyclonedx.Parser{}, nil
+		return data, parsers["sbom"], nil
 	}
 
 	// Priority 2: Explicit go.mod path
@@ -95,13 +98,13 @@ func resolveAuditInput(sbomPath, filePath string) ([]byte, depparser.DependencyP
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
 		}
-		return data, &gomod.Parser{}, nil
+		return data, parsers["gomod"], nil
 	}
 
 	// Priority 3: Auto-detect go.mod in cwd
 	if data, err := os.ReadFile("go.mod"); err == nil {
 		slog.Info("auto-detected go.mod in current directory")
-		return data, &gomod.Parser{}, nil
+		return data, parsers["gomod"], nil
 	}
 
 	return nil, nil, fmt.Errorf("no input: use --sbom <file>, --file <go.mod>, or run from a directory with go.mod")
@@ -153,9 +156,9 @@ func renderTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL")
 
-	for _, e := range entries {
-		lifecycle, eol := entryLifecycleEOL(&e, "—")
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", e.Verdict, e.PURL, lifecycle, eol)
+	for i := range entries {
+		lifecycle, eol := entryLifecycleEOL(&entries[i], "—")
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", entries[i].Verdict, entries[i].PURL, lifecycle, eol)
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("failed to flush table output: %w", err)
@@ -193,14 +196,14 @@ func renderJSON(w io.Writer, entries []domainaudit.AuditEntry) error {
 		Summary: computeSummary(entries),
 		Entries: make([]jsonEntry, 0, len(entries)),
 	}
-	for _, e := range entries {
-		lifecycle, eol := entryLifecycleEOL(&e, "—")
+	for i := range entries {
+		lifecycle, eol := entryLifecycleEOL(&entries[i], "—")
 		out.Entries = append(out.Entries, jsonEntry{
-			PURL:      e.PURL,
-			Verdict:   string(e.Verdict),
+			PURL:      entries[i].PURL,
+			Verdict:   string(entries[i].Verdict),
 			Lifecycle: lifecycle,
 			EOL:       eol,
-			Error:     e.ErrorMsg,
+			Error:     entries[i].ErrorMsg,
 		})
 	}
 
@@ -217,10 +220,10 @@ func renderCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	if err := cw.Write([]string{"verdict", "purl", "lifecycle", "eol"}); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
-	for _, e := range entries {
-		lifecycle, eol := entryLifecycleEOL(&e, "")
-		if err := cw.Write([]string{string(e.Verdict), e.PURL, lifecycle, eol}); err != nil {
-			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
+	for i := range entries {
+		lifecycle, eol := entryLifecycleEOL(&entries[i], "")
+		if err := cw.Write([]string{string(entries[i].Verdict), entries[i].PURL, lifecycle, eol}); err != nil {
+			return fmt.Errorf("failed to write CSV row for %s: %w", entries[i].PURL, err)
 		}
 	}
 	cw.Flush()
