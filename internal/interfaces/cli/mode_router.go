@@ -155,22 +155,6 @@ func handleBatchFile(_ context.Context, _ *config.Config, inputs *ProcessingInpu
 
 // ---------------- Post Hooks ----------------
 
-// Axis registry for future analysis axes (e.g., lifecycle, security, etc.)
-type AxisEvaluator interface {
-	Key() string
-	Evaluate(a *ProcessingResults) error
-}
-
-var axisRegistry []AxisEvaluator
-
-func RegisterAxis(e AxisEvaluator) {
-	axisRegistry = append(axisRegistry, e)
-}
-
-func AllAxes() []AxisEvaluator {
-	return axisRegistry
-}
-
 func postErrors(_ *config.Config, _ *ProcessingInputs, results *ProcessingResults, _ ProcessingOptions) {
 	displayBatchErrors(results.AllAnalyses)
 }
