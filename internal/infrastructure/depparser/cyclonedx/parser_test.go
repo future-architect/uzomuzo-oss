@@ -1,6 +1,7 @@
 package cyclonedx_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,7 +20,7 @@ func readTestData(t *testing.T, name string) []byte {
 
 func TestParser_Parse_Minimal(t *testing.T) {
 	p := &cyclonedx.Parser{}
-	deps, err := p.Parse(readTestData(t, "minimal.json"))
+	deps, err := p.Parse(context.Background(), readTestData(t, "minimal.json"))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -49,7 +50,7 @@ func TestParser_Parse_Minimal(t *testing.T) {
 
 func TestParser_Parse_Nested(t *testing.T) {
 	p := &cyclonedx.Parser{}
-	deps, err := p.Parse(readTestData(t, "nested.json"))
+	deps, err := p.Parse(context.Background(), readTestData(t, "nested.json"))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -63,7 +64,7 @@ func TestParser_Parse_Nested(t *testing.T) {
 
 func TestParser_Parse_QualifiersStripped(t *testing.T) {
 	p := &cyclonedx.Parser{}
-	deps, err := p.Parse(readTestData(t, "with_qualifiers.json"))
+	deps, err := p.Parse(context.Background(), readTestData(t, "with_qualifiers.json"))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -79,7 +80,7 @@ func TestParser_Parse_QualifiersStripped(t *testing.T) {
 
 func TestParser_Parse_Empty(t *testing.T) {
 	p := &cyclonedx.Parser{}
-	deps, err := p.Parse(readTestData(t, "empty.json"))
+	deps, err := p.Parse(context.Background(), readTestData(t, "empty.json"))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -90,7 +91,7 @@ func TestParser_Parse_Empty(t *testing.T) {
 
 func TestParser_Parse_NoPURL(t *testing.T) {
 	p := &cyclonedx.Parser{}
-	deps, err := p.Parse(readTestData(t, "no_purl.json"))
+	deps, err := p.Parse(context.Background(), readTestData(t, "no_purl.json"))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -104,7 +105,7 @@ func TestParser_Parse_NoPURL(t *testing.T) {
 
 func TestParser_Parse_Duplicates(t *testing.T) {
 	p := &cyclonedx.Parser{}
-	deps, err := p.Parse(readTestData(t, "duplicates.json"))
+	deps, err := p.Parse(context.Background(), readTestData(t, "duplicates.json"))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -115,7 +116,7 @@ func TestParser_Parse_Duplicates(t *testing.T) {
 
 func TestParser_Parse_InvalidJSON(t *testing.T) {
 	p := &cyclonedx.Parser{}
-	_, err := p.Parse([]byte("not json"))
+	_, err := p.Parse(context.Background(), []byte("not json"))
 	if err == nil {
 		t.Error("Parse() expected error for invalid JSON, got nil")
 	}

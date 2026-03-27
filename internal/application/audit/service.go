@@ -31,7 +31,7 @@ func NewService(analysisService *application.AnalysisService) *Service {
 //
 // Returns audit entries and a boolean indicating whether any verdict is "replace".
 func (s *Service) Run(ctx context.Context, parser depparser.DependencyParser, data []byte) ([]domainaudit.AuditEntry, bool, error) {
-	deps, err := parser.Parse(data)
+	deps, err := parser.Parse(ctx, data)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to parse dependencies (%s): %w", parser.FormatName(), err)
 	}

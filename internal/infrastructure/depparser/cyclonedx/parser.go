@@ -4,8 +4,10 @@
 package cyclonedx
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	"github.com/package-url/packageurl-go"
@@ -21,7 +23,7 @@ func (p *Parser) FormatName() string { return "CycloneDX SBOM" }
 // It recursively walks nested components and deduplicates by PURL string.
 // Components without a purl field are silently skipped.
 // Qualifiers (e.g., syft's ?package-id=) are stripped for clean PURLs.
-func (p *Parser) Parse(data []byte) ([]depparser.ParsedDependency, error) {
+func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDependency, error) {
 	var bom bomEnvelope
 	if err := json.Unmarshal(data, &bom); err != nil {
 		return nil, fmt.Errorf("failed to parse CycloneDX JSON: %w", err)
@@ -56,11 +58,13 @@ func extractPURLs(components []component, seen map[string]struct{}, deps *[]depp
 	for _, c := range components {
 		if c.PURL != "" {
 			dep, err := normalizePURL(c.PURL)
-			if err == nil {
-				if _, exists := seen[dep.PURL]; !exists {
-					seen[dep.PURL] = struct{}{}
-					*deps = append(*deps, dep)
-				}
+			if err != nil {
+				slog.Debug("skipping invalid PURL in SBOM component", "purl", c.PURL, "error", err)
+				continue
+			}
+			if _, exists := seen[dep.PURL]; !exists {
+				seen[dep.PURL] = struct{}{}
+				*deps = append(*deps, dep)
 			}
 		}
 		if len(c.Components) > 0 {

@@ -5,6 +5,7 @@
 package gomod
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
@@ -21,7 +22,7 @@ func (p *Parser) FormatName() string { return "go.mod" }
 // Indirect dependencies are skipped by default.
 // Replace directives are applied: if a module has a replacement, the
 // replacement path and version are used instead.
-func (p *Parser) Parse(data []byte) ([]depparser.ParsedDependency, error) {
+func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDependency, error) {
 	f, err := modfile.Parse("go.mod", data, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse go.mod: %w", err)

@@ -1,6 +1,7 @@
 package gomod_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,7 +20,7 @@ func readTestData(t *testing.T, name string) []byte {
 
 func TestParser_Parse_Basic(t *testing.T) {
 	p := &gomod.Parser{}
-	deps, err := p.Parse(readTestData(t, "go.mod"))
+	deps, err := p.Parse(context.Background(), readTestData(t, "go.mod"))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -47,7 +48,7 @@ func TestParser_Parse_Basic(t *testing.T) {
 
 func TestParser_Parse_WithReplace(t *testing.T) {
 	p := &gomod.Parser{}
-	deps, err := p.Parse(readTestData(t, "with_replace.mod"))
+	deps, err := p.Parse(context.Background(), readTestData(t, "with_replace.mod"))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -66,7 +67,7 @@ func TestParser_Parse_WithReplace(t *testing.T) {
 
 func TestParser_Parse_Empty(t *testing.T) {
 	p := &gomod.Parser{}
-	deps, err := p.Parse(readTestData(t, "empty.mod"))
+	deps, err := p.Parse(context.Background(), readTestData(t, "empty.mod"))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -77,7 +78,7 @@ func TestParser_Parse_Empty(t *testing.T) {
 
 func TestParser_Parse_InvalidData(t *testing.T) {
 	p := &gomod.Parser{}
-	_, err := p.Parse([]byte("not a go.mod"))
+	_, err := p.Parse(context.Background(), []byte("not a go.mod"))
 	if err == nil {
 		t.Error("Parse() expected error for invalid go.mod, got nil")
 	}
