@@ -4,37 +4,40 @@ import "testing"
 
 func TestParseLineRange(t *testing.T) {
 	cases := []struct {
+		name    string
 		in      string
 		start   int
 		end     int
 		wantErr bool
-		name    string
 	}{
-		{"1:10", 1, 10, false, "basic"},
-		{"5:", 5, 0, false, "open end"},
-		{"10:10", 10, 10, false, "single line"},
-		{"001:002", 1, 2, false, "leading zeros"},
-		{":10", 0, 0, true, "missing start"},
-		{"0:10", 0, 0, true, "zero start"},
-		{"10:9", 0, 0, true, "end lt start"},
-		{"abc:10", 0, 0, true, "non numeric start"},
-		{"5:xyz", 0, 0, true, "non numeric end"},
-		{"5", 0, 0, true, "missing colon"},
+		{"basic", "1:10", 1, 10, false},
+		{"open end", "5:", 5, 0, false},
+		{"single line", "10:10", 10, 10, false},
+		{"leading zeros", "001:002", 1, 2, false},
+		{"missing start", ":10", 0, 0, true},
+		{"zero start", "0:10", 0, 0, true},
+		{"end lt start", "10:9", 0, 0, true},
+		{"non numeric start", "abc:10", 0, 0, true},
+		{"non numeric end", "5:xyz", 0, 0, true},
+		{"missing colon", "5", 0, 0, true},
 	}
 	for _, c := range cases {
-		start, end, err := ParseLineRange(c.in)
-		if c.wantErr {
-			if err == nil {
-				t.Fatalf("%s: expected error for input %q", c.name, c.in)
+		t.Run(c.name, func(t *testing.T) {
+			start, end, err := ParseLineRange(c.in)
+			if c.wantErr {
+				if err == nil {
+					t.Errorf("expected error for input %q", c.in)
+				}
+				return
 			}
-			continue
-		}
-		if err != nil {
-			t.Fatalf("%s: unexpected error for input %q: %v", c.name, c.in, err)
-		}
-		if start != c.start || end != c.end {
-			t.Fatalf("%s: got (%d,%d) want (%d,%d)", c.name, start, end, c.start, c.end)
-		}
+			if err != nil {
+				t.Errorf("unexpected error for input %q: %v", c.in, err)
+				return
+			}
+			if start != c.start || end != c.end {
+				t.Errorf("got (%d,%d) want (%d,%d)", start, end, c.start, c.end)
+			}
+		})
 	}
 }
 
