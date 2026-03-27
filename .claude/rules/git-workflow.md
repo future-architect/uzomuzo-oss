@@ -12,14 +12,19 @@
 
 Types: feat, fix, refactor, docs, test, chore, perf, ci
 
+## Branch Protection Policy
+
+**NEVER push directly to main.** All changes MUST go through a pull request, no matter how small. Create a branch, push it, and open a PR. Ask the user before merging.
+
 ## Pull Request Workflow
 
 When creating PRs:
-1. Analyze full commit history (not just latest commit)
-2. Use `git diff [base-branch]...HEAD` to see all changes
-3. Draft comprehensive PR summary
-4. Include test plan with TODOs
-5. Push with `-u` flag if new branch
+1. Create a feature/fix/chore branch from main
+2. Analyze full commit history (not just latest commit)
+3. Use `git diff [base-branch]...HEAD` to see all changes
+4. Draft comprehensive PR summary
+5. Include test plan with TODOs
+6. Push with `-u` flag if new branch
 
 ## Feature Implementation Workflow
 
