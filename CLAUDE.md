@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Worktree Isolation (MUST READ FIRST)
+
+**At the start of every session that involves file changes, ALWAYS call `EnterWorktree` before doing any work.** This prevents branch conflicts when multiple Claude Code sessions run in parallel on this repository.
+
+- Call `EnterWorktree` immediately when the session begins (do not wait for the user to ask)
+- Give the worktree a descriptive name based on the task (e.g., `feat-goreleaser`, `fix-nuget-test`)
+- Commit your work inside the worktree before exiting
+- When done, inform the user of the worktree branch name so they can review and merge
+
 ## Go Version Policy
 
 The team and CI use **Go 1.26.1**. The `go` directive in `go.mod` tracks the minimum version required by our dependencies (currently `go 1.25.0`). **Do not downgrade this value** — it is set by `go mod tidy` based on dependency requirements and is intentional.
