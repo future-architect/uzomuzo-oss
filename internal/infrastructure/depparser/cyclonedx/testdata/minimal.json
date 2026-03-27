@@ -1,0 +1,24 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "components": [
+    {
+      "type": "library",
+      "name": "express",
+      "version": "4.18.2",
+      "purl": "pkg:npm/express@4.18.2"
+    },
+    {
+      "type": "library",
+      "name": "gin",
+      "version": "v1.10.0",
+      "purl": "pkg:golang/github.com/gin-gonic/gin@v1.10.0"
+    },
+    {
+      "type": "library",
+      "name": "django",
+      "version": "4.2.0",
+      "purl": "pkg:pypi/django@4.2.0"
+    }
+  ]
+}

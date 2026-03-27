@@ -79,6 +79,12 @@ func main() {
 
 	// Subcommands
 	switch first {
+	case "audit":
+		// Combine flags and remaining positional args for the audit subcommand.
+		// This avoids passing global flags (e.g., --log-level debug) that appear before "audit".
+		auditArgs := append(flags, positional[1:]...)
+		cli.RunAudit(ctx, cfg, auditArgs)
+		return
 	case "update-spdx":
 		if err := runUpdateSPDX(ctx); err != nil {
 			slog.Error("update-spdx failed", "error", err)
@@ -201,6 +207,7 @@ func showUsage() {
 		"file_usage", "File mode: uzomuzo <purl_file> [sample_size]",
 		"pipe_usage", "Pipe mode: <command> | uzomuzo [flags]",
 		"subcommands", []string{
+			"audit          — Audit dependencies from SBOM or go.mod for lifecycle health",
 			"update-spdx    — Refresh embedded SPDX license list",
 		},
 		"examples", []string{
@@ -210,7 +217,10 @@ func showUsage() {
 			"uzomuzo github.com/django/django",
 			"uzomuzo test_max.txt 100",
 			"cat purls.txt | uzomuzo --only-eol",
-			"trivy image --format cyclonedx IMAGE | jq -r '.components[].purl' | uzomuzo",
+			"uzomuzo audit --sbom bom.json",
+			"syft . -o cyclonedx-json | uzomuzo audit --sbom -",
+			"uzomuzo audit                     # auto-detect go.mod in cwd",
+			"uzomuzo audit --format json",
 		})
 }
 
