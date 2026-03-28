@@ -26,6 +26,40 @@ When creating PRs:
 5. Include test plan with TODOs
 6. Push with `-u` flag if new branch
 
+## Branch Isolation with Git Worktree
+
+Multiple Claude Code sessions or terminals may run concurrently in the same repository. To prevent branch switching conflicts, **always use `git worktree`** for feature branch work.
+
+### Rules
+
+1. **Never `git checkout` a feature branch in the main worktree.** Use `git worktree add` instead.
+2. **One worktree per branch.** Each feature branch gets its own directory.
+3. **Clean up after merge.** Remove the worktree once the branch is merged.
+4. **Claude Code agents**: Use `isolation: "worktree"` when spawning agents that modify code on a different branch.
+
+### Worktree Cleanup (MANDATORY)
+
+Stale worktrees cause merge conflicts and clutter. Follow these rules:
+
+1. **Before creating a new worktree**: Run `git worktree list` and remove any worktrees whose branch has already been merged or is no longer needed.
+2. **After PR merge**: Immediately `git worktree remove <path>` the worktree used for that PR.
+3. **At session start**: If `git worktree list` shows 3+ non-main worktrees, proactively clean up merged ones before starting new work.
+
+```bash
+# Create a worktree for a feature branch
+git worktree add ../uzomuzo-oss-<branch-short-name> <branch-name>
+
+# After merge, clean up
+git worktree remove ../uzomuzo-oss-<branch-short-name>
+
+# List active worktrees
+git worktree list
+```
+
+### When worktree is NOT needed
+
+- Read-only operations (log, diff, blame)
+
 ## Feature Implementation Workflow
 
 1. **Plan First**
