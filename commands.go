@@ -173,6 +173,11 @@ func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 
 	args := cmd.Args().Slice()
 
+	// Validate --sample is non-negative (consistent with analyzeAction).
+	if opts.SampleSize < 0 {
+		return fmt.Errorf("--sample must be non-negative")
+	}
+
 	// No positional args → check stdin
 	if len(args) == 0 {
 		if !isTerminal(os.Stdin) {
@@ -195,6 +200,13 @@ func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 	// Check for GitHub URL / owner/repo shorthand before falling back to file path heuristic,
 	// because "owner/repo" contains "/" and would otherwise match as a file path.
 	if common.IsValidGitHubURL(first) {
+		// Reject --sample and --line-range for GitHub URL direct mode for consistency with analyzeAction.
+		if cmd.IsSet("sample") {
+			return fmt.Errorf("--sample requires file input; use 'uzomuzo analyze --file <path> --sample N'")
+		}
+		if cmd.IsSet("line-range") {
+			return fmt.Errorf("--line-range requires file input; use 'uzomuzo analyze --file <path> --line-range START:END'")
+		}
 		return cli.ProcessDirectMode(ctx, cfg, args, opts)
 	}
 

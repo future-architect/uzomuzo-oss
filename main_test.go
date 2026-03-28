@@ -389,6 +389,34 @@ func TestRootAction_SampleWithoutFileRejects(t *testing.T) {
 	}
 }
 
+// TestRootAction_NegativeSampleRejects verifies that rootAction rejects negative
+// --sample values, matching analyzeAction behavior.
+func TestRootAction_NegativeSampleRejects(t *testing.T) {
+	cfg := &domaincfg.Config{}
+	app := buildApp(cfg)
+	err := app.Run(context.Background(), []string{"uzomuzo", "--sample", "-1", "input.txt"})
+	if err == nil {
+		t.Fatal("expected error for negative --sample in root action, got nil")
+	}
+	if !bytes.Contains([]byte(err.Error()), []byte("--sample must be non-negative")) {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestRootAction_SampleWithGitHubURLRejects verifies that --sample is rejected
+// when used with a GitHub URL in the deprecated root action.
+func TestRootAction_SampleWithGitHubURLRejects(t *testing.T) {
+	cfg := &domaincfg.Config{}
+	app := buildApp(cfg)
+	err := app.Run(context.Background(), []string{"uzomuzo", "--sample", "10", "https://github.com/expressjs/express"})
+	if err == nil {
+		t.Fatal("expected error for --sample with GitHub URL in root action, got nil")
+	}
+	if !bytes.Contains([]byte(err.Error()), []byte("--sample requires file input")) {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 // TestAnalyzeAction_NoInputReturnsNil verifies that "uzomuzo analyze" with no args
 // returns nil (no error). It prints a guidance message but does not show full help.
 func TestAnalyzeAction_NoInputReturnsNil(t *testing.T) {
