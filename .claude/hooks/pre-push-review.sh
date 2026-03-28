@@ -17,7 +17,8 @@ BASE=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2
 if [ -z "$BASE" ]; then
   exit 0
 fi
-DIFF=$(git diff "$BASE" HEAD 2>/dev/null || true)
+# Only check Go source files (avoid false positives from scripts, docs, etc.)
+DIFF=$(git diff "$BASE" HEAD -- '*.go' 2>/dev/null || true)
 
 if [ -z "$DIFF" ]; then
   exit 0
