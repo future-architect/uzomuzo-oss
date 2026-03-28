@@ -39,11 +39,11 @@ Wait for both agents to complete.
 
 #### Step 1.2: Apply Fixes
 
-After collecting findings from both agents, **directly fix** all CRITICAL and HIGH issues in the code. For MEDIUM and LOW issues, fix them if the fix is straightforward and low-risk.
+After collecting findings from both agents, **directly fix** all CRITICAL and HIGH issues **within the diff under review**. For MEDIUM and LOW issues, fix them if the fix is straightforward and low-risk **and can be done entirely within the diff**. Any findings that would require changes outside the diff must be treated as skipped/unfixable for Phase 1 and only reported, not edited.
 
 **Do NOT post review comments to the PR.** The goal is to fix the code, not to leave comments.
 
-1. Read each affected file and apply the fix
+1. Read each affected file in the diff and apply fixes only to hunks that are part of the diff; if fixing an issue would require changes outside the diff, treat that finding as skipped/unfixable for Phase 1 and report it
 2. Verify the fixes compile: `go build ./...`
 3. Run tests: `go test ./...`
 4. If a fix causes test failures, revert that specific fix and report it as unfixable
@@ -319,7 +319,7 @@ After all phases complete, output a unified summary:
 | 1 | path/to/file.go:42 | HIGH | Fixed: <description> |
 | 2 | path/to/other.go:10 | MEDIUM | Skipped: <reason> |
 
-Commit: <sha>
+Commit: <sha> (use `(none)` if no fixes were applied; omit in --dry-run)
 
 ### Copilot Resolution — PR #<number>
 | # | File | Classification | Action |
@@ -341,8 +341,9 @@ Threads resolved: N/N
 ## Safety Rules
 
 - NEVER force-push or rewrite history
-- NEVER post review comments to the PR — fix the code directly instead
+- During Phase 1 fixes, do NOT post new review comments to the PR — fix the code directly instead
 - During Phase 1 fixes, only fix issues found in the diff under review; do not refactor unrelated code
+- During Phase 2 fixes, you may reply to existing Copilot review threads as needed to resolve them, but do NOT start new review threads
 - During Phase 2 fixes, NEVER modify files outside the scope of Copilot's comments; the only exception is Phase 3 rule-learning updates to `.github/instructions/*` for confirmed recurring patterns
 - Always verify `go build` passes before committing
 - If `go test` fails after fixes, revert the failing change and classify as WONT_FIX
