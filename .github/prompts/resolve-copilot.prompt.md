@@ -146,7 +146,85 @@ mutation {
 }'
 ```
 
-### Step 7: Summary Report
+### Step 7: Learn from Copilot — Update Local Coding Rules
+
+After resolving all threads, analyze the FIX-classified comments for **recurring patterns**
+that the project's coding rules should prevent in the future.
+
+#### 7a. Pattern Detection
+
+Group all FIX comments (from the current run AND from already-resolved Copilot threads on the
+same PRs) by category. Look for patterns such as:
+
+| Pattern Category | Example Copilot Feedback |
+|-----------------|--------------------------|
+| Naming consistency | "Variable still uses old terminology" |
+| Comment/doc drift | "Comment says X but code does Y" |
+| Error handling | "Error not wrapped with context" |
+| Defensive coding | "Nil check missing", "Fallback needed" |
+| API consistency | "Public function missing doc comment" |
+| Security | "User input not validated" |
+
+A pattern is **recurring** if Copilot has flagged the same category **2+ times** across
+any threads (current or historical on the same repo).
+
+#### 7b. Map Pattern to Rule File
+
+Each pattern maps to an existing rule file:
+
+| Pattern Category | Target Rule File |
+|-----------------|------------------|
+| Naming consistency | `.github/instructions/coding-standards.instructions.md` |
+| Comment/doc drift | `.github/instructions/coding-standards.instructions.md` |
+| Error handling | `.github/instructions/error-handling.instructions.md` |
+| Defensive coding | `.github/instructions/coding-standards.instructions.md` |
+| API consistency | `.github/instructions/coding-standards.instructions.md` |
+| Security | `.github/instructions/security.instructions.md` |
+| Testing | `.github/instructions/testing-performance.instructions.md` |
+| DDD violations | `.github/instructions/ddd-architecture.instructions.md` |
+
+If no existing file fits, add to `coding-standards.instructions.md` as a new section.
+
+#### 7c. Propose Rule Additions
+
+For each recurring pattern, draft a concise, actionable rule. Rules must be:
+
+- **Specific**: "When renaming a type, update all variable names, comments, and output labels
+  that reference the old name" — not "Keep things consistent"
+- **Preventive**: Describe what to do BEFORE the mistake, not what the mistake looks like
+- **Minimal**: One rule per pattern, 1-3 sentences max
+
+Format the proposal:
+
+```
+## Proposed Rule Additions
+
+### → coding-standards.instructions.md
+> **Rename Completeness**: When renaming a type, constant, or function, search the entire
+> codebase for the old name in variable names, comments, log messages, CLI output, and
+> documentation. Update all occurrences in the same commit.
+
+### → error-handling.instructions.md
+> (none — no recurring patterns detected)
+```
+
+#### 7d. Apply Rules (with confirmation)
+
+1. Show the proposed rules to the user and ask for confirmation
+2. For each confirmed rule, append it to the appropriate `.github/instructions/` file
+   under a `## Learned from Copilot Reviews` section (create the section if it doesn't exist)
+3. Run `make sync-instructions` to regenerate `.claude/rules/`
+4. Commit with message: `chore: update coding rules based on Copilot review patterns`
+
+If `--dry-run` is active, only show the proposals without modifying files.
+
+#### 7e. Deduplication
+
+Before adding a rule, check if an equivalent rule already exists in the target file
+(including any prior `Learned from Copilot Reviews` section). If a similar rule exists,
+either skip or refine the existing rule instead of adding a duplicate.
+
+### Step 8: Summary Report
 
 After processing all threads, output a summary:
 
@@ -162,6 +240,12 @@ After processing all threads, output a summary:
 
 Commits: <sha1>, <sha2>
 Threads resolved: N/N
+
+### Rules Learned
+| Pattern | Rule Added To | Summary |
+|---------|--------------|---------|
+| Rename completeness | coding-standards | Update all references when renaming |
+| (none detected) | — | — |
 ```
 
 ## Safety Rules
@@ -178,6 +262,6 @@ Threads resolved: N/N
 ## Dry Run Mode
 
 When `--dry-run` is specified:
-- Perform Steps 1-3 (discover and classify) only
-- Output the summary table with proposed classifications
+- Perform Steps 1-3 (discover and classify) and Step 7a-7c (pattern detection and proposal)
+- Output the summary table with proposed classifications and proposed rule additions
 - Do not modify any files, commit, push, reply, or resolve

@@ -16,4 +16,6 @@ description: "Resolve GitHub Copilot review comments on open PRs. Usage: /resolv
 - Classify: FIX / ALREADY_FIXED / WONT_FIX
 - For each thread: fix code (if FIX) -> commit & push -> reply -> resolve via GraphQL
 - After fixes: `go build ./... && go test ./... && go vet ./...`
+- Rule learning: detects recurring FIX patterns and proposes additions to `.github/instructions/`
+- Runs `make sync-instructions` after rule updates to regenerate `.claude/rules/`
 - Never force-push, never modify files outside Copilot's comments scope
