@@ -68,8 +68,8 @@ func main() {
 	}
 }
 
-// scanFlags returns the flags shared by the scan subcommand.
-func scanFlags() []urfcli.Flag {
+// analyzeFlags returns the flags shared by the analyze subcommand.
+func analyzeFlags() []urfcli.Flag {
 	return []urfcli.Flag{
 		&urfcli.BoolFlag{Name: "only-review-needed", Usage: "Show only 'Review Needed' results"},
 		&urfcli.BoolFlag{Name: "only-eol", Usage: "Show only 'EOL-*' results"},
@@ -81,20 +81,20 @@ func scanFlags() []urfcli.Flag {
 	}
 }
 
-// scanCommand builds the "scan" subcommand.
-func scanCommand(cfg *domaincfg.Config) *urfcli.Command {
+// analyzeCommand builds the "analyze" subcommand.
+func analyzeCommand(cfg *domaincfg.Config) *urfcli.Command {
 	return &urfcli.Command{
-		Name:  "scan",
+		Name:  "analyze",
 		Usage: "Analyze PURLs or GitHub URLs for lifecycle health",
-		UsageText: `uzomuzo scan <purl> [more...]                Direct mode
-   uzomuzo scan https://github.com/owner/repo   GitHub URL mode
-   uzomuzo scan --file purls.txt                 File mode
-   uzomuzo scan --file purls.txt --sample 10     File mode with sampling
-   <command> | uzomuzo scan                      Pipe mode
-   <command> | uzomuzo scan -                    Pipe mode (explicit)`,
-		Flags: scanFlags(),
+		UsageText: `uzomuzo analyze <purl> [more...]                Direct mode
+   uzomuzo analyze https://github.com/owner/repo   GitHub URL mode
+   uzomuzo analyze --file purls.txt                 File mode
+   uzomuzo analyze --file purls.txt --sample 10     File mode with sampling
+   <command> | uzomuzo analyze                      Pipe mode
+   <command> | uzomuzo analyze -                    Pipe mode (explicit)`,
+		Flags: analyzeFlags(),
 		Action: func(ctx context.Context, cmd *urfcli.Command) error {
-			return scanAction(ctx, cfg, cmd)
+			return analyzeAction(ctx, cfg, cmd)
 		},
 	}
 }
@@ -105,17 +105,17 @@ func buildApp(cfg *domaincfg.Config) *urfcli.Command {
 		Name:    "uzomuzo",
 		Usage:   "OSS dependency health checker",
 		Version: version,
-		UsageText: `uzomuzo scan <purl> [more...]       Direct mode
-   uzomuzo scan --file purls.txt      File mode
-   <command> | uzomuzo scan            Pipe mode
-   uzomuzo audit --sbom bom.json      Audit mode
+		UsageText: `uzomuzo analyze <purl> [more...]       Direct mode
+   uzomuzo analyze --file purls.txt      File mode
+   <command> | uzomuzo analyze            Pipe mode
+   uzomuzo audit --sbom bom.json         Audit mode
 
 Examples:
-   uzomuzo scan pkg:npm/express@4.18.2 pkg:pypi/django@4.2.0
-   uzomuzo scan https://github.com/expressjs/express
-   uzomuzo scan --file input_purls.txt --sample 10
-   uzomuzo scan --file input_purls.txt --line-range 1:10
-   cat purls.txt | uzomuzo scan --only-eol
+   uzomuzo analyze pkg:npm/express@4.18.2 pkg:pypi/django@4.2.0
+   uzomuzo analyze https://github.com/expressjs/express
+   uzomuzo analyze --file input_purls.txt --sample 10
+   uzomuzo analyze --file input_purls.txt --line-range 1:10
+   cat purls.txt | uzomuzo analyze --only-eol
    uzomuzo audit --sbom bom.json
    syft . -o cyclonedx-json | uzomuzo audit --sbom -
    uzomuzo audit --format json`,
@@ -132,7 +132,7 @@ Examples:
 			return rootAction(ctx, cfg, cmd)
 		},
 		Commands: []*urfcli.Command{
-			scanCommand(cfg),
+			analyzeCommand(cfg),
 			{
 				Name:  "audit",
 				Usage: "Audit dependencies from SBOM or go.mod for lifecycle health",
@@ -160,8 +160,8 @@ Examples:
 	}
 }
 
-// scanAction handles the "scan" subcommand invocation.
-func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command) error {
+// analyzeAction handles the "analyze" subcommand invocation.
+func analyzeAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command) error {
 	opts, err := buildProcessingOptions(cmd)
 	if err != nil {
 		return fmt.Errorf("invalid flags: %w", err)
@@ -206,15 +206,15 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 	}
 
 	// No input: show help
-	if err := cmd.Root().Run(ctx, []string{cmd.Root().Name, "scan", "--help"}); err != nil {
+	if err := cmd.Root().Run(ctx, []string{cmd.Root().Name, "analyze", "--help"}); err != nil {
 		return fmt.Errorf("failed to display help: %w", err)
 	}
-	return fmt.Errorf("no input provided; see 'uzomuzo scan --help'")
+	return fmt.Errorf("no input provided; see 'uzomuzo analyze --help'")
 }
 
 // rootAction handles the default (non-subcommand) invocation.
 //
-// DEPRECATED: Direct root invocation is deprecated. Use "uzomuzo scan" instead.
+// DEPRECATED: Direct root invocation is deprecated. Use "uzomuzo analyze" instead.
 // This shim prints a deprecation warning and delegates using the legacy heuristic
 // for one release cycle of backward compatibility.
 func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command) error {
@@ -228,7 +228,7 @@ func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 	// No positional args → check stdin
 	if len(args) == 0 {
 		if !isTerminal(os.Stdin) {
-			fmt.Fprintln(os.Stderr, "WARNING: Piping without a subcommand is deprecated. Use 'uzomuzo scan' instead.")
+			fmt.Fprintln(os.Stderr, "WARNING: Piping without a subcommand is deprecated. Use 'uzomuzo analyze' instead.")
 			return processStdin(ctx, cfg, opts)
 		}
 		// Show auto-generated help when invoked with no arguments.
@@ -239,7 +239,7 @@ func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 	}
 
 	// Deprecation warning for direct root invocation with arguments.
-	fmt.Fprintln(os.Stderr, "WARNING: Running without a subcommand is deprecated. Use 'uzomuzo scan' instead.")
+	fmt.Fprintln(os.Stderr, "WARNING: Running without a subcommand is deprecated. Use 'uzomuzo analyze' instead.")
 
 	first := strings.TrimSpace(args[0])
 	if first == "" {
@@ -344,7 +344,7 @@ func processStdin(ctx context.Context, cfg *domaincfg.Config, opts cli.Processin
 // isFilePath determines if the input is a file path or a direct PURL/GitHub URL.
 //
 // DEPRECATED: Used only by the legacy root action shim for backward compatibility.
-// The "scan" subcommand uses --file instead. Remove after deprecation cycle.
+// The "analyze" subcommand uses --file instead. Remove after deprecation cycle.
 func isFilePath(input string) bool {
 	// Check if it's a PURL
 	if strings.HasPrefix(input, "pkg:") {

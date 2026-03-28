@@ -171,9 +171,9 @@ func TestBuildProcessingOptions(t *testing.T) {
 	}
 }
 
-// runScanWithFlags creates a minimal urfave/cli app with the scan subcommand,
+// runAnalyzeWithFlags creates a minimal urfave/cli app with the analyze subcommand,
 // parses the given CLI args, and calls buildProcessingOptions inside the Action.
-func runScanWithFlags(t *testing.T, args []string) (cli.ProcessingOptions, error) {
+func runAnalyzeWithFlags(t *testing.T, args []string) (cli.ProcessingOptions, error) {
 	t.Helper()
 
 	var opts cli.ProcessingOptions
@@ -183,8 +183,8 @@ func runScanWithFlags(t *testing.T, args []string) (cli.ProcessingOptions, error
 		Name: "test",
 		Commands: []*urfcli.Command{
 			{
-				Name:  "scan",
-				Flags: scanFlags(),
+				Name:  "analyze",
+				Flags: analyzeFlags(),
 				Action: func(_ context.Context, cmd *urfcli.Command) error {
 					opts, optsErr = buildProcessingOptions(cmd)
 					return nil
@@ -193,14 +193,14 @@ func runScanWithFlags(t *testing.T, args []string) (cli.ProcessingOptions, error
 		},
 	}
 
-	fullArgs := append([]string{"test", "scan"}, args...)
+	fullArgs := append([]string{"test", "analyze"}, args...)
 	if err := app.Run(context.Background(), fullArgs); err != nil {
 		t.Fatalf("urfave/cli Run failed: %v", err)
 	}
 	return opts, optsErr
 }
 
-func TestBuildScanProcessingOptions(t *testing.T) {
+func TestBuildAnalyzeProcessingOptions(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []string
@@ -276,7 +276,7 @@ func TestBuildScanProcessingOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts, err := runScanWithFlags(t, tt.args)
+			opts, err := runAnalyzeWithFlags(t, tt.args)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -293,7 +293,7 @@ func TestBuildScanProcessingOptions(t *testing.T) {
 	}
 }
 
-func TestScanAction_FlagValidation(t *testing.T) {
+func TestAnalyzeAction_FlagValidation(t *testing.T) {
 	cfg := &domaincfg.Config{}
 
 	tests := []struct {
@@ -303,22 +303,22 @@ func TestScanAction_FlagValidation(t *testing.T) {
 	}{
 		{
 			name:    "sample without file rejects",
-			args:    []string{"scan", "--sample", "10", "pkg:npm/express"},
+			args:    []string{"analyze", "--sample", "10", "pkg:npm/express"},
 			wantErr: "--sample requires --file",
 		},
 		{
 			name:    "line-range without file rejects",
-			args:    []string{"scan", "--line-range", "1:10", "pkg:npm/express"},
+			args:    []string{"analyze", "--line-range", "1:10", "pkg:npm/express"},
 			wantErr: "--line-range requires --file",
 		},
 		{
 			name:    "positional args with file rejects",
-			args:    []string{"scan", "--file", "input.txt", "pkg:npm/express"},
+			args:    []string{"analyze", "--file", "input.txt", "pkg:npm/express"},
 			wantErr: "positional arguments are not allowed with --file",
 		},
 		{
 			name:    "negative sample rejects",
-			args:    []string{"scan", "--file", "input.txt", "--sample", "-1"},
+			args:    []string{"analyze", "--file", "input.txt", "--sample", "-1"},
 			wantErr: "--sample must be zero (process all) or a positive integer",
 		},
 	}
@@ -375,18 +375,18 @@ func TestRootAction_DeprecationWarning(t *testing.T) {
 	}
 }
 
-func TestScanCommand_Registered(t *testing.T) {
+func TestAnalyzeCommand_Registered(t *testing.T) {
 	cfg := &domaincfg.Config{}
 	app := buildApp(cfg)
 
 	found := false
 	for _, cmd := range app.Commands {
-		if cmd.Name == "scan" {
+		if cmd.Name == "analyze" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("expected 'scan' subcommand to be registered in buildApp()")
+		t.Error("expected 'analyze' subcommand to be registered in buildApp()")
 	}
 }
