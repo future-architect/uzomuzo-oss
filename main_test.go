@@ -378,10 +378,21 @@ func TestRootAction_DeprecationWarning(t *testing.T) {
 func TestAnalyzeAction_NoInputShowsHelp(t *testing.T) {
 	cfg := &domaincfg.Config{}
 	app := buildApp(cfg)
-	// "analyze" with no args should show help and return nil (no error).
+	// "analyze" with no args should show help message and return nil (no error).
 	err := app.Run(context.Background(), []string{"uzomuzo", "analyze"})
 	if err != nil {
 		t.Errorf("expected nil error for no-input help, got: %v", err)
+	}
+}
+
+// TestRootAction_NoInputReturnsNil verifies that bare "uzomuzo" with no args
+// returns nil (shows help without an error), matching analyzeAction behavior.
+func TestRootAction_NoInputReturnsNil(t *testing.T) {
+	cfg := &domaincfg.Config{}
+	app := buildApp(cfg)
+	err := app.Run(context.Background(), []string{"uzomuzo"})
+	if err != nil {
+		t.Errorf("expected nil error for root no-input help, got: %v", err)
 	}
 }
 

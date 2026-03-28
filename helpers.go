@@ -20,14 +20,14 @@ func runUpdateSPDX(ctx context.Context) error {
 	slog.Info("fetching SPDX", "url", spdx.UpstreamURL)
 	data, err := spdx.FetchLatest(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("fetching SPDX licenses: %w", err)
 	}
 	ver, err := spdx.ValidatePayload(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("validating SPDX payload: %w", err)
 	}
 	if err := spdx.WriteAtomic(path, data); err != nil {
-		return err
+		return fmt.Errorf("writing SPDX json to %s: %w", path, err)
 	}
 	slog.Info("wrote SPDX json", "path", path, "version", ver, "bytes", len(data))
 	cmd := exec.CommandContext(ctx, "go", "generate", "./internal/domain/licenses")
@@ -35,7 +35,7 @@ func runUpdateSPDX(ctx context.Context) error {
 	cmd.Stderr = os.Stderr
 	slog.Info("running go generate for licenses")
 	if err := cmd.Run(); err != nil {
-		return err
+		return fmt.Errorf("running go generate for licenses: %w", err)
 	}
 	slog.Info("SPDX update complete")
 	return nil
@@ -74,7 +74,8 @@ func processStdin(ctx context.Context, cfg *domaincfg.Config, opts cli.Processin
 // isFilePath determines if the input is a file path or a direct PURL/GitHub URL.
 //
 // DEPRECATED: Used only by the legacy root action shim for backward compatibility.
-// The "analyze" subcommand uses --file instead. Remove after deprecation cycle.
+// The "analyze" subcommand uses explicit --file flags instead.
+// Do not reuse this function in new code. Remove after deprecation cycle.
 func isFilePath(input string) bool {
 	// Check if it's a PURL
 	if strings.HasPrefix(input, "pkg:") {

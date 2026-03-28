@@ -18,6 +18,7 @@ import (
 
 // commonFlags returns the filtering/output flags shared by both the analyze
 // subcommand and the deprecated root action.
+// Returns a fresh slice each call; safe to append command-specific flags.
 func commonFlags() []urfcli.Flag {
 	return []urfcli.Flag{
 		&urfcli.BoolFlag{Name: "only-review-needed", Usage: "Show only 'Review Needed' results"},
@@ -178,11 +179,9 @@ func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 			fmt.Fprintln(os.Stderr, "WARNING: Piping without a subcommand is deprecated. Use 'uzomuzo analyze' instead.")
 			return processStdin(ctx, cfg, opts)
 		}
-		// Show auto-generated help when invoked with no arguments.
-		if err := cmd.Root().Run(ctx, []string{cmd.Root().Name, "--help"}); err != nil {
-			return fmt.Errorf("failed to display help: %w", err)
-		}
-		return fmt.Errorf("no input provided")
+		// No args and no stdin: show help and exit cleanly (not a deprecated path).
+		fmt.Fprintln(os.Stderr, "No input provided. Run 'uzomuzo analyze --help' for usage.")
+		return nil
 	}
 
 	// Deprecation warning for direct root invocation with arguments.
