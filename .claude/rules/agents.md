@@ -18,6 +18,7 @@
 | Skill | Command | When to Use |
 |-------|---------|-------------|
 | deadcode | `/deadcode [fix] [path]` | Quick dead code audit or interactive cleanup |
+| resolve-copilot | `/resolve-copilot [PR#] [--dry-run]` | Resolve Copilot review comments on open PRs |
 
 ## Immediate Agent Usage
 
