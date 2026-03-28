@@ -11,8 +11,18 @@ if ! echo "$CMD" | grep -qE '^git\s+push'; then
   exit 0
 fi
 
-# Determine diff base
-BASE=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2>/dev/null || echo "HEAD~10")
+# Determine diff base — robust fallback for shallow clones and small repos
+if ! BASE=$(git merge-base HEAD origin/main 2>/dev/null); then
+  if ! BASE=$(git merge-base HEAD main 2>/dev/null); then
+    if git rev-parse HEAD~10 >/dev/null 2>&1; then
+      BASE="HEAD~10"
+    elif git rev-parse HEAD~1 >/dev/null 2>&1; then
+      BASE="HEAD~1"
+    else
+      BASE=$(git rev-list --max-parents=0 HEAD | tail -n1)
+    fi
+  fi
+fi
 DIFF=$(git diff "$BASE"...HEAD --name-only 2>/dev/null || true)
 
 if [ -z "$DIFF" ]; then
@@ -34,14 +44,20 @@ if echo "$DIFF" | grep -q '^go\.mod$'; then
   fi
 fi
 
-# 3. DB schema changes
-FULL_DIFF=$(git diff "$BASE"...HEAD -- . 2>/dev/null || true)
-if echo "$FULL_DIFF" | grep -qiE 'CREATE TABLE|ALTER TABLE|createTableSQL'; then
-  REASONS+=("Database schema changes detected")
+# 3. DB schema changes (lazy: only compute full diff when relevant files changed)
+FULL_DIFF=""
+if echo "$DIFF" | grep -qiE '\.sql$|/migrations/|\.go$'; then
+  FULL_DIFF=$(git diff "$BASE"...HEAD -- . 2>/dev/null || true)
+  if echo "$FULL_DIFF" | grep -qiE 'CREATE TABLE|ALTER TABLE|createTableSQL'; then
+    REASONS+=("Database schema changes detected")
+  fi
 fi
 
 # 4. New CLI subcommands
 if echo "$DIFF" | grep -qE '^(internal/interfaces/cli/|cmd/)'; then
+  if [ -z "$FULL_DIFF" ]; then
+    FULL_DIFF=$(git diff "$BASE"...HEAD -- . 2>/dev/null || true)
+  fi
   if echo "$FULL_DIFF" | grep -qE 'Command\{|case "'; then
     REASONS+=("New CLI subcommand possibly added")
   fi
