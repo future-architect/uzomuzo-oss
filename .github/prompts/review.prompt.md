@@ -18,9 +18,11 @@ Parse the user's arguments:
 
 ## Procedure
 
-### Phase 1: Claude Code Review
+### Phase 1: Claude Code Review & Fix
 
 Skip this phase if `--copilot-only` is specified.
+
+#### Step 1.1: Identify Issues
 
 Launch **both** review agents in parallel:
 
@@ -31,7 +33,42 @@ Provide each agent with the relevant diff context:
 - If a PR number is given, use `gh pr diff <PR number>`
 - Otherwise, detect the associated PR via `gh pr list --head "$(git branch --show-current)" --json number --jq '.[0].number'` and use `gh pr diff <number>`. If no PR exists, fall back to `git diff main...HEAD`
 
-Wait for both agents to complete and present their findings to the user.
+Instruct each agent to return a structured list of findings with severity (CRITICAL / HIGH / MEDIUM / LOW) and the specific file, line, and suggested fix for each issue.
+
+Wait for both agents to complete.
+
+#### Step 1.2: Apply Fixes
+
+After collecting findings from both agents, **directly fix** all CRITICAL and HIGH issues in the code. For MEDIUM and LOW issues, fix them if the fix is straightforward and low-risk.
+
+**Do NOT post review comments to the PR.** The goal is to fix the code, not to leave comments.
+
+1. Read each affected file and apply the fix
+2. Verify the fixes compile: `go build ./...`
+3. Run tests: `go test ./...`
+4. If a fix causes test failures, revert that specific fix and report it as unfixable
+
+#### Step 1.3: Commit Fixes
+
+If any fixes were applied:
+
+```bash
+go build ./... && go test ./... && go vet ./... && golangci-lint run
+```
+
+Commit with message format:
+
+```
+fix: address review findings
+
+<brief summary of changes>
+```
+
+Then push to the PR branch.
+
+#### Step 1.4: Report
+
+Present a summary of findings to the user, indicating which were fixed and which were skipped (with reason).
 
 ### Phase 2: Resolve Copilot Review Comments
 
@@ -276,9 +313,13 @@ After all phases complete, output a unified summary:
 ```
 ## Review Summary
 
-### Claude Review
-- code-reviewer: APPROVE / WARNING / BLOCK
-- architect: APPROVE / WARNING / BLOCK
+### Claude Review & Fix
+| # | File | Severity | Action |
+|---|------|----------|--------|
+| 1 | path/to/file.go:42 | HIGH | Fixed: <description> |
+| 2 | path/to/other.go:10 | MEDIUM | Skipped: <reason> |
+
+Commit: <sha>
 
 ### Copilot Resolution — PR #<number>
 | # | File | Classification | Action |
@@ -300,6 +341,8 @@ Threads resolved: N/N
 ## Safety Rules
 
 - NEVER force-push or rewrite history
+- NEVER post review comments to the PR — fix the code directly instead
+- During Phase 1 fixes, only fix issues found in the diff under review; do not refactor unrelated code
 - During Phase 2 fixes, NEVER modify files outside the scope of Copilot's comments; the only exception is Phase 3 rule-learning updates to `.github/instructions/*` for confirmed recurring patterns
 - Always verify `go build` passes before committing
 - If `go test` fails after fixes, revert the failing change and classify as WONT_FIX
@@ -311,7 +354,7 @@ Threads resolved: N/N
 ## Dry Run Mode
 
 When `--dry-run` is specified:
-- Phase 1: Launch review agents normally (read-only anyway)
+- Phase 1: Launch review agents and report findings, but do NOT apply fixes or commit
 - Phase 2: Discover and classify only (Steps 2.1-2.4), no fixes/commits/replies
 - Phase 3: Pattern detection and proposals only (Steps 3.1-3.3), no rule file changes
 - Phase 4: Output the summary with proposed classifications and rules
