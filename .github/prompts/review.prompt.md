@@ -28,7 +28,7 @@ Launch **both** review agents in parallel:
 2. **architect** agent — DDD layer compliance, dependency direction, package structure
 
 Provide each agent with the relevant diff context:
-- If a PR number is given, use `git diff main...HEAD`
+- If a PR number is given, use `gh pr diff <PR number>`
 - Otherwise, use `git diff` for uncommitted changes or `git diff HEAD~1` for the last commit
 
 Wait for both agents to complete and present their findings to the user.
@@ -48,10 +48,11 @@ If no PR exists for the current branch, skip Phase 2 and Phase 3.
 
 #### Step 2.2: Discover Unresolved Copilot Threads
 
-First, detect the repository owner and name from the git remote:
+First, detect the repository owner and name separately from the git remote:
 
 ```bash
-gh repo view --json owner,name --jq '"\(.owner.login)/\(.name)"'
+OWNER=$(gh repo view --json owner --jq '.owner.login')
+REPO=$(gh repo view --json name --jq '.name')
 ```
 
 Then run this GraphQL query to find unresolved Copilot review threads
@@ -93,9 +94,10 @@ and skip to Phase 3.
 
 #### Step 2.3: Checkout the PR Branch
 
+Use GitHub CLI to reliably checkout the PR, including fork-based PRs:
+
 ```bash
-git fetch origin <headRefName>
-git checkout <headRefName>
+gh pr checkout {N}
 ```
 
 #### Step 2.4: Analyze and Classify Each Thread
@@ -201,8 +203,8 @@ same PRs) by category. Look for patterns such as:
 | API consistency | "Public function missing doc comment" |
 | Security | "User input not validated" |
 
-A pattern is **recurring** if Copilot has flagged the same category **2+ times** across
-any threads (current or historical on the same repo).
+A pattern is **recurring** if Copilot has flagged the same category **2+ times** across any
+Copilot threads for the current PR(s), including already-resolved threads.
 
 #### Step 3.2: Map Pattern to Rule File
 
@@ -291,7 +293,7 @@ Threads resolved: N/N
 ## Safety Rules
 
 - NEVER force-push or rewrite history
-- NEVER modify files outside the scope of Copilot's comments
+- During Phase 2 fixes, NEVER modify files outside the scope of Copilot's comments; the only exception is Phase 3 rule-learning updates to `.github/instructions/*` for confirmed recurring patterns
 - Always verify `go build` passes before committing
 - If `go test` fails after fixes, revert the failing change and classify as WONT_FIX
 - If the PR branch has merge conflicts, skip that PR and report it
