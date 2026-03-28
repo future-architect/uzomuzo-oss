@@ -5,7 +5,6 @@ argument-hint: |
   - Single package evaluation: 'pkg:golang/modernc.org/sqlite'
   - Compare multiple candidates: 'pkg:golang/modernc.org/sqlite pkg:golang/github.com/mattn/go-sqlite3'
   - Audit all go.mod dependencies: 'audit'
-  - Specific ecosystem: 'audit --ecosystem npm'
 agent: "agent"
 model: ["claude-opus-4.6"]
 ---
@@ -36,26 +35,24 @@ Determine the mode from the user message:
 # When PURLs are directly specified
 GOWORK=off go run . <purl1> [purl2 ...]
 
-# Audit mode: generate PURL list from go.mod
-GOWORK=off go list -m -json all | python3 -c "
-import json, sys
-for line in sys.stdin.read().split('\n}\n'):
-    line = line.strip()
-    if not line: continue
-    if not line.endswith('}'): line += '}'
-    try:
-        m = json.loads(line)
-        path = m.get('Path', '')
-        if path and not path.startswith('github.com/vuls-saas/') and not path.startswith('github.com/future-architect/'):
-            print(f'pkg:golang/{path}')
-    except: pass
+# Audit mode: generate PURL list from go.mod and evaluate in batches
+GOWORK=off go list -m -f '{{.Path}}' all | python3 -c "
+import sys
+for line in sys.stdin:
+    path = line.strip()
+    if not path:
+        continue
+    if path.startswith('github.com/vuls-saas/') or path.startswith('github.com/future-architect/'):
+        continue
+    print(f'pkg:golang/{path}')
 " > /tmp/oss-select-purls.txt
-GOWORK=off go run . $(cat /tmp/oss-select-purls.txt | tr '\n' ' ')
+# Use xargs to avoid shell argument-length limits on large projects
+cat /tmp/oss-select-purls.txt | xargs GOWORK=off go run .
 ```
 
 ### S2.2 Read CSV Data
 
-uzomuzo outputs detailed data to `uzomuzo-catalog.csv`. Read this for structured data.
+In batch (file) mode, uzomuzo writes detailed results to `scorecard.csv`. For audits, run `audit --format csv` and read the CSV data from stdout.
 
 ---
 

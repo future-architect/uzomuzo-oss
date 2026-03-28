@@ -46,6 +46,10 @@ Parse the following from the user message:
 
 ### S2.1 Run Extract Command
 
+> **Note**: `catalog-health-extract` and `catalog-health-import` are subcommands available
+> only in the **uzomuzo-catalog** repository. When using this prompt in uzomuzo-oss,
+> adapt the commands to the available CLI (see `go run . --help`).
+
 ```bash
 go run . catalog-health-extract --db <DB_PATH> --filter <FILTER> --limit <LIMIT> [--ecosystem <ECO>] [--days <DAYS>] > /tmp/oss-health-batch.json
 ```
@@ -123,7 +127,7 @@ Present results to the user for review:
 After user approves the results:
 
 ```bash
-go run . catalog-health-import --db <DB_PATH> < /tmp/oss-health-results.json
+go run . catalog-health-import --db <DB_PATH> < /tmp/oss-health-batch.json
 ```
 
 ### S4.2 Report Results

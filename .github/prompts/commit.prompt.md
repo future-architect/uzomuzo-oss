@@ -25,12 +25,13 @@ go build ./...
 ### Step 3: Test
 
 ```bash
-go test ./...
+go test -race ./...
 ```
 
-### Step 4: Lint
+### Step 4: Vet & Lint
 
 ```bash
+go vet ./...
 golangci-lint run
 ```
 

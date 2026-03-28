@@ -20,8 +20,8 @@ NEW_DEPS=$(git diff --cached go.mod | grep '^+' | grep -v '^+++' | sed 's/^+//' 
     /^\)/        { in_require = 0; next }
     # Single-line require: "require module/path v1.2.3"
     $1 == "require" && NF >= 3 && $3 ~ /^v[0-9]/ { print $2; next }
-    # Inside require () block
-    in_require && $1 ~ /^[[:alnum:].\/-]+$/ && $2 ~ /^v[0-9]/ { print $1 }
+    # Inside require () block: rely on version field to identify deps
+    in_require && $2 ~ /^v[0-9]/ { print $1 }
   ' | sort -u || true)
 
 if [ -z "$NEW_DEPS" ]; then
