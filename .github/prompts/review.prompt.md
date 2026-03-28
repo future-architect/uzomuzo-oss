@@ -133,7 +133,7 @@ For threads classified as **FIX**:
 After all fixes for a PR are applied:
 
 ```bash
-go build ./... && go test ./... && go vet ./...
+go build ./... && go test ./... && go vet ./... && golangci-lint run
 ```
 
 If all pass, commit with message format:
