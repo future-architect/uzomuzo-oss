@@ -375,6 +375,25 @@ func TestRootAction_DeprecationWarning(t *testing.T) {
 	}
 }
 
+func TestAnalyzeAction_NoInputShowsHelp(t *testing.T) {
+	cfg := &domaincfg.Config{}
+	app := buildApp(cfg)
+	// "analyze" with no args should show help and return nil (no error).
+	err := app.Run(context.Background(), []string{"uzomuzo", "analyze"})
+	if err != nil {
+		t.Errorf("expected nil error for no-input help, got: %v", err)
+	}
+}
+
+func TestAnalyzeAction_FileNotFoundReturnsError(t *testing.T) {
+	cfg := &domaincfg.Config{}
+	app := buildApp(cfg)
+	err := app.Run(context.Background(), []string{"uzomuzo", "analyze", "--file", "nonexistent.txt"})
+	if err == nil {
+		t.Fatal("expected error for nonexistent file, got nil")
+	}
+}
+
 func TestAnalyzeCommand_Registered(t *testing.T) {
 	cfg := &domaincfg.Config{}
 	app := buildApp(cfg)
