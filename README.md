@@ -4,7 +4,7 @@
 
 ![uzomuzo demo](docs/assets/demo.gif)
 
-> `./uzomuzo pkg:npm/inflight@1.0.6` — inflight has 556K dependents, yet its repository is archived and npm has deprecated it. uzomuzo detects this as **EOL-Confirmed** in seconds.
+> `./uzomuzo analyze pkg:npm/inflight@1.0.6` — inflight has 556K dependents, yet its repository is archived and npm has deprecated it. uzomuzo detects this as **EOL-Confirmed** in seconds.
 
 ## The Problem: The CVE Blind Spot
 
@@ -31,7 +31,7 @@ No official deprecation, no archived repository — yet `dicer` has an unpatched
 ```bash
 trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
   | jq -r '.components[].purl // empty' \
-  | ./uzomuzo --only-eol
+  | ./uzomuzo analyze --only-eol
 ```
 
 ```text
@@ -75,10 +75,10 @@ export GITHUB_TOKEN=ghp_...  # optional; enables commit history and Scorecard
 
 ```bash
 # Single package
-uzomuzo pkg:npm/express@4.18.2
+uzomuzo analyze pkg:npm/express@4.18.2
 
 # GitHub repository
-uzomuzo https://github.com/expressjs/express
+uzomuzo analyze https://github.com/expressjs/express
 
 # Audit all project dependencies (CI-friendly)
 trivy fs . --format cyclonedx | uzomuzo audit --sbom -
@@ -88,10 +88,10 @@ uzomuzo audit --format json      # JSON output for CI integration
 # Batch from Trivy SBOM (detailed per-package analysis)
 trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
   | jq -r '.components[].purl // empty' \
-  | uzomuzo --only-eol
+  | uzomuzo analyze --only-eol
 
 # File input (one PURL per line)
-uzomuzo --sample 500 input_purls.txt
+uzomuzo analyze --file input_purls.txt --sample 500
 ```
 
 See [Usage](docs/usage.md) for full CLI reference and [Integration Examples](docs/integration-examples.md) for Trivy, Syft, and Go module workflows.
