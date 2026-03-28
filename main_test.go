@@ -354,6 +354,7 @@ func TestRootAction_DeprecationWarning(t *testing.T) {
 	os.Stderr = w
 	defer func() {
 		os.Stderr = oldStderr
+		w.Close()
 		r.Close()
 	}()
 
