@@ -6,20 +6,20 @@
 
 ```bash
 # NPM package
-./uzomuzo pkg:npm/lodash@4.17.21
+./uzomuzo scan pkg:npm/lodash@4.17.21
 
 # Python package
-./uzomuzo pkg:pypi/requests@2.28.1
+./uzomuzo scan pkg:pypi/requests@2.28.1
 
 # Maven package
-./uzomuzo pkg:maven/org.springframework/spring-core@5.3.8
+./uzomuzo scan pkg:maven/org.springframework/spring-core@5.3.8
 
 # GitHub repository
-./uzomuzo github.com/microsoft/typescript
+./uzomuzo scan github.com/microsoft/typescript
 
 # Multiple inputs (PURL and GitHub URL can be mixed)
-./uzomuzo pkg:npm/express@4.18.2 pkg:pypi/requests@2.28.1
-./uzomuzo https://github.com/expressjs/express github.com/psf/requests
+./uzomuzo scan pkg:npm/express@4.18.2 pkg:pypi/requests@2.28.1
+./uzomuzo scan https://github.com/expressjs/express github.com/psf/requests
 ```
 
 ## Batch Processing
@@ -36,10 +36,10 @@ pkg:cargo/serde@1.0.136
 Run:
 
 ```bash
-./uzomuzo --sample 500 input_file.txt
+./uzomuzo scan --file input_file.txt --sample 500
 ```
 
-File mode is designed for large inputs (thousands of lines). `--sample N` enables random sampling (0 = all). The legacy positional sample argument (e.g., `input.txt 500`) is deprecated.
+File mode is designed for large inputs (thousands of lines). The file path is specified via the `--file` flag and `--sample N` enables random sampling (0 = all).
 
 ### Line Range (`--line-range`)
 
@@ -47,20 +47,20 @@ Process only a contiguous subset of a large input file:
 
 ```bash
 # Lines 1-250 (inclusive)
-./uzomuzo --line-range=1:250 input_file.txt
+./uzomuzo scan --file input_file.txt --line-range=1:250
 
 # Line 500 to end of file
-./uzomuzo --line-range=500: input_file.txt
+./uzomuzo scan --file input_file.txt --line-range=500:
 
 # Line range + random sampling (sampling applied after line range filter)
-./uzomuzo --line-range=1001:2000 --sample=1000 input_file.txt
+./uzomuzo scan --file input_file.txt --line-range=1001:2000 --sample=1000
 ```
 
 Rules:
 
 - Format: `START:END` (1-based, inclusive). Omit END to read to EOF
 - START must be >= 1. When END is specified, it must be >= START
-- Ignored in direct input mode (specifying outside file mode causes an error)
+- Requires `--file`; ignored in direct input mode (specifying outside file mode causes an error)
 - Counts physical line numbers (blank lines and `#` comments consume line numbers but are skipped during processing)
 
 ### Pipe / stdin Input
@@ -68,7 +68,7 @@ Rules:
 uzomuzo reads from stdin when piped. This enables integration with SBOM tools:
 
 ```bash
-trivy image --format cyclonedx IMAGE | jq -r '.components[].purl' | ./uzomuzo --only-eol
+trivy image --format cyclonedx IMAGE | jq -r '.components[].purl' | ./uzomuzo scan --only-eol
 ```
 
 All flags (`--only-eol`, `--ecosystem`, `--export-license-csv`) work with pipe input. See [Integration Examples](integration-examples.md) for detailed workflows.
@@ -85,10 +85,10 @@ Input filtering and output control options:
 
 ```bash
 # Direct input: npm only & EOL only
-./uzomuzo --ecosystem npm --only-eol pkg:npm/express@4.18.2 pkg:npm/lodash@4.17.21
+./uzomuzo scan --ecosystem npm --only-eol pkg:npm/express@4.18.2 pkg:npm/lodash@4.17.21
 
 # File mode: sample 200, Maven only, Review Needed only
-./uzomuzo --ecosystem maven --only-review-needed --sample 200 input_file.txt
+./uzomuzo scan --file input_file.txt --ecosystem maven --only-review-needed --sample 200
 ```
 
 ### Built-in Flags
@@ -98,14 +98,17 @@ Input filtering and output control options:
 | `--help`, `-h` | Show help for any command |
 | `--version`, `-v` | Print version information |
 
-These flags are auto-generated. Use `uzomuzo --help` for the full list, or `uzomuzo audit --help` for subcommand-specific help.
+These flags are auto-generated. Use `uzomuzo --help` for the full list, or `uzomuzo scan --help` / `uzomuzo audit --help` for subcommand-specific help.
 
 ## Subcommands
 
 | Subcommand | Description |
 |------------|-------------|
+| `scan` | Analyze packages by PURL, GitHub URL, file, or stdin pipe |
 | `audit` | Bulk dependency health evaluation from CycloneDX SBOM or go.mod |
 | `update-spdx` | Update and regenerate the embedded SPDX license list from upstream |
+
+> **Deprecation notice:** Running `uzomuzo <PURL>` without the `scan` subcommand still works for backward compatibility but prints a deprecation warning. This legacy invocation will be removed in a future release. Use `uzomuzo scan <PURL>` instead.
 
 ### `audit` — Dependency Health Audit
 
@@ -151,7 +154,7 @@ syft . -o cyclonedx-json | ./uzomuzo audit --sbom -
 | `replace` | EOL-Confirmed, EOL-Effective, Archived | Migrate immediately |
 | `review` | Insufficient data, analysis error | Manual investigation |
 
-**Difference from pipe mode:** The `audit` subcommand accepts structured SBOM files directly (no `jq` extraction needed), provides a summarized verdict view optimized for quick scanning, and exits with code 1 for CI gating. Use the existing pipe mode (`trivy ... | jq -r '.components[].purl' | ./uzomuzo`) when you need detailed per-package analysis.
+**Difference from pipe mode:** The `audit` subcommand accepts structured SBOM files directly (no `jq` extraction needed), provides a summarized verdict view optimized for quick scanning, and exits with code 1 for CI gating. Use the existing pipe mode (`trivy ... | jq -r '.components[].purl' | ./uzomuzo scan`) when you need detailed per-package analysis.
 
 ## License CSV Column Reference (`--export-license-csv`)
 
