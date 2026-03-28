@@ -4,7 +4,7 @@
 
 **ALWAYS call `EnterWorktree` before doing any work that changes files.** This prevents branch conflicts when multiple sessions run in parallel. Give it a descriptive name (e.g., `feat-goreleaser`). Commit before exiting and inform the user of the branch name.
 
-**Clean up stale worktrees proactively.** See `.claude/rules/git-workflow.md` for the full worktree lifecycle rules.
+**Worktree deletion is dangerous — other sessions may depend on it.** NEVER remove a locked or unmerged worktree. See `.claude/rules/git-workflow.md` "Worktree Lifecycle: Lock and Cleanup" for the full safe cleanup protocol (lock check → merge check → dirty check).
 
 ## Build & Test
 
