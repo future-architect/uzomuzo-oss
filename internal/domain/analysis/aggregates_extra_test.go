@@ -97,7 +97,7 @@ func TestAnalysis_EnsureCanonical(t *testing.T) {
 	}
 }
 
-func TestAnalysis_FinalLifecycleLabel(t *testing.T) {
+func TestAnalysis_FinalMaintenanceStatus(t *testing.T) {
 	// Helper to clone axis result map
 	lr := &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled}
 	tests := []struct {
@@ -113,8 +113,8 @@ func TestAnalysis_FinalLifecycleLabel(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.a.FinalLifecycleLabel(); got != tt.want {
-				t.Errorf("FinalLifecycleLabel() = %q, want %q", got, tt.want)
+			if got := tt.a.FinalMaintenanceStatus(); got != tt.want {
+				t.Errorf("FinalMaintenanceStatus() = %q, want %q", got, tt.want)
 			}
 		})
 	}

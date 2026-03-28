@@ -4,10 +4,10 @@ import (
 	"testing"
 )
 
-func TestLifecycleLabel_String(t *testing.T) {
+func TestMaintenanceStatus_String(t *testing.T) {
 	tests := []struct {
 		name  string
-		label LifecycleLabel
+		label MaintenanceStatus
 		want  string
 	}{
 		{
@@ -50,16 +50,16 @@ func TestLifecycleLabel_String(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.label.String(); got != tt.want {
-				t.Errorf("LifecycleLabel.String() = %v, want %v", got, tt.want)
+				t.Errorf("MaintenanceStatus.String() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestLifecycleLabelConstants(t *testing.T) {
+func TestMaintenanceStatusConstants(t *testing.T) {
 	tests := []struct {
 		name     string
-		label    LifecycleLabel
+		label    MaintenanceStatus
 		expected string
 	}{
 		{
@@ -102,17 +102,17 @@ func TestLifecycleLabelConstants(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if string(tt.label) != tt.expected {
-				t.Errorf("LifecycleLabel constant = %v, want %v", string(tt.label), tt.expected)
+				t.Errorf("MaintenanceStatus constant = %v, want %v", string(tt.label), tt.expected)
 			}
 		})
 	}
 }
 
-func TestLifecycleLabelEquality(t *testing.T) {
+func TestMaintenanceStatusEquality(t *testing.T) {
 	tests := []struct {
 		name   string
-		label1 LifecycleLabel
-		label2 LifecycleLabel
+		label1 MaintenanceStatus
+		label2 MaintenanceStatus
 		equal  bool
 	}{
 		{
@@ -151,60 +151,60 @@ func TestLifecycleLabelEquality(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.label1 == tt.label2
 			if result != tt.equal {
-				t.Errorf("LifecycleLabel equality = %v, want %v", result, tt.equal)
+				t.Errorf("MaintenanceStatus equality = %v, want %v", result, tt.equal)
 			}
 		})
 	}
 }
 
-func TestLifecycleLabelTypeConversion(t *testing.T) {
+func TestMaintenanceStatusTypeConversion(t *testing.T) {
 	tests := []struct {
 		name       string
-		label      LifecycleLabel
+		label      MaintenanceStatus
 		stringRep  string
-		backToType LifecycleLabel
+		backToType MaintenanceStatus
 	}{
 		{
 			name:       "active_conversion",
 			label:      LabelActive,
 			stringRep:  "Active",
-			backToType: LifecycleLabel("Active"),
+			backToType: MaintenanceStatus("Active"),
 		},
 		{
 			name:       "stalled_conversion",
 			label:      LabelStalled,
 			stringRep:  "Stalled",
-			backToType: LifecycleLabel("Stalled"),
+			backToType: MaintenanceStatus("Stalled"),
 		},
 		{
 			name:       "legacy_safe_conversion",
 			label:      LabelLegacySafe,
 			stringRep:  "Legacy-Safe",
-			backToType: LifecycleLabel("Legacy-Safe"),
+			backToType: MaintenanceStatus("Legacy-Safe"),
 		},
 		{
 			name:       "eol_confirmed_conversion",
 			label:      LabelEOLConfirmed,
 			stringRep:  "EOL-Confirmed",
-			backToType: LifecycleLabel("EOL-Confirmed"),
+			backToType: MaintenanceStatus("EOL-Confirmed"),
 		},
 		{
 			name:       "eol_effective_conversion",
 			label:      LabelEOLEffective,
 			stringRep:  "EOL-Effective",
-			backToType: LifecycleLabel("EOL-Effective"),
+			backToType: MaintenanceStatus("EOL-Effective"),
 		},
 		{
 			name:       "eol_scheduled_conversion",
 			label:      LabelEOLScheduled,
 			stringRep:  "EOL-Scheduled",
-			backToType: LifecycleLabel("EOL-Scheduled"),
+			backToType: MaintenanceStatus("EOL-Scheduled"),
 		},
 		{
 			name:       "review_needed_conversion",
 			label:      LabelReviewNeeded,
 			stringRep:  "Review Needed",
-			backToType: LifecycleLabel("Review Needed"),
+			backToType: MaintenanceStatus("Review Needed"),
 		},
 	}
 

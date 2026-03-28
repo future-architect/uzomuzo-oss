@@ -114,7 +114,7 @@ func renderAuditOutput(w io.Writer, entries []domainaudit.AuditEntry, format str
 // Returns placeholder strings when Analysis is nil.
 func entryLifecycleEOL(e *domainaudit.AuditEntry, placeholder string) (lifecycle, eol string) {
 	if e.Analysis != nil {
-		return e.Analysis.FinalLifecycleLabel(), e.Analysis.EOL.HumanState()
+		return e.Analysis.FinalMaintenanceStatus(), e.Analysis.EOL.HumanState()
 	}
 	return placeholder, placeholder
 }

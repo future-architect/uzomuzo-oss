@@ -52,7 +52,7 @@ func main() {
 		}
 
 		summary := uzomuzo.BuildLifecycleSummary(a)
-		fmt.Printf("  FinalLifecycleLabel: %s\n", summary.FinalLabel)
+		fmt.Printf("  FinalMaintenanceStatus: %s\n", summary.FinalLabel)
 		fmt.Printf("  Raw EOLState: %s (human=%s)\n", summary.EOLState, summary.EOLHumanState)
 		if summary.Successor != "" {
 			fmt.Printf("  Successor: %s\n", summary.Successor)

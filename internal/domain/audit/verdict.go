@@ -40,7 +40,7 @@ func DeriveVerdict(a *analysis.Analysis) Verdict {
 	}
 	// EOL status from primary sources (catalog, registry) takes precedence over
 	// lifecycle label. This is intentionally redundant with the label switch below:
-	// if EOLStatus and LifecycleLabel disagree (a data inconsistency), the
+	// if EOLStatus and MaintenanceStatus disagree (a data inconsistency), the
 	// primary-source EOL signal wins.
 	if a.EOL.IsEOL() {
 		return VerdictReplace
