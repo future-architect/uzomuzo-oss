@@ -25,7 +25,7 @@ if [ -z "$DIFF" ]; then
 fi
 
 # Strip diff metadata lines to avoid false positives on headers
-DIFF_CONTENT=$(echo "$DIFF" | grep -v '^+++' | grep -v '^---' | grep -v '^diff --git' | grep -v '^@@')
+DIFF_CONTENT=$(echo "$DIFF" | grep -v '^+++ [ab]/' | grep -v '^--- [ab]/' | grep -v '^diff --git' | grep -v '^@@')
 
 # Collect potential issues
 ISSUES=()
@@ -39,7 +39,7 @@ if [ -n "$ADDED_EXPORTS" ]; then
     LINE_NUM=$(echo "$DIFF" | grep -nF "$export_line" | head -1 | cut -d: -f1)
     if [ -n "$LINE_NUM" ] && [ "$LINE_NUM" -gt 1 ]; then
       PREV_LINE=$(echo "$DIFF" | sed -n "$((LINE_NUM - 1))p")
-      if ! echo "$PREV_LINE" | grep -qE '^\+\s*//'; then
+      if ! echo "$PREV_LINE" | grep -qE '^[+ ]\s*//'; then
         ISSUES+=("Missing godoc on exported identifier in diff")
         break
       fi
@@ -58,7 +58,7 @@ if echo "$DIFF_CONTENT" | grep -qE '^\+.*(TODO|FIXME|HACK|XXX)'; then
 fi
 
 # 4. Magic numbers in new code (large numeric literals, heuristic check)
-if echo "$DIFF_CONTENT" | grep -E '^\+.*[^a-zA-Z0-9_][2-9][0-9]{2,}[^0-9]' | grep -qvE '(const|//|http|port|0x|0o|0b)'; then
+if echo "$DIFF_CONTENT" | grep -E '^\+.*[^a-zA-Z0-9_][2-9][0-9]{2,}([^0-9]|$)' | grep -qvE '(const|//|http|port|0x|0o|0b)'; then
   ISSUES+=("Possible magic numbers in new code — consider named constants")
 fi
 
