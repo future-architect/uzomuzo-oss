@@ -1,26 +1,54 @@
 ---
-description: "Resolve GitHub Copilot review comments on open PRs by fixing code and marking threads as resolved"
+description: "Unified code review: launch Claude reviewers, resolve Copilot comments, and learn coding rules from patterns"
 ---
 
-# /resolve-copilot — Resolve Copilot Review Comments
+# /review — Unified Code Review
 
-You are resolving GitHub Copilot pull request review comments. Your job is to analyze each
-unresolved Copilot comment, fix the code if the suggestion is valid, reply to the thread,
-and resolve it.
+You are performing a comprehensive code review that combines Claude's own review,
+Copilot comment resolution, and rule learning from recurring patterns.
 
 ## Arguments
 
 Parse the user's arguments:
 
-- **No arguments**: Process ALL open PRs with unresolved Copilot comments
-- **`<PR number>`**: Process only the specified PR (e.g., `/resolve-copilot 21`)
-- **`--dry-run`**: Show what would be done without making changes
+- **No arguments**: Review the current branch's changes AND resolve Copilot comments on the associated PR
+- **`<PR number>`**: Target a specific PR (e.g., `/review 21`)
+- **`--copilot-only`**: Skip Claude's review, only resolve Copilot comments and learn rules
+- **`--dry-run`**: Show classifications and proposed rules without making changes
 
 ## Procedure
 
-### Step 1: Discover Unresolved Copilot Threads
+### Phase 1: Claude Code Review
 
-For each target PR, run this GraphQL query to find unresolved Copilot review threads:
+Skip this phase if `--copilot-only` is specified.
+
+Launch **both** review agents in parallel:
+
+1. **code-reviewer** agent — Code quality, Go idioms, error handling, security
+2. **architect** agent — DDD layer compliance, dependency direction, package structure
+
+Provide each agent with the relevant diff context:
+- If a PR number is given, use `git diff main...HEAD`
+- Otherwise, use `git diff` for uncommitted changes or `git diff HEAD~1` for the last commit
+
+Wait for both agents to complete and present their findings to the user.
+
+### Phase 2: Resolve Copilot Review Comments
+
+#### Step 2.1: Identify the Target PR
+
+- If a PR number was given as argument, use it directly
+- Otherwise, detect the PR for the current branch:
+
+```bash
+gh pr list --head "$(git branch --show-current)" --json number,title --jq '.[0]'
+```
+
+If no PR exists for the current branch, skip Phase 2 and Phase 3.
+
+#### Step 2.2: Discover Unresolved Copilot Threads
+
+Run this GraphQL query to find unresolved Copilot review threads:
 
 ```bash
 gh api graphql -f query='
@@ -53,16 +81,17 @@ Filter for threads where:
 - `isResolved` is `false`
 - First comment author is `copilot-pull-request-reviewer`
 
-If no unresolved Copilot threads exist, report "No unresolved Copilot comments found." and stop.
+If no unresolved Copilot threads exist, report "No unresolved Copilot comments found."
+and skip to Phase 3.
 
-### Step 2: Checkout the PR Branch
+#### Step 2.3: Checkout the PR Branch
 
 ```bash
 git fetch origin <headRefName>
 git checkout <headRefName>
 ```
 
-### Step 3: Analyze and Classify Each Thread
+#### Step 2.4: Analyze and Classify Each Thread
 
 For each unresolved thread, read the Copilot comment body, the `diffHunk` for context,
 and the current file content at the referenced `path`. Classify as:
@@ -81,7 +110,7 @@ Classification guidelines:
 - Suggestions that violate project conventions (see CLAUDE.md): WONT_FIX
 - Security or correctness issues: always FIX
 
-### Step 4: Apply Fixes
+#### Step 2.5: Apply Fixes
 
 For threads classified as **FIX**:
 
@@ -90,7 +119,7 @@ For threads classified as **FIX**:
 3. Verify the fix compiles: `go build ./...` (for Go files)
 4. Group related fixes per file to minimize commits
 
-### Step 5: Commit and Push
+#### Step 2.6: Commit and Push
 
 After all fixes for a PR are applied:
 
@@ -108,7 +137,7 @@ fix: address Copilot review feedback on PR #<number>
 
 Then push to the PR branch.
 
-### Step 6: Reply and Resolve Each Thread
+#### Step 2.7: Reply and Resolve Each Thread
 
 For each thread, post a reply comment and resolve:
 
@@ -146,12 +175,12 @@ mutation {
 }'
 ```
 
-### Step 7: Learn from Copilot — Update Local Coding Rules
+### Phase 3: Learn from Copilot — Update Local Coding Rules
 
 After resolving all threads, analyze the FIX-classified comments for **recurring patterns**
 that the project's coding rules should prevent in the future.
 
-#### 7a. Pattern Detection
+#### Step 3.1: Pattern Detection
 
 Group all FIX comments (from the current run AND from already-resolved Copilot threads on the
 same PRs) by category. Look for patterns such as:
@@ -168,7 +197,7 @@ same PRs) by category. Look for patterns such as:
 A pattern is **recurring** if Copilot has flagged the same category **2+ times** across
 any threads (current or historical on the same repo).
 
-#### 7b. Map Pattern to Rule File
+#### Step 3.2: Map Pattern to Rule File
 
 Each pattern maps to an existing rule file:
 
@@ -185,7 +214,7 @@ Each pattern maps to an existing rule file:
 
 If no existing file fits, add to `coding-standards.instructions.md` as a new section.
 
-#### 7c. Propose Rule Additions
+#### Step 3.3: Propose Rule Additions
 
 For each recurring pattern, draft a concise, actionable rule. Rules must be:
 
@@ -208,7 +237,7 @@ Format the proposal:
 > (none — no recurring patterns detected)
 ```
 
-#### 7d. Apply Rules (with confirmation)
+#### Step 3.4: Apply Rules (with confirmation)
 
 1. Show the proposed rules to the user and ask for confirmation
 2. For each confirmed rule, append it to the appropriate `.github/instructions/` file
@@ -218,20 +247,24 @@ Format the proposal:
 
 If `--dry-run` is active, only show the proposals without modifying files.
 
-#### 7e. Deduplication
+#### Step 3.5: Deduplication
 
 Before adding a rule, check if an equivalent rule already exists in the target file
 (including any prior `Learned from Copilot Reviews` section). If a similar rule exists,
 either skip or refine the existing rule instead of adding a duplicate.
 
-### Step 8: Summary Report
+### Phase 4: Summary Report
 
-After processing all threads, output a summary:
+After all phases complete, output a unified summary:
 
 ```
-## Copilot Review Resolution Summary
+## Review Summary
 
-### PR #<number> — <title>
+### Claude Review
+- code-reviewer: APPROVE / WARNING / BLOCK
+- architect: APPROVE / WARNING / BLOCK
+
+### Copilot Resolution — PR #<number>
 | # | File | Classification | Action |
 |---|------|---------------|--------|
 | 1 | path/to/file.go:42 | FIX | Fixed naming inconsistency |
@@ -262,6 +295,7 @@ Threads resolved: N/N
 ## Dry Run Mode
 
 When `--dry-run` is specified:
-- Perform Steps 1-3 (discover and classify) and Step 7a-7c (pattern detection and proposal)
-- Output the summary table with proposed classifications and proposed rule additions
-- Do not modify any files, commit, push, reply, or resolve
+- Phase 1: Launch review agents normally (read-only anyway)
+- Phase 2: Discover and classify only (Steps 2.1-2.4), no fixes/commits/replies
+- Phase 3: Pattern detection and proposals only (Steps 3.1-3.3), no rule file changes
+- Phase 4: Output the summary with proposed classifications and rules

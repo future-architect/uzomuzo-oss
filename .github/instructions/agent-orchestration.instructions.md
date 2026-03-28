@@ -16,7 +16,7 @@
 | Skill | Command | When to Use |
 |-------|---------|-------------|
 | deadcode | `/deadcode [fix] [path]` | Quick dead code audit or interactive cleanup |
-| resolve-copilot | `/resolve-copilot [PR#] [--dry-run]` | Resolve Copilot review comments on open PRs |
+| review | `/review [PR#] [--copilot-only] [--dry-run]` | Unified review: Claude + Copilot resolution + rule learning |
 
 ## Immediate Agent Usage
 
@@ -27,11 +27,15 @@ No user prompt needed:
 
 ## Code Review Policy
 
-When the user requests a code review (e.g., "レビューして", "review this"), ALWAYS launch **both** agents in parallel:
-1. **code-reviewer** — Code quality, idioms, error handling, security
-2. **architect** — DDD layer compliance, dependency direction, package structure
+When the user requests a code review (e.g., "レビューして", "review this"), use the `/review` skill.
+This skill orchestrates:
 
-This ensures every review covers both implementation quality and architectural correctness.
+1. **Phase 1** — Launch **code-reviewer** + **architect** agents in parallel (Claude review)
+2. **Phase 2** — Discover and resolve unresolved **Copilot** review comments (fix, reply, resolve)
+3. **Phase 3** — Detect recurring Copilot patterns and propose **rule additions** to prevent repeat feedback
+
+Use `/review --copilot-only` to skip Phase 1 when only Copilot resolution is needed.
+See `.github/prompts/review.prompt.md` for the full specification.
 
 ## Worktree Isolation Policy
 
