@@ -33,7 +33,7 @@ Multiple Claude Code sessions or terminals may run concurrently in the same repo
 1. **Never `git checkout` a feature branch in the main worktree.** Use `git worktree add` instead.
 2. **One worktree per branch.** Each feature branch gets its own directory under `.claude/worktrees/`.
 3. **Clean up after merge.** Remove the worktree once the branch is merged.
-4. **Claude Code agents**: See agent-orchestration rules for Worktree Isolation Policy.
+4. **Claude Code agents**: See `.claude/rules/agents.md` Worktree Isolation Policy for agent-specific rules.
 
 ### Worktree Lifecycle: Lock and Cleanup
 
@@ -106,7 +106,7 @@ done
 ### When worktree is NOT needed
 
 - Read-only operations (log, diff, blame)
-- Work on the branch already checked out in the main worktree
+- Work on the default branch (e.g., `main`) in the main worktree. Do NOT use the main worktree for feature branches.
 
 ## Feature Implementation Workflow
 
