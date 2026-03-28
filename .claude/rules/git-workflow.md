@@ -63,7 +63,7 @@ git worktree add .claude/worktrees/<name> <branch-name>
 ### When worktree is NOT needed
 
 - Read-only operations (log, diff, blame)
-- Work on the branch already checked out in the main worktree
+- Work on the default branch (e.g., `main`) in the main worktree. Do NOT use the main worktree for feature branches.
 
 ## Feature Implementation Workflow
 
