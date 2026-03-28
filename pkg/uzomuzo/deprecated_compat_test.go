@@ -3,6 +3,7 @@ package uzomuzo_test
 import (
 	"testing"
 
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/pkg/uzomuzo"
 )
 
@@ -43,9 +44,18 @@ func TestDeprecatedFinalLifecycleLabelMethod(t *testing.T) {
 // TestDeprecatedLifecycleSummaryField verifies that the deprecated
 // LifecycleSummary.LifecycleLabel field stays in sync with MaintenanceStatus.
 func TestDeprecatedLifecycleSummaryField(t *testing.T) {
-	summary := uzomuzo.BuildLifecycleSummary(nil)
+	// Use a non-nil Analysis with a lifecycle result to exercise the sync path.
+	a := &uzomuzo.Analysis{
+		AxisResults: map[domain.AssessmentAxis]*uzomuzo.AssessmentResult{
+			domain.LifecycleAxis: {Axis: domain.LifecycleAxis, Label: uzomuzo.LabelStalled, Reason: "test"},
+		},
+	}
+	summary := uzomuzo.BuildLifecycleSummary(a)
 	if summary.LifecycleLabel != summary.MaintenanceStatus {
 		t.Errorf("LifecycleLabel=%q != MaintenanceStatus=%q; deprecated field must stay in sync",
 			summary.LifecycleLabel, summary.MaintenanceStatus)
+	}
+	if summary.MaintenanceStatus != string(uzomuzo.LabelStalled) {
+		t.Errorf("MaintenanceStatus=%q, want %q", summary.MaintenanceStatus, uzomuzo.LabelStalled)
 	}
 }

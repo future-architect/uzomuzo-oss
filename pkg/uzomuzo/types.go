@@ -111,17 +111,18 @@ func FinalLifecycleLabel(a *Analysis) string { return FinalMaintenanceStatus(a) 
 // LifecycleSummary provides a consolidated snapshot combining lifecycle assessment + primary-source EOL.
 // This decouples callers from internal domain structs while giving richer context.
 type LifecycleSummary struct {
-	FinalLabel        string        // priority-ordered final label (EOL > Scheduled EOL > LifecycleAssessment > Review Needed)
-	MaintenanceStatus string        // raw maintenance status label (may be empty)
-	LifecycleLabel    string        // Deprecated: Use MaintenanceStatus instead.
-	LifecycleReason   string        // rationale for lifecycle assessment
-	EOLState          string        // raw EOL state (Unknown / NotEOL / EOL / Planned)
-	EOLHumanState     string        // human-friendly EOL state label
-	Successor         string        // successor project reference (when available)
-	ScheduledAt       *time.Time    // scheduled EOL date (for scheduled state)
-	EOLEvidences      []EOLEvidence // evidence list (may be empty)
-	EOLReason         string        // catalog human judgment reason (English)
-	EOLReasonJa       string        // catalog human judgment reason Japanese (if available)
+	FinalLabel        string // priority-ordered final label (EOL > Scheduled EOL > LifecycleAssessment > Review Needed)
+	MaintenanceStatus string // raw maintenance status label (may be empty)
+	// Deprecated: Use MaintenanceStatus instead.
+	LifecycleLabel  string        // legacy lifecycle label; kept for backward compatibility
+	LifecycleReason string        // rationale for lifecycle assessment
+	EOLState        string        // raw EOL state (Unknown / NotEOL / EOL / Planned)
+	EOLHumanState   string        // human-friendly EOL state label
+	Successor       string        // successor project reference (when available)
+	ScheduledAt     *time.Time    // scheduled EOL date (for scheduled state)
+	EOLEvidences    []EOLEvidence // evidence list (may be empty)
+	EOLReason       string        // catalog human judgment reason (English)
+	EOLReasonJa     string        // catalog human judgment reason Japanese (if available)
 }
 
 // BuildLifecycleSummary constructs a LifecycleSummary from an Analysis.
