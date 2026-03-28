@@ -347,6 +347,15 @@ func (a *Analysis) GetLifecycleResult() *AssessmentResult {
 // FinalMaintenanceStatus derives a single high-level maintenance status for UI/consumers.
 // Precedence: EOL > Scheduled EOL > lifecycle assessment label > Review Needed.
 func (a *Analysis) FinalMaintenanceStatus() string {
+	return a.finalMaintenanceStatus()
+}
+
+// Deprecated: Use FinalMaintenanceStatus instead.
+func (a *Analysis) FinalLifecycleLabel() string {
+	return a.finalMaintenanceStatus()
+}
+
+func (a *Analysis) finalMaintenanceStatus() string {
 	if a == nil {
 		return "Review Needed"
 	}

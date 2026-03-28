@@ -140,6 +140,7 @@ func computeSummary(entries []domainaudit.AuditEntry) jsonSummary {
 
 func renderTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	// Header uses "LIFECYCLE" intentionally for backward compatibility with existing tooling/scripts.
 	fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL")
 
 	for i := range entries {

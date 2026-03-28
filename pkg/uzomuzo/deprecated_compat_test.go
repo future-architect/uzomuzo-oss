@@ -29,6 +29,17 @@ func TestDeprecatedFinalLifecycleLabelFunc(t *testing.T) {
 	}
 }
 
+// TestDeprecatedFinalLifecycleLabelMethod verifies that the deprecated
+// (*Analysis).FinalLifecycleLabel() method returns the same result as FinalMaintenanceStatus().
+func TestDeprecatedFinalLifecycleLabelMethod(t *testing.T) {
+	var a uzomuzo.Analysis
+	got := a.FinalLifecycleLabel()
+	want := a.FinalMaintenanceStatus()
+	if got != want {
+		t.Errorf("(*Analysis).FinalLifecycleLabel() = %q, want %q (same as FinalMaintenanceStatus)", got, want)
+	}
+}
+
 // TestDeprecatedLifecycleSummaryField verifies that the deprecated
 // LifecycleSummary.LifecycleLabel field stays in sync with MaintenanceStatus.
 func TestDeprecatedLifecycleSummaryField(t *testing.T) {

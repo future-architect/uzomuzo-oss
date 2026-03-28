@@ -320,8 +320,8 @@ After enrichers run, Phase 3 converts `EOLStatus` into the final maintenance sta
 
 | EOL State | Maintenance Status |
 | --------- | ------------------ |
-| `EOLEndOfLife` | `EOL Confirmed` |
-| `EOLScheduled` | `EOL Scheduled` |
+| `EOLEndOfLife` | `EOL` |
+| `EOLScheduled` | `Scheduled EOL` |
 | `EOLNotEOL` | (determined by activity heuristics) |
 | `EOLUnknown` | (determined by activity heuristics) |
 
