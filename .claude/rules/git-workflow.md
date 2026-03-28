@@ -49,7 +49,8 @@ Stale worktrees accumulate disk clutter and cause confusion. Follow these rules:
 # List active worktrees
 git worktree list
 
-# Remove a merged worktree (fails safely if uncommitted changes exist)
+# Remove a merged worktree (run from the main worktree, not from inside the one being removed)
+# Fails safely if uncommitted changes exist
 git worktree remove .claude/worktrees/<name>
 
 # Create a worktree for a new feature branch
