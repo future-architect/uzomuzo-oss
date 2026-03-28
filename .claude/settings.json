@@ -9,6 +9,12 @@
             "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const cmd=JSON.parse(d).tool_input?.command||'';if(/^git\\s+push/.test(cmd)){console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',additionalContext:'IMPORTANT: Before pushing, check if documentation needs updating for the changes on this branch. Run git diff main...HEAD --name-only to see changed files. If Go source files changed, launch the doc-updater agent to update README and godoc comments. Only proceed with git push after docs are confirmed up-to-date or updated.'}}));}});\"",
             "timeout": 10,
             "statusMessage": "Checking if docs need updating..."
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/adr-check.sh",
+            "timeout": 15,
+            "statusMessage": "Checking if ADR is needed..."
           }
         ]
       }
