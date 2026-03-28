@@ -91,6 +91,15 @@ Input filtering and output control options:
 ./uzomuzo --ecosystem maven --only-review-needed --sample 200 input_file.txt
 ```
 
+### Built-in Flags
+
+| Flag | Description |
+|------|-------------|
+| `--help`, `-h` | Show help for any command |
+| `--version`, `-v` | Print version information |
+
+These flags are auto-generated. Use `uzomuzo --help` for the full list, or `uzomuzo audit --help` for subcommand-specific help.
+
 ## Subcommands
 
 | Subcommand | Description |
@@ -115,7 +124,7 @@ syft . -o cyclonedx-json | ./uzomuzo audit --sbom -
 
 # Output formats
 ./uzomuzo audit --format table     # default: human-readable table
-./uzomuzo audit --format json      # structured JSON with summary
+./uzomuzo audit -f json            # short flag alias
 ./uzomuzo audit --format csv       # CSV for spreadsheet/pipeline processing
 ```
 
@@ -125,7 +134,7 @@ syft . -o cyclonedx-json | ./uzomuzo audit --sbom -
 |------|-------------|---------|
 | `--sbom <path>` | Path to CycloneDX SBOM JSON file (use `-` for stdin) | — |
 | `--file <path>` | Path to go.mod file | — |
-| `--format <fmt>` | Output format: `table`, `json`, `csv` | `table` |
+| `--format <fmt>`, `-f` | Output format: `table`, `json`, `csv` | `table` |
 
 **Input resolution order:**
 

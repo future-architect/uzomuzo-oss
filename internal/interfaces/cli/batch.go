@@ -77,47 +77,24 @@ func validateLineRange(opts *ProcessingOptions) error {
 //
 // DDD Layer: Interface (unified entry point for direct multi-input processing)
 // Responsibilities:
-//   - Parse flags relevant to direct mode (ignores sampling & line-range)
 //   - Categorize raw inputs into PURLs and GitHub URLs
 //   - Delegate to shared processing pipeline (processMixedContent)
 //
 // Constraints:
 //   - --sample and --line-range are ignored / rejected (only file mode supports them)
-func ProcessDirectMode(ctx context.Context, cfg *domaincfg.Config, inputs []string) {
+func ProcessDirectMode(ctx context.Context, cfg *domaincfg.Config, inputs []string, opts ProcessingOptions) error {
 	if len(inputs) == 0 {
-		slog.Error("No inputs provided for batch processing")
-		os.Exit(1)
+		return fmt.Errorf("no inputs provided for batch processing")
 	}
-	flagTokens, positional := parseFlags(inputs)
-	opts := ProcessingOptions{IsDirectInput: true}
-	fs := buildFlagSet(&opts, "direct", cfg.App.SampleSize)
-	if err := fs.Parse(flagTokens); err != nil {
-		slog.Error("Failed to parse flags", "error", err)
-		os.Exit(1)
-	}
-	if err := applyPostParseLineRange(fs, &opts); err != nil {
-		slog.Error("Invalid --line-range", "error", err)
-		os.Exit(1)
-	}
-	if len(positional) == 0 {
-		slog.Error("No inputs provided for batch processing (after flag parsing)")
-		os.Exit(1)
-	}
-	if err := validateLineRange(&opts); err != nil {
-		slog.Error("Invalid line range", "error", err)
-		os.Exit(1)
-	}
+	opts.IsDirectInput = true
 	if opts.LineStart > 0 || opts.LineEnd > 0 {
-		slog.Error("--line-range is only valid in file mode")
-		os.Exit(1)
+		return fmt.Errorf("--line-range is only valid in file mode")
 	}
-	purls, githubURLs := categorizeInputs(positional)
+	purls, githubURLs := categorizeInputs(inputs)
 	if len(purls) == 0 && len(githubURLs) == 0 {
-		slog.Error("No valid PURLs or GitHub URLs found in inputs")
-		os.Exit(1)
+		return fmt.Errorf("no valid PURLs or GitHub URLs found in inputs")
 	}
-	// mutual exclusion validated in ResolveMode via Normalize()
-	processMixedContent(ctx, cfg, purls, githubURLs, opts)
+	return processMixedContent(ctx, cfg, purls, githubURLs, opts)
 }
 
 // categorizeInputs separates PURLs and GitHub URLs from mixed input
@@ -141,44 +118,23 @@ func categorizeInputs(inputs []string) (purls []string, githubURLs []string) {
 	return purls, githubURLs
 }
 
-// ProcessFileMode handles file mode processing with unified line-by-line detection
-func ProcessFileMode(cfg *domaincfg.Config, args []string) {
-	if len(args) == 0 {
-		slog.Error("File mode requires a file argument")
-		os.Exit(1)
-	}
-	flagTokens, positional := parseFlags(args)
-	opts := ProcessingOptions{IsDirectInput: false, SampleSize: cfg.App.SampleSize}
-	fs := buildFlagSet(&opts, "file", cfg.App.SampleSize)
-	if err := fs.Parse(flagTokens); err != nil {
-		slog.Error("Failed to parse flags", "error", err)
-		os.Exit(1)
-	}
-	if err := applyPostParseLineRange(fs, &opts); err != nil {
-		slog.Error("Invalid --line-range", "error", err)
-		os.Exit(1)
-	}
-	if len(positional) == 0 {
-		slog.Error("File mode requires a file argument (after flag parsing)")
-		os.Exit(1)
-	}
-	filename := positional[0]
-	// Validate line-range usage in file mode here (direct mode handled earlier)
+// ProcessFileMode handles file mode processing with unified line-by-line detection.
+//
+// DDD Layer: Interface (CLI handler, delegates to processMixedContent)
+func ProcessFileMode(ctx context.Context, cfg *domaincfg.Config, filePath string, opts ProcessingOptions) error {
+	opts.IsDirectInput = false
+	opts.Filename = filePath
 	if err := validateLineRange(&opts); err != nil {
-		slog.Error("Invalid line range", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("invalid line range: %w", err)
 	}
-	purls, githubURLs, err := categorizeFileLines(filename, opts)
+	purls, githubURLs, err := categorizeFileLines(filePath, opts)
 	if err != nil {
-		slog.Error("Error reading file", "file", filename, "error", err)
-		os.Exit(1)
+		return err
 	}
 	if len(purls) == 0 && len(githubURLs) == 0 {
-		slog.Error("No valid PURLs or GitHub URLs found in file", "file", filename)
-		os.Exit(1)
+		return fmt.Errorf("no valid PURLs or GitHub URLs found in file '%s'", filePath)
 	}
-	opts.Filename = filename
-	processMixedContent(context.Background(), cfg, purls, githubURLs, opts)
+	return processMixedContent(ctx, cfg, purls, githubURLs, opts)
 }
 
 // categorizeFileLines reads file and categorizes each line (unified function)
@@ -253,7 +209,9 @@ type GitHubURLProcessingResult struct {
 // DDD Layer: Interface (unified processing entry point)
 // Dependencies: Application layer services
 // Reuses: All existing batch processing optimizations
-func processMixedContent(ctx context.Context, cfg *domaincfg.Config, purls []string, githubURLs []string, options ProcessingOptions) {
+func processMixedContent(ctx context.Context, cfg *domaincfg.Config, purls []string, githubURLs []string, options ProcessingOptions) error {
+	// Normalize ecosystem filter (trim + lowercase) once at the entry point.
+	options.Ecosystem = strings.ToLower(strings.TrimSpace(options.Ecosystem))
 
 	// Global Maven collapsed coordinate normalization
 	if len(purls) > 0 {
@@ -287,8 +245,7 @@ func processMixedContent(ctx context.Context, cfg *domaincfg.Config, purls []str
 	// Step 1: Validate and preprocess inputs
 	inputs, err := validateAndPreprocessInputs(ctx, cfg, purls, githubURLs, options)
 	if err != nil {
-		slog.Error("Input validation failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("input validation failed: %w", err)
 	}
 	defer func() {
 		if inputs.CancelFunc != nil {
@@ -299,15 +256,17 @@ func processMixedContent(ctx context.Context, cfg *domaincfg.Config, purls []str
 	// Step 2: Execute processing
 	results, svc, err := executeProcessing(inputs.ProcessingCtx, cfg, inputs.SupportedPURLs, inputs.ValidGitHubURLs)
 	if err != nil {
-		slog.Error("Processing failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("processing failed: %w", err)
 	}
 
 	// Step 3: Display results
-	displayResults(cfg, results, inputs, options)
+	if err := displayResults(cfg, results, inputs, options); err != nil {
+		return err
+	}
 
 	// Step 4: Print GitHub API rate limit summary (when at least one call was made)
 	printGitHubRateLimitSummary(svc)
+	return nil
 }
 
 // validateAndPreprocessInputs validates inputs and applies filtering, sampling, and validation
@@ -540,8 +499,10 @@ func executeProcessing(ctx context.Context, cfg *domaincfg.Config, supportedPURL
 	return &ProcessingResults{AllAnalyses: allAnalyses}, analysisService, nil
 }
 
-// displayResults handles the display of processing results and statistics
-func displayResults(cfg *domaincfg.Config, results *ProcessingResults, inputs *ProcessingInputs, options ProcessingOptions) {
+// displayResults handles the display of processing results and statistics.
+// Mode is already determined by the caller (ProcessDirectMode / ProcessFileMode)
+// via options.IsDirectInput — no secondary dispatch needed.
+func displayResults(cfg *domaincfg.Config, results *ProcessingResults, inputs *ProcessingInputs, options ProcessingOptions) error {
 	// Single point of skipped PURL logging (start-phase duplicate removed per noise reduction policy)
 	if len(inputs.SkippedPURLs) > 0 {
 		slog.Debug("Skipped unsupported package types", "count", len(inputs.SkippedPURLs))
@@ -550,15 +511,82 @@ func displayResults(cfg *domaincfg.Config, results *ProcessingResults, inputs *P
 		}
 	}
 
-	mode, err := ResolveMode(options)
-	if err != nil {
-		slog.Error("Failed to resolve mode", "error", err)
-		os.Exit(1)
+	// Display mode-specific output
+	if options.IsDirectInput {
+		displayDirectSummary(inputs, results, options)
+	} else {
+		displayBatchFileSummary(inputs, results, options)
 	}
-	router := NewCommandRouter()
-	if err := router.Run(mode, context.Background(), cfg, inputs, results, options); err != nil {
-		slog.Error("Mode execution failed", "error", err, "mode", mode.String())
-		os.Exit(1)
+
+	// Post-display hooks (common to both modes)
+	displayBatchErrors(results.AllAnalyses)
+
+	if strings.TrimSpace(options.LicenseCSVPath) == "" {
+		displayBatchAnalysesSummary(results.AllAnalyses)
+	}
+
+	if strings.ToLower(os.Getenv("LOG_LEVEL")) == "debug" {
+		printReviewNeededArgs(results.AllAnalyses)
+	}
+
+	// CSV export (file mode only)
+	if !options.IsDirectInput {
+		analysisService := createAnalysisService(cfg)
+		if err := analysisService.WriteScoreCardCSV(results.AllAnalyses, "scorecard.csv"); err != nil {
+			slog.Error("Failed to write CSV file", "error", err)
+		}
+		if strings.TrimSpace(options.LicenseCSVPath) != "" {
+			if err := analysisService.WriteLicenseCSV(results.AllAnalyses, options.LicenseCSVPath); err != nil {
+				slog.Error("Failed to write license CSV file", "error", err, "path", options.LicenseCSVPath)
+			} else {
+				fmt.Printf("\n📄 License CSV written: %s\n", options.LicenseCSVPath)
+				slog.Info("License CSV exported", "path", options.LicenseCSVPath)
+			}
+		}
+	}
+	return nil
+}
+
+// displayDirectSummary prints a compact summary for direct (non-file) mode.
+func displayDirectSummary(inputs *ProcessingInputs, results *ProcessingResults, opts ProcessingOptions) {
+	fmt.Printf("\n📊 Processing Summary:\n")
+	if len(inputs.SupportedPURLs) > 0 {
+		fmt.Printf("   PURLs processed: %d\n", len(inputs.SupportedPURLs))
+	}
+	if len(inputs.ValidGitHubURLs) > 0 {
+		fmt.Printf("   GitHub URLs processed: %d\n", len(inputs.ValidGitHubURLs))
+	}
+	if len(inputs.SkippedPURLs) > 0 {
+		fmt.Printf("   Skipped (unsupported): %d\n", len(inputs.SkippedPURLs))
+	}
+	if opts.OnlyReviewNeeded {
+		fmt.Printf("   Filter: only 'Review Needed' results will be shown\n")
+	}
+	if opts.Ecosystem != "" {
+		fmt.Printf("   Filter: ecosystem = %s\n", opts.Ecosystem)
+	}
+	if opts.OnlyEOL {
+		fmt.Printf("   Filter: only 'EOL-*' results will be shown\n")
+	}
+	if opts.ShouldShowPerPURLDetails() {
+		displayBatchAnalysesFull(results.AllAnalyses, opts)
+	}
+}
+
+// displayBatchFileSummary prints a summary header for file-based batch mode.
+func displayBatchFileSummary(inputs *ProcessingInputs, results *ProcessingResults, opts ProcessingOptions) {
+	fmt.Printf("\n" + strings.Repeat("=", separatorLength) + "\n")
+	if len(inputs.SupportedPURLs) > 0 && len(inputs.ValidGitHubURLs) > 0 {
+		fmt.Printf("📊 MIXED FILE BATCH ANALYSIS RESULTS\n")
+		fmt.Printf("📝 PURLs: %d | GitHub URLs: %d | Total: %d\n", len(inputs.SupportedPURLs), len(inputs.ValidGitHubURLs), len(results.AllAnalyses))
+	} else if len(inputs.SupportedPURLs) > 0 {
+		fmt.Printf("📊 INDIVIDUAL PURL ANALYSIS RESULTS\n")
+	} else if len(inputs.ValidGitHubURLs) > 0 {
+		fmt.Printf("📊 GITHUB URL BATCH ANALYSIS RESULTS\n")
+	}
+	fmt.Printf(strings.Repeat("=", separatorLength) + "\n")
+	if opts.ShouldShowPerPURLDetails() {
+		displayBatchAnalysesFull(results.AllAnalyses, opts)
 	}
 }
 
@@ -1131,7 +1159,6 @@ func displayBatchAnalysesSummary(analyses map[string]*analysispkg.Analysis) {
 		}
 	}
 
-
 	// Extra: Surface README-based EOL candidates to allow quick manual verification
 	// We list all evidences where Source == "GitHubREADME".
 	var readmeHits []struct{ pkg, url, phrase string }
@@ -1174,7 +1201,6 @@ func displayBatchAnalysesSummary(analyses map[string]*analysispkg.Analysis) {
 		}
 	}
 }
-
 
 // displayBatchErrors displays processing errors for failed analyses
 func displayBatchErrors(analyses map[string]*analysispkg.Analysis) {
@@ -1238,7 +1264,6 @@ func displayBatchErrors(analyses map[string]*analysispkg.Analysis) {
 	}
 	fmt.Printf(strings.Repeat("!", separatorLength) + "\n")
 }
-
 
 // ecosystemFromPURL extracts the ecosystem from a PURL string (e.g. "pkg:npm/foo" -> "npm").
 func ecosystemFromPURL(purl string) string {

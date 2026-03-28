@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
-	"flag"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -18,42 +18,29 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 )
 
+// ErrAuditReplaceFound is returned by RunAudit when at least one dependency
+// has a "replace" verdict, signaling the caller to exit with code 1.
+var ErrAuditReplaceFound = errors.New("audit: one or more dependencies require replacement")
+
 // RunAudit is the entry point for the "audit" subcommand.
 //
 // Input resolution order:
-//  1. --sbom <file> or "-" for stdin (CycloneDX SBOM JSON)
-//  2. --file <go.mod path> (go.mod convenience fallback)
+//  1. sbomPath (non-empty): CycloneDX SBOM JSON file, or "-" for stdin
+//  2. filePath (non-empty): go.mod convenience fallback
 //  3. Auto-detect: look for go.mod in current working directory
 //
-// Output: table (default), json, or csv via --format flag.
-// Exit code: 1 if any verdict is "replace".
+// Output: table (default), json, or csv via format parameter.
+// Returns ErrAuditReplaceFound if any verdict is "replace".
 //
 // The parsers parameter provides available DependencyParser implementations,
 // keyed by input type ("sbom" and "gomod"). This avoids the Interfaces layer
 // importing Infrastructure directly (DDD layer compliance).
 //
 // DDD Layer: Interfaces (CLI handler, delegates to Application)
-func RunAudit(ctx context.Context, cfg *domaincfg.Config, args []string, parsers map[string]depparser.DependencyParser) {
-	fs := flag.NewFlagSet("audit", flag.ContinueOnError)
-	fs.SetOutput(io.Discard) // suppress default FlagSet error/usage output
-	var (
-		sbomPath string
-		filePath string
-		format   string
-	)
-	fs.StringVar(&sbomPath, "sbom", "", "Path to CycloneDX SBOM JSON file (use '-' for stdin)")
-	fs.StringVar(&filePath, "file", "", "Path to go.mod file")
-	fs.StringVar(&format, "format", "table", "Output format: table, json, csv")
-
-	if err := fs.Parse(args); err != nil {
-		slog.Error("failed to parse audit flags", "error", err)
-		os.Exit(1)
-	}
-
+func RunAudit(ctx context.Context, cfg *domaincfg.Config, sbomPath, filePath, format string, parsers map[string]depparser.DependencyParser) error {
 	data, parser, err := resolveAuditInput(sbomPath, filePath, parsers)
 	if err != nil {
-		slog.Error("failed to resolve audit input", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to resolve audit input: %w", err)
 	}
 
 	analysisService := createAnalysisService(cfg)
@@ -61,18 +48,17 @@ func RunAudit(ctx context.Context, cfg *domaincfg.Config, args []string, parsers
 
 	entries, hasReplace, err := auditService.Run(ctx, parser, data)
 	if err != nil {
-		slog.Error("audit failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("audit failed: %w", err)
 	}
 
 	if err := renderAuditOutput(os.Stdout, entries, format); err != nil {
-		slog.Error("failed to render output", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to render output: %w", err)
 	}
 
 	if hasReplace {
-		os.Exit(1)
+		return ErrAuditReplaceFound
 	}
+	return nil
 }
 
 // resolveAuditInput determines the input data and parser based on flags.
