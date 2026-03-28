@@ -37,7 +37,7 @@ Parse the following from the user message:
 | `--limit` | `100` | Number of records to process at once |
 | `--ecosystem` | (all) | Ecosystem filter |
 | `--days` | `30` | Days threshold for stale/new filter |
-| `--health-status` | - | Target status for status filter |
+| `--health-status` | - | Target status (used with `--filter status`) |
 | PURL list | - | Directly specify PURLs |
 
 ---
@@ -51,7 +51,7 @@ Parse the following from the user message:
 > adapt the commands to the available CLI (see `go run . --help`).
 
 ```bash
-go run . catalog-health-extract --db <DB_PATH> --filter <FILTER> --limit <LIMIT> [--ecosystem <ECO>] [--days <DAYS>] > /tmp/oss-health-batch.json
+go run . catalog-health-extract --db <DB_PATH> --filter <FILTER> --limit <LIMIT> [--ecosystem <ECO>] [--days <DAYS>] [--health-status <STATUS>] > /tmp/oss-health-batch.json
 ```
 
 ### S2.2 Verify Extraction Results
@@ -117,6 +117,15 @@ Present results to the user for review:
 - Display status distribution (healthy: N, warning: N, critical: N)
 - List all critical records
 - Apply corrections if the user requests changes
+
+### S3.4 Save Judged Results
+
+After review and any corrections, write the final judged results to the batch file:
+
+```bash
+# Overwrite the batch file with judged results (same path used by import)
+python3 -c "import json; json.dump(results, open('/tmp/oss-health-batch.json', 'w'), indent=2)"
+```
 
 ---
 

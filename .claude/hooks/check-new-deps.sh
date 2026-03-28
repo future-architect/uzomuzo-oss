@@ -28,7 +28,7 @@ if [ -z "$NEW_DEPS" ]; then
   exit 0
 fi
 
-echo "=== OSS Health Check: new dependencies detected ===" >&2
+echo "=== OSS Health Check: dependency changes detected ===" >&2
 
 # Build PURL array (skip self-owned modules)
 PURLS=()
@@ -46,7 +46,7 @@ fi
 # Run uzomuzo evaluation (capture stderr for diagnostics on failure)
 echo "Evaluating: ${PURLS[*]}" >&2
 STDERR_TMP=$(mktemp -t check-new-deps.XXXXXX)
-RESULT=$(cd "$REPO_ROOT" && GOWORK=off go run . "${PURLS[@]}" 2>"$STDERR_TMP") || {
+RESULT=$(cd "$REPO_ROOT" && GOWORK=off GOFLAGS=-mod=readonly go run . "${PURLS[@]}" 2>"$STDERR_TMP") || {
   echo "WARN: uzomuzo evaluation failed ($(head -1 "$STDERR_TMP")), skipping health check" >&2
   rm -f "$STDERR_TMP"
   exit 0

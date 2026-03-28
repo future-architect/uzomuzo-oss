@@ -52,7 +52,7 @@ cat /tmp/oss-select-purls.txt | xargs GOWORK=off go run .
 
 ### S2.2 Read CSV Data
 
-In batch (file) mode, uzomuzo writes detailed results to `scorecard.csv`. For audits, run `audit --format csv` and read the CSV data from stdout.
+In batch (file) mode, uzomuzo writes detailed results to `scorecard.csv`. Read this CSV for structured indicator data when generating evaluation reports.
 
 ---
 
