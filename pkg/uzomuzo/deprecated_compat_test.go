@@ -1,0 +1,30 @@
+package uzomuzo_test
+
+import (
+	"testing"
+
+	"github.com/future-architect/uzomuzo-oss/pkg/uzomuzo"
+)
+
+// TestDeprecatedLifecycleLabelAlias verifies that the deprecated LifecycleLabel
+// type alias remains usable and interchangeable with MaintenanceStatus.
+func TestDeprecatedLifecycleLabelAlias(t *testing.T) {
+	var label uzomuzo.LifecycleLabel = uzomuzo.LabelActive
+
+	// LifecycleLabel must be assignable to MaintenanceStatus (same type).
+	var status uzomuzo.MaintenanceStatus = label
+	if status != uzomuzo.LabelActive {
+		t.Errorf("LifecycleLabel→MaintenanceStatus: got %q, want %q", status, uzomuzo.LabelActive)
+	}
+}
+
+// TestDeprecatedFinalLifecycleLabelFunc verifies that the deprecated
+// FinalLifecycleLabel function returns the same result as FinalMaintenanceStatus.
+func TestDeprecatedFinalLifecycleLabelFunc(t *testing.T) {
+	// nil Analysis should return "Review Needed" for both.
+	got := uzomuzo.FinalLifecycleLabel(nil)
+	want := uzomuzo.FinalMaintenanceStatus(nil)
+	if got != want {
+		t.Errorf("FinalLifecycleLabel(nil) = %q, want %q (same as FinalMaintenanceStatus)", got, want)
+	}
+}

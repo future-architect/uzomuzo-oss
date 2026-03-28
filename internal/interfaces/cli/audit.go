@@ -110,9 +110,9 @@ func renderAuditOutput(w io.Writer, entries []domainaudit.AuditEntry, format str
 	}
 }
 
-// entryLifecycleEOL extracts lifecycle label and EOL state from an audit entry.
+// entryMaintenanceEOL extracts maintenance status and EOL state from an audit entry.
 // Returns placeholder strings when Analysis is nil.
-func entryLifecycleEOL(e *domainaudit.AuditEntry, placeholder string) (lifecycle, eol string) {
+func entryMaintenanceEOL(e *domainaudit.AuditEntry, placeholder string) (maintenance, eol string) {
 	if e.Analysis != nil {
 		return e.Analysis.FinalMaintenanceStatus(), e.Analysis.EOL.HumanState()
 	}
@@ -143,8 +143,8 @@ func renderTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL")
 
 	for i := range entries {
-		lifecycle, eol := entryLifecycleEOL(&entries[i], "—")
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", entries[i].Verdict, entries[i].PURL, lifecycle, eol)
+		maintenance, eol := entryMaintenanceEOL(&entries[i], "—")
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", entries[i].Verdict, entries[i].PURL, maintenance, eol)
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("failed to flush table output: %w", err)
@@ -183,11 +183,11 @@ func renderJSON(w io.Writer, entries []domainaudit.AuditEntry) error {
 		Entries: make([]jsonEntry, 0, len(entries)),
 	}
 	for i := range entries {
-		lifecycle, eol := entryLifecycleEOL(&entries[i], "—")
+		maintenance, eol := entryMaintenanceEOL(&entries[i], "—")
 		out.Entries = append(out.Entries, jsonEntry{
 			PURL:      entries[i].PURL,
 			Verdict:   string(entries[i].Verdict),
-			Lifecycle: lifecycle,
+			Lifecycle: maintenance,
 			EOL:       eol,
 			Error:     entries[i].ErrorMsg,
 		})
@@ -207,8 +207,8 @@ func renderCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
 	for i := range entries {
-		lifecycle, eol := entryLifecycleEOL(&entries[i], "")
-		if err := cw.Write([]string{string(entries[i].Verdict), entries[i].PURL, lifecycle, eol}); err != nil {
+		maintenance, eol := entryMaintenanceEOL(&entries[i], "")
+		if err := cw.Write([]string{string(entries[i].Verdict), entries[i].PURL, maintenance, eol}); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", entries[i].PURL, err)
 		}
 	}

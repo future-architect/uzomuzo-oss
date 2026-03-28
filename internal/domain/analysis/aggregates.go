@@ -344,10 +344,8 @@ func (a *Analysis) GetLifecycleResult() *AssessmentResult {
 // External API convenience methods (for Go package users)
 // ============================================================================
 
-// FinalMaintenanceStatus derives a single high-level maintenance status for UI/consumers
-// prioritizing primary-source EOL signals, then lifecycle assessment.
-// Order: EOL > Scheduled EOL > Lifecycle assessment label > Review Needed.
-// FinalMaintenanceStatus derives a single label with precedence: EOL > Scheduled EOL > lifecycle axis > Review Needed.
+// FinalMaintenanceStatus derives a single high-level maintenance status for UI/consumers.
+// Precedence: EOL > Scheduled EOL > lifecycle assessment label > Review Needed.
 func (a *Analysis) FinalMaintenanceStatus() string {
 	if a == nil {
 		return "Review Needed"

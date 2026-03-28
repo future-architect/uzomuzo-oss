@@ -3,7 +3,7 @@ package analysis
 // MaintenanceStatus represents the maintenance status result of a lifecycle assessment.
 type MaintenanceStatus string
 
-// Predefined lifecycle assessment labels (expanded EOL taxonomy).
+// Predefined maintenance status values (expanded EOL taxonomy).
 const (
 	LabelActive       MaintenanceStatus = "Active"
 	LabelStalled      MaintenanceStatus = "Stalled"

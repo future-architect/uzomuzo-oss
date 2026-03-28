@@ -240,7 +240,7 @@ func main() {
     panic(err)
   }
   for purl, a := range results {
-    fmt.Printf("%s: lifecycle=%s eol=%s\n", purl, a.FinalMaintenanceStatus(), a.EOL.HumanState())
+    fmt.Printf("%s: maintenance=%s eol=%s\n", purl, a.FinalMaintenanceStatus(), a.EOL.HumanState())
   }
 }
 ```
