@@ -6,7 +6,6 @@ import (
 
 	urfcli "github.com/urfave/cli/v3"
 
-	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/interfaces/cli"
 )
 
@@ -14,7 +13,7 @@ import (
 // the given CLI args, and calls buildProcessingOptions inside the Action.
 // This avoids reaching into urfave internals and exercises the real flag
 // parsing path.
-func runWithFlags(t *testing.T, cfg *domaincfg.Config, args []string) (cli.ProcessingOptions, error) {
+func runWithFlags(t *testing.T, args []string) (cli.ProcessingOptions, error) {
 	t.Helper()
 
 	var opts cli.ProcessingOptions
@@ -31,7 +30,7 @@ func runWithFlags(t *testing.T, cfg *domaincfg.Config, args []string) (cli.Proce
 			&urfcli.StringFlag{Name: "line-range"},
 		},
 		Action: func(_ context.Context, cmd *urfcli.Command) error {
-			opts, optsErr = buildProcessingOptions(cfg, cmd)
+			opts, optsErr = buildProcessingOptions(cmd)
 			return nil
 		},
 	}
@@ -46,16 +45,14 @@ func runWithFlags(t *testing.T, cfg *domaincfg.Config, args []string) (cli.Proce
 
 func TestBuildProcessingOptions(t *testing.T) {
 	tests := []struct {
-		name      string
-		args      []string
-		cfg       *domaincfg.Config
-		wantErr   bool
-		check     func(t *testing.T, opts cli.ProcessingOptions)
+		name    string
+		args    []string
+		wantErr bool
+		check   func(t *testing.T, opts cli.ProcessingOptions)
 	}{
 		{
 			name: "zero/default flags",
 			args: nil,
-			cfg:  &domaincfg.Config{},
 			check: func(t *testing.T, opts cli.ProcessingOptions) {
 				if opts.OnlyReviewNeeded {
 					t.Error("OnlyReviewNeeded should be false")
@@ -87,7 +84,6 @@ func TestBuildProcessingOptions(t *testing.T) {
 				"--export-license-csv", "/tmp/lic.csv",
 				"--line-range", "5:20",
 			},
-			cfg: &domaincfg.Config{},
 			check: func(t *testing.T, opts cli.ProcessingOptions) {
 				if !opts.OnlyReviewNeeded {
 					t.Error("OnlyReviewNeeded should be true")
@@ -112,19 +108,16 @@ func TestBuildProcessingOptions(t *testing.T) {
 		{
 			name:    "invalid line-range missing colon",
 			args:    []string{"--line-range", "10-20"},
-			cfg:     &domaincfg.Config{},
 			wantErr: true,
 		},
 		{
 			name:    "invalid line-range end less than start",
 			args:    []string{"--line-range", "20:5"},
-			cfg:     &domaincfg.Config{},
 			wantErr: true,
 		},
 		{
 			name: "valid line-range open end",
 			args: []string{"--line-range", "3:"},
-			cfg:  &domaincfg.Config{},
 			check: func(t *testing.T, opts cli.ProcessingOptions) {
 				if opts.LineStart != 3 {
 					t.Errorf("LineStart = %d, want 3", opts.LineStart)
@@ -137,12 +130,9 @@ func TestBuildProcessingOptions(t *testing.T) {
 		{
 			name: "sample size stays zero when flag not given",
 			args: []string{"--only-eol"},
-			cfg: &domaincfg.Config{
-				App: domaincfg.AppConfig{SampleSize: 100},
-			},
 			check: func(t *testing.T, opts cli.ProcessingOptions) {
-				// buildProcessingOptions should NOT apply cfg.App.SampleSize;
-				// that is deferred to rootAction/ProcessFileMode for file mode only.
+				// buildProcessingOptions should NOT apply config SampleSize;
+				// that is deferred to rootAction for file mode only.
 				if opts.SampleSize != 0 {
 					t.Errorf("SampleSize = %d, want 0 (config default deferred to file mode)", opts.SampleSize)
 				}
@@ -151,9 +141,6 @@ func TestBuildProcessingOptions(t *testing.T) {
 		{
 			name: "sample size from flag overrides zero",
 			args: []string{"--sample", "5"},
-			cfg: &domaincfg.Config{
-				App: domaincfg.AppConfig{SampleSize: 100},
-			},
 			check: func(t *testing.T, opts cli.ProcessingOptions) {
 				if opts.SampleSize != 5 {
 					t.Errorf("SampleSize = %d, want 5", opts.SampleSize)
@@ -164,7 +151,7 @@ func TestBuildProcessingOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts, err := runWithFlags(t, tt.cfg, tt.args)
+			opts, err := runWithFlags(t, tt.args)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")

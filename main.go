@@ -13,6 +13,7 @@ import (
 
 	urfcli "github.com/urfave/cli/v3"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common"
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/config"
@@ -127,7 +128,7 @@ Examples:
 
 // rootAction handles the default (non-subcommand) invocation.
 func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command) error {
-	opts, err := buildProcessingOptions(cfg, cmd)
+	opts, err := buildProcessingOptions(cmd)
 	if err != nil {
 		return fmt.Errorf("invalid flags: %w", err)
 	}
@@ -139,8 +140,11 @@ func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 		if !isTerminal(os.Stdin) {
 			return processStdin(ctx, cfg, opts)
 		}
-		// urfave/cli auto-generates help; show it when no args
-		return fmt.Errorf("no input provided. Run 'uzomuzo --help' for usage")
+		// Show auto-generated help when invoked with no arguments.
+		if err := cmd.Root().Run(ctx, []string{cmd.Root().Name, "--help"}); err != nil {
+			return fmt.Errorf("failed to display help: %w", err)
+		}
+		return fmt.Errorf("no input provided")
 	}
 
 	first := strings.TrimSpace(args[0])
@@ -148,8 +152,15 @@ func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 		return fmt.Errorf("input cannot be empty")
 	}
 
+	// Check for GitHub URL / owner/repo shorthand before falling back to file path heuristic,
+	// because "owner/repo" contains "/" and would otherwise match as a file path.
+	if common.IsValidGitHubURL(first) {
+		return cli.ProcessDirectMode(ctx, cfg, args, opts)
+	}
+
 	if isFilePath(first) {
-		if opts.SampleSize == 0 {
+		// Apply config default only if --sample was not explicitly provided.
+		if !cmd.IsSet("sample") && opts.SampleSize == 0 {
 			opts.SampleSize = cfg.App.SampleSize
 		}
 		return cli.ProcessFileMode(ctx, cfg, first, opts)
@@ -160,7 +171,7 @@ func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 }
 
 // buildProcessingOptions maps urfave/cli flags to ProcessingOptions.
-func buildProcessingOptions(cfg *domaincfg.Config, cmd *urfcli.Command) (cli.ProcessingOptions, error) {
+func buildProcessingOptions(cmd *urfcli.Command) (cli.ProcessingOptions, error) {
 	opts := cli.ProcessingOptions{
 		OnlyReviewNeeded: cmd.Bool("only-review-needed"),
 		OnlyEOL:          cmd.Bool("only-eol"),
@@ -168,8 +179,6 @@ func buildProcessingOptions(cfg *domaincfg.Config, cmd *urfcli.Command) (cli.Pro
 		SampleSize:       int(cmd.Int("sample")),
 		LicenseCSVPath:   cmd.String("export-license-csv"),
 	}
-	// SampleSize default from config is applied later in ProcessFileMode;
-	// leave zero here so direct/stdin modes are not affected.
 	if raw := cmd.String("line-range"); raw != "" {
 		ls, le, err := cli.ParseLineRange(raw)
 		if err != nil {
