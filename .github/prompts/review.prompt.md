@@ -53,7 +53,7 @@ After collecting findings from both agents, **directly fix** all CRITICAL and HI
 If any fixes were applied:
 
 ```bash
-goimports -w . && go build ./... && go test ./... && go vet ./... && golangci-lint run
+goimports -w $(git diff --name-only --cached -- '*.go') && go build ./... && go test ./... && go vet ./... && golangci-lint run
 ```
 
 Commit with message format:
