@@ -179,8 +179,8 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 			return fmt.Errorf("--line-range requires --file")
 		}
 	}
-	if cmd.IsSet("sample") && opts.SampleSize <= 0 {
-		return fmt.Errorf("--sample must be a positive integer")
+	if cmd.IsSet("sample") && opts.SampleSize < 0 {
+		return fmt.Errorf("--sample must be zero (process all) or a positive integer")
 	}
 
 	// File mode: --file flag is set

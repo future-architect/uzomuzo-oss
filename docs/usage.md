@@ -39,7 +39,7 @@ Run:
 ./uzomuzo scan --file input_file.txt --sample 500
 ```
 
-File mode is designed for large inputs (thousands of lines). The file path is specified via the `--file` flag and `--sample N` enables random sampling (0 = all).
+File mode is designed for large inputs (thousands of lines). The file path is specified via the `--file` flag and `--sample N` (N > 0) enables random sampling; omit `--sample` to process all entries.
 
 ### Line Range (`--line-range`)
 
@@ -60,7 +60,7 @@ Rules:
 
 - Format: `START:END` (1-based, inclusive). Omit END to read to EOF
 - START must be >= 1. When END is specified, it must be >= START
-- Requires `--file`; ignored in direct input mode (specifying outside file mode causes an error)
+- Requires `--file`; specifying `--line-range` without `--file` results in an error
 - Counts physical line numbers (blank lines and `#` comments consume line numbers but are skipped during processing)
 
 ### Pipe / stdin Input

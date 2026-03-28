@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"path/filepath"
 	"testing"
 
 	urfcli "github.com/urfave/cli/v3"
@@ -264,6 +263,15 @@ func TestBuildScanProcessingOptions(t *testing.T) {
 			args:    []string{"--file", "input.txt", "--line-range", "10-20"},
 			wantErr: true,
 		},
+		{
+			name: "sample zero accepted as process all",
+			args: []string{"--file", "input.txt", "--sample", "0"},
+			check: func(t *testing.T, opts cli.ProcessingOptions) {
+				if opts.SampleSize != 0 {
+					t.Errorf("SampleSize = %d, want 0 (process all)", opts.SampleSize)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -311,7 +319,7 @@ func TestScanAction_FlagValidation(t *testing.T) {
 		{
 			name:    "negative sample rejects",
 			args:    []string{"scan", "--file", "input.txt", "--sample", "-1"},
-			wantErr: "--sample must be a positive integer",
+			wantErr: "--sample must be zero (process all) or a positive integer",
 		},
 	}
 
@@ -336,28 +344,31 @@ func TestScanAction_FlagValidation(t *testing.T) {
 // TestRootAction_DeprecationWarning verifies stderr deprecation output.
 // Not safe for t.Parallel() — mutates os.Stderr.
 func TestRootAction_DeprecationWarning(t *testing.T) {
-	// Create a temp file to use as a PURL input file so rootAction's isFilePath returns true.
-	dir := t.TempDir()
-	f := filepath.Join(dir, "purls.txt")
-	if err := os.WriteFile(f, []byte("pkg:npm/express@4.18.2\n"), 0o644); err != nil {
-		t.Fatal(err)
+	// Capture stderr to verify deprecation warning.
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() failed: %v", err)
 	}
 
-	// Capture stderr to verify deprecation warning.
 	oldStderr := os.Stderr
-	r, w, _ := os.Pipe()
 	os.Stderr = w
+	defer func() {
+		os.Stderr = oldStderr
+		r.Close()
+	}()
 
 	cfg := &domaincfg.Config{}
 	app := buildApp(cfg)
-	// Run with a PURL arg (will fail at network level, but we only care about the warning).
-	_ = app.Run(context.Background(), []string{"uzomuzo", "pkg:npm/express@4.18.2"})
+	// Use "not-a-purl" — fails categorization early without network access,
+	// but still exercises the rootAction deprecation warning path.
+	_ = app.Run(context.Background(), []string{"uzomuzo", "not-a-purl"})
 
 	w.Close()
-	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	if _, err := buf.ReadFrom(r); err != nil {
+		t.Fatalf("failed to read captured stderr: %v", err)
+	}
 	if !bytes.Contains(buf.Bytes(), []byte("deprecated")) {
 		t.Errorf("expected deprecation warning in stderr, got: %s", buf.String())
 	}
