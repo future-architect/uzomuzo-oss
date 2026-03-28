@@ -39,7 +39,7 @@ Run:
 ./uzomuzo scan --file input_file.txt --sample 500
 ```
 
-File mode is designed for large inputs (thousands of lines). The file path is specified via the `--file` flag and `--sample N` (N > 0) enables random sampling; omit `--sample` to process all entries.
+File mode is designed for large inputs (thousands of lines). The file path is specified via the `--file` flag and `--sample N` (N > 0) enables random sampling. Omit `--sample` to use the configured default sample size (env `APP_SAMPLE_SIZE`; 0 = process all). Use `--sample 0` to explicitly process all entries regardless of configuration.
 
 ### Line Range (`--line-range`)
 
