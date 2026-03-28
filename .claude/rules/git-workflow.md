@@ -26,6 +26,45 @@ When creating PRs:
 5. Include test plan with TODOs
 6. Push with `-u` flag if new branch
 
+## Branch Isolation with Git Worktree
+
+Multiple Claude Code sessions or terminals may run concurrently in the same repository. To prevent branch switching conflicts, **always use `git worktree`** for feature branch work.
+
+### Rules
+
+1. **Never `git checkout` a feature branch in the main worktree.** Use `git worktree add` instead.
+2. **One worktree per branch.** Each feature branch gets its own directory under `.claude/worktrees/`.
+3. **Clean up after merge.** Remove the worktree once the branch is merged.
+4. **Claude Code agents**: See `.claude/rules/agents.md` Worktree Isolation Policy for agent-specific rules.
+
+### Worktree Cleanup (MANDATORY)
+
+Stale worktrees accumulate disk clutter and cause confusion. Follow these rules:
+
+1. **Before creating a new worktree**: Run `git worktree list` and remove any worktrees whose branch has already been merged or is no longer needed.
+2. **After PR merge**: Immediately remove the worktree used for that PR. If it has uncommitted changes, stash or discard them first, then remove.
+3. **At session start**: If `git worktree list` shows 3+ non-main worktrees, proactively clean up merged ones before starting new work.
+
+```bash
+# List active worktrees
+git worktree list
+
+# Remove a merged worktree (run from the main worktree, not from inside the one being removed)
+# Fails safely if uncommitted changes exist
+git worktree remove .claude/worktrees/<name>
+
+# Create a worktree for a new feature branch
+git worktree add .claude/worktrees/<name> -b <branch-name>
+
+# Create a worktree for an existing branch
+git worktree add .claude/worktrees/<name> <branch-name>
+```
+
+### When worktree is NOT needed
+
+- Read-only operations (log, diff, blame)
+- Work on the default branch (e.g., `main`) in the main worktree. Do NOT use the main worktree for feature branches.
+
 ## Feature Implementation Workflow
 
 1. **Plan First**

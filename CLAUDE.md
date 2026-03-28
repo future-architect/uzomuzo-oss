@@ -4,6 +4,8 @@
 
 **ALWAYS call `EnterWorktree` before doing any work that changes files.** This prevents branch conflicts when multiple sessions run in parallel. Give it a descriptive name (e.g., `feat-goreleaser`). Commit before exiting and inform the user of the branch name.
 
+**Clean up stale worktrees proactively.** See `.claude/rules/git-workflow.md` for the full worktree lifecycle rules.
+
 ## Build & Test
 
 ```bash
