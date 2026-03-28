@@ -65,23 +65,23 @@ type EOLStatus = domain.EOLStatus
 // EOLEvidence captures a single EOL evidence item.
 type EOLEvidence = domain.EOLEvidence
 
-// LifecycleLabel enumerates lifecycle labels.
-type LifecycleLabel = domain.LifecycleLabel
+// MaintenanceStatus enumerates maintenance status labels.
+type MaintenanceStatus = domain.MaintenanceStatus
 
 // EOLState enumerates the primary-source EOL decision state.
 type EOLState = domain.EOLState
 
 // =============================
-// Lifecycle Labels (constants)
+// Maintenance Status Labels (constants)
 // =============================
 const (
-	LabelActive       LifecycleLabel = domain.LabelActive
-	LabelStalled      LifecycleLabel = domain.LabelStalled
-	LabelLegacySafe   LifecycleLabel = domain.LabelLegacySafe
-	LabelEOLConfirmed LifecycleLabel = domain.LabelEOLConfirmed
-	LabelEOLEffective LifecycleLabel = domain.LabelEOLEffective
-	LabelEOLScheduled LifecycleLabel = domain.LabelEOLScheduled
-	LabelReviewNeeded LifecycleLabel = domain.LabelReviewNeeded
+	LabelActive       MaintenanceStatus = domain.LabelActive
+	LabelStalled      MaintenanceStatus = domain.LabelStalled
+	LabelLegacySafe   MaintenanceStatus = domain.LabelLegacySafe
+	LabelEOLConfirmed MaintenanceStatus = domain.LabelEOLConfirmed
+	LabelEOLEffective MaintenanceStatus = domain.LabelEOLEffective
+	LabelEOLScheduled MaintenanceStatus = domain.LabelEOLScheduled
+	LabelReviewNeeded MaintenanceStatus = domain.LabelReviewNeeded
 )
 
 // =============================
@@ -98,23 +98,23 @@ const (
 // Helper Accessors
 // =============================
 
-// FinalLifecycleLabel returns the final single lifecycle label (wrapper over Analysis.FinalLifecycleLabel).
+// FinalMaintenanceStatus returns the final single maintenance status (wrapper over Analysis.FinalMaintenanceStatus).
 // Prefer this over directly inspecting LifecycleAssessment/EOL for simple UI decisions.
-func FinalLifecycleLabel(a *Analysis) string { return a.FinalLifecycleLabel() }
+func FinalMaintenanceStatus(a *Analysis) string { return a.FinalMaintenanceStatus() }
 
 // LifecycleSummary provides a consolidated snapshot combining lifecycle assessment + primary-source EOL.
 // This decouples callers from internal domain structs while giving richer context.
 type LifecycleSummary struct {
-	FinalLabel      string        // priority-ordered final label (EOL > Scheduled EOL > LifecycleAssessment > Review Needed)
-	LifecycleLabel  string        // raw lifecycle assessment label (may be empty)
-	LifecycleReason string        // rationale for lifecycle assessment
-	EOLState        string        // raw EOL state (Unknown / NotEOL / EOL / Planned)
-	EOLHumanState   string        // human-friendly EOL state label
-	Successor       string        // successor project reference (when available)
-	ScheduledAt     *time.Time    // scheduled EOL date (for scheduled state)
-	EOLEvidences    []EOLEvidence // evidence list (may be empty)
-	EOLReason       string        // catalog human judgment reason (English)
-	EOLReasonJa     string        // catalog human judgment reason Japanese (if available)
+	FinalLabel        string        // priority-ordered final label (EOL > Scheduled EOL > LifecycleAssessment > Review Needed)
+	MaintenanceStatus string        // raw maintenance status label (may be empty)
+	LifecycleReason   string        // rationale for lifecycle assessment
+	EOLState          string        // raw EOL state (Unknown / NotEOL / EOL / Planned)
+	EOLHumanState     string        // human-friendly EOL state label
+	Successor         string        // successor project reference (when available)
+	ScheduledAt       *time.Time    // scheduled EOL date (for scheduled state)
+	EOLEvidences      []EOLEvidence // evidence list (may be empty)
+	EOLReason         string        // catalog human judgment reason (English)
+	EOLReasonJa       string        // catalog human judgment reason Japanese (if available)
 }
 
 // BuildLifecycleSummary constructs a LifecycleSummary from an Analysis.
@@ -123,7 +123,7 @@ func BuildLifecycleSummary(a *Analysis) LifecycleSummary {
 	if a == nil {
 		return LifecycleSummary{FinalLabel: "Review Needed", EOLState: string(EOLUnknown), EOLHumanState: "Unknown"}
 	}
-	ls := LifecycleSummary{FinalLabel: a.FinalLifecycleLabel(), EOLState: string(a.EOL.State), EOLHumanState: a.EOL.HumanState(), Successor: a.EOL.Successor, ScheduledAt: a.EOL.ScheduledAt}
+	ls := LifecycleSummary{FinalLabel: a.FinalMaintenanceStatus(), EOLState: string(a.EOL.State), EOLHumanState: a.EOL.HumanState(), Successor: a.EOL.Successor, ScheduledAt: a.EOL.ScheduledAt}
 	ls.EOLReason = a.EOL.Reason
 	ls.EOLReasonJa = a.EOL.ReasonJa
 	if a.EOL.Evidences != nil {
@@ -131,7 +131,7 @@ func BuildLifecycleSummary(a *Analysis) LifecycleSummary {
 		copy(ls.EOLEvidences, a.EOL.Evidences)
 	}
 	if lr := a.GetLifecycleResult(); lr != nil {
-		ls.LifecycleLabel = string(lr.Label)
+		ls.MaintenanceStatus = string(lr.Label)
 		ls.LifecycleReason = lr.Reason
 	}
 	return ls

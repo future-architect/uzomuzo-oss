@@ -20,10 +20,10 @@ type AssessmentInput struct {
 }
 
 // AssessmentResult is the normalized output for a single axis assessment.
-// For lifecycle we project existing LifecycleAssessment entity fields into this structure.
+// For lifecycle we project existing lifecycle assessment entity fields into this structure.
 type AssessmentResult struct {
 	Axis   AssessmentAxis
-	Label  LifecycleLabel
+	Label  MaintenanceStatus
 	Reason string
 	Trace  []string          // debug-only explanatory steps (not printed in normal CLI)
 	Meta   map[string]string // future extensibility (key/value lightweight diagnostics)

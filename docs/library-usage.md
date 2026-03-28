@@ -240,7 +240,7 @@ func main() {
     panic(err)
   }
   for purl, a := range results {
-    fmt.Printf("%s: lifecycle=%s eol=%s\n", purl, a.FinalLifecycleLabel(), a.EOL.HumanState())
+    fmt.Printf("%s: maintenance=%s eol=%s\n", purl, a.FinalMaintenanceStatus(), a.EOL.HumanState())
   }
 }
 ```
@@ -314,18 +314,18 @@ All types are re-exported via `pkg/uzomuzo`:
 | `uzomuzo.EOLState` | Enum: `EOLUnknown`, `EOLNotEOL`, `EOLEndOfLife`, `EOLScheduled` |
 | `uzomuzo.EOLEvidence` | Single evidence item (Source, Summary, Reference, Confidence) |
 
-### How EOL Flows into Lifecycle Labels
+### How EOL Flows into Maintenance Status
 
-After enrichers run, Phase 3 converts `EOLStatus` into the final lifecycle label:
+After enrichers run, Phase 3 converts `EOLStatus` into the final maintenance status:
 
-| EOL State | Lifecycle Label |
-| --------- | --------------- |
-| `EOLEndOfLife` | `EOL Confirmed` |
-| `EOLScheduled` | `EOL Scheduled` |
+| EOL State | Maintenance Status |
+| --------- | ------------------ |
+| `EOLEndOfLife` | `EOL` |
+| `EOLScheduled` | `Scheduled EOL` |
 | `EOLNotEOL` | (determined by activity heuristics) |
 | `EOLUnknown` | (determined by activity heuristics) |
 
-Access the final label via `a.FinalLifecycleLabel()` or the richer `uzomuzo.BuildLifecycleSummary(a)`.
+Access the final status via `a.FinalMaintenanceStatus()` or the richer `uzomuzo.BuildLifecycleSummary(a)`.
 
 ## Sample Code
 

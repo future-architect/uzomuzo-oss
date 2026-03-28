@@ -27,7 +27,7 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 		name     string
 		analysis *Analysis
 		scores   map[string]*ScoreEntity
-		want     LifecycleLabel
+		want     MaintenanceStatus
 		wantErr  bool
 	}{
 		{
@@ -231,7 +231,7 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 		name        string
 		analysis    *Analysis
 		scores      map[string]*ScoreEntity
-		wantLabel   LifecycleLabel
+		wantLabel   MaintenanceStatus
 		description string
 	}{
 		{
@@ -447,7 +447,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 		name     string
 		analysis *Analysis
 		scores   map[string]*ScoreEntity
-		want     LifecycleLabel
+		want     MaintenanceStatus
 	}{
 		{
 			name:     "nil_analysis",

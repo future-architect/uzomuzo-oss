@@ -8,7 +8,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 )
 
-func makeAnalysisWithLabel(label analysis.LifecycleLabel) *analysis.Analysis {
+func makeAnalysisWithLabel(label analysis.MaintenanceStatus) *analysis.Analysis {
 	return &analysis.Analysis{
 		AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
 			analysis.LifecycleAxis: {
