@@ -15,4 +15,4 @@ const (
 )
 
 // String returns the string representation.
-func (j MaintenanceStatus) String() string { return string(j) }
+func (m MaintenanceStatus) String() string { return string(m) }

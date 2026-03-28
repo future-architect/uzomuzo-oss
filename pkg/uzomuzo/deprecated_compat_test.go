@@ -28,3 +28,13 @@ func TestDeprecatedFinalLifecycleLabelFunc(t *testing.T) {
 		t.Errorf("FinalLifecycleLabel(nil) = %q, want %q (same as FinalMaintenanceStatus)", got, want)
 	}
 }
+
+// TestDeprecatedLifecycleSummaryField verifies that the deprecated
+// LifecycleSummary.LifecycleLabel field stays in sync with MaintenanceStatus.
+func TestDeprecatedLifecycleSummaryField(t *testing.T) {
+	summary := uzomuzo.BuildLifecycleSummary(nil)
+	if summary.LifecycleLabel != summary.MaintenanceStatus {
+		t.Errorf("LifecycleLabel=%q != MaintenanceStatus=%q; deprecated field must stay in sync",
+			summary.LifecycleLabel, summary.MaintenanceStatus)
+	}
+}

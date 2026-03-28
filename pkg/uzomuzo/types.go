@@ -112,15 +112,16 @@ func FinalLifecycleLabel(a *Analysis) string { return FinalMaintenanceStatus(a) 
 // This decouples callers from internal domain structs while giving richer context.
 type LifecycleSummary struct {
 	FinalLabel        string        // priority-ordered final label (EOL > Scheduled EOL > LifecycleAssessment > Review Needed)
-	MaintenanceStatus string        // raw lifecycle assessment label (may be empty)
-	LifecycleReason string        // rationale for lifecycle assessment
-	EOLState        string        // raw EOL state (Unknown / NotEOL / EOL / Planned)
-	EOLHumanState   string        // human-friendly EOL state label
-	Successor       string        // successor project reference (when available)
-	ScheduledAt     *time.Time    // scheduled EOL date (for scheduled state)
-	EOLEvidences    []EOLEvidence // evidence list (may be empty)
-	EOLReason       string        // catalog human judgment reason (English)
-	EOLReasonJa     string        // catalog human judgment reason Japanese (if available)
+	MaintenanceStatus string        // raw maintenance status label (may be empty)
+	LifecycleLabel    string        // Deprecated: Use MaintenanceStatus instead.
+	LifecycleReason   string        // rationale for lifecycle assessment
+	EOLState          string        // raw EOL state (Unknown / NotEOL / EOL / Planned)
+	EOLHumanState     string        // human-friendly EOL state label
+	Successor         string        // successor project reference (when available)
+	ScheduledAt       *time.Time    // scheduled EOL date (for scheduled state)
+	EOLEvidences      []EOLEvidence // evidence list (may be empty)
+	EOLReason         string        // catalog human judgment reason (English)
+	EOLReasonJa       string        // catalog human judgment reason Japanese (if available)
 }
 
 // BuildLifecycleSummary constructs a LifecycleSummary from an Analysis.
@@ -138,6 +139,7 @@ func BuildLifecycleSummary(a *Analysis) LifecycleSummary {
 	}
 	if lr := a.GetLifecycleResult(); lr != nil {
 		ls.MaintenanceStatus = string(lr.Label)
+		ls.LifecycleLabel = ls.MaintenanceStatus // keep deprecated field in sync
 		ls.LifecycleReason = lr.Reason
 	}
 	return ls

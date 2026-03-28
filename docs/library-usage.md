@@ -314,18 +314,18 @@ All types are re-exported via `pkg/uzomuzo`:
 | `uzomuzo.EOLState` | Enum: `EOLUnknown`, `EOLNotEOL`, `EOLEndOfLife`, `EOLScheduled` |
 | `uzomuzo.EOLEvidence` | Single evidence item (Source, Summary, Reference, Confidence) |
 
-### How EOL Flows into Lifecycle Labels
+### How EOL Flows into Maintenance Status
 
-After enrichers run, Phase 3 converts `EOLStatus` into the final lifecycle label:
+After enrichers run, Phase 3 converts `EOLStatus` into the final maintenance status:
 
-| EOL State | Lifecycle Label |
-| --------- | --------------- |
+| EOL State | Maintenance Status |
+| --------- | ------------------ |
 | `EOLEndOfLife` | `EOL Confirmed` |
 | `EOLScheduled` | `EOL Scheduled` |
 | `EOLNotEOL` | (determined by activity heuristics) |
 | `EOLUnknown` | (determined by activity heuristics) |
 
-Access the final label via `a.FinalMaintenanceStatus()` or the richer `uzomuzo.BuildLifecycleSummary(a)`.
+Access the final status via `a.FinalMaintenanceStatus()` or the richer `uzomuzo.BuildLifecycleSummary(a)`.
 
 ## Sample Code
 
