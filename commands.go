@@ -155,7 +155,7 @@ func analyzeAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Comma
 		return cli.ProcessDirectMode(ctx, cfg, args, opts)
 	}
 
-	// No input: return nil to let urfave/cli show default help.
+	// No input: print a short guidance message and exit successfully without showing full help.
 	fmt.Fprintln(os.Stderr, "No input provided. Run 'uzomuzo analyze --help' for usage.")
 	return nil
 }
@@ -204,6 +204,14 @@ func rootAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 			opts.SampleSize = cfg.App.SampleSize
 		}
 		return cli.ProcessFileMode(ctx, cfg, first, opts)
+	}
+
+	// Reject --sample and --line-range in direct mode for consistency with analyzeAction.
+	if cmd.IsSet("sample") {
+		return fmt.Errorf("--sample requires file input; use 'uzomuzo analyze --file <path> --sample N'")
+	}
+	if cmd.IsSet("line-range") {
+		return fmt.Errorf("--line-range requires file input; use 'uzomuzo analyze --file <path> --line-range START:END'")
 	}
 
 	// Direct mode: all positional args are PURLs/GitHub URLs

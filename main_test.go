@@ -375,24 +375,39 @@ func TestRootAction_DeprecationWarning(t *testing.T) {
 	}
 }
 
-func TestAnalyzeAction_NoInputShowsHelp(t *testing.T) {
+// TestRootAction_SampleWithoutFileRejects verifies that --sample in direct mode
+// is rejected by the deprecated root action, matching analyzeAction behavior.
+func TestRootAction_SampleWithoutFileRejects(t *testing.T) {
 	cfg := &domaincfg.Config{}
 	app := buildApp(cfg)
-	// "analyze" with no args should show help message and return nil (no error).
+	err := app.Run(context.Background(), []string{"uzomuzo", "--sample", "10", "pkg:npm/express"})
+	if err == nil {
+		t.Fatal("expected error for --sample without file in root action, got nil")
+	}
+	if !bytes.Contains([]byte(err.Error()), []byte("--sample requires file input")) {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestAnalyzeAction_NoInputReturnsNil verifies that "uzomuzo analyze" with no args
+// returns nil (no error). It prints a guidance message but does not show full help.
+func TestAnalyzeAction_NoInputReturnsNil(t *testing.T) {
+	cfg := &domaincfg.Config{}
+	app := buildApp(cfg)
 	err := app.Run(context.Background(), []string{"uzomuzo", "analyze"})
 	if err != nil {
-		t.Errorf("expected nil error for no-input help, got: %v", err)
+		t.Errorf("expected nil error for analyze with no input, got: %v", err)
 	}
 }
 
 // TestRootAction_NoInputReturnsNil verifies that bare "uzomuzo" with no args
-// returns nil (shows help without an error), matching analyzeAction behavior.
+// returns nil (no error), matching the no-input behavior of analyzeAction.
 func TestRootAction_NoInputReturnsNil(t *testing.T) {
 	cfg := &domaincfg.Config{}
 	app := buildApp(cfg)
 	err := app.Run(context.Background(), []string{"uzomuzo"})
 	if err != nil {
-		t.Errorf("expected nil error for root no-input help, got: %v", err)
+		t.Errorf("expected nil error for root with no input, got: %v", err)
 	}
 }
 
