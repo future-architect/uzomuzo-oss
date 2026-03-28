@@ -12,6 +12,12 @@
           },
           {
             "type": "command",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{let cmd='';try{cmd=JSON.parse(d).tool_input?.command||'';}catch(e){}if(/^git\\s+commit/.test(cmd)){const{execFileSync}=require('child_process');const fs=require('fs');try{const root=execFileSync('git',['rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();const hook=root+'/.claude/hooks/check-new-deps.sh';if(fs.existsSync(hook)&&(fs.statSync(hook).mode&0o111)){execFileSync('bash',[hook],{stdio:'inherit'});}}catch(e){process.exitCode=0;}}});\"",
+            "timeout": 30,
+            "statusMessage": "Checking new dependency health..."
+          },
+          {
+            "type": "command",
             "command": "bash .claude/hooks/adr-check.sh",
             "timeout": 15,
             "statusMessage": "Checking if ADR is needed..."
