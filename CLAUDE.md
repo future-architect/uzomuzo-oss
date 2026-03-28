@@ -4,20 +4,7 @@
 
 **ALWAYS call `EnterWorktree` before doing any work that changes files.** This prevents branch conflicts when multiple sessions run in parallel. Give it a descriptive name (e.g., `feat-goreleaser`). Commit before exiting and inform the user of the branch name.
 
-### Worktree Cleanup (MANDATORY)
-
-Stale worktrees cause merge conflicts and clutter. Follow these rules:
-
-1. **Before creating a new worktree**: Run `git worktree list` and remove any worktrees whose branch has already been merged or is no longer needed.
-2. **After PR merge**: Immediately `git worktree remove <path>` the worktree used for that PR.
-3. **At session start**: If `git worktree list` shows 3+ non-main worktrees, proactively clean up merged ones before starting new work.
-
-```bash
-# Check for stale worktrees
-git worktree list
-# Remove a merged worktree
-git worktree remove <path> --force
-```
+**Clean up stale worktrees proactively.** See `.claude/rules/git-workflow.md` for the full worktree lifecycle rules.
 
 ## Build & Test
 

@@ -33,32 +33,36 @@ Multiple Claude Code sessions or terminals may run concurrently in the same repo
 ### Rules
 
 1. **Never `git checkout` a feature branch in the main worktree.** Use `git worktree add` instead.
-2. **One worktree per branch.** Each feature branch gets its own directory.
+2. **One worktree per branch.** Each feature branch gets its own directory under `.claude/worktrees/`.
 3. **Clean up after merge.** Remove the worktree once the branch is merged.
-4. **Claude Code agents**: Use `isolation: "worktree"` when spawning agents that modify code on a different branch.
+4. **Claude Code agents**: See `.claude/rules/agents.md` Worktree Isolation Policy for agent-specific rules.
 
 ### Worktree Cleanup (MANDATORY)
 
-Stale worktrees cause merge conflicts and clutter. Follow these rules:
+Stale worktrees accumulate disk clutter and cause confusion. Follow these rules:
 
 1. **Before creating a new worktree**: Run `git worktree list` and remove any worktrees whose branch has already been merged or is no longer needed.
-2. **After PR merge**: Immediately `git worktree remove <path>` the worktree used for that PR.
+2. **After PR merge**: Immediately remove the worktree used for that PR. If it has uncommitted changes, stash or discard them first, then remove.
 3. **At session start**: If `git worktree list` shows 3+ non-main worktrees, proactively clean up merged ones before starting new work.
 
 ```bash
-# Create a worktree for a feature branch
-git worktree add ../uzomuzo-oss-<branch-short-name> <branch-name>
-
-# After merge, clean up
-git worktree remove ../uzomuzo-oss-<branch-short-name>
-
 # List active worktrees
 git worktree list
+
+# Remove a merged worktree (fails safely if uncommitted changes exist)
+git worktree remove .claude/worktrees/<name>
+
+# Create a worktree for a new feature branch
+git worktree add .claude/worktrees/<name> -b <branch-name>
+
+# Create a worktree for an existing branch
+git worktree add .claude/worktrees/<name> <branch-name>
 ```
 
 ### When worktree is NOT needed
 
 - Read-only operations (log, diff, blame)
+- Work on the branch already checked out in the main worktree
 
 ## Feature Implementation Workflow
 
