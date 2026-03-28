@@ -68,17 +68,24 @@ func main() {
 	}
 }
 
-// analyzeFlags returns the flags shared by the analyze subcommand.
-func analyzeFlags() []urfcli.Flag {
+// commonFlags returns the filtering/output flags shared by both the analyze
+// subcommand and the deprecated root action.
+func commonFlags() []urfcli.Flag {
 	return []urfcli.Flag{
 		&urfcli.BoolFlag{Name: "only-review-needed", Usage: "Show only 'Review Needed' results"},
 		&urfcli.BoolFlag{Name: "only-eol", Usage: "Show only 'EOL-*' results"},
 		&urfcli.StringFlag{Name: "ecosystem", Usage: "Filter to a single ecosystem (npm, pypi, maven, etc.)"},
 		&urfcli.StringFlag{Name: "export-license-csv", Usage: "Write license CSV to path"},
-		&urfcli.StringFlag{Name: "file", Usage: "Path to input file containing PURLs/URLs (one per line)"},
-		&urfcli.IntFlag{Name: "sample", Usage: "Randomly sample up to N inputs (requires --file)"},
-		&urfcli.StringFlag{Name: "line-range", Usage: "Limit to line range START:END (requires --file)"},
+		&urfcli.IntFlag{Name: "sample", Usage: "Randomly sample up to N inputs (file mode only)"},
+		&urfcli.StringFlag{Name: "line-range", Usage: "Limit to line range START:END (file mode only)"},
 	}
+}
+
+// analyzeFlags returns commonFlags plus analyze-specific flags (--file).
+func analyzeFlags() []urfcli.Flag {
+	return append(commonFlags(),
+		&urfcli.StringFlag{Name: "file", Usage: "Path to input file containing PURLs/URLs (one per line)"},
+	)
 }
 
 // analyzeCommand builds the "analyze" subcommand.
@@ -120,14 +127,8 @@ Examples:
    syft . -o cyclonedx-json | uzomuzo audit --sbom -
    uzomuzo audit --format json`,
 		// Root flags kept for backward compatibility (deprecated).
-		Flags: []urfcli.Flag{
-			&urfcli.BoolFlag{Name: "only-review-needed", Usage: "Show only 'Review Needed' results"},
-			&urfcli.BoolFlag{Name: "only-eol", Usage: "Show only 'EOL-*' results"},
-			&urfcli.StringFlag{Name: "ecosystem", Usage: "Filter to a single ecosystem (npm, pypi, maven, etc.)"},
-			&urfcli.IntFlag{Name: "sample", Usage: "Randomly sample up to N inputs (file mode only)"},
-			&urfcli.StringFlag{Name: "export-license-csv", Usage: "Write license CSV to path"},
-			&urfcli.StringFlag{Name: "line-range", Usage: "Limit to line range START:END (file mode only)"},
-		},
+		// Uses commonFlags() to stay in sync with the analyze subcommand.
+		Flags: commonFlags(),
 		Action: func(ctx context.Context, cmd *urfcli.Command) error {
 			return rootAction(ctx, cfg, cmd)
 		},
