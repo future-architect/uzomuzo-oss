@@ -210,6 +210,8 @@ type GitHubURLProcessingResult struct {
 // Dependencies: Application layer services
 // Reuses: All existing batch processing optimizations
 func processMixedContent(ctx context.Context, cfg *domaincfg.Config, purls []string, githubURLs []string, options ProcessingOptions) error {
+	// Normalize ecosystem filter (trim + lowercase) once at the entry point.
+	options.Ecosystem = strings.ToLower(strings.TrimSpace(options.Ecosystem))
 
 	// Global Maven collapsed coordinate normalization
 	if len(purls) > 0 {
@@ -497,7 +499,9 @@ func executeProcessing(ctx context.Context, cfg *domaincfg.Config, supportedPURL
 	return &ProcessingResults{AllAnalyses: allAnalyses}, analysisService, nil
 }
 
-// displayResults handles the display of processing results and statistics
+// displayResults handles the display of processing results and statistics.
+// Mode is already determined by the caller (ProcessDirectMode / ProcessFileMode)
+// via options.IsDirectInput — no secondary dispatch needed.
 func displayResults(cfg *domaincfg.Config, results *ProcessingResults, inputs *ProcessingInputs, options ProcessingOptions) error {
 	// Single point of skipped PURL logging (start-phase duplicate removed per noise reduction policy)
 	if len(inputs.SkippedPURLs) > 0 {
@@ -507,15 +511,83 @@ func displayResults(cfg *domaincfg.Config, results *ProcessingResults, inputs *P
 		}
 	}
 
-	mode, err := ResolveMode(options)
-	if err != nil {
-		return fmt.Errorf("failed to resolve mode: %w", err)
+	// Display mode-specific output
+	if options.IsDirectInput {
+		displayDirectSummary(inputs, results, options)
+	} else {
+		displayBatchFileSummary(inputs, results, options)
 	}
-	router := NewCommandRouter()
-	if err := router.Run(mode, inputs.ProcessingCtx, cfg, inputs, results, options); err != nil {
-		return fmt.Errorf("mode execution failed (%s): %w", mode.String(), err)
+
+	// Post-display hooks (common to both modes)
+	displayBatchErrors(results.AllAnalyses)
+
+	if strings.TrimSpace(options.LicenseCSVPath) == "" {
+		displayBatchAnalysesSummary(results.AllAnalyses)
+	}
+
+	if strings.ToLower(os.Getenv("LOG_LEVEL")) == "debug" {
+		printReviewNeededArgs(results.AllAnalyses)
+	}
+
+	// CSV export (file mode only)
+	if !options.IsDirectInput {
+		analysisService := createAnalysisService(cfg)
+		if err := analysisService.WriteScoreCardCSV(results.AllAnalyses, "scorecard.csv"); err != nil {
+			slog.Error("Failed to write CSV file", "error", err)
+		}
+		if strings.TrimSpace(options.LicenseCSVPath) != "" {
+			if err := analysisService.WriteLicenseCSV(results.AllAnalyses, options.LicenseCSVPath); err != nil {
+				slog.Error("Failed to write license CSV file", "error", err, "path", options.LicenseCSVPath)
+			} else {
+				fmt.Printf("\n📄 License CSV written: %s\n", options.LicenseCSVPath)
+				slog.Info("License CSV exported", "path", options.LicenseCSVPath)
+			}
+		}
 	}
 	return nil
+}
+
+// displayDirectSummary prints a compact summary for direct (non-file) mode.
+func displayDirectSummary(inputs *ProcessingInputs, results *ProcessingResults, opts ProcessingOptions) {
+	fmt.Printf("\n📊 Processing Summary:\n")
+	if len(inputs.SupportedPURLs) > 0 {
+		fmt.Printf("   PURLs processed: %d\n", len(inputs.SupportedPURLs))
+	}
+	if len(inputs.ValidGitHubURLs) > 0 {
+		fmt.Printf("   GitHub URLs processed: %d\n", len(inputs.ValidGitHubURLs))
+	}
+	if len(inputs.SkippedPURLs) > 0 {
+		fmt.Printf("   Skipped (unsupported): %d\n", len(inputs.SkippedPURLs))
+	}
+	if opts.OnlyReviewNeeded {
+		fmt.Printf("   Filter: only 'Review Needed' results will be shown\n")
+	}
+	if opts.Ecosystem != "" {
+		fmt.Printf("   Filter: ecosystem = %s\n", opts.Ecosystem)
+	}
+	if opts.OnlyEOL {
+		fmt.Printf("   Filter: only 'EOL-*' results will be shown\n")
+	}
+	if opts.ShouldShowPerPURLDetails() {
+		displayBatchAnalysesFull(results.AllAnalyses, opts)
+	}
+}
+
+// displayBatchFileSummary prints a summary header for file-based batch mode.
+func displayBatchFileSummary(inputs *ProcessingInputs, results *ProcessingResults, opts ProcessingOptions) {
+	fmt.Printf("\n" + strings.Repeat("=", separatorLength) + "\n")
+	if len(inputs.SupportedPURLs) > 0 && len(inputs.ValidGitHubURLs) > 0 {
+		fmt.Printf("📊 MIXED FILE BATCH ANALYSIS RESULTS\n")
+		fmt.Printf("📝 PURLs: %d | GitHub URLs: %d | Total: %d\n", len(inputs.SupportedPURLs), len(inputs.ValidGitHubURLs), len(results.AllAnalyses))
+	} else if len(inputs.SupportedPURLs) > 0 {
+		fmt.Printf("📊 INDIVIDUAL PURL ANALYSIS RESULTS\n")
+	} else if len(inputs.ValidGitHubURLs) > 0 {
+		fmt.Printf("📊 GITHUB URL BATCH ANALYSIS RESULTS\n")
+	}
+	fmt.Printf(strings.Repeat("=", separatorLength) + "\n")
+	if opts.ShouldShowPerPURLDetails() {
+		displayBatchAnalysesFull(results.AllAnalyses, opts)
+	}
 }
 
 // printGitHubRateLimitSummary prints remaining GitHub API quota and reset time
