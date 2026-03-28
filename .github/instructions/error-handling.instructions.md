@@ -29,7 +29,25 @@ Use `errors.Join()` (Go 1.20+) to combine errors from multiple independent opera
 
 Only use `panic` for truly exceptional, unrecoverable situations (e.g., programmer errors like nil pointer dereference, or failed startup conditions). Do not use it for normal error control flow.
 
-### 5. Integrate with Structured Logging (`slog`)
+### 5. Never Silently Discard Errors
+
+When intentionally ignoring an error, use a comment explaining why:
+
+- **GOOD:** `_ = f.Close() // best-effort cleanup, original error preserved`
+- **BAD:** `_, _ = sqlDB.Exec(migrationSQL)`
+
+If the error matters only in some cases, handle the expected case and propagate the rest:
+
+```go
+if _, err := db.Exec(alterSQL); err != nil {
+    if !strings.Contains(err.Error(), "duplicate column name") {
+        return fmt.Errorf("migration failed: %w", err)
+    }
+    // Column already exists — expected on subsequent runs.
+}
+```
+
+### 6. Integrate with Structured Logging (`slog`)
 
 When logging errors (Go 1.21+), use `log/slog`.
 

@@ -9,6 +9,18 @@
             "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const cmd=JSON.parse(d).tool_input?.command||'';if(/^git\\s+push/.test(cmd)){console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',additionalContext:'IMPORTANT: Before pushing, check if documentation needs updating for the changes on this branch. Run git diff main...HEAD --name-only to see changed files. If Go source files changed, launch the doc-updater agent to update README and godoc comments. Only proceed with git push after docs are confirmed up-to-date or updated.'}}));}});\"",
             "timeout": 10,
             "statusMessage": "Checking if docs need updating..."
+          },
+          {
+            "type": "command",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{let cmd='';try{cmd=JSON.parse(d).tool_input?.command||'';}catch(e){}if(/^git\\s+commit/.test(cmd)){const{execFileSync}=require('child_process');const fs=require('fs');try{const root=execFileSync('git',['rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();const hook=root+'/.claude/hooks/check-new-deps.sh';if(fs.existsSync(hook)){execFileSync('bash',[hook],{stdio:'inherit'});}}catch(e){process.exitCode=0;}}});\"",
+            "timeout": 30,
+            "statusMessage": "Checking new dependency health..."
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/adr-check.sh",
+            "timeout": 15,
+            "statusMessage": "Checking if ADR is needed..."
           }
         ]
       }
