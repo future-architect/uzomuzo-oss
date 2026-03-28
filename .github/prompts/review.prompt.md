@@ -48,7 +48,14 @@ If no PR exists for the current branch, skip Phase 2 and Phase 3.
 
 #### Step 2.2: Discover Unresolved Copilot Threads
 
-Run this GraphQL query to find unresolved Copilot review threads:
+First, detect the repository owner and name from the git remote:
+
+```bash
+gh repo view --json owner,name --jq '"\(.owner.login)/\(.name)"'
+```
+
+Then run this GraphQL query to find unresolved Copilot review threads
+(substitute `{owner}`, `{repo}`, and `{N}` with actual values):
 
 ```bash
 gh api graphql -f query='
