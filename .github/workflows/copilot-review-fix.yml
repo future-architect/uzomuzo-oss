@@ -50,7 +50,14 @@ jobs:
       - name: Post @claude comment to trigger fix
         env:
           GH_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --body "@claude fix copilot reviews on this PR. Discover unresolved Copilot review threads, fix them, run build/test/lint, commit, push, and resolve the threads."
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$(cat <<'BODY'
+          @claude Follow the procedure in `.github/prompts/review.prompt.md` with `--copilot-only` mode for this PR.
+
+          Phase 2: Resolve all unresolved Copilot review threads (discover → classify → fix → build/test/lint → commit/push → reply/resolve).
+          Phase 3: Detect recurring patterns from FIX-classified comments, propose and apply coding rules to `.github/instructions/`, then run `make sync-instructions`.
+          Phase 4: Post a summary comment on this PR.
+          BODY
+          )"
