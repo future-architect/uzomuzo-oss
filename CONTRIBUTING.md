@@ -6,7 +6,7 @@ Thank you for your interest in contributing to uzomuzo! This project is a Go CLI
 
 ### Prerequisites
 
-- **Go 1.26+** (the project uses Go 1.26.1; `go.mod` specifies 1.25.0 as the dependency minimum)
+- **Go 1.25+** (`go.mod` currently requires Go 1.25.0; Go 1.26.1 is recommended for local development)
 - **goimports** (`go install golang.org/x/tools/cmd/goimports@latest`)
 - **golangci-lint** ([installation guide](https://golangci-lint.run/welcome/install/))
 - A GitHub account
