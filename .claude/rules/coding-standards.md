@@ -66,3 +66,4 @@ Any exported function, type, or constant is part of our public API. API stabilit
 
 - **Diff Content Filtering**: When writing tools that analyze `git diff` output, always strip diff metadata lines (`+++`, `---`, `diff --git`, `@@`) before pattern-matching on `^+` lines. Diff headers can trigger false positives.
 - **Comment-Code Consistency**: When changing implementation behavior (e.g., switching from three-dot to two-dot diff), update all comments and documentation that reference the old behavior in the same commit.
+- **Markdown Link Validity**: When adding or editing Markdown files under `.github/` (templates, workflows, docs), use absolute paths from the repo root (e.g., `/docs/development.md`) for links to repo files, since relative paths resolve from the file's directory. Always verify that linked files actually exist before committing.
