@@ -2,6 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
   "minimumReleaseAge": "21 days",
+  "ignorePaths": ["**/testdata/**"],
   "packageRules": [
     {
       "matchManagers": ["gomod"],
