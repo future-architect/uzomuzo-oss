@@ -1,22 +1,19 @@
 name: Auto-fix Copilot Review
 
-# Temporarily disabled: claude-code-action fails with 404 on GET /users/Copilot
-# because Copilot is a bot, not a regular user. Re-enable after upgrading
-# claude-code-action to a version that handles bot actors correctly.
-# Original triggers:
-#   pull_request_review:
-#     types: [submitted]
-#   pull_request:
-#     types: [labeled]
 on:
-  workflow_dispatch:
+  # Auto-trigger: Copilot finishes its review and submits it
+  pull_request_review:
+    types: [submitted]
+  # Manual trigger: add 'copilot-review' label to re-run
+  pull_request:
+    types: [labeled]
 
 concurrency:
   group: copilot-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  claude-fix-copilot:
+  trigger-claude:
     # Run when: Copilot submits a review OR 'copilot-review' label is added
     # Only for PRs authored by kotakanbe
     if: >-
@@ -29,18 +26,11 @@ jobs:
             && github.event.sender.login == 'kotakanbe')
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     permissions:
-      contents: write
       pull-requests: write
-      issues: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-
-      - name: Remove copilot-review label early to prevent stale label on cancellation
+      - name: Remove copilot-review label if present
         if: github.event_name == 'pull_request' && github.event.label.name == 'copilot-review'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -57,62 +47,10 @@ jobs:
             fi
           fi
 
-      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
-
-      - name: Install tools
-        run: go install golang.org/x/tools/cmd/goimports@v0.34.0
-
-      - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin
-
-      - name: Run Claude Code to fix Copilot review comments
-        uses: anthropics/claude-code-action@33ea56dd1072951fc382b7bffdb52125f2994e68 # v1.0.82
-        with:
-          prompt: |
-            You are running in CI to automatically fix Copilot review comments on PR #${{ github.event.pull_request.number }}.
-
-            Follow the procedure defined in .github/prompts/review.prompt.md with --copilot-only mode:
-            - Skip Phase 1 (Claude review) entirely
-            - Execute Phase 2 (Resolve Copilot Review Comments) fully:
-              - Step 2.1: PR number is ${{ github.event.pull_request.number }}
-              - Step 2.2: Discover unresolved Copilot threads via GraphQL
-              - Step 2.3: You are already on the PR branch (checked out above)
-              - Step 2.4: Classify each thread (FIX / ALREADY_FIXED / WONT_FIX)
-              - Step 2.5: Apply fixes
-              - Step 2.6: Run build/test/vet/lint, then commit and push
-              - Step 2.7: Reply to each thread and resolve
-            - Execute Phase 3 (Learn from Copilot — Update Local Coding Rules) automatically:
-              - Step 3.1: Detect recurring patterns from FIX-classified comments (2+ occurrences)
-              - Step 3.2: Map each pattern to the appropriate .github/instructions/ rule file
-              - Step 3.3: Draft concise, actionable, preventive rules
-              - Step 3.4: Apply rules. Append to the "Learned from Copilot Reviews" section in each target file.
-                Then run: make sync-instructions
-              - Step 3.5: Check for duplicates before adding. Skip or refine existing rules.
-              - Commit rule changes separately: "chore: update coding rules based on Copilot review patterns"
-            - Output Phase 4 summary as a PR comment
-
-            Important:
-            - NEVER force-push or rewrite history
-            - Only modify source files within the scope of Copilot's comments (Phase 2) or .github/instructions/ (Phase 3). Running make sync-instructions is allowed to regenerate derived files under .claude/rules/.
-            - Always verify go build passes before committing
-            - If go test fails after fixes, revert the failing change and classify as WONT_FIX
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_args: "--model opus --allowedTools 'Bash(*)' Edit Write Read Glob Grep"
-          show_full_output: false
-          allowed_bots: "Copilot"
-          allowed_non_write_users: "Copilot"
+      - name: Post @claude comment to trigger fix
         env:
-          CLAUDE_CODE_MAX_TURNS: "50"
-
-      - name: Notify on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}
         run: |
           gh pr comment "${{ github.event.pull_request.number }}" \
             --repo "${{ github.repository }}" \
-            --body "@kotakanbe Copilot review auto-fix failed. Check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+            --body "@claude fix copilot reviews on this PR. Discover unresolved Copilot review threads, fix them, run build/test/lint, commit, push, and resolve the threads."
