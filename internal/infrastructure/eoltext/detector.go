@@ -600,16 +600,14 @@ func extractSuccessorNearPhrase(fullText, phrase string, pats []*regexp.Regexp, 
 	if phrase == "" {
 		return ""
 	}
+	// Sanitize invalid UTF-8 before lowercasing so that strings.ToLower
+	// cannot expand replacement characters and change the byte length.
+	// This keeps byte indices consistent between fullText and its lowercased form.
+	fullText = strings.ToValidUTF8(fullText, "\ufffd")
 	lowerFull := strings.ToLower(fullText)
 	lowerPhrase := strings.ToLower(phrase)
 	idx := strings.Index(lowerFull, lowerPhrase)
 	if idx < 0 {
-		return ""
-	}
-	// Guard against byte-length mismatch between fullText and its lowercased form.
-	// strings.ToLower can expand invalid UTF-8 bytes (e.g., 0xe5 → U+FFFD),
-	// making lowerFull longer than fullText and the index out of bounds.
-	if idx >= len(fullText) {
 		return ""
 	}
 	// Include the phrase itself in the window so patterns like "superseded by X" that begin within the phrase substring can match.
