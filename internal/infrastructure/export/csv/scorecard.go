@@ -70,7 +70,13 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 	}()
 
 	writer := csv.NewWriter(file)
-	defer writer.Flush()
+	defer func() {
+		writer.Flush()
+		if werr := writer.Error(); werr != nil && err == nil {
+			err = common.NewIOError("failed to flush scorecard CSV writer", werr).
+				WithContext("filename", filename)
+		}
+	}()
 
 	checkNames := getAllCheckNames(analyses)
 

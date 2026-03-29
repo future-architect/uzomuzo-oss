@@ -28,7 +28,13 @@ func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err 
 	}()
 
 	w := csv.NewWriter(file)
-	defer w.Flush()
+	defer func() {
+		w.Flush()
+		if werr := w.Error(); werr != nil && err == nil {
+			err = common.NewIOError("failed to flush license CSV writer", werr).
+				WithContext("filename", filename)
+		}
+	}()
 
 	headers := []string{
 		"original_purl", "effective_purl", "version_resolved",
