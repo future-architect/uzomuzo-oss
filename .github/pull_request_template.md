@@ -4,9 +4,10 @@
 
 ## Changes
 
-<!-- Bulleted list of changes -->
-
--
+<!-- Bulleted list of changes, for example:
+- Added feature X
+- Fixed bug Y
+-->
 
 ## Related Issues
 
@@ -14,12 +15,12 @@
 
 ## Checklist
 
-- [ ] Code follows the project's [coding standards](docs/development.md)
+- [ ] Code follows the project's [coding standards](/docs/development.md)
 - [ ] Tests added/updated for the changes
 - [ ] `go test ./...` passes
 - [ ] `goimports -w . && golangci-lint run` passes
 - [ ] Documentation updated (if applicable)
-- [ ] Commit messages follow [conventional commits](CONTRIBUTING.md) format
+- [ ] Commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format
 
 ## Test Plan
 
