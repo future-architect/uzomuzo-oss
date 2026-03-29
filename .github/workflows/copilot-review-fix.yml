@@ -40,9 +40,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr edit "${{ github.event.pull_request.number }}" \
+          set -euo pipefail
+          if ! output=$(gh pr edit "${{ github.event.pull_request.number }}" \
             --remove-label copilot-review \
-            --repo "${{ github.repository }}" || true
+            --repo "${{ github.repository }}" 2>&1); then
+            if echo "$output" | grep -qiE 'label(.+)does not exist|could not find label'; then
+              echo "Label 'copilot-review' is not present; nothing to remove."
+            else
+              echo "Failed to remove 'copilot-review' label: $output" >&2
+              exit 1
+            fi
+          fi
 
       - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
