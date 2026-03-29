@@ -64,8 +64,7 @@ jobs:
               - Step 3.1: Detect recurring patterns from FIX-classified comments (2+ occurrences)
               - Step 3.2: Map each pattern to the appropriate .github/instructions/ rule file
               - Step 3.3: Draft concise, actionable, preventive rules
-              - Step 3.4: Apply rules WITHOUT asking for confirmation (CI mode — skip the confirmation step).
-                Append to the "Learned from Copilot Reviews" section in each target file.
+              - Step 3.4: Apply rules. Append to the "Learned from Copilot Reviews" section in each target file.
                 Then run: make sync-instructions
               - Step 3.5: Check for duplicates before adding. Skip or refine existing rules.
               - Commit rule changes separately: "chore: update coding rules based on Copilot review patterns"
