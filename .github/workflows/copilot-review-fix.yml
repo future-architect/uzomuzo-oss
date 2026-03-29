@@ -15,11 +15,15 @@ concurrency:
 jobs:
   claude-fix-copilot:
     # Run when: Copilot submits a review OR 'copilot-review' label is added
+    # Skip fork PRs to prevent untrusted code execution
     if: >-
-      (github.event_name == 'pull_request_review'
-       && github.event.review.user.login == 'copilot-pull-request-reviewer')
-      || (github.event_name == 'pull_request'
-          && github.event.label.name == 'copilot-review')
+      github.event.pull_request.head.repo.full_name == github.repository
+      && (
+        (github.event_name == 'pull_request_review'
+         && github.event.review.user.login == 'copilot-pull-request-reviewer')
+        || (github.event_name == 'pull_request'
+            && github.event.label.name == 'copilot-review')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
