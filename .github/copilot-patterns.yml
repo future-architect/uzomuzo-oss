@@ -17,3 +17,23 @@ patterns:
     pr: 73
     file: ".github/prompts/review.prompt.md"
     date: "2026-03-29"
+  - category: "defensive-coding"
+    summary: "Shell script missing set -euo pipefail and empty-input guard"
+    pr: 74
+    file: ".github/workflows/update-branches.yml"
+    date: "2026-03-29"
+  - category: "defensive-coding"
+    summary: "gh pr list without --limit may miss PRs beyond first page"
+    pr: 74
+    file: ".github/workflows/update-branches.yml"
+    date: "2026-03-29"
+  - category: "defensive-coding"
+    summary: "Workflow missing concurrency group allowing overlapping runs"
+    pr: 74
+    file: ".github/workflows/update-branches.yml"
+    date: "2026-03-29"
+  - category: "error-handling"
+    summary: "Blanket || echo hides unexpected API failures behind skip message"
+    pr: 74
+    file: ".github/workflows/update-branches.yml"
+    date: "2026-03-29"
