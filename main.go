@@ -41,7 +41,9 @@ func main() {
 
 	// Set lifecycle assessment type environment variable
 	if cfg.Lifecycle.Type != "" {
-		_ = os.Setenv("LIFECYCLE_ASSESS_TYPE", cfg.Lifecycle.Type) // best-effort; Setenv failure is non-critical
+		if err := os.Setenv("LIFECYCLE_ASSESS_TYPE", cfg.Lifecycle.Type); err != nil {
+			slog.Warn("failed to set LIFECYCLE_ASSESS_TYPE env var", "error", err)
+		}
 	}
 
 	app := buildApp(cfg)

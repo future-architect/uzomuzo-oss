@@ -141,19 +141,25 @@ func computeSummary(entries []domainaudit.AuditEntry) jsonSummary {
 func renderTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	// Header uses "LIFECYCLE" intentionally for backward compatibility with existing tooling/scripts.
-	_, _ = fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL")
+	if _, err := fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL"); err != nil {
+		return fmt.Errorf("failed to write table header: %w", err)
+	}
 
 	for i := range entries {
 		maintenance, eol := entryMaintenanceEOL(&entries[i], "—")
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", entries[i].Verdict, entries[i].PURL, maintenance, eol)
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", entries[i].Verdict, entries[i].PURL, maintenance, eol); err != nil {
+			return fmt.Errorf("failed to write table row: %w", err)
+		}
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("failed to flush table output: %w", err)
 	}
 
 	s := computeSummary(entries)
-	_, _ = fmt.Fprintf(w, "\nSummary: %d dependencies | %d ok | %d caution | %d replace | %d review\n",
-		s.Total, s.OK, s.Caution, s.Replace, s.Review)
+	if _, err := fmt.Fprintf(w, "\nSummary: %d dependencies | %d ok | %d caution | %d replace | %d review\n",
+		s.Total, s.OK, s.Caution, s.Replace, s.Review); err != nil {
+		return fmt.Errorf("failed to write summary: %w", err)
+	}
 	return nil
 }
 

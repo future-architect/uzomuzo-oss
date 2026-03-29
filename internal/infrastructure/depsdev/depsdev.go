@@ -762,18 +762,20 @@ func (c *DepsDevClient) fetchProjectsBatch(ctx context.Context, repoURLs []strin
 				slog.Debug("deps.dev HTTP batch request failed", "method", "POST", "url", url, "page", page, "error", err)
 				return nil, fmt.Errorf("HTTP batch request failed (page=%d, url=%s): %w", page, url, err)
 			}
-			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
 				bodyBytes, _ := io.ReadAll(resp.Body)
+				_ = resp.Body.Close() // best-effort cleanup
 				snippet := truncateString(string(bodyBytes), 1024)
 				slog.Debug("deps.dev project batch non-OK response", "method", "POST", "url", url, "page", page, "status", resp.StatusCode, "body_snippet", snippet)
 				return nil, fmt.Errorf("HTTP %d (page=%d, url=%s): %s", resp.StatusCode, page, url, snippet)
 			}
 			var projectResp ProjectBatchResponse
 			if err := json.NewDecoder(resp.Body).Decode(&projectResp); err != nil {
+				_ = resp.Body.Close() // best-effort cleanup
 				slog.Debug("deps.dev project batch JSON decode failed", "method", "POST", "url", url, "page", page, "error", err)
 				return nil, fmt.Errorf("JSON decode failed (url=%s, page=%d): %w", url, page, err)
 			}
+			_ = resp.Body.Close() // close explicitly per iteration to avoid resource accumulation
 			for _, response := range projectResp.Responses {
 				if response.Project != nil {
 					key := strings.ToLower(response.Project.ProjectKey.ID)
