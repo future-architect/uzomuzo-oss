@@ -606,6 +606,12 @@ func extractSuccessorNearPhrase(fullText, phrase string, pats []*regexp.Regexp, 
 	if idx < 0 {
 		return ""
 	}
+	// Guard against byte-length mismatch between fullText and its lowercased form.
+	// strings.ToLower can expand invalid UTF-8 bytes (e.g., 0xe5 → U+FFFD),
+	// making lowerFull longer than fullText and the index out of bounds.
+	if idx >= len(fullText) {
+		return ""
+	}
 	// Include the phrase itself in the window so patterns like "superseded by X" that begin within the phrase substring can match.
 	remain := fullText[idx:]
 	if maxChars > 0 && len(remain) > maxChars {
