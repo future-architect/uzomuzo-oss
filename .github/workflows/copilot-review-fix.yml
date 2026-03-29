@@ -26,7 +26,7 @@ jobs:
             && github.event.sender.login == 'kotakanbe')
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
@@ -64,7 +64,7 @@ jobs:
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@1481404843c368bc19ca9406f87d6e0fc97bdcfd # v7.0.0
         with:
-          install-only: true
+          install-mode: binary
 
       - name: Run Claude Code to fix Copilot review comments
         uses: anthropics/claude-code-action@e7b588b6eaa5263c2e7c6c7b34a29e190d32ee68 # v1.0.81
@@ -98,10 +98,11 @@ jobs:
             - Always verify go build passes before committing
             - If go test fails after fixes, revert the failing change and classify as WONT_FIX
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          model: claude-opus-4-6
-          timeout_minutes: 10
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: "--model opus --allowedTools 'Bash(*)' Edit Write Read Glob Grep"
+          show_full_output: true
         env:
-          ANTHROPIC_DEFAULT_OPUS_MODEL: claude-opus-4-6
+          CLAUDE_CODE_MAX_TURNS: "50"
 
       - name: Notify on failure
         if: failure()
