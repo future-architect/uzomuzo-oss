@@ -1,0 +1,17 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "minimumReleaseAge": "21 days",
+  "packageRules": [
+    {
+      "matchManagers": ["gomod"],
+      "groupName": "Go modules",
+      "groupSlug": "gomod"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "groupSlug": "github-actions"
+    }
+  ]
+}
