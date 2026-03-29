@@ -37,8 +37,8 @@ jobs:
           fi
 
           if [[ "$EVENT_NAME" == "issue_comment" && "$IS_PR_ISSUE" == "true" ]]; then
-            head_ref=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefName --jq .headRefName)
-            echo "ref=$head_ref" >> "$GITHUB_OUTPUT"
+            head_sha=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefOid --jq .headRefOid)
+            echo "ref=$head_sha" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
