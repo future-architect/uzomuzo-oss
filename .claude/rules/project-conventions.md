@@ -87,6 +87,19 @@ const envDependencyAPIEndpoint = "UZOMUZO_DEP_API_URL"
 
 If in doubt: **leave it out** and revisit only when a concrete, repeated operational requirement is demonstrated.
 
+## Dependency Version Policy
+
+When adding or updating external dependencies (Go modules, GitHub Actions, Docker images, etc.):
+
+1. **Use the latest stable release** — never pin to old or pre-release versions without explicit justification.
+2. **Avoid bleeding-edge releases** — prefer versions released at least **1 week ago** to avoid regressions. For critical infrastructure (CI actions, security tools), prefer **2+ weeks**.
+3. **Pin to exact versions** — use SHA pins for GitHub Actions (e.g., `actions/checkout@<sha> # v4.2.0`), exact versions for Go modules.
+4. **Verify before adding** — check the release date, changelog, and open issues before adopting a new version.
+5. **Keep dependencies updated** — Dependabot is configured to propose updates. Review and merge dependency PRs promptly.
+6. **Document major version jumps** — when upgrading across major versions (e.g., v0 → v1), note the migration in the PR description.
+
+**Rationale**: Using outdated versions leads to missing bug fixes, security patches, and feature improvements. The v0.0.22 → v1.0.82 incident with `claude-code-action` (where a known bug blocked Copilot review triggers) demonstrated the cost of stale dependencies.
+
 ## Tooling Constraints
 
 ### JSON Manipulation — Use Python, NOT PowerShell
