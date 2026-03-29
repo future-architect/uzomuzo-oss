@@ -1,0 +1,100 @@
+name: Auto-fix Copilot Review
+
+on:
+  # Auto-trigger: Copilot finishes its review and submits it
+  pull_request_review:
+    types: [submitted]
+  # Manual trigger: add 'copilot-review' label to re-run
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: copilot-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-fix-copilot:
+    # Run when: Copilot submits a review OR 'copilot-review' label is added
+    # Skip fork PRs to prevent untrusted code execution
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && (
+        (github.event_name == 'pull_request_review'
+         && github.event.review.user.login == 'copilot-pull-request-reviewer')
+        || (github.event_name == 'pull_request'
+            && github.event.label.name == 'copilot-review')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Remove copilot-review label early to prevent stale label on cancellation
+        if: github.event_name == 'pull_request' && github.event.label.name == 'copilot-review'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! output=$(gh pr edit "${{ github.event.pull_request.number }}" \
+            --remove-label copilot-review \
+            --repo "${{ github.repository }}" 2>&1); then
+            if echo "$output" | grep -qiE 'label(.+)does not exist|could not find label'; then
+              echo "Label 'copilot-review' is not present; nothing to remove."
+            else
+              echo "Failed to remove 'copilot-review' label: $output" >&2
+              exit 1
+            fi
+          fi
+
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@4afd733a84b2f1a21f7c3a9d0135a3a8360b1ee2 # v7.0.0
+        with:
+          install-only: true
+
+      - name: Run Claude Code to fix Copilot review comments
+        uses: anthropics/claude-code-action@f28709ede76ab727eab14d1e5a0e4c21a006e85c # v0.0.22
+        with:
+          direct_prompt: |
+            You are running in CI to automatically fix Copilot review comments on PR #${{ github.event.pull_request.number }}.
+
+            Follow the procedure defined in .github/prompts/review.prompt.md with --copilot-only mode:
+            - Skip Phase 1 (Claude review) entirely
+            - Execute Phase 2 (Resolve Copilot Review Comments) fully:
+              - Step 2.1: PR number is ${{ github.event.pull_request.number }}
+              - Step 2.2: Discover unresolved Copilot threads via GraphQL
+              - Step 2.3: You are already on the PR branch (checked out above)
+              - Step 2.4: Classify each thread (FIX / ALREADY_FIXED / WONT_FIX)
+              - Step 2.5: Apply fixes
+              - Step 2.6: Run build/test/vet/lint, then commit and push
+              - Step 2.7: Reply to each thread and resolve
+            - Execute Phase 3 (Learn from Copilot — Update Local Coding Rules) automatically:
+              - Step 3.1: Detect recurring patterns from FIX-classified comments (2+ occurrences)
+              - Step 3.2: Map each pattern to the appropriate .github/instructions/ rule file
+              - Step 3.3: Draft concise, actionable, preventive rules
+              - Step 3.4: Apply rules. Append to the "Learned from Copilot Reviews" section in each target file.
+                Then run: make sync-instructions
+              - Step 3.5: Check for duplicates before adding. Skip or refine existing rules.
+              - Commit rule changes separately: "chore: update coding rules based on Copilot review patterns"
+            - Output Phase 4 summary as a PR comment
+
+            Important:
+            - NEVER force-push or rewrite history
+            - Only modify files within the scope of Copilot's comments (Phase 2) or .github/instructions/ (Phase 3)
+            - Always verify go build passes before committing
+            - If go test fails after fixes, revert the failing change and classify as WONT_FIX
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-sonnet-4-6
+          timeout_minutes: 10
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

@@ -290,13 +290,12 @@ Format the proposal:
 > (none — no recurring patterns detected)
 ```
 
-#### Step 3.4: Apply Rules (with confirmation)
+#### Step 3.4: Apply Rules
 
-1. Show the proposed rules to the user and ask for confirmation
-2. For each confirmed rule, append it to the appropriate `.github/instructions/` file
+1. Append each rule to the appropriate `.github/instructions/` file
    under a `## Learned from Copilot Reviews` section (create the section if it doesn't exist)
-3. Run `make sync-instructions` to regenerate `.claude/rules/`
-4. Commit with message: `chore: update coding rules based on Copilot review patterns`
+2. Run `make sync-instructions` to regenerate `.claude/rules/`
+3. Commit with message: `chore: update coding rules based on Copilot review patterns`
 
 If `--dry-run` is active, only show the proposals without modifying files.
 
