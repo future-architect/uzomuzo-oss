@@ -3,8 +3,6 @@
   "extends": ["config:recommended"],
   "minimumReleaseAge": "21 days",
   "ignorePaths": ["**/testdata/**"],
-  "automerge": true,
-  "automergeType": "pr",
   "packageRules": [
     {
       "matchManagers": ["gomod"],
@@ -15,6 +13,15 @@
       "matchManagers": ["github-actions"],
       "groupName": "GitHub Actions",
       "groupSlug": "github-actions"
+    },
+    {
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "automerge": false
     }
   ]
 }
