@@ -124,7 +124,7 @@ gh api graphql -f query='
 
 Filter for threads where:
 - `isResolved` is `false`
-- First comment author is `copilot-pull-request-reviewer`
+- First comment author is `copilot-pull-request-reviewer[bot]`
 
 Also collect **already-resolved** Copilot threads from the same query (where `isResolved` is
 `true`) — these are needed in Phase 3 for pattern detection across all Copilot feedback.
