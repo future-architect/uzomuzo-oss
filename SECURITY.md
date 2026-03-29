@@ -2,12 +2,12 @@
 
 ## Supported Versions
 
-uzomuzo is currently in pre-1.0 development. Security updates are applied to the latest release on the `main` branch only.
+uzomuzo is currently in pre-1.0 development. Security updates are applied only to the latest commit on the `main` branch; older tagged releases are not maintained.
 
-| Version       | Supported          |
-| ------------- | ------------------ |
-| Latest (main) | Yes                |
-| Older releases | No                |
+| Version                     | Supported |
+| --------------------------- | --------- |
+| Main branch (latest commit) | Yes       |
+| Tagged releases (pre-1.0)  | No        |
 
 ## Reporting a Vulnerability
 
