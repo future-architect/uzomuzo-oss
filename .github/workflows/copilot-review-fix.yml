@@ -15,10 +15,9 @@ concurrency:
 jobs:
   claude-fix-copilot:
     # Run when: Copilot submits a review OR 'copilot-review' label is added
-    # Only for PRs authored by kotakanbe, skip fork PRs
+    # Only for PRs authored by kotakanbe (implicitly excludes fork PRs)
     if: >-
-      github.event.pull_request.head.repo.full_name == github.repository
-      && github.event.pull_request.user.login == 'kotakanbe'
+      github.event.pull_request.user.login == 'kotakanbe'
       && (
         (github.event_name == 'pull_request_review'
          && github.event.review.user.login == 'copilot-pull-request-reviewer')
