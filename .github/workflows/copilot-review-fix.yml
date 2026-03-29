@@ -60,12 +60,20 @@ jobs:
               - Step 2.5: Apply fixes
               - Step 2.6: Run build/test/vet/lint, then commit and push
               - Step 2.7: Reply to each thread and resolve
-            - Skip Phase 3 (rule learning) — requires human confirmation
+            - Execute Phase 3 (Learn from Copilot — Update Local Coding Rules) automatically:
+              - Step 3.1: Detect recurring patterns from FIX-classified comments (2+ occurrences)
+              - Step 3.2: Map each pattern to the appropriate .github/instructions/ rule file
+              - Step 3.3: Draft concise, actionable, preventive rules
+              - Step 3.4: Apply rules WITHOUT asking for confirmation (CI mode — skip the confirmation step).
+                Append to the "Learned from Copilot Reviews" section in each target file.
+                Then run: make sync-instructions
+              - Step 3.5: Check for duplicates before adding. Skip or refine existing rules.
+              - Commit rule changes separately: "chore: update coding rules based on Copilot review patterns"
             - Output Phase 4 summary as a PR comment
 
             Important:
             - NEVER force-push or rewrite history
-            - Only modify files within the scope of Copilot's comments
+            - Only modify files within the scope of Copilot's comments (Phase 2) or .github/instructions/ (Phase 3)
             - Always verify go build passes before committing
             - If go test fails after fixes, revert the failing change and classify as WONT_FIX
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
