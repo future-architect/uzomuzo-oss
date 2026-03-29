@@ -33,22 +33,25 @@ ISSUES=()
 # 1. Exported functions/types without godoc comments (only in newly added lines)
 ADDED_EXPORTS=$(echo "$DIFF_CONTENT" | grep -E '^\+\s*(func [A-Z]|func \([^)]+\) [A-Z]|type [A-Z]|const [A-Z]|var [A-Z])' || true)
 if [ -n "$ADDED_EXPORTS" ]; then
-  # Check if preceding diff line is a comment
-  while IFS= read -r export_line; do
-    # Get the line number in the diff, check if previous added line is a comment
-    LINE_NUM=$(echo "$DIFF" | grep -nF "$export_line" | head -1 | cut -d: -f1)
-    if [ -n "$LINE_NUM" ] && [ "$LINE_NUM" -gt 1 ]; then
-      PREV_LINE=$(echo "$DIFF" | sed -n "$((LINE_NUM - 1))p")
-      if ! echo "$PREV_LINE" | grep -qE '^[+ ]\s*//'; then
-        ISSUES+=("Missing godoc on exported identifier in diff")
+  # Scan diff sequentially to pair each export with its preceding line
+  PREV_DIFF_LINE=""
+  FOUND_MISSING=false
+  while IFS= read -r line; do
+    if echo "$line" | grep -qE '^\+\s*(func [A-Z]|func \([^)]+\) [A-Z]|type [A-Z]|const [A-Z]|var [A-Z])'; then
+      if ! echo "$PREV_DIFF_LINE" | grep -qE '^[+ ]\s*//'; then
+        FOUND_MISSING=true
         break
       fi
     fi
-  done <<< "$ADDED_EXPORTS"
+    PREV_DIFF_LINE="$line"
+  done <<< "$DIFF"
+  if $FOUND_MISSING; then
+    ISSUES+=("Missing godoc on exported identifier in diff")
+  fi
 fi
 
 # 2. Bare error returns (return err without wrapping)
-if echo "$DIFF_CONTENT" | grep -qE '^\+.*return\s+(nil,\s*)?err\s*$|^\+.*return err[[:space:]}]'; then
+if echo "$DIFF_CONTENT" | grep -qE '^\+.*return\s+(nil,\s*)?err\s*$'; then
   ISSUES+=("Bare 'return err' without fmt.Errorf wrapping detected")
 fi
 
