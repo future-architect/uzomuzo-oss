@@ -17,7 +17,7 @@ Thank you for your interest in contributing to uzomuzo! This project is a Go CLI
 git clone https://github.com/future-architect/uzomuzo-oss.git
 cd uzomuzo-oss
 cp config.template.env .env   # configure environment variables as needed
-go build -o uzomuzo main.go
+go build -o uzomuzo .
 ```
 
 ### Run Tests
