@@ -8,6 +8,15 @@
 - **Test Data Organization**: Follow Go conventions for test data structure and naming
 - **Test Data Reuse**: Reuse existing test data files instead of creating duplicates
 
+## Debug with Data, Not Guesswork
+
+When encountering unknown behavior (runtime values, API responses, tool parameters):
+
+1. **Observe first** — Add temporary debug output to capture actual values before writing a fix. Never guess at runtime values.
+2. **Read the docs** — Check official documentation before implementing. For GitHub Actions: webhook payload docs, expression security docs, action README/source code.
+3. **One unknown per change** — If unsure about multiple things, verify them separately. Do not stack untested assumptions in one PR.
+4. **Verify versions** — Check that dependencies are current. Use the latest stable release, not whatever was used in a past example.
+
 ## General Principles
 
 - Explain concepts clearly, as if to a beginner. Avoid jargon, or explain it simply.
