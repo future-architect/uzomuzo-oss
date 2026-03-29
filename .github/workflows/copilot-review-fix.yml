@@ -62,9 +62,8 @@ jobs:
         run: go install golang.org/x/tools/cmd/goimports@v0.34.0
 
       - name: Install golangci-lint
-        uses: golangci/golangci-lint-action@1481404843c368bc19ca9406f87d6e0fc97bdcfd # v7.0.0
-        with:
-          install-mode: binary
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
       - name: Run Claude Code to fix Copilot review comments
         uses: anthropics/claude-code-action@e7b588b6eaa5263c2e7c6c7b34a29e190d32ee68 # v1.0.81
