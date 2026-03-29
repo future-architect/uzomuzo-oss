@@ -233,10 +233,13 @@ mutation {
 After resolving all threads, analyze the FIX-classified comments for **recurring patterns**
 that the project's coding rules should prevent in the future.
 
-#### Step 3.1: Pattern Detection
+This phase uses `.github/copilot-patterns.yml` as a **cross-PR pattern accumulator**.
+Patterns are recorded per-PR and promoted to coding rules once a category reaches 2+ entries.
 
-Group all FIX comments (from the current run AND from already-resolved Copilot threads on the
-same PRs) by category. Look for patterns such as:
+#### Step 3.1: Record Current Patterns
+
+For each FIX-classified comment (from the current run AND from already-resolved Copilot threads
+on the same PR), assign a category:
 
 | Pattern Category | Example Copilot Feedback |
 |-----------------|--------------------------|
@@ -246,13 +249,32 @@ same PRs) by category. Look for patterns such as:
 | Defensive coding | "Nil check missing", "Fallback needed" |
 | API consistency | "Public function missing doc comment" |
 | Security | "User input not validated" |
+| Dependency pinning | "Pin dependency version for reproducibility" |
 
-A pattern is **recurring** if Copilot has flagged the same category **2+ times** across any
-Copilot threads for the current PR(s), including already-resolved threads.
+Read `.github/copilot-patterns.yml` and append each new FIX comment as an entry:
 
-#### Step 3.2: Map Pattern to Rule File
+```yaml
+patterns:
+  # ... existing entries ...
+  - category: "defensive-coding"
+    summary: "Fail-closed fork-rejection gate"
+    pr: 72
+    file: ".github/workflows/claude.yml"
+    date: "2026-03-29"
+```
 
-Each pattern maps to an existing rule file:
+Avoid adding duplicate entries (same category + same PR + same file).
+
+#### Step 3.2: Detect Recurring Patterns
+
+Group all entries in the updated YAML by `category`. A pattern is **recurring** if the
+category has **2+ entries across different PRs**.
+
+If no category meets the threshold, skip to Step 3.6 (save YAML and report).
+
+#### Step 3.3: Map Pattern to Rule File
+
+Each recurring pattern maps to an existing rule file:
 
 | Pattern Category | Target Rule File |
 |-----------------|------------------|
@@ -264,10 +286,11 @@ Each pattern maps to an existing rule file:
 | Security | `.github/instructions/security.instructions.md` |
 | Testing | `.github/instructions/testing-performance.instructions.md` |
 | DDD violations | `.github/instructions/ddd-architecture.instructions.md` |
+| Dependency pinning | `.github/instructions/coding-standards.instructions.md` |
 
 If no existing file fits, add to `coding-standards.instructions.md` as a new section.
 
-#### Step 3.3: Propose Rule Additions
+#### Step 3.4: Propose and Apply Rules
 
 For each recurring pattern, draft a concise, actionable rule. Rules must be:
 
@@ -276,34 +299,35 @@ For each recurring pattern, draft a concise, actionable rule. Rules must be:
 - **Preventive**: Describe what to do BEFORE the mistake, not what the mistake looks like
 - **Minimal**: One rule per pattern, 1-3 sentences max
 
-Format the proposal:
+Apply the rule:
 
-```
-## Proposed Rule Additions
-
-### → coding-standards.instructions.md
-> **Rename Completeness**: When renaming a type, constant, or function, search the entire
-> codebase for the old name in variable names, comments, log messages, CLI output, and
-> documentation. Update all occurrences in the same commit.
-
-### → error-handling.instructions.md
-> (none — no recurring patterns detected)
-```
-
-#### Step 3.4: Apply Rules
-
-1. Append each rule to the appropriate `.github/instructions/` file
-   under a `## Learned from Copilot Reviews` section (create the section if it doesn't exist)
-2. Run `make sync-instructions` to regenerate `.claude/rules/`
-3. Commit with message: `chore: update coding rules based on Copilot review patterns`
+1. Check if an equivalent rule already exists in the target file (including any prior
+   `Learned from Copilot Reviews` section). If so, skip or refine instead of duplicating.
+2. Append the rule to the appropriate `.github/instructions/` file under a
+   `## Learned from Copilot Reviews` section (create the section if it doesn't exist)
+3. Run `make sync-instructions` to regenerate `.claude/rules/`
 
 If `--dry-run` is active, only show the proposals without modifying files.
 
-#### Step 3.5: Deduplication
+#### Step 3.5: Remove Promoted Entries from YAML
 
-Before adding a rule, check if an equivalent rule already exists in the target file
-(including any prior `Learned from Copilot Reviews` section). If a similar rule exists,
-either skip or refine the existing rule instead of adding a duplicate.
+After a category is promoted to a coding rule, **remove all entries of that category**
+from `.github/copilot-patterns.yml`. This keeps the file small — it only holds
+patterns that have not yet reached the promotion threshold.
+
+#### Step 3.6: Save and Commit
+
+Write the updated `.github/copilot-patterns.yml` (with new entries added and promoted
+entries removed).
+
+Commit all Phase 3 changes together:
+
+```
+chore: update Copilot pattern log and coding rules
+
+- Record N new pattern(s) from PR #<number>
+- Promote M category/categories to coding rules (if any)
+```
 
 ### Phase 4: Summary Report
 
@@ -331,9 +355,10 @@ Commits: <sha1>, <sha2>
 Threads resolved: N/N
 
 ### Rules Learned
-| Pattern | Rule Added To | Summary |
-|---------|--------------|---------|
-| Rename completeness | coding-standards | Update all references when renaming |
+| Pattern | Status | Detail |
+|---------|--------|--------|
+| defensive-coding | **Promoted** → coding-standards | 2 entries across PR #68, #72 |
+| dependency-pinning | Accumulated (1/2) | Awaiting 2nd occurrence |
 | (none detected) | — | — |
 ```
 
@@ -343,7 +368,7 @@ Threads resolved: N/N
 - During Phase 1 fixes, do NOT post new review comments to the PR — fix the code directly instead
 - During Phase 1 fixes, only fix issues found in the diff under review; do not refactor unrelated code
 - During Phase 2 fixes, you may reply to existing Copilot review threads as needed to resolve them, but do NOT start new review threads
-- During Phase 2 fixes, NEVER modify files outside the scope of Copilot's comments; the only exception is Phase 3 rule-learning updates to `.github/instructions/*` for confirmed recurring patterns
+- During Phase 2 fixes, NEVER modify files outside the scope of Copilot's comments; the only exceptions are Phase 3 updates to `.github/copilot-patterns.yml` and `.github/instructions/*` for pattern tracking and confirmed recurring patterns
 - Always verify `go build` passes before committing
 - If `go test` fails after fixes, revert the failing change and classify as WONT_FIX
 - If the PR branch has merge conflicts, skip that PR and report it
@@ -356,5 +381,5 @@ Threads resolved: N/N
 When `--dry-run` is specified:
 - Phase 1: Launch review agents and report findings, but do NOT apply fixes or commit
 - Phase 2: Discover and classify only (Steps 2.1-2.4), no fixes/commits/replies
-- Phase 3: Pattern detection and proposals only (Steps 3.1-3.3), no rule file changes
+- Phase 3: Pattern detection and proposals only (Steps 3.1-3.4), no YAML writes or rule file changes
 - Phase 4: Output the summary with proposed classifications and rules

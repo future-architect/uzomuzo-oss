@@ -1,0 +1,14 @@
+# Copilot review patterns awaiting promotion to coding rules.
+#
+# Phase 3 of /review appends new FIX-classified patterns here.
+# When a category reaches 2+ entries, it is promoted to a rule in
+# .github/instructions/ and the promoted entries are removed.
+#
+# Schema:
+#   patterns:
+#     - category: "<pattern-category>"
+#       summary: "<one-line description>"
+#       pr: <PR number>
+#       file: "<path>"
+#       date: "YYYY-MM-DD"
+patterns: []
