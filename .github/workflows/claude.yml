@@ -17,6 +17,10 @@ jobs:
     if: >-
       contains(github.event.comment.body, '@claude')
       && github.event.comment.user.login == 'kotakanbe'
+      && (
+        (github.event_name == 'issue_comment' && github.event.issue.pull_request)
+        || github.event_name == 'pull_request_review_comment'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -24,6 +28,24 @@ jobs:
       pull-requests: write
       issues: write
     steps:
+      - name: Reject fork PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo "No PR number found; skipping fork check."
+            exit 0
+          fi
+          IS_FORK=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json isCrossRepository --jq '.isCrossRepository')
+          if [[ "$IS_FORK" == "true" ]]; then
+            echo "::error::Fork PRs are not allowed for automated Claude execution"
+            exit 1
+          fi
+
       - name: Determine checkout ref
         id: determine_ref
         env:
@@ -58,9 +80,9 @@ jobs:
       - name: Install tools
         run: go install golang.org/x/tools/cmd/goimports@v0.34.0
 
-      - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin
+      - uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7.0.1
+        with:
+          install-only: true
 
       - uses: anthropics/claude-code-action@88c168b39e7e64da0286d812b6e9fbebb6708185 # v1.0.82
         with:
