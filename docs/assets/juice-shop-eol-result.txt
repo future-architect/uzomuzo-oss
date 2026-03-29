@@ -1,0 +1,2467 @@
+================================================================================
+📊 INDIVIDUAL PURL ANALYSIS RESULTS
+================================================================================
+
+--- PURL 1 ---
+📦 Package: pkg:npm/%40ampproject/remapping@2.2.0
+🧾 Description: Remap sequential sourcemaps through transformations to point at the original source code
+   🗃 Registry: https://www.npmjs.com/package/@ampproject/remapping
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 133 stars)
+👥 Dependents: 77
+🏆 Overall Score: 3.1/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.3.0 (2024-03-01)
+   ↳ Version Page: https://www.npmjs.com/package/@ampproject/remapping/v/2.3.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 2.3.0 (2024-03-01)
+   ↳ Version Page: https://www.npmjs.com/package/@ampproject/remapping/v/2.3.0
+📋 Requested Version: 2.2.0 (2022-04-27)
+   ↳ Version Page: https://www.npmjs.com/package/@ampproject/remapping/v/2.2.0
+📄 License: Apache-2.0 (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2025-06-28
+🔗 Repository: https://github.com/ampproject/remapping
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fampproject%2Fremapping
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/ampproject/remapping
+
+--- PURL 2 ---
+📦 Package: pkg:npm/%40humanwhocodes/config-array@0.5.0
+🧾 Description: DEPRECATED. Use eslint/config-array instead
+   🗃 Registry: https://www.npmjs.com/package/@humanwhocodes/config-array
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Use @eslint/config-array instead UI: https://www.npmjs.com/package/@humanwhocodes/config-array/v/0.13.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@humanwhocodes%2Fconfig-array
+🔁 Successor: @eslint/config-array
+📊 GitHub Info: 📦 Archived (⭐ 30 stars)
+👥 Dependents: 15035
+🏆 Overall Score: 3.7/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 0.13.0 (2024-04-17) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@humanwhocodes/config-array/v/0.13.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 0.13.0 (2024-04-17) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@humanwhocodes/config-array/v/0.13.0
+📋 Requested Version: 0.5.0 (2021-04-13) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@humanwhocodes/config-array/v/0.5.0
+📄 License: Apache-2.0 (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2024-04-17
+🔗 Repository: https://github.com/humanwhocodes/config-array
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fhumanwhocodes%2Fconfig-array
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/humanwhocodes/config-array
+
+--- PURL 3 ---
+📦 Package: pkg:npm/%40humanwhocodes/object-schema@1.2.1
+🧾 Description: DEPRECATED. Use eslint/object-schema instead.
+   🗃 Registry: https://www.npmjs.com/package/@humanwhocodes/object-schema
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Use @eslint/object-schema instead UI: https://www.npmjs.com/package/@humanwhocodes/object-schema/v/2.0.3 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@humanwhocodes%2Fobject-schema
+🔁 Successor: @eslint/object-schema
+📊 GitHub Info: 📦 Archived (⭐ 33 stars)
+👥 Dependents: 15940
+🏆 Overall Score: 3.2/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.0.3 (2024-04-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@humanwhocodes/object-schema/v/2.0.3
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 2.0.3 (2024-04-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@humanwhocodes/object-schema/v/2.0.3
+📋 Requested Version: 1.2.1 (2021-11-02) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@humanwhocodes/object-schema/v/1.2.1
+📄 License: BSD-3-Clause (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2024-04-01
+🔗 Repository: https://github.com/humanwhocodes/object-schema
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fhumanwhocodes%2Fobject-schema
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/humanwhocodes/object-schema
+
+--- PURL 4 ---
+📦 Package: pkg:npm/%40npmcli/move-file@1.1.2
+🧾 Description: Move a file across devices with support for all node 10 versions (fork of https://github.com/sindresorhus/move-file)
+   🗃 Registry: https://www.npmjs.com/package/@npmcli/move-file
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This functionality has been moved to @npmcli/fs UI: https://www.npmjs.com/package/@npmcli/move-file/v/3.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@npmcli%2Fmove-file
+🔁 Successor: @npmcli/fs
+📊 GitHub Info: 📦 Archived 
+👥 Dependents: 31236
+📦 Latest Stable Release: 3.0.0 (2022-10-14) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@npmcli/move-file/v/3.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 3.0.0 (2022-10-14) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@npmcli/move-file/v/3.0.0
+📋 Requested Version: 1.1.2 (2021-02-11) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@npmcli/move-file/v/1.1.2
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2022-11-03
+🔗 Repository: https://github.com/npm/move-file
+
+--- PURL 5 ---
+📦 Package: pkg:npm/%40otplib/plugin-crypto@12.0.1
+🧾 Description: One Time Password (OTP) / 2FA for Node.js and Browser - Supports HOTP, TOTP and Google Authenticator
+   🔗 Homepage: https://otplib.yeojz.dev
+   🗃 Registry: https://www.npmjs.com/package/@otplib/plugin-crypto
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Please upgrade to v13 of otplib. Refer to otplib docs for migration paths UI: https://www.npmjs.com/package/@otplib/plugin-crypto/v/12.0.1 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@otplib%2Fplugin-crypto
+📊 GitHub Info: Normal (⭐ 2220 stars)
+👥 Dependents: 677
+🏆 Overall Score: 7.1/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 12.0.1 (2020-01-24) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@otplib/plugin-crypto/v/12.0.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 12.0.1 (2020-01-24) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@otplib/plugin-crypto/v/12.0.1
+📋 Requested Version: 12.0.1 (2020-01-24) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@otplib/plugin-crypto/v/12.0.1
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-27
+🔗 Repository: https://github.com/yeojz/otplib
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fyeojz%2Fotplib
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/yeojz/otplib
+
+--- PURL 6 ---
+📦 Package: pkg:npm/%40otplib/plugin-thirty-two@12.0.1
+🧾 Description: One Time Password (OTP) / 2FA for Node.js and Browser - Supports HOTP, TOTP and Google Authenticator
+   🔗 Homepage: https://otplib.yeojz.dev
+   🗃 Registry: https://www.npmjs.com/package/@otplib/plugin-thirty-two
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Please upgrade to v13 of otplib. Refer to otplib docs for migration paths UI: https://www.npmjs.com/package/@otplib/plugin-thirty-two/v/12.0.1 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@otplib%2Fplugin-thirty-two
+📊 GitHub Info: Normal (⭐ 2220 stars)
+👥 Dependents: 677
+🏆 Overall Score: 7.1/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 12.0.1 (2020-01-24) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@otplib/plugin-thirty-two/v/12.0.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 12.0.1 (2020-01-24) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@otplib/plugin-thirty-two/v/12.0.1
+📋 Requested Version: 12.0.1 (2020-01-24) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@otplib/plugin-thirty-two/v/12.0.1
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-27
+🔗 Repository: https://github.com/yeojz/otplib
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fyeojz%2Fotplib
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/yeojz/otplib
+
+--- PURL 7 ---
+📦 Package: pkg:npm/%40otplib/preset-default@12.0.1
+🧾 Description: One Time Password (OTP) / 2FA for Node.js and Browser - Supports HOTP, TOTP and Google Authenticator
+   🔗 Homepage: https://otplib.yeojz.dev
+   🗃 Registry: https://www.npmjs.com/package/@otplib/preset-default
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Please upgrade to v13 of otplib. Refer to otplib docs for migration paths UI: https://www.npmjs.com/package/@otplib/preset-default/v/12.0.1 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@otplib%2Fpreset-default
+📊 GitHub Info: Normal (⭐ 2220 stars)
+👥 Dependents: 660
+🏆 Overall Score: 7.1/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 12.0.1 (2020-01-24) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@otplib/preset-default/v/12.0.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 12.0.1 (2020-01-24) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@otplib/preset-default/v/12.0.1
+📋 Requested Version: 12.0.1 (2020-01-24) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@otplib/preset-default/v/12.0.1
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-27
+🔗 Repository: https://github.com/yeojz/otplib
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fyeojz%2Fotplib
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/yeojz/otplib
+
+--- PURL 8 ---
+📦 Package: pkg:npm/%40sinonjs/text-encoding@0.7.2
+🧾 Description: Polyfill for the Encoding Living Standard's API
+   🗃 Registry: https://www.npmjs.com/package/@sinonjs/text-encoding
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Deprecated: no longer maintained and no longer used by Sinon packages. See
+  https://github.com/sinonjs/nise/issues/243 for replacement details. UI: https://www.npmjs.com/package/@sinonjs/text-encoding/v/0.7.3 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@sinonjs%2Ftext-encoding
+📊 GitHub Info: 📦 Archived (⭐ 3 stars)
+👥 Dependents: 3
+📦 Latest Stable Release: 0.7.3 (2024-08-19) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@sinonjs/text-encoding/v/0.7.3
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 0.7.3 (2024-08-19) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@sinonjs/text-encoding/v/0.7.3
+📋 Requested Version: 0.7.2 (2022-07-27) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@sinonjs/text-encoding/v/0.7.2
+📄 Licenses:
+   Project: (non-standard raw=Other source=github-project-nonstandard)
+   Requested Version: Apache-2.0-OR-Unlicense (source: depsdev-version-raw)
+💻 Latest Commit: 2026-03-03
+🔗 Repository: https://github.com/sinonjs/text-encoding
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsinonjs%2Ftext-encoding
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sinonjs/text-encoding
+
+--- PURL 9 ---
+📦 Package: pkg:npm/%40types/config@0.0.41
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/config
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. config provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/config/v/4.4.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fconfig
+📊 GitHub Info: Normal (⭐ 51116 stars)
+👥 Dependents: 22
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 4.4.0 (2026-03-18) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/config/v/4.4.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 0.0.28-alpha (2016-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/@types/config/v/0.0.28-alpha
+📦 Highest Version (SemVer): 4.4.0 (2026-03-18) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/config/v/4.4.0
+📋 Requested Version: 0.0.41 (2022-01-03)
+   ↳ Version Page: https://www.npmjs.com/package/@types/config/v/0.0.41
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 10 ---
+📦 Package: pkg:npm/%40types/cookie@0.4.1
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/cookie
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. cookie provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/cookie/v/1.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fcookie
+📊 GitHub Info: Normal (⭐ 51116 stars)
+👥 Dependents: 3686
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 1.0.0 (2024-10-29) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/cookie/v/1.0.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 0.1.27-alpha (2016-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/@types/cookie/v/0.1.27-alpha
+📦 Highest Version (SemVer): 1.0.0 (2024-10-29) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/cookie/v/1.0.0
+📋 Requested Version: 0.4.1 (2021-07-06)
+   ↳ Version Page: https://www.npmjs.com/package/@types/cookie/v/0.4.1
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 11 ---
+📦 Package: pkg:npm/%40types/express-jwt@6.0.4
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/express-jwt
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. express-jwt provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/express-jwt/v/7.4.4 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fexpress-jwt
+📊 GitHub Info: Normal (⭐ 51116 stars)
+👥 Dependents: 12
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 7.4.4 (2024-10-23) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/express-jwt/v/7.4.4
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 0.0.28-alpha (2016-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/@types/express-jwt/v/0.0.28-alpha
+📦 Highest Version (SemVer): 7.4.4 (2024-10-23) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/express-jwt/v/7.4.4
+📋 Requested Version: 6.0.4 (2021-12-23)
+   ↳ Version Page: https://www.npmjs.com/package/@types/express-jwt/v/6.0.4
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 12 ---
+📦 Package: pkg:npm/%40types/express-unless@2.0.1
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/express-unless
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. express-unless provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/express-unless/v/2.0.3 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fexpress-unless
+📊 GitHub Info: Normal (⭐ 51116 stars)
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 2.0.3 (2024-10-23) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/express-unless/v/2.0.3
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 0.0.28-alpha (2016-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/@types/express-unless/v/0.0.28-alpha
+📦 Highest Version (SemVer): 2.0.3 (2024-10-23) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/express-unless/v/2.0.3
+📋 Requested Version: 2.0.1 (2022-10-22) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/express-unless/v/2.0.1
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 13 ---
+📦 Package: pkg:npm/%40types/glob@7.2.0
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/glob
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. glob provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/glob/v/9.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fglob
+📊 GitHub Info: Normal (⭐ 51116 stars)
+👥 Dependents: 51842
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 9.0.0 (2025-07-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/glob/v/9.0.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 5.0.28-alpha (2016-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/@types/glob/v/5.0.28-alpha
+📦 Highest Version (SemVer): 9.0.0 (2025-07-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/glob/v/9.0.0
+📋 Requested Version: 7.2.0 (2021-10-19)
+   ↳ Version Page: https://www.npmjs.com/package/@types/glob/v/7.2.0
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 14 ---
+📦 Package: pkg:npm/%40types/json5@0.0.29
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/json5
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. json5 provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/json5/v/2.2.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fjson5
+📊 GitHub Info: Normal (⭐ 51116 stars)
+👥 Dependents: 77425
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 2.2.0 (2021-02-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/json5/v/2.2.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 0.0.27-alpha (2016-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/@types/json5/v/0.0.27-alpha
+📦 Highest Version (SemVer): 2.2.0 (2021-02-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/json5/v/2.2.0
+📋 Requested Version: 0.0.29 (2016-09-19)
+   ↳ Version Page: https://www.npmjs.com/package/@types/json5/v/0.0.29
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 15 ---
+📦 Package: pkg:npm/%40types/mime@3.0.1
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/mime
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. mime provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/mime/v/4.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fmime
+📊 GitHub Info: Normal (⭐ 51116 stars)
+👥 Dependents: 4
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 4.0.0 (2024-03-31) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/mime/v/4.0.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 0.0.27-alpha (2016-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/@types/mime/v/0.0.27-alpha
+📦 Highest Version (SemVer): 4.0.0 (2024-03-31) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/mime/v/4.0.0
+📋 Requested Version: 3.0.1 (2022-08-04)
+   ↳ Version Page: https://www.npmjs.com/package/@types/mime/v/3.0.1
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 16 ---
+📦 Package: pkg:npm/%40types/minimatch@5.1.2
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/minimatch
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. minimatch provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/minimatch/v/6.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fminimatch
+📊 GitHub Info: Normal (⭐ 51116 stars)
+👥 Dependents: 1469
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 6.0.0 (2025-07-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/minimatch/v/6.0.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 2.0.27-alpha (2016-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/@types/minimatch/v/2.0.27-alpha
+📦 Highest Version (SemVer): 6.0.0 (2025-07-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/minimatch/v/6.0.0
+📋 Requested Version: 5.1.2 (2022-08-31)
+   ↳ Version Page: https://www.npmjs.com/package/@types/minimatch/v/5.1.2
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 17 ---
+📦 Package: pkg:npm/%40types/prettier@2.7.2
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/prettier
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. prettier provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/prettier/v/3.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fprettier
+📊 GitHub Info: Normal (⭐ 51116 stars)
+👥 Dependents: 20
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 3.0.0 (2023-07-29) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/prettier/v/3.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 3.0.0 (2023-07-29) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/prettier/v/3.0.0
+📋 Requested Version: 2.7.2 (2022-12-20)
+   ↳ Version Page: https://www.npmjs.com/package/@types/prettier/v/2.7.2
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 18 ---
+📦 Package: pkg:npm/%40types/sequelize@4.28.14
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/sequelize
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. sequelize provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/sequelize/v/6.12.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fsequelize
+📊 GitHub Info: Normal (⭐ 51116 stars)
+👥 Dependents: 1
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 6.12.0 (2025-07-10) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/sequelize/v/6.12.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 3.4.26-alpha (2016-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/@types/sequelize/v/3.4.26-alpha
+📦 Highest Version (SemVer): 6.12.0 (2025-07-10) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/sequelize/v/6.12.0
+📋 Requested Version: 4.28.14 (2022-07-05)
+   ↳ Version Page: https://www.npmjs.com/package/@types/sequelize/v/4.28.14
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 19 ---
+📦 Package: pkg:npm/%40types/socket.io-client@1.4.36
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/socket.io-client
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. socket.io-client provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/socket.io-client/v/3.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fsocket.io-client
+📊 GitHub Info: Normal (⭐ 51116 stars)
+👥 Dependents: 794
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 3.0.0 (2021-05-14) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/socket.io-client/v/3.0.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 1.4.25-alpha (2016-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/@types/socket.io-client/v/1.4.25-alpha
+📦 Highest Version (SemVer): 3.0.0 (2021-05-14) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/socket.io-client/v/3.0.0
+📋 Requested Version: 1.4.36 (2021-03-12)
+   ↳ Version Page: https://www.npmjs.com/package/@types/socket.io-client/v/1.4.36
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 20 ---
+📦 Package: pkg:npm/%40types/socket.io-parser@3.0.0
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/socket.io-parser
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. socket.io-parser provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/socket.io-parser/v/3.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fsocket.io-parser
+📊 GitHub Info: Normal (⭐ 51116 stars)
+👥 Dependents: 528
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 3.0.0 (2021-05-14) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/socket.io-parser/v/3.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 3.0.0 (2021-05-14) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/socket.io-parser/v/3.0.0
+📋 Requested Version: 3.0.0 (2021-05-14) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/socket.io-parser/v/3.0.0
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 21 ---
+📦 Package: pkg:npm/%40types/socket.io@2.1.13
+🧾 Description: The repository for high quality TypeScript type definitions.
+   🗃 Registry: https://www.npmjs.com/package/@types/socket.io
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. socket.io provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/socket.io/v/3.0.2 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fsocket.io
+📊 GitHub Info: Normal (⭐ 51116 stars)
+👥 Dependents: 529
+🏆 Overall Score: 6.5/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 3.0.2 (2021-05-14) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/socket.io/v/3.0.2
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 1.4.25-alpha (2016-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/@types/socket.io/v/1.4.25-alpha
+📦 Highest Version (SemVer): 3.0.2 (2021-05-14) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/socket.io/v/3.0.2
+📋 Requested Version: 2.1.13 (2021-01-25)
+   ↳ Version Page: https://www.npmjs.com/package/@types/socket.io/v/2.1.13
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-29
+🔗 Repository: https://github.com/definitelytyped/definitelytyped
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdefinitelytyped%2Fdefinitelytyped
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/definitelytyped/definitelytyped
+
+--- PURL 22 ---
+📦 Package: pkg:npm/%40types/strip-bom@3.0.0
+🧾 Description: Strip UTF-8 byte order mark (BOM) from a string
+   🗃 Registry: https://www.npmjs.com/package/@types/strip-bom
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. strip-bom provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/strip-bom/v/4.0.1 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fstrip-bom
+📊 GitHub Info: Normal (⭐ 112 stars)
+👥 Dependents: 1850
+🏆 Overall Score: 3.6/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 4.0.1 (2019-05-06) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/strip-bom/v/4.0.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 4.0.1 (2019-05-06) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/strip-bom/v/4.0.1
+📋 Requested Version: 3.0.0 (2016-12-29)
+   ↳ Version Page: https://www.npmjs.com/package/@types/strip-bom/v/3.0.0
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2021-04-16
+🔗 Repository: https://github.com/sindresorhus/strip-bom
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fstrip-bom
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/strip-bom
+
+--- PURL 23 ---
+📦 Package: pkg:npm/%40types/strip-json-comments@0.0.30
+🧾 Description: Strip comments from JSON. Lets you use comments in your JSON files!
+   🗃 Registry: https://www.npmjs.com/package/@types/strip-json-comments
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is a stub types definition. strip-json-comments provides its own type definitions, so you do not need this installed. UI: https://www.npmjs.com/package/@types/strip-json-comments/v/3.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/@types%2Fstrip-json-comments
+📊 GitHub Info: Normal (⭐ 625 stars)
+👥 Dependents: 1862
+🏆 Overall Score: 3.7/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 3.0.0 (2019-07-17) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/strip-json-comments/v/3.0.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 0.0.26-alpha (2016-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/@types/strip-json-comments/v/0.0.26-alpha
+📦 Highest Version (SemVer): 3.0.0 (2019-07-17) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/@types/strip-json-comments/v/3.0.0
+📋 Requested Version: 0.0.30 (2017-08-21)
+   ↳ Version Page: https://www.npmjs.com/package/@types/strip-json-comments/v/0.0.30
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2025-08-08
+🔗 Repository: https://github.com/sindresorhus/strip-json-comments
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fstrip-json-comments
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/strip-json-comments
+
+--- PURL 24 ---
+📦 Package: pkg:npm/abab@2.0.6
+🧾 Description: Perfectly spec-compliant atob and btoa implementations
+   🗃 Registry: https://www.npmjs.com/package/abab
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Use your platform's native atob() and btoa() methods instead UI: https://www.npmjs.com/package/abab/v/2.0.6 (confidence 0.90)
+      ↳ https://registry.npmjs.org/abab
+🔁 Successor: your
+📊 GitHub Info: 📦 Archived (⭐ 91 stars)
+👥 Dependents: 81457
+🏆 Overall Score: 3.1/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.0.6 (2022-04-17) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/abab/v/2.0.6
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 2.0.6 (2022-04-17) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/abab/v/2.0.6
+📋 Requested Version: 2.0.6 (2022-04-17) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/abab/v/2.0.6
+📄 License: BSD-3-Clause (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2023-11-26
+🔗 Repository: https://github.com/jsdom/abab
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fjsdom%2Fabab
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/jsdom/abab
+
+--- PURL 25 ---
+📦 Package: pkg:npm/are-we-there-yet@1.1.7
+🧾 Description: Track complex hiearchies of asynchronous task completion statuses.
+   🗃 Registry: https://www.npmjs.com/package/are-we-there-yet
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is no longer supported. UI: https://www.npmjs.com/package/are-we-there-yet/v/4.0.2 (confidence 0.90)
+      ↳ https://registry.npmjs.org/are-we-there-yet
+📊 GitHub Info: 📦 Archived (⭐ 182 stars)
+👥 Dependents: 36487
+🏆 Overall Score: 5.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 4.0.2 (2024-01-05) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/are-we-there-yet/v/4.0.2
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 4.0.2 (2024-01-05) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/are-we-there-yet/v/4.0.2
+📋 Requested Version: 1.1.7 (2021-09-02) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/are-we-there-yet/v/1.1.7
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-05-04
+🔗 Repository: https://github.com/npm/are-we-there-yet
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnpm%2Fare-we-there-yet
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/npm/are-we-there-yet
+
+--- PURL 26 ---
+📦 Package: pkg:npm/are-we-there-yet@2.0.0
+🧾 Description: Track complex hiearchies of asynchronous task completion statuses.
+   🗃 Registry: https://www.npmjs.com/package/are-we-there-yet
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is no longer supported. UI: https://www.npmjs.com/package/are-we-there-yet/v/4.0.2 (confidence 0.90)
+      ↳ https://registry.npmjs.org/are-we-there-yet
+📊 GitHub Info: 📦 Archived (⭐ 182 stars)
+👥 Dependents: 36487
+🏆 Overall Score: 5.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 4.0.2 (2024-01-05) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/are-we-there-yet/v/4.0.2
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 4.0.2 (2024-01-05) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/are-we-there-yet/v/4.0.2
+📋 Requested Version: 2.0.0 (2021-09-02) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/are-we-there-yet/v/2.0.0
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-05-04
+🔗 Repository: https://github.com/npm/are-we-there-yet
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnpm%2Fare-we-there-yet
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/npm/are-we-there-yet
+
+--- PURL 27 ---
+📦 Package: pkg:npm/are-we-there-yet@3.0.1
+🧾 Description: Track complex hiearchies of asynchronous task completion statuses.
+   🗃 Registry: https://www.npmjs.com/package/are-we-there-yet
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is no longer supported. UI: https://www.npmjs.com/package/are-we-there-yet/v/4.0.2 (confidence 0.90)
+      ↳ https://registry.npmjs.org/are-we-there-yet
+📊 GitHub Info: 📦 Archived (⭐ 182 stars)
+👥 Dependents: 36487
+🏆 Overall Score: 5.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 4.0.2 (2024-01-05) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/are-we-there-yet/v/4.0.2
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 4.0.2 (2024-01-05) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/are-we-there-yet/v/4.0.2
+📋 Requested Version: 3.0.1 (2022-07-27) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/are-we-there-yet/v/3.0.1
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-05-04
+🔗 Repository: https://github.com/npm/are-we-there-yet
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnpm%2Fare-we-there-yet
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/npm/are-we-there-yet
+
+--- PURL 28 ---
+📦 Package: pkg:npm/code-point-at@1.1.0
+🧾 Description: ES2015 `String#codePointAt()` ponyfill
+   🗃 Registry: https://www.npmjs.com/package/code-point-at
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Deprecated in favor of `String#codePointAt()`. UI: https://www.npmjs.com/package/code-point-at/v/2.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/code-point-at
+📊 GitHub Info: 📦 Archived (⭐ 23 stars)
+👥 Dependents: 177907
+🏆 Overall Score: 3.4/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.0.0 (2021-10-13) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/code-point-at/v/2.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 2.0.0 (2021-10-13) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/code-point-at/v/2.0.0
+📋 Requested Version: 1.1.0 (2016-11-03)
+   ↳ Version Page: https://www.npmjs.com/package/code-point-at/v/1.1.0
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2021-01-01
+🔗 Repository: https://github.com/sindresorhus/code-point-at
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fcode-point-at
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/code-point-at
+
+--- PURL 29 ---
+📦 Package: pkg:npm/doctrine@2.1.0
+🧾 Description: JSDoc parser
+   🗃 Registry: https://www.npmjs.com/package/doctrine
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 459 stars)
+👥 Dependents: 95523
+🏆 Overall Score: 4.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 3.0.0 (2018-11-10)
+   ↳ Version Page: https://www.npmjs.com/package/doctrine/v/3.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 3.0.0 (2018-11-10)
+   ↳ Version Page: https://www.npmjs.com/package/doctrine/v/3.0.0
+📋 Requested Version: 2.1.0 (2018-01-06)
+   ↳ Version Page: https://www.npmjs.com/package/doctrine/v/2.1.0
+📄 License: Apache-2.0 (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2018-12-03
+🔗 Repository: https://github.com/eslint/doctrine
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Feslint%2Fdoctrine
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/eslint/doctrine
+
+--- PURL 30 ---
+📦 Package: pkg:npm/doctrine@3.0.0
+🧾 Description: JSDoc parser
+   🗃 Registry: https://www.npmjs.com/package/doctrine
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 459 stars)
+👥 Dependents: 95523
+🏆 Overall Score: 4.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 3.0.0 (2018-11-10)
+   ↳ Version Page: https://www.npmjs.com/package/doctrine/v/3.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 3.0.0 (2018-11-10)
+   ↳ Version Page: https://www.npmjs.com/package/doctrine/v/3.0.0
+📋 Requested Version: 3.0.0 (2018-11-10)
+   ↳ Version Page: https://www.npmjs.com/package/doctrine/v/3.0.0
+📄 License: Apache-2.0 (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2018-12-03
+🔗 Repository: https://github.com/eslint/doctrine
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Feslint%2Fdoctrine
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/eslint/doctrine
+
+--- PURL 31 ---
+📦 Package: pkg:npm/domexception@2.0.1
+🧾 Description: An implementation of the DOMException class from browsers
+   🗃 Registry: https://www.npmjs.com/package/domexception
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Use your platform's native DOMException instead UI: https://www.npmjs.com/package/domexception/v/4.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/domexception
+🔁 Successor: your
+📊 GitHub Info: 📦 Archived (⭐ 22 stars)
+👥 Dependents: 56678
+🏆 Overall Score: 2.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 4.0.0 (2021-10-06) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/domexception/v/4.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 4.0.0 (2021-10-06) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/domexception/v/4.0.0
+📋 Requested Version: 2.0.1 (2019-12-14) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/domexception/v/2.0.1
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2023-11-26
+🔗 Repository: https://github.com/jsdom/domexception
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fjsdom%2Fdomexception
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/jsdom/domexception
+
+--- PURL 32 ---
+📦 Package: pkg:npm/ecstatic@3.3.2
+🧾 Description: A static file server middleware that works with core http, express or on the CLI!
+   🔗 Homepage: https://github.com/jfhbrook/node-ecstatic
+   🗃 Registry: https://www.npmjs.com/package/ecstatic
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is unmaintained and deprecated. See the GH Issue 259. UI: https://www.npmjs.com/package/ecstatic/v/4.1.4 (confidence 0.90)
+      ↳ https://registry.npmjs.org/ecstatic
+📊 GitHub Info: Normal (⭐ 974 stars)
+👥 Dependents: 804
+🏆 Overall Score: 2.9/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 4.1.4 (2020-04-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/ecstatic/v/4.1.4
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 4.1.4 (2020-04-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/ecstatic/v/4.1.4
+📋 Requested Version: 3.3.2 (2019-05-14) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/ecstatic/v/3.3.2
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2020-04-01
+🔗 Repository: https://github.com/jfhbrook/node-ecstatic
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fjfhbrook%2Fnode-ecstatic
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/jfhbrook/node-ecstatic
+
+--- PURL 33 ---
+📦 Package: pkg:npm/eivindfjeldstad-dot@0.0.1
+🧾 Description: Get and set object properties with dot notation
+   🗃 Registry: https://www.npmjs.com/package/eivindfjeldstad-dot
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL; successor: @eivifj/dot
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Use @eivifj/dot instead UI: https://www.npmjs.com/package/eivindfjeldstad-dot/v/0.0.1 (confidence 0.90)
+      ↳ https://registry.npmjs.org/eivindfjeldstad-dot
+🔁 Successor: @eivifj/dot
+📊 GitHub Info: Normal (⭐ 2 stars)
+👥 Dependents: 116
+🏆 Overall Score: 1.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 0.0.1 (2013-12-03) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/eivindfjeldstad-dot/v/0.0.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 0.0.1 (2013-12-03) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/eivindfjeldstad-dot/v/0.0.1
+📋 Requested Version: 0.0.1 (2013-12-03) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/eivindfjeldstad-dot/v/0.0.1
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2020-02-22
+🔗 Repository: https://github.com/eivindfjeldstad/dot
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Feivindfjeldstad%2Fdot
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/eivindfjeldstad/dot
+
+--- PURL 34 ---
+📦 Package: pkg:npm/eslint-config-standard-with-typescript@21.0.1
+🧾 Description: A TypeScript ESLint config that loves you
+   🗃 Registry: https://www.npmjs.com/package/eslint-config-standard-with-typescript
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL; successor: eslint-config-love
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Please use eslint-config-love, instead. UI: https://www.npmjs.com/package/eslint-config-standard-with-typescript/v/43.0.1 (confidence 0.90)
+      ↳ https://registry.npmjs.org/eslint-config-standard-with-typescript
+🔁 Successor: eslint-config-love
+📊 GitHub Info: Normal (⭐ 818 stars)
+👥 Dependents: 90
+🏆 Overall Score: 4.7/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 43.0.1 (2024-01-20) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/eslint-config-standard-with-typescript/v/43.0.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 43.0.1 (2024-01-20) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/eslint-config-standard-with-typescript/v/43.0.1
+📋 Requested Version: 21.0.1 (2021-08-31) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/eslint-config-standard-with-typescript/v/21.0.1
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-26
+🔗 Repository: https://github.com/mightyiam/eslint-config-standard-with-typescript
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fmightyiam%2Feslint-config-standard-with-typescript
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/mightyiam/eslint-config-standard-with-typescript
+
+--- PURL 35 ---
+📦 Package: pkg:npm/find-cache-dir@3.3.2
+🧾 Description: Finds the common standard cache directory
+   🗃 Registry: https://www.npmjs.com/package/find-cache-dir
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Renamed to `find-cache-directory`. UI: https://www.npmjs.com/package/find-cache-dir/v/6.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/find-cache-dir
+📊 GitHub Info: Normal (⭐ 162 stars)
+👥 Dependents: 79654
+🏆 Overall Score: 3.9/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 6.0.0 (2025-04-08) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/find-cache-dir/v/6.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 6.0.0 (2025-04-08) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/find-cache-dir/v/6.0.0
+📋 Requested Version: 3.3.2 (2021-08-29)
+   ↳ Version Page: https://www.npmjs.com/package/find-cache-dir/v/3.3.2
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2025-04-08
+🔗 Repository: https://github.com/sindresorhus/find-cache-dir
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Ffind-cache-dir
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/find-cache-dir
+
+--- PURL 36 ---
+📦 Package: pkg:npm/formatio@1.1.1
+🧾 Description: The cheesy object formatter
+   🔗 Homepage: https://sinonjs.github.io/formatio/
+   🗃 Registry: https://www.npmjs.com/package/formatio
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is unmaintained. Use @sinonjs/formatio instead UI: https://www.npmjs.com/package/formatio/v/1.2.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/formatio
+🔁 Successor: @sinonjs/formatio
+📊 GitHub Info: 📦 Archived (⭐ 36 stars)
+👥 Dependents: 4790
+🏆 Overall Score: 2.6/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 1.2.0 (2016-02-17) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/formatio/v/1.2.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 1.2.0 (2016-02-17) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/formatio/v/1.2.0
+📋 Requested Version: 1.1.1 (2014-07-29) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/formatio/v/1.1.1
+📄 License: BSD-3-Clause (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2021-01-06
+🔗 Repository: https://github.com/busterjs/formatio
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fbusterjs%2Fformatio
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/busterjs/formatio
+
+--- PURL 37 ---
+📦 Package: pkg:npm/fstream@1.0.12
+🧾 Description: Advanced FS Streaming for Node
+   🗃 Registry: https://www.npmjs.com/package/fstream
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is no longer supported. UI: https://www.npmjs.com/package/fstream/v/1.0.12 (confidence 0.90)
+      ↳ https://registry.npmjs.org/fstream
+📊 GitHub Info: 📦 Archived (⭐ 209 stars)
+👥 Dependents: 46141
+🏆 Overall Score: 2.0/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 1.0.12 (2019-05-15) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/fstream/v/1.0.12
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 1.0.12 (2019-05-15) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/fstream/v/1.0.12
+📋 Requested Version: 1.0.12 (2019-05-15) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/fstream/v/1.0.12
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2021-06-01
+🔗 Repository: https://github.com/npm/fstream
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnpm%2Ffstream
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/npm/fstream
+
+--- PURL 38 ---
+📦 Package: pkg:npm/gauge@2.7.4
+🧾 Description: A terminal based horizontal guage aka, a progress bar
+   🗃 Registry: https://www.npmjs.com/package/gauge
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is no longer supported. UI: https://www.npmjs.com/package/gauge/v/5.0.2 (confidence 0.90)
+      ↳ https://registry.npmjs.org/gauge
+📊 GitHub Info: 📦 Archived (⭐ 322 stars)
+👥 Dependents: 19454
+🏆 Overall Score: 5.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 5.0.2 (2024-05-04) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/gauge/v/5.0.2
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 5.0.2 (2024-05-04) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/gauge/v/5.0.2
+📋 Requested Version: 2.7.4 (2017-04-21) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/gauge/v/2.7.4
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-05-04
+🔗 Repository: https://github.com/npm/gauge
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnpm%2Fgauge
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/npm/gauge
+
+--- PURL 39 ---
+📦 Package: pkg:npm/gauge@3.0.2
+🧾 Description: A terminal based horizontal guage aka, a progress bar
+   🗃 Registry: https://www.npmjs.com/package/gauge
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is no longer supported. UI: https://www.npmjs.com/package/gauge/v/5.0.2 (confidence 0.90)
+      ↳ https://registry.npmjs.org/gauge
+📊 GitHub Info: 📦 Archived (⭐ 322 stars)
+👥 Dependents: 19454
+🏆 Overall Score: 5.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 5.0.2 (2024-05-04) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/gauge/v/5.0.2
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 5.0.2 (2024-05-04) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/gauge/v/5.0.2
+📋 Requested Version: 3.0.2 (2021-12-13) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/gauge/v/3.0.2
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-05-04
+🔗 Repository: https://github.com/npm/gauge
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnpm%2Fgauge
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/npm/gauge
+
+--- PURL 40 ---
+📦 Package: pkg:npm/gauge@4.0.4
+🧾 Description: A terminal based horizontal guage aka, a progress bar
+   🗃 Registry: https://www.npmjs.com/package/gauge
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is no longer supported. UI: https://www.npmjs.com/package/gauge/v/5.0.2 (confidence 0.90)
+      ↳ https://registry.npmjs.org/gauge
+📊 GitHub Info: 📦 Archived (⭐ 322 stars)
+👥 Dependents: 19454
+🏆 Overall Score: 5.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 5.0.2 (2024-05-04) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/gauge/v/5.0.2
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 5.0.2 (2024-05-04) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/gauge/v/5.0.2
+📋 Requested Version: 4.0.4 (2022-03-28) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/gauge/v/4.0.4
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-05-04
+🔗 Repository: https://github.com/npm/gauge
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnpm%2Fgauge
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/npm/gauge
+
+--- PURL 41 ---
+📦 Package: pkg:npm/global-dirs@3.0.1
+🧾 Description: Get the directory of globally installed packages and binaries
+   🗃 Registry: https://www.npmjs.com/package/global-dirs
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Renamed to global-directory UI: https://www.npmjs.com/package/global-dirs/v/4.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/global-dirs
+📊 GitHub Info: Normal (⭐ 77 stars)
+👥 Dependents: 10357
+🏆 Overall Score: 4.3/10
+  🔧 Maintained: 7.0/10
+📦 Latest Stable Release: 4.0.0 (2023-11-06) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/global-dirs/v/4.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 4.0.0 (2023-11-06) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/global-dirs/v/4.0.0
+📋 Requested Version: 3.0.1 (2022-11-16)
+   ↳ Version Page: https://www.npmjs.com/package/global-dirs/v/3.0.1
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2026-02-02
+🔗 Repository: https://github.com/sindresorhus/global-dirs
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fglobal-dirs
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/global-dirs
+
+--- PURL 42 ---
+📦 Package: pkg:npm/har-validator@5.1.5
+🧾 Description: Extremely fast HTTP Archive (HAR) validator using JSON Schema
+   🗃 Registry: https://www.npmjs.com/package/har-validator
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: this library is no longer supported UI: https://www.npmjs.com/package/har-validator/v/5.1.5 (confidence 0.90)
+      ↳ https://registry.npmjs.org/har-validator
+📊 GitHub Info: Normal (⭐ 63 stars)
+👥 Dependents: 190492
+🏆 Overall Score: 4.2/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 5.1.5 (2020-07-30) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/har-validator/v/5.1.5
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 5.1.5 (2020-07-30) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/har-validator/v/5.1.5
+📋 Requested Version: 5.1.5 (2020-07-30) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/har-validator/v/5.1.5
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2023-08-09
+🔗 Repository: https://github.com/ahmadnassri/node-har-validator
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fahmadnassri%2Fnode-har-validator
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/ahmadnassri/node-har-validator
+
+--- PURL 43 ---
+📦 Package: pkg:npm/hoek@5.0.4
+🧾 Description: Node utilities shared among the extended hapi universe
+   🗃 Registry: https://www.npmjs.com/package/hoek
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This module has moved and is now available at @hapi/hoek. Please update your dependencies as this version is no longer maintained an may contain bugs and security issues. UI: https://www.npmjs.com/package/hoek/v/6.1.3 (confidence 0.90)
+      ↳ https://registry.npmjs.org/hoek
+📊 GitHub Info: Normal (⭐ 483 stars)
+👥 Dependents: 2883
+🏆 Overall Score: 3.9/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 6.1.3 (2019-03-27) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/hoek/v/6.1.3
+   ↳ Stable Advisories: 1
+      • [GHSA] GHSA-c429-5p7v-vgjp (https://github.com/advisories/GHSA-c429-5p7v-vgjp)
+📦 Highest Version (SemVer): 6.1.3 (2019-03-27) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/hoek/v/6.1.3
+📋 Requested Version: 5.0.4 (2018-08-10) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/hoek/v/5.0.4
+📄 License: BSD-3-Clause (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2025-03-12
+🔗 Repository: https://github.com/hapijs/hoek
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fhapijs%2Fhoek
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/hapijs/hoek
+
+--- PURL 44 ---
+📦 Package: pkg:npm/hoek@6.1.3
+🧾 Description: Node utilities shared among the extended hapi universe
+   🗃 Registry: https://www.npmjs.com/package/hoek
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This module has moved and is now available at @hapi/hoek. Please update your dependencies as this version is no longer maintained an may contain bugs and security issues. UI: https://www.npmjs.com/package/hoek/v/6.1.3 (confidence 0.90)
+      ↳ https://registry.npmjs.org/hoek
+📊 GitHub Info: Normal (⭐ 483 stars)
+👥 Dependents: 2883
+🏆 Overall Score: 3.9/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 6.1.3 (2019-03-27) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/hoek/v/6.1.3
+   ↳ Stable Advisories: 1
+      • [GHSA] GHSA-c429-5p7v-vgjp (https://github.com/advisories/GHSA-c429-5p7v-vgjp)
+📦 Highest Version (SemVer): 6.1.3 (2019-03-27) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/hoek/v/6.1.3
+📋 Requested Version: 6.1.3 (2019-03-27) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/hoek/v/6.1.3
+📄 License: BSD-3-Clause (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2025-03-12
+🔗 Repository: https://github.com/hapijs/hoek
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fhapijs%2Fhoek
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/hapijs/hoek
+
+--- PURL 45 ---
+📦 Package: pkg:npm/iltorb@2.4.5
+🧾 Description: Node.js module for brotli compression/decompression with native bindings
+   🗃 Registry: https://www.npmjs.com/package/iltorb
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: The zlib module provides APIs for brotli compression/decompression starting with Node.js v10.16.0, please use it over iltorb UI: https://www.npmjs.com/package/iltorb/v/2.4.5 (confidence 0.90)
+      ↳ https://registry.npmjs.org/iltorb
+🔁 Successor: it
+📊 GitHub Info: 📦 Archived (⭐ 168 stars)
+👥 Dependents: 519
+🏆 Overall Score: 2.1/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.4.5 (2020-02-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/iltorb/v/2.4.5
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 2.4.5 (2020-02-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/iltorb/v/2.4.5
+📋 Requested Version: 2.4.5 (2020-02-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/iltorb/v/2.4.5
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2020-02-01
+🔗 Repository: https://github.com/nstepien/iltorb
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnstepien%2Filtorb
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/nstepien/iltorb
+
+--- PURL 46 ---
+📦 Package: pkg:npm/inflight@1.0.6
+🧾 Description: Add callbacks to requests in flight to avoid async duplication
+   🗃 Registry: https://www.npmjs.com/package/inflight
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful. UI: https://www.npmjs.com/package/inflight/v/1.0.6 (confidence 0.90)
+      ↳ https://registry.npmjs.org/inflight
+🔁 Successor: it
+📊 GitHub Info: 📦 Archived (⭐ 76 stars)
+👥 Dependents: 556713
+🏆 Overall Score: 2.9/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 1.0.6 (2016-10-13) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/inflight/v/1.0.6
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 1.0.6 (2016-10-13) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/inflight/v/1.0.6
+📋 Requested Version: 1.0.6 (2016-10-13) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/inflight/v/1.0.6
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-05-23
+🔗 Repository: https://github.com/npm/inflight
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnpm%2Finflight
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/npm/inflight
+
+--- PURL 47 ---
+📦 Package: pkg:npm/ip@1.1.8
+🧾 Description: IP address tools for node.js
+   🗃 Registry: https://www.npmjs.com/package/ip
+⚖️  Result: 🛑 EOL-Effective
+💭 Reason: Scorecard data incomplete; open advisories (1) and no human commits > 2 yrs
+📊 GitHub Info: Normal (⭐ 1545 stars)
+👥 Dependents: 64
+🏆 Overall Score: 2.6/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.0.1 (2024-02-19)
+   ↳ Version Page: https://www.npmjs.com/package/ip/v/2.0.1
+   ↳ Stable Advisories: 1
+      • [GHSA] GHSA-2p57-rm9w-gvfp (https://github.com/advisories/GHSA-2p57-rm9w-gvfp)
+📦 Highest Version (SemVer): 2.0.1 (2024-02-19)
+   ↳ Version Page: https://www.npmjs.com/package/ip/v/2.0.1
+📋 Requested Version: 1.1.8 (2022-05-11)
+   ↳ Version Page: https://www.npmjs.com/package/ip/v/1.1.8
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-02-19
+🔗 Repository: https://github.com/indutny/node-ip
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Findutny%2Fnode-ip
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/indutny/node-ip
+
+--- PURL 48 ---
+📦 Package: pkg:npm/ip@2.0.0
+🧾 Description: IP address tools for node.js
+   🗃 Registry: https://www.npmjs.com/package/ip
+⚖️  Result: 🛑 EOL-Effective
+💭 Reason: Scorecard data incomplete; open advisories (1) and no human commits > 2 yrs
+📊 GitHub Info: Normal (⭐ 1545 stars)
+👥 Dependents: 64
+🏆 Overall Score: 2.6/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.0.1 (2024-02-19)
+   ↳ Version Page: https://www.npmjs.com/package/ip/v/2.0.1
+   ↳ Stable Advisories: 1
+      • [GHSA] GHSA-2p57-rm9w-gvfp (https://github.com/advisories/GHSA-2p57-rm9w-gvfp)
+📦 Highest Version (SemVer): 2.0.1 (2024-02-19)
+   ↳ Version Page: https://www.npmjs.com/package/ip/v/2.0.1
+📋 Requested Version: 2.0.0 (2022-05-10)
+   ↳ Version Page: https://www.npmjs.com/package/ip/v/2.0.0
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-02-19
+🔗 Repository: https://github.com/indutny/node-ip
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Findutny%2Fnode-ip
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/indutny/node-ip
+
+--- PURL 49 ---
+📦 Package: pkg:npm/is-gitpod@2.0.9
+🧾 Description: Checks if we are in Gitpod.
+   🗃 Registry: https://www.npmjs.com/package/is-gitpod
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: GitPod Classic is deprecated UI: https://www.npmjs.com/package/is-gitpod/v/3.0.5 (confidence 0.90)
+      ↳ https://registry.npmjs.org/is-gitpod
+📊 GitHub Info: 📦 Archived 
+🏆 Overall Score: 2.7/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 3.0.5 (2023-05-02) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/is-gitpod/v/3.0.5
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 3.0.5 (2023-05-02) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/is-gitpod/v/3.0.5
+📋 Requested Version: 2.0.9 (2022-01-12) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/is-gitpod/v/2.0.9
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2025-04-13
+🔗 Repository: https://github.com/dword-design/is-gitpod
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdword-design%2Fis-gitpod
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/dword-design/is-gitpod
+
+--- PURL 50 ---
+📦 Package: pkg:npm/is-windows@1.0.2
+🧾 Description: Returns true if the platform is Windows (and Cygwin or MSYS/MinGW for unit tests)
+   🔗 Homepage: https://github.com/jonschlinkert
+   🗃 Registry: https://www.npmjs.com/package/is-windows
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 48 stars)
+👥 Dependents: 175481
+🏆 Overall Score: 2.1/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 1.0.2 (2018-02-14)
+   ↳ Version Page: https://www.npmjs.com/package/is-windows/v/1.0.2
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 1.0.2 (2018-02-14)
+   ↳ Version Page: https://www.npmjs.com/package/is-windows/v/1.0.2
+📋 Requested Version: 1.0.2 (2018-02-14)
+   ↳ Version Page: https://www.npmjs.com/package/is-windows/v/1.0.2
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2018-02-14
+🔗 Repository: https://github.com/jonschlinkert/is-windows
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fjonschlinkert%2Fis-windows
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/jonschlinkert/is-windows
+
+--- PURL 51 ---
+📦 Package: pkg:npm/isemail@3.2.0
+🧾 Description: validate an email address according to RFCs 5321, 5322, and others
+   🗃 Registry: https://www.npmjs.com/package/isemail
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 258 stars)
+👥 Dependents: 7964
+🏆 Overall Score: 2.6/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 3.2.0 (2018-10-18)
+   ↳ Version Page: https://www.npmjs.com/package/isemail/v/3.2.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 3.2.0 (2018-10-18)
+   ↳ Version Page: https://www.npmjs.com/package/isemail/v/3.2.0
+📋 Requested Version: 3.2.0 (2018-10-18)
+   ↳ Version Page: https://www.npmjs.com/package/isemail/v/3.2.0
+📄 License: BSD-3-Clause (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-10-02
+🔗 Repository: https://github.com/hapijs/isemail
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fhapijs%2Fisemail
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/hapijs/isemail
+
+--- PURL 52 ---
+📦 Package: pkg:npm/jest-serializer@26.6.2
+🧾 Description: Delightful JavaScript Testing.
+   🔗 Homepage: https://jestjs.io
+   🗃 Registry: https://www.npmjs.com/package/jest-serializer
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL; successor: v8.serialize
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Use v8.serialize and v8.deserialize directly UI: https://www.npmjs.com/package/jest-serializer/v/28.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/jest-serializer
+🔁 Successor: v8.serialize
+📊 GitHub Info: Normal (⭐ 45328 stars)
+👥 Dependents: 13992
+🏆 Overall Score: 6.4/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 28.0.0 (2022-04-25) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/jest-serializer/v/28.0.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 28.0.0-alpha.6 (2022-03-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/jest-serializer/v/28.0.0-alpha.6
+📦 Highest Version (SemVer): 28.0.0 (2022-04-25) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/jest-serializer/v/28.0.0
+📋 Requested Version: 26.6.2 (2020-11-02)
+   ↳ Version Page: https://www.npmjs.com/package/jest-serializer/v/26.6.2
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-10
+🔗 Repository: https://github.com/facebook/jest
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Ffacebook%2Fjest
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/facebook/jest
+
+--- PURL 53 ---
+📦 Package: pkg:npm/json-buffer@3.0.0
+   🗃 Registry: https://www.npmjs.com/package/json-buffer
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 41 stars)
+👥 Dependents: 50408
+🏆 Overall Score: 2.1/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 3.0.1 (2018-09-10)
+   ↳ Version Page: https://www.npmjs.com/package/json-buffer/v/3.0.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 3.0.1 (2018-09-10)
+   ↳ Version Page: https://www.npmjs.com/package/json-buffer/v/3.0.1
+📋 Requested Version: 3.0.0 (2017-07-17)
+   ↳ Version Page: https://www.npmjs.com/package/json-buffer/v/3.0.0
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2018-09-10
+🔗 Repository: https://github.com/dominictarr/json-buffer
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdominictarr%2Fjson-buffer
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/dominictarr/json-buffer
+
+--- PURL 54 ---
+📦 Package: pkg:npm/lodash.get@4.4.2
+🧾 Description: A modern JavaScript utility library delivering modularity, performance, & extras.
+   🔗 Homepage: https://lodash.com/
+   🗃 Registry: https://www.npmjs.com/package/lodash.get
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL; successor: the
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is deprecated. Use the optional chaining (?.) operator instead. UI: https://www.npmjs.com/package/lodash.get/v/4.4.2 (confidence 0.90)
+      ↳ https://registry.npmjs.org/lodash.get
+🔁 Successor: the
+📊 GitHub Info: Normal (⭐ 61573 stars)
+👥 Dependents: 57917
+🏆 Overall Score: 7.2/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 4.4.2 (2016-08-13) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/lodash.get/v/4.4.2
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 4.4.2 (2016-08-13) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/lodash.get/v/4.4.2
+📋 Requested Version: 4.4.2 (2016-08-13) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/lodash.get/v/4.4.2
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-25
+🔗 Repository: https://github.com/lodash/lodash
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Flodash%2Flodash
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/lodash/lodash
+
+--- PURL 55 ---
+📦 Package: pkg:npm/lolex@1.3.2
+🧾 Description: Fake setTimeout and friends (collectively known as "timers"). Useful in your JavaScript tests. Extracted from Sinon.JS
+   🗃 Registry: https://www.npmjs.com/package/lolex
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL; successor: the
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: lolex has been renamed to @sinonjs/fake-timers. No API changes made. Please use the new package instead UI: https://www.npmjs.com/package/lolex/v/6.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/lolex
+🔁 Successor: the
+📊 GitHub Info: Normal (⭐ 858 stars)
+👥 Dependents: 4704
+🏆 Overall Score: 5.7/10
+  🔧 Maintained: 9.0/10
+📦 Latest Stable Release: 6.0.0 (2020-02-04) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/lolex/v/6.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 6.0.0 (2020-02-04) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/lolex/v/6.0.0
+📋 Requested Version: 1.3.2 (2015-09-22)
+   ↳ Version Page: https://www.npmjs.com/package/lolex/v/1.3.2
+📄 License: BSD-3-Clause (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-16
+🔗 Repository: https://github.com/sinonjs/lolex
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsinonjs%2Flolex
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sinonjs/lolex
+
+--- PURL 56 ---
+📦 Package: pkg:npm/marsdb@0.6.11
+🧾 Description: MarsDB is a Promise based lightweight database with MongoDB query syntax, written on ES6
+   🗃 Registry: https://www.npmjs.com/package/marsdb
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 231 stars)
+👥 Dependents: 4
+🏆 Overall Score: 1.9/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 0.6.11 (2016-09-07)
+   ↳ Version Page: https://www.npmjs.com/package/marsdb/v/0.6.11
+   ↳ Stable Advisories: 1
+      • [GHSA] GHSA-5mrr-rgp6-x4gr (https://github.com/advisories/GHSA-5mrr-rgp6-x4gr)
+📦 Highest Version (SemVer): 0.6.11 (2016-09-07)
+   ↳ Version Page: https://www.npmjs.com/package/marsdb/v/0.6.11
+📋 Requested Version: 0.6.11 (2016-09-07)
+   ↳ Version Page: https://www.npmjs.com/package/marsdb/v/0.6.11
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2016-09-07
+🔗 Repository: https://github.com/c58/marsdb
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fc58%2Fmarsdb
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/c58/marsdb
+
+--- PURL 57 ---
+📦 Package: pkg:npm/mimic-fn@2.1.0
+🧾 Description: Make a function mimic another one
+   🗃 Registry: https://www.npmjs.com/package/mimic-fn
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Renamed to mimic-function UI: https://www.npmjs.com/package/mimic-fn/v/5.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/mimic-fn
+📊 GitHub Info: Normal (⭐ 96 stars)
+👥 Dependents: 278207
+🏆 Overall Score: 4.2/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 5.0.0 (2023-11-05) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/mimic-fn/v/5.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 5.0.0 (2023-11-05) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/mimic-fn/v/5.0.0
+📋 Requested Version: 2.1.0 (2019-03-31)
+   ↳ Version Page: https://www.npmjs.com/package/mimic-fn/v/2.1.0
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2024-10-28
+🔗 Repository: https://github.com/sindresorhus/mimic-fn
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fmimic-fn
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/mimic-fn
+
+--- PURL 58 ---
+📦 Package: pkg:npm/monorepo-symlink-test@0.0.0
+   🗃 Registry: https://www.npmjs.com/package/monorepo-symlink-test
+⚖️  Result: 🛑 EOL-Effective
+💭 Reason: Open advisories (1) on latest version, no new release in 1580 days; consumers cannot resolve vulnerabilities via package manager
+📊 GitHub Info: Normal 
+📦 Latest Stable Release: 0.0.1-security (2021-11-30)
+   ↳ Version Page: https://www.npmjs.com/package/monorepo-symlink-test/v/0.0.1-security
+   ↳ Stable Advisories: 1
+      • [OTHER] MAL-2022-4691 (https://osv.dev/MAL-2022-4691)
+📦 Highest Version (SemVer): 0.0.1-security (2021-11-30)
+   ↳ Version Page: https://www.npmjs.com/package/monorepo-symlink-test/v/0.0.1-security
+🔗 Repository: https://npm/security-holder
+
+--- PURL 59 ---
+📦 Package: pkg:npm/node-int64@0.4.0
+🧾 Description: Support for representing 64-bit integers in JavaScript
+   🗃 Registry: https://www.npmjs.com/package/node-int64
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 205 stars)
+👥 Dependents: 100848
+🏆 Overall Score: 2.3/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 0.4.0 (2015-04-04)
+   ↳ Version Page: https://www.npmjs.com/package/node-int64/v/0.4.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 0.4.0 (2015-04-04)
+   ↳ Version Page: https://www.npmjs.com/package/node-int64/v/0.4.0
+📋 Requested Version: 0.4.0 (2015-04-04)
+   ↳ Version Page: https://www.npmjs.com/package/node-int64/v/0.4.0
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2019-06-06
+🔗 Repository: https://github.com/broofa/node-int64
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fbroofa%2Fnode-int64
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/broofa/node-int64
+
+--- PURL 60 ---
+📦 Package: pkg:npm/node-pre-gyp@0.15.0
+🧾 Description: Node.js tool for easy binary deployment of C++ addons
+   🗃 Registry: https://www.npmjs.com/package/node-pre-gyp
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Please upgrade to @mapbox/node-pre-gyp: the non-scoped node-pre-gyp package is deprecated and only the @mapbox scoped package will recieve updates in the future UI: https://www.npmjs.com/package/node-pre-gyp/v/0.17.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/node-pre-gyp
+📊 GitHub Info: Normal (⭐ 1147 stars)
+👥 Dependents: 318
+🏆 Overall Score: 6.3/10
+  🔧 Maintained: 4.0/10
+📦 Latest Stable Release: 0.17.0 (2020-12-07) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/node-pre-gyp/v/0.17.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 0.10.1-dev.1 (2018-06-21)
+   ↳ Version Page: https://www.npmjs.com/package/node-pre-gyp/v/0.10.1-dev.1
+📦 Highest Version (SemVer): 0.17.0 (2020-12-07) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/node-pre-gyp/v/0.17.0
+📋 Requested Version: 0.15.0 (2020-05-29) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/node-pre-gyp/v/0.15.0
+📄 License: BSD-3-Clause (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2026-02-21
+🔗 Repository: https://github.com/mapbox/node-pre-gyp
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fmapbox%2Fnode-pre-gyp
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/mapbox/node-pre-gyp
+
+--- PURL 61 ---
+📦 Package: pkg:npm/noop-logger@0.1.1
+🧾 Description: A logger that does exactly nothing.
+   🗃 Registry: https://www.npmjs.com/package/noop-logger
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 4 stars)
+👥 Dependents: 10968
+🏆 Overall Score: 1.6/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 0.1.1 (2016-02-16)
+   ↳ Version Page: https://www.npmjs.com/package/noop-logger/v/0.1.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 0.1.1 (2016-02-16)
+   ↳ Version Page: https://www.npmjs.com/package/noop-logger/v/0.1.1
+📋 Requested Version: 0.1.1 (2016-02-16)
+   ↳ Version Page: https://www.npmjs.com/package/noop-logger/v/0.1.1
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2016-02-16
+🔗 Repository: https://github.com/segmentio/noop-logger
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsegmentio%2Fnoop-logger
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/segmentio/noop-logger
+
+--- PURL 62 ---
+📦 Package: pkg:npm/notevil@1.3.3
+🧾 Description: Evalulate javascript like the built-in javascript eval() method but safely.
+   🗃 Registry: https://www.npmjs.com/package/notevil
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info. UI: https://www.npmjs.com/package/notevil/v/1.3.3 (confidence 0.90)
+      ↳ https://registry.npmjs.org/notevil
+📊 GitHub Info: 📦 Archived (⭐ 194 stars)
+👥 Dependents: 32
+🏆 Overall Score: 1.6/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 1.3.3 (2020-03-04) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/notevil/v/1.3.3
+   ↳ Stable Advisories: 1
+      • [GHSA] GHSA-8g4m-cjm2-96wq (https://github.com/advisories/GHSA-8g4m-cjm2-96wq)
+📦 Highest Version (SemVer): 1.3.3 (2020-03-04) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/notevil/v/1.3.3
+📋 Requested Version: 1.3.3 (2020-03-04) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/notevil/v/1.3.3
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2021-12-28
+🔗 Repository: https://github.com/mmckegg/notevil
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fmmckegg%2Fnotevil
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/mmckegg/notevil
+
+--- PURL 63 ---
+📦 Package: pkg:npm/npmlog@4.1.2
+🧾 Description: The logger that npm uses
+   🗃 Registry: https://www.npmjs.com/package/npmlog
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is no longer supported. UI: https://www.npmjs.com/package/npmlog/v/7.0.1 (confidence 0.90)
+      ↳ https://registry.npmjs.org/npmlog
+📊 GitHub Info: 📦 Archived (⭐ 442 stars)
+👥 Dependents: 36229
+🏆 Overall Score: 5.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 7.0.1 (2022-10-19) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/npmlog/v/7.0.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 7.0.1 (2022-10-19) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/npmlog/v/7.0.1
+📋 Requested Version: 4.1.2 (2017-06-26) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/npmlog/v/4.1.2
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-05-03
+🔗 Repository: https://github.com/npm/npmlog
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnpm%2Fnpmlog
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/npm/npmlog
+
+--- PURL 64 ---
+📦 Package: pkg:npm/npmlog@5.0.1
+🧾 Description: The logger that npm uses
+   🗃 Registry: https://www.npmjs.com/package/npmlog
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is no longer supported. UI: https://www.npmjs.com/package/npmlog/v/7.0.1 (confidence 0.90)
+      ↳ https://registry.npmjs.org/npmlog
+📊 GitHub Info: 📦 Archived (⭐ 442 stars)
+👥 Dependents: 36229
+🏆 Overall Score: 5.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 7.0.1 (2022-10-19) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/npmlog/v/7.0.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 7.0.1 (2022-10-19) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/npmlog/v/7.0.1
+📋 Requested Version: 5.0.1 (2021-09-02) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/npmlog/v/5.0.1
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-05-03
+🔗 Repository: https://github.com/npm/npmlog
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnpm%2Fnpmlog
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/npm/npmlog
+
+--- PURL 65 ---
+📦 Package: pkg:npm/npmlog@6.0.2
+🧾 Description: The logger that npm uses
+   🗃 Registry: https://www.npmjs.com/package/npmlog
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is no longer supported. UI: https://www.npmjs.com/package/npmlog/v/7.0.1 (confidence 0.90)
+      ↳ https://registry.npmjs.org/npmlog
+📊 GitHub Info: 📦 Archived (⭐ 442 stars)
+👥 Dependents: 36229
+🏆 Overall Score: 5.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 7.0.1 (2022-10-19) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/npmlog/v/7.0.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 7.0.1 (2022-10-19) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/npmlog/v/7.0.1
+📋 Requested Version: 6.0.2 (2022-04-20) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/npmlog/v/6.0.2
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-05-03
+🔗 Repository: https://github.com/npm/npmlog
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnpm%2Fnpmlog
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/npm/npmlog
+
+--- PURL 66 ---
+📦 Package: pkg:npm/number-is-nan@1.0.1
+🧾 Description: ES2015 Number.isNaN() ponyfill
+   🗃 Registry: https://www.npmjs.com/package/number-is-nan
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Deprecated UI: https://www.npmjs.com/package/number-is-nan/v/3.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/number-is-nan
+📊 GitHub Info: 📦 Archived (⭐ 30 stars)
+👥 Dependents: 187365
+🏆 Overall Score: 3.1/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 3.0.0 (2021-04-07) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/number-is-nan/v/3.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 3.0.0 (2021-04-07) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/number-is-nan/v/3.0.0
+📋 Requested Version: 1.0.1 (2016-09-30)
+   ↳ Version Page: https://www.npmjs.com/package/number-is-nan/v/1.0.1
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2024-05-02
+🔗 Repository: https://github.com/sindresorhus/number-is-nan
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fnumber-is-nan
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/number-is-nan
+
+--- PURL 67 ---
+📦 Package: pkg:npm/os-homedir@1.0.2
+🧾 Description: [DEPRECATED] Node.js `os.homedir()` ponyfill
+   🗃 Registry: https://www.npmjs.com/package/os-homedir
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is not needed anymore. Use `require('os').homedir()` instead. UI: https://www.npmjs.com/package/os-homedir/v/2.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/os-homedir
+📊 GitHub Info: 📦 Archived (⭐ 61 stars)
+👥 Dependents: 158873
+🏆 Overall Score: 3.0/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.0.0 (2018-11-08) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/os-homedir/v/2.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 2.0.0 (2018-11-08) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/os-homedir/v/2.0.0
+📋 Requested Version: 1.0.2 (2016-09-30)
+   ↳ Version Page: https://www.npmjs.com/package/os-homedir/v/1.0.2
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2019-05-31
+🔗 Repository: https://github.com/sindresorhus/os-homedir
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fos-homedir
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/os-homedir
+
+--- PURL 68 ---
+📦 Package: pkg:npm/os-tmpdir@1.0.2
+🧾 Description: [DEPRECATED] Node.js os.tmpdir() ponyfill
+   🗃 Registry: https://www.npmjs.com/package/os-tmpdir
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This is not needed anymore. `require('os').tmpdir()` in Node.js 4 and up is good. UI: https://www.npmjs.com/package/os-tmpdir/v/2.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/os-tmpdir
+📊 GitHub Info: 📦 Archived (⭐ 37 stars)
+👥 Dependents: 227796
+🏆 Overall Score: 3.0/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.0.0 (2018-11-08) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/os-tmpdir/v/2.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 2.0.0 (2018-11-08) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/os-tmpdir/v/2.0.0
+📋 Requested Version: 1.0.2 (2016-09-30)
+   ↳ Version Page: https://www.npmjs.com/package/os-tmpdir/v/1.0.2
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2019-05-31
+🔗 Repository: https://github.com/sindresorhus/os-tmpdir
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fos-tmpdir
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/os-tmpdir
+
+--- PURL 69 ---
+📦 Package: pkg:npm/osenv@0.1.5
+🧾 Description: Look up environment settings specific to different operating systems.
+   🗃 Registry: https://www.npmjs.com/package/osenv
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is no longer supported. UI: https://www.npmjs.com/package/osenv/v/0.1.5 (confidence 0.90)
+      ↳ https://registry.npmjs.org/osenv
+📊 GitHub Info: 📦 Archived (⭐ 138 stars)
+👥 Dependents: 59721
+🏆 Overall Score: 2.0/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 0.1.5 (2018-02-16) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/osenv/v/0.1.5
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 0.1.5 (2018-02-16) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/osenv/v/0.1.5
+📋 Requested Version: 0.1.5 (2018-02-16) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/osenv/v/0.1.5
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2019-02-08
+🔗 Repository: https://github.com/npm/osenv
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fnpm%2Fosenv
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/npm/osenv
+
+--- PURL 70 ---
+📦 Package: pkg:npm/p-finally@1.0.0
+🧾 Description: `Promise#finally()` ponyfill - Invoked when the promise is settled regardless of outcome
+   🗃 Registry: https://www.npmjs.com/package/p-finally
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Deprecated UI: https://www.npmjs.com/package/p-finally/v/3.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/p-finally
+📊 GitHub Info: 📦 Archived (⭐ 47 stars)
+👥 Dependents: 157501
+🏆 Overall Score: 3.6/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 3.0.0 (2021-04-09) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/p-finally/v/3.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 3.0.0 (2021-04-09) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/p-finally/v/3.0.0
+📋 Requested Version: 1.0.0 (2016-10-21)
+   ↳ Version Page: https://www.npmjs.com/package/p-finally/v/1.0.0
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2021-04-09
+🔗 Repository: https://github.com/sindresorhus/p-finally
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fp-finally
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/p-finally
+
+--- PURL 71 ---
+📦 Package: pkg:npm/path-is-absolute@1.0.1
+🧾 Description: Node.js 0.12 path.isAbsolute() ponyfill
+   🗃 Registry: https://www.npmjs.com/package/path-is-absolute
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package is no longer relevant as Node.js 0.12 is unmaintained. UI: https://www.npmjs.com/package/path-is-absolute/v/2.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/path-is-absolute
+📊 GitHub Info: 📦 Archived (⭐ 43 stars)
+👥 Dependents: 553062
+🏆 Overall Score: 3.0/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.0.0 (2018-11-08) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/path-is-absolute/v/2.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 2.0.0 (2018-11-08) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/path-is-absolute/v/2.0.0
+📋 Requested Version: 1.0.1 (2016-09-30)
+   ↳ Version Page: https://www.npmjs.com/package/path-is-absolute/v/1.0.1
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2019-05-31
+🔗 Repository: https://github.com/sindresorhus/path-is-absolute
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fpath-is-absolute
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/path-is-absolute
+
+--- PURL 72 ---
+📦 Package: pkg:npm/peek-readable@4.1.0
+🧾 Description: A promise based asynchronous stream reader, which makes reading from a stream easy.
+   🗃 Registry: https://www.npmjs.com/package/peek-readable
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 9 stars)
+👥 Dependents: 18307
+🏆 Overall Score: 3.4/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 7.0.0 (2025-03-09)
+   ↳ Version Page: https://www.npmjs.com/package/peek-readable/v/7.0.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 5.4.0-beta.7 (2025-01-19)
+   ↳ Version Page: https://www.npmjs.com/package/peek-readable/v/5.4.0-beta.7
+📦 Highest Version (SemVer): 7.0.0 (2025-03-09)
+   ↳ Version Page: https://www.npmjs.com/package/peek-readable/v/7.0.0
+📋 Requested Version: 4.1.0 (2022-02-06)
+   ↳ Version Page: https://www.npmjs.com/package/peek-readable/v/4.1.0
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2025-07-17
+🔗 Repository: https://github.com/borewit/peek-readable
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fborewit%2Fpeek-readable
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/borewit/peek-readable
+
+--- PURL 73 ---
+📦 Package: pkg:npm/pkg-dir@4.2.0
+🧾 Description: Find the root directory of a Node.js project or npm package
+   🗃 Registry: https://www.npmjs.com/package/pkg-dir
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Renamed to `package-directory`. UI: https://www.npmjs.com/package/pkg-dir/v/9.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/pkg-dir
+📊 GitHub Info: Normal (⭐ 252 stars)
+👥 Dependents: 107179
+🏆 Overall Score: 3.8/10
+  🔧 Maintained: 1.0/10
+📦 Latest Stable Release: 9.0.0 (2025-06-05) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/pkg-dir/v/9.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 9.0.0 (2025-06-05) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/pkg-dir/v/9.0.0
+📋 Requested Version: 4.2.0 (2019-05-21)
+   ↳ Version Page: https://www.npmjs.com/package/pkg-dir/v/4.2.0
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2026-02-01
+🔗 Repository: https://github.com/sindresorhus/pkg-dir
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fpkg-dir
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/pkg-dir
+
+--- PURL 74 ---
+📦 Package: pkg:npm/prebuild-install@5.3.6
+🧾 Description: Deprecated. Minimal install client for prebuilds.
+   🗃 Registry: https://www.npmjs.com/package/prebuild-install
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: No longer maintained. Please contact the author of the relevant native addon; alternatives are available. UI: https://www.npmjs.com/package/prebuild-install/v/7.1.3 (confidence 0.90)
+      ↳ https://registry.npmjs.org/prebuild-install
+📊 GitHub Info: 📦 Archived (⭐ 115 stars)
+👥 Dependents: 5332
+🏆 Overall Score: 3.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 7.1.3 (2025-01-22) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/prebuild-install/v/7.1.3
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 7.1.3 (2025-01-22) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/prebuild-install/v/7.1.3
+📋 Requested Version: 5.3.6 (2020-10-20) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/prebuild-install/v/5.3.6
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2026-02-19
+🔗 Repository: https://github.com/prebuild/prebuild-install
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fprebuild%2Fprebuild-install
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/prebuild/prebuild-install
+
+--- PURL 75 ---
+📦 Package: pkg:npm/read-pkg-up@7.0.1
+🧾 Description: Read the closest package.json file
+   🗃 Registry: https://www.npmjs.com/package/read-pkg-up
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Renamed to read-package-up UI: https://www.npmjs.com/package/read-pkg-up/v/11.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/read-pkg-up
+📊 GitHub Info: Normal (⭐ 268 stars)
+👥 Dependents: 40720
+🏆 Overall Score: 3.6/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 11.0.0 (2023-11-03) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/read-pkg-up/v/11.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 11.0.0 (2023-11-03) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/read-pkg-up/v/11.0.0
+📋 Requested Version: 7.0.1 (2019-12-06)
+   ↳ Version Page: https://www.npmjs.com/package/read-pkg-up/v/7.0.1
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2025-11-07
+🔗 Repository: https://github.com/sindresorhus/read-pkg-up
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fread-pkg-up
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/read-pkg-up
+
+--- PURL 76 ---
+📦 Package: pkg:npm/request@2.88.2
+🧾 Description: 🏊🏾 Simplified HTTP request client.
+   🗃 Registry: https://www.npmjs.com/package/request
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2 (confidence 0.90)
+      ↳ https://registry.npmjs.org/request
+📊 GitHub Info: Normal (⭐ 25581 stars)
+👥 Dependents: 186330
+🏆 Overall Score: 3.6/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.88.2 (2020-02-11) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/request/v/2.88.2
+   ↳ Stable Advisories: 1
+      • [GHSA] GHSA-p8p7-x288-28g6 (https://github.com/advisories/GHSA-p8p7-x288-28g6)
+📦 Highest Version (SemVer): 2.88.2 (2020-02-11) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/request/v/2.88.2
+📋 Requested Version: 2.88.2 (2020-02-11) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/request/v/2.88.2
+📄 License: Apache-2.0 (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2020-02-11
+🔗 Repository: https://github.com/request/request
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Frequest%2Frequest
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/request/request
+
+--- PURL 77 ---
+📦 Package: pkg:npm/require-from-string@2.0.2
+🧾 Description: Load module from string
+   🗃 Registry: https://www.npmjs.com/package/require-from-string
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 298 stars)
+👥 Dependents: 198907
+🏆 Overall Score: 2.3/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.0.2 (2018-04-09)
+   ↳ Version Page: https://www.npmjs.com/package/require-from-string/v/2.0.2
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 2.0.2 (2018-04-09)
+   ↳ Version Page: https://www.npmjs.com/package/require-from-string/v/2.0.2
+📋 Requested Version: 2.0.2 (2018-04-09)
+   ↳ Version Page: https://www.npmjs.com/package/require-from-string/v/2.0.2
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2018-04-09
+🔗 Repository: https://github.com/floatdrop/require-from-string
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Ffloatdrop%2Frequire-from-string
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/floatdrop/require-from-string
+
+--- PURL 78 ---
+📦 Package: pkg:npm/resolve-url@0.2.1
+🧾 Description: [DEPRECATED] Like Node.js’ `path.resolve`/`url.resolve` for the browser.
+   🗃 Registry: https://www.npmjs.com/package/resolve-url
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: https://github.com/lydell/resolve-url#deprecated UI: https://www.npmjs.com/package/resolve-url/v/0.2.1 (confidence 0.90)
+      ↳ https://registry.npmjs.org/resolve-url
+📊 GitHub Info: 📦 Archived (⭐ 54 stars)
+👥 Dependents: 159539
+🏆 Overall Score: 2.0/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 0.2.1 (2014-02-25) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/resolve-url/v/0.2.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 0.2.1 (2014-02-25) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/resolve-url/v/0.2.1
+📋 Requested Version: 0.2.1 (2014-02-25) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/resolve-url/v/0.2.1
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2022-01-11
+🔗 Repository: https://github.com/lydell/resolve-url
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Flydell%2Fresolve-url
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/lydell/resolve-url
+
+--- PURL 79 ---
+📦 Package: pkg:npm/samsam@1.1.2
+🧾 Description: Value identification and comparison functions
+   🔗 Homepage: http://sinonjs.github.io/samsam/
+   🗃 Registry: https://www.npmjs.com/package/samsam
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This package has been deprecated in favour of @sinonjs/samsam UI: https://www.npmjs.com/package/samsam/v/1.3.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/samsam
+📊 GitHub Info: Normal (⭐ 27 stars)
+👥 Dependents: 4738
+🏆 Overall Score: 6.0/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 1.3.0 (2017-10-03) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/samsam/v/1.3.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 1.3.0 (2017-10-03) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/samsam/v/1.3.0
+📋 Requested Version: 1.1.2 (2014-12-11) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/samsam/v/1.1.2
+📄 License: BSD-3-Clause (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2026-03-20
+🔗 Repository: https://github.com/busterjs/samsam
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fbusterjs%2Fsamsam
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/busterjs/samsam
+
+--- PURL 80 ---
+📦 Package: pkg:npm/saxes@5.0.1
+🧾 Description: An evented streaming XML parser in JavaScript
+   🗃 Registry: https://www.npmjs.com/package/saxes
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 84 stars)
+👥 Dependents: 62292
+🏆 Overall Score: 2.9/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 6.0.0 (2021-11-07)
+   ↳ Version Page: https://www.npmjs.com/package/saxes/v/6.0.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 6.0.0-rc.1 (2021-11-07)
+   ↳ Version Page: https://www.npmjs.com/package/saxes/v/6.0.0-rc.1
+📦 Highest Version (SemVer): 6.0.0 (2021-11-07)
+   ↳ Version Page: https://www.npmjs.com/package/saxes/v/6.0.0
+📋 Requested Version: 5.0.1 (2020-04-10)
+   ↳ Version Page: https://www.npmjs.com/package/saxes/v/5.0.1
+📄 License: ISC (source: derived-from-version / depsdev-version-spdx)
+🔗 Repository: https://github.com/lddubeau/saxes
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Flddubeau%2Fsaxes
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/lddubeau/saxes
+
+--- PURL 81 ---
+📦 Package: pkg:npm/source-map-resolve@0.5.3
+🧾 Description: [DEPRECATED] Resolve the source map and/or sources for a generated file.
+   🗃 Registry: https://www.npmjs.com/package/source-map-resolve
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: See https://github.com/lydell/source-map-resolve#deprecated UI: https://www.npmjs.com/package/source-map-resolve/v/0.6.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/source-map-resolve
+📊 GitHub Info: 📦 Archived (⭐ 94 stars)
+👥 Dependents: 158263
+🏆 Overall Score: 3.0/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 0.6.0 (2020-03-21) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/source-map-resolve/v/0.6.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 0.6.0 (2020-03-21) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/source-map-resolve/v/0.6.0
+📋 Requested Version: 0.5.3 (2019-12-28) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/source-map-resolve/v/0.5.3
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2022-01-11
+🔗 Repository: https://github.com/lydell/source-map-resolve
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Flydell%2Fsource-map-resolve
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/lydell/source-map-resolve
+
+--- PURL 82 ---
+📦 Package: pkg:npm/source-map-url@0.4.1
+🧾 Description: [DEPRECATED] Tools for working with sourceMappingURL comments.
+   🗃 Registry: https://www.npmjs.com/package/source-map-url
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: See https://github.com/lydell/source-map-url#deprecated UI: https://www.npmjs.com/package/source-map-url/v/0.4.1 (confidence 0.90)
+      ↳ https://registry.npmjs.org/source-map-url
+📊 GitHub Info: 📦 Archived (⭐ 46 stars)
+👥 Dependents: 158952
+🏆 Overall Score: 2.0/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 0.4.1 (2021-02-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/source-map-url/v/0.4.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 0.4.1 (2021-02-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/source-map-url/v/0.4.1
+📋 Requested Version: 0.4.1 (2021-02-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/source-map-url/v/0.4.1
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2022-01-11
+🔗 Repository: https://github.com/lydell/source-map-url
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Flydell%2Fsource-map-url
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/lydell/source-map-url
+
+--- PURL 83 ---
+📦 Package: pkg:npm/strip-eof@1.0.0
+🧾 Description: Strip the final newline character from a string/buffer
+   🗃 Registry: https://www.npmjs.com/package/strip-eof
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Renamed to `strip-final-newline` to better represent its functionality. UI: https://www.npmjs.com/package/strip-eof/v/2.0.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/strip-eof
+📊 GitHub Info: Normal (⭐ 38 stars)
+👥 Dependents: 113392
+🏆 Overall Score: 3.8/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.0.0 (2018-10-28) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/strip-eof/v/2.0.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 2.0.0 (2018-10-28) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/strip-eof/v/2.0.0
+📋 Requested Version: 1.0.0 (2015-12-05)
+   ↳ Version Page: https://www.npmjs.com/package/strip-eof/v/1.0.0
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2024-10-28
+🔗 Repository: https://github.com/sindresorhus/strip-eof
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fsindresorhus%2Fstrip-eof
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/sindresorhus/strip-eof
+
+--- PURL 84 ---
+📦 Package: pkg:npm/through@2.3.8
+🧾 Description: simple way to create a ReadableWritable stream that works
+   🗃 Registry: https://www.npmjs.com/package/through
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 670 stars)
+👥 Dependents: 262351
+🏆 Overall Score: 2.1/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.3.8 (2015-07-03)
+   ↳ Version Page: https://www.npmjs.com/package/through/v/2.3.8
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 2.3.8 (2015-07-03)
+   ↳ Version Page: https://www.npmjs.com/package/through/v/2.3.8
+📋 Requested Version: 2.3.8 (2015-07-03)
+   ↳ Version Page: https://www.npmjs.com/package/through/v/2.3.8
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2015-07-03
+🔗 Repository: https://github.com/dominictarr/through
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fdominictarr%2Fthrough
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/dominictarr/through
+
+--- PURL 85 ---
+📦 Package: pkg:npm/topo@3.0.3
+🧾 Description: Topological sorting with grouping support
+   🗃 Registry: https://www.npmjs.com/package/topo
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Primary-source EOL
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: This module has moved and is now available at @hapi/topo. Please update your dependencies as this version is no longer maintained an may contain bugs and security issues. UI: https://www.npmjs.com/package/topo/v/3.0.3 (confidence 0.90)
+      ↳ https://registry.npmjs.org/topo
+📊 GitHub Info: Normal (⭐ 108 stars)
+👥 Dependents: 4637
+🏆 Overall Score: 3.7/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 3.0.3 (2018-11-03) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/topo/v/3.0.3
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 3.0.3 (2018-11-03) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/topo/v/3.0.3
+📋 Requested Version: 3.0.3 (2018-11-03) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/topo/v/3.0.3
+📄 License: BSD-3-Clause (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2024-10-23
+🔗 Repository: https://github.com/hapijs/topo
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fhapijs%2Ftopo
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/hapijs/topo
+
+--- PURL 86 ---
+📦 Package: pkg:npm/ts-node-dev@1.1.8
+🧾 Description: Compiles your TS app and restarts when files are modified.
+   🗃 Registry: https://www.npmjs.com/package/ts-node-dev
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 3453 stars)
+👥 Dependents: 483
+🏆 Overall Score: 2.0/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.0.0 (2022-05-26)
+   ↳ Version Page: https://www.npmjs.com/package/ts-node-dev/v/2.0.0
+   ↳ Stable Advisories: 0
+📦 Latest Pre-release: 1.0.0-pre.66 (2020-10-17)
+   ↳ Version Page: https://www.npmjs.com/package/ts-node-dev/v/1.0.0-pre.66
+📦 Highest Version (SemVer): 2.0.0 (2022-05-26)
+   ↳ Version Page: https://www.npmjs.com/package/ts-node-dev/v/2.0.0
+📋 Requested Version: 1.1.8 (2021-07-01)
+   ↳ Version Page: https://www.npmjs.com/package/ts-node-dev/v/1.1.8
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2022-05-26
+🔗 Repository: https://github.com/whitecolor/ts-node-dev
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fwhitecolor%2Fts-node-dev
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/whitecolor/ts-node-dev
+
+--- PURL 87 ---
+📦 Package: pkg:npm/urix@0.1.0
+🧾 Description: [DEPRECATED] Makes Windows-style paths more unix and URI friendly.
+   🗃 Registry: https://www.npmjs.com/package/urix
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Please see https://github.com/lydell/urix#deprecated UI: https://www.npmjs.com/package/urix/v/0.1.0 (confidence 0.90)
+      ↳ https://registry.npmjs.org/urix
+📊 GitHub Info: 📦 Archived (⭐ 62 stars)
+👥 Dependents: 159122
+🏆 Overall Score: 2.1/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 0.1.0 (2014-03-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/urix/v/0.1.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 0.1.0 (2014-03-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/urix/v/0.1.0
+📋 Requested Version: 0.1.0 (2014-03-01) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/urix/v/0.1.0
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2022-01-11
+🔗 Repository: https://github.com/lydell/urix
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Flydell%2Furix
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/lydell/urix
+
+--- PURL 88 ---
+📦 Package: pkg:npm/w3c-hr-time@1.0.2
+🧾 Description: An implementation of the W3C High Resolution Time Level 2 specification.
+   🗃 Registry: https://www.npmjs.com/package/w3c-hr-time
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Use your platform's native performance.now() and performance.timeOrigin. UI: https://www.npmjs.com/package/w3c-hr-time/v/1.0.2 (confidence 0.90)
+      ↳ https://registry.npmjs.org/w3c-hr-time
+🔁 Successor: your
+📊 GitHub Info: 📦 Archived (⭐ 11 stars)
+👥 Dependents: 76558
+🏆 Overall Score: 2.5/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 1.0.2 (2020-03-06) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/w3c-hr-time/v/1.0.2
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 1.0.2 (2020-03-06) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/w3c-hr-time/v/1.0.2
+📋 Requested Version: 1.0.2 (2020-03-06) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/w3c-hr-time/v/1.0.2
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2022-10-16
+🔗 Repository: https://github.com/jsdom/w3c-hr-time
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fjsdom%2Fw3c-hr-time
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/jsdom/w3c-hr-time
+
+--- PURL 89 ---
+📦 Package: pkg:npm/whatwg-encoding@1.0.5
+🧾 Description: Decode strings according to the WHATWG Encoding Standard
+   🗃 Registry: https://www.npmjs.com/package/whatwg-encoding
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📚 EOL Evidence (1):
+   • [npmjs] Stable version is deprecated in npm registry. Message: Use @exodus/bytes instead for a more spec-conformant and faster implementation UI: https://www.npmjs.com/package/whatwg-encoding/v/3.1.1 (confidence 0.90)
+      ↳ https://registry.npmjs.org/whatwg-encoding
+🔁 Successor: @exodus/bytes
+📊 GitHub Info: 📦 Archived (⭐ 27 stars)
+👥 Dependents: 81535
+🏆 Overall Score: 2.6/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 3.1.1 (2023-11-12) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/whatwg-encoding/v/3.1.1
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 3.1.1 (2023-11-12) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/whatwg-encoding/v/3.1.1
+📋 Requested Version: 1.0.5 (2018-09-30) [DEPRECATED]
+   ↳ Version Page: https://www.npmjs.com/package/whatwg-encoding/v/1.0.5
+📄 License: MIT (source: derived-from-version / depsdev-version-spdx)
+💻 Latest Commit: 2025-12-28
+🔗 Repository: https://github.com/jsdom/whatwg-encoding
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fjsdom%2Fwhatwg-encoding
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/jsdom/whatwg-encoding
+
+--- PURL 90 ---
+📦 Package: pkg:npm/xmlchars@2.2.0
+🧾 Description: Utilities for determining if characters belong to character classes defined by the XML specs.
+   🗃 Registry: https://www.npmjs.com/package/xmlchars
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 3 stars)
+👥 Dependents: 83708
+🏆 Overall Score: 3.0/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 2.2.0 (2019-09-06)
+   ↳ Version Page: https://www.npmjs.com/package/xmlchars/v/2.2.0
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 2.2.0 (2019-09-06)
+   ↳ Version Page: https://www.npmjs.com/package/xmlchars/v/2.2.0
+📋 Requested Version: 2.2.0 (2019-09-06)
+   ↳ Version Page: https://www.npmjs.com/package/xmlchars/v/2.2.0
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2021-11-07
+🔗 Repository: https://github.com/lddubeau/xmlchars
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Flddubeau%2Fxmlchars
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/lddubeau/xmlchars
+
+--- PURL 91 ---
+📦 Package: pkg:npm/xtend@4.0.2
+🧾 Description: extend like a boss
+   🗃 Registry: https://www.npmjs.com/package/xtend
+⚖️  Result: 🔴 EOL-Confirmed
+💭 Reason: Repository is archived or disabled on GitHub
+📊 GitHub Info: 📦 Archived (⭐ 306 stars)
+👥 Dependents: 328933
+🏆 Overall Score: 2.8/10
+  🔧 Maintained: 0.0/10
+📦 Latest Stable Release: 4.0.2 (2019-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/xtend/v/4.0.2
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 4.0.2 (2019-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/xtend/v/4.0.2
+📋 Requested Version: 4.0.2 (2019-07-08)
+   ↳ Version Page: https://www.npmjs.com/package/xtend/v/4.0.2
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+💻 Latest Commit: 2020-08-10
+🔗 Repository: https://github.com/raynos/xtend
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fraynos%2Fxtend
+🔗 Scorecard API: https://api.scorecard.dev/projects/github.com/raynos/xtend
+
+📊 Displayed 91 individual results
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+❌ PROCESSING ERRORS (10 failed)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+1. 🔗 URL: pkg:npm/archy@1.0.0
+   ❌ Error: GitHub API request failed: repository not found
+
+2. 🔗 URL: pkg:npm/binary@0.3.0
+   ❌ Error: GitHub API request failed: repository not found
+
+3. 🔗 URL: pkg:npm/buffers@0.1.1
+   ❌ Error: GitHub API request failed: repository not found
+
+4. 🔗 URL: pkg:npm/chainsaw@0.1.0
+   ❌ Error: GitHub API request failed: repository not found
+
+5. 🔗 URL: pkg:npm/commondir@1.0.1
+   ❌ Error: GitHub API request failed: repository not found
+
+6. 🔗 URL: pkg:npm/github-from-package@0.0.0
+   ❌ Error: GitHub API request failed: repository not found
+
+7. 🔗 URL: pkg:npm/mylib@0.0.0
+   ❌ Error: GitHub API request failed: repository not found
+
+8. 🔗 URL: pkg:npm/text-table@0.2.0
+   ❌ Error: GitHub API request failed: repository not found
+
+9. 🔗 URL: pkg:npm/wordwrap@0.0.3
+   ❌ Error: GitHub API request failed: repository not found
+
+10. 🔗 URL: pkg:npm/wordwrap@1.0.0
+   ❌ Error: GitHub API request failed: repository not found
+
+💡 Common causes:
+   • Repository not found or private
+   • Package not available in deps.dev
+   • Network connectivity issues
+   • GitHub API rate limits
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+================================================================================
+📈 BATCH PROCESSING SUMMARY
+================================================================================
+
+📊 OVERALL STATISTICS:
+--------------------------------------------------
+  Total Input: 1545 packages
+  Evaluated: 1540 packages
+  Not Found: 5 packages
+
+🔍 NOT FOUND in deps.dev: 5 packages
+   • pkg:npm/%40my-scope/package-a@0.0.0
+   • pkg:npm/%40my-scope/package-b@0.0.0
+   • pkg:npm/beep-boop@1.2.3
+   • pkg:npm/juice-shop@14.5.1
+   • pkg:npm/nw-pre-gyp-module-test@0.0.1
+
+🏷️  LABEL SUMMARY:
+--------------------------------------------------
+  🟢 Active: 630 packages (40.9%)
+  🔵 Legacy-Safe: 556 packages (36.1%)
+  ⚪ Stalled: 263 packages (17.1%)
+  🔴 EOL-Confirmed: 88 packages (5.7%)
+  🛑 EOL-Effective: 3 packages (0.2%)
+
+💭 REASONS BY LABEL:
+--------------------------------------------------
+
+  🟢 Active (630 packages):
+    • Recent stable package version published with recent human commits; maintenance score ≥ 3 (274 packages, 17.8%)
+    • Recent stable package version published with recent human commits (189 packages, 12.3%)
+    • Recent human commits but no recent package publishing; maintenance score ≥ 3 (88 packages, 5.7%)
+    • Recent stable package version published (75 packages, 4.9%)
+    • Recent human commits but no recent package publishing; maintenance score unavailable (Scorecard not found) (4 packages, 0.3%)
+
+  🔵 Legacy-Safe (556 packages):
+    • No known advisories; no human commits for > 2 yrs (551 packages, 35.8%)
+    • No known advisories; frozen for 1649 days with no security concerns (1 packages, 0.1%)
+    • No known advisories; frozen for 2550 days with no security concerns (1 packages, 0.1%)
+    • No known advisories; frozen for 2780 days with no security concerns (1 packages, 0.1%)
+    • No known advisories; frozen for 3709 days with no security concerns (1 packages, 0.1%)
+    • No known advisories; frozen for 934 days with no security concerns (1 packages, 0.1%)
+
+  ⚪ Stalled (263 packages):
+    • Low maintenance; last human commit within 2 yrs (157 packages, 10.2%)
+    • Recent human commits, no recent package publishing, maintenance score < 3 (99 packages, 6.4%)
+    • Scorecard Maintained(3) ≥ 3 but no recent activity; partial scorecard data (4 packages, 0.3%)
+    • Scorecard Maintained(4) ≥ 3 but no recent activity; partial scorecard data (1 packages, 0.1%)
+    • Scorecard data incomplete; latest version published 438 days ago (within 730-day threshold) (1 packages, 0.1%)
+    • Scorecard data incomplete; latest version published 674 days ago (within 730-day threshold) (1 packages, 0.1%)
+
+  🔴 EOL-Confirmed (88 packages):
+    • Repository is archived or disabled on GitHub (51 packages, 3.3%)
+    • Primary-source EOL (32 packages, 2.1%)
+    • Primary-source EOL; successor: the (2 packages, 0.1%)
+    • Primary-source EOL; successor: @eivifj/dot (1 packages, 0.1%)
+    • Primary-source EOL; successor: eslint-config-love (1 packages, 0.1%)
+    • Primary-source EOL; successor: v8.serialize (1 packages, 0.1%)
+
+  🛑 EOL-Effective (3 packages):
+    • Scorecard data incomplete; open advisories (1) and no human commits > 2 yrs (2 packages, 0.1%)
+    • Open advisories (1) on latest version, no new release in 1580 days; consumers cannot resolve vulnerabilities via package manager (1 packages, 0.1%)
