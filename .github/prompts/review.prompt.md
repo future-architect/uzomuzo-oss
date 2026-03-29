@@ -243,15 +243,16 @@ on the same PR), assign a category:
 
 | Pattern Category | Example Copilot Feedback |
 |-----------------|--------------------------|
-| Naming consistency | "Variable still uses old terminology" |
-| Comment/doc drift | "Comment says X but code does Y" |
-| Error handling | "Error not wrapped with context" |
-| Defensive coding | "Nil check missing", "Fallback needed" |
-| API consistency | "Public function missing doc comment" |
-| Security | "User input not validated" |
-| Dependency pinning | "Pin dependency version for reproducibility" |
+| naming-consistency | "Variable still uses old terminology" |
+| comment-doc-drift | "Comment says X but code does Y" |
+| error-handling | "Error not wrapped with context" |
+| defensive-coding | "Nil check missing", "Fallback needed" |
+| api-consistency | "Public function missing doc comment" |
+| security | "User input not validated" |
+| dependency-pinning | "Pin dependency version for reproducibility" |
 
-Read `.github/copilot-patterns.yml` and append each new FIX comment as an entry:
+Read `.github/copilot-patterns.yml` and append each new FIX comment as an entry.
+If `--dry-run` is active, perform this step **in-memory only** — do not write to disk:
 
 ```yaml
 patterns:
@@ -278,15 +279,15 @@ Each recurring pattern maps to an existing rule file:
 
 | Pattern Category | Target Rule File |
 |-----------------|------------------|
-| Naming consistency | `.github/instructions/coding-standards.instructions.md` |
-| Comment/doc drift | `.github/instructions/coding-standards.instructions.md` |
-| Error handling | `.github/instructions/error-handling.instructions.md` |
-| Defensive coding | `.github/instructions/coding-standards.instructions.md` |
-| API consistency | `.github/instructions/coding-standards.instructions.md` |
-| Security | `.github/instructions/security.instructions.md` |
-| Testing | `.github/instructions/testing-performance.instructions.md` |
-| DDD violations | `.github/instructions/ddd-architecture.instructions.md` |
-| Dependency pinning | `.github/instructions/coding-standards.instructions.md` |
+| naming-consistency | `.github/instructions/coding-standards.instructions.md` |
+| comment-doc-drift | `.github/instructions/coding-standards.instructions.md` |
+| error-handling | `.github/instructions/error-handling.instructions.md` |
+| defensive-coding | `.github/instructions/coding-standards.instructions.md` |
+| api-consistency | `.github/instructions/coding-standards.instructions.md` |
+| security | `.github/instructions/security.instructions.md` |
+| testing | `.github/instructions/testing-performance.instructions.md` |
+| ddd-violations | `.github/instructions/ddd-architecture.instructions.md` |
+| dependency-pinning | `.github/instructions/coding-standards.instructions.md` |
 
 If no existing file fits, add to `coding-standards.instructions.md` as a new section.
 
@@ -316,6 +317,8 @@ from `.github/copilot-patterns.yml`. This keeps the file small — it only holds
 patterns that have not yet reached the promotion threshold.
 
 #### Step 3.6: Save and Commit
+
+If `--dry-run` is active, skip this step entirely — do not write files or commit.
 
 Write the updated `.github/copilot-patterns.yml` (with new entries added and promoted
 entries removed).
