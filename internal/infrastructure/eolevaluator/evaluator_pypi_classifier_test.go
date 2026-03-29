@@ -16,7 +16,7 @@ func TestEvaluator_PyPI_InactiveClassifier(t *testing.T) {
 		if r.URL.Path == "/pypi/inactivepkg/json" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write([]byte(`{"info":{"name":"inactivepkg","summary":"","description":"","classifiers":["Development Status :: 7 - Inactive"]}}`))
+			_, _ = w.Write([]byte(`{"info":{"name":"inactivepkg","summary":"","description":"","classifiers":["Development Status :: 7 - Inactive"]}}`))
 			return
 		}
 		http.NotFound(w, r)

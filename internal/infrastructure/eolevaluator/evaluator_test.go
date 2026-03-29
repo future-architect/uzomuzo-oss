@@ -17,7 +17,7 @@ func TestEvaluator_NuGet_CriticalBugs(t *testing.T) {
 		if r.URL.Path == "/v3/registration5-semver2/test.package/index.json" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write([]byte(`{"items":[{"items":[{"catalogEntry":{"id":"Test.Package"},"deprecation":{"reasons":["CriticalBugs"],"message":"","alternatePackage":null}}]}]}`))
+			_, _ = w.Write([]byte(`{"items":[{"items":[{"catalogEntry":{"id":"Test.Package"},"deprecation":{"reasons":["CriticalBugs"],"message":"","alternatePackage":null}}]}]}`))
 			return
 		}
 		http.NotFound(w, r)
@@ -48,7 +48,7 @@ func TestEvaluator_NuGet_LegacyWithSuccessor(t *testing.T) {
 		if r.URL.Path == "/v3/registration5-semver2/old.package/index.json" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write([]byte(`{"items":[{"items":[{"catalogEntry":{"id":"Old.Package"},"deprecation":{"reasons":["Legacy"],"message":"","alternatePackage":{"id":"New.Package","range":"[1.0,)"}}}]}]}`))
+			_, _ = w.Write([]byte(`{"items":[{"items":[{"catalogEntry":{"id":"Old.Package"},"deprecation":{"reasons":["Legacy"],"message":"","alternatePackage":{"id":"New.Package","range":"[1.0,)"}}}]}]}`))
 			return
 		}
 		http.NotFound(w, r)
@@ -80,7 +80,7 @@ func TestEvaluator_Maven_Relocation(t *testing.T) {
 		if r.URL.Path == "/com/old/lib/1.0.0/lib-1.0.0.pom" {
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(200)
-			w.Write([]byte(`
+			_, _ = w.Write([]byte(`
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.old</groupId>

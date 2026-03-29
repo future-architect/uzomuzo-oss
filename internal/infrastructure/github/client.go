@@ -652,7 +652,7 @@ func (c *Client) executeGraphQLQuery(ctx context.Context, query string, variable
 	if err != nil {
 		return nil, common.NewFetchError("failed to execute GraphQL request", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusUnauthorized {
@@ -721,8 +721,8 @@ func (c *Client) normalizeRepoURL(ctx context.Context, raw string) string {
 	if err != nil {
 		return ""
 	}
-	defer resp.Body.Close()
-	io.CopyN(io.Discard, resp.Body, 1024)
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.CopyN(io.Discard, resp.Body, 1024) // best-effort drain before close
 	if resp.Request != nil && resp.Request.URL != nil {
 		return resp.Request.URL.String()
 	}
@@ -748,10 +748,10 @@ func (c *Client) FetchRepoLanguages(ctx context.Context, owner, repo string) (ma
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch languages: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		io.CopyN(io.Discard, resp.Body, 1024)
+		_, _ = io.CopyN(io.Discard, resp.Body, 1024) // best-effort drain before close
 		return nil, fmt.Errorf("GitHub languages API returned %d", resp.StatusCode)
 	}
 

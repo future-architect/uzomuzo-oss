@@ -16,15 +16,25 @@ import (
 // DDD Layer: Infrastructure (CSV export implementation)
 // Columns (extended set, updated):
 // original_purl,effective_purl,version_resolved,project_license_identifier,project_license_raw,project_license_source,project_license_is_spdx,project_license_is_zero,version_license_identifiers,version_license_raws,version_license_sources,version_license_count,version_licenses_all_non_spdx,version_licenses_any_composite_expr,project_vs_version_mismatch,licenses_all_missing_or_nonstandard,fallback_applied,derived_from_version,github_override_applied,license_resolution_scenario,error,registry_url,repository_url
-func ExportLicenses(analyses map[string]*domain.Analysis, filename string) error {
+func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err error) {
 	file, err := os.Create(filename)
 	if err != nil {
 		return common.NewIOError("failed to create license CSV file", err).WithContext("filename", filename)
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	w := csv.NewWriter(file)
-	defer w.Flush()
+	defer func() {
+		w.Flush()
+		if werr := w.Error(); werr != nil && err == nil {
+			err = common.NewIOError("failed to flush license CSV writer", werr).
+				WithContext("filename", filename)
+		}
+	}()
 
 	headers := []string{
 		"original_purl", "effective_purl", "version_resolved",

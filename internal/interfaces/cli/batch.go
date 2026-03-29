@@ -143,7 +143,11 @@ func categorizeFileLines(filename string, opts ProcessingOptions) (purls []strin
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open file '%s': %w", filename, err)
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
@@ -575,7 +579,7 @@ func displayDirectSummary(inputs *ProcessingInputs, results *ProcessingResults, 
 
 // displayBatchFileSummary prints a summary header for file-based batch mode.
 func displayBatchFileSummary(inputs *ProcessingInputs, results *ProcessingResults, opts ProcessingOptions) {
-	fmt.Printf("\n" + strings.Repeat("=", separatorLength) + "\n")
+	fmt.Print("\n" + strings.Repeat("=", separatorLength) + "\n")
 	if len(inputs.SupportedPURLs) > 0 && len(inputs.ValidGitHubURLs) > 0 {
 		fmt.Printf("📊 MIXED FILE BATCH ANALYSIS RESULTS\n")
 		fmt.Printf("📝 PURLs: %d | GitHub URLs: %d | Total: %d\n", len(inputs.SupportedPURLs), len(inputs.ValidGitHubURLs), len(results.AllAnalyses))
@@ -584,7 +588,7 @@ func displayBatchFileSummary(inputs *ProcessingInputs, results *ProcessingResult
 	} else if len(inputs.ValidGitHubURLs) > 0 {
 		fmt.Printf("📊 GITHUB URL BATCH ANALYSIS RESULTS\n")
 	}
-	fmt.Printf(strings.Repeat("=", separatorLength) + "\n")
+	fmt.Print(strings.Repeat("=", separatorLength) + "\n")
 	if opts.ShouldShowPerPURLDetails() {
 		displayBatchAnalysesFull(results.AllAnalyses, opts)
 	}
@@ -955,10 +959,7 @@ func printLicenses(a *analysispkg.Analysis) {
 	if proj.IsZero() && len(reqs) == 0 {
 		return
 	}
-	collapse := false
-	if proj.Identifier != "" && len(reqs) == 1 && strings.EqualFold(proj.Identifier, reqs[0].Identifier) {
-		collapse = true
-	}
+	collapse := proj.Identifier != "" && len(reqs) == 1 && strings.EqualFold(proj.Identifier, reqs[0].Identifier)
 	if collapse {
 		if proj.Source != "" {
 			fmt.Printf("📄 License: %s (source: %s / %s)\n", proj.Identifier, proj.Source, reqs[0].Source)
@@ -1038,9 +1039,9 @@ func printRepositoryLinks(a *analysispkg.Analysis) {
 
 // displayBatchAnalysesSummary displays summary statistics for batch processing results from domain.Analysis
 func displayBatchAnalysesSummary(analyses map[string]*analysispkg.Analysis) {
-	fmt.Printf("\n" + strings.Repeat("=", separatorLength) + "\n")
+	fmt.Print("\n" + strings.Repeat("=", separatorLength) + "\n")
 	fmt.Printf("📈 BATCH PROCESSING SUMMARY\n")
-	fmt.Printf(strings.Repeat("=", separatorLength) + "\n")
+	fmt.Print(strings.Repeat("=", separatorLength) + "\n")
 
 	// Count by labels and collect label-reason combinations
 	labelCounts := make(map[string]int)
@@ -1083,7 +1084,7 @@ func displayBatchAnalysesSummary(analyses map[string]*analysispkg.Analysis) {
 
 	// 1. Overall statistics first — gives the user the big picture
 	fmt.Printf("\n📊 OVERALL STATISTICS:\n")
-	fmt.Printf(strings.Repeat("-", shortSeparatorLength) + "\n")
+	fmt.Print(strings.Repeat("-", shortSeparatorLength) + "\n")
 	fmt.Printf("  Total Input: %d packages\n", successfulCount+notFoundCount)
 	fmt.Printf("  Evaluated: %d packages\n", successfulCount)
 	if notFoundCount > 0 {
@@ -1121,7 +1122,7 @@ func displayBatchAnalysesSummary(analyses map[string]*analysispkg.Analysis) {
 
 	// 3. Label summary
 	fmt.Printf("\n🏷️  LABEL SUMMARY:\n")
-	fmt.Printf(strings.Repeat("-", shortSeparatorLength) + "\n")
+	fmt.Print(strings.Repeat("-", shortSeparatorLength) + "\n")
 	for _, lc := range sortedLabels {
 		percentage := float64(lc.count) / float64(successfulCount) * 100
 		fmt.Printf("  %s: %d packages (%.1f%%)\n", common.ColorizeResult(lc.label), lc.count, percentage)
@@ -1129,7 +1130,7 @@ func displayBatchAnalysesSummary(analyses map[string]*analysispkg.Analysis) {
 
 	// 4. Reasons grouped by label
 	fmt.Printf("\n💭 REASONS BY LABEL:\n")
-	fmt.Printf(strings.Repeat("-", shortSeparatorLength) + "\n")
+	fmt.Print(strings.Repeat("-", shortSeparatorLength) + "\n")
 
 	for _, labelInfo := range sortedLabels {
 		label := labelInfo.label
@@ -1189,9 +1190,9 @@ func displayBatchAnalysesSummary(analyses map[string]*analysispkg.Analysis) {
 		return readmeHits[i].pkg < readmeHits[j].pkg
 	})
 	if len(readmeHits) > 0 {
-		fmt.Printf("\n" + strings.Repeat("-", separatorLength) + "\n")
+		fmt.Print("\n" + strings.Repeat("-", separatorLength) + "\n")
 		fmt.Printf("🔎 README-BASED EOL CANDIDATES (%d)\n", len(readmeHits))
-		fmt.Printf(strings.Repeat("-", separatorLength) + "\n")
+		fmt.Print(strings.Repeat("-", separatorLength) + "\n")
 		for i, h := range readmeHits {
 			if h.phrase != "" {
 				fmt.Printf("%d. %s\n   ↳ %s\n   phrase: \"%s\"\n", i+1, h.pkg, h.url, h.phrase)
@@ -1240,9 +1241,9 @@ func displayBatchErrors(analyses map[string]*analysispkg.Analysis) {
 		return
 	}
 
-	fmt.Printf("\n" + strings.Repeat("!", separatorLength) + "\n")
+	fmt.Print("\n" + strings.Repeat("!", separatorLength) + "\n")
 	fmt.Printf("❌ PROCESSING ERRORS (%d failed)\n", totalErrors)
-	fmt.Printf(strings.Repeat("!", separatorLength) + "\n")
+	fmt.Print(strings.Repeat("!", separatorLength) + "\n")
 
 	// Show auth errors as a single summary instead of listing each one
 	if authCount > 0 {
@@ -1262,16 +1263,7 @@ func displayBatchErrors(analyses map[string]*analysispkg.Analysis) {
 		fmt.Printf("   • Network connectivity issues\n")
 		fmt.Printf("   • GitHub API rate limits\n")
 	}
-	fmt.Printf(strings.Repeat("!", separatorLength) + "\n")
-}
-
-// ecosystemFromPURL extracts the ecosystem from a PURL string (e.g. "pkg:npm/foo" -> "npm").
-func ecosystemFromPURL(purl string) string {
-	s := strings.TrimPrefix(purl, "pkg:")
-	if idx := strings.Index(s, "/"); idx > 0 {
-		return s[:idx]
-	}
-	return ""
+	fmt.Print(strings.Repeat("!", separatorLength) + "\n")
 }
 
 // purlHasVersion returns true if the PURL string contains a version component (i.e., has '@').
@@ -1309,20 +1301,6 @@ func pickVersionedPURL(a *analysispkg.Analysis) string {
 				return versioned
 			}
 		}
-	}
-	return ""
-}
-
-// nameFromPURL extracts the unscoped package name from a versionless PURL (e.g. "pkg:gem/rails" -> "rails").
-func nameFromPURL(purl string) string {
-	s := strings.TrimPrefix(purl, "pkg:")
-	if idx := strings.Index(s, "/"); idx > 0 {
-		name := s[idx+1:]
-		// Remove version if present
-		if vi := strings.Index(name, "@"); vi > 0 {
-			name = name[:vi]
-		}
-		return name
 	}
 	return ""
 }

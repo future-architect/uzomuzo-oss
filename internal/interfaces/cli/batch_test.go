@@ -202,9 +202,13 @@ func TestDisplayBatchAnalysesFull_Licenses_Same(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pipe error: %v", err)
 	}
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		_ = r.Close()
+	})
 	os.Stdout = w
 	displayBatchAnalysesFull(analyses, ProcessingOptions{})
-	w.Close()
+	_ = w.Close() // best-effort cleanup
 	os.Stdout = oldStdout
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, r); err != nil {
@@ -228,9 +232,13 @@ func TestDisplayBatchAnalysesFull_Licenses_Different(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pipe error: %v", err)
 	}
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		_ = r.Close()
+	})
 	os.Stdout = w
 	displayBatchAnalysesFull(analyses, ProcessingOptions{})
-	w.Close()
+	_ = w.Close() // best-effort cleanup
 	os.Stdout = oldStdout
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, r); err != nil {

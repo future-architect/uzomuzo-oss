@@ -122,7 +122,7 @@ func (c *Client) fetchPackage(ctx context.Context, vendor, name string) (*packag
 	if err != nil {
 		return nil, 0, fmt.Errorf("http request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		// Cache negative result to avoid repeated lookups

@@ -232,9 +232,9 @@ func (c *Client) fetchPOM(ctx context.Context, groupID, artifactID, version stri
 	if err != nil {
 		return nil, false, fmt.Errorf("maven http failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		io.CopyN(io.Discard, resp.Body, 1024)
+		_, _ = io.CopyN(io.Discard, resp.Body, 1024) // best-effort drain before close
 		if resp.StatusCode == http.StatusNotFound {
 			slog.Debug("maven: http not found", "phase", "fetch_pom", "status", resp.StatusCode, "url", pomURL)
 			return nil, false, nil
@@ -400,7 +400,7 @@ func (c *Client) scrapeFirstGitHubFromHTML(ctx context.Context, pageURL string) 
 	if err != nil {
 		return ""
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return ""
 	}
@@ -579,10 +579,10 @@ func (c *Client) SearchByArtifactID(ctx context.Context, artifactID string) (gro
 	if err != nil {
 		return "", false, fmt.Errorf("maven search http failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		io.CopyN(io.Discard, resp.Body, 1024)
+		_, _ = io.CopyN(io.Discard, resp.Body, 1024) // best-effort drain before close
 		return "", false, fmt.Errorf("maven search http status %d", resp.StatusCode)
 	}
 

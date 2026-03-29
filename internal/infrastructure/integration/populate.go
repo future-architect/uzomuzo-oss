@@ -209,7 +209,7 @@ func promoteProjectLicenseFromVersion(a *domain.Analysis) {
 	if len(a.RequestedVersionLicenses) != 1 {
 		return
 	}
-	if !(a.ProjectLicense.IsZero() || a.ProjectLicense.IsNonStandard()) {
+	if !a.ProjectLicense.IsZero() && !a.ProjectLicense.IsNonStandard() {
 		return
 	}
 	raw := a.RequestedVersionLicenses[0].Identifier

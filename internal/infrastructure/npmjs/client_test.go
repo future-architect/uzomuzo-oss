@@ -10,12 +10,12 @@ import (
 func TestGetDeprecation_Deprecated(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"versions": {
 				"1.2.3": { "deprecated": "Use @scope/newpkg instead" }
 			},
 			"time": {}
-		}`))
+		}`)) // test helper
 	}))
 	defer server.Close()
 	c := NewClient()
@@ -35,12 +35,12 @@ func TestGetDeprecation_Deprecated(t *testing.T) {
 func TestGetDeprecation_SelfSuccessorSuppressed(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"versions": {
 				"1.0.0": { "deprecated": "Use @scope/oldpkg instead" }
 			},
 			"time": {}
-		}`))
+		}`)) // test helper
 	}))
 	defer server.Close()
 	c := NewClient()
@@ -60,12 +60,12 @@ func TestGetDeprecation_SelfSuccessorSuppressed(t *testing.T) {
 func TestGetDeprecation_Unpublished(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"versions": {
 				"2.0.0": {}
 			},
 			"time": { "unpublished": { "name": "oldpkg" } }
-		}`))
+		}`)) // test helper
 	}))
 	defer server.Close()
 	c := NewClient()
@@ -82,12 +82,12 @@ func TestGetDeprecation_Unpublished(t *testing.T) {
 func TestGetDeprecation_NotDeprecated(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"versions": {
 				"3.0.0": {}
 			},
 			"time": {}
-		}`))
+		}`)) // test helper
 	}))
 	defer server.Close()
 	c := NewClient()

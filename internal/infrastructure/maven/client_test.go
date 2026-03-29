@@ -121,7 +121,7 @@ func TestSearchByArtifactID(t *testing.T) {
 					return
 				}
 				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprint(w, tc.response)
+				_, _ = fmt.Fprint(w, tc.response) // test helper
 			}))
 			defer srv.Close()
 
