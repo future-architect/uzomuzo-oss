@@ -19,7 +19,8 @@ jobs:
     if: >-
       github.event.pull_request.user.login == 'kotakanbe'
       && (
-        (github.event_name == 'pull_request_review')
+        (github.event_name == 'pull_request_review'
+         && github.event.review.user.login == 'Copilot')
         || (github.event_name == 'pull_request'
             && github.event.label.name == 'copilot-review'
             && github.event.sender.login == 'kotakanbe')
@@ -31,16 +32,6 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - name: Debug - dump event payload
-        run: |
-          echo "event_name: ${{ github.event_name }}"
-          echo "review.user.login: ${{ github.event.review.user.login }}"
-          echo "review.user.type: ${{ github.event.review.user.type }}"
-          echo "review.user.id: ${{ github.event.review.user.id }}"
-          echo "review.state: ${{ github.event.review.state }}"
-          echo "pr.user.login: ${{ github.event.pull_request.user.login }}"
-          echo "sender.login: ${{ github.event.sender.login }}"
-          echo "actor: ${{ github.actor }}"
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.ref }}
