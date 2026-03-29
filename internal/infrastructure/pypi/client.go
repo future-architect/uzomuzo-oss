@@ -134,7 +134,7 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 	if err != nil {
 		return nil, false, fmt.Errorf("pypi http failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, false, nil
 	}

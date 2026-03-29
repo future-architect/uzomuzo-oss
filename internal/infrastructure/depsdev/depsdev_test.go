@@ -301,7 +301,7 @@ func TestNuGetResolverInChain(t *testing.T) {
 		case "/v3/registration5-semver2/serilog/index.json":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write([]byte(`{"items":[{"items":[{"catalogEntry":{"repositoryUrl":"https://github.com/serilog/serilog"}}]}]}`))
+			_, _ = w.Write([]byte(`{"items":[{"items":[{"catalogEntry":{"repositoryUrl":"https://github.com/serilog/serilog"}}]}]}`)) // test helper
 		default:
 			http.NotFound(w, r)
 		}
@@ -333,7 +333,7 @@ func TestTryMavenSearchFallback(t *testing.T) {
 		// Match corrected PURL by checking for the resolved groupId in the request
 		if strings.Contains(r.RequestURI, "javax.annotation") {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"version":{"versionKey":{"system":"MAVEN","name":"javax.annotation:jsr250-api","version":"1.0"},"purl":"pkg:maven/javax.annotation/jsr250-api@1.0","links":[]}}`))
+			_, _ = w.Write([]byte(`{"version":{"versionKey":{"system":"MAVEN","name":"javax.annotation:jsr250-api","version":"1.0"},"purl":"pkg:maven/javax.annotation/jsr250-api@1.0","links":[]}}`)) // test helper
 			return
 		}
 		// Original (missing namespace) returns 404
@@ -343,7 +343,7 @@ func TestTryMavenSearchFallback(t *testing.T) {
 
 	searchSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"response":{"numFound":1,"docs":[{"g":"javax.annotation","a":"jsr250-api"}]}}`))
+		_, _ = w.Write([]byte(`{"response":{"numFound":1,"docs":[{"g":"javax.annotation","a":"jsr250-api"}]}}`)) // test helper
 	}))
 	defer searchSrv.Close()
 
@@ -372,7 +372,7 @@ func TestTryMavenSearchFallback_NamespaceEqualsName(t *testing.T) {
 	depsdevSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.RequestURI, "org.springframework") {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"version":{"versionKey":{"system":"MAVEN","name":"org.springframework:spring-aop","version":"6.0.0"},"purl":"pkg:maven/org.springframework/spring-aop@6.0.0","links":[]}}`))
+			_, _ = w.Write([]byte(`{"version":{"versionKey":{"system":"MAVEN","name":"org.springframework:spring-aop","version":"6.0.0"},"purl":"pkg:maven/org.springframework/spring-aop@6.0.0","links":[]}}`))
 			return
 		}
 		http.NotFound(w, r)
@@ -381,7 +381,7 @@ func TestTryMavenSearchFallback_NamespaceEqualsName(t *testing.T) {
 
 	searchSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"response":{"numFound":1,"docs":[{"g":"org.springframework","a":"spring-aop"}]}}`))
+		_, _ = w.Write([]byte(`{"response":{"numFound":1,"docs":[{"g":"org.springframework","a":"spring-aop"}]}}`))
 	}))
 	defer searchSrv.Close()
 
@@ -407,7 +407,7 @@ func TestTryMavenSearchFallback_VersionInName(t *testing.T) {
 	depsdevSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.RequestURI, "io.opentelemetry") {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"version":{"versionKey":{"system":"MAVEN","name":"io.opentelemetry:opentelemetry-sdk-extension-autoconfigure","version":"1.28.0"},"purl":"pkg:maven/io.opentelemetry/opentelemetry-sdk-extension-autoconfigure@1.28.0","links":[]}}`))
+			_, _ = w.Write([]byte(`{"version":{"versionKey":{"system":"MAVEN","name":"io.opentelemetry:opentelemetry-sdk-extension-autoconfigure","version":"1.28.0"},"purl":"pkg:maven/io.opentelemetry/opentelemetry-sdk-extension-autoconfigure@1.28.0","links":[]}}`))
 			return
 		}
 		http.NotFound(w, r)
@@ -416,7 +416,7 @@ func TestTryMavenSearchFallback_VersionInName(t *testing.T) {
 
 	searchSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"response":{"numFound":1,"docs":[{"g":"io.opentelemetry","a":"opentelemetry-sdk-extension-autoconfigure"}]}}`))
+		_, _ = w.Write([]byte(`{"response":{"numFound":1,"docs":[{"g":"io.opentelemetry","a":"opentelemetry-sdk-extension-autoconfigure"}]}}`))
 	}))
 	defer searchSrv.Close()
 
@@ -466,7 +466,7 @@ func TestMavenResolverInChain(t *testing.T) {
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(200)
 			// Minimal POM body with scm.url
-			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 			<project xmlns="http://maven.apache.org/POM/4.0.0">
 				<modelVersion>4.0.0</modelVersion>
 				<groupId>org.ognl</groupId>

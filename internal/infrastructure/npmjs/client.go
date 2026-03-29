@@ -94,7 +94,7 @@ func (c *Client) GetRepoURL(ctx context.Context, namespace, name, version string
 	if err != nil {
 		return "", fmt.Errorf("npm http failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return "", nil
@@ -263,7 +263,7 @@ func (c *Client) GetDeprecation(ctx context.Context, namespace, name, version st
 	if err != nil {
 		return nil, false, fmt.Errorf("npm http failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, false, nil
 	}

@@ -12,41 +12,6 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
 )
 
-// fakeGoProxyClient embeds goproxy.Client behavior we need via an interface-like stub.
-type fakeGoProxyClient struct {
-	latest map[string]string // module -> version
-}
-
-func (f *fakeGoProxyClient) LatestVersion(ctx context.Context, module string) (string, string, error) {
-	if v, ok := f.latest[module]; ok {
-		return v, "proxy://latest/" + module, nil
-	}
-	return "", "proxy://latest/" + module, context.DeadlineExceeded
-}
-
-// Only methods used by NormalizePathToModuleRoot indirectly (ResolveModuleRoot) need stubbing.
-func (f *fakeGoProxyClient) GoMod(ctx context.Context, module, version string) ([]byte, string, error) {
-	return nil, "", context.DeadlineExceeded
-}
-func (f *fakeGoProxyClient) ResolveModuleRoot(ctx context.Context, path string) (string, string, error) {
-	// mimic real logic: check decreasing prefixes
-	p := strings.TrimSuffix(path, "/")
-	for {
-		if p == "" || p == "/" {
-			break
-		}
-		if v, ok := f.latest[p]; ok {
-			return p, v, nil
-		}
-		i := strings.LastIndexByte(p, '/')
-		if i < 0 {
-			break
-		}
-		p = p[:i]
-	}
-	return "", "", context.DeadlineExceeded
-}
-
 func TestNormalizePathToModuleRoot(t *testing.T) {
 	ctx := context.Background()
 	mod, latest, ok := NormalizePathToModuleRoot(ctx, nil, "")
@@ -54,7 +19,7 @@ func TestNormalizePathToModuleRoot(t *testing.T) {
 		t.Fatalf("expected empty on nil + blank input")
 	}
 
-	mod, latest, ok = NormalizePathToModuleRoot(ctx, nil, "github.com/org/repo")
+	_, _, ok = NormalizePathToModuleRoot(ctx, nil, "github.com/org/repo")
 	if ok {
 		t.Fatalf("nil client should fail")
 	}
@@ -71,7 +36,7 @@ func TestNormalizePathToModuleRoot_WithRealClientTraversal(t *testing.T) {
 			// success only for github.com/org/repo and nested sub paths should fall back
 			if path == "github.com/org/repo" {
 				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(`{"Version":"v1.2.3"}`))
+				_, _ = w.Write([]byte(`{"Version":"v1.2.3"}`)) // test helper
 				return
 			}
 			w.WriteHeader(404)
@@ -100,7 +65,7 @@ func TestNormalizePURLToModuleRoot(t *testing.T) {
 			// Only root path returns success
 			if strings.Contains(r.URL.Path, "github.com%2Forg%2Frepo") && !strings.Contains(r.URL.Path, "sub") {
 				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(`{"Version":"v9.9.9"}`))
+				_, _ = w.Write([]byte(`{"Version":"v9.9.9"}`)) // test helper
 				return
 			}
 			w.WriteHeader(404)
@@ -138,7 +103,7 @@ func TestNormalizePURLToModuleRoot_GitHubFallback(t *testing.T) {
 	modContent := "module github.com/other/repo\nrequire (\n\tX Y\n)"
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/go.mod") {
-			w.Write([]byte(modContent))
+			_, _ = w.Write([]byte(modContent)) // test helper
 			return
 		}
 		w.WriteHeader(404)

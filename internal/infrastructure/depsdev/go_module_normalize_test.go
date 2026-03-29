@@ -54,8 +54,7 @@ func TestNormalizeGoModuleForVersions(t *testing.T) {
 			// adapt fake to *goproxy.Client? we only need ResolveModuleRoot; interface satisfied
 			// but normalizeGoModuleForVersions expects *goproxy.Client; use type conversion via embedding not possible here.
 			// Instead we pass nil for proxy-driven cases except those where we want success; for proxy success create a wrapper? Simplify: when proxy != nil and proxy.module != "", treat as success by manual override.
-			var norm GoModuleNormalization
-			norm = normalizeGoModuleForVersions(ctx, nil, pr)
+			norm := normalizeGoModuleForVersions(ctx, nil, pr)
 			if norm.Strategy != tc.wantStrat {
 				t.Fatalf("strategy: got %s want %s", norm.Strategy, tc.wantStrat)
 			}

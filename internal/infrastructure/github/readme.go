@@ -49,15 +49,15 @@ func FetchREADME(ctx context.Context, owner, repo, defaultBranch string) (string
 		}
 		if resp.StatusCode == http.StatusOK {
 			body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // cap 1MB
-			resp.Body.Close()
+			_ = resp.Body.Close() // best-effort cleanup
 			cancel()
 			if len(body) > 0 {
 				return string(body), rawURL, nil
 			}
 			continue
 		}
-		io.CopyN(io.Discard, resp.Body, 1024) // drain small amount
-		resp.Body.Close()
+		_, _ = io.CopyN(io.Discard, resp.Body, 1024) // best-effort drain before close
+		_ = resp.Body.Close() // best-effort cleanup
 		cancel()
 	}
 	return "", "", common.NewResourceNotFoundError("readme not found on default branch")

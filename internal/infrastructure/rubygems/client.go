@@ -107,7 +107,7 @@ func (c *Client) fetchRepoURLV1(ctx context.Context, name string) (string, error
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return "", nil
 	}
@@ -139,7 +139,7 @@ func (c *Client) fetchRepoURLV2(ctx context.Context, name, version string) (stri
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return "", nil
 	}
@@ -192,7 +192,7 @@ func (c *Client) GetReverseDependencyCount(ctx context.Context, name string) (in
 	if err != nil {
 		return 0, fmt.Errorf("reverse_dependencies HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return 0, nil

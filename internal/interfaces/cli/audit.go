@@ -141,18 +141,18 @@ func computeSummary(entries []domainaudit.AuditEntry) jsonSummary {
 func renderTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	// Header uses "LIFECYCLE" intentionally for backward compatibility with existing tooling/scripts.
-	fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL")
+	_, _ = fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL")
 
 	for i := range entries {
 		maintenance, eol := entryMaintenanceEOL(&entries[i], "—")
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", entries[i].Verdict, entries[i].PURL, maintenance, eol)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", entries[i].Verdict, entries[i].PURL, maintenance, eol)
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("failed to flush table output: %w", err)
 	}
 
 	s := computeSummary(entries)
-	fmt.Fprintf(w, "\nSummary: %d dependencies | %d ok | %d caution | %d replace | %d review\n",
+	_, _ = fmt.Fprintf(w, "\nSummary: %d dependencies | %d ok | %d caution | %d replace | %d review\n",
 		s.Total, s.OK, s.Caution, s.Replace, s.Review)
 	return nil
 }

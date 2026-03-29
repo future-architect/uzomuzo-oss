@@ -187,12 +187,12 @@ func (c *Client) GetDeprecation(ctx context.Context, packageID string) (*Depreca
 		if resp.StatusCode == http.StatusNotFound {
 			slog.Debug("nuget: registration index not found", "id", id, "endpoint", endpoint)
 			last404 = true
-			resp.Body.Close()
+			_ = resp.Body.Close() // best-effort cleanup
 			continue
 		}
 		if resp.StatusCode != http.StatusOK {
 			slog.Debug("nuget: non-OK status from registration index", "id", id, "status", resp.StatusCode, "endpoint", endpoint)
-			resp.Body.Close()
+			_ = resp.Body.Close() // best-effort cleanup
 			// Non-OK other than 404: treat as error for now
 			return nil, false, fmt.Errorf("NuGet HTTP %d", resp.StatusCode)
 		}
@@ -203,11 +203,11 @@ func (c *Client) GetDeprecation(ctx context.Context, packageID string) (*Depreca
 			// Do not abort on decode errors (e.g., slow network/timeouts while reading body).
 			// Try next candidate (gz/non-gz) or fallback scraper.
 			slog.Debug("nuget: decode failed for registration index", "id", id, "error", err)
-			resp.Body.Close()
+			_ = resp.Body.Close() // best-effort cleanup
 			decodeErrors++
 			continue
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close() // best-effort cleanup
 
 		// Iterate pages; items may be embedded or referenced.
 		for _, page := range reg.Items {
@@ -235,17 +235,17 @@ func (c *Client) GetDeprecation(ctx context.Context, packageID string) (*Depreca
 				return nil, false, fmt.Errorf("NuGet HTTP (page) error: %w", err)
 			}
 			if piResp.StatusCode != http.StatusOK {
-				piResp.Body.Close()
+				_ = piResp.Body.Close() // best-effort cleanup
 				slog.Debug("nuget: non-OK page status", "id", id, "status", piResp.StatusCode, "page", page.ID)
 				continue
 			}
 			var leaf registrationPage
 			if err := json.NewDecoder(piResp.Body).Decode(&leaf); err != nil {
-				piResp.Body.Close()
+				_ = piResp.Body.Close() // best-effort cleanup
 				slog.Debug("nuget: page decode failed", "id", id, "error", err)
 				return nil, false, fmt.Errorf("NuGet page decode failed: %w", err)
 			}
-			piResp.Body.Close()
+			_ = piResp.Body.Close() // best-effort cleanup
 			if info, ok := extractFirstDeprecation(leaf.Items); ok {
 				slog.Debug("nuget: deprecation found (page)", "id", id, "reasons", info.Reasons, "alt", info.AlternatePackageID)
 				c.remember(id, info)
@@ -391,19 +391,19 @@ func (c *Client) GetRepoURL(ctx context.Context, packageID string, _ string) (st
 			return "", fmt.Errorf("NuGet HTTP error: %w", err)
 		}
 		if resp.StatusCode == http.StatusNotFound {
-			resp.Body.Close()
+			_ = resp.Body.Close() // best-effort cleanup
 			continue
 		}
 		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
+			_ = resp.Body.Close() // best-effort cleanup
 			return "", fmt.Errorf("NuGet HTTP %d", resp.StatusCode)
 		}
 		var reg registrationIndex
 		if err := json.NewDecoder(resp.Body).Decode(&reg); err != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close() // best-effort cleanup
 			return "", fmt.Errorf("NuGet decode failed: %w", err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close() // best-effort cleanup
 
 		// 1) Inspect embedded leaves for catalogEntry object
 		for _, page := range reg.Items {
@@ -430,15 +430,15 @@ func (c *Client) GetRepoURL(ctx context.Context, packageID string, _ string) (st
 				return "", fmt.Errorf("NuGet HTTP (page) error: %w", err)
 			}
 			if piResp.StatusCode != http.StatusOK {
-				piResp.Body.Close()
+				_ = piResp.Body.Close() // best-effort cleanup
 				continue
 			}
 			var leaf registrationPage
 			if err := json.NewDecoder(piResp.Body).Decode(&leaf); err != nil {
-				piResp.Body.Close()
+				_ = piResp.Body.Close() // best-effort cleanup
 				return "", fmt.Errorf("NuGet page decode failed: %w", err)
 			}
-			piResp.Body.Close()
+			_ = piResp.Body.Close() // best-effort cleanup
 			if repo := extractRepoURLFromLeaves(leaf.Items); repo != "" {
 				if resolved := c.resolveRepoURLHeuristics(ctx, repo); resolved != "" {
 					return resolved, nil
@@ -571,7 +571,7 @@ func (c *Client) discoverRegistrationBases(ctx context.Context) []string {
 	if err != nil {
 		return nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil
 	}
@@ -682,9 +682,9 @@ func (c *Client) followRedirect(ctx context.Context, startURL string) string {
 	if err != nil {
 		return ""
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	// Drain small body to allow re-use
-	io.CopyN(io.Discard, resp.Body, 1024)
+	_, _ = io.CopyN(io.Discard, resp.Body, 1024) // best-effort drain before close
 	if resp.Request != nil && resp.Request.URL != nil {
 		return resp.Request.URL.String()
 	}
@@ -702,7 +702,7 @@ func (c *Client) scrapeFirstGitHubFromHTML(ctx context.Context, pageURL string) 
 	if err != nil {
 		return ""
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return ""
 	}
@@ -749,7 +749,7 @@ func (c *Client) scrapeDeprecationFromNuGetHTML(ctx context.Context, id string) 
 	if err != nil {
 		return nil, false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return nil, false
 	}

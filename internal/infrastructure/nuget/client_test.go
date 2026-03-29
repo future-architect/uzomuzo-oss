@@ -14,14 +14,14 @@ func TestGetDeprecation_FoundEmbedded(t *testing.T) {
 		case "/v3/registration5-semver2/test.package/index.json":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write([]byte(`{
+			_, _ = w.Write([]byte(`{
                 "items": [
                     {"items": [
                         {"catalogEntry": {"id": "Test.Package"},
                          "deprecation": {"reasons": ["Legacy"], "message": "Use successor", "alternatePackage": {"id": "New.Package", "range": "[1.0,)"}}}
                     ]}
                 ]
-            }`))
+            }`)) // test helper
 		default:
 			http.NotFound(w, r)
 		}
@@ -72,7 +72,7 @@ func TestGetDeprecation_CaseInsensitiveID(t *testing.T) {
 		case "/v3/registration5-semver2/microsoft.azure.documentdb/index.json":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write([]byte(`{
+			_, _ = w.Write([]byte(`{
 				"items": [
 					{"items": [
 						{"catalogEntry": {"id": "Microsoft.Azure.DocumentDB"},
@@ -133,7 +133,7 @@ func TestGetDeprecation_NoCacheNotFound_AllowsFreshLookup(t *testing.T) {
 	mux.HandleFunc("/v3/registration5-semver2/samplepkg/index.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		w.Write([]byte(`{"items":[{"items": [{"catalogEntry":{"id":"SamplePkg"}, "deprecation": {"reasons":["Legacy"], "message":"msg"}}]}]}`))
+		_, _ = w.Write([]byte(`{"items":[{"items": [{"catalogEntry":{"id":"SamplePkg"}, "deprecation": {"reasons":["Legacy"], "message":"msg"}}]}]}`)) // test helper
 	})
 	// Replace server handler in place (httptest.Server supports changing Config.Handler)
 	srv.Config.Handler = mux
@@ -158,7 +158,7 @@ func TestGetDeprecation_RetryOn5xxThenSuccess(t *testing.T) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write([]byte(`{"items":[{"items": [{"catalogEntry":{"id":"RetryPkg"}, "deprecation": {"reasons":["Other"], "message":"msg"}}]}]}`))
+			_, _ = w.Write([]byte(`{"items":[{"items": [{"catalogEntry":{"id":"RetryPkg"}, "deprecation": {"reasons":["Other"], "message":"msg"}}]}]}`)) // test helper
 			return
 		}
 		http.NotFound(w, r)
@@ -183,13 +183,13 @@ func TestGetRepoURL_EmbeddedRepositoryObject(t *testing.T) {
 		case "/v3/registration5-semver2/sample/index.json":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write([]byte(`{
+			_, _ = w.Write([]byte(`{
 				"items": [
 					{"items": [
 						{"catalogEntry": {"id": "Sample", "repository": {"type":"git", "url": "https://github.com/Owner/Repo"}}}
 					]}
 				]
-			}`))
+			}`)) // test helper
 		default:
 			http.NotFound(w, r)
 		}
@@ -213,7 +213,7 @@ func TestGetRepoURL_EmbeddedRepositoryStringAndProjectURL(t *testing.T) {
 		case "/v3/registration5-semver2/sample2/index.json":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write([]byte(`{"items":[{"items":[{"catalogEntry":{"id":"Sample2","repository":"git+https://github.com/Org/Repo.git","projectUrl":"https://example.com"}}]}]}`))
+			_, _ = w.Write([]byte(`{"items":[{"items":[{"catalogEntry":{"id":"Sample2","repository":"git+https://github.com/Org/Repo.git","projectUrl":"https://example.com"}}]}]}`)) // test helper
 		default:
 			http.NotFound(w, r)
 		}
@@ -237,12 +237,12 @@ func TestGetRepoURL_PageFetch_ProjectURLFallback(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
 		// Provide a full URL for the registration page ID as NuGet does (including scheme)
-		w.Write([]byte(`{"items":[{"@id":"http://` + r.Host + `/page1"}]}`))
+		_, _ = w.Write([]byte(`{"items":[{"@id":"http://` + r.Host + `/page1"}]}`)) // test helper
 	})
 	mux.HandleFunc("/page1", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		w.Write([]byte(`{"items":[{"catalogEntry":{"projectUrl":"https://github.com/acme/repo"}}]}`))
+		_, _ = w.Write([]byte(`{"items":[{"catalogEntry":{"projectUrl":"https://github.com/acme/repo"}}]}`)) // test helper
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -264,12 +264,12 @@ func TestDiscoverRegistrationBases_UsesServiceIndexAndCaches(t *testing.T) {
 	mux.HandleFunc("/v3/index.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 					"resources": [
 						{"@id": "` + r.Host + `/v3/registration5-semver2", "@type": "RegistrationsBaseUrl/3.6.0"},
 						{"@id": "` + r.Host + `/v3/registration5-gz-semver2", "@type": "RegistrationsBaseUrl/3.6.0"}
 					]
-				}`))
+				}`)) // test helper
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -299,18 +299,18 @@ func TestGetDeprecation_HTMLFallback_DeprecatedWithAlternative(t *testing.T) {
 	mux.HandleFunc("/v3/registration5-semver2/microsoft.azure.eventhubs/index.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		w.Write([]byte(`{"items": [ INVALID`))
+		_, _ = w.Write([]byte(`{"items": [ INVALID`)) // test helper
 	})
 	mux.HandleFunc("/v3/registration5-gz-semver2/microsoft.azure.eventhubs/index.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		w.Write([]byte(`{"items": [ INVALID`))
+		_, _ = w.Write([]byte(`{"items": [ INVALID`)) // test helper
 	})
 	// HTML page for nuget.org package with deprecation banner and Suggested Alternatives link
 	mux.HandleFunc("/packages/Microsoft.Azure.EventHubs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(200)
-		w.Write([]byte(`<!doctype html><html><body>
+		_, _ = w.Write([]byte(`<!doctype html><html><body>
 			<div class="deprecated">This package has been deprecated.</div>
 			<h3>Suggested Alternatives</h3>
 			<a href="/packages/Azure.Messaging.EventHubs">Azure.Messaging.EventHubs</a>

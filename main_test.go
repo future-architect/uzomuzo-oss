@@ -354,8 +354,8 @@ func TestRootAction_DeprecationWarning(t *testing.T) {
 	os.Stderr = w
 	defer func() {
 		os.Stderr = oldStderr
-		w.Close()
-		r.Close()
+		_ = w.Close() // best-effort cleanup
+		_ = r.Close() // best-effort cleanup
 	}()
 
 	cfg := &domaincfg.Config{}
@@ -364,7 +364,7 @@ func TestRootAction_DeprecationWarning(t *testing.T) {
 	// but still exercises the rootAction deprecation warning path.
 	_ = app.Run(context.Background(), []string{"uzomuzo", "not-a-purl"})
 
-	w.Close()
+	_ = w.Close() // best-effort cleanup
 
 	var buf bytes.Buffer
 	if _, err := buf.ReadFrom(r); err != nil {

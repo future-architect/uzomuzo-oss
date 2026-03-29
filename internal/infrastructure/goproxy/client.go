@@ -57,7 +57,7 @@ func (c *Client) LatestVersion(ctx context.Context, module string) (version stri
 	if err != nil {
 		return "", u, fmt.Errorf("latest request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return "", u, fmt.Errorf("latest request status %d", resp.StatusCode)
 	}
@@ -88,7 +88,7 @@ func (c *Client) GoMod(ctx context.Context, module, version string) (mod []byte,
 	if err != nil {
 		return nil, u, fmt.Errorf("mod request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, u, fmt.Errorf("mod request status %d", resp.StatusCode)
 	}
@@ -117,10 +117,7 @@ func (c *Client) ResolveModuleRoot(ctx context.Context, path string) (module str
 		return "", "", fmt.Errorf("nil goproxy client")
 	}
 	p := strings.TrimSuffix(path, "/")
-	for {
-		if p == "" || p == "/" {
-			break
-		}
+	for p != "" && p != "/" {
 		if v, _, e := c.LatestVersion(ctx, p); e == nil && v != "" {
 			return p, v, nil
 		}

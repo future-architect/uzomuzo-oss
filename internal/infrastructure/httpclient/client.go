@@ -65,7 +65,7 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 		if err != nil {
 			return nil, common.NewIOError("failed to read request body", err).WithContext("request_url", req.URL.String())
 		}
-		req.Body.Close()
+		_ = req.Body.Close() // best-effort cleanup, body already read
 		originalBody = body
 		req.Body = io.NopCloser(bytes.NewReader(originalBody))
 	}
@@ -95,7 +95,7 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 				return resp, nil
 			}
 			if resp != nil {
-				resp.Body.Close()
+				_ = resp.Body.Close() // best-effort cleanup
 			}
 			slog.Debug("custom_retry_logic", "attempt", attempt+1, "max_attempts", c.config.MaxRetries+1, "wait_time", waitTime)
 			select {
@@ -133,7 +133,7 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 
 		if resp.StatusCode == http.StatusTooManyRequests { // rate limit
 			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
+			_ = resp.Body.Close() // best-effort cleanup
 			return nil, common.NewRateLimitError("rate limit reached", nil).WithContext("request_url", req.URL.String()).WithContext("response_body", string(body)).WithContext("status_code", resp.StatusCode)
 		}
 
@@ -143,7 +143,7 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 
 		if resp.StatusCode >= 500 && c.config.RetryOn5xx { // server error retry
 			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
+			_ = resp.Body.Close() // best-effort cleanup
 			if attempt < c.config.MaxRetries {
 				backoff := c.calculateBackoff(attempt)
 				slog.Warn("server error, retrying", "status_code", resp.StatusCode, "attempt", attempt+1, "max_attempts", c.config.MaxRetries+1, "response_body", string(body), "backoff", backoff)

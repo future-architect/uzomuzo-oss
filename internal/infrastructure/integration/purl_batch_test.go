@@ -192,7 +192,7 @@ func TestEnrichDependentCounts_Phase2_RubyGems(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/gems/rails/reverse_dependencies.json" {
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `["dep1","dep2","dep3"]`)
+			_, _ = fmt.Fprint(w, `["dep1","dep2","dep3"]`) // test helper
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -225,7 +225,7 @@ func TestEnrichDependentCounts_Phase2_Packagist(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/packages/monolog/monolog.json" {
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"package":{"name":"monolog/monolog","dependents":4200,"versions":{}}}`)
+			_, _ = fmt.Fprint(w, `{"package":{"name":"monolog/monolog","dependents":4200,"versions":{}}}`) // test helper
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)

@@ -57,13 +57,17 @@ func getAllCheckNames(analyses map[string]*domain.Analysis) []string {
 // DDD Layer: Infrastructure (CSV export implementation)
 // Args: analyses - map of PURL to domain.Analysis, filename - destination CSV path
 // Returns: error if any I/O or formatting failure occurs
-func ExportScorecard(analyses map[string]*domain.Analysis, filename string) error {
+func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err error) {
 	file, err := os.Create(filename)
 	if err != nil {
 		return common.NewIOError("failed to create CSV file", err).
 			WithContext("filename", filename)
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()

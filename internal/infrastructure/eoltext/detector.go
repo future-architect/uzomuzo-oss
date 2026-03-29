@@ -386,10 +386,11 @@ func DetectLifecycle(opts LifecycleDetectOpts) DetectionResult {
 	const maxNewlines = 3
 	res.Successor = extractSuccessorNearPhrase(text, res.Phrase, cfg.successorPatterns, maxChars, maxNewlines)
 	// Self reference suppression
-	selfName := ""
-	if opts.Source == SourcePyPI {
+	var selfName string
+	switch opts.Source {
+	case SourcePyPI:
 		selfName = opts.PackageName
-	} else if opts.Source == SourceReadme {
+	case SourceReadme:
 		selfName = opts.RepoName
 	}
 	if res.Successor != "" && selfName != "" && strings.EqualFold(res.Successor, selfName) {
