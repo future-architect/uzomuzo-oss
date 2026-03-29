@@ -20,7 +20,7 @@ jobs:
       github.event.pull_request.user.login == 'kotakanbe'
       && (
         (github.event_name == 'pull_request_review'
-         && startsWith(github.event.review.user.login, 'copilot-pull-request-reviewer'))
+         && github.event.review.user.login == 'Copilot')
         || (github.event_name == 'pull_request'
             && github.event.label.name == 'copilot-review'
             && github.event.sender.login == 'kotakanbe')
