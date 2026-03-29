@@ -59,3 +59,8 @@ Any exported function, type, or constant is part of our public API. API stabilit
 - **Additive Changes are Preferred**: When modifying an exported struct, prefer adding new, optional fields over changing or removing existing ones.
 - **Use the Options Pattern for Arguments**: Avoid adding new arguments to an existing exported function. Instead, use the "functional options pattern" for optional arguments to ensure backward compatibility.
 - **Interfaces are (Almost) Forever**: Be very deliberate when designing exported interfaces, as adding methods to them is a breaking change.
+
+## Learned from Copilot Reviews
+
+- **Diff Content Filtering**: When writing tools that analyze `git diff` output, always strip diff metadata lines (`+++`, `---`, `diff --git`, `@@`) before pattern-matching on `^+` lines. Diff headers can trigger false positives.
+- **Comment-Code Consistency**: When changing implementation behavior (e.g., switching from three-dot to two-dot diff), update all comments and documentation that reference the old behavior in the same commit.

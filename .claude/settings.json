@@ -21,6 +21,12 @@
             "command": "bash .claude/hooks/adr-check.sh",
             "timeout": 15,
             "statusMessage": "Checking if ADR is needed..."
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pre-push-review.sh",
+            "timeout": 30,
+            "statusMessage": "Self-reviewing for Copilot issues..."
           }
         ]
       }
