@@ -29,12 +29,20 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      issues: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+
+      - name: Remove copilot-review label early to prevent stale label on cancellation
+        if: github.event_name == 'pull_request' && github.event.label.name == 'copilot-review'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit "${{ github.event.pull_request.number }}" \
+            --remove-label copilot-review \
+            --repo "${{ github.repository }}" || true
 
       - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
@@ -82,25 +90,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Remove copilot-review label
-        if: >-
-          always()
-          && github.event_name == 'pull_request'
-          && github.event.label.name == 'copilot-review'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          if ! output=$(
-            gh pr edit "${{ github.event.pull_request.number }}" \
-              --remove-label copilot-review \
-              --repo "${{ github.repository }}" 2>&1
-          ); then
-            if echo "$output" | grep -qiE 'label(.+)?(does not exist|not found|is not present)'; then
-              echo "Label 'copilot-review' not present on PR; nothing to remove."
-            else
-              echo "Failed to remove 'copilot-review' label from PR:" >&2
-              echo "$output" >&2
-              exit 1
-            fi
-          fi
