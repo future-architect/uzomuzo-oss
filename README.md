@@ -122,6 +122,8 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | Lifecycle classification granularity | N/A | N/A | Binary (EOL/not) | **7 actionable states** |
 | Batch processing scale | N/A | 1 repo/run | N/A | **5,000+ PURLs/run** |
 
+<a id="assessment-precision-by-data-availability"></a>
+
 ### Technical Novelty
 
 | Innovation | Why it matters |
