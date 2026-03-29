@@ -112,6 +112,8 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | **EOL-Scheduled** | Future EOL date announced (not yet reached) | Plan migration before EOL date |
 | **Review Needed** | Insufficient data for automated classification | Manual investigation required |
 
+<a id="assessment-precision-by-data-availability"></a>
+
 ## What Makes uzomuzo Different
 
 | Capability | Trivy / Syft | OpenSSF Scorecard | endoflife.date | **uzomuzo** |
