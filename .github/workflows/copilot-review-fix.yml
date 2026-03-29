@@ -99,7 +99,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: "--model opus --allowedTools 'Bash(*)' Edit Write Read Glob Grep"
-          show_full_output: true
+          show_full_output: false
           allowed_bots: "Copilot"
           allowed_non_write_users: "Copilot"
         env:
