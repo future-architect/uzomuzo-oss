@@ -1,0 +1,26 @@
+name: Update PR Branches
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Update all open PR branches
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          prs=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number --jq '.[].number')
+          for pr in $prs; do
+            echo "Updating PR #$pr..."
+            gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$pr/update-branch" \
+              -f update_method=merge 2>&1 || echo "  Skipped (already up-to-date or conflict)"
+          done
