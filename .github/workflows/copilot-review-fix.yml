@@ -97,7 +97,7 @@ jobs:
             - Only modify source files within the scope of Copilot's comments (Phase 2) or .github/instructions/ (Phase 3). Running make sync-instructions is allowed to regenerate derived files under .claude/rules/.
             - Always verify go build passes before committing
             - If go test fails after fixes, revert the failing change and classify as WONT_FIX
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           model: claude-opus-4-6
           timeout_minutes: 10
         env:
