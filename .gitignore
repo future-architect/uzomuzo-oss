@@ -13,6 +13,7 @@ scorecard.csv
 
 *.py
 *.txt
+!docs/assets/*.txt
 
 # Claude Code local settings (per-user permission allowlist)
 .claude/settings.local.json

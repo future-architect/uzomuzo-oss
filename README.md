@@ -35,11 +35,11 @@ trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
 ```
 
 ```text
-🏷️  LABEL SUMMARY (1,460 packages):
-  🟢 Active:        595 (40.8%)
-  🔵 Legacy-Safe:   472 (32.3%)
-  ⚪ Stalled:       311 (21.3%)
-  🔴 EOL-Confirmed:  79 (5.4%)
+🏷️  LABEL SUMMARY (1,540 packages):
+  🟢 Active:        630 (40.9%)
+  🔵 Legacy-Safe:   556 (36.1%)
+  ⚪ Stalled:       263 (17.1%)
+  🔴 EOL-Confirmed:  88 (5.7%)
   🛑 EOL-Effective:    3 (0.2%)
 ```
 
