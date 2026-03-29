@@ -3,6 +3,8 @@
   "extends": ["config:recommended"],
   "minimumReleaseAge": "21 days",
   "ignorePaths": ["**/testdata/**"],
+  "automerge": true,
+  "automergeType": "pr",
   "packageRules": [
     {
       "matchManagers": ["gomod"],
