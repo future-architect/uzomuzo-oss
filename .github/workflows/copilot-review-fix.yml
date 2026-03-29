@@ -8,6 +8,8 @@ on:
   pull_request:
     types: [labeled]
 
+permissions: {}
+
 concurrency:
   group: copilot-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
