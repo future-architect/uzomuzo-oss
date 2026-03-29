@@ -94,7 +94,7 @@ jobs:
             - Always verify go build passes before committing
             - If go test fails after fixes, revert the failing change and classify as WONT_FIX
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          model: claude-sonnet-4-6
+          model: claude-opus-4-6
           timeout_minutes: 10
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
