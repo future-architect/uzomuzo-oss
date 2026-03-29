@@ -1,12 +1,25 @@
 name: Auto-fix Copilot Review
 
 on:
+  # Auto-trigger: Copilot submits a review
+  pull_request_review:
+    types: [submitted]
+  # Manual trigger: add 'copilot-review' label
   pull_request:
     types: [labeled]
 
+concurrency:
+  group: copilot-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   claude-fix-copilot:
-    if: github.event.label.name == 'copilot-review'
+    # Run when: Copilot submits a review OR 'copilot-review' label is added
+    if: >-
+      (github.event_name == 'pull_request_review'
+       && github.event.review.user.login == 'copilot-pull-request-reviewer')
+      || (github.event_name == 'pull_request'
+          && github.event.label.name == 'copilot-review')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -18,20 +31,43 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
+      - name: Check iteration limit
+        id: iteration
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MAX_ITERATIONS=3
+          count=$(git log --oneline --grep="fix: address Copilot review feedback on PR #${{ github.event.pull_request.number }}" | wc -l)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Copilot fix iteration: $count / $MAX_ITERATIONS"
+          if [ "$count" -ge "$MAX_ITERATIONS" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Reached max iteration limit ($MAX_ITERATIONS). Skipping to avoid infinite loop."
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --repo ${{ github.repository }} \
+              --body "⚠️ Auto-fix reached the iteration limit ($MAX_ITERATIONS). Remaining Copilot comments require manual review." || true
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        if: steps.iteration.outputs.skip != 'true'
         with:
           go-version-file: go.mod
 
       - name: Install golangci-lint
+        if: steps.iteration.outputs.skip != 'true'
         uses: golangci/golangci-lint-action@4afd733a84b2f1a21f7c3a9d0135a3a8360b1ee2 # v7.0.0
         with:
           install-only: true
 
       - name: Run Claude Code to fix Copilot review comments
+        if: steps.iteration.outputs.skip != 'true'
         uses: anthropics/claude-code-action@f28709ede76ab727eab14d1e5a0e4c21a006e85c # v0.0.22
         with:
           direct_prompt: |
             You are running in CI to automatically fix Copilot review comments on PR #${{ github.event.pull_request.number }}.
+            This is iteration ${{ steps.iteration.outputs.count }} (max 3).
 
             Follow the procedure defined in .github/prompts/review.prompt.md with --copilot-only mode:
             - Skip Phase 1 (Claude review) entirely
@@ -58,7 +94,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Remove copilot-review label
-        if: always()
+        if: >-
+          always()
+          && github.event_name == 'pull_request'
+          && github.event.label.name == 'copilot-review'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
