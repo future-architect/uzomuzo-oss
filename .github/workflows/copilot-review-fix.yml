@@ -1,15 +1,12 @@
 name: Auto-fix Copilot Review
 
-# Temporarily disabled: claude-code-action fails with 404 on GET /users/Copilot
-# because Copilot is a bot, not a regular user. Re-enable after upgrading
-# claude-code-action to a version that handles bot actors correctly.
-# Original triggers:
-#   pull_request_review:
-#     types: [submitted]
-#   pull_request:
-#     types: [labeled]
 on:
-  workflow_dispatch:
+  # Auto-trigger: Copilot finishes its review and submits it
+  pull_request_review:
+    types: [submitted]
+  # Manual trigger: add 'copilot-review' label to re-run
+  pull_request:
+    types: [labeled]
 
 concurrency:
   group: copilot-review-${{ github.event.pull_request.number }}
