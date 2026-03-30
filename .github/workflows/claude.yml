@@ -71,6 +71,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ steps.determine_ref.outputs.ref }}
+          token: ${{ secrets.GH_ACTIONS_TOKEN }}
 
       - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
