@@ -35,8 +35,7 @@ jobs:
       - name: Sign checksums with cosign (keyless)
         run: |
           cosign sign-blob --yes \
-            --output-signature dist/checksums.txt.sig \
-            --output-certificate dist/checksums.txt.pem \
+            --bundle dist/checksums.txt.bundle \
             dist/checksums.txt
 
       - name: Upload signatures to release
@@ -44,5 +43,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ github.ref_name }}" \
-            dist/checksums.txt.sig \
-            dist/checksums.txt.pem
+            dist/checksums.txt.bundle
