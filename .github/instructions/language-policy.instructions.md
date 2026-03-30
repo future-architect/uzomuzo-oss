@@ -31,10 +31,5 @@ Source code and documentation are both in English for tooling compatibility and 
 
 ## Copilot Response Language Policy
 
-**GitHub Copilot Chat and Inline Chat responses must be in the same language as the user's question.**
-
-- **If the user asks in Japanese**: Respond in Japanese
-- **If the user asks in English**: Respond in English
-- **Match the user's communication language**: Always adapt to the language used in the user's question or comment
-
-This ensures natural communication and avoids language confusion during development.
+- **PR review comments**: Always in **English**. Automated PR reviews are public-facing project content and must follow the English-only documentation policy.
+- **Chat / Inline Chat**: Respond in the same language as the user's question (Japanese → Japanese, English → English).
