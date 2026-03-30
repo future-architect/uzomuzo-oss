@@ -10,12 +10,11 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: copilot-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   trigger-claude:
+    concurrency:
+      group: copilot-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     # Run when: Copilot submits a review OR 'copilot-review' label is added
     # Only for PRs authored by kotakanbe
     if: >-
