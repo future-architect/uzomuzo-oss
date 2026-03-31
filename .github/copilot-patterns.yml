@@ -11,9 +11,4 @@
 #       pr: <PR number>
 #       file: "<path>"
 #       date: "YYYY-MM-DD"
-patterns:
-  - category: "comment-doc-drift"
-    summary: "Category format and dry-run guard inconsistent between sections"
-    pr: 73
-    file: ".github/prompts/review.prompt.md"
-    date: "2026-03-29"
+patterns: []
