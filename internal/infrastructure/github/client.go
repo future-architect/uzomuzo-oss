@@ -133,6 +133,7 @@ func (c *Client) FetchBasicRepositoryInfo(ctx context.Context, owner, repo strin
 		    description
 		    homepageUrl
 		    licenseInfo { spdxId name }
+		    source { nameWithOwner }
 
 		    defaultBranchRef {
 		      name
@@ -195,6 +196,7 @@ func (c *Client) FetchDetailedRepositoryInfo(ctx context.Context, owner, repo st
 		    description
 		    homepageUrl
 		    licenseInfo { spdxId name }
+		    source { nameWithOwner }
 
 		    defaultBranchRef {
 		      name
@@ -601,6 +603,8 @@ func (c *Client) githubWorker(ctx context.Context, batchCancel context.CancelFun
 		repoState := &domain.RepoState{
 			IsArchived: repoInfo.IsArchived,
 			IsDisabled: repoInfo.IsDisabled,
+			IsFork:     repoInfo.IsFork,
+			ForkSource: forkSourceFromRepoInfo(repoInfo),
 		}
 
 		// Process commit history if available
@@ -699,6 +703,19 @@ func (c *Client) executeGraphQLQuery(ctx context.Context, query string, variable
 	c.recordRateLimit(rateLimit.Cost, rateLimit.Remaining, rateLimit.ResetAt)
 
 	return &graphqlResp.Data.Repository, nil
+}
+
+// forkSourceFromRepoInfo extracts the ultimate source repository name ("owner/repo") from a
+// GraphQL RepositoryInfo response. Returns empty string when the repo is not a fork or source
+// data is unavailable (e.g. private parent).
+func forkSourceFromRepoInfo(info *RepositoryInfo) string {
+	if info == nil || !info.IsFork {
+		return ""
+	}
+	if info.Source != nil && info.Source.NameWithOwner != "" {
+		return info.Source.NameWithOwner
+	}
+	return ""
 }
 
 // normalizeRepoURL follows GitHub redirects for a repository HTML URL and returns the final URL.

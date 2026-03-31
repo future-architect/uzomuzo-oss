@@ -181,4 +181,8 @@ type RepoState struct {
 	IsDisabled bool
 	// IsFork flags that the repository is a fork (helpful for judging maintenance independence and original activity).
 	IsFork bool
+	// ForkSource is the ultimate non-fork root repository ("owner/repo" format, GitHub "source" field).
+	// Empty when IsFork is false or GitHub data is unavailable.
+	// Useful for LLM-based health assessment to suggest evaluating the original project instead.
+	ForkSource string
 }
