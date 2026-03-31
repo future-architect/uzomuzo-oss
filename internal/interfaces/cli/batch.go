@@ -865,6 +865,9 @@ func printDependentCount(a *analysispkg.Analysis) {
 	if a.DependentCount > 0 {
 		fmt.Printf("👥 Dependents: %d\n", a.DependentCount)
 	}
+	if a.DirectDepsCount > 0 || a.TransitiveDepsCount > 0 {
+		fmt.Printf("📦 Dependencies: %d direct, %d transitive\n", a.DirectDepsCount, a.TransitiveDepsCount)
+	}
 }
 
 func printScores(a *analysispkg.Analysis) {
