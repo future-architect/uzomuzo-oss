@@ -73,6 +73,16 @@ type Analysis struct {
 	// Zero means unknown or unsupported ecosystem.
 	DependentCount int
 
+	// DirectDepsCount is the number of direct dependencies of this package's latest release.
+	// Zero means unknown, unsupported ecosystem, or no version resolved.
+	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
+	DirectDepsCount int
+
+	// TransitiveDepsCount is the number of transitive (indirect) dependencies of this package's latest release.
+	// Zero means unknown, unsupported ecosystem, or no version resolved.
+	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
+	TransitiveDepsCount int
+
 	// Canonical package links (homepage, registry, docs, changelog)
 	PackageLinks *PackageLinks
 

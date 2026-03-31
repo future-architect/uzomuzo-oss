@@ -81,7 +81,7 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 	checkNames := getAllCheckNames(analyses)
 
 	// Create CSV headers
-	headers := []string{"purl", "repoURL", "scorecard", "api", "release", "star", "Canary", "Latest", "Lastcommit", "archived", "disabled", "Fork", "overallScore", "dependents"}
+	headers := []string{"purl", "repoURL", "scorecard", "api", "release", "star", "Canary", "Latest", "Lastcommit", "archived", "disabled", "Fork", "overallScore", "dependents", "directDeps", "transitiveDeps"}
 	headers = append(headers, checkNames...)
 	headers = append(headers, "Result", "Reason", "RepoState")
 
@@ -157,7 +157,9 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 			disabled,
 			forked,
 			fmt.Sprintf("%.2f", analysis.OverallScore),
-			fmt.Sprintf("%d", analysis.DependentCount), // 0 = unknown; CLI omits zero but CSV always emits for machine-readability
+			fmt.Sprintf("%d", analysis.DependentCount),      // 0 = unknown; CLI omits zero but CSV always emits for machine-readability
+			fmt.Sprintf("%d", analysis.DirectDepsCount),     // 0 = unknown or unsupported ecosystem
+			fmt.Sprintf("%d", analysis.TransitiveDepsCount), // 0 = unknown or unsupported ecosystem
 		}
 
 		// Add check scores

@@ -81,6 +81,12 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// Dependent count enrichment (best-effort)
 	s.enrichDependentCounts(ctx, purls, analyses)
 
+	// Dependency count enrichment (best-effort, npm/cargo/maven/pypi only).
+	// Uses latestReleaseVersion (stable > prerelease) instead of resolvedVersion
+	// because catalog DB stores version-agnostic package data; the latest release
+	// best represents the current dependency surface for OSS selection.
+	s.enrichDependencyCounts(ctx, purls, analyses)
+
 	total := len(analyses)
 	pct := func(n int) float64 {
 		if total == 0 {
@@ -209,6 +215,69 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 		}
 	}
 	wg.Wait()
+}
+
+// enrichDependencyCounts fetches dependency counts (direct + transitive) from deps.dev
+// and populates Analysis.DirectDepsCount and Analysis.TransitiveDepsCount.
+//
+// Version selection: StableVersion > PrereleaseVersion (latest release for catalog DB).
+// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
+//
+// DDD Layer: Infrastructure (best-effort enrichment)
+func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls []string, analyses map[string]*domain.Analysis) {
+	effectivePURLs := make([]string, 0, len(purls))
+	effectiveToOriginal := make(map[string]string, len(purls))
+	for _, p := range purls {
+		a := analyses[p]
+		if a == nil {
+			continue
+		}
+		ep := a.EffectivePURL
+		if ep == "" {
+			ep = p
+		}
+		// The :dependencies endpoint requires a versioned PURL.
+		// Use the latest release version (stable > prerelease) for catalog consistency.
+		if !strings.Contains(ep, "@") {
+			if v := latestReleaseVersion(a); v != "" {
+				if versioned, err := purl.WithVersion(ep, v); err == nil {
+					ep = versioned
+				}
+			}
+		}
+		effectivePURLs = append(effectivePURLs, ep)
+		effectiveToOriginal[ep] = p
+	}
+
+	depsResults := s.depsdevClient.FetchDependenciesBatch(ctx, effectivePURLs)
+	for ep, originalKey := range effectiveToOriginal {
+		a := analyses[originalKey]
+		if a == nil {
+			continue
+		}
+		key := purl.CanonicalKey(ep)
+		if key == "" {
+			key = ep
+		}
+		if resp, ok := depsResults[key]; ok && resp != nil {
+			a.DirectDepsCount, a.TransitiveDepsCount = resp.CountByRelation()
+		}
+	}
+}
+
+// latestReleaseVersion returns the latest release version for dependency count queries.
+// Preference: StableVersion > PrereleaseVersion.
+func latestReleaseVersion(a *domain.Analysis) string {
+	if a.ReleaseInfo == nil {
+		return ""
+	}
+	if a.ReleaseInfo.StableVersion != nil && a.ReleaseInfo.StableVersion.Version != "" {
+		return a.ReleaseInfo.StableVersion.Version
+	}
+	if a.ReleaseInfo.PreReleaseVersion != nil && a.ReleaseInfo.PreReleaseVersion.Version != "" {
+		return a.ReleaseInfo.PreReleaseVersion.Version
+	}
+	return ""
 }
 
 // resolvedVersion returns the best available version string from an Analysis.

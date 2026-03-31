@@ -30,6 +30,10 @@ type Client interface {
 	// FetchDependentCountBatch fetches dependent counts for multiple PURLs in parallel.
 	// Returns a map of canonical (versionless) PURL -> DependentsResponse.
 	FetchDependentCountBatch(ctx context.Context, purls []string) map[string]*DependentsResponse
+	// FetchDependenciesBatch fetches dependency graphs for multiple PURLs in parallel.
+	// Returns a map of canonical (versionless) PURL -> DependenciesResponse.
+	// Supported ecosystems: npm, cargo, maven, pypi.
+	FetchDependenciesBatch(ctx context.Context, purls []string) map[string]*DependenciesResponse
 }
 
 // Config is the configuration for depsdev clients
