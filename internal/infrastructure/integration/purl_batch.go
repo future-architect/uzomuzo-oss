@@ -248,7 +248,11 @@ func dependenciesSupportedEcosystem(eco string) bool {
 // DDD Layer: Infrastructure (best-effort enrichment)
 func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls []string, analyses map[string]*domain.Analysis) {
 	effectivePURLs := make([]string, 0, len(purls))
-	effectiveToOriginal := make(map[string]string, len(purls))
+	// Multiple original PURLs may resolve to the same effective PURL (e.g., case
+	// variants like pkg:npm/React and pkg:npm/react). Use a slice of original keys
+	// so all analyses get populated, not just the last one.
+	effectiveToOriginals := make(map[string][]string, len(purls))
+	seen := make(map[string]bool, len(purls))
 	for _, p := range purls {
 		a := analyses[p]
 		if a == nil {
@@ -271,24 +275,33 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 				}
 			}
 		}
-		effectivePURLs = append(effectivePURLs, ep)
-		effectiveToOriginal[ep] = p
+		// Deduplicate effective PURLs to avoid redundant API calls.
+		if !seen[ep] {
+			effectivePURLs = append(effectivePURLs, ep)
+			seen[ep] = true
+		}
+		effectiveToOriginals[ep] = append(effectiveToOriginals[ep], p)
 	}
 
 	slog.Debug("dependency_count_filtered", "total_purls", len(purls), "supported_purls", len(effectivePURLs))
 
 	depsResults := s.depsdevClient.FetchDependenciesBatch(ctx, effectivePURLs)
-	for ep, originalKey := range effectiveToOriginal {
-		a := analyses[originalKey]
-		if a == nil {
-			continue
-		}
+	for ep, originalKeys := range effectiveToOriginals {
 		key := purl.CanonicalKey(ep)
 		if key == "" {
 			key = ep
 		}
-		if resp, ok := depsResults[key]; ok && resp != nil {
-			a.DirectDepsCount, a.TransitiveDepsCount = resp.CountByRelation()
+		resp, ok := depsResults[key]
+		if !ok || resp == nil {
+			continue
+		}
+		direct, transitive := resp.CountByRelation()
+		for _, originalKey := range originalKeys {
+			a := analyses[originalKey]
+			if a == nil {
+				continue
+			}
+			a.DirectDepsCount, a.TransitiveDepsCount = direct, transitive
 		}
 	}
 }
