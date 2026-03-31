@@ -70,9 +70,10 @@ func TestResolvedVersion(t *testing.T) {
 	}
 }
 
-// stubDepsDevClient implements depsdev.Client for testing enrichDependentCounts.
+// stubDepsDevClient implements depsdev.Client for testing enrichment functions.
 type stubDepsDevClient struct {
-	dependentResults map[string]*depsdev.DependentsResponse
+	dependentResults    map[string]*depsdev.DependentsResponse
+	dependenciesResults map[string]*depsdev.DependenciesResponse
 }
 
 func (s *stubDepsDevClient) GetDetailsForPURLs(_ context.Context, _ []string) (map[string]*depsdev.BatchResult, error) {
@@ -94,13 +95,20 @@ func (s *stubDepsDevClient) FetchDependentCountBatch(_ context.Context, _ []stri
 	return s.dependentResults
 }
 
+func (s *stubDepsDevClient) FetchDependenciesBatch(_ context.Context, _ []string) map[string]*depsdev.DependenciesResponse {
+	if s.dependenciesResults == nil {
+		return make(map[string]*depsdev.DependenciesResponse)
+	}
+	return s.dependenciesResults
+}
+
 func TestEnrichDependentCounts_Phase1(t *testing.T) {
 	tests := []struct {
-		name           string
-		purls          []string
-		analyses       map[string]*domain.Analysis
-		stubResults    map[string]*depsdev.DependentsResponse
-		wantCounts     map[string]int
+		name        string
+		purls       []string
+		analyses    map[string]*domain.Analysis
+		stubResults map[string]*depsdev.DependentsResponse
+		wantCounts  map[string]int
 	}{
 		{
 			name:  "versioned PURL matches canonical key",
@@ -272,5 +280,180 @@ func TestEnrichDependentCounts_Phase2_SkipsWhenDepsDevPopulated(t *testing.T) {
 	a := analyses["pkg:gem/rails@7.0.4"]
 	if a.DependentCount != 999 {
 		t.Errorf("DependentCount = %d, want 999 (from Phase 1)", a.DependentCount)
+	}
+}
+
+func TestLatestReleaseVersion(t *testing.T) {
+	tests := []struct {
+		name     string
+		analysis *domain.Analysis
+		want     string
+	}{
+		{
+			name:     "stable version preferred",
+			analysis: &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Version: "2.0.0"}, PreReleaseVersion: &domain.VersionDetail{Version: "3.0.0-rc1"}}},
+			want:     "2.0.0",
+		},
+		{
+			name:     "fallback to prerelease",
+			analysis: &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{PreReleaseVersion: &domain.VersionDetail{Version: "1.0.0-beta.1"}}},
+			want:     "1.0.0-beta.1",
+		},
+		{
+			name:     "nil release info",
+			analysis: &domain.Analysis{},
+			want:     "",
+		},
+		{
+			name:     "empty versions",
+			analysis: &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Version: ""}}},
+			want:     "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := latestReleaseVersion(tt.analysis)
+			if got != tt.want {
+				t.Errorf("latestReleaseVersion() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEnrichDependencyCounts(t *testing.T) {
+	tests := []struct {
+		name           string
+		purls          []string
+		analyses       map[string]*domain.Analysis
+		stubResults    map[string]*depsdev.DependenciesResponse
+		wantDirect     map[string]int
+		wantTransitive map[string]int
+	}{
+		{
+			name:  "versioned PURL populates counts",
+			purls: []string{"pkg:npm/express@4.21.2"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:npm/express@4.21.2": {
+					EffectivePURL: "pkg:npm/express@4.21.2",
+					Package:       &domain.Package{Ecosystem: "npm", Version: "4.21.2"},
+				},
+			},
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:npm/express": {
+					Nodes: []depsdev.DependencyNode{
+						{Relation: "SELF"},
+						{Relation: "DIRECT"},
+						{Relation: "DIRECT"},
+						{Relation: "INDIRECT"},
+						{Relation: "INDIRECT"},
+						{Relation: "INDIRECT"},
+					},
+				},
+			},
+			wantDirect:     map[string]int{"pkg:npm/express@4.21.2": 2},
+			wantTransitive: map[string]int{"pkg:npm/express@4.21.2": 3},
+		},
+		{
+			name:  "versionless PURL resolved via stable release",
+			purls: []string{"pkg:cargo/serde"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:cargo/serde": {
+					EffectivePURL: "pkg:cargo/serde",
+					Package:       &domain.Package{Ecosystem: "cargo"},
+					ReleaseInfo:   &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Version: "1.0.200"}},
+				},
+			},
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:cargo/serde": {
+					Nodes: []depsdev.DependencyNode{
+						{Relation: "SELF"},
+						{Relation: "DIRECT"},
+					},
+				},
+			},
+			wantDirect:     map[string]int{"pkg:cargo/serde": 1},
+			wantTransitive: map[string]int{"pkg:cargo/serde": 0},
+		},
+		{
+			name:  "versionless PURL falls back to prerelease",
+			purls: []string{"pkg:npm/beta-only"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:npm/beta-only": {
+					EffectivePURL: "pkg:npm/beta-only",
+					Package:       &domain.Package{Ecosystem: "npm"},
+					ReleaseInfo:   &domain.ReleaseInfo{PreReleaseVersion: &domain.VersionDetail{Version: "0.1.0-beta.1"}},
+				},
+			},
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:npm/beta-only": {
+					Nodes: []depsdev.DependencyNode{
+						{Relation: "SELF"},
+						{Relation: "DIRECT"},
+						{Relation: "INDIRECT"},
+					},
+				},
+			},
+			wantDirect:     map[string]int{"pkg:npm/beta-only": 1},
+			wantTransitive: map[string]int{"pkg:npm/beta-only": 1},
+		},
+		{
+			name:  "no match leaves counts at zero",
+			purls: []string{"pkg:pypi/unknown"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:pypi/unknown": {
+					EffectivePURL: "pkg:pypi/unknown",
+					Package:       &domain.Package{Ecosystem: "pypi"},
+				},
+			},
+			stubResults:    map[string]*depsdev.DependenciesResponse{},
+			wantDirect:     map[string]int{"pkg:pypi/unknown": 0},
+			wantTransitive: map[string]int{"pkg:pypi/unknown": 0},
+		},
+		{
+			name:  "unsupported ecosystem skipped without API call",
+			purls: []string{"pkg:golang/github.com/gin-gonic/gin@v1.10.0"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:golang/github.com/gin-gonic/gin@v1.10.0": {
+					EffectivePURL: "pkg:golang/github.com/gin-gonic/gin@v1.10.0",
+					Package:       &domain.Package{Ecosystem: "golang", Version: "v1.10.0"},
+				},
+			},
+			// stub has data, but it should never be consulted for golang
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:golang/github.com/gin-gonic/gin": {
+					Nodes: []depsdev.DependencyNode{{Relation: "DIRECT"}},
+				},
+			},
+			wantDirect:     map[string]int{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": 0},
+			wantTransitive: map[string]int{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": 0},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &IntegrationService{
+				depsdevClient: &stubDepsDevClient{dependenciesResults: tt.stubResults},
+			}
+			svc.enrichDependencyCounts(context.Background(), tt.purls, tt.analyses)
+			for purl, wantDirect := range tt.wantDirect {
+				a := tt.analyses[purl]
+				if a == nil {
+					t.Fatalf("analysis not found for %s", purl)
+				}
+				if a.DirectDepsCount != wantDirect {
+					t.Errorf("DirectDepsCount for %s = %d, want %d", purl, a.DirectDepsCount, wantDirect)
+				}
+			}
+			for purl, wantTransitive := range tt.wantTransitive {
+				a := tt.analyses[purl]
+				if a == nil {
+					t.Fatalf("analysis not found for %s", purl)
+				}
+				if a.TransitiveDepsCount != wantTransitive {
+					t.Errorf("TransitiveDepsCount for %s = %d, want %d", purl, a.TransitiveDepsCount, wantTransitive)
+				}
+			}
+		})
 	}
 }

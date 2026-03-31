@@ -78,8 +78,23 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 		slog.Debug("github_enhancement_failed", "error", err)
 	}
 
-	// Dependent count enrichment (best-effort)
-	s.enrichDependentCounts(ctx, purls, analyses)
+	// Dependent count + dependency count enrichment (best-effort, parallel).
+	// These are independent enrichment steps hitting different deps.dev endpoints,
+	// so running them concurrently halves wall-clock time for large batches (30k+ PURLs).
+	var enrichWg sync.WaitGroup
+	enrichWg.Add(2)
+	go func() {
+		defer enrichWg.Done()
+		s.enrichDependentCounts(ctx, purls, analyses)
+	}()
+	go func() {
+		defer enrichWg.Done()
+		// Uses latestReleaseVersion (stable > prerelease) instead of resolvedVersion
+		// because catalog DB stores version-agnostic package data; the latest release
+		// best represents the current dependency surface for OSS selection.
+		s.enrichDependencyCounts(ctx, purls, analyses)
+	}()
+	enrichWg.Wait()
 
 	total := len(analyses)
 	pct := func(n int) float64 {
@@ -209,6 +224,101 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 		}
 	}
 	wg.Wait()
+}
+
+// dependenciesSupportedEcosystem reports whether the deps.dev GetDependencies endpoint
+// supports the given ecosystem. Only npm, cargo, maven, and pypi are supported.
+func dependenciesSupportedEcosystem(eco string) bool {
+	switch strings.ToLower(strings.TrimSpace(eco)) {
+	case "npm", "cargo", "maven", "pypi":
+		return true
+	default:
+		return false
+	}
+}
+
+// enrichDependencyCounts fetches dependency counts (direct + transitive) from deps.dev
+// and populates Analysis.DirectDepsCount and Analysis.TransitiveDepsCount.
+//
+// Version selection: StableVersion > PrereleaseVersion (latest release for catalog DB).
+// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
+// Unsupported ecosystems are filtered out before making API requests to avoid
+// wasting HTTP round-trips on guaranteed 404 responses (important for large batches).
+//
+// DDD Layer: Infrastructure (best-effort enrichment)
+func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls []string, analyses map[string]*domain.Analysis) {
+	effectivePURLs := make([]string, 0, len(purls))
+	// Multiple original PURLs may resolve to the same effective PURL (e.g., case
+	// variants like pkg:npm/React and pkg:npm/react). Use a slice of original keys
+	// so all analyses get populated, not just the last one.
+	effectiveToOriginals := make(map[string][]string, len(purls))
+	seen := make(map[string]bool, len(purls))
+	for _, p := range purls {
+		a := analyses[p]
+		if a == nil {
+			continue
+		}
+		// Skip ecosystems not supported by the :dependencies endpoint.
+		if a.Package == nil || !dependenciesSupportedEcosystem(a.Package.Ecosystem) {
+			continue
+		}
+		ep := a.EffectivePURL
+		if ep == "" {
+			ep = p
+		}
+		// The :dependencies endpoint requires a versioned PURL.
+		// Use the latest release version (stable > prerelease) for catalog consistency.
+		if !strings.Contains(ep, "@") {
+			if v := latestReleaseVersion(a); v != "" {
+				if versioned, err := purl.WithVersion(ep, v); err == nil {
+					ep = versioned
+				}
+			}
+		}
+		// Deduplicate effective PURLs to avoid redundant API calls.
+		if !seen[ep] {
+			effectivePURLs = append(effectivePURLs, ep)
+			seen[ep] = true
+		}
+		effectiveToOriginals[ep] = append(effectiveToOriginals[ep], p)
+	}
+
+	slog.Debug("dependency_count_filtered", "total_purls", len(purls), "supported_purls", len(effectivePURLs))
+
+	depsResults := s.depsdevClient.FetchDependenciesBatch(ctx, effectivePURLs)
+	for ep, originalKeys := range effectiveToOriginals {
+		key := purl.CanonicalKey(ep)
+		if key == "" {
+			key = ep
+		}
+		resp, ok := depsResults[key]
+		if !ok || resp == nil {
+			continue
+		}
+		direct, transitive := resp.CountByRelation()
+		for _, originalKey := range originalKeys {
+			a := analyses[originalKey]
+			if a == nil {
+				continue
+			}
+			a.DirectDepsCount, a.TransitiveDepsCount = direct, transitive
+		}
+	}
+}
+
+// latestReleaseVersion returns the latest release version for dependency count queries.
+// Preference: StableVersion > PrereleaseVersion.
+func latestReleaseVersion(a *domain.Analysis) string {
+	if a.ReleaseInfo == nil {
+		return ""
+	}
+	if a.ReleaseInfo.StableVersion != nil && a.ReleaseInfo.StableVersion.Version != "" {
+		return a.ReleaseInfo.StableVersion.Version
+	}
+	if a.ReleaseInfo.PreReleaseVersion != nil && a.ReleaseInfo.PreReleaseVersion.Version != "" {
+		return a.ReleaseInfo.PreReleaseVersion.Version
+	}
+	return ""
 }
 
 // resolvedVersion returns the best available version string from an Analysis.

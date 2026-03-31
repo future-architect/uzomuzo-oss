@@ -230,6 +230,53 @@ type Attestation struct {
 }
 
 // ============================================================================
+// GetDependencies API response types
+// https://docs.deps.dev/api/v3alpha/#getdependencies
+// ============================================================================
+
+// DependenciesResponse represents the response from the GetDependencies API.
+// Endpoint: GET /v3alpha/systems/{system}/packages/{name}/versions/{version}:dependencies
+// Supported systems: npm, cargo, maven, pypi.
+type DependenciesResponse struct {
+	Nodes []DependencyNode `json:"nodes"`
+	Edges []DependencyEdge `json:"edges"`
+}
+
+// DependencyNode represents a single node in the dependency graph.
+type DependencyNode struct {
+	VersionKey DependencyVersionKey `json:"versionKey"`
+	Relation   string               `json:"relation"` // SELF, DIRECT, INDIRECT
+	Errors     []string             `json:"errors"`
+}
+
+// DependencyVersionKey identifies the system/name/version of a dependency node.
+type DependencyVersionKey struct {
+	System  string `json:"system"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+// DependencyEdge represents an edge in the dependency graph.
+type DependencyEdge struct {
+	FromNode    int    `json:"fromNode"`
+	ToNode      int    `json:"toNode"`
+	Requirement string `json:"requirement"`
+}
+
+// CountByRelation counts nodes by relation type (DIRECT, INDIRECT), excluding SELF.
+func (r *DependenciesResponse) CountByRelation() (direct, transitive int) {
+	for _, n := range r.Nodes {
+		switch n.Relation {
+		case "DIRECT":
+			direct++
+		case "INDIRECT":
+			transitive++
+		}
+	}
+	return
+}
+
+// ============================================================================
 // GetDependents API response types
 // https://docs.deps.dev/api/v3alpha/#getdependents
 // ============================================================================

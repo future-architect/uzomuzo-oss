@@ -73,6 +73,22 @@ type Analysis struct {
 	// Zero means unknown or unsupported ecosystem.
 	DependentCount int
 
+	// DirectDepsCount is the number of direct dependencies for the package version
+	// used in the deps.dev query:
+	//   - If EffectivePURL includes a version, that exact version is used.
+	//   - Otherwise, the latest release is used (stable > prerelease).
+	// Zero means unknown, unsupported ecosystem, or no version resolved.
+	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
+	DirectDepsCount int
+
+	// TransitiveDepsCount is the number of transitive (indirect) dependencies for the
+	// package version used in the deps.dev query:
+	//   - If EffectivePURL includes a version, that exact version is used.
+	//   - Otherwise, the latest release is used (stable > prerelease).
+	// Zero means unknown, unsupported ecosystem, or no version resolved.
+	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
+	TransitiveDepsCount int
+
 	// Canonical package links (homepage, registry, docs, changelog)
 	PackageLinks *PackageLinks
 
