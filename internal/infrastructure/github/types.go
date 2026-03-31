@@ -31,7 +31,8 @@ type RepositoryInfo struct {
 	DependencyGraphManifests DependencyGraphManifests `json:"dependencyGraphManifests"`
 	LicenseInfo              *LicenseInfo             `json:"licenseInfo"`
 	// Source is the ultimate non-fork root repository (GitHub "source" field).
-	// Nil when the repository is not a fork.
+	// Nil when the repository is not a fork, or when the GraphQL "source" field is
+	// null/unavailable (for example, if the parent/source repository is private or inaccessible).
 	Source *SourceInfo `json:"source,omitempty"`
 }
 
