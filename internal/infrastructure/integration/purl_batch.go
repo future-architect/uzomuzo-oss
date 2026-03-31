@@ -78,14 +78,23 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 		slog.Debug("github_enhancement_failed", "error", err)
 	}
 
-	// Dependent count enrichment (best-effort)
-	s.enrichDependentCounts(ctx, purls, analyses)
-
-	// Dependency count enrichment (best-effort, npm/cargo/maven/pypi only).
-	// Uses latestReleaseVersion (stable > prerelease) instead of resolvedVersion
-	// because catalog DB stores version-agnostic package data; the latest release
-	// best represents the current dependency surface for OSS selection.
-	s.enrichDependencyCounts(ctx, purls, analyses)
+	// Dependent count + dependency count enrichment (best-effort, parallel).
+	// These are independent enrichment steps hitting different deps.dev endpoints,
+	// so running them concurrently halves wall-clock time for large batches (30k+ PURLs).
+	var enrichWg sync.WaitGroup
+	enrichWg.Add(2)
+	go func() {
+		defer enrichWg.Done()
+		s.enrichDependentCounts(ctx, purls, analyses)
+	}()
+	go func() {
+		defer enrichWg.Done()
+		// Uses latestReleaseVersion (stable > prerelease) instead of resolvedVersion
+		// because catalog DB stores version-agnostic package data; the latest release
+		// best represents the current dependency surface for OSS selection.
+		s.enrichDependencyCounts(ctx, purls, analyses)
+	}()
+	enrichWg.Wait()
 
 	total := len(analyses)
 	pct := func(n int) float64 {
@@ -217,11 +226,24 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 	wg.Wait()
 }
 
+// dependenciesSupportedEcosystem reports whether the deps.dev GetDependencies endpoint
+// supports the given ecosystem. Only npm, cargo, maven, and pypi are supported.
+func dependenciesSupportedEcosystem(eco string) bool {
+	switch strings.ToLower(strings.TrimSpace(eco)) {
+	case "npm", "cargo", "maven", "pypi":
+		return true
+	default:
+		return false
+	}
+}
+
 // enrichDependencyCounts fetches dependency counts (direct + transitive) from deps.dev
 // and populates Analysis.DirectDepsCount and Analysis.TransitiveDepsCount.
 //
 // Version selection: StableVersion > PrereleaseVersion (latest release for catalog DB).
 // Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
+// Unsupported ecosystems are filtered out before making API requests to avoid
+// wasting HTTP round-trips on guaranteed 404 responses (important for large batches).
 //
 // DDD Layer: Infrastructure (best-effort enrichment)
 func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls []string, analyses map[string]*domain.Analysis) {
@@ -230,6 +252,10 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 	for _, p := range purls {
 		a := analyses[p]
 		if a == nil {
+			continue
+		}
+		// Skip ecosystems not supported by the :dependencies endpoint.
+		if a.Package == nil || !dependenciesSupportedEcosystem(a.Package.Ecosystem) {
 			continue
 		}
 		ep := a.EffectivePURL
@@ -248,6 +274,8 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 		effectivePURLs = append(effectivePURLs, ep)
 		effectiveToOriginal[ep] = p
 	}
+
+	slog.Debug("dependency_count_filtered", "total_purls", len(purls), "supported_purls", len(effectivePURLs))
 
 	depsResults := s.depsdevClient.FetchDependenciesBatch(ctx, effectivePURLs)
 	for ep, originalKey := range effectiveToOriginal {

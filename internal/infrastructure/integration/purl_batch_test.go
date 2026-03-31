@@ -410,6 +410,24 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantDirect:     map[string]int{"pkg:pypi/unknown": 0},
 			wantTransitive: map[string]int{"pkg:pypi/unknown": 0},
 		},
+		{
+			name:  "unsupported ecosystem skipped without API call",
+			purls: []string{"pkg:golang/github.com/gin-gonic/gin@v1.10.0"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:golang/github.com/gin-gonic/gin@v1.10.0": {
+					EffectivePURL: "pkg:golang/github.com/gin-gonic/gin@v1.10.0",
+					Package:       &domain.Package{Ecosystem: "golang", Version: "v1.10.0"},
+				},
+			},
+			// stub has data, but it should never be consulted for golang
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:golang/github.com/gin-gonic/gin": {
+					Nodes: []depsdev.DependencyNode{{Relation: "DIRECT"}},
+				},
+			},
+			wantDirect:     map[string]int{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": 0},
+			wantTransitive: map[string]int{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": 0},
+		},
 	}
 
 	for _, tt := range tests {
