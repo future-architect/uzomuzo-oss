@@ -181,4 +181,8 @@ type RepoState struct {
 	IsDisabled bool
 	// IsFork flags that the repository is a fork (helpful for judging maintenance independence and original activity).
 	IsFork bool
+	// ForkSource is the immediate fork parent repository in "owner/repo" format (GitHub GraphQL parent.nameWithOwner).
+	// Empty when IsFork is false, or when the fork's parent is private/inaccessible, or when GitHub data is unavailable.
+	// Useful for LLM-based health assessment to suggest evaluating the upstream project instead of the fork.
+	ForkSource string
 }

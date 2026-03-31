@@ -30,6 +30,14 @@ type RepositoryInfo struct {
 	DefaultBranchRef         DefaultBranchRef         `json:"defaultBranchRef"`
 	DependencyGraphManifests DependencyGraphManifests `json:"dependencyGraphManifests"`
 	LicenseInfo              *LicenseInfo             `json:"licenseInfo"`
+	// Parent is the immediate parent repository from which this repo was forked (GitHub GraphQL "parent" field).
+	// Nil when the repository is not a fork, or when the parent is private/inaccessible.
+	Parent *ParentInfo `json:"parent,omitempty"`
+}
+
+// ParentInfo represents a parent repository in a fork chain.
+type ParentInfo struct {
+	NameWithOwner string `json:"nameWithOwner"`
 }
 
 // LicenseInfo represents GitHub repository license information

@@ -81,7 +81,7 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 	checkNames := getAllCheckNames(analyses)
 
 	// Create CSV headers
-	headers := []string{"purl", "repoURL", "scorecard", "api", "release", "star", "Canary", "Latest", "Lastcommit", "archived", "disabled", "Fork", "overallScore", "dependents", "directDeps", "transitiveDeps"}
+	headers := []string{"purl", "repoURL", "scorecard", "api", "release", "star", "Canary", "Latest", "Lastcommit", "archived", "disabled", "Fork", "ForkSource", "overallScore", "dependents", "directDeps", "transitiveDeps"}
 	headers = append(headers, checkNames...)
 	headers = append(headers, "Result", "Reason", "RepoState")
 
@@ -130,7 +130,8 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 		lastCommitDays := "0"
 		archived := "false"
 		disabled := "false"
-		forked := "false" // Domain RepoState doesn't track fork status
+		forked := "false"
+		forkSource := ""
 		repoStateStr := ""
 		if analysis.Repository != nil {
 			starCount = fmt.Sprintf("%d", analysis.Repository.StarsCount)
@@ -139,7 +140,8 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 			lastCommitDays = fmt.Sprintf("%d", analysis.RepoState.DaysSinceLastCommit)
 			archived = fmt.Sprintf("%t", analysis.RepoState.IsArchived)
 			disabled = fmt.Sprintf("%t", analysis.RepoState.IsDisabled)
-			// Use analysis metadata for repo state string representation
+			forked = fmt.Sprintf("%t", analysis.RepoState.IsFork)
+			forkSource = analysis.RepoState.ForkSource
 			repoStateStr = fmt.Sprintf("Archived:%t,Disabled:%t", analysis.RepoState.IsArchived, analysis.RepoState.IsDisabled)
 		}
 
@@ -156,6 +158,7 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 			archived,
 			disabled,
 			forked,
+			forkSource,
 			fmt.Sprintf("%.2f", analysis.OverallScore),
 			fmt.Sprintf("%d", analysis.DependentCount),      // 0 = unknown; CLI omits zero but CSV always emits for machine-readability
 			fmt.Sprintf("%d", analysis.DirectDepsCount),     // 0 = unknown or unsupported ecosystem
