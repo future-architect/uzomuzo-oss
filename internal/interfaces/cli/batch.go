@@ -845,7 +845,11 @@ func printRepoState(a *analysispkg.Analysis) {
 		fmt.Printf("⛔ Disabled ")
 	}
 	if isFork {
-		fmt.Printf("🔀 Fork ")
+		if a.RepoState != nil && a.RepoState.ForkSource != "" {
+			fmt.Printf("🔀 Fork of %s ", a.RepoState.ForkSource)
+		} else {
+			fmt.Printf("🔀 Fork ")
+		}
 	}
 	if !isArchived && !isDisabled && !isFork {
 		fmt.Printf("Normal ")

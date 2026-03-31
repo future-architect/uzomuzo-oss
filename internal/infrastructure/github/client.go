@@ -133,7 +133,7 @@ func (c *Client) FetchBasicRepositoryInfo(ctx context.Context, owner, repo strin
 		    description
 		    homepageUrl
 		    licenseInfo { spdxId name }
-		    source { nameWithOwner }
+		    parent { nameWithOwner }
 
 		    defaultBranchRef {
 		      name
@@ -196,7 +196,7 @@ func (c *Client) FetchDetailedRepositoryInfo(ctx context.Context, owner, repo st
 		    description
 		    homepageUrl
 		    licenseInfo { spdxId name }
-		    source { nameWithOwner }
+		    parent { nameWithOwner }
 
 		    defaultBranchRef {
 		      name
@@ -705,15 +705,15 @@ func (c *Client) executeGraphQLQuery(ctx context.Context, query string, variable
 	return &graphqlResp.Data.Repository, nil
 }
 
-// forkSourceFromRepoInfo extracts the ultimate source repository name ("owner/repo") from a
-// GraphQL RepositoryInfo response. Returns empty string when the repo is not a fork or source
+// forkSourceFromRepoInfo extracts the parent repository name ("owner/repo") from a
+// GraphQL RepositoryInfo response. Returns empty string when the repo is not a fork or parent
 // data is unavailable (e.g. private parent).
 func forkSourceFromRepoInfo(info *RepositoryInfo) string {
 	if info == nil || !info.IsFork {
 		return ""
 	}
-	if info.Source != nil && info.Source.NameWithOwner != "" {
-		return info.Source.NameWithOwner
+	if info.Parent != nil && info.Parent.NameWithOwner != "" {
+		return info.Parent.NameWithOwner
 	}
 	return ""
 }

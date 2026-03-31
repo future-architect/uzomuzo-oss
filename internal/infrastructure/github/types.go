@@ -30,14 +30,13 @@ type RepositoryInfo struct {
 	DefaultBranchRef         DefaultBranchRef         `json:"defaultBranchRef"`
 	DependencyGraphManifests DependencyGraphManifests `json:"dependencyGraphManifests"`
 	LicenseInfo              *LicenseInfo             `json:"licenseInfo"`
-	// Source is the ultimate non-fork root repository (GitHub "source" field).
-	// Nil when the repository is not a fork, or when the GraphQL "source" field is
-	// null/unavailable (for example, if the parent/source repository is private or inaccessible).
-	Source *SourceInfo `json:"source,omitempty"`
+	// Parent is the immediate parent repository from which this repo was forked (GitHub GraphQL "parent" field).
+	// Nil when the repository is not a fork, or when the parent is private/inaccessible.
+	Parent *ParentInfo `json:"parent,omitempty"`
 }
 
-// SourceInfo represents the ultimate source (non-fork root) repository.
-type SourceInfo struct {
+// ParentInfo represents a parent repository in a fork chain.
+type ParentInfo struct {
 	NameWithOwner string `json:"nameWithOwner"`
 }
 

@@ -21,34 +21,34 @@ func TestForkSourceFromRepoInfo(t *testing.T) {
 			want: "",
 		},
 		{
-			name: "fork with source",
+			name: "fork with parent",
 			info: &RepositoryInfo{
 				IsFork: true,
-				Source:  &SourceInfo{NameWithOwner: "original-owner/original-repo"},
+				Parent: &ParentInfo{NameWithOwner: "original-owner/original-repo"},
 			},
 			want: "original-owner/original-repo",
 		},
 		{
-			name: "fork without source data (private parent)",
+			name: "fork without parent data (private parent)",
 			info: &RepositoryInfo{
 				IsFork: true,
-				Source:  nil,
+				Parent: nil,
 			},
 			want: "",
 		},
 		{
-			name: "fork with empty source name",
+			name: "fork with empty parent name",
 			info: &RepositoryInfo{
 				IsFork: true,
-				Source:  &SourceInfo{NameWithOwner: ""},
+				Parent: &ParentInfo{NameWithOwner: ""},
 			},
 			want: "",
 		},
 		{
-			name: "not a fork but source present (should not happen, but guard)",
+			name: "not a fork but parent present (should not happen, but guard)",
 			info: &RepositoryInfo{
 				IsFork: false,
-				Source:  &SourceInfo{NameWithOwner: "some-owner/some-repo"},
+				Parent: &ParentInfo{NameWithOwner: "some-owner/some-repo"},
 			},
 			want: "",
 		},
