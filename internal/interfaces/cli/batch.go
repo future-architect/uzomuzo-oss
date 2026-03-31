@@ -863,10 +863,10 @@ func printDependentCount(a *analysispkg.Analysis) {
 	// CLI intentionally omits zero counts (unknown/unsupported ecosystem).
 	// CSV always emits "0" for machine-readable consistency.
 	if a.DependentCount > 0 {
-		fmt.Printf("👥 Dependents: %d\n", a.DependentCount)
+		fmt.Printf("👥 Used by: %d packages\n", a.DependentCount)
 	}
 	if a.DirectDepsCount > 0 || a.TransitiveDepsCount > 0 {
-		fmt.Printf("📦 Dependencies: %d direct, %d transitive\n", a.DirectDepsCount, a.TransitiveDepsCount)
+		fmt.Printf("📦 Depends on: %d direct, %d transitive\n", a.DirectDepsCount, a.TransitiveDepsCount)
 	}
 }
 
