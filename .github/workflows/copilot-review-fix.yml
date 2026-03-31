@@ -1,9 +1,14 @@
 name: Auto-fix Copilot Review
 
 on:
-  # Auto-trigger: Copilot finishes its review and submits it
-  pull_request_review:
-    types: [submitted]
+  # Auto-trigger: Copilot posts a review comment.
+  # Note: pull_request_review (submitted) no longer fires for Copilot since the
+  # agentic architecture migration (2026-03-05) due to GITHUB_TOKEN event
+  # suppression. pull_request_review_comment still fires (verified in PR #81).
+  # Multiple comments trigger multiple events; concurrency cancel-in-progress
+  # ensures only the last one runs.
+  pull_request_review_comment:
+    types: [created]
   # Manual trigger: add 'copilot-review' label to re-run
   pull_request:
     types: [labeled]
@@ -15,13 +20,13 @@ jobs:
     concurrency:
       group: copilot-review-${{ github.event.pull_request.number }}
       cancel-in-progress: true
-    # Run when: Copilot submits a review OR 'copilot-review' label is added
+    # Run when: Copilot posts a review comment OR 'copilot-review' label is added
     # Only for PRs authored by kotakanbe
     if: >-
       github.event.pull_request.user.login == 'kotakanbe'
       && (
-        (github.event_name == 'pull_request_review'
-         && github.event.review.user.login == 'Copilot')
+        (github.event_name == 'pull_request_review_comment'
+         && github.event.comment.user.login == 'Copilot')
         || (github.event_name == 'pull_request'
             && github.event.label.name == 'copilot-review'
             && github.event.sender.login == 'kotakanbe')
