@@ -273,9 +273,11 @@ func (s *IntegrationService) githubURLToPURL(ctx context.Context, githubURL stri
 
 	repoInfo, err := s.githubClient.FetchDetailedRepositoryInfo(ctxWithTimeout, owner, repo)
 	if err != nil {
-		return "", common.NewFetchError("failed to fetch repository info", err).
-			WithContext("repository", fmt.Sprintf("%s/%s", owner, repo)).
-			WithContext("github_url", githubURL)
+		// GraphQL failed (e.g. invalid/expired token, permission error, rate limit).
+		// Fall back to REST language detection instead of giving up entirely.
+		slog.Warn("GraphQL failed - falling back to REST language detection",
+			"owner", owner, "repo", repo, "error", err)
+		return s.inferPURLFromLanguages(ctx, owner, repo)
 	}
 	if repoInfo == nil {
 		// Token not available for GraphQL; use REST API language detection to infer ecosystem
