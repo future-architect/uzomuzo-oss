@@ -11,4 +11,19 @@
 #       pr: <PR number>
 #       file: "<path>"
 #       date: "YYYY-MM-DD"
-patterns: []
+patterns:
+  - category: "error-handling"
+    summary: "Preserve typed error identity when wrapping — use matching constructor (e.g., NewAuthenticationError) not a generic one (e.g., NewFetchError)"
+    pr: 83
+    file: "internal/infrastructure/integration/service.go"
+    date: "2026-04-01"
+  - category: "defensive-coding"
+    summary: "Restrict fallback paths to specific error classes; fail fast for not-found and rate-limit errors instead of silently degrading"
+    pr: 83
+    file: "internal/infrastructure/integration/service.go"
+    date: "2026-04-01"
+  - category: "defensive-coding"
+    summary: "Propagate timeout context to fallback code paths — do not use the unbounded parent ctx when a scoped ctxWithTimeout exists"
+    pr: 83
+    file: "internal/infrastructure/integration/service.go"
+    date: "2026-04-01"
