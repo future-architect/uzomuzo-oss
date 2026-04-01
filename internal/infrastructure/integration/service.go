@@ -279,12 +279,11 @@ func (s *IntegrationService) githubURLToPURL(ctx context.Context, githubURL stri
 				WithContext("repository", fmt.Sprintf("%s/%s", owner, repo)).
 				WithContext("github_url", githubURL)
 		}
-		// Not-found and rate-limit errors should fail fast instead of
-		// inferring a potentially incorrect PURL via language detection.
-		if common.IsResourceNotFoundError(err) || common.IsRateLimitError(err) {
-			return "", common.NewFetchError("failed to fetch repository info", err).
-				WithContext("repository", fmt.Sprintf("%s/%s", owner, repo)).
-				WithContext("github_url", githubURL)
+		// Not-found, rate-limit, timeout, and network errors should fail fast
+		// instead of inferring a potentially incorrect PURL via language detection.
+		if common.IsResourceNotFoundError(err) || common.IsRateLimitError(err) ||
+			common.IsTimeoutError(err) || common.IsNetworkError(err) {
+			return "", fmt.Errorf("failed to fetch repository info for %s/%s: %w", owner, repo, err)
 		}
 		// For other errors (GraphQL field-level errors, insufficient scopes, etc.),
 		// fall back to REST API language detection.
