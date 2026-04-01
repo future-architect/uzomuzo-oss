@@ -273,17 +273,29 @@ func (s *IntegrationService) githubURLToPURL(ctx context.Context, githubURL stri
 
 	repoInfo, err := s.githubClient.FetchDetailedRepositoryInfo(ctxWithTimeout, owner, repo)
 	if err != nil {
-		// GraphQL failed (e.g. invalid/expired token, permission error, rate limit).
-		// Fall back to REST language detection instead of giving up entirely.
-		slog.Warn("GraphQL failed - falling back to REST language detection",
+		// Authentication errors should not be retried via fallback.
+		if common.IsAuthenticationError(err) {
+			return "", common.NewAuthenticationError("failed to fetch repository info", err).
+				WithContext("repository", fmt.Sprintf("%s/%s", owner, repo)).
+				WithContext("github_url", githubURL)
+		}
+		// Not-found, rate-limit, timeout, and network errors should fail fast
+		// instead of inferring a potentially incorrect PURL via language detection.
+		if common.IsResourceNotFoundError(err) || common.IsRateLimitError(err) ||
+			common.IsTimeoutError(err) || common.IsNetworkError(err) {
+			return "", fmt.Errorf("failed to fetch repository info for %s/%s: %w", owner, repo, err)
+		}
+		// For other errors (GraphQL field-level errors, insufficient scopes, etc.),
+		// fall back to REST API language detection.
+		slog.Warn("GraphQL repository info failed, falling back to REST language detection",
 			"owner", owner, "repo", repo, "error", err)
-		return s.inferPURLFromLanguages(ctx, owner, repo)
+		return s.inferPURLFromLanguages(ctxWithTimeout, owner, repo)
 	}
 	if repoInfo == nil {
 		// Token not available for GraphQL; use REST API language detection to infer ecosystem
 		slog.Warn("GitHub token not available for GraphQL - using REST language detection",
 			"owner", owner, "repo", repo)
-		return s.inferPURLFromLanguages(ctx, owner, repo)
+		return s.inferPURLFromLanguages(ctxWithTimeout, owner, repo)
 	}
 
 	// Extract package managers from dependency manifests
