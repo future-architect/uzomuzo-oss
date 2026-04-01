@@ -56,17 +56,15 @@ Download the latest release from [GitHub Releases](https://github.com/future-arc
 ### Go install
 
 ```bash
-go install github.com/future-architect/uzomuzo-oss@latest
+go install github.com/future-architect/uzomuzo-oss/cmd/uzomuzo@latest
 ```
-
-> **Note:** `go install` produces a binary named `uzomuzo-oss`. Create an alias if you prefer the shorter name: `alias uzomuzo=uzomuzo-oss`
 
 ### Build from source
 
 ```bash
 git clone https://github.com/future-architect/uzomuzo-oss.git
 cd uzomuzo-oss
-go build -o uzomuzo main.go
+go build -o uzomuzo ./cmd/uzomuzo
 ```
 
 ## Quick Start
