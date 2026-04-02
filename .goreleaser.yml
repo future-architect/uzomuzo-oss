@@ -2,7 +2,7 @@ version: 2
 
 builds:
   - binary: uzomuzo
-    main: .
+    main: ./cmd/uzomuzo
     env:
       - CGO_ENABLED=0
     ldflags:

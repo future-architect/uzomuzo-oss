@@ -9,10 +9,10 @@
 ## Build & Test
 
 ```bash
-go build -o uzomuzo main.go        # build
+go build -o uzomuzo ./cmd/uzomuzo   # build
 go test ./...                       # test all
 goimports -w . && golangci-lint run # format & lint
-go run . update-spdx                # regenerate SPDX license list
+go run ./cmd/uzomuzo update-spdx   # regenerate SPDX license list
 ```
 
 ## Configuration
