@@ -18,10 +18,23 @@ import (
 const sniffPrefixLen = 512
 
 // IsCycloneDXJSON performs a quick sniff to detect CycloneDX JSON format
-// by checking for the "bomFormat" key in the first 512 bytes.
+// by checking for "bomFormat" with value "CycloneDX" in the first 512 bytes.
+// It handles both compact (`"bomFormat":"CycloneDX"`) and pretty-printed
+// (`"bomFormat": "CycloneDX"`) JSON.
 func IsCycloneDXJSON(data []byte) bool {
 	prefix := data[:min(len(data), sniffPrefixLen)]
-	return bytes.Contains(prefix, []byte(`"bomFormat"`))
+	if !bytes.Contains(prefix, []byte(`"bomFormat"`)) {
+		return false
+	}
+	// Decode just the bomFormat field to validate the value.
+	var header struct {
+		BOMFormat string `json:"bomFormat"`
+	}
+	if err := json.Unmarshal(prefix, &header); err != nil {
+		// prefix may be truncated; fall back to substring match
+		return bytes.Contains(prefix, []byte(`"CycloneDX"`))
+	}
+	return header.BOMFormat == "CycloneDX"
 }
 
 // Parser implements depparser.DependencyParser for CycloneDX SBOM JSON.

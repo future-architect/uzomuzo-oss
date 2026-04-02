@@ -15,8 +15,11 @@ import (
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	domainscan "github.com/future-architect/uzomuzo-oss/internal/domain/scan"
-	infradepparser "github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser"
 )
+
+// FileDetector inspects a file path and returns the matching parser and file data.
+// Returns (nil, nil, nil) when the file is not a recognized structured format.
+type FileDetector func(filePath string, parsers map[string]depparser.DependencyParser) (depparser.DependencyParser, []byte, error)
 
 // ErrScanFailPolicy is returned by RunScan when at least one dependency
 // matches the --fail-on policy, signaling the caller to exit with code 1.
@@ -41,7 +44,7 @@ type ScanOptions struct {
 //  5. Auto-detect: go.mod in current directory
 //
 // DDD Layer: Interfaces (CLI handler, delegates to Application)
-func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts ScanOptions, parsers map[string]depparser.DependencyParser) error {
+func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts ScanOptions, parsers map[string]depparser.DependencyParser, detectFile FileDetector) error {
 	// Parse fail-on policy
 	policy, err := domainscan.ParseFailPolicy(opts.FailOnRaw)
 	if err != nil {
@@ -60,7 +63,7 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 		return runScanSBOM(ctx, scanService, opts, parsers, policy)
 
 	case opts.Filename != "":
-		return runScanFile(ctx, scanService, opts, parsers, policy)
+		return runScanFile(ctx, scanService, opts, parsers, policy, detectFile)
 
 	case len(args) > 0:
 		return runScanDirect(ctx, scanService, args, opts, policy)
@@ -101,11 +104,11 @@ func runScanSBOM(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 }
 
 // runScanFile handles --file input (go.mod, SBOM, or PURL/URL list).
-func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy) error {
+func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy, detectFile FileDetector) error {
 	filePath := opts.Filename
 
 	// Try structured format (go.mod / CycloneDX SBOM) first
-	parser, data, err := infradepparser.DetectFileParser(filePath, parsers)
+	parser, data, err := detectFile(filePath, parsers)
 	if err != nil {
 		return fmt.Errorf("failed to detect file format for '%s': %w", filePath, err)
 	}

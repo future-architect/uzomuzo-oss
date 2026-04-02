@@ -28,6 +28,11 @@ func TestIsCycloneDXJSON(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "JSON with bomFormat but wrong value",
+			data: []byte(`{"bomFormat": "SPDX", "specVersion": "2.3"}`),
+			want: false,
+		},
+		{
 			name: "empty data",
 			data: []byte{},
 			want: false,

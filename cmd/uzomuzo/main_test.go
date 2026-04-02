@@ -72,31 +72,15 @@ func TestBuildScanOptions(t *testing.T) {
 		{
 			name: "all flags set",
 			args: []string{
-				"--only-review-needed",
-				"--only-eol",
-				"--ecosystem", "npm",
 				"--sample", "42",
-				"--export-license-csv", "/tmp/lic.csv",
 				"--line-range", "5:20",
 				"--format", "json",
 				"--fail-on", "eol-confirmed,stalled",
 				"--sbom", "bom.json",
 			},
 			check: func(t *testing.T, opts cli.ScanOptions) {
-				if !opts.OnlyReviewNeeded {
-					t.Error("OnlyReviewNeeded should be true")
-				}
-				if !opts.OnlyEOL {
-					t.Error("OnlyEOL should be true")
-				}
-				if opts.Ecosystem != "npm" {
-					t.Errorf("Ecosystem = %q, want %q", opts.Ecosystem, "npm")
-				}
 				if opts.SampleSize != 42 {
 					t.Errorf("SampleSize = %d, want 42", opts.SampleSize)
-				}
-				if opts.LicenseCSVPath != "/tmp/lic.csv" {
-					t.Errorf("LicenseCSVPath = %q, want %q", opts.LicenseCSVPath, "/tmp/lic.csv")
 				}
 				if opts.LineStart != 5 || opts.LineEnd != 20 {
 					t.Errorf("LineStart/LineEnd = %d/%d, want 5/20", opts.LineStart, opts.LineEnd)

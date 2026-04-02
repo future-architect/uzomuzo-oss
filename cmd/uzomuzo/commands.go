@@ -9,6 +9,7 @@ import (
 
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
+	infradepparser "github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/cyclonedx"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/gomod"
 	"github.com/future-architect/uzomuzo-oss/internal/interfaces/cli"
@@ -26,12 +27,6 @@ func scanFlags() []urfcli.Flag {
 
 		// CI gate
 		&urfcli.StringFlag{Name: "fail-on", Usage: "Comma-separated lifecycle labels that trigger exit 1 (eol-confirmed,eol-effective,eol-scheduled,stalled,legacy-safe)"},
-
-		// Filters
-		&urfcli.BoolFlag{Name: "only-review-needed", Usage: "Show only 'Review Needed' results"},
-		&urfcli.BoolFlag{Name: "only-eol", Usage: "Show only 'EOL-*' results"},
-		&urfcli.StringFlag{Name: "ecosystem", Usage: "Filter to a single ecosystem (npm, pypi, maven, etc.)"},
-		&urfcli.StringFlag{Name: "export-license-csv", Usage: "Write license CSV to path"},
 
 		// File mode options
 		&urfcli.IntFlag{Name: "sample", Usage: "Randomly sample up to N inputs (file mode only)"},
@@ -142,19 +137,15 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 		"gomod": &gomod.Parser{},
 	}
 
-	return cli.RunScan(ctx, cfg, args, opts, parsers)
+	return cli.RunScan(ctx, cfg, args, opts, parsers, infradepparser.DetectFileParser)
 }
 
 // buildScanOptions maps urfave/cli flags to ScanOptions.
 func buildScanOptions(cmd *urfcli.Command) (cli.ScanOptions, error) {
 	opts := cli.ScanOptions{
 		ProcessingOptions: cli.ProcessingOptions{
-			OnlyReviewNeeded: cmd.Bool("only-review-needed"),
-			OnlyEOL:          cmd.Bool("only-eol"),
-			Ecosystem:        cmd.String("ecosystem"),
-			SampleSize:       int(cmd.Int("sample")),
-			LicenseCSVPath:   cmd.String("export-license-csv"),
-			Filename:         cmd.String("file"),
+			SampleSize: int(cmd.Int("sample")),
+			Filename:   cmd.String("file"),
 		},
 		Format:    cmd.String("format"),
 		FailOnRaw: cmd.String("fail-on"),
