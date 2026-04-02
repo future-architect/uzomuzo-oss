@@ -117,8 +117,7 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 			}
 			continue
 		}
-		// Reuse the existing printFullAnalysis which writes to stdout.
-		printFullAnalysis(e.PURL, e.Analysis, &counter)
+		printFullAnalysis(w, e.PURL, e.Analysis, &counter)
 	}
 	if counter == 0 {
 		if _, err := fmt.Fprintln(w, "No results to display"); err != nil {
