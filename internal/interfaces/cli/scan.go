@@ -64,6 +64,9 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 		return runScanSBOM(ctx, scanService, opts, parsers, policy)
 
 	case opts.Filename != "":
+		if detectFile == nil {
+			return fmt.Errorf("file detector is required for --file mode")
+		}
 		return runScanFile(ctx, scanService, opts, parsers, policy, detectFile)
 
 	case len(args) > 0:

@@ -5,6 +5,7 @@ package depparser
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,7 +44,7 @@ func DetectFileParser(filePath string, parsers map[string]depparser.DependencyPa
 		defer f.Close() //nolint:errcheck // best-effort cleanup
 
 		prefix := make([]byte, cyclonedx.SniffPrefixLen)
-		n, err := f.Read(prefix)
+		n, err := io.ReadFull(f, prefix)
 		if err != nil && n == 0 {
 			return nil, nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
 		}
