@@ -34,11 +34,27 @@ func DetectFileParser(filePath string, parsers map[string]depparser.DependencyPa
 	}
 
 	if strings.HasSuffix(filePath, ".json") {
-		data, err := os.ReadFile(filePath)
+		// Read only a small prefix to sniff format, avoiding a full-file
+		// allocation when the file is not CycloneDX.
+		f, err := os.Open(filePath)
 		if err != nil {
+			return nil, nil, fmt.Errorf("failed to open file '%s': %w", filePath, err)
+		}
+		defer f.Close() //nolint:errcheck // best-effort cleanup
+
+		prefix := make([]byte, cyclonedx.SniffPrefixLen)
+		n, err := f.Read(prefix)
+		if err != nil && n == 0 {
 			return nil, nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
 		}
-		if cyclonedx.IsCycloneDXJSON(data) {
+		prefix = prefix[:n]
+
+		if cyclonedx.IsCycloneDXJSON(prefix) {
+			// Confirmed CycloneDX — now read the full file for parsing.
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
+			}
 			parser, ok := parsers["sbom"]
 			if !ok {
 				return nil, nil, fmt.Errorf("SBOM parser not available")

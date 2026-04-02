@@ -194,7 +194,10 @@ func TestScanAction_FlagValidation(t *testing.T) {
 func TestRootAction_NoInputReturnsNil(t *testing.T) {
 	// Capture stderr to suppress output
 	oldStderr := os.Stderr
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() failed: %v", err)
+	}
 	os.Stderr = w
 	t.Cleanup(func() {
 		os.Stderr = oldStderr
@@ -203,7 +206,7 @@ func TestRootAction_NoInputReturnsNil(t *testing.T) {
 
 	cfg := &domaincfg.Config{}
 	app := buildApp(cfg)
-	err := app.Run(context.Background(), []string{"uzomuzo"})
+	err = app.Run(context.Background(), []string{"uzomuzo"})
 	_ = w.Close()
 	if err != nil {
 		t.Errorf("expected nil error for root with no input, got: %v", err)

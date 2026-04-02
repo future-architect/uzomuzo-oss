@@ -113,6 +113,14 @@ func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 		return fmt.Errorf("failed to detect file format for '%s': %w", filePath, err)
 	}
 	if parser != nil {
+		// --sample and --line-range are only meaningful for PURL/URL list files;
+		// reject them when the file is a structured format (go.mod / CycloneDX).
+		if opts.SampleSize > 0 {
+			return fmt.Errorf("--sample is not supported for %s files", parser.FormatName())
+		}
+		if opts.LineStart > 0 || opts.LineEnd > 0 {
+			return fmt.Errorf("--line-range is not supported for %s files", parser.FormatName())
+		}
 		result, err := svc.RunFromParser(ctx, parser, data, policy)
 		if err != nil {
 			return fmt.Errorf("scan failed: %w", err)
