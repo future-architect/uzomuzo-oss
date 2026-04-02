@@ -29,6 +29,7 @@ jobs:
     outputs:
       exit_code: ${{ steps.scan.outputs.exit_code }}
       scan_output: ${{ steps.scan.outputs.scan_output }}
+      fail_on: ${{ steps.scan.outputs.fail_on }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -78,6 +79,7 @@ jobs:
           set -e
 
           echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          echo "fail_on=$FAIL_ON" >> "$GITHUB_OUTPUT"
 
           # Extract summary table section (between markers) for issue body
           {
@@ -110,6 +112,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SCAN_OUTPUT: ${{ needs.scan.outputs.scan_output }}
           EXIT_CODE: ${{ needs.scan.outputs.exit_code }}
+          FAIL_ON_POLICY: ${{ needs.scan.outputs.fail_on }}
         run: |
           TITLE="Dependency scan report ($(date +%Y-%m-%d))"
 
@@ -131,7 +134,7 @@ jobs:
 
           **Status**: $STATUS
           **Workflow run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          **Fail-on policy**: \`${{ github.event.inputs.fail-on || 'eol-confirmed' }}\`
+          **Fail-on policy**: \`${FAIL_ON_POLICY:-(none)}\`
 
           <details>
           <summary>Scan output</summary>
@@ -161,7 +164,7 @@ jobs:
         run: |
           REPO="${{ github.repository }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          FAIL_ON="${{ github.event.inputs.fail-on || 'eol-confirmed' }}"
+          FAIL_ON="${{ needs.scan.outputs.fail_on }}"
 
           curl -sf -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
