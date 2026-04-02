@@ -12,4 +12,4 @@ require golang.org/x/mod v0.34.0
 
 require github.com/urfave/cli/v3 v3.8.0
 
-require gopkg.in/yaml.v3 v3.0.1 // indirect
+require gopkg.in/yaml.v3 v3.0.1

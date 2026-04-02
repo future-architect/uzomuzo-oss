@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,12 +15,19 @@ import (
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	domainscan "github.com/future-architect/uzomuzo-oss/internal/domain/scan"
-	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/ghaworkflow"
 )
 
 // FileDetector inspects a file path and returns the matching parser and file data.
 // Returns (nil, nil, nil) when the file is not a recognized structured format.
 type FileDetector func(filePath string, parsers map[string]depparser.DependencyParser) (depparser.DependencyParser, []byte, error)
+
+// WorkflowDetector checks whether filePath is a GitHub Actions workflow YAML.
+// If it is, it returns (data, true, nil). Otherwise (nil, false, nil).
+// The data is the full file content, ready for parsing.
+type WorkflowDetector func(filePath string) (data []byte, ok bool, err error)
+
+// WorkflowParser extracts GitHub repository URLs from workflow YAML data.
+type WorkflowParser func(data []byte) ([]string, error)
 
 // ErrScanFailPolicy is returned by RunScan when at least one dependency
 // matches the --fail-on policy, signaling the caller to exit with code 1.
@@ -31,10 +37,10 @@ var ErrScanFailPolicy = errors.New("scan: one or more dependencies matched --fai
 type ScanOptions struct {
 	ProcessingOptions
 
-	Format             string // "detailed", "table", "json", "csv" (empty = smart default)
-	FailOnRaw          string // raw --fail-on CSV string
-	SBOMPath           string // --sbom flag
-	ConfigSampleDefault int   // Config-level default sample size (applied only to PURL/URL list files)
+	Format              string // "detailed", "table", "json", "csv" (empty = smart default)
+	FailOnRaw           string // raw --fail-on CSV string
+	SBOMPath            string // --sbom flag
+	ConfigSampleDefault int    // Config-level default sample size (applied only to PURL/URL list files)
 }
 
 // RunScan is the entry point for the "scan" subcommand.
@@ -47,7 +53,7 @@ type ScanOptions struct {
 //  5. Auto-detect: go.mod in current directory
 //
 // DDD Layer: Interfaces (CLI handler, delegates to Application)
-func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts ScanOptions, parsers map[string]depparser.DependencyParser, detectFile FileDetector) error {
+func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts ScanOptions, parsers map[string]depparser.DependencyParser, detectFile FileDetector, detectWorkflow WorkflowDetector, parseWorkflow WorkflowParser) error {
 	// Parse fail-on policy
 	policy, err := domainscan.ParseFailPolicy(opts.FailOnRaw)
 	if err != nil {
@@ -69,7 +75,7 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 		if detectFile == nil {
 			return fmt.Errorf("file detector is required for --file mode")
 		}
-		return runScanFile(ctx, scanService, opts, parsers, policy, detectFile)
+		return runScanFile(ctx, scanService, opts, parsers, policy, detectFile, detectWorkflow, parseWorkflow)
 
 	case len(args) > 0:
 		return runScanDirect(ctx, scanService, args, opts, policy)
@@ -110,7 +116,7 @@ func runScanSBOM(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 }
 
 // runScanFile handles --file input (go.mod, SBOM, or PURL/URL list).
-func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy, detectFile FileDetector) error {
+func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy, detectFile FileDetector, detectWorkflow WorkflowDetector, parseWorkflow WorkflowParser) error {
 	filePath := opts.Filename
 
 	// Try structured format (go.mod / CycloneDX SBOM) first
@@ -135,12 +141,14 @@ func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 	}
 
 	// Try GitHub Actions workflow YAML before falling back to PURL/URL list.
-	wfData, wfErr := tryReadWorkflowFile(filePath)
-	if wfErr != nil {
-		return fmt.Errorf("failed to read workflow file '%s': %w", filePath, wfErr)
-	}
-	if wfData != nil {
-		return runScanWorkflow(ctx, svc, wfData, opts, policy)
+	if detectWorkflow != nil && parseWorkflow != nil {
+		wfData, ok, wfErr := detectWorkflow(filePath)
+		if wfErr != nil {
+			return fmt.Errorf("failed to read workflow file '%s': %w", filePath, wfErr)
+		}
+		if ok {
+			return runScanWorkflow(ctx, svc, wfData, opts, policy, parseWorkflow)
+		}
 	}
 
 	// Fall back to PURL/URL list
@@ -280,13 +288,14 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 }
 
 // runScanWorkflow parses a GitHub Actions workflow YAML and evaluates referenced Actions.
-func runScanWorkflow(ctx context.Context, svc *scanapp.Service, data []byte, opts ScanOptions, policy domainscan.FailPolicy) error {
-	githubURLs, err := ghaworkflow.ParseGitHubURLs(data)
+func runScanWorkflow(ctx context.Context, svc *scanapp.Service, data []byte, opts ScanOptions, policy domainscan.FailPolicy, parseWorkflow WorkflowParser) error {
+	githubURLs, err := parseWorkflow(data)
 	if err != nil {
 		return fmt.Errorf("failed to parse workflow: %w", err)
 	}
 	if len(githubURLs) == 0 {
-		return fmt.Errorf("no GitHub Actions references found in workflow file")
+		slog.Info("scan: no supported GitHub Actions references found in workflow; returning empty result")
+		return finalizeScanOutput(svc, &scanapp.Result{}, opts, 0)
 	}
 
 	slog.Info("scan: found GitHub Actions references in workflow", "count", len(githubURLs))
@@ -296,29 +305,6 @@ func runScanWorkflow(ctx context.Context, svc *scanapp.Service, data []byte, opt
 		return fmt.Errorf("scan failed: %w", err)
 	}
 	return finalizeScanOutput(svc, result, opts, len(githubURLs))
-}
-
-// tryReadWorkflowFile checks whether filePath is a GitHub Actions workflow YAML.
-// Returns the file data if it is, or (nil, nil) if it is not.
-func tryReadWorkflowFile(filePath string) ([]byte, error) {
-	ext := strings.ToLower(filepath.Ext(filePath))
-	if ext != ".yml" && ext != ".yaml" {
-		return nil, nil
-	}
-
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
-	}
-
-	prefix := data
-	if len(prefix) > 1024 {
-		prefix = prefix[:1024]
-	}
-	if ghaworkflow.IsWorkflowYAML(filePath, prefix) {
-		return data, nil
-	}
-	return nil, nil
 }
 
 // isStdinTerminal reports whether stdin is connected to a terminal.

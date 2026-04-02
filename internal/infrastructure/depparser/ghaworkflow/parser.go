@@ -111,8 +111,7 @@ func IsWorkflowYAML(filePath string, prefix []byte) bool {
 }
 
 // hasWorkflowMarkers checks whether the byte prefix contains top-level YAML keys
-// that indicate a GitHub Actions workflow file: "on:" (or "true:" from YAML boolean
-// parsing of bare `on`) and "jobs:".
+// that indicate a GitHub Actions workflow file: "on:" (or quoted "on":) and "jobs:".
 func hasWorkflowMarkers(data []byte) bool {
 	s := string(data)
 	hasOn := strings.Contains(s, "\non:") || strings.HasPrefix(s, "on:") ||

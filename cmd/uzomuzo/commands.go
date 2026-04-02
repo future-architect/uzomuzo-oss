@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	urfcli "github.com/urfave/cli/v3"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	infradepparser "github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/cyclonedx"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/ghaworkflow"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/gomod"
 	"github.com/future-architect/uzomuzo-oss/internal/interfaces/cli"
 )
@@ -139,7 +142,30 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 		"gomod": &gomod.Parser{},
 	}
 
-	return cli.RunScan(ctx, cfg, args, opts, parsers, infradepparser.DetectFileParser)
+	return cli.RunScan(ctx, cfg, args, opts, parsers, infradepparser.DetectFileParser, detectWorkflowFile, ghaworkflow.ParseGitHubURLs)
+}
+
+// detectWorkflowFile checks whether filePath is a GitHub Actions workflow YAML.
+// Returns the full file data and true if it is a workflow, or (nil, false, nil) otherwise.
+func detectWorkflowFile(filePath string) ([]byte, bool, error) {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	if ext != ".yml" && ext != ".yaml" {
+		return nil, false, nil
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to read file '%s': %w", filePath, err)
+	}
+
+	prefix := data
+	if len(prefix) > 1024 {
+		prefix = prefix[:1024]
+	}
+	if ghaworkflow.IsWorkflowYAML(filePath, prefix) {
+		return data, true, nil
+	}
+	return nil, false, nil
 }
 
 // buildScanOptions maps urfave/cli flags to ScanOptions.
