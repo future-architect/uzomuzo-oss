@@ -22,11 +22,6 @@ patterns:
     pr: 87
     file: "internal/application/scan/service.go"
     date: "2026-04-02"
-  - category: "api-consistency"
-    summary: "Do not expose CLI flags that have no backing implementation — unused flags confuse users and bloat the interface"
-    pr: 87
-    file: "cmd/uzomuzo/commands.go"
-    date: "2026-04-02"
   - category: "ddd-violations"
     summary: "Interfaces layer must not import Infrastructure packages directly — inject dependencies via function types or interfaces"
     pr: 87
@@ -46,31 +41,6 @@ patterns:
     summary: "Docs and README referenced removed flags (--only-eol, --ecosystem, --export-license-csv) across 6+ files after scan refactor"
     pr: 87
     file: "README.md"
-    date: "2026-04-02"
-  - category: "defensive-coding"
-    summary: "Config default sample size applied to all --file inputs including structured formats (go.mod/CycloneDX) that reject sampling — defer defaults to compatible code paths"
-    pr: 87
-    file: "cmd/uzomuzo/commands.go"
-    date: "2026-04-02"
-  - category: "defensive-coding"
-    summary: "Validate injected function-type dependencies (e.g., FileDetector) for nil before invoking — exported functions accepting callbacks must guard against nil callers"
-    pr: 87
-    file: "internal/interfaces/cli/scan.go"
-    date: "2026-04-02"
-  - category: "defensive-coding"
-    summary: "Use io.ReadFull instead of single f.Read when filling a fixed-size prefix buffer — os.File.Read may return short reads"
-    pr: 87
-    file: "internal/infrastructure/depparser/detect.go"
-    date: "2026-04-02"
-  - category: "defensive-coding"
-    summary: "Deduplicate user-provided input lists before batch API calls to avoid redundant external calls and skewed counts"
-    pr: 87
-    file: "internal/application/scan/service.go"
-    date: "2026-04-02"
-  - category: "defensive-coding"
-    summary: "Normalize user-provided enum values (TrimSpace+ToLower) before case-sensitive validation — rejects common inputs like --format JSON otherwise"
-    pr: 87
-    file: "internal/interfaces/cli/scan_render.go"
     date: "2026-04-02"
   - category: "error-handling"
     summary: "Distinguish os.ErrNotExist from other I/O errors when auto-detecting files — treating all errors as 'not found' hides real causes"
