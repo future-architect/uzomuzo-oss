@@ -27,3 +27,13 @@ patterns:
     pr: 87
     file: "internal/application/scan/service.go"
     date: "2026-04-02"
+  - category: "api-consistency"
+    summary: "Do not expose CLI flags that have no backing implementation — unused flags confuse users and bloat the interface"
+    pr: 87
+    file: "cmd/uzomuzo/commands.go"
+    date: "2026-04-02"
+  - category: "ddd-violations"
+    summary: "Interfaces layer must not import Infrastructure packages directly — inject dependencies via function types or interfaces"
+    pr: 87
+    file: "internal/interfaces/cli/scan.go"
+    date: "2026-04-02"
