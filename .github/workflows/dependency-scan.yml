@@ -13,7 +13,7 @@ on:
       format:
         description: 'Output format'
         required: false
-        default: 'table'
+        default: 'detailed'
         type: choice
         options:
           - table
@@ -60,7 +60,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           FAIL_ON="${{ github.event.inputs.fail-on || 'eol-confirmed' }}"
-          FORMAT="${{ github.event.inputs.format || 'table' }}"
+          FORMAT="${{ github.event.inputs.format || 'detailed' }}"
 
           ARGS=""
           if [ -n "$FAIL_ON" ]; then ARGS="--fail-on $FAIL_ON"; fi
@@ -68,24 +68,18 @@ jobs:
             ARGS="$ARGS ${{ github.event.inputs.extra-args }}"
           fi
 
-          # Run detailed scan for artifact report
+          # Single scan run; detailed format includes summary table + detailed report
           set +e
-          ./uzomuzo scan --sbom sbom.json --format detailed $ARGS > scan-report.txt 2>&1
+          ./uzomuzo scan --sbom sbom.json --format detailed $ARGS 2>&1 | tee scan-report.txt
+          EXIT_CODE=${PIPESTATUS[0]}
           set -e
 
-          # Run table scan for console + issue body; preserve exit code
-          set +e
-          OUTPUT=$(./uzomuzo scan --sbom sbom.json --format "$FORMAT" $ARGS 2>&1)
-          EXIT_CODE=$?
-          set -e
-
-          echo "$OUTPUT"
           echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
 
-          # Save table output for the issue step
+          # Extract summary table section (between markers) for issue body
           {
             echo 'scan_output<<SCAN_EOF'
-            echo "$OUTPUT"
+            sed -n '/^--- Summary Table ---$/,/^--- Detailed Report ---$/{ /^--- Detailed Report ---$/d; p; }' scan-report.txt
             echo 'SCAN_EOF'
           } >> "$GITHUB_OUTPUT"
 
