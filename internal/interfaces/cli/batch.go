@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"math/rand"
 	"os"
@@ -719,7 +718,7 @@ func displayBatchAnalysesFull(analyses map[string]*analysispkg.Analysis, options
 	// Ordered printing
 	for _, bucket := range [][]item{actives, stalled, eols, reviews, others} {
 		for _, it := range bucket {
-			printFullAnalysis(os.Stdout, it.key, it.a, &purlCount)
+			printFullAnalysis(it.key, it.a, &purlCount)
 		}
 	}
 
@@ -731,108 +730,108 @@ func displayBatchAnalysesFull(analyses map[string]*analysispkg.Analysis, options
 }
 
 // printFullAnalysis orchestrates printing of a single analysis entry.
-func printFullAnalysis(w io.Writer, purl string, analysis *analysispkg.Analysis, counter *int) {
+func printFullAnalysis(purl string, analysis *analysispkg.Analysis, counter *int) {
 	*counter++
-	fmt.Fprintf(w, "\n--- PURL %d ---\n", *counter)
-	printHeader(w, purl, analysis)
-	printLifecycle(w, analysis)
-	printEOLEvidence(w, analysis)
-	printEOLCatalog(w, analysis)
-	printRepoHint(w, analysis)
-	printRepoState(w, analysis)
-	printDependentCount(w, analysis)
-	printScores(w, analysis)
-	printReleaseInfo(w, analysis)
-	printRequestedVersion(w, analysis)
-	printLicenses(w, analysis)
-	printCommitActivity(w, analysis)
-	printRepositoryLinks(w, analysis)
+	fmt.Printf("\n--- PURL %d ---\n", *counter)
+	printHeader(purl, analysis)
+	printLifecycle(analysis)
+	printEOLEvidence(analysis)
+	printEOLCatalog(analysis)
+	printRepoHint(analysis)
+	printRepoState(analysis)
+	printDependentCount(analysis)
+	printScores(analysis)
+	printReleaseInfo(analysis)
+	printRequestedVersion(analysis)
+	printLicenses(analysis)
+	printCommitActivity(analysis)
+	printRepositoryLinks(analysis)
 }
 
-func printHeader(w io.Writer, original string, a *analysispkg.Analysis) {
+func printHeader(original string, a *analysispkg.Analysis) {
 	displayPackage := original
 	if a != nil {
 		if dp := a.DisplayPURL(); dp != "" && dp != original {
 			displayPackage = dp
 		}
 	}
-	fmt.Fprintf(w, "📦 Package: %s\n", displayPackage)
+	fmt.Printf("📦 Package: %s\n", displayPackage)
 	if a.Repository != nil && a.Repository.Description != "" {
 		if desc := truncateDescription(a.Repository.Description); desc != "" {
-			fmt.Fprintf(w, "🧾 Description: %s\n", desc)
+			fmt.Printf("🧾 Description: %s\n", desc)
 		}
 	}
 	if a.PackageLinks != nil {
 		if a.PackageLinks.HomepageURL != "" {
-			fmt.Fprintf(w, "   🔗 Homepage: %s\n", a.PackageLinks.HomepageURL)
+			fmt.Printf("   🔗 Homepage: %s\n", a.PackageLinks.HomepageURL)
 		}
 		if a.PackageLinks.RegistryURL != "" {
-			fmt.Fprintf(w, "   🗃 Registry: %s\n", a.PackageLinks.RegistryURL)
+			fmt.Printf("   🗃 Registry: %s\n", a.PackageLinks.RegistryURL)
 		}
 	}
 }
 
-func printLifecycle(w io.Writer, a *analysispkg.Analysis) {
+func printLifecycle(a *analysispkg.Analysis) {
 	if a.AxisResults != nil && a.AxisResults[analysispkg.LifecycleAxis] != nil {
 		res := a.AxisResults[analysispkg.LifecycleAxis]
-		fmt.Fprintf(w, "⚖️  Result: %s\n", common.ColorizeResult(string(res.Label)))
-		fmt.Fprintf(w, "💭 Reason: %s\n", res.Reason)
+		fmt.Printf("⚖️  Result: %s\n", common.ColorizeResult(string(res.Label)))
+		fmt.Printf("💭 Reason: %s\n", res.Reason)
 		if strings.EqualFold(os.Getenv("LOG_LEVEL"), "debug") && len(res.Trace) > 0 {
 			for i, step := range res.Trace {
-				fmt.Fprintf(w, "   🧪 Trace[%d]: %s\n", i, step)
+				fmt.Printf("   🧪 Trace[%d]: %s\n", i, step)
 			}
 		}
 	} else {
-		fmt.Fprintf(w, "⚖️  Result: %s\n", common.ColorizeResult("Review Needed"))
-		fmt.Fprintf(w, "💭 Reason: %s\n", "No lifecycle assessment available")
+		fmt.Printf("⚖️  Result: %s\n", common.ColorizeResult("Review Needed"))
+		fmt.Printf("💭 Reason: %s\n", "No lifecycle assessment available")
 	}
 }
 
-func printEOLEvidence(w io.Writer, a *analysispkg.Analysis) {
+func printEOLEvidence(a *analysispkg.Analysis) {
 	if len(a.EOL.Evidences) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "📚 EOL Evidence (%d):\n", len(a.EOL.Evidences))
+	fmt.Printf("📚 EOL Evidence (%d):\n", len(a.EOL.Evidences))
 	for _, ev := range a.EOL.Evidences {
 		if ev.Source != "" {
-			fmt.Fprintf(w, "   • [%s] %s", ev.Source, ev.Summary)
+			fmt.Printf("   • [%s] %s", ev.Source, ev.Summary)
 		} else {
-			fmt.Fprintf(w, "   • %s", ev.Summary)
+			fmt.Printf("   • %s", ev.Summary)
 		}
 		if ev.Confidence > 0 {
-			fmt.Fprintf(w, " (confidence %.2f)", ev.Confidence)
+			fmt.Printf(" (confidence %.2f)", ev.Confidence)
 		}
-		fmt.Fprintf(w, "\n")
+		fmt.Printf("\n")
 		if strings.TrimSpace(ev.Reference) != "" {
-			fmt.Fprintf(w, "      ↳ %s\n", ev.Reference)
+			fmt.Printf("      ↳ %s\n", ev.Reference)
 		}
 	}
 }
 
-func printEOLCatalog(w io.Writer, a *analysispkg.Analysis) {
+func printEOLCatalog(a *analysispkg.Analysis) {
 	// Simplified: only show planned date and successor (catalog struct removed)
 	if a.EOL.ScheduledAt != nil && a.EOL.State == analysispkg.EOLScheduled {
-		fmt.Fprintf(w, "🌅 Scheduled EOL: %s\n", a.EOL.ScheduledAt.Format(dateFormat))
+		fmt.Printf("🌅 Scheduled EOL: %s\n", a.EOL.ScheduledAt.Format(dateFormat))
 	}
 	if a.EOL.Successor != "" {
-		fmt.Fprintf(w, "🔁 Successor: %s\n", a.EOL.Successor)
+		fmt.Printf("🔁 Successor: %s\n", a.EOL.Successor)
 	}
 	if a.EOL.Reason != "" {
-		fmt.Fprintf(w, "📝 Catalog Reason: %s\n", a.EOL.Reason)
+		fmt.Printf("📝 Catalog Reason: %s\n", a.EOL.Reason)
 	}
 }
 
-func printRepoHint(w io.Writer, a *analysispkg.Analysis) {
+func printRepoHint(a *analysispkg.Analysis) {
 	if a.RepoURL == "" {
-		fmt.Fprintf(w, "🔎 Hint: No repository URL was found from deps.dev links; Scorecard data cannot be retrieved.\n")
+		fmt.Printf("🔎 Hint: No repository URL was found from deps.dev links; Scorecard data cannot be retrieved.\n")
 	}
 }
 
-func printRepoState(w io.Writer, a *analysispkg.Analysis) {
+func printRepoState(a *analysispkg.Analysis) {
 	if a.RepoURL == "" {
 		return
 	}
-	fmt.Fprintf(w, "📊 GitHub Info: ")
+	fmt.Printf("📊 GitHub Info: ")
 	isArchived, isDisabled, isFork := false, false, false
 	if a.RepoState != nil {
 		isArchived = a.RepoState.IsArchived
@@ -840,61 +839,61 @@ func printRepoState(w io.Writer, a *analysispkg.Analysis) {
 		isFork = a.RepoState.IsFork
 	}
 	if isArchived {
-		fmt.Fprintf(w, "📦 Archived ")
+		fmt.Printf("📦 Archived ")
 	}
 	if isDisabled {
-		fmt.Fprintf(w, "⛔ Disabled ")
+		fmt.Printf("⛔ Disabled ")
 	}
 	if isFork {
 		if a.RepoState != nil && a.RepoState.ForkSource != "" {
-			fmt.Fprintf(w, "🔀 Fork of %s ", a.RepoState.ForkSource)
+			fmt.Printf("🔀 Fork of %s ", a.RepoState.ForkSource)
 		} else {
-			fmt.Fprintf(w, "🔀 Fork ")
+			fmt.Printf("🔀 Fork ")
 		}
 	}
 	if !isArchived && !isDisabled && !isFork {
-		fmt.Fprintf(w, "Normal ")
+		fmt.Printf("Normal ")
 	}
 	if a.Repository != nil && a.Repository.StarsCount > 0 {
-		fmt.Fprintf(w, "(⭐ %d stars)", a.Repository.StarsCount)
+		fmt.Printf("(⭐ %d stars)", a.Repository.StarsCount)
 	}
-	fmt.Fprintf(w, "\n")
+	fmt.Printf("\n")
 }
 
-func printDependentCount(w io.Writer, a *analysispkg.Analysis) {
+func printDependentCount(a *analysispkg.Analysis) {
 	if a == nil {
 		return
 	}
 	// CLI intentionally omits zero counts (unknown/unsupported ecosystem).
 	// CSV always emits "0" for machine-readable consistency.
 	if a.DependentCount > 0 {
-		fmt.Fprintf(w, "👥 Used by: %d packages\n", a.DependentCount)
+		fmt.Printf("👥 Used by: %d packages\n", a.DependentCount)
 	}
 	if a.DirectDepsCount > 0 || a.TransitiveDepsCount > 0 {
-		fmt.Fprintf(w, "📦 Depends on: %d direct, %d transitive\n", a.DirectDepsCount, a.TransitiveDepsCount)
+		fmt.Printf("📦 Depends on: %d direct, %d transitive\n", a.DirectDepsCount, a.TransitiveDepsCount)
 	}
 }
 
-func printScores(w io.Writer, a *analysispkg.Analysis) {
+func printScores(a *analysispkg.Analysis) {
 	if len(a.Scores) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "🏆 Overall Score: %.*f/10\n", scorePrecision, a.OverallScore)
+	fmt.Printf("🏆 Overall Score: %.*f/10\n", scorePrecision, a.OverallScore)
 	for name, scoreEntity := range a.Scores {
 		if scoreEntity == nil {
 			slog.Debug("Skipping nil score entity", "check", name)
 			continue
 		}
 		if name == "Maintained" && scoreEntity.Value() >= 0 {
-			fmt.Fprintf(w, "  🔧 Maintained: %.*f/10\n", scorePrecision, float64(scoreEntity.Value()))
+			fmt.Printf("  🔧 Maintained: %.*f/10\n", scorePrecision, float64(scoreEntity.Value()))
 		}
 		if name == "Vulnerabilities" && scoreEntity.Value() >= 0 {
-			fmt.Fprintf(w, "  🛡️ Vulnerabilities: %.*f/10\n", scorePrecision, float64(scoreEntity.Value()))
+			fmt.Printf("  🛡️ Vulnerabilities: %.*f/10\n", scorePrecision, float64(scoreEntity.Value()))
 		}
 	}
 }
 
-func printReleaseInfo(w io.Writer, a *analysispkg.Analysis) {
+func printReleaseInfo(a *analysispkg.Analysis) {
 	if a.ReleaseInfo == nil {
 		return
 	}
@@ -904,18 +903,18 @@ func printReleaseInfo(w io.Writer, a *analysispkg.Analysis) {
 		if stable.IsDeprecated {
 			deprecatedTag = " [DEPRECATED]"
 		}
-		fmt.Fprintf(w, "📦 Latest Stable Release: %s (%s)%s\n", stable.Version, stable.PublishedAt.Format(dateFormat), deprecatedTag)
+		fmt.Printf("📦 Latest Stable Release: %s (%s)%s\n", stable.Version, stable.PublishedAt.Format(dateFormat), deprecatedTag)
 		if stable.RegistryURL != "" {
-			fmt.Fprintf(w, "   ↳ Version Page: %s\n", stable.RegistryURL)
+			fmt.Printf("   ↳ Version Page: %s\n", stable.RegistryURL)
 		}
 		advCount := len(stable.Advisories)
 		if advCount > 0 {
-			fmt.Fprintf(w, "   ↳ Stable Advisories: %d\n", advCount)
+			fmt.Printf("   ↳ Stable Advisories: %d\n", advCount)
 			for _, adv := range stable.Advisories {
-				fmt.Fprintf(w, "      • [%s] %s (%s)\n", adv.Source, adv.ID, adv.URL)
+				fmt.Printf("      • [%s] %s (%s)\n", adv.Source, adv.ID, adv.URL)
 			}
 		} else {
-			fmt.Fprintf(w, "   ↳ Stable Advisories: 0\n")
+			fmt.Printf("   ↳ Stable Advisories: 0\n")
 		}
 	}
 	if a.ReleaseInfo.PreReleaseVersion != nil && !a.ReleaseInfo.PreReleaseVersion.PublishedAt.IsZero() {
@@ -924,9 +923,9 @@ func printReleaseInfo(w io.Writer, a *analysispkg.Analysis) {
 		if pre.IsDeprecated {
 			deprecatedTag = " [DEPRECATED]"
 		}
-		fmt.Fprintf(w, "📦 Latest Pre-release: %s (%s)%s\n", pre.Version, pre.PublishedAt.Format(dateFormat), deprecatedTag)
+		fmt.Printf("📦 Latest Pre-release: %s (%s)%s\n", pre.Version, pre.PublishedAt.Format(dateFormat), deprecatedTag)
 		if pre.RegistryURL != "" {
-			fmt.Fprintf(w, "   ↳ Version Page: %s\n", pre.RegistryURL)
+			fmt.Printf("   ↳ Version Page: %s\n", pre.RegistryURL)
 		}
 	}
 	if a.ReleaseInfo.MaxSemverVersion != nil && a.ReleaseInfo.MaxSemverVersion.Version != "" {
@@ -936,17 +935,17 @@ func printReleaseInfo(w io.Writer, a *analysispkg.Analysis) {
 			deprecatedTag = " [DEPRECATED]"
 		}
 		if !maxv.PublishedAt.IsZero() {
-			fmt.Fprintf(w, "📦 Highest Version (SemVer): %s (%s)%s\n", maxv.Version, maxv.PublishedAt.Format(dateFormat), deprecatedTag)
+			fmt.Printf("📦 Highest Version (SemVer): %s (%s)%s\n", maxv.Version, maxv.PublishedAt.Format(dateFormat), deprecatedTag)
 		} else {
-			fmt.Fprintf(w, "📦 Highest Version (SemVer): %s%s\n", maxv.Version, deprecatedTag)
+			fmt.Printf("📦 Highest Version (SemVer): %s%s\n", maxv.Version, deprecatedTag)
 		}
 		if maxv.RegistryURL != "" {
-			fmt.Fprintf(w, "   ↳ Version Page: %s\n", maxv.RegistryURL)
+			fmt.Printf("   ↳ Version Page: %s\n", maxv.RegistryURL)
 		}
 	}
 }
 
-func printRequestedVersion(w io.Writer, a *analysispkg.Analysis) {
+func printRequestedVersion(a *analysispkg.Analysis) {
 	if a.ReleaseInfo == nil || a.ReleaseInfo.RequestedVersion == nil || a.ReleaseInfo.RequestedVersion.PublishedAt.IsZero() {
 		return
 	}
@@ -955,13 +954,13 @@ func printRequestedVersion(w io.Writer, a *analysispkg.Analysis) {
 	if rv.IsDeprecated {
 		deprecatedTag = " [DEPRECATED]"
 	}
-	fmt.Fprintf(w, "📋 Requested Version: %s (%s)%s\n", rv.Version, rv.PublishedAt.Format(dateFormat), deprecatedTag)
+	fmt.Printf("📋 Requested Version: %s (%s)%s\n", rv.Version, rv.PublishedAt.Format(dateFormat), deprecatedTag)
 	if rv.RegistryURL != "" {
-		fmt.Fprintf(w, "   ↳ Version Page: %s\n", rv.RegistryURL)
+		fmt.Printf("   ↳ Version Page: %s\n", rv.RegistryURL)
 	}
 }
 
-func printLicenses(w io.Writer, a *analysispkg.Analysis) {
+func printLicenses(a *analysispkg.Analysis) {
 	proj := a.ProjectLicense
 	reqs := a.RequestedVersionLicenses
 	if proj.IsZero() && len(reqs) == 0 {
@@ -970,25 +969,25 @@ func printLicenses(w io.Writer, a *analysispkg.Analysis) {
 	collapse := proj.Identifier != "" && len(reqs) == 1 && strings.EqualFold(proj.Identifier, reqs[0].Identifier)
 	if collapse {
 		if proj.Source != "" {
-			fmt.Fprintf(w, "📄 License: %s (source: %s / %s)\n", proj.Identifier, proj.Source, reqs[0].Source)
+			fmt.Printf("📄 License: %s (source: %s / %s)\n", proj.Identifier, proj.Source, reqs[0].Source)
 		} else {
-			fmt.Fprintf(w, "📄 License: %s\n", proj.Identifier)
+			fmt.Printf("📄 License: %s\n", proj.Identifier)
 		}
 		return
 	}
-	fmt.Fprintf(w, "📄 Licenses:\n")
+	fmt.Printf("📄 Licenses:\n")
 	if proj.Identifier != "" {
 		if proj.Source != "" {
-			fmt.Fprintf(w, "   Project: %s (source: %s)\n", proj.Identifier, proj.Source)
+			fmt.Printf("   Project: %s (source: %s)\n", proj.Identifier, proj.Source)
 		} else {
-			fmt.Fprintf(w, "   Project: %s\n", proj.Identifier)
+			fmt.Printf("   Project: %s\n", proj.Identifier)
 		}
 	} else if proj.IsNonStandard() && proj.Raw != "" {
-		fmt.Fprintf(w, "   Project: (non-standard raw=%s source=%s)\n", proj.Raw, proj.Source)
+		fmt.Printf("   Project: (non-standard raw=%s source=%s)\n", proj.Raw, proj.Source)
 	} else if proj.IsZero() {
-		fmt.Fprintf(w, "   Project: (not detected)\n")
+		fmt.Printf("   Project: (not detected)\n")
 	} else {
-		fmt.Fprintf(w, "   Project: (unclassified source=%s raw=%s)\n", proj.Source, proj.Raw)
+		fmt.Printf("   Project: (unclassified source=%s raw=%s)\n", proj.Source, proj.Raw)
 	}
 	if len(reqs) > 0 {
 		allSameSource := true
@@ -1005,43 +1004,43 @@ func printLicenses(w io.Writer, a *analysispkg.Analysis) {
 				ids = append(ids, rl.Identifier)
 			}
 			if firstSource != "" {
-				fmt.Fprintf(w, "   Requested Version: %s (source: %s)\n", strings.Join(ids, ", "), firstSource)
+				fmt.Printf("   Requested Version: %s (source: %s)\n", strings.Join(ids, ", "), firstSource)
 			} else {
-				fmt.Fprintf(w, "   Requested Version: %s\n", strings.Join(ids, ", "))
+				fmt.Printf("   Requested Version: %s\n", strings.Join(ids, ", "))
 			}
 		} else {
 			for i, rl := range reqs {
 				if rl.Source != "" {
-					fmt.Fprintf(w, "   Requested Version[%d]: %s (source: %s)\n", i, rl.Identifier, rl.Source)
+					fmt.Printf("   Requested Version[%d]: %s (source: %s)\n", i, rl.Identifier, rl.Source)
 				} else {
-					fmt.Fprintf(w, "   Requested Version[%d]: %s\n", i, rl.Identifier)
+					fmt.Printf("   Requested Version[%d]: %s\n", i, rl.Identifier)
 				}
 			}
 		}
 	} else {
-		fmt.Fprintf(w, "   Requested Version: (none)\n")
+		fmt.Printf("   Requested Version: (none)\n")
 	}
 }
 
-func printCommitActivity(w io.Writer, a *analysispkg.Analysis) {
+func printCommitActivity(a *analysispkg.Analysis) {
 	if a.RepoState != nil && a.RepoState.LatestHumanCommit != nil && !a.RepoState.LatestHumanCommit.IsZero() {
-		fmt.Fprintf(w, "💻 Latest Commit: %s\n", a.RepoState.LatestHumanCommit.Format(dateFormat))
+		fmt.Printf("💻 Latest Commit: %s\n", a.RepoState.LatestHumanCommit.Format(dateFormat))
 	}
 }
 
-func printRepositoryLinks(w io.Writer, a *analysispkg.Analysis) {
+func printRepositoryLinks(a *analysispkg.Analysis) {
 	if a.RepoURL != "" {
 		repoURL := a.RepoURL
 		if !strings.HasPrefix(repoURL, "http://") && !strings.HasPrefix(repoURL, "https://") {
 			repoURL = "https://" + repoURL
 		}
-		fmt.Fprintf(w, "🔗 Repository: %s\n", repoURL)
+		fmt.Printf("🔗 Repository: %s\n", repoURL)
 	}
 	if a.ScorecardURL != "" {
-		fmt.Fprintf(w, "🔗 Scorecard: %s\n", a.ScorecardURL)
+		fmt.Printf("🔗 Scorecard: %s\n", a.ScorecardURL)
 	}
 	if a.ScorecardAPIURL != "" {
-		fmt.Fprintf(w, "🔗 Scorecard API: %s\n", a.ScorecardAPIURL)
+		fmt.Printf("🔗 Scorecard API: %s\n", a.ScorecardAPIURL)
 	}
 }
 
