@@ -1,4 +1,4 @@
-# ADR-0004: Unify analyze/audit into Single scan Subcommand
+# ADR-0004: Unify analyze/audit into a single scan subcommand
 
 ## Status
 

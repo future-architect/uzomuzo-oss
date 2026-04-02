@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"text/tabwriter"
 
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
@@ -63,9 +64,10 @@ const smartDefaultThreshold = 3
 // Otherwise, the smart default is applied: detailed for ≤3 inputs, table for more.
 func ResolveFormat(explicit string, inputCount int) (string, error) {
 	if explicit != "" {
-		switch explicit {
+		normalized := strings.TrimSpace(strings.ToLower(explicit))
+		switch normalized {
 		case FormatDetailed, FormatTable, FormatJSON, FormatCSV:
-			return explicit, nil
+			return normalized, nil
 		default:
 			return "", fmt.Errorf("unsupported format %q (use detailed, table, json, or csv)", explicit)
 		}

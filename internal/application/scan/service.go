@@ -44,6 +44,10 @@ func (s *Service) AnalysisService() *application.AnalysisService {
 
 // RunFromPURLs executes the scan pipeline from pre-resolved PURLs and GitHub URLs.
 func (s *Service) RunFromPURLs(ctx context.Context, purls, githubURLs []string, policy domainscan.FailPolicy) (*Result, error) {
+	// Deduplicate inputs while preserving first-seen order.
+	purls = dedup(purls)
+	githubURLs = dedup(githubURLs)
+
 	allAnalyses := make(map[string]*analysis.Analysis)
 
 	if len(purls) > 0 {
@@ -115,6 +119,20 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 	hasFailure := policy.Evaluate(entries)
 
 	return &Result{Entries: entries, HasFailure: hasFailure}, nil
+}
+
+// dedup removes duplicate strings while preserving first-seen order.
+func dedup(ss []string) []string {
+	seen := make(map[string]struct{}, len(ss))
+	result := make([]string, 0, len(ss))
+	for _, s := range ss {
+		if _, exists := seen[s]; exists {
+			continue
+		}
+		seen[s] = struct{}{}
+		result = append(result, s)
+	}
+	return result
 }
 
 // buildEntries creates AuditEntry slice from keys and analyses in order.

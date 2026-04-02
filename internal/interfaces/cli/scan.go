@@ -219,7 +219,10 @@ func runScanStdin(ctx context.Context, svc *scanapp.Service, opts ScanOptions, p
 func runScanAutoDetect(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy) error {
 	data, err := os.ReadFile("go.mod")
 	if err != nil {
-		return fmt.Errorf("no input provided and no go.mod found in current directory; run 'uzomuzo scan --help' for usage")
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("no input provided and no go.mod found in current directory; run 'uzomuzo scan --help' for usage")
+		}
+		return fmt.Errorf("failed to read go.mod: %w", err)
 	}
 	slog.Info("auto-detected go.mod in current directory")
 
