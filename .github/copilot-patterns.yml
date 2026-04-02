@@ -52,3 +52,13 @@ patterns:
     pr: 87
     file: "cmd/uzomuzo/commands.go"
     date: "2026-04-02"
+  - category: "defensive-coding"
+    summary: "Validate injected function-type dependencies (e.g., FileDetector) for nil before invoking — exported functions accepting callbacks must guard against nil callers"
+    pr: 87
+    file: "internal/interfaces/cli/scan.go"
+    date: "2026-04-02"
+  - category: "defensive-coding"
+    summary: "Use io.ReadFull instead of single f.Read when filling a fixed-size prefix buffer — os.File.Read may return short reads"
+    pr: 87
+    file: "internal/infrastructure/depparser/detect.go"
+    date: "2026-04-02"
