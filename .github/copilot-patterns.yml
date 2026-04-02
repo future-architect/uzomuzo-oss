@@ -42,3 +42,13 @@ patterns:
     pr: 87
     file: "internal/application/scan/service.go"
     date: "2026-04-02"
+  - category: "comment-doc-drift"
+    summary: "Docs and README referenced removed flags (--only-eol, --ecosystem, --export-license-csv) across 6+ files after scan refactor"
+    pr: 87
+    file: "README.md"
+    date: "2026-04-02"
+  - category: "defensive-coding"
+    summary: "Config default sample size applied to all --file inputs including structured formats (go.mod/CycloneDX) that reject sampling — defer defaults to compatible code paths"
+    pr: 87
+    file: "cmd/uzomuzo/commands.go"
+    date: "2026-04-02"
