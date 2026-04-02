@@ -150,38 +150,3 @@ jobs:
           )
 
           gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "$BODY" --label "dependencies"
-
-  notify:
-    needs: scan
-    if: always() && needs.scan.outputs.exit_code != '0' && needs.scan.outputs.exit_code != ''
-    runs-on: ubuntu-latest
-    steps:
-      - name: Notify Slack
-        if: env.SLACK_WEBHOOK_URL != ''
-        continue-on-error: true
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          REPO="${{ github.repository }}"
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          FAIL_ON="${{ needs.scan.outputs.fail_on }}"
-
-          curl -sf -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-Type: application/json' \
-            -d "$(jq -n \
-              --arg repo "$REPO" \
-              --arg url "$RUN_URL" \
-              --arg policy "$FAIL_ON" \
-              '{
-                text: ":warning: Dependency scan policy violations found",
-                blocks: [
-                  {
-                    type: "section",
-                    text: {
-                      type: "mrkdwn",
-                      text: ("*:warning: Dependency Scan — Policy Violations Found*\n\n*Repository:* `" + $repo + "`\n*Fail-on policy:* `" + $policy + "`\n*Details:* <" + $url + "|View workflow run>")
-                    }
-                  }
-                ]
-              }'
-            )"
