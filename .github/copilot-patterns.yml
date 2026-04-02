@@ -22,3 +22,8 @@ patterns:
     pr: 87
     file: "internal/interfaces/cli/scan_render.go"
     date: "2026-04-02"
+  - category: "comment-doc-drift"
+    summary: "Comment claimed 'preserves input order' but code groups by type — comments must match actual behavior"
+    pr: 87
+    file: "internal/application/scan/service.go"
+    date: "2026-04-02"
