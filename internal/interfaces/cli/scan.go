@@ -100,20 +100,16 @@ func runScanSBOM(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 	return finalizeScanOutput(svc, result, opts, len(result.Entries))
 }
 
-// runScanFile handles --file input (go.mod or PURL/URL list).
+// runScanFile handles --file input (go.mod, SBOM, or PURL/URL list).
 func runScanFile(ctx context.Context, cfg *domaincfg.Config, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy) error {
 	filePath := opts.Filename
 
-	// Detect file type: go.mod → use gomod parser, otherwise read as PURL/URL list
-	if strings.HasSuffix(filePath, "go.mod") || strings.HasSuffix(filePath, ".mod") {
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			return fmt.Errorf("failed to read file '%s': %w", filePath, err)
-		}
-		parser, ok := parsers["gomod"]
-		if !ok {
-			return fmt.Errorf("go.mod parser not available")
-		}
+	// Try structured format (go.mod / CycloneDX SBOM) first
+	parser, data, err := detectFileParser(filePath, parsers)
+	if err != nil {
+		return err
+	}
+	if parser != nil {
 		result, err := svc.RunFromParser(ctx, parser, data, policy)
 		if err != nil {
 			return fmt.Errorf("scan failed: %w", err)
@@ -121,27 +117,44 @@ func runScanFile(ctx context.Context, cfg *domaincfg.Config, svc *scanapp.Servic
 		return finalizeScanOutput(svc, result, opts, len(result.Entries))
 	}
 
-	// Attempt to parse as CycloneDX SBOM if JSON extension
+	// Fall back to PURL/URL list
+	return runScanPURLList(ctx, svc, opts, filePath, policy)
+}
+
+// detectFileParser inspects filePath and returns the matching parser and file data.
+// Returns (nil, nil, nil) when the file is not a recognized structured format.
+func detectFileParser(filePath string, parsers map[string]depparser.DependencyParser) (depparser.DependencyParser, []byte, error) {
+	if strings.HasSuffix(filePath, "go.mod") || strings.HasSuffix(filePath, ".mod") {
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
+		}
+		parser, ok := parsers["gomod"]
+		if !ok {
+			return nil, nil, fmt.Errorf("go.mod parser not available")
+		}
+		return parser, data, nil
+	}
+
 	if strings.HasSuffix(filePath, ".json") {
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			return fmt.Errorf("failed to read file '%s': %w", filePath, err)
+			return nil, nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
 		}
-		// Quick sniff for CycloneDX
 		if isCycloneDXJSON(data) {
 			parser, ok := parsers["sbom"]
 			if !ok {
-				return fmt.Errorf("SBOM parser not available")
+				return nil, nil, fmt.Errorf("SBOM parser not available")
 			}
-			result, err := svc.RunFromParser(ctx, parser, data, policy)
-			if err != nil {
-				return fmt.Errorf("scan failed: %w", err)
-			}
-			return finalizeScanOutput(svc, result, opts, len(result.Entries))
+			return parser, data, nil
 		}
 	}
 
-	// Read as PURL/URL list file
+	return nil, nil, nil
+}
+
+// runScanPURLList reads a file as a PURL/URL line list and runs the scan.
+func runScanPURLList(ctx context.Context, svc *scanapp.Service, opts ScanOptions, filePath string, policy domainscan.FailPolicy) error {
 	if err := validateLineRange(&opts.ProcessingOptions); err != nil {
 		return fmt.Errorf("invalid line range: %w", err)
 	}
@@ -150,7 +163,6 @@ func runScanFile(ctx context.Context, cfg *domaincfg.Config, svc *scanapp.Servic
 		return fmt.Errorf("failed to read file '%s': %w", filePath, err)
 	}
 
-	// Apply sampling
 	if opts.SampleSize > 0 {
 		purls = randomSample(purls, opts.SampleSize)
 		githubURLs = randomSample(githubURLs, opts.SampleSize)

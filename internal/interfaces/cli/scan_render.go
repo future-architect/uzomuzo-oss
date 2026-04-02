@@ -183,46 +183,7 @@ func renderScanJSON(w io.Writer, entries []domainaudit.AuditEntry) error {
 		Entries: make([]enrichedJSONEntry, 0, len(entries)),
 	}
 	for i := range entries {
-		e := &entries[i]
-		maintenance, eol := entryMaintenanceEOL(e, "—")
-
-		je := enrichedJSONEntry{
-			PURL:      e.PURL,
-			Verdict:   string(e.Verdict),
-			Lifecycle: maintenance,
-			EOL:       eol,
-			Error:     e.ErrorMsg,
-		}
-
-		if a := e.Analysis; a != nil {
-			je.RepoURL = a.RepoURL
-			je.OverallScore = a.OverallScore
-			je.DependentCount = a.DependentCount
-			je.EOLReason = a.EOL.FinalReason()
-			je.Successor = a.EOL.Successor
-			je.Archived = a.IsArchived()
-
-			if a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
-				je.StableVersion = a.ReleaseInfo.StableVersion.Version
-			}
-
-			if a.ProjectLicense.Identifier != "" {
-				je.ProjectLicense = a.ProjectLicense.Identifier
-			}
-			if len(a.RequestedVersionLicenses) > 0 {
-				ids := make([]string, 0, len(a.RequestedVersionLicenses))
-				for _, lic := range a.RequestedVersionLicenses {
-					ids = append(ids, lic.Identifier)
-				}
-				je.VersionLicenses = ids
-			}
-
-			if lr := a.GetLifecycleResult(); lr != nil {
-				je.Reason = lr.Reason
-			}
-		}
-
-		out.Entries = append(out.Entries, je)
+		out.Entries = append(out.Entries, newEnrichedJSONEntry(&entries[i]))
 	}
 
 	enc := json.NewEncoder(w)
@@ -231,6 +192,50 @@ func renderScanJSON(w io.Writer, entries []domainaudit.AuditEntry) error {
 		return fmt.Errorf("failed to encode JSON output: %w", err)
 	}
 	return nil
+}
+
+// newEnrichedJSONEntry converts a single AuditEntry into the enriched JSON DTO.
+func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
+	maintenance, eol := entryMaintenanceEOL(e, "—")
+
+	je := enrichedJSONEntry{
+		PURL:      e.PURL,
+		Verdict:   string(e.Verdict),
+		Lifecycle: maintenance,
+		EOL:       eol,
+		Error:     e.ErrorMsg,
+	}
+
+	a := e.Analysis
+	if a == nil {
+		return je
+	}
+
+	je.RepoURL = a.RepoURL
+	je.OverallScore = a.OverallScore
+	je.DependentCount = a.DependentCount
+	je.EOLReason = a.EOL.FinalReason()
+	je.Successor = a.EOL.Successor
+	je.Archived = a.IsArchived()
+
+	if a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
+		je.StableVersion = a.ReleaseInfo.StableVersion.Version
+	}
+	if a.ProjectLicense.Identifier != "" {
+		je.ProjectLicense = a.ProjectLicense.Identifier
+	}
+	if len(a.RequestedVersionLicenses) > 0 {
+		ids := make([]string, 0, len(a.RequestedVersionLicenses))
+		for _, lic := range a.RequestedVersionLicenses {
+			ids = append(ids, lic.Identifier)
+		}
+		je.VersionLicenses = ids
+	}
+	if lr := a.GetLifecycleResult(); lr != nil {
+		je.Reason = lr.Reason
+	}
+
+	return je
 }
 
 func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
