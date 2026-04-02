@@ -124,6 +124,36 @@ jobs:
 
           gh issue create --title "$TITLE" --body "$BODY" --label "dependencies"
 
+      - name: Notify Slack
+        if: failure() && steps.scan.outputs.exit_code != '0' && env.SLACK_WEBHOOK_URL != ''
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          REPO="${{ github.repository }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          FAIL_ON="${{ github.event.inputs.fail-on || 'eol-confirmed' }}"
+
+          curl -sf -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -n \
+              --arg repo "$REPO" \
+              --arg url "$RUN_URL" \
+              --arg policy "$FAIL_ON" \
+              '{
+                text: ":warning: Dependency scan policy violations found",
+                blocks: [
+                  {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: ("*:warning: Dependency Scan — Policy Violations Found*\n\n*Repository:* `" + $repo + "`\n*Fail-on policy:* `" + $policy + "`\n*Details:* <" + $url + "|View workflow run>")
+                    }
+                  }
+                ]
+              }'
+            )"
+
       - name: Upload scan report
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
