@@ -94,8 +94,30 @@ func renderScanOutput(w io.Writer, entries []domainaudit.AuditEntry, format stri
 	}
 }
 
-// renderScanDetailed prints rich per-package output (reuses existing detailed display logic).
+// Section markers for machine-parseable output.
+const (
+	// MarkerSummaryTableBegin marks the start of the summary table section.
+	MarkerSummaryTableBegin = "--- Summary Table ---"
+	// MarkerDetailedReportBegin marks the start of the detailed report section.
+	MarkerDetailedReportBegin = "--- Detailed Report ---"
+)
+
+// renderScanDetailed prints a summary table followed by rich per-package output.
+// The two sections are separated by markers for machine extraction.
 func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
+	// Summary table section
+	if _, err := fmt.Fprintln(w, MarkerSummaryTableBegin); err != nil {
+		return fmt.Errorf("failed to write marker: %w", err)
+	}
+	if err := renderScanTable(w, entries); err != nil {
+		return fmt.Errorf("failed to write summary table: %w", err)
+	}
+
+	// Detailed report section
+	if _, err := fmt.Fprintf(w, "\n%s\n", MarkerDetailedReportBegin); err != nil {
+		return fmt.Errorf("failed to write marker: %w", err)
+	}
+
 	counter := 0
 	for i := range entries {
 		e := &entries[i]
