@@ -25,7 +25,7 @@ on:
         required: false
         default: ''
       create-issue:
-        description: 'Create a GitHub Issue when policy violations are found'
+        description: 'Create a GitHub Issue with scan report'
         required: false
         default: true
         type: boolean
@@ -85,13 +85,13 @@ jobs:
 
           exit $EXIT_CODE
 
-      - name: Create issue for policy violations
-        if: failure() && steps.scan.outputs.exit_code != '0' && github.event.inputs.create-issue != 'false'
+      - name: Create monthly scan report issue
+        if: always() && github.event.inputs.create-issue != 'false'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TITLE="Dependency scan: policy violations found ($(date +%Y-%m-%d))"
+          TITLE="Dependency scan report ($(date +%Y-%m-%d))"
 
           # Deduplicate: skip if an open issue with the same title exists
           EXISTING=$(gh issue list --state open --search "$TITLE" --json number --jq 'length')
@@ -100,11 +100,16 @@ jobs:
             exit 0
           fi
 
+          if [ "${{ steps.scan.outputs.exit_code }}" != "0" ]; then
+            STATUS="Policy violations detected"
+          else
+            STATUS="No policy violations"
+          fi
+
           BODY=$(cat <<'ISSUE_EOF'
           ## Dependency Scan Report
 
-          The monthly dependency scan found lifecycle policy violations.
-
+          **Status**: $STATUS
           **Workflow run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           **Fail-on policy**: `${{ github.event.inputs.fail-on || 'eol-confirmed' }}`
 
@@ -118,8 +123,6 @@ jobs:
           </details>
 
           For detailed per-dependency analysis, download the `dependency-scan-report` artifact from the workflow run.
-
-          Please review the flagged dependencies and update or replace as needed.
           ISSUE_EOF
           )
 
