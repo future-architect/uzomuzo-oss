@@ -10,16 +10,6 @@ on:
         description: 'Fail on labels (comma-separated, empty = never fail)'
         required: false
         default: 'eol-confirmed'
-      format:
-        description: 'Output format'
-        required: false
-        default: 'detailed'
-        type: choice
-        options:
-          - table
-          - detailed
-          - json
-          - csv
       extra-args:
         description: 'Extra arguments passed to uzomuzo scan'
         required: false
@@ -102,7 +92,7 @@ jobs:
 
   report:
     needs: scan
-    if: always() && needs.scan.result == 'success' && github.event.inputs.create-issue != 'false'
+    if: always() && github.event.inputs.create-issue != 'false'
     runs-on: ubuntu-latest
     permissions:
       issues: write
