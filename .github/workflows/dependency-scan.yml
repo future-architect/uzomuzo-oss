@@ -1,0 +1,163 @@
+name: Dependency Scan
+
+on:
+  schedule:
+    # Monthly: 1st of each month at 09:00 UTC
+    - cron: '0 9 1 * *'
+  workflow_dispatch:
+    inputs:
+      fail-on:
+        description: 'Fail on labels (comma-separated, empty = never fail)'
+        required: false
+        default: 'eol-confirmed'
+      format:
+        description: 'Output format'
+        required: false
+        default: 'table'
+        type: choice
+        options:
+          - table
+          - detailed
+          - json
+          - csv
+      extra-args:
+        description: 'Extra arguments passed to uzomuzo scan'
+        required: false
+        default: ''
+      create-issue:
+        description: 'Create a GitHub Issue when policy violations are found'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build uzomuzo
+        run: go build -o uzomuzo ./cmd/uzomuzo
+
+      - name: Generate SBOM
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: 'fs'
+          format: 'cyclonedx'
+          output: 'sbom.json'
+
+      - name: Run scan
+        id: scan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FAIL_ON="${{ github.event.inputs.fail-on || 'eol-confirmed' }}"
+          FORMAT="${{ github.event.inputs.format || 'table' }}"
+
+          ARGS=""
+          if [ -n "$FAIL_ON" ]; then ARGS="--fail-on $FAIL_ON"; fi
+          if [ -n "${{ github.event.inputs.extra-args }}" ]; then
+            ARGS="$ARGS ${{ github.event.inputs.extra-args }}"
+          fi
+
+          # Capture output for issue body; preserve exit code
+          set +e
+          OUTPUT=$(./uzomuzo scan --sbom sbom.json --format "$FORMAT" $ARGS 2>&1)
+          EXIT_CODE=$?
+          set -e
+
+          echo "$OUTPUT"
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          # Save scan output for the issue step
+          {
+            echo 'scan_output<<SCAN_EOF'
+            echo "$OUTPUT"
+            echo 'SCAN_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+          exit $EXIT_CODE
+
+      - name: Create issue for policy violations
+        if: failure() && steps.scan.outputs.exit_code != '0' && github.event.inputs.create-issue != 'false'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Dependency scan: policy violations found ($(date +%Y-%m-%d))"
+
+          # Deduplicate: skip if an open issue with the same title exists
+          EXISTING=$(gh issue list --state open --search "$TITLE" --json number --jq 'length')
+          if [ "$EXISTING" -gt 0 ]; then
+            echo "Open issue already exists, skipping creation"
+            exit 0
+          fi
+
+          BODY=$(cat <<'ISSUE_EOF'
+          ## Dependency Scan Report
+
+          The monthly dependency scan found lifecycle policy violations.
+
+          **Workflow run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          **Fail-on policy**: `${{ github.event.inputs.fail-on || 'eol-confirmed' }}`
+
+          <details>
+          <summary>Scan output</summary>
+
+          ```
+          ${{ steps.scan.outputs.scan_output }}
+          ```
+
+          </details>
+
+          Please review the flagged dependencies and update or replace as needed.
+          ISSUE_EOF
+          )
+
+          gh issue create --title "$TITLE" --body "$BODY" --label "dependencies"
+
+      - name: Notify Slack
+        if: failure() && steps.scan.outputs.exit_code != '0' && env.SLACK_WEBHOOK_URL != ''
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          REPO="${{ github.repository }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          FAIL_ON="${{ github.event.inputs.fail-on || 'eol-confirmed' }}"
+
+          curl -sf -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -n \
+              --arg repo "$REPO" \
+              --arg url "$RUN_URL" \
+              --arg policy "$FAIL_ON" \
+              '{
+                text: ":warning: Dependency scan policy violations found",
+                blocks: [
+                  {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: ("*:warning: Dependency Scan — Policy Violations Found*\n\n*Repository:* `" + $repo + "`\n*Fail-on policy:* `" + $policy + "`\n*Details:* <" + $url + "|View workflow run>")
+                    }
+                  }
+                ]
+              }'
+            )"
+
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: dependency-scan-report
+          path: sbom.json
+          retention-days: 90
