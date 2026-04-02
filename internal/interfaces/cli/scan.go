@@ -108,7 +108,7 @@ func runScanFile(ctx context.Context, cfg *domaincfg.Config, svc *scanapp.Servic
 	// Try structured format (go.mod / CycloneDX SBOM) first
 	parser, data, err := detectFileParser(filePath, parsers)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to detect file format for '%s': %w", filePath, err)
 	}
 	if parser != nil {
 		result, err := svc.RunFromParser(ctx, parser, data, policy)
