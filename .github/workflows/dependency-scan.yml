@@ -1,0 +1,72 @@
+name: Dependency Scan
+
+on:
+  schedule:
+    # Monthly: 1st of each month at 09:00 UTC
+    - cron: '0 9 1 * *'
+  workflow_dispatch:
+    inputs:
+      fail-on:
+        description: 'Fail on labels (comma-separated, empty = never fail)'
+        required: false
+        default: 'eol-confirmed'
+      format:
+        description: 'Output format'
+        required: false
+        default: 'table'
+        type: choice
+        options:
+          - table
+          - detailed
+          - json
+          - csv
+      extra-args:
+        description: 'Extra arguments passed to uzomuzo scan'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build uzomuzo
+        run: go build -o uzomuzo ./cmd/uzomuzo
+
+      - name: Generate SBOM
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: 'fs'
+          format: 'cyclonedx'
+          output: 'sbom.json'
+
+      - name: Run scan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FAIL_ON="${{ github.event.inputs.fail-on || 'eol-confirmed' }}"
+          FORMAT="${{ github.event.inputs.format || 'table' }}"
+
+          ARGS=""
+          if [ -n "$FAIL_ON" ]; then ARGS="--fail-on $FAIL_ON"; fi
+          if [ -n "${{ github.event.inputs.extra-args }}" ]; then
+            ARGS="$ARGS ${{ github.event.inputs.extra-args }}"
+          fi
+
+          ./uzomuzo scan --sbom sbom.json --format "$FORMAT" $ARGS
+
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: dependency-scan-report
+          path: sbom.json
+          retention-days: 90
