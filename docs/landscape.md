@@ -74,8 +74,7 @@ uzomuzo is designed to **complement**, not replace, existing tools. The typical 
 ```bash
 # Trivy generates SBOM → uzomuzo assesses lifecycle health
 trivy image --format cyclonedx my-app:latest \
-  | jq -r '.components[].purl' \
-  | ./uzomuzo scan --only-eol
+  | ./uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective
 ```
 
 This combines Trivy's comprehensive asset enumeration with uzomuzo's lifecycle intelligence, surfacing abandoned dependencies that traditional SCA scanners would report as "0 vulnerabilities — safe."

@@ -29,9 +29,10 @@ var ErrScanFailPolicy = errors.New("scan: one or more dependencies matched --fai
 type ScanOptions struct {
 	ProcessingOptions
 
-	Format    string // "detailed", "table", "json", "csv" (empty = smart default)
-	FailOnRaw string // raw --fail-on CSV string
-	SBOMPath  string // --sbom flag
+	Format             string // "detailed", "table", "json", "csv" (empty = smart default)
+	FailOnRaw          string // raw --fail-on CSV string
+	SBOMPath           string // --sbom flag
+	ConfigSampleDefault int   // Config-level default sample size (applied only to PURL/URL list files)
 }
 
 // RunScan is the entry point for the "scan" subcommand.
@@ -142,9 +143,14 @@ func runScanPURLList(ctx context.Context, svc *scanapp.Service, opts ScanOptions
 		return fmt.Errorf("failed to read file '%s': %w", filePath, err)
 	}
 
-	if opts.SampleSize > 0 {
-		purls = randomSample(purls, opts.SampleSize)
-		githubURLs = randomSample(githubURLs, opts.SampleSize)
+	// Apply config default sample size only for plain PURL/URL list files
+	sampleSize := opts.SampleSize
+	if sampleSize == 0 && opts.ConfigSampleDefault > 0 {
+		sampleSize = opts.ConfigSampleDefault
+	}
+	if sampleSize > 0 {
+		purls = randomSample(purls, sampleSize)
+		githubURLs = randomSample(githubURLs, sampleSize)
 	}
 
 	if len(purls) == 0 && len(githubURLs) == 0 {

@@ -32,8 +32,7 @@ No official deprecation, no archived repository — yet `dicer` has an unpatched
 
 ```bash
 trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
-  | jq -r '.components[].purl // empty' \
-  | ./uzomuzo scan --only-eol
+  | ./uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective
 ```
 
 ```text
@@ -90,7 +89,7 @@ uzomuzo scan --sbom bom.json --fail-on eol-confirmed
 
 # Batch from Trivy SBOM
 trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
-  | uzomuzo scan --sbom - --only-eol
+  | uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective
 
 # File input (one PURL per line)
 uzomuzo scan --file input_purls.txt --sample 500

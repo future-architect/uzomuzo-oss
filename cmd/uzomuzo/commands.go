@@ -120,9 +120,10 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 		return fmt.Errorf("--sample must be zero (process all) or a positive integer")
 	}
 
-	// Apply config default for sample
-	if opts.Filename != "" && !cmd.IsSet("sample") && opts.SampleSize == 0 {
-		opts.SampleSize = cfg.App.SampleSize
+	// Pass config default sample size; applied only to PURL/URL list files
+	// (not to structured formats like go.mod/CycloneDX which reject --sample)
+	if !cmd.IsSet("sample") {
+		opts.ConfigSampleDefault = cfg.App.SampleSize
 	}
 
 	args := cmd.Args().Slice()

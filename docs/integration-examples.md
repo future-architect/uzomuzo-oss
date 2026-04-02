@@ -31,9 +31,9 @@ syft . -o cyclonedx-json | ./uzomuzo scan --sbom -
 
 ```bash
 # Fail the build if any dependency is EOL or archived
-trivy fs . --format cyclonedx | ./uzomuzo scan --sbom - --format json
-# Exit code 0 = all dependencies OK
-# Exit code 1 = at least one dependency needs replacement
+trivy fs . --format cyclonedx | ./uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective --format json
+# Exit code 0 = no dependencies matched --fail-on policy
+# Exit code 1 = at least one dependency matched --fail-on policy
 ```
 
 ### go.mod Shortcut
@@ -67,18 +67,16 @@ Generate a CycloneDX SBOM from a container image, extract PURLs, and pipe them i
 
 ```bash
 trivy image --scanners vuln --list-all-pkgs --format cyclonedx bitnami/node \
-  | jq -r '.components[].purl' \
-  | ./uzomuzo scan --only-eol
+  | ./uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective
 ```
 
 This workflow:
 
 1. **Trivy** scans the container image and outputs a CycloneDX SBOM (JSON).
-2. **jq** extracts the `purl` field from each component.
-3. **uzomuzo scan** reads PURLs from stdin and evaluates their lifecycle status.
-4. `--only-eol` filters the output to show only EOL packages (Confirmed, Effective, Scheduled).
+2. **uzomuzo scan** reads the SBOM from stdin and evaluates each component's lifecycle status.
+3. `--fail-on` causes exit code 1 when any component matches the specified lifecycle labels.
 
-You can omit `--only-eol` to see the full lifecycle classification for every component.
+You can omit `--fail-on` to see the full lifecycle classification for every component without failing the build.
 
 ## Repository Transitive Dependency Check
 
@@ -86,8 +84,7 @@ Assess the health of all transitive dependencies of a GitHub repository:
 
 ```bash
 trivy repo --scanners vuln --list-all-pkgs --format cyclonedx https://github.com/future-architect/vuls \
-  | jq -r '.components[].purl' \
-  | ./uzomuzo scan --only-eol
+  | ./uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective
 ```
 
 This identifies EOL or stagnant packages hidden deep in the dependency tree — packages that traditional SCA scanners may report as "0 vulnerabilities" but are operationally abandoned.
@@ -122,8 +119,7 @@ This tells you exactly which module in your project imports the EOL package, so 
 
 ```bash
 syft bitnami/node -o cyclonedx-json \
-  | jq -r '.components[].purl' \
-  | ./uzomuzo scan --only-eol
+  | ./uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective
 ```
 
 ## File-Based Workflow (Alternative)
@@ -142,18 +138,16 @@ head purls.txt     # inspect format
 ./uzomuzo scan --file purls.txt --sample 500
 ```
 
-## Combining Filters
+## Combining Options
 
-Filters can be combined with pipe input:
+Options can be combined with SBOM input:
 
 ```bash
-# Only npm ecosystem, only EOL packages
+# CI gate with JSON output
 trivy repo --format cyclonedx https://github.com/example/app \
-  | jq -r '.components[].purl' \
-  | ./uzomuzo scan --ecosystem npm --only-eol
+  | ./uzomuzo scan --sbom - --fail-on eol-confirmed --format json
 
-# Export license CSV while scanning
+# Table output for quick triage
 trivy image --format cyclonedx my-app:latest \
-  | jq -r '.components[].purl' \
-  | ./uzomuzo scan --export-license-csv licenses.csv
+  | ./uzomuzo scan --sbom - --format table
 ```

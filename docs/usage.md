@@ -62,7 +62,7 @@ Run:
 ./uzomuzo scan --file input_file.txt --sample 500
 ```
 
-File mode is designed for large inputs (thousands of lines). `--sample N` (N > 0) enables random sampling. Omit `--sample` to process all entries.
+File mode is designed for large inputs (thousands of lines). `--sample N` (N > 0) enables random sampling. If `--sample` is omitted, the configured default sample size (`APP_SAMPLE_SIZE`) is applied when set; otherwise all entries are processed.
 
 ### Pipe / stdin Input
 
@@ -135,22 +135,6 @@ Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `leg
 | `caution` | Stalled, EOL-Scheduled | Monitor; plan migration |
 | `replace` | EOL-Confirmed, EOL-Effective, Archived | Migrate immediately |
 | `review` | Insufficient data, analysis error | Manual investigation |
-
-## Filters & Output Control
-
-- `--ecosystem <name>`: Limit to a single ecosystem (e.g., `npm`, `pypi`, `maven`, `nuget`, `cargo`, `golang`, `gem`, `composer`). In file mode, filter is applied before sampling
-- `--only-eol`: Show only items with confirmed EOL status
-- `--only-review-needed`: Show only items with "Review Needed" status (includes unevaluated)
-- Combining `--only-eol` and `--only-review-needed` shows both categories
-- `--export-license-csv <path>`: Export extended license analysis CSV
-
-```bash
-# Direct input: npm only & EOL only
-./uzomuzo scan --ecosystem npm --only-eol pkg:npm/express@4.18.2 pkg:npm/lodash@4.17.21
-
-# File mode: sample 200, Maven only, Review Needed only
-./uzomuzo scan --file input_file.txt --ecosystem maven --only-review-needed --sample 200
-```
 
 ### Built-in Flags
 
@@ -310,5 +294,3 @@ Lifecycle label order in CLI detailed view (non-CSV):
 2. Stalled
 3. EOL
 4. Review Needed
-
-When `--only-eol` / `--only-review-needed` is specified, only the matching category is shown (both flags together show both).
