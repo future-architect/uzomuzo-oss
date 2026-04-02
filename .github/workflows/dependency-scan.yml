@@ -68,7 +68,12 @@ jobs:
             ARGS="$ARGS ${{ github.event.inputs.extra-args }}"
           fi
 
-          # Capture output for issue body; preserve exit code
+          # Run detailed scan for artifact report
+          set +e
+          ./uzomuzo scan --sbom sbom.json --format detailed $ARGS > scan-report.txt 2>&1
+          set -e
+
+          # Run table scan for console + issue body; preserve exit code
           set +e
           OUTPUT=$(./uzomuzo scan --sbom sbom.json --format "$FORMAT" $ARGS 2>&1)
           EXIT_CODE=$?
@@ -77,7 +82,7 @@ jobs:
           echo "$OUTPUT"
           echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
 
-          # Save scan output for the issue step
+          # Save table output for the issue step
           {
             echo 'scan_output<<SCAN_EOF'
             echo "$OUTPUT"
@@ -117,6 +122,8 @@ jobs:
           ```
 
           </details>
+
+          For detailed per-dependency analysis, download the `dependency-scan-report` artifact from the workflow run.
 
           Please review the flagged dependencies and update or replace as needed.
           ISSUE_EOF
@@ -159,5 +166,7 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: dependency-scan-report
-          path: sbom.json
+          path: |
+            sbom.json
+            scan-report.txt
           retention-days: 90
