@@ -4,6 +4,7 @@
 package cyclonedx
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,48 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	"github.com/package-url/packageurl-go"
 )
+
+// SniffPrefixLen is the number of bytes inspected when sniffing file format.
+const SniffPrefixLen = 512
+
+// IsCycloneDXJSON performs a quick sniff to detect CycloneDX JSON format
+// by checking for "bomFormat" with value "CycloneDX" in the first 512 bytes.
+// It handles both compact (`"bomFormat":"CycloneDX"`) and pretty-printed
+// (`"bomFormat": "CycloneDX"`) JSON.
+func IsCycloneDXJSON(data []byte) bool {
+	prefix := data[:min(len(data), SniffPrefixLen)]
+	if !bytes.Contains(prefix, []byte(`"bomFormat"`)) {
+		return false
+	}
+	// Decode just the bomFormat field to validate the value.
+	var header struct {
+		BOMFormat string `json:"bomFormat"`
+	}
+	if err := json.Unmarshal(prefix, &header); err == nil {
+		return header.BOMFormat == "CycloneDX"
+	}
+
+	// prefix may be truncated; fall back to a stricter search that
+	// validates bomFormat's value is exactly "CycloneDX".
+	bomIdx := bytes.Index(prefix, []byte(`"bomFormat"`))
+	if bomIdx == -1 {
+		return false
+	}
+	rest := prefix[bomIdx+len(`"bomFormat"`):]
+	colonIdx := bytes.IndexByte(rest, ':')
+	if colonIdx == -1 {
+		return false
+	}
+	rest = bytes.TrimLeft(rest[colonIdx+1:], " \t\r\n")
+	if len(rest) == 0 || rest[0] != '"' {
+		return false
+	}
+	endIdx := bytes.IndexByte(rest[1:], '"')
+	if endIdx == -1 {
+		return false
+	}
+	return bytes.Equal(rest[1:1+endIdx], []byte("CycloneDX"))
+}
 
 // Parser implements depparser.DependencyParser for CycloneDX SBOM JSON.
 type Parser struct{}

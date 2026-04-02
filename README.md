@@ -6,7 +6,7 @@
 
 ![uzomuzo demo](docs/assets/demo.gif)
 
-> `./uzomuzo analyze pkg:npm/inflight@1.0.6` — inflight has 556K dependents, yet its repository is archived and npm has deprecated it. uzomuzo detects this as **EOL-Confirmed** in seconds.
+> `./uzomuzo scan pkg:npm/inflight@1.0.6` — inflight has 556K dependents, yet its repository is archived and npm has deprecated it. uzomuzo detects this as **EOL-Confirmed** in seconds.
 
 ## The Problem: The CVE Blind Spot
 
@@ -32,8 +32,7 @@ No official deprecation, no archived repository — yet `dicer` has an unpatched
 
 ```bash
 trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
-  | jq -r '.components[].purl // empty' \
-  | ./uzomuzo analyze --only-eol
+  | ./uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective
 ```
 
 ```text
@@ -75,23 +74,25 @@ export GITHUB_TOKEN=ghp_...  # optional; enables commit history and Scorecard
 
 ```bash
 # Single package
-uzomuzo analyze pkg:npm/express@4.18.2
+uzomuzo scan pkg:npm/express@4.18.2
 
 # GitHub repository
-uzomuzo analyze https://github.com/expressjs/express
+uzomuzo scan https://github.com/expressjs/express
 
-# Audit all project dependencies (CI-friendly)
-trivy fs . --format cyclonedx | uzomuzo audit --sbom -
-uzomuzo audit                    # auto-detect go.mod in cwd
-uzomuzo audit --format json      # JSON output for CI integration
+# Scan all project dependencies (CI-friendly)
+trivy fs . --format cyclonedx | uzomuzo scan --sbom -
+uzomuzo scan                     # auto-detect go.mod in cwd
+uzomuzo scan --format json       # JSON output for CI integration
 
-# Batch from Trivy SBOM (detailed per-package analysis)
+# CI gate: exit 1 if any EOL dependency found
+uzomuzo scan --sbom bom.json --fail-on eol-confirmed
+
+# Batch from Trivy SBOM
 trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
-  | jq -r '.components[].purl // empty' \
-  | uzomuzo analyze --only-eol
+  | uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective
 
 # File input (one PURL per line)
-uzomuzo analyze --file input_purls.txt --sample 500
+uzomuzo scan --file input_purls.txt --sample 500
 ```
 
 See [Usage](docs/usage.md) for full CLI reference and [Integration Examples](docs/integration-examples.md) for Trivy, Syft, and Go module workflows.
@@ -228,7 +229,7 @@ npm / PyPI / Maven / Cargo / Go modules / NuGet / RubyGems / Packagist
 - **Multi-ecosystem support**: 8 ecosystems with full PURL (Package URL) spec compliance
 - **OpenSSF Scorecard integration**: Automated security maturity metrics
 - **Parallel-optimized batch processing**: 5,000+ PURLs/run with concurrent API orchestration
-- **Audit subcommand**: Bulk dependency health check from CycloneDX SBOM or go.mod with CI exit code gating
+- **Unified scan subcommand**: Single entry point for PURL, GitHub URL, SBOM, go.mod — with `--fail-on` CI exit code gating
 - **Flexible input**: Direct PURL / GitHub URL / file list / mixed / stdin pipe
 - **CSV / CLI reports**: Comprehensive output of metrics, licenses, and lifecycle status
 - **Extensible via AnalysisEnricher hook**: Inject custom EOL catalog logic without modifying core — [details](docs/library-usage.md)

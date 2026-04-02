@@ -12,18 +12,73 @@
 #       file: "<path>"
 #       date: "YYYY-MM-DD"
 patterns:
+  - category: "naming-consistency"
+    summary: "Keep field/column names consistent across output formats — if JSON uses 'eol_reason', CSV should too"
+    pr: 87
+    file: "internal/interfaces/cli/scan_render.go"
+    date: "2026-04-02"
+  - category: "comment-doc-drift"
+    summary: "Comment claimed 'preserves input order' but code groups by type — comments must match actual behavior"
+    pr: 87
+    file: "internal/application/scan/service.go"
+    date: "2026-04-02"
+  - category: "api-consistency"
+    summary: "Do not expose CLI flags that have no backing implementation — unused flags confuse users and bloat the interface"
+    pr: 87
+    file: "cmd/uzomuzo/commands.go"
+    date: "2026-04-02"
+  - category: "ddd-violations"
+    summary: "Interfaces layer must not import Infrastructure packages directly — inject dependencies via function types or interfaces"
+    pr: 87
+    file: "internal/interfaces/cli/scan.go"
+    date: "2026-04-02"
+  - category: "comment-doc-drift"
+    summary: "Flag help text must reflect actual sampling behavior — --sample applies per type, not across combined input"
+    pr: 87
+    file: "cmd/uzomuzo/commands.go"
+    date: "2026-04-02"
+  - category: "testing"
+    summary: "When replacing an application service, port existing unit tests to the new service to prevent regression"
+    pr: 87
+    file: "internal/application/scan/service.go"
+    date: "2026-04-02"
+  - category: "comment-doc-drift"
+    summary: "Docs and README referenced removed flags (--only-eol, --ecosystem, --export-license-csv) across 6+ files after scan refactor"
+    pr: 87
+    file: "README.md"
+    date: "2026-04-02"
+  - category: "defensive-coding"
+    summary: "Config default sample size applied to all --file inputs including structured formats (go.mod/CycloneDX) that reject sampling — defer defaults to compatible code paths"
+    pr: 87
+    file: "cmd/uzomuzo/commands.go"
+    date: "2026-04-02"
+  - category: "defensive-coding"
+    summary: "Validate injected function-type dependencies (e.g., FileDetector) for nil before invoking — exported functions accepting callbacks must guard against nil callers"
+    pr: 87
+    file: "internal/interfaces/cli/scan.go"
+    date: "2026-04-02"
+  - category: "defensive-coding"
+    summary: "Use io.ReadFull instead of single f.Read when filling a fixed-size prefix buffer — os.File.Read may return short reads"
+    pr: 87
+    file: "internal/infrastructure/depparser/detect.go"
+    date: "2026-04-02"
+  - category: "defensive-coding"
+    summary: "Deduplicate user-provided input lists before batch API calls to avoid redundant external calls and skewed counts"
+    pr: 87
+    file: "internal/application/scan/service.go"
+    date: "2026-04-02"
+  - category: "defensive-coding"
+    summary: "Normalize user-provided enum values (TrimSpace+ToLower) before case-sensitive validation — rejects common inputs like --format JSON otherwise"
+    pr: 87
+    file: "internal/interfaces/cli/scan_render.go"
+    date: "2026-04-02"
   - category: "error-handling"
-    summary: "Preserve typed error identity when wrapping — use matching constructor (e.g., NewAuthenticationError) not a generic one (e.g., NewFetchError)"
-    pr: 83
-    file: "internal/infrastructure/integration/service.go"
-    date: "2026-04-01"
-  - category: "defensive-coding"
-    summary: "Restrict fallback paths to specific error classes; fail fast for not-found and rate-limit errors instead of silently degrading"
-    pr: 83
-    file: "internal/infrastructure/integration/service.go"
-    date: "2026-04-01"
-  - category: "defensive-coding"
-    summary: "Propagate timeout context to fallback code paths — do not use the unbounded parent ctx when a scoped ctxWithTimeout exists"
-    pr: 83
-    file: "internal/infrastructure/integration/service.go"
-    date: "2026-04-01"
+    summary: "Distinguish os.ErrNotExist from other I/O errors when auto-detecting files — treating all errors as 'not found' hides real causes"
+    pr: 87
+    file: "internal/interfaces/cli/scan.go"
+    date: "2026-04-02"
+  - category: "comment-doc-drift"
+    summary: "ADR title casing inconsistent — use consistent sentence-style capitalization across all ADRs"
+    pr: 87
+    file: "docs/adr/0004-unify-analyze-audit-into-scan.md"
+    date: "2026-04-02"

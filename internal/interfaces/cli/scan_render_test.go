@@ -36,32 +36,27 @@ func makeTestEntries() []domainaudit.AuditEntry {
 	}
 }
 
-func TestRenderTable(t *testing.T) {
+func TestRenderScanTable(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries()
-	if err := renderTable(&buf, entries); err != nil {
-		t.Fatalf("renderTable() error = %v", err)
+	if err := renderScanTable(&buf, entries); err != nil {
+		t.Fatalf("renderScanTable() error = %v", err)
 	}
 
 	output := buf.String()
 
-	// Check header
 	if !strings.Contains(output, "VERDICT") {
 		t.Error("table output missing VERDICT header")
 	}
 	if !strings.Contains(output, "PURL") {
 		t.Error("table output missing PURL header")
 	}
-
-	// Check entries present
 	if !strings.Contains(output, "pkg:npm/express@4.18.2") {
 		t.Error("table output missing express entry")
 	}
 	if !strings.Contains(output, "replace") {
 		t.Error("table output missing replace verdict")
 	}
-
-	// Check summary
 	if !strings.Contains(output, "Summary:") {
 		t.Error("table output missing summary")
 	}
@@ -73,14 +68,14 @@ func TestRenderTable(t *testing.T) {
 	}
 }
 
-func TestRenderJSON(t *testing.T) {
+func TestRenderScanJSON(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries()
-	if err := renderJSON(&buf, entries); err != nil {
-		t.Fatalf("renderJSON() error = %v", err)
+	if err := renderScanJSON(&buf, entries); err != nil {
+		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
-	var out jsonOutput
+	var out enrichedJSONOutput
 	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
 		t.Fatalf("JSON unmarshal error = %v", err)
 	}
@@ -102,11 +97,11 @@ func TestRenderJSON(t *testing.T) {
 	}
 }
 
-func TestRenderCSV(t *testing.T) {
+func TestRenderScanCSV(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries()
-	if err := renderCSV(&buf, entries); err != nil {
-		t.Fatalf("renderCSV() error = %v", err)
+	if err := renderScanCSV(&buf, entries); err != nil {
+		t.Fatalf("renderScanCSV() error = %v", err)
 	}
 
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
@@ -117,12 +112,52 @@ func TestRenderCSV(t *testing.T) {
 	if !strings.HasPrefix(lines[0], "verdict,") {
 		t.Errorf("CSV header = %q, want to start with 'verdict,'", lines[0])
 	}
+	if !strings.Contains(lines[0], "eol_reason") {
+		t.Errorf("CSV header = %q, want to contain 'eol_reason'", lines[0])
+	}
 }
 
-func TestRenderAuditOutput_UnsupportedFormat(t *testing.T) {
+func TestRenderScanOutput_UnsupportedFormat(t *testing.T) {
 	var buf bytes.Buffer
-	err := renderAuditOutput(&buf, nil, "yaml")
+	err := renderScanOutput(&buf, nil, "yaml")
 	if err == nil {
 		t.Error("expected error for unsupported format, got nil")
+	}
+}
+
+func TestResolveFormat(t *testing.T) {
+	tests := []struct {
+		name       string
+		explicit   string
+		inputCount int
+		want       string
+		wantErr    bool
+	}{
+		{name: "explicit json", explicit: "json", inputCount: 1, want: "json"},
+		{name: "explicit table", explicit: "table", inputCount: 1, want: "table"},
+		{name: "explicit csv", explicit: "csv", inputCount: 100, want: "csv"},
+		{name: "explicit detailed", explicit: "detailed", inputCount: 100, want: "detailed"},
+		{name: "invalid format", explicit: "yaml", wantErr: true},
+		{name: "auto 1 input", inputCount: 1, want: "detailed"},
+		{name: "auto 3 inputs", inputCount: 3, want: "detailed"},
+		{name: "auto 4 inputs", inputCount: 4, want: "table"},
+		{name: "auto 100 inputs", inputCount: 100, want: "table"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolveFormat(tt.explicit, tt.inputCount)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("ResolveFormat() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

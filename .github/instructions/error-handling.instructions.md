@@ -61,3 +61,10 @@ slog.Error(
     "user_id", userID,
 )
 ```
+
+## Learned from Copilot Reviews
+
+- **Preserve Typed Error Identity When Wrapping**: When a function returns a domain-specific error type (e.g., `AuthenticationError`), wrap it using the matching constructor — not a generic one (e.g., `NewFetchError`). Mismatched wrappers break `errors.As` checks downstream.
+- **Check All Error Returns in Tests**: Do not discard errors from stdlib functions (e.g., `os.Pipe()`, `os.CreateTemp()`) in test helpers with `_`. If the call fails, subsequent code will panic with a confusing nil-pointer error. Always check and `t.Fatalf` on failure.
+- **Avoid Redundant Context in Error Wrapping Chains**: When wrapping an error that already contains context (e.g., `"invalid --fail-on label ..."`), use a different wrapper phrase (e.g., `"parse fail policy: %w"`) instead of repeating the same prefix. Redundant wrapping produces confusing messages like `"invalid --fail-on: invalid --fail-on label ..."`.
+- **Distinguish "Not Found" from Other I/O Errors**: When reading a file that may not exist (e.g., auto-detecting `go.mod`), check `errors.Is(err, os.ErrNotExist)` for the "not found" case and return a wrapped error for other failures (permission denied, transient I/O). Treating all read errors as "not found" hides the real cause from users.
