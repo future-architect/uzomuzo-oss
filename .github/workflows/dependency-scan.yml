@@ -51,8 +51,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXTRA_ARGS: ${{ github.event.inputs.extra-args || '' }}
+          FAIL_ON_INPUT: ${{ github.event.inputs.fail-on }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          FAIL_ON="${{ github.event.inputs.fail-on || 'eol-confirmed' }}"
+          # For schedule runs, default to eol-confirmed.
+          # For workflow_dispatch, respect the input (empty = never fail).
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            FAIL_ON="${FAIL_ON_INPUT:-eol-confirmed}"
+          else
+            FAIL_ON="$FAIL_ON_INPUT"
+          fi
 
           ARGS=()
           if [ -n "$FAIL_ON" ]; then
@@ -92,7 +100,7 @@ jobs:
 
   report:
     needs: scan
-    if: always() && github.event.inputs.create-issue != 'false'
+    if: always() && needs.scan.outputs.exit_code != '' && github.event.inputs.create-issue != 'false'
     runs-on: ubuntu-latest
     permissions:
       issues: write
