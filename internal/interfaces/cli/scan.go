@@ -48,7 +48,7 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 	// Parse fail-on policy
 	policy, err := domainscan.ParseFailPolicy(opts.FailOnRaw)
 	if err != nil {
-		return fmt.Errorf("invalid --fail-on: %w", err)
+		return fmt.Errorf("parse fail policy: %w", err)
 	}
 
 	analysisService := createAnalysisService(cfg)

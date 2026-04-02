@@ -29,7 +29,7 @@ func scanFlags() []urfcli.Flag {
 		&urfcli.StringFlag{Name: "fail-on", Usage: "Comma-separated lifecycle labels that trigger exit 1 (eol-confirmed,eol-effective,eol-scheduled,stalled,legacy-safe)"},
 
 		// File mode options
-		&urfcli.IntFlag{Name: "sample", Usage: "Randomly sample up to N inputs (file mode only)"},
+		&urfcli.IntFlag{Name: "sample", Usage: "Randomly sample up to N PURLs and N GitHub URLs (file mode only)"},
 		&urfcli.StringFlag{Name: "line-range", Usage: "Limit to line range START:END (file mode only)"},
 	}
 }
