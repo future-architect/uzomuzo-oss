@@ -1,6 +1,6 @@
 # Uzomuzo
 
-[![CI](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/future-architect/uzomuzo-oss)](https://goreportcard.com/report/github.com/future-architect/uzomuzo-oss) [![Go Reference](https://pkg.go.dev/badge/github.com/future-architect/uzomuzo-oss.svg)](https://pkg.go.dev/github.com/future-architect/uzomuzo-oss) [![Release](https://img.shields.io/github/v/release/future-architect/uzomuzo-oss)](https://github.com/future-architect/uzomuzo-oss/releases/latest) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![CI](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml) [![Dependency Scan](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/future-architect/uzomuzo-oss)](https://goreportcard.com/report/github.com/future-architect/uzomuzo-oss) [![Go Reference](https://pkg.go.dev/badge/github.com/future-architect/uzomuzo-oss.svg)](https://pkg.go.dev/github.com/future-architect/uzomuzo-oss) [![Release](https://img.shields.io/github/v/release/future-architect/uzomuzo-oss)](https://github.com/future-architect/uzomuzo-oss/releases/latest) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 **Proactive lifecycle governance for OSS supply chains.** Detects abandoned, stalled, and effectively dead dependencies that traditional SCA tools report as "0 vulnerabilities — safe."
 
@@ -234,6 +234,7 @@ npm / PyPI / Maven / Cargo / Go modules / NuGet / RubyGems / Packagist
 - **CSV / CLI reports**: Comprehensive output of metrics, licenses, and lifecycle status
 - **Extensible via AnalysisEnricher hook**: Inject custom EOL catalog logic without modifying core — [details](docs/library-usage.md)
 - **Embeddable as a Go library**: `pkg/uzomuzo/` facade for SaaS integration — [details](docs/library-usage.md)
+- **Automated monthly scanning**: GitHub Actions workflow with Trivy SBOM generation, issue creation, and optional Slack notification — [details](docs/integration-examples.md#github-actions-scheduled-scanning)
 
 ## Architecture
 
@@ -254,7 +255,7 @@ See [Data Flow](docs/data-flow.md) for API integration diagram and two-path asse
 | --- | --- |
 | [Usage](docs/usage.md) | CLI commands, batch processing, filters, configuration, logging |
 | [Data Flow](docs/data-flow.md) | API integration diagram, two-path assessment architecture |
-| [Integration Examples](docs/integration-examples.md) | Trivy/SBOM integration, container scanning, dependency tracing |
+| [Integration Examples](docs/integration-examples.md) | Trivy/SBOM integration, container scanning, dependency tracing, GitHub Actions scheduled scanning |
 | [Landscape Comparison](docs/landscape.md) | Problem space, tool comparison, complementary usage |
 | [Library Usage](docs/library-usage.md) | Go library API, Evaluator, Analysis type |
 | [PURL Identity Model](docs/purl-identity-model.md) | OriginalPURL / EffectivePURL / CanonicalKey 3-layer design |

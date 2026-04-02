@@ -138,6 +138,59 @@ head purls.txt     # inspect format
 ./uzomuzo scan --file purls.txt --sample 500
 ```
 
+## GitHub Actions Scheduled Scanning
+
+uzomuzo includes a ready-to-use GitHub Actions workflow (`.github/workflows/dependency-scan.yml`) that runs a monthly dependency scan and creates a GitHub Issue with the results.
+
+### What It Does
+
+1. **Generates SBOM** using [Trivy](https://github.com/aquasecurity/trivy) (CycloneDX format)
+2. **Runs `uzomuzo scan`** with detailed output (summary table + per-dependency analysis)
+3. **Creates a GitHub Issue** with the summary table as a monthly report
+4. **Uploads artifacts** (SBOM + detailed report) for download
+5. **Optionally notifies Slack** when policy violations are detected
+
+### Schedule
+
+Runs automatically on the **1st of each month at 09:00 UTC**. Can also be triggered manually via `workflow_dispatch`.
+
+### Manual Trigger
+
+```bash
+# Run with defaults (fail-on: eol-confirmed)
+gh workflow run dependency-scan.yml
+
+# Run without CI gate (never fail)
+gh workflow run dependency-scan.yml --field fail-on=""
+
+# Disable issue creation
+gh workflow run dependency-scan.yml --field create-issue=false
+```
+
+### Workflow Dispatch Inputs
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `fail-on` | `eol-confirmed` | Comma-separated lifecycle labels that trigger exit 1 (empty = never fail) |
+| `extra-args` | *(empty)* | Extra arguments passed to `uzomuzo scan` |
+| `create-issue` | `true` | Create a GitHub Issue with scan report |
+
+### Example Report Issue
+
+See [Issue #95](https://github.com/future-architect/uzomuzo-oss/issues/95) for a demo report showing EOL detection across npm, PyPI, and Go ecosystems.
+
+### Slack Notification
+
+To enable Slack notifications on policy violations, add a `SLACK_WEBHOOK_URL` secret to your repository settings. The notification is skipped gracefully when the secret is not configured.
+
+### Setup for Your Repository
+
+1. Copy `.github/workflows/dependency-scan.yml` to your repository
+2. Ensure the `dependencies` label exists (the workflow uses it for issues)
+3. Optionally add `SLACK_WEBHOOK_URL` to repository secrets
+
+---
+
 ## Combining Options
 
 Options can be combined with SBOM input:
