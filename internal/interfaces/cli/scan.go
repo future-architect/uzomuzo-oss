@@ -143,7 +143,7 @@ func runScanFile(ctx context.Context, cfg *domaincfg.Config, svc *scanapp.Servic
 	}
 	purls, githubURLs, err := categorizeFileLines(filePath, opts.ProcessingOptions)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read file '%s': %w", filePath, err)
 	}
 
 	// Apply sampling
@@ -236,7 +236,7 @@ func runScanAutoDetect(ctx context.Context, svc *scanapp.Service, opts ScanOptio
 func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanOptions, inputCount int) error {
 	format, err := ResolveFormat(opts.Format, inputCount)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid output format: %w", err)
 	}
 
 	if err := renderScanOutput(os.Stdout, result.Entries, format); err != nil {
@@ -261,10 +261,13 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 	return nil
 }
 
+// sniffPrefixLen is the number of bytes inspected when sniffing file format.
+const sniffPrefixLen = 512
+
 // isCycloneDXJSON performs a quick sniff to detect CycloneDX JSON format.
 func isCycloneDXJSON(data []byte) bool {
 	s := string(data)
-	return strings.Contains(s[:min(len(s), 512)], `"bomFormat"`)
+	return strings.Contains(s[:min(len(s), sniffPrefixLen)], `"bomFormat"`)
 }
 
 // isStdinTerminal reports whether stdin is connected to a terminal.
