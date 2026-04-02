@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -48,7 +49,10 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 	}
 
 	analysisService := createAnalysisService(cfg)
-	scanService := scanapp.NewService(analysisService)
+	scanService, err := scanapp.NewService(analysisService)
+	if err != nil {
+		return fmt.Errorf("failed to initialize scan service: %w", err)
+	}
 
 	// Route to the appropriate input handler
 	switch {
@@ -266,8 +270,8 @@ const sniffPrefixLen = 512
 
 // isCycloneDXJSON performs a quick sniff to detect CycloneDX JSON format.
 func isCycloneDXJSON(data []byte) bool {
-	s := string(data)
-	return strings.Contains(s[:min(len(s), sniffPrefixLen)], `"bomFormat"`)
+	prefix := data[:min(len(data), sniffPrefixLen)]
+	return bytes.Contains(prefix, []byte(`"bomFormat"`))
 }
 
 // isStdinTerminal reports whether stdin is connected to a terminal.

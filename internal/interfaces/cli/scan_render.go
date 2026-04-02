@@ -160,13 +160,13 @@ type enrichedJSONEntry struct {
 	EOLReason string `json:"eol_reason,omitempty"`
 	Successor string `json:"successor,omitempty"`
 
-	RepoURL         string  `json:"repo_url,omitempty"`
-	Archived        bool    `json:"archived,omitempty"`
-	OverallScore    float64 `json:"overall_score,omitempty"`
-	DependentCount  int     `json:"dependent_count,omitempty"`
-	StableVersion   string  `json:"stable_version,omitempty"`
-	ProjectLicense  string  `json:"project_license,omitempty"`
-	VersionLicenses string  `json:"version_licenses,omitempty"`
+	RepoURL         string   `json:"repo_url,omitempty"`
+	Archived        bool     `json:"archived,omitempty"`
+	OverallScore    float64  `json:"overall_score,omitempty"`
+	DependentCount  int      `json:"dependent_count,omitempty"`
+	StableVersion   string   `json:"stable_version,omitempty"`
+	ProjectLicense  string   `json:"project_license,omitempty"`
+	VersionLicenses []string `json:"version_licenses,omitempty"`
 
 	Reason string `json:"reason,omitempty"`
 	Error  string `json:"error,omitempty"`
@@ -210,7 +210,11 @@ func renderScanJSON(w io.Writer, entries []domainaudit.AuditEntry) error {
 				je.ProjectLicense = a.ProjectLicense.Identifier
 			}
 			if len(a.RequestedVersionLicenses) > 0 {
-				je.VersionLicenses = a.RequestedVersionLicenses[0].Identifier
+				ids := make([]string, 0, len(a.RequestedVersionLicenses))
+				for _, lic := range a.RequestedVersionLicenses {
+					ids = append(ids, lic.Identifier)
+				}
+				je.VersionLicenses = ids
 			}
 
 			if lr := a.GetLifecycleResult(); lr != nil {
@@ -231,24 +235,24 @@ func renderScanJSON(w io.Writer, entries []domainaudit.AuditEntry) error {
 
 func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	cw := csv.NewWriter(w)
-	if err := cw.Write([]string{"verdict", "purl", "lifecycle", "eol", "reason", "successor", "repo_url"}); err != nil {
+	if err := cw.Write([]string{"verdict", "purl", "lifecycle", "eol", "eol_reason", "successor", "repo_url"}); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
 	for i := range entries {
 		e := &entries[i]
 		maintenance, eol := entryMaintenanceEOL(e, "")
 
-		reason := ""
+		eolReason := ""
 		successor := ""
 		repoURL := ""
 		if a := e.Analysis; a != nil {
-			reason = a.EOL.FinalReason()
+			eolReason = a.EOL.FinalReason()
 			successor = a.EOL.Successor
 			repoURL = a.RepoURL
 		}
 
 		if err := cw.Write([]string{
-			string(e.Verdict), e.PURL, maintenance, eol, reason, successor, repoURL,
+			string(e.Verdict), e.PURL, maintenance, eol, eolReason, successor, repoURL,
 		}); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}

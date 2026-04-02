@@ -112,6 +112,9 @@ func TestRenderScanCSV(t *testing.T) {
 	if !strings.HasPrefix(lines[0], "verdict,") {
 		t.Errorf("CSV header = %q, want to start with 'verdict,'", lines[0])
 	}
+	if !strings.Contains(lines[0], "eol_reason") {
+		t.Errorf("CSV header = %q, want to contain 'eol_reason'", lines[0])
+	}
 }
 
 func TestRenderScanOutput_UnsupportedFormat(t *testing.T) {

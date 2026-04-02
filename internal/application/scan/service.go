@@ -28,9 +28,12 @@ type Service struct {
 	analysisService *application.AnalysisService
 }
 
-// NewService creates a scan Service.
-func NewService(analysisService *application.AnalysisService) *Service {
-	return &Service{analysisService: analysisService}
+// NewService creates a scan Service. analysisService must not be nil.
+func NewService(analysisService *application.AnalysisService) (*Service, error) {
+	if analysisService == nil {
+		return nil, fmt.Errorf("scan.NewService: analysisService must not be nil")
+	}
+	return &Service{analysisService: analysisService}, nil
 }
 
 // AnalysisService returns the underlying analysis service for callers that need

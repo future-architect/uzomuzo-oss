@@ -107,8 +107,13 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 		return fmt.Errorf("invalid flags: %w", err)
 	}
 
-	// Validate file-only flags
-	if opts.Filename == "" && opts.SBOMPath == "" {
+	// --file and --sbom are mutually exclusive
+	if opts.Filename != "" && opts.SBOMPath != "" {
+		return fmt.Errorf("--file and --sbom are mutually exclusive; use one or the other")
+	}
+
+	// --sample and --line-range require --file specifically
+	if opts.Filename == "" {
 		if cmd.IsSet("sample") {
 			return fmt.Errorf("--sample requires --file")
 		}
