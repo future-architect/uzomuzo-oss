@@ -61,3 +61,8 @@ slog.Error(
     "user_id", userID,
 )
 ```
+
+## Learned from Copilot Reviews
+
+- **Preserve Typed Error Identity When Wrapping**: When a function returns a domain-specific error type (e.g., `AuthenticationError`), wrap it using the matching constructor — not a generic one (e.g., `NewFetchError`). Mismatched wrappers break `errors.As` checks downstream.
+- **Check All Error Returns in Tests**: Do not discard errors from stdlib functions (e.g., `os.Pipe()`, `os.CreateTemp()`) in test helpers with `_`. If the call fails, subsequent code will panic with a confusing nil-pointer error. Always check and `t.Fatalf` on failure.

@@ -12,11 +12,6 @@
 #       file: "<path>"
 #       date: "YYYY-MM-DD"
 patterns:
-  - category: "error-handling"
-    summary: "Preserve typed error identity when wrapping — use matching constructor (e.g., NewAuthenticationError) not a generic one (e.g., NewFetchError)"
-    pr: 83
-    file: "internal/infrastructure/integration/service.go"
-    date: "2026-04-01"
   - category: "naming-consistency"
     summary: "Keep field/column names consistent across output formats — if JSON uses 'eol_reason', CSV should too"
     pr: 87
