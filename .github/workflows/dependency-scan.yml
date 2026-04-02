@@ -24,9 +24,15 @@ on:
         description: 'Extra arguments passed to uzomuzo scan'
         required: false
         default: ''
+      create-issue:
+        description: 'Create a GitHub Issue when policy violations are found'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   scan:
@@ -49,6 +55,7 @@ jobs:
           output: 'sbom.json'
 
       - name: Run scan
+        id: scan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -61,7 +68,61 @@ jobs:
             ARGS="$ARGS ${{ github.event.inputs.extra-args }}"
           fi
 
-          ./uzomuzo scan --sbom sbom.json --format "$FORMAT" $ARGS
+          # Capture output for issue body; preserve exit code
+          set +e
+          OUTPUT=$(./uzomuzo scan --sbom sbom.json --format "$FORMAT" $ARGS 2>&1)
+          EXIT_CODE=$?
+          set -e
+
+          echo "$OUTPUT"
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          # Save scan output for the issue step
+          {
+            echo 'scan_output<<SCAN_EOF'
+            echo "$OUTPUT"
+            echo 'SCAN_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+          exit $EXIT_CODE
+
+      - name: Create issue for policy violations
+        if: failure() && steps.scan.outputs.exit_code != '0' && github.event.inputs.create-issue != 'false'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Dependency scan: policy violations found ($(date +%Y-%m-%d))"
+
+          # Deduplicate: skip if an open issue with the same title exists
+          EXISTING=$(gh issue list --state open --search "$TITLE" --json number --jq 'length')
+          if [ "$EXISTING" -gt 0 ]; then
+            echo "Open issue already exists, skipping creation"
+            exit 0
+          fi
+
+          BODY=$(cat <<'ISSUE_EOF'
+          ## Dependency Scan Report
+
+          The monthly dependency scan found lifecycle policy violations.
+
+          **Workflow run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          **Fail-on policy**: `${{ github.event.inputs.fail-on || 'eol-confirmed' }}`
+
+          <details>
+          <summary>Scan output</summary>
+
+          ```
+          ${{ steps.scan.outputs.scan_output }}
+          ```
+
+          </details>
+
+          Please review the flagged dependencies and update or replace as needed.
+          ISSUE_EOF
+          )
+
+          gh issue create --title "$TITLE" --body "$BODY" --label "dependencies"
 
       - name: Upload scan report
         if: always()
