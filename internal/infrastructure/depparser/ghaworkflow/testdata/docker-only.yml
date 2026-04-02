@@ -1,0 +1,9 @@
+name: Docker Only
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://alpine:3.8
+      - uses: docker://ghcr.io/owner/image:latest

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	domainscan "github.com/future-architect/uzomuzo-oss/internal/domain/scan"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/ghaworkflow"
 )
 
 // FileDetector inspects a file path and returns the matching parser and file data.
@@ -130,6 +132,15 @@ func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 			return fmt.Errorf("scan failed: %w", err)
 		}
 		return finalizeScanOutput(svc, result, opts, len(result.Entries))
+	}
+
+	// Try GitHub Actions workflow YAML before falling back to PURL/URL list.
+	wfData, wfErr := tryReadWorkflowFile(filePath)
+	if wfErr != nil {
+		return fmt.Errorf("failed to read workflow file '%s': %w", filePath, wfErr)
+	}
+	if wfData != nil {
+		return runScanWorkflow(ctx, svc, wfData, opts, policy)
 	}
 
 	// Fall back to PURL/URL list
@@ -266,6 +277,48 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 		return ErrScanFailPolicy
 	}
 	return nil
+}
+
+// runScanWorkflow parses a GitHub Actions workflow YAML and evaluates referenced Actions.
+func runScanWorkflow(ctx context.Context, svc *scanapp.Service, data []byte, opts ScanOptions, policy domainscan.FailPolicy) error {
+	githubURLs, err := ghaworkflow.ParseGitHubURLs(data)
+	if err != nil {
+		return fmt.Errorf("failed to parse workflow: %w", err)
+	}
+	if len(githubURLs) == 0 {
+		return fmt.Errorf("no GitHub Actions references found in workflow file")
+	}
+
+	slog.Info("scan: found GitHub Actions references in workflow", "count", len(githubURLs))
+
+	result, err := svc.RunFromPURLs(ctx, nil, githubURLs, policy)
+	if err != nil {
+		return fmt.Errorf("scan failed: %w", err)
+	}
+	return finalizeScanOutput(svc, result, opts, len(githubURLs))
+}
+
+// tryReadWorkflowFile checks whether filePath is a GitHub Actions workflow YAML.
+// Returns the file data if it is, or (nil, nil) if it is not.
+func tryReadWorkflowFile(filePath string) ([]byte, error) {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	if ext != ".yml" && ext != ".yaml" {
+		return nil, nil
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
+	}
+
+	prefix := data
+	if len(prefix) > 1024 {
+		prefix = prefix[:1024]
+	}
+	if ghaworkflow.IsWorkflowYAML(filePath, prefix) {
+		return data, nil
+	}
+	return nil, nil
 }
 
 // isStdinTerminal reports whether stdin is connected to a terminal.

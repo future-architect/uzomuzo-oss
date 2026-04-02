@@ -20,7 +20,7 @@ func scanFlags() []urfcli.Flag {
 	return []urfcli.Flag{
 		// Input source
 		&urfcli.StringFlag{Name: "sbom", Usage: "Path to CycloneDX SBOM JSON (use '-' for stdin)"},
-		&urfcli.StringFlag{Name: "file", Usage: "Path to input file (PURL list, go.mod, or CycloneDX SBOM)"},
+		&urfcli.StringFlag{Name: "file", Usage: "Path to input file (PURL list, go.mod, CycloneDX SBOM, or GitHub Actions workflow YAML)"},
 
 		// Output format
 		&urfcli.StringFlag{Name: "format", Aliases: []string{"f"}, Usage: "Output format: detailed, table, json, csv (default: auto)"},
@@ -46,6 +46,7 @@ func scanCommand(cfg *domaincfg.Config) *urfcli.Command {
    uzomuzo scan --sbom bom.json                                   CycloneDX SBOM
    trivy fs . --format cyclonedx | uzomuzo scan --sbom -          Pipe SBOM
    uzomuzo scan --file go.mod                                     go.mod
+   uzomuzo scan --file .github/workflows/ci.yml                   GitHub Actions workflow
    uzomuzo scan                                                   Auto-detect go.mod
    cat purls.txt | uzomuzo scan                                   Pipe PURLs
 
