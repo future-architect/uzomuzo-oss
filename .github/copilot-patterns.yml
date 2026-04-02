@@ -52,3 +52,8 @@ patterns:
     pr: 87
     file: "docs/adr/0004-unify-analyze-audit-into-scan.md"
     date: "2026-04-02"
+  - category: "defensive-coding"
+    summary: "GitHub issue search uses word-level matching, not exact — add jq post-filter for exact title comparison to prevent false-positive deduplication"
+    pr: 91
+    file: ".github/workflows/dependency-scan.yml"
+    date: "2026-04-02"
