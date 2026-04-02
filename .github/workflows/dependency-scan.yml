@@ -47,6 +47,12 @@ jobs:
           format: 'cyclonedx'
           output: 'sbom.json'
 
+      # TEMPORARY: Inject EOL dependency for Slack notification testing (REVERT AFTER TEST)
+      - name: Inject test EOL dependency
+        run: |
+          jq '.components += [{"type":"library","name":"request","version":"2.88.2","purl":"pkg:npm/request@2.88.2","bom-ref":"test-eol-request"}]' sbom.json > sbom-test.json
+          mv sbom-test.json sbom.json
+
       - name: Run scan
         id: scan
         env:
