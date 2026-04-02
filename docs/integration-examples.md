@@ -148,7 +148,6 @@ uzomuzo includes a ready-to-use GitHub Actions workflow (`.github/workflows/depe
 2. **Runs `uzomuzo scan`** with detailed output (summary table + per-dependency analysis)
 3. **Creates a GitHub Issue** with the summary table as a monthly report
 4. **Uploads artifacts** (SBOM + detailed report) for download
-5. **Optionally notifies Slack** when policy violations are detected
 
 ### Schedule
 
@@ -181,11 +180,7 @@ See [Issue #95](https://github.com/future-architect/uzomuzo-oss/issues/95) for a
 
 ### Slack Notification
 
-To enable Slack notifications on policy violations, add a `SLACK_WEBHOOK_URL` secret to your repository settings. The notification is skipped gracefully when the secret is not configured.
-
-### Slack Notification
-
-The workflow creates a GitHub Issue with the `dependencies` label on each run. To receive Slack notifications, use GitHub's native Slack integration instead of a custom webhook:
+The workflow creates a GitHub Issue with the `dependencies` label on each run. To receive Slack notifications, use GitHub's native Slack integration:
 
 ```
 # In your Slack channel:

@@ -234,7 +234,7 @@ npm / PyPI / Maven / Cargo / Go modules / NuGet / RubyGems / Packagist
 - **CSV / CLI reports**: Comprehensive output of metrics, licenses, and lifecycle status
 - **Extensible via AnalysisEnricher hook**: Inject custom EOL catalog logic without modifying core — [details](docs/library-usage.md)
 - **Embeddable as a Go library**: `pkg/uzomuzo/` facade for SaaS integration — [details](docs/library-usage.md)
-- **Automated monthly scanning**: GitHub Actions workflow with Trivy SBOM generation, issue creation, and optional Slack notification — [details](docs/integration-examples.md#github-actions-scheduled-scanning)
+- **Automated monthly scanning**: GitHub Actions workflow with Trivy SBOM generation and GitHub Issue publication, with Slack notifications available via GitHub issue subscriptions/integrations — [details](docs/integration-examples.md#github-actions-scheduled-scanning)
 
 ## Architecture
 
