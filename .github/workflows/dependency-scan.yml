@@ -10,16 +10,6 @@ on:
         description: 'Fail on labels (comma-separated, empty = never fail)'
         required: false
         default: 'eol-confirmed'
-      format:
-        description: 'Output format'
-        required: false
-        default: 'detailed'
-        type: choice
-        options:
-          - table
-          - detailed
-          - json
-          - csv
       extra-args:
         description: 'Extra arguments passed to uzomuzo scan'
         required: false
@@ -32,11 +22,14 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   scan:
     runs-on: ubuntu-latest
+    outputs:
+      exit_code: ${{ steps.scan.outputs.exit_code }}
+      scan_output: ${{ steps.scan.outputs.scan_output }}
+      fail_on: ${{ steps.scan.outputs.fail_on }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -58,23 +51,35 @@ jobs:
         id: scan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXTRA_ARGS: ${{ github.event.inputs.extra-args || '' }}
+          FAIL_ON_INPUT: ${{ github.event.inputs.fail-on }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          FAIL_ON="${{ github.event.inputs.fail-on || 'eol-confirmed' }}"
-          FORMAT="${{ github.event.inputs.format || 'detailed' }}"
+          # For schedule runs, default to eol-confirmed.
+          # For workflow_dispatch, respect the input (empty = never fail).
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            FAIL_ON="${FAIL_ON_INPUT:-eol-confirmed}"
+          else
+            FAIL_ON="$FAIL_ON_INPUT"
+          fi
 
-          ARGS=""
-          if [ -n "$FAIL_ON" ]; then ARGS="--fail-on $FAIL_ON"; fi
-          if [ -n "${{ github.event.inputs.extra-args }}" ]; then
-            ARGS="$ARGS ${{ github.event.inputs.extra-args }}"
+          ARGS=()
+          if [ -n "$FAIL_ON" ]; then
+            ARGS+=("--fail-on" "$FAIL_ON")
+          fi
+          if [ -n "$EXTRA_ARGS" ]; then
+            mapfile -t EXTRA_ARGS_ARRAY < <(python3 -c 'import os, shlex; [print(arg) for arg in shlex.split(os.environ["EXTRA_ARGS"])]')
+            ARGS+=("${EXTRA_ARGS_ARRAY[@]}")
           fi
 
           # Single scan run; detailed format includes summary table + detailed report
           set +e
-          ./uzomuzo scan --sbom sbom.json --format detailed $ARGS 2>&1 | tee scan-report.txt
+          ./uzomuzo scan --sbom sbom.json --format detailed "${ARGS[@]}" 2>&1 | tee scan-report.txt
           EXIT_CODE=${PIPESTATUS[0]}
           set -e
 
           echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          echo "fail_on=$FAIL_ON" >> "$GITHUB_OUTPUT"
 
           # Extract summary table section (between markers) for issue body
           {
@@ -85,58 +90,81 @@ jobs:
 
           exit $EXIT_CODE
 
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: dependency-scan-report
+          path: |
+            sbom.json
+            scan-report.txt
+          retention-days: 90
+
+  report:
+    needs: scan
+    if: always() && needs.scan.outputs.exit_code != '' && github.event.inputs.create-issue != 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
       - name: Create monthly scan report issue
-        if: always() && github.event.inputs.create-issue != 'false'
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SCAN_OUTPUT: ${{ needs.scan.outputs.scan_output }}
+          EXIT_CODE: ${{ needs.scan.outputs.exit_code }}
+          FAIL_ON_POLICY: ${{ needs.scan.outputs.fail_on }}
         run: |
           TITLE="Dependency scan report ($(date +%Y-%m-%d))"
 
           # Deduplicate: skip if an open issue with the same title exists
-          EXISTING=$(gh issue list --state open --search "$TITLE" --json number --jq 'length')
+          EXISTING=$(gh issue list --state open --search "in:title $TITLE" --json number --jq 'length')
           if [ "$EXISTING" -gt 0 ]; then
             echo "Open issue already exists, skipping creation"
             exit 0
           fi
 
-          if [ "${{ steps.scan.outputs.exit_code }}" != "0" ]; then
+          if [ "$EXIT_CODE" != "0" ]; then
             STATUS="Policy violations detected"
           else
             STATUS="No policy violations"
           fi
 
-          BODY=$(cat <<'ISSUE_EOF'
+          BODY=$(cat <<EOF
           ## Dependency Scan Report
 
           **Status**: $STATUS
           **Workflow run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          **Fail-on policy**: `${{ github.event.inputs.fail-on || 'eol-confirmed' }}`
+          **Fail-on policy**: \`${FAIL_ON_POLICY:-(none)}\`
 
           <details>
           <summary>Scan output</summary>
 
-          ```
-          ${{ steps.scan.outputs.scan_output }}
-          ```
+          \`\`\`
+          $SCAN_OUTPUT
+          \`\`\`
 
           </details>
 
-          For detailed per-dependency analysis, download the `dependency-scan-report` artifact from the workflow run.
-          ISSUE_EOF
+          For detailed per-dependency analysis, download the \`dependency-scan-report\` artifact from the workflow run.
+          EOF
           )
 
           gh issue create --title "$TITLE" --body "$BODY" --label "dependencies"
 
+  notify:
+    needs: scan
+    if: always() && needs.scan.outputs.exit_code != '0' && needs.scan.outputs.exit_code != ''
+    runs-on: ubuntu-latest
+    steps:
       - name: Notify Slack
-        if: failure() && steps.scan.outputs.exit_code != '0' && env.SLACK_WEBHOOK_URL != ''
+        if: env.SLACK_WEBHOOK_URL != ''
         continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           REPO="${{ github.repository }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          FAIL_ON="${{ github.event.inputs.fail-on || 'eol-confirmed' }}"
+          FAIL_ON="${{ needs.scan.outputs.fail_on }}"
 
           curl -sf -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
@@ -157,13 +185,3 @@ jobs:
                 ]
               }'
             )"
-
-      - name: Upload scan report
-        if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: dependency-scan-report
-          path: |
-            sbom.json
-            scan-report.txt
-          retention-days: 90
