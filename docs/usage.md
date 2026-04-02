@@ -2,27 +2,50 @@
 
 [← Back to README.md](../README.md)
 
-## Direct Package Analysis
+## The `scan` Subcommand
+
+`scan` is the unified entry point for all dependency lifecycle analysis. It accepts PURLs, GitHub URLs, CycloneDX SBOMs, go.mod files, and stdin pipes.
+
+### Direct Package Analysis
 
 ```bash
 # NPM package
-./uzomuzo analyze pkg:npm/lodash@4.17.21
+./uzomuzo scan pkg:npm/lodash@4.17.21
 
 # Python package
-./uzomuzo analyze pkg:pypi/requests@2.28.1
+./uzomuzo scan pkg:pypi/requests@2.28.1
 
 # Maven package
-./uzomuzo analyze pkg:maven/org.springframework/spring-core@5.3.8
+./uzomuzo scan pkg:maven/org.springframework/spring-core@5.3.8
 
 # GitHub repository
-./uzomuzo analyze github.com/microsoft/typescript
+./uzomuzo scan github.com/microsoft/typescript
 
 # Multiple inputs (PURL and GitHub URL can be mixed)
-./uzomuzo analyze pkg:npm/express@4.18.2 pkg:pypi/requests@2.28.1
-./uzomuzo analyze https://github.com/expressjs/express github.com/psf/requests
+./uzomuzo scan pkg:npm/express@4.18.2 pkg:pypi/requests@2.28.1
+./uzomuzo scan https://github.com/expressjs/express github.com/psf/requests
 ```
 
-## Batch Processing
+### SBOM Input
+
+```bash
+# CycloneDX SBOM file
+./uzomuzo scan --sbom bom.json
+
+# Pipe from SBOM tools
+trivy fs . --format cyclonedx | ./uzomuzo scan --sbom -
+trivy image my-app:latest --format cyclonedx | ./uzomuzo scan --sbom -
+syft . -o cyclonedx-json | ./uzomuzo scan --sbom -
+```
+
+### go.mod Input
+
+```bash
+./uzomuzo scan                     # auto-detect go.mod in cwd
+./uzomuzo scan --file go.mod       # explicit path
+```
+
+### File Input (PURL/URL list)
 
 List one identifier per line (PURL or GitHub URL) in a text file:
 
@@ -36,10 +59,18 @@ pkg:cargo/serde@1.0.136
 Run:
 
 ```bash
-./uzomuzo analyze --file input_file.txt --sample 500
+./uzomuzo scan --file input_file.txt --sample 500
 ```
 
-File mode is designed for large inputs (thousands of lines). The file path is specified via the `--file` flag and `--sample N` (N > 0) enables random sampling. Omit `--sample` to use the configured default sample size (env `APP_SAMPLE_SIZE`; 0 = process all). Use `--sample 0` to explicitly process all entries regardless of configuration.
+File mode is designed for large inputs (thousands of lines). `--sample N` (N > 0) enables random sampling. Omit `--sample` to process all entries.
+
+### Pipe / stdin Input
+
+uzomuzo reads from stdin when piped:
+
+```bash
+echo "pkg:npm/express@4.18.2" | ./uzomuzo scan
+```
 
 ### Line Range (`--line-range`)
 
@@ -47,13 +78,13 @@ Process only a contiguous subset of a large input file:
 
 ```bash
 # Lines 1-250 (inclusive)
-./uzomuzo analyze --file input_file.txt --line-range=1:250
+./uzomuzo scan --file input_file.txt --line-range=1:250
 
 # Line 500 to end of file
-./uzomuzo analyze --file input_file.txt --line-range=500:
+./uzomuzo scan --file input_file.txt --line-range=500:
 
 # Line range + random sampling (sampling applied after line range filter)
-./uzomuzo analyze --file input_file.txt --line-range=1001:2000 --sample=1000
+./uzomuzo scan --file input_file.txt --line-range=1001:2000 --sample=1000
 ```
 
 Rules:
@@ -63,32 +94,62 @@ Rules:
 - Requires `--file`; specifying `--line-range` without `--file` results in an error
 - Counts physical line numbers (blank lines and `#` comments consume line numbers but are skipped during processing)
 
-### Pipe / stdin Input
+## Input Resolution Order
 
-uzomuzo reads from stdin when piped. This enables integration with SBOM tools:
+1. `--sbom` flag (CycloneDX JSON, or `-` for stdin)
+2. `--file` flag (go.mod, CycloneDX JSON, or PURL/URL list — auto-detected)
+3. Positional args (PURLs or GitHub URLs)
+4. Stdin pipe
+5. Auto-detect `go.mod` in current working directory
+
+## Output Formats
 
 ```bash
-trivy image --format cyclonedx IMAGE | jq -r '.components[].purl' | ./uzomuzo analyze --only-eol
+./uzomuzo scan pkg:npm/express@4.18.2 --format detailed   # rich per-package output
+./uzomuzo scan --sbom bom.json --format table              # verdict summary table
+./uzomuzo scan --sbom bom.json --format json               # enriched JSON with full analysis
+./uzomuzo scan --sbom bom.json --format csv                # CSV for spreadsheet/pipeline
 ```
 
-All flags (`--only-eol`, `--ecosystem`, `--export-license-csv`) work with pipe input. See [Integration Examples](integration-examples.md) for detailed workflows.
+**Smart default:** `detailed` for ≤3 inputs, `table` for bulk.
+
+## CI Gating with `--fail-on`
+
+Exit with code 1 when any dependency matches the specified lifecycle labels:
+
+```bash
+# Fail on confirmed EOL packages
+./uzomuzo scan --sbom bom.json --fail-on eol-confirmed
+
+# Fail on multiple lifecycle states
+./uzomuzo scan --sbom bom.json --fail-on eol-confirmed,eol-effective,stalled
+```
+
+Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `legacy-safe`
+
+## Verdict Mapping
+
+| Verdict | Lifecycle states | Action |
+|---------|-----------------|--------|
+| `ok` | Active, Legacy-Safe | No action needed |
+| `caution` | Stalled, EOL-Scheduled | Monitor; plan migration |
+| `replace` | EOL-Confirmed, EOL-Effective, Archived | Migrate immediately |
+| `review` | Insufficient data, analysis error | Manual investigation |
 
 ## Filters & Output Control
-
-Input filtering and output control options:
 
 - `--ecosystem <name>`: Limit to a single ecosystem (e.g., `npm`, `pypi`, `maven`, `nuget`, `cargo`, `golang`, `gem`, `composer`). In file mode, filter is applied before sampling
 - `--only-eol`: Show only items with confirmed EOL status
 - `--only-review-needed`: Show only items with "Review Needed" status (includes unevaluated)
 - Combining `--only-eol` and `--only-review-needed` shows both categories
-- `--export-license-csv <path>`: Export extended license analysis CSV (project vs version licenses, SPDX statistics, fallback / derived / override indicators). Output only when specified (opt-in). Column definitions: `internal/infrastructure/export/csv/license.go`
+- `--export-license-csv <path>`: Export extended license analysis CSV
 
 ```bash
 # Direct input: npm only & EOL only
-./uzomuzo analyze --ecosystem npm --only-eol pkg:npm/express@4.18.2 pkg:npm/lodash@4.17.21
+./uzomuzo scan --ecosystem npm --only-eol pkg:npm/express@4.18.2 pkg:npm/lodash@4.17.21
 
 # File mode: sample 200, Maven only, Review Needed only
-./uzomuzo analyze --file input_file.txt --ecosystem maven --only-review-needed --sample 200
+./uzomuzo scan --file input_file.txt --ecosystem maven --only-review-needed --sample 200
 ```
 
 ### Built-in Flags
@@ -98,63 +159,14 @@ Input filtering and output control options:
 | `--help`, `-h` | Show help for any command |
 | `--version`, `-v` | Print version information |
 
-These flags are auto-generated. Use `uzomuzo --help` for the full list, or `uzomuzo analyze --help` / `uzomuzo audit --help` for subcommand-specific help.
+Use `uzomuzo --help` for the full list, or `uzomuzo scan --help` for scan-specific help.
 
 ## Subcommands
 
 | Subcommand | Description |
 |------------|-------------|
-| `analyze` | Analyze packages by PURL, GitHub URL, file, or stdin pipe |
-| `audit` | Bulk dependency health evaluation from CycloneDX SBOM or go.mod |
+| `scan` | Scan dependencies for lifecycle health (PURL, GitHub URL, SBOM, go.mod, file, pipe) |
 | `update-spdx` | Update and regenerate the embedded SPDX license list from upstream |
-
-> **Deprecation notice:** Running `uzomuzo <PURL>` without the `analyze` subcommand still works for backward compatibility but prints a deprecation warning. This legacy invocation will be removed in a future release. Use `uzomuzo analyze <PURL>` instead.
-
-### `audit` — Dependency Health Audit
-
-Evaluates all project dependencies in bulk and derives a per-dependency verdict: **ok**, **caution**, **replace**, or **review**. Designed for CI pipelines — exits with code 1 when any dependency receives a `replace` verdict.
-
-```bash
-# CycloneDX SBOM input (recommended)
-./uzomuzo audit --sbom bom.json
-trivy fs . --format cyclonedx | ./uzomuzo audit --sbom -
-trivy image my-app:latest --format cyclonedx | ./uzomuzo audit --sbom -
-syft . -o cyclonedx-json | ./uzomuzo audit --sbom -
-
-# go.mod fallback
-./uzomuzo audit                    # auto-detect go.mod in cwd
-./uzomuzo audit --file go.mod
-
-# Output formats
-./uzomuzo audit --format table     # default: human-readable table
-./uzomuzo audit -f json            # short flag alias
-./uzomuzo audit --format csv       # CSV for spreadsheet/pipeline processing
-```
-
-**Flags:**
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--sbom <path>` | Path to CycloneDX SBOM JSON file (use `-` for stdin) | — |
-| `--file <path>` | Path to go.mod file | — |
-| `--format <fmt>`, `-f` | Output format: `table`, `json`, `csv` | `table` |
-
-**Input resolution order:**
-
-1. `--sbom` flag (CycloneDX JSON)
-2. `--file` flag (go.mod)
-3. Auto-detect `go.mod` in current working directory
-
-**Verdict mapping:**
-
-| Verdict | Lifecycle states | Action |
-|---------|-----------------|--------|
-| `ok` | Active, Legacy-Safe | No action needed |
-| `caution` | Stalled, EOL-Scheduled | Monitor; plan migration |
-| `replace` | EOL-Confirmed, EOL-Effective, Archived | Migrate immediately |
-| `review` | Insufficient data, analysis error | Manual investigation |
-
-**Difference from pipe mode:** The `audit` subcommand accepts structured SBOM files directly (no `jq` extraction needed), provides a summarized verdict view optimized for quick scanning, and exits with code 1 for CI gating. Use the existing pipe mode (`trivy ... | jq -r '.components[].purl' | ./uzomuzo analyze`) when you need detailed per-package analysis.
 
 ## License CSV Column Reference (`--export-license-csv`)
 
@@ -176,7 +188,7 @@ syft . -o cyclonedx-json | ./uzomuzo audit --sbom -
 | version_license_count | int | len(slice) | Version-side license count. Dual/multi-license detection. |
 | version_licenses_all_non_spdx | bool | derived | true = all non-SPDX. Priority extraction target for normalization. |
 | version_licenses_any_composite_expr | bool | AND/OR/() detection | true = contains composite conditions (AND/OR). Raises legal review priority. |
-| project_vs_version_mismatch | bool | derived | true = Project SPDX not found in Version set, indicating divergence. Audit target for config/evolution. |
+| project_vs_version_mismatch | bool | derived | true = Project SPDX not found in Version set, indicating divergence. |
 | licenses_all_missing_or_nonstandard | bool | derived | true = no confirmed SPDX. Coverage KPI denominator & improvement tracking. |
 | fallback_applied | bool | version source==`project-fallback` | true = Project SPDX copied to Version. Indicates original data gap. |
 | derived_from_version | bool | project source==`derived-from-version` | true = single Version SPDX promoted. Suggests missing Project metadata. |

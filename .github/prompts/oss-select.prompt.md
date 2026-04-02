@@ -4,14 +4,14 @@ argument-hint: |
   Specify candidate package PURLs:
   - Single package evaluation: 'pkg:golang/modernc.org/sqlite'
   - Compare multiple candidates: 'pkg:golang/modernc.org/sqlite pkg:golang/github.com/mattn/go-sqlite3'
-  - Audit all go.mod dependencies: 'audit'
+  - Scan all go.mod dependencies: 'scan'
 agent: "agent"
 model: ["claude-opus-4.6"]
 ---
 
 # OSS Select — OSS Health Evaluation and Selection Support with uzomuzo
 
-Support adoption decisions for new OSS packages, or audit the health of existing dependencies.
+Support adoption decisions for new OSS packages, or scan the health of existing dependencies.
 
 ---
 
@@ -23,7 +23,7 @@ Determine the mode from the user message:
 |------|---------|----------|
 | **compare** | Multiple PURLs specified | Compare candidates and present recommendation |
 | **evaluate** | Single PURL specified | Detailed evaluation of one package |
-| **audit** | `audit` keyword | Bulk check all go.mod dependencies |
+| **scan** | `scan` keyword | Bulk check all go.mod dependencies |
 
 ---
 
@@ -35,7 +35,7 @@ Determine the mode from the user message:
 # When PURLs are directly specified
 GOWORK=off go run . <purl1> [purl2 ...]
 
-# Audit mode: generate PURL list from go.mod and evaluate in batches
+# Scan mode: generate PURL list from go.mod and evaluate in batches
 GOWORK=off go list -m -f '{{.Path}}' all | python3 -c "
 import sys
 for line in sys.stdin:
@@ -101,7 +101,7 @@ Present candidates side by side:
 Reason: No CGO requirement simplifies CI configuration. Scorecard is slightly lower but Maintained=10 indicates active development.
 ```
 
-### S3.3 Audit Mode
+### S3.3 Scan Mode
 
 Summary of all dependencies + highlight problematic packages:
 
@@ -160,7 +160,7 @@ For Go modules with major version suffixes (`/v2`, `/v3`, etc.),
 
 The safest approach is to convert go.mod `require` paths directly to PURLs.
 
-### Audit Mode Execution
+### Scan Mode Execution
 
 - Exclude internal packages (`vuls-saas/*`, `future-architect/*`)
 - Check all dependencies including `// indirect` (indirect dependencies are also attack targets)

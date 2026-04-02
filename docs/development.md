@@ -173,5 +173,5 @@ Enable verbose logging:
 
 ```bash
 export LOG_LEVEL=debug
-./uzomuzo analyze pkg:npm/express@4.18.2
+./uzomuzo scan pkg:npm/express@4.18.2
 ```
