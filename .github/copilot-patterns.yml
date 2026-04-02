@@ -17,13 +17,8 @@ patterns:
     pr: 83
     file: "internal/infrastructure/integration/service.go"
     date: "2026-04-01"
-  - category: "defensive-coding"
-    summary: "Restrict fallback paths to specific error classes; fail fast for not-found and rate-limit errors instead of silently degrading"
-    pr: 83
-    file: "internal/infrastructure/integration/service.go"
-    date: "2026-04-01"
-  - category: "defensive-coding"
-    summary: "Propagate timeout context to fallback code paths — do not use the unbounded parent ctx when a scoped ctxWithTimeout exists"
-    pr: 83
-    file: "internal/infrastructure/integration/service.go"
-    date: "2026-04-01"
+  - category: "naming-consistency"
+    summary: "Keep field/column names consistent across output formats — if JSON uses 'eol_reason', CSV should too"
+    pr: 87
+    file: "internal/interfaces/cli/scan_render.go"
+    date: "2026-04-02"
