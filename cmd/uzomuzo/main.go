@@ -48,8 +48,8 @@ func main() {
 
 	app := buildApp(cfg)
 	if err := app.Run(ctx, os.Args); err != nil {
-		// ErrAuditReplaceFound is a signal, not a failure — exit silently with code 1.
-		if errors.Is(err, cli.ErrAuditReplaceFound) {
+		// ErrScanFailPolicy is a signal, not a failure — exit silently with code 1.
+		if errors.Is(err, cli.ErrScanFailPolicy) {
 			os.Exit(1)
 		}
 		slog.Error("command failed", "error", err)
