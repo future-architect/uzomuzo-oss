@@ -26,6 +26,37 @@
 ./uzomuzo scan https://github.com/expressjs/express github.com/psf/requests
 ```
 
+<details>
+<summary><strong>Example: Single PURL (detailed output)</strong></summary>
+
+```text
+$ uzomuzo scan pkg:npm/express@4.18.2
+
+--- PURL 1 ---
+📦 Package: pkg:npm/express@4.18.2
+🧾 Description: Fast, unopinionated, minimalist web framework for node.
+   🔗 Homepage: https://expressjs.com
+   🗃 Registry: https://www.npmjs.com/package/express
+⚖️  Result: 🟢 Active
+💭 Reason: Recent stable package version published; maintenance score ≥ 3
+📊 GitHub Info: Normal (⭐ 68886 stars)
+👥 Used by: 2210 packages
+📦 Depends on: 31 direct, 39 transitive
+🏆 Overall Score: 8.4/10
+  🔧 Maintained: 10.0/10
+📦 Latest Stable Release: 5.2.1 (2025-12-01)
+   ↳ Stable Advisories: 0
+📦 Highest Version (SemVer): 5.2.1 (2025-12-01)
+📋 Requested Version: 4.18.2 (2022-10-08)
+📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+🔗 Repository: https://github.com/expressjs/express
+🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fexpressjs%2Fexpress
+```
+
+For ≤3 inputs, the `detailed` format is used automatically. Use `--format detailed` to force it for larger inputs.
+
+</details>
+
 ### SBOM Input
 
 ```bash
@@ -113,6 +144,66 @@ Rules:
 
 **Smart default:** `detailed` for ≤3 inputs, `table` for bulk.
 
+<details>
+<summary><strong>Example: <code>--format table</code></strong></summary>
+
+```text
+$ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --format table
+VERDICT  PURL                    LIFECYCLE  EOL
+replace  pkg:npm/request@2.88.2  EOL        EOL
+ok       pkg:npm/express@4.18.2  Active     Not EOL
+
+Summary: 2 dependencies | 1 ok | 0 caution | 1 replace | 0 review
+```
+
+</details>
+
+<details>
+<summary><strong>Example: <code>--format json</code></strong></summary>
+
+```json
+{
+  "summary": {
+    "total": 1,
+    "ok": 0,
+    "caution": 0,
+    "replace": 1,
+    "review": 0
+  },
+  "packages": [
+    {
+      "purl": "pkg:npm/request@2.88.2",
+      "verdict": "replace",
+      "lifecycle": "EOL",
+      "eol": "EOL",
+      "eol_reason": "Stable version is deprecated in npm registry. ...",
+      "repo_url": "https://github.com/request/request",
+      "overall_score": 3.6,
+      "dependent_count": 186345,
+      "stable_version": "2.88.2",
+      "project_license": "Apache-2.0",
+      "version_licenses": ["Apache-2.0"],
+      "reason": "Primary-source EOL"
+    }
+  ]
+}
+```
+
+The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, scores, license info), making it suitable for CI pipelines and downstream tooling without needing a separate detailed run.
+
+</details>
+
+<details>
+<summary><strong>Example: <code>--format csv</code></strong></summary>
+
+```text
+$ uzomuzo scan pkg:npm/request@2.88.2 --format csv
+verdict,purl,lifecycle,eol,eol_reason,successor,repo_url
+replace,pkg:npm/request@2.88.2,EOL,EOL,"Stable version is deprecated in npm registry. ...",https://github.com/request/request
+```
+
+</details>
+
 ## CI Gating with `--fail-on`
 
 Exit with code 1 when any dependency matches the specified lifecycle labels:
@@ -126,6 +217,49 @@ Exit with code 1 when any dependency matches the specified lifecycle labels:
 ```
 
 Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `legacy-safe`
+
+Without `--fail-on`, exit code is always 0 regardless of scan results.
+
+<details>
+<summary><strong>Example: <code>--fail-on</code> exit code behavior</strong></summary>
+
+**Exit 1 — label matches a dependency:**
+
+```text
+$ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-confirmed --format table
+VERDICT  PURL                    LIFECYCLE  EOL
+replace  pkg:npm/request@2.88.2  EOL        EOL
+
+Summary: 1 dependencies | 0 ok | 0 caution | 1 replace | 0 review
+# exit code: 1  (request is EOL-Confirmed → matches --fail-on eol-confirmed)
+```
+
+**Exit 0 — label does not match:**
+
+```text
+$ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-effective --format table
+VERDICT  PURL                    LIFECYCLE  EOL
+replace  pkg:npm/request@2.88.2  EOL        EOL
+
+Summary: 1 dependencies | 0 ok | 0 caution | 1 replace | 0 review
+# exit code: 0  (request is EOL-Confirmed, not EOL-Effective → no match)
+```
+
+**Multiple labels — exit 1 if any label matches any dependency:**
+
+```text
+$ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --fail-on eol-confirmed,stalled --format table
+VERDICT  PURL                    LIFECYCLE  EOL
+replace  pkg:npm/request@2.88.2  EOL        EOL
+ok       pkg:npm/express@4.18.2  Active     Not EOL
+
+Summary: 2 dependencies | 1 ok | 0 caution | 1 replace | 0 review
+# exit code: 1  (request matches eol-confirmed)
+```
+
+`--fail-on` works with all output formats (`table`, `json`, `csv`). Output is produced normally before the exit code is set.
+
+</details>
 
 ## Verdict Mapping
 
