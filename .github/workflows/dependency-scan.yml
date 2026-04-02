@@ -54,12 +54,6 @@ jobs:
           format: 'cyclonedx'
           output: 'sbom.json'
 
-      # TEMPORARY: Inject EOL dependency for testing (revert before merge)
-      - name: Inject test EOL dependency
-        run: |
-          jq '.components += [{"type":"library","name":"python","version":"2.7.18","purl":"pkg:pypi/python@2.7.18","bom-ref":"test-eol-python2"}]' sbom.json > sbom-test.json
-          mv sbom-test.json sbom.json
-
       - name: Run scan
         id: scan
         env:
