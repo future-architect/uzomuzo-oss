@@ -4,6 +4,7 @@
 package cyclonedx
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,16 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	"github.com/package-url/packageurl-go"
 )
+
+// sniffPrefixLen is the number of bytes inspected when sniffing file format.
+const sniffPrefixLen = 512
+
+// IsCycloneDXJSON performs a quick sniff to detect CycloneDX JSON format
+// by checking for the "bomFormat" key in the first 512 bytes.
+func IsCycloneDXJSON(data []byte) bool {
+	prefix := data[:min(len(data), sniffPrefixLen)]
+	return bytes.Contains(prefix, []byte(`"bomFormat"`))
+}
 
 // Parser implements depparser.DependencyParser for CycloneDX SBOM JSON.
 type Parser struct{}

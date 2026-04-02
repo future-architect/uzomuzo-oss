@@ -2,14 +2,12 @@ package cli
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,6 +15,7 @@ import (
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	domainscan "github.com/future-architect/uzomuzo-oss/internal/domain/scan"
+	infradepparser "github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser"
 )
 
 // ErrScanFailPolicy is returned by RunScan when at least one dependency
@@ -61,13 +60,13 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 		return runScanSBOM(ctx, scanService, opts, parsers, policy)
 
 	case opts.Filename != "":
-		return runScanFile(ctx, cfg, scanService, opts, parsers, policy)
+		return runScanFile(ctx, scanService, opts, parsers, policy)
 
 	case len(args) > 0:
-		return runScanDirect(ctx, cfg, scanService, args, opts, policy)
+		return runScanDirect(ctx, scanService, args, opts, policy)
 
 	case !isStdinTerminal():
-		return runScanStdin(ctx, cfg, scanService, opts, policy)
+		return runScanStdin(ctx, scanService, opts, policy)
 
 	default:
 		// Auto-detect go.mod in cwd
@@ -102,11 +101,11 @@ func runScanSBOM(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 }
 
 // runScanFile handles --file input (go.mod, SBOM, or PURL/URL list).
-func runScanFile(ctx context.Context, cfg *domaincfg.Config, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy) error {
+func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy) error {
 	filePath := opts.Filename
 
 	// Try structured format (go.mod / CycloneDX SBOM) first
-	parser, data, err := detectFileParser(filePath, parsers)
+	parser, data, err := infradepparser.DetectFileParser(filePath, parsers)
 	if err != nil {
 		return fmt.Errorf("failed to detect file format for '%s': %w", filePath, err)
 	}
@@ -120,38 +119,6 @@ func runScanFile(ctx context.Context, cfg *domaincfg.Config, svc *scanapp.Servic
 
 	// Fall back to PURL/URL list
 	return runScanPURLList(ctx, svc, opts, filePath, policy)
-}
-
-// detectFileParser inspects filePath and returns the matching parser and file data.
-// Returns (nil, nil, nil) when the file is not a recognized structured format.
-func detectFileParser(filePath string, parsers map[string]depparser.DependencyParser) (depparser.DependencyParser, []byte, error) {
-	if filepath.Base(filePath) == "go.mod" {
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
-		}
-		parser, ok := parsers["gomod"]
-		if !ok {
-			return nil, nil, fmt.Errorf("go.mod parser not available")
-		}
-		return parser, data, nil
-	}
-
-	if strings.HasSuffix(filePath, ".json") {
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
-		}
-		if isCycloneDXJSON(data) {
-			parser, ok := parsers["sbom"]
-			if !ok {
-				return nil, nil, fmt.Errorf("SBOM parser not available")
-			}
-			return parser, data, nil
-		}
-	}
-
-	return nil, nil, nil
 }
 
 // runScanPURLList reads a file as a PURL/URL line list and runs the scan.
@@ -182,7 +149,7 @@ func runScanPURLList(ctx context.Context, svc *scanapp.Service, opts ScanOptions
 }
 
 // runScanDirect handles positional args (PURLs / GitHub URLs).
-func runScanDirect(ctx context.Context, cfg *domaincfg.Config, svc *scanapp.Service, args []string, opts ScanOptions, policy domainscan.FailPolicy) error {
+func runScanDirect(ctx context.Context, svc *scanapp.Service, args []string, opts ScanOptions, policy domainscan.FailPolicy) error {
 	purls, githubURLs := categorizeInputs(args)
 	if len(purls) == 0 && len(githubURLs) == 0 {
 		return fmt.Errorf("no valid PURLs or GitHub URLs found in arguments")
@@ -197,7 +164,7 @@ func runScanDirect(ctx context.Context, cfg *domaincfg.Config, svc *scanapp.Serv
 }
 
 // runScanStdin reads PURLs/GitHub URLs from stdin.
-func runScanStdin(ctx context.Context, cfg *domaincfg.Config, svc *scanapp.Service, opts ScanOptions, policy domainscan.FailPolicy) error {
+func runScanStdin(ctx context.Context, svc *scanapp.Service, opts ScanOptions, policy domainscan.FailPolicy) error {
 	var lines []string
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
@@ -276,15 +243,6 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 		return ErrScanFailPolicy
 	}
 	return nil
-}
-
-// sniffPrefixLen is the number of bytes inspected when sniffing file format.
-const sniffPrefixLen = 512
-
-// isCycloneDXJSON performs a quick sniff to detect CycloneDX JSON format.
-func isCycloneDXJSON(data []byte) bool {
-	prefix := data[:min(len(data), sniffPrefixLen)]
-	return bytes.Contains(prefix, []byte(`"bomFormat"`))
 }
 
 // isStdinTerminal reports whether stdin is connected to a terminal.
