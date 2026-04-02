@@ -66,3 +66,4 @@ slog.Error(
 
 - **Preserve Typed Error Identity When Wrapping**: When a function returns a domain-specific error type (e.g., `AuthenticationError`), wrap it using the matching constructor — not a generic one (e.g., `NewFetchError`). Mismatched wrappers break `errors.As` checks downstream.
 - **Check All Error Returns in Tests**: Do not discard errors from stdlib functions (e.g., `os.Pipe()`, `os.CreateTemp()`) in test helpers with `_`. If the call fails, subsequent code will panic with a confusing nil-pointer error. Always check and `t.Fatalf` on failure.
+- **Avoid Redundant Context in Error Wrapping Chains**: When wrapping an error that already contains context (e.g., `"invalid --fail-on label ..."`), use a different wrapper phrase (e.g., `"parse fail policy: %w"`) instead of repeating the same prefix. Redundant wrapping produces confusing messages like `"invalid --fail-on: invalid --fail-on label ..."`.

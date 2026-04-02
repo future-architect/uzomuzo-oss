@@ -32,3 +32,13 @@ patterns:
     pr: 87
     file: "internal/interfaces/cli/scan.go"
     date: "2026-04-02"
+  - category: "comment-doc-drift"
+    summary: "Flag help text must reflect actual sampling behavior — --sample applies per type, not across combined input"
+    pr: 87
+    file: "cmd/uzomuzo/commands.go"
+    date: "2026-04-02"
+  - category: "testing"
+    summary: "When replacing an application service, port existing unit tests to the new service to prevent regression"
+    pr: 87
+    file: "internal/application/scan/service.go"
+    date: "2026-04-02"
