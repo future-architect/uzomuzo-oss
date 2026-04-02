@@ -183,11 +183,25 @@ See [Issue #95](https://github.com/future-architect/uzomuzo-oss/issues/95) for a
 
 To enable Slack notifications on policy violations, add a `SLACK_WEBHOOK_URL` secret to your repository settings. The notification is skipped gracefully when the secret is not configured.
 
+### Slack Notification
+
+The workflow creates a GitHub Issue with the `dependencies` label on each run. To receive Slack notifications, use GitHub's native Slack integration instead of a custom webhook:
+
+```
+# In your Slack channel:
+/github subscribe owner/repo issues
+
+# Filter to dependency scan reports only:
+/github subscribe owner/repo issues label:"dependencies"
+```
+
+This sends a Slack notification whenever a scan report issue is created, with no secrets or webhook configuration needed.
+
 ### Setup for Your Repository
 
 1. Copy `.github/workflows/dependency-scan.yml` to your repository
 2. Ensure the `dependencies` label exists (the workflow uses it for issues)
-3. Optionally add `SLACK_WEBHOOK_URL` to repository secrets
+3. Optionally configure Slack notifications via `/github subscribe` (see above)
 
 ---
 
