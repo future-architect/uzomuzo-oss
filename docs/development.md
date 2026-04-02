@@ -125,7 +125,7 @@ golangci-lint run
 | `codeql.yml` | push / PR / weekly | CodeQL security analysis |
 | `scorecard.yml` | Weekly | OpenSSF Scorecard |
 
-The dependency scan workflow (`dependency-scan.yml`) uses three separate jobs for least-privilege permissions: `scan` (contents: read), `report` (issues: write), and `notify` (no extra permissions). See [Integration Examples](/docs/integration-examples.md#github-actions-scheduled-scanning) for configuration details.
+The dependency scan workflow (`dependency-scan.yml`) uses three separate jobs with scoped permissions: `scan` (contents: read), `report` (issues: write), and `notify` (inherits the workflow-level `contents: read` permission). See [Integration Examples](/docs/integration-examples.md#github-actions-scheduled-scanning) for configuration details.
 
 ## Project Structure (DDD Layer Boundaries)
 
