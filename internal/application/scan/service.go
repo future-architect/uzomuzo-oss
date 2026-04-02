@@ -68,7 +68,7 @@ func (s *Service) RunFromPURLs(ctx context.Context, purls, githubURLs []string, 
 		}
 	}
 
-	// Build ordered entry list: PURLs first, then GitHub URLs (preserves input order).
+	// Build ordered entry list: PURLs first, then GitHub URLs.
 	keys := make([]string, 0, len(purls)+len(githubURLs))
 	keys = append(keys, purls...)
 	keys = append(keys, githubURLs...)

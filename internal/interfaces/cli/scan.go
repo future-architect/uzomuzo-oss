@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -124,7 +125,7 @@ func runScanFile(ctx context.Context, cfg *domaincfg.Config, svc *scanapp.Servic
 // detectFileParser inspects filePath and returns the matching parser and file data.
 // Returns (nil, nil, nil) when the file is not a recognized structured format.
 func detectFileParser(filePath string, parsers map[string]depparser.DependencyParser) (depparser.DependencyParser, []byte, error) {
-	if strings.HasSuffix(filePath, "go.mod") || strings.HasSuffix(filePath, ".mod") {
+	if filepath.Base(filePath) == "go.mod" {
 		data, err := os.ReadFile(filePath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
