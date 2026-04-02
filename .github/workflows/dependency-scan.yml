@@ -117,7 +117,7 @@ jobs:
           TITLE="Dependency scan report ($(date +%Y-%m-%d))"
 
           # Deduplicate: skip if an open issue with the same title exists
-          EXISTING=$(gh issue list --repo "${{ github.repository }}" --state open --search "in:title $TITLE" --json title --jq --arg t "$TITLE" '[.[] | select(.title == $t)] | length')
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" --state open --search "in:title $TITLE" --json title | jq --arg t "$TITLE" '[.[] | select(.title == $t)] | length')
           if [ "$EXISTING" -gt 0 ]; then
             echo "Open issue already exists, skipping creation"
             exit 0
