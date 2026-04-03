@@ -22,11 +22,6 @@ patterns:
     pr: 87
     file: "internal/interfaces/cli/scan.go"
     date: "2026-04-02"
-  - category: "deterministic-output"
-    summary: "Sort goroutine-collected results before further processing (e.g., BFS seeding) to ensure deterministic behavior"
-    pr: 106
-    file: "internal/infrastructure/actionscan/discovery.go"
-    date: "2026-04-03"
   - category: "security"
     summary: "Normalize repository-scoped paths with path.Clean and reject traversal attempts (../ escaping repo root)"
     pr: 111
@@ -46,3 +41,4 @@ patterns:
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)
   # comment-doc-drift: promoted to coding-standards.instructions.md (PRs #101, #106)
+  # deterministic-output: promoted to coding-standards.instructions.md (PRs #106, #111)
