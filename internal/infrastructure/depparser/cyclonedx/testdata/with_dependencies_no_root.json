@@ -1,0 +1,38 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "my-app",
+      "version": "1.0.0",
+      "bom-ref": "my-app@1.0.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "express@4.18.2",
+      "name": "express",
+      "version": "4.18.2",
+      "purl": "pkg:npm/express@4.18.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "lodash@4.17.21",
+      "name": "lodash",
+      "version": "4.17.21",
+      "purl": "pkg:npm/lodash@4.17.21"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "express@4.18.2",
+      "dependsOn": ["lodash@4.17.21"]
+    },
+    {
+      "ref": "lodash@4.17.21",
+      "dependsOn": []
+    }
+  ]
+}

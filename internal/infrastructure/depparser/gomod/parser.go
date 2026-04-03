@@ -60,6 +60,7 @@ func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDepend
 			Ecosystem: "golang",
 			Name:      modPath,
 			Version:   version,
+			Relation:  depparser.RelationDirect,
 		})
 	}
 

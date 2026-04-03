@@ -162,3 +162,4 @@ Phase 3 can be evaluated independently if the proxy indicator proves insufficien
 
 - ADR-0005's mention of "Phase 3 (`--depth N`) is planned" is superseded — `--depth N` is not implemented. Full traversal is the default behavior.
 - Phase 3 (Action dependency package scanning) remains an independent future consideration, unaffected by this decision.
+- `--show-transitive` was extended to also control SBOM dependency relation display (direct vs. transitive). See [ADR-0009](0009-sbom-dependency-relation-detection.md) for details.

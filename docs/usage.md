@@ -69,6 +69,20 @@ trivy image my-app:latest --format cyclonedx | ./uzomuzo scan --sbom -
 syft . -o cyclonedx-json | ./uzomuzo scan --sbom -
 ```
 
+When the SBOM includes a CycloneDX `dependencies` section (produced by most modern SBOM generators), uzomuzo classifies dependencies as **direct** or **transitive** based on the dependency graph. By default, only direct dependencies are shown. In OSS health assessment (unlike vulnerability scanning), transitive dependency issues are not directly actionable by the user — if a transitive dependency has a problem, the resolution path is to update or replace the direct dependency that pulls it in. Filtering also reduces API calls for faster results.
+
+Use `--show-transitive` to include transitive dependencies in the output:
+
+```bash
+# Direct dependencies only (default)
+trivy fs . --format cyclonedx | ./uzomuzo scan --sbom -
+
+# Include transitive dependencies
+trivy fs . --format cyclonedx | ./uzomuzo scan --sbom - --show-transitive
+```
+
+When transitive dependencies are included, output shows a `RELATION` column indicating `direct`, `transitive (via-parent)`, or `Unknown` (for SBOMs without a `dependencies` section). SBOMs without dependency graph information gracefully fall back to showing all components as `Unknown`.
+
 ### go.mod Input
 
 ```bash
@@ -181,6 +195,25 @@ ok       pkg:npm/express@4.18.2  Active     Not EOL
 
 Summary: 2 dependencies | 1 ok | 0 caution | 1 replace | 0 review
 ```
+
+</details>
+
+<details>
+<summary><strong>Example: <code>--format table</code> with SBOM input (RELATION column)</strong></summary>
+
+When scanning an SBOM that includes dependency graph information, a `RELATION` column is added:
+
+```text
+$ trivy fs . --format cyclonedx | uzomuzo scan --sbom - --show-transitive --format table
+VERDICT  RELATION                  PURL                        LIFECYCLE  EOL
+ok       direct                    pkg:npm/express@4.18.2      Active     Not EOL
+ok       transitive (express)      pkg:npm/accepts@1.3.8       Active     Not EOL
+replace  transitive (express)      pkg:npm/inflight@1.0.6      EOL        EOL
+
+Summary: 3 dependencies | 2 ok | 0 caution | 1 replace | 0 review
+```
+
+Without `--show-transitive`, only `direct` entries are displayed — transitive issues are addressed by updating the direct dependency that introduces them.
 
 </details>
 

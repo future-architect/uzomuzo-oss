@@ -2,6 +2,7 @@ package audit
 
 import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 )
 
 // EntrySource identifies how a dependency was discovered.
@@ -32,4 +33,10 @@ type AuditEntry struct {
 	// Via is the direct parent action URL that caused this transitive dependency to be discovered.
 	// Only populated when Source is SourceActionsTransitive.
 	Via string
+	// Relation indicates whether this dependency is direct, transitive, or unknown
+	// relative to the user's project. Populated when input is an SBOM or go.mod.
+	Relation depparser.DependencyRelation
+	// ViaParents lists short names of direct dependencies through which this
+	// transitive dependency is pulled in. Populated when input is an SBOM.
+	ViaParents []string
 }

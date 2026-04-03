@@ -133,7 +133,7 @@ func runScanSBOM(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 		return fmt.Errorf("SBOM parser not available")
 	}
 
-	result, err := svc.RunFromParser(ctx, parser, data, policy)
+	result, err := svc.RunFromParser(ctx, parser, data, policy, scanapp.ParserConfig{ShowTransitive: opts.ShowTransitive})
 	if err != nil {
 		return fmt.Errorf("scan failed: %w", err)
 	}
@@ -162,7 +162,7 @@ func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 		if opts.IncludeActions {
 			return fmt.Errorf("--include-actions is not supported for %s files", parser.FormatName())
 		}
-		result, err := svc.RunFromParser(ctx, parser, data, policy)
+		result, err := svc.RunFromParser(ctx, parser, data, policy, scanapp.ParserConfig{ShowTransitive: opts.ShowTransitive})
 		if err != nil {
 			return fmt.Errorf("scan failed: %w", err)
 		}
@@ -290,7 +290,7 @@ func runScanAutoDetect(ctx context.Context, svc *scanapp.Service, opts ScanOptio
 		return fmt.Errorf("go.mod parser not available")
 	}
 
-	result, err := svc.RunFromParser(ctx, parser, data, policy)
+	result, err := svc.RunFromParser(ctx, parser, data, policy, scanapp.ParserConfig{ShowTransitive: opts.ShowTransitive})
 	if err != nil {
 		return fmt.Errorf("scan failed: %w", err)
 	}
