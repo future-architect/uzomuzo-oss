@@ -27,23 +27,8 @@ patterns:
     pr: 87
     file: "internal/interfaces/cli/scan.go"
     date: "2026-04-02"
-  - category: "api-consistency"
-    summary: "Return empty result (not error) when a structured parser finds zero dependencies — align behavior across all input formats"
-    pr: 93
-    file: "internal/interfaces/cli/scan.go"
-    date: "2026-04-02"
-  - category: "comment-doc-drift"
-    summary: "Update doc comments listing supported inputs when adding a new input mode — stale comments mislead callers"
-    pr: 93
-    file: "internal/interfaces/cli/scan.go"
-    date: "2026-04-03"
-  - category: "comment-doc-drift"
-    summary: "Update function doc comment when adding new code paths — runScanFile handles workflow YAML but comment only listed go.mod/SBOM/PURL"
-    pr: 93
-    file: "internal/interfaces/cli/scan.go"
-    date: "2026-04-03"
-  - category: "comment-doc-drift"
-    summary: "Update test helper comments when underlying behavior changes — assertURLsEqual referenced non-deterministic map iteration after sort was added"
-    pr: 93
-    file: "internal/infrastructure/depparser/ghaworkflow/parser_test.go"
+  - category: "defensive-coding"
+    summary: "Bound goroutine concurrency with a semaphore when spawning one goroutine per input — unbounded fan-out exceeds API rate limits"
+    pr: 101
+    file: "internal/infrastructure/actionscan/discovery.go"
     date: "2026-04-03"
