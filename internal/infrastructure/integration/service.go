@@ -294,6 +294,17 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 		strings.Contains(depsdevErr.Message, "package not found in deps.dev") {
 		slog.Info("deps_dev_package_not_found_falling_back_to_github_only",
 			"purl", purl, "github_url", githubURL)
+		// Reuse the existing analysis if GitHub enrichment already populated RepoState
+		// for the same repository, avoiding a redundant GitHub API call.
+		if analysis.RepoState != nil && s.validateRepoURLMatch(analysis.RepoURL, githubURL) {
+			analysis.Error = nil
+			analysis.OriginalPURL = githubURL
+			analysis.EffectivePURL = githubURL
+			analysis.Package = nil
+			analysis.ReleaseInfo = nil
+			analysis.EnsureCanonical()
+			return analysis, nil
+		}
 		return s.buildGitHubOnlyAnalysis(ctx, githubURL)
 	}
 
