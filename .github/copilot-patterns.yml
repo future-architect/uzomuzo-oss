@@ -22,16 +22,6 @@ patterns:
     pr: 87
     file: "internal/interfaces/cli/scan.go"
     date: "2026-04-02"
-  - category: "api-consistency"
-    summary: "Set User-Agent header on all REST API requests — new endpoints must match existing client conventions"
-    pr: 101
-    file: "internal/infrastructure/github/contents.go"
-    date: "2026-04-03"
-  - category: "testing"
-    summary: "Add unit tests for new BFS/graph traversal helpers — pure functions like key builders and URL parsers are easy to test"
-    pr: 106
-    file: "internal/infrastructure/actionscan/discovery.go"
-    date: "2026-04-03"
   - category: "deterministic-output"
     summary: "Sort goroutine-collected results before further processing (e.g., BFS seeding) to ensure deterministic behavior"
     pr: 106
@@ -52,6 +42,7 @@ patterns:
     pr: 111
     file: "internal/infrastructure/actionscan/discovery.go"
     date: "2026-04-03"
+  # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107)
+  # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
+  # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)
   # comment-doc-drift: promoted to coding-standards.instructions.md (PRs #101, #106)
-  # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #103, #106, #111)
-  # testing: promoted to testing-performance.instructions.md (PRs #101, #103)
