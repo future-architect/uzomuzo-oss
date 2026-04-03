@@ -5,6 +5,7 @@ package ghaworkflow
 
 import (
 	"fmt"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -67,6 +68,56 @@ func ParseGitHubURLs(data []byte) ([]string, error) {
 	}
 
 	return urls, nil
+}
+
+// ParseWorkflowAll reads a GitHub Actions workflow YAML file and returns both
+// the unique GitHub repository URLs and step-level local action paths from a
+// single unmarshal. Local action paths are extracted only from step `uses:`
+// values (matching ParseLocalActionPaths); job-level `uses:` values are not
+// included in localPaths.
+// This avoids double-parsing for callers that need both results.
+// Jobs are iterated in sorted key order for deterministic output.
+func ParseWorkflowAll(data []byte) (urls []string, localPaths []string, err error) {
+	var wf workflowFile
+	if err := yaml.Unmarshal(data, &wf); err != nil {
+		return nil, nil, fmt.Errorf("failed to parse GitHub Actions workflow YAML: %w", err)
+	}
+
+	jobNames := make([]string, 0, len(wf.Jobs))
+	for name := range wf.Jobs {
+		jobNames = append(jobNames, name)
+	}
+	sort.Strings(jobNames)
+
+	urlSeen := make(map[string]struct{})
+	localSeen := make(map[string]struct{})
+
+	for _, name := range jobNames {
+		j := wf.Jobs[name]
+		// Reusable workflow reference at job level (GitHub URLs only).
+		if u := extractGitHubURL(j.Uses); u != "" {
+			if _, exists := urlSeen[u]; !exists {
+				urlSeen[u] = struct{}{}
+				urls = append(urls, u)
+			}
+		}
+		for _, s := range j.Steps {
+			if u := extractGitHubURL(s.Uses); u != "" {
+				if _, exists := urlSeen[u]; !exists {
+					urlSeen[u] = struct{}{}
+					urls = append(urls, u)
+				}
+			}
+			if p := ExtractLocalActionPath(s.Uses); p != "" {
+				if _, exists := localSeen[p]; !exists {
+					localSeen[p] = struct{}{}
+					localPaths = append(localPaths, p)
+				}
+			}
+		}
+	}
+
+	return urls, localPaths, nil
 }
 
 // extractGitHubURL converts a `uses:` value to a GitHub repository URL.
@@ -205,6 +256,135 @@ func ParseCompositeActionURLs(data []byte) (refs []ActionRef, isComposite bool, 
 	}
 
 	return refs, true, nil
+}
+
+// ExtractLocalActionPath returns the cleaned local path from a uses: directive
+// that starts with "./" (e.g., "./.github/actions/foo" → ".github/actions/foo").
+// Returns "" for non-local references, docker://, empty strings, or paths that
+// attempt directory traversal (e.g., "./../secret" or "./foo/../../../etc").
+func ExtractLocalActionPath(uses string) string {
+	uses = strings.TrimSpace(uses)
+	if uses == "" {
+		return ""
+	}
+	if !strings.HasPrefix(uses, "./") {
+		return ""
+	}
+	// Reject backslashes (non-POSIX path separators).
+	if strings.ContainsRune(uses, '\\') {
+		return ""
+	}
+	// Strip "./" prefix and any trailing slashes.
+	p := strings.TrimPrefix(uses, "./")
+	p = strings.TrimRight(p, "/")
+	if p == "" {
+		return ""
+	}
+	// Normalize and reject path traversal attempts and absolute paths.
+	cleaned := path.Clean(p)
+	if cleaned == "." || strings.HasPrefix(cleaned, "/") || strings.HasPrefix(cleaned, "..") {
+		return ""
+	}
+	return cleaned
+}
+
+// ParseLocalActionPaths reads a GitHub Actions workflow YAML file and returns
+// the unique local action paths referenced by step-level uses: directives
+// (those starting with "./").
+// Paths are cleaned (leading "./" and trailing "/" removed).
+// Jobs are iterated in sorted key order for deterministic output.
+func ParseLocalActionPaths(data []byte) ([]string, error) {
+	var wf workflowFile
+	if err := yaml.Unmarshal(data, &wf); err != nil {
+		return nil, fmt.Errorf("failed to parse GitHub Actions workflow YAML: %w", err)
+	}
+
+	jobNames := make([]string, 0, len(wf.Jobs))
+	for name := range wf.Jobs {
+		jobNames = append(jobNames, name)
+	}
+	sort.Strings(jobNames)
+
+	seen := make(map[string]struct{})
+	var paths []string
+
+	for _, name := range jobNames {
+		j := wf.Jobs[name]
+		for _, s := range j.Steps {
+			if p := ExtractLocalActionPath(s.Uses); p != "" {
+				if _, exists := seen[p]; !exists {
+					seen[p] = struct{}{}
+					paths = append(paths, p)
+				}
+			}
+		}
+	}
+
+	return paths, nil
+}
+
+// ParseCompositeAll parses an action.yml and returns both external ActionRef values
+// and nested local action paths from a single YAML unmarshal. This avoids double-parsing
+// for callers that need both results (e.g., BFS over local composite actions).
+// Returns isComposite=false if runs.using != "composite".
+func ParseCompositeAll(data []byte) (refs []ActionRef, localPaths []string, isComposite bool, err error) {
+	var af actionFile
+	if err := yaml.Unmarshal(data, &af); err != nil {
+		return nil, nil, false, fmt.Errorf("failed to parse action manifest: %w", err)
+	}
+
+	if !strings.EqualFold(af.Runs.Using, "composite") {
+		return nil, nil, false, nil
+	}
+
+	refSeen := make(map[string]struct{})
+	localSeen := make(map[string]struct{})
+
+	for _, s := range af.Runs.Steps {
+		if ref, ok := ExtractActionRef(s.Uses); ok {
+			key := ref.GitHubURL()
+			if ref.Path != "" {
+				key += "/" + ref.Path
+			}
+			if _, exists := refSeen[key]; !exists {
+				refSeen[key] = struct{}{}
+				refs = append(refs, ref)
+			}
+		}
+		if p := ExtractLocalActionPath(s.Uses); p != "" {
+			if _, exists := localSeen[p]; !exists {
+				localSeen[p] = struct{}{}
+				localPaths = append(localPaths, p)
+			}
+		}
+	}
+
+	return refs, localPaths, true, nil
+}
+
+// ParseCompositeLocalActionPaths parses an action.yml and extracts local action paths
+// from composite steps (uses: ./ references). Returns nil if not a composite action.
+func ParseCompositeLocalActionPaths(data []byte) (paths []string, isComposite bool, err error) {
+	var af actionFile
+	if err := yaml.Unmarshal(data, &af); err != nil {
+		return nil, false, fmt.Errorf("failed to parse action manifest: %w", err)
+	}
+
+	if !strings.EqualFold(af.Runs.Using, "composite") {
+		return nil, false, nil
+	}
+
+	seen := make(map[string]struct{})
+	for _, s := range af.Runs.Steps {
+		if p := ExtractLocalActionPath(s.Uses); p != "" {
+			if _, exists := seen[p]; !exists {
+				seen[p] = struct{}{}
+				paths = append(paths, p)
+			}
+		}
+	}
+
+	return paths, true, nil
 }
 
 // IsWorkflowYAMLByPath reports whether filePath is inside a .github/workflows/ directory

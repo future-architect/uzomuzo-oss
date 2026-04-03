@@ -112,6 +112,8 @@ func sourceDisplayName(s domainaudit.EntrySource) string {
 		return "action"
 	case domainaudit.SourceActionsTransitive:
 		return "action-transitive"
+	case domainaudit.SourceActionsLocal:
+		return "action-local"
 	default:
 		return string(s)
 	}

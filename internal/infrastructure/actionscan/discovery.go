@@ -54,17 +54,32 @@ func NewDiscoveryService(githubClient *github.Client, maxConcurrency int) (*Disc
 // Parse/fetch errors for individual files are collected in DiscoveryResult.Errors
 // rather than aborting the entire scan.
 //
+// Returns:
+//   - directURLs: actions referenced directly in workflow files
+//   - localActions: actions found inside local composite actions (URL → local path)
+//   - transitiveActions: actions found via composite action BFS (URL → parent action URL)
+//
 // The returned slices are sorted lexicographically for deterministic output.
 // This method satisfies scan.ActionsDiscoverer.
-func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs []string, transitiveActions map[string]string, errors map[string]error, err error) {
+func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs []string, localActions map[string]string, transitiveActions map[string]string, errors map[string]error, err error) {
 	result := &DiscoveryResult{
 		Actions: make(map[string]int),
 		Errors:  make(map[string]error),
 	}
 
-	// Phase 1: Discover direct actions from workflow files.
+	localActions = make(map[string]string)
+
+	// Phase 1: Discover direct and local actions from workflow files.
+	// Collect per-repo local actions separately, then merge deterministically
+	// after all goroutines complete (sorted by repoURL for stable Via provenance).
+	type repoLocalResult struct {
+		repoURL      string
+		localActions map[string]string
+	}
+
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	var perRepoLocals []repoLocalResult
 	semaphore := make(chan struct{}, s.maxConcurrency)
 
 	for _, repoURL := range repoURLs {
@@ -82,7 +97,7 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 				return
 			}
 
-			urls, errs := s.discoverFromRepo(ctx, owner, repo)
+			urls, repoLocalActions, errs := s.discoverFromRepo(ctx, owner, repo)
 
 			mu.Lock()
 			for _, u := range urls {
@@ -90,6 +105,12 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 					result.Actions[u] = 0
 					directURLs = append(directURLs, u)
 				}
+			}
+			if len(repoLocalActions) > 0 {
+				perRepoLocals = append(perRepoLocals, repoLocalResult{
+					repoURL:      repoURL,
+					localActions: repoLocalActions,
+				})
 			}
 			for k, v := range errs {
 				result.Errors[k] = v
@@ -100,24 +121,44 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 
 	wg.Wait()
 
+	// Merge per-repo local actions deterministically: sort by repoURL so
+	// "first-seen wins" Via provenance is stable across runs.
+	sort.Slice(perRepoLocals, func(i, j int) bool {
+		return perRepoLocals[i].repoURL < perRepoLocals[j].repoURL
+	})
+	for _, prl := range perRepoLocals {
+		for u, localPath := range prl.localActions {
+			if _, exists := result.Actions[u]; !exists {
+				result.Actions[u] = 0
+				localActions[u] = localPath
+			}
+		}
+	}
+
 	// Sort before transitive resolution so BFS seed order is deterministic.
-	// This ensures consistent "via" parent selection when multiple direct actions
-	// lead to the same transitive dependency (lexicographically first wins).
 	sort.Strings(directURLs)
 
 	// Phase 2: Resolve transitive composite action dependencies via BFS (opt-in).
+	// Seed BFS with both direct and local-discovered action URLs.
 	if resolveTransitive {
-		transitiveActions = s.resolveTransitiveActions(ctx, directURLs, result)
+		allSeedURLs := make([]string, 0, len(directURLs)+len(localActions))
+		allSeedURLs = append(allSeedURLs, directURLs...)
+		for u := range localActions {
+			allSeedURLs = append(allSeedURLs, u)
+		}
+		sort.Strings(allSeedURLs)
+		transitiveActions = s.resolveTransitiveActions(ctx, allSeedURLs, result)
 	}
 
 	slog.Info("actions discovery complete",
 		"repos_scanned", len(repoURLs),
 		"direct_actions", len(directURLs),
+		"local_actions", len(localActions),
 		"transitive_actions", len(transitiveActions),
 		"errors", len(result.Errors),
 	)
 
-	return directURLs, transitiveActions, result.Errors, nil
+	return directURLs, localActions, transitiveActions, result.Errors, nil
 }
 
 // actionRefKey returns a dedup key for BFS traversal that includes the subdirectory path.
@@ -258,18 +299,25 @@ func (s *DiscoveryService) fetchActionYAML(ctx context.Context, ref ghaworkflow.
 	return data // nil if not found
 }
 
-// discoverFromRepo fetches workflow files from a single repository and parses them.
-func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo string) ([]string, map[string]error) {
-	errs := make(map[string]error)
+// discoverFromRepo fetches workflow files from a single repository, parses them,
+// and resolves local composite actions to discover external action dependencies
+// that would otherwise be hidden behind ./ references.
+//
+// Returns:
+//   - directURLs: external action URLs referenced directly in workflow files
+//   - localActions: external action URLs found inside local composite actions (URL → local path)
+//   - errs: non-fatal errors keyed by source path
+func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo string) (directURLs []string, localActions map[string]string, errs map[string]error) {
+	errs = make(map[string]error)
 
 	entries, err := s.githubClient.FetchDirectoryContents(ctx, owner, repo, ".github/workflows")
 	if err != nil {
 		errs[fmt.Sprintf("%s/%s/.github/workflows", owner, repo)] = err
-		return nil, errs
+		return nil, nil, errs
 	}
 	if entries == nil {
 		slog.Debug("no .github/workflows directory", "owner", owner, "repo", repo)
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// Filter to YAML files only.
@@ -286,13 +334,14 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 
 	if len(yamlFiles) == 0 {
 		slog.Debug("no workflow YAML files found", "owner", owner, "repo", repo)
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	slog.Debug("fetching workflow files", "owner", owner, "repo", repo, "count", len(yamlFiles))
 
 	seen := make(map[string]struct{})
-	var allURLs []string
+	var localPaths []string
+	localSeen := make(map[string]struct{})
 
 	for _, yf := range yamlFiles {
 		data, fetchErr := s.githubClient.FetchFileContent(ctx, owner, repo, yf.Path)
@@ -304,7 +353,7 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 			continue // 404 — file disappeared between listing and fetch
 		}
 
-		urls, parseErr := ghaworkflow.ParseGitHubURLs(data)
+		urls, locals, parseErr := ghaworkflow.ParseWorkflowAll(data)
 		if parseErr != nil {
 			errs[fmt.Sprintf("%s/%s/%s", owner, repo, yf.Path)] = parseErr
 			continue
@@ -313,10 +362,109 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 		for _, u := range urls {
 			if _, exists := seen[u]; !exists {
 				seen[u] = struct{}{}
-				allURLs = append(allURLs, u)
+				directURLs = append(directURLs, u)
+			}
+		}
+
+		for _, lp := range locals {
+			if _, exists := localSeen[lp]; !exists {
+				localSeen[lp] = struct{}{}
+				localPaths = append(localPaths, lp)
 			}
 		}
 	}
 
-	return allURLs, errs
+	// Resolve local composite actions to find external action dependencies.
+	// Sort for deterministic BFS "first-seen wins" Via provenance.
+	if len(localPaths) > 0 {
+		sort.Strings(localPaths)
+		localActions = s.resolveLocalActions(ctx, owner, repo, localPaths, errs)
+	}
+
+	return directURLs, localActions, errs
+}
+
+// resolveLocalActions performs BFS over local composite actions within a repository,
+// fetching action.yml for each local path, extracting external action URLs, and
+// following nested local references (uses: ./) with cycle detection.
+// It returns a map of external GitHub URL → local action path that contained it (first-seen wins).
+func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo string, initialPaths []string, errs map[string]error) map[string]string {
+	seen := make(map[string]struct{})
+	for _, p := range initialPaths {
+		seen[p] = struct{}{}
+	}
+
+	queue := append([]string(nil), initialPaths...)
+	// external URL → originating local action path (first-seen wins)
+	externalActions := make(map[string]string)
+
+	for len(queue) > 0 {
+		current := queue
+		queue = nil
+
+		for _, localPath := range current {
+			data := s.fetchLocalActionYAML(ctx, owner, repo, localPath, errs)
+			if data == nil {
+				continue
+			}
+
+			// Extract both external refs and nested local paths from a single unmarshal.
+			refs, nestedLocals, isComposite, err := ghaworkflow.ParseCompositeAll(data)
+			if err != nil {
+				errs[fmt.Sprintf("%s/%s/%s", owner, repo, localPath)] = err
+				continue
+			}
+			if !isComposite {
+				continue
+			}
+
+			for _, ref := range refs {
+				ghURL := ref.GitHubURL()
+				if _, exists := externalActions[ghURL]; !exists {
+					externalActions[ghURL] = localPath
+				}
+			}
+
+			for _, nested := range nestedLocals {
+				if _, exists := seen[nested]; !exists {
+					seen[nested] = struct{}{}
+					queue = append(queue, nested)
+				}
+			}
+		}
+	}
+
+	if len(externalActions) > 0 {
+		slog.Debug("resolved local composite actions",
+			"owner", owner, "repo", repo,
+			"local_actions_scanned", len(seen),
+			"external_urls_found", len(externalActions),
+		)
+	}
+
+	return externalActions
+}
+
+// fetchLocalActionYAML fetches action.yml (or action.yaml as fallback) for a local action
+// path within a repository (e.g., ".github/actions/foo" → fetch ".github/actions/foo/action.yml").
+// It returns nil if neither file exists. Errors are recorded in errs.
+func (s *DiscoveryService) fetchLocalActionYAML(ctx context.Context, owner, repo, localPath string, errs map[string]error) []byte {
+	ymlPath := localPath + "/action.yml"
+	data, err := s.githubClient.FetchFileContent(ctx, owner, repo, ymlPath)
+	if err != nil {
+		errs[fmt.Sprintf("%s/%s/%s", owner, repo, ymlPath)] = err
+		return nil
+	}
+	if data != nil {
+		return data
+	}
+
+	// Fallback to action.yaml.
+	yamlPath := localPath + "/action.yaml"
+	data, err = s.githubClient.FetchFileContent(ctx, owner, repo, yamlPath)
+	if err != nil {
+		errs[fmt.Sprintf("%s/%s/%s", owner, repo, yamlPath)] = err
+		return nil
+	}
+	return data
 }

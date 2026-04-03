@@ -371,6 +371,273 @@ func TestActionRef_ActionYAMLPath(t *testing.T) {
 	}
 }
 
+func TestExtractLocalActionPath(t *testing.T) {
+	tests := []struct {
+		name string
+		uses string
+		want string
+	}{
+		{name: "standard local action", uses: "./.github/actions/foo", want: ".github/actions/foo"},
+		{name: "local action with trailing slash", uses: "./.github/actions/bar/", want: ".github/actions/bar"},
+		{name: "deeply nested local", uses: "./actions/setup/build", want: "actions/setup/build"},
+		{name: "external action", uses: "actions/checkout@v4", want: ""},
+		{name: "docker reference", uses: "docker://alpine:3.18", want: ""},
+		{name: "empty string", uses: "", want: ""},
+		{name: "whitespace only", uses: "   ", want: ""},
+		{name: "dot-slash only", uses: "./", want: ""},
+		{name: "whitespace around local", uses: "  ./.github/actions/foo  ", want: ".github/actions/foo"},
+		{name: "parent relative", uses: "../some-action", want: ""},
+		{name: "traversal via dot-dot prefix", uses: "./../some-action", want: ""},
+		{name: "embedded dot-dot normalized within repo", uses: "./.github/actions/../secrets", want: ".github/secrets"},
+		{name: "traversal resolved to parent", uses: "./foo/../../../etc", want: ""},
+		{name: "clean normalizes redundant slashes", uses: "./.github/actions//foo", want: ".github/actions/foo"},
+		{name: "backslash rejected", uses: ".\\.github\\actions\\foo", want: ""},
+		{name: "dot-dot in middle resolved safely", uses: "./foo/../bar", want: "bar"},
+		{name: "extra slashes produce absolute path rejected", uses: ".///.github/actions/foo", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ghaworkflow.ExtractLocalActionPath(tt.uses)
+			if got != tt.want {
+				t.Errorf("ExtractLocalActionPath(%q) = %q, want %q", tt.uses, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseLocalActionPaths(t *testing.T) {
+	tests := []struct {
+		name      string
+		yaml      string
+		wantPaths []string
+	}{
+		{
+			name: "workflow with local actions",
+			yaml: `
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build-frontend
+      - uses: ./.github/actions/deploy
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/build-frontend
+      - uses: ./.github/actions/test-e2e
+`,
+			wantPaths: []string{
+				".github/actions/build-frontend",
+				".github/actions/deploy",
+				".github/actions/test-e2e",
+			},
+		},
+		{
+			name: "workflow with no local actions",
+			yaml: `
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+`,
+			wantPaths: nil,
+		},
+		{
+			name: "workflow with only local actions",
+			yaml: `
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/foo
+`,
+			wantPaths: []string{".github/actions/foo"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ghaworkflow.ParseLocalActionPaths([]byte(tt.yaml))
+			if err != nil {
+				t.Fatalf("ParseLocalActionPaths() error = %v", err)
+			}
+			if len(got) != len(tt.wantPaths) {
+				t.Fatalf("got %d paths, want %d\ngot:  %v\nwant: %v", len(got), len(tt.wantPaths), got, tt.wantPaths)
+			}
+			// Sort for comparison since job iteration is sorted but cross-job dedup order may vary.
+			sortedGot := make([]string, len(got))
+			copy(sortedGot, got)
+			sort.Strings(sortedGot)
+			sortedWant := make([]string, len(tt.wantPaths))
+			copy(sortedWant, tt.wantPaths)
+			sort.Strings(sortedWant)
+			for i := range sortedGot {
+				if sortedGot[i] != sortedWant[i] {
+					t.Errorf("path mismatch:\ngot:  %v\nwant: %v", sortedGot, sortedWant)
+					return
+				}
+			}
+		})
+	}
+}
+
+func TestParseWorkflowAll(t *testing.T) {
+	tests := []struct {
+		name           string
+		yaml           string
+		wantURLs       []string
+		wantLocalPaths []string
+	}{
+		{
+			name: "mixed workflow with external and local actions",
+			yaml: `
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build-frontend
+      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/deploy
+`,
+			wantURLs: []string{
+				"https://github.com/actions/checkout",
+				"https://github.com/actions/setup-node",
+			},
+			wantLocalPaths: []string{
+				".github/actions/build-frontend",
+				".github/actions/deploy",
+			},
+		},
+		{
+			name: "no local actions",
+			yaml: `
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+`,
+			wantURLs:       []string{"https://github.com/actions/checkout"},
+			wantLocalPaths: nil,
+		},
+		{
+			name: "only local actions",
+			yaml: `
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/foo
+`,
+			wantURLs:       nil,
+			wantLocalPaths: []string{".github/actions/foo"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			urls, locals, err := ghaworkflow.ParseWorkflowAll([]byte(tt.yaml))
+			if err != nil {
+				t.Fatalf("ParseWorkflowAll() error = %v", err)
+			}
+			assertURLsEqual(t, urls, tt.wantURLs)
+			if len(locals) != len(tt.wantLocalPaths) {
+				t.Fatalf("got %d local paths, want %d\ngot:  %v\nwant: %v",
+					len(locals), len(tt.wantLocalPaths), locals, tt.wantLocalPaths)
+			}
+			sortedGot := make([]string, len(locals))
+			copy(sortedGot, locals)
+			sort.Strings(sortedGot)
+			sortedWant := make([]string, len(tt.wantLocalPaths))
+			copy(sortedWant, tt.wantLocalPaths)
+			sort.Strings(sortedWant)
+			for i := range sortedGot {
+				if sortedGot[i] != sortedWant[i] {
+					t.Errorf("local path mismatch:\ngot:  %v\nwant: %v", sortedGot, sortedWant)
+					return
+				}
+			}
+		})
+	}
+}
+
+func TestParseCompositeLocalActionPaths(t *testing.T) {
+	tests := []struct {
+		name          string
+		yaml          string
+		wantComposite bool
+		wantPaths     []string
+	}{
+		{
+			name: "composite with local and external refs",
+			yaml: `
+name: Build
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+    - uses: ./.github/actions/setup-tools
+    - uses: ./.github/actions/lint
+`,
+			wantComposite: true,
+			wantPaths:     []string{".github/actions/setup-tools", ".github/actions/lint"},
+		},
+		{
+			name: "composite with no local refs",
+			yaml: `
+name: Build
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+`,
+			wantComposite: true,
+			wantPaths:     nil,
+		},
+		{
+			name: "node action (not composite)",
+			yaml: `
+name: Node Action
+runs:
+  using: node20
+  main: index.js
+`,
+			wantComposite: false,
+			wantPaths:     nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			paths, isComposite, err := ghaworkflow.ParseCompositeLocalActionPaths([]byte(tt.yaml))
+			if err != nil {
+				t.Fatalf("ParseCompositeLocalActionPaths() error = %v", err)
+			}
+			if isComposite != tt.wantComposite {
+				t.Errorf("isComposite = %v, want %v", isComposite, tt.wantComposite)
+			}
+			if len(paths) != len(tt.wantPaths) {
+				t.Fatalf("got %d paths, want %d\ngot:  %v\nwant: %v", len(paths), len(tt.wantPaths), paths, tt.wantPaths)
+			}
+			for i, got := range paths {
+				if got != tt.wantPaths[i] {
+					t.Errorf("paths[%d] = %q, want %q", i, got, tt.wantPaths[i])
+				}
+			}
+		})
+	}
+}
+
 // assertURLsEqual compares two URL slices as unordered sets because URL order is not part of the parser contract.
 func assertURLsEqual(t *testing.T, got, want []string) {
 	t.Helper()

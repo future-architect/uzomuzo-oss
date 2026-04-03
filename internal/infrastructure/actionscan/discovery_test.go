@@ -29,12 +29,15 @@ func TestDiscoverActions_InvalidURLs(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	directURLs, transitiveActions, errs, err := svc.DiscoverActions(context.Background(), []string{"not-a-url", "https://gitlab.com/foo/bar"}, false)
+	directURLs, localActions, transitiveActions, errs, err := svc.DiscoverActions(context.Background(), []string{"not-a-url", "https://gitlab.com/foo/bar"}, false)
 	if err != nil {
 		t.Fatalf("DiscoverActions should not return fatal error: %v", err)
 	}
 	if len(directURLs) != 0 {
 		t.Errorf("expected 0 direct URLs, got %d", len(directURLs))
+	}
+	if len(localActions) != 0 {
+		t.Errorf("expected 0 local actions, got %d", len(localActions))
 	}
 	if len(transitiveActions) != 0 {
 		t.Errorf("expected 0 transitive actions, got %d", len(transitiveActions))
@@ -157,12 +160,15 @@ func TestDiscoverActions_EmptyInput(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	directURLs, transitiveActions, errs, err := svc.DiscoverActions(context.Background(), nil, false)
+	directURLs, localActions, transitiveActions, errs, err := svc.DiscoverActions(context.Background(), nil, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(directURLs) != 0 {
 		t.Errorf("expected 0 direct URLs, got %d", len(directURLs))
+	}
+	if len(localActions) != 0 {
+		t.Errorf("expected 0 local actions, got %d", len(localActions))
 	}
 	if len(transitiveActions) != 0 {
 		t.Errorf("expected 0 transitive actions, got %d", len(transitiveActions))

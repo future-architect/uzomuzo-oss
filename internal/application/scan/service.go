@@ -149,10 +149,11 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 
 // ActionsDiscoverer abstracts the actions discovery infrastructure.
 type ActionsDiscoverer interface {
-	// DiscoverActions returns direct and transitive action URLs discovered from repository workflows.
-	// Direct URLs are Actions referenced in workflow files; transitive actions (map of URL → via parent URL)
-	// are discovered by recursively resolving composite action dependencies when resolveTransitive is true.
-	DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs []string, transitiveActions map[string]string, errors map[string]error, err error)
+	// DiscoverActions returns direct, local, and transitive action URLs discovered from repository workflows.
+	// Direct URLs are Actions referenced in workflow files; local actions (map of URL → local path)
+	// are discovered inside local composite actions (./.github/actions/foo); transitive actions
+	// (map of URL → via parent URL) are discovered by recursively resolving composite action dependencies.
+	DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs []string, localActions map[string]string, transitiveActions map[string]string, errors map[string]error, err error)
 }
 
 // ActionsConfig configures optional GitHub Actions health scanning.
@@ -209,7 +210,7 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 		return nil, fmt.Errorf("actions discovery is enabled but discoverer is nil")
 	}
 	if actionsCfg.Enabled && len(githubURLs) > 0 {
-		directActionURLs, transitiveActions, discoveryErrors, err := actionsCfg.Discoverer.DiscoverActions(ctx, githubURLs, actionsCfg.ShowTransitive)
+		directActionURLs, localActions, transitiveActions, discoveryErrors, err := actionsCfg.Discoverer.DiscoverActions(ctx, githubURLs, actionsCfg.ShowTransitive)
 		if err != nil {
 			return nil, fmt.Errorf("actions discovery failed: %w", err)
 		}
@@ -224,6 +225,24 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 			return nil, fmt.Errorf("failed to evaluate direct actions: %w", err)
 		}
 		entries = append(entries, directEntries...)
+
+		// Evaluate local action URLs (discovered inside local composite actions).
+		if len(localActions) > 0 {
+			localURLs := make([]string, 0, len(localActions))
+			for u := range localActions {
+				localURLs = append(localURLs, u)
+			}
+			sort.Strings(localURLs)
+
+			localEntries, err := s.evaluateActionURLs(ctx, localURLs, allAnalyses, domainaudit.SourceActionsLocal)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate local actions: %w", err)
+			}
+			for i := range localEntries {
+				localEntries[i].Via = localActions[localEntries[i].PURL]
+			}
+			entries = append(entries, localEntries...)
+		}
 
 		// Evaluate transitive action URLs (only when --show-transitive is set).
 		if actionsCfg.ShowTransitive && len(transitiveActions) > 0 {
