@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-04-03)
+Superseded by [ADR-0008](0008-transitive-composite-action-scanning.md) (2026-04-03)
 
 ## Context
 
