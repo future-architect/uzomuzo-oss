@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
 
 	urfcli "github.com/urfave/cli/v3"
 
@@ -11,6 +15,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	infradepparser "github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/cyclonedx"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/ghaworkflow"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/gomod"
 	"github.com/future-architect/uzomuzo-oss/internal/interfaces/cli"
 )
@@ -20,7 +25,7 @@ func scanFlags() []urfcli.Flag {
 	return []urfcli.Flag{
 		// Input source
 		&urfcli.StringFlag{Name: "sbom", Usage: "Path to CycloneDX SBOM JSON (use '-' for stdin)"},
-		&urfcli.StringFlag{Name: "file", Usage: "Path to input file (PURL list, go.mod, or CycloneDX SBOM)"},
+		&urfcli.StringFlag{Name: "file", Usage: "Path to input file (PURL list, go.mod, CycloneDX SBOM, or GitHub Actions workflow YAML)"},
 
 		// Output format
 		&urfcli.StringFlag{Name: "format", Aliases: []string{"f"}, Usage: "Output format: detailed, table, json, csv (default: auto)"},
@@ -46,6 +51,7 @@ func scanCommand(cfg *domaincfg.Config) *urfcli.Command {
    uzomuzo scan --sbom bom.json                                   CycloneDX SBOM
    trivy fs . --format cyclonedx | uzomuzo scan --sbom -          Pipe SBOM
    uzomuzo scan --file go.mod                                     go.mod
+   uzomuzo scan --file .github/workflows/ci.yml                   GitHub Actions workflow
    uzomuzo scan                                                   Auto-detect go.mod
    cat purls.txt | uzomuzo scan                                   Pipe PURLs
 
@@ -138,7 +144,49 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 		"gomod": &gomod.Parser{},
 	}
 
-	return cli.RunScan(ctx, cfg, args, opts, parsers, infradepparser.DetectFileParser)
+	return cli.RunScan(ctx, cfg, args, opts, parsers, infradepparser.DetectFileParser, detectWorkflowFile, ghaworkflow.ParseGitHubURLs)
+}
+
+// detectWorkflowFile checks whether filePath is a GitHub Actions workflow YAML.
+// Returns the full file data and true if it is a workflow, or (nil, false, nil) otherwise.
+//
+// Detection is delegated to ghaworkflow.IsWorkflowYAML (single source of truth).
+// To avoid unnecessary I/O for non-workflow YAML files (e.g., docker-compose.yml),
+// only a small prefix is read for content-based marker detection. The full file is
+// read only after confirming the file is a workflow.
+func detectWorkflowFile(filePath string) ([]byte, bool, error) {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	if ext != ".yml" && ext != ".yaml" {
+		return nil, false, nil
+	}
+
+	// Read a small prefix for content-based detection by IsWorkflowYAML.
+	// Path-based detection (inside .github/workflows/) also happens inside
+	// IsWorkflowYAML, so we still need to call it even with an empty prefix.
+	var prefix []byte
+	if !ghaworkflow.IsWorkflowYAMLByPath(filePath) {
+		f, err := os.Open(filePath)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to open file '%s': %w", filePath, err)
+		}
+		prefix = make([]byte, 1024)
+		n, readErr := f.Read(prefix)
+		_ = f.Close() // best-effort cleanup, original error preserved
+		if readErr != nil && !errors.Is(readErr, io.EOF) {
+			return nil, false, fmt.Errorf("failed to read file '%s': %w", filePath, readErr)
+		}
+		prefix = prefix[:n]
+		if !ghaworkflow.IsWorkflowYAML(filePath, prefix) {
+			return nil, false, nil
+		}
+	}
+
+	// Confirmed workflow — read the full file.
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to read file '%s': %w", filePath, err)
+	}
+	return data, true, nil
 }
 
 // buildScanOptions maps urfave/cli flags to ScanOptions.

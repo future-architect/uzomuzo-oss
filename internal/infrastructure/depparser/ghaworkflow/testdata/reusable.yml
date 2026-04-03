@@ -1,0 +1,16 @@
+name: Reusable Caller
+on:
+  workflow_dispatch:
+
+jobs:
+  call-ci:
+    uses: owner/shared-workflows/.github/workflows/ci.yml@main
+
+  call-deploy:
+    uses: owner/shared-workflows/.github/workflows/deploy.yml@v2
+
+  local-steps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./local-action

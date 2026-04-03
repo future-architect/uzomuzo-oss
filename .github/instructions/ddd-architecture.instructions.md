@@ -141,3 +141,7 @@ func ProcessBatchPURLs(ctx context.Context, cfg *config.Config, purls []string) 
 5. **CORRECT CONCURRENCY** — Parallel processing in Infrastructure layer only
 
 **VIOLATION CONSEQUENCE**: Immediate refactoring required to comply with DDD principles and eliminate code duplication.
+
+## Learned from Copilot Reviews
+
+- **Inject Infrastructure Into Interfaces via Function Types**: The Interfaces layer (CLI) must never import Infrastructure packages directly. When the CLI needs to call Infrastructure logic (e.g., file format detection, workflow parsing), define a function type in the Interfaces layer and inject the concrete implementation from the composition root (`cmd/`). This preserves the `Interfaces → Application → Domain ← Infrastructure` dependency direction.

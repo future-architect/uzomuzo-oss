@@ -17,11 +17,6 @@ patterns:
     pr: 87
     file: "internal/interfaces/cli/scan_render.go"
     date: "2026-04-02"
-  - category: "ddd-violations"
-    summary: "Interfaces layer must not import Infrastructure packages directly — inject dependencies via function types or interfaces"
-    pr: 87
-    file: "internal/interfaces/cli/scan.go"
-    date: "2026-04-02"
   - category: "testing"
     summary: "When replacing an application service, port existing unit tests to the new service to prevent regression"
     pr: 87
@@ -32,8 +27,23 @@ patterns:
     pr: 87
     file: "internal/interfaces/cli/scan.go"
     date: "2026-04-02"
-  - category: "defensive-coding"
-    summary: "GitHub issue search uses word-level matching, not exact — add jq post-filter for exact title comparison to prevent false-positive deduplication"
-    pr: 91
-    file: ".github/workflows/dependency-scan.yml"
+  - category: "api-consistency"
+    summary: "Return empty result (not error) when a structured parser finds zero dependencies — align behavior across all input formats"
+    pr: 93
+    file: "internal/interfaces/cli/scan.go"
     date: "2026-04-02"
+  - category: "comment-doc-drift"
+    summary: "Update doc comments listing supported inputs when adding a new input mode — stale comments mislead callers"
+    pr: 93
+    file: "internal/interfaces/cli/scan.go"
+    date: "2026-04-03"
+  - category: "comment-doc-drift"
+    summary: "Update function doc comment when adding new code paths — runScanFile handles workflow YAML but comment only listed go.mod/SBOM/PURL"
+    pr: 93
+    file: "internal/interfaces/cli/scan.go"
+    date: "2026-04-03"
+  - category: "comment-doc-drift"
+    summary: "Update test helper comments when underlying behavior changes — assertURLsEqual referenced non-deterministic map iteration after sort was added"
+    pr: 93
+    file: "internal/infrastructure/depparser/ghaworkflow/parser_test.go"
+    date: "2026-04-03"

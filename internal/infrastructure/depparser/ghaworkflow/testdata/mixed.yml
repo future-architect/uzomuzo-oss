@@ -1,0 +1,12 @@
+name: Mixed
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker://node:18
+      - uses: ./local-action
+      - uses: actions/setup-node@v4
+      - uses: owner/repo/subpath@v1

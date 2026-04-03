@@ -21,6 +21,14 @@ import (
 // Returns (nil, nil, nil) when the file is not a recognized structured format.
 type FileDetector func(filePath string, parsers map[string]depparser.DependencyParser) (depparser.DependencyParser, []byte, error)
 
+// WorkflowDetector checks whether filePath is a GitHub Actions workflow YAML.
+// If it is, it returns (data, true, nil). Otherwise (nil, false, nil).
+// The data is the full file content, ready for parsing.
+type WorkflowDetector func(filePath string) (data []byte, ok bool, err error)
+
+// WorkflowParser extracts GitHub repository URLs from workflow YAML data.
+type WorkflowParser func(data []byte) ([]string, error)
+
 // ErrScanFailPolicy is returned by RunScan when at least one dependency
 // matches the --fail-on policy, signaling the caller to exit with code 1.
 var ErrScanFailPolicy = errors.New("scan: one or more dependencies matched --fail-on policy")
@@ -29,23 +37,23 @@ var ErrScanFailPolicy = errors.New("scan: one or more dependencies matched --fai
 type ScanOptions struct {
 	ProcessingOptions
 
-	Format             string // "detailed", "table", "json", "csv" (empty = smart default)
-	FailOnRaw          string // raw --fail-on CSV string
-	SBOMPath           string // --sbom flag
-	ConfigSampleDefault int   // Config-level default sample size (applied only to PURL/URL list files)
+	Format              string // "detailed", "table", "json", "csv" (empty = smart default)
+	FailOnRaw           string // raw --fail-on CSV string
+	SBOMPath            string // --sbom flag
+	ConfigSampleDefault int    // Config-level default sample size (applied only to PURL/URL list files)
 }
 
 // RunScan is the entry point for the "scan" subcommand.
 //
 // Input resolution order:
 //  1. --sbom: CycloneDX SBOM JSON (or "-" for stdin)
-//  2. --file: go.mod or PURL/URL list file
+//  2. --file: go.mod, GitHub Actions workflow YAML, or PURL/URL list file
 //  3. Positional args: PURLs or GitHub URLs (direct mode)
 //  4. Stdin pipe
 //  5. Auto-detect: go.mod in current directory
 //
 // DDD Layer: Interfaces (CLI handler, delegates to Application)
-func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts ScanOptions, parsers map[string]depparser.DependencyParser, detectFile FileDetector) error {
+func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts ScanOptions, parsers map[string]depparser.DependencyParser, detectFile FileDetector, detectWorkflow WorkflowDetector, parseWorkflow WorkflowParser) error {
 	// Parse fail-on policy
 	policy, err := domainscan.ParseFailPolicy(opts.FailOnRaw)
 	if err != nil {
@@ -67,7 +75,7 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 		if detectFile == nil {
 			return fmt.Errorf("file detector is required for --file mode")
 		}
-		return runScanFile(ctx, scanService, opts, parsers, policy, detectFile)
+		return runScanFile(ctx, scanService, opts, parsers, policy, detectFile, detectWorkflow, parseWorkflow)
 
 	case len(args) > 0:
 		return runScanDirect(ctx, scanService, args, opts, policy)
@@ -107,8 +115,8 @@ func runScanSBOM(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 	return finalizeScanOutput(svc, result, opts, len(result.Entries))
 }
 
-// runScanFile handles --file input (go.mod, SBOM, or PURL/URL list).
-func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy, detectFile FileDetector) error {
+// runScanFile handles --file input (go.mod, SBOM, GitHub Actions workflow YAML, or PURL/URL list).
+func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy, detectFile FileDetector, detectWorkflow WorkflowDetector, parseWorkflow WorkflowParser) error {
 	filePath := opts.Filename
 
 	// Try structured format (go.mod / CycloneDX SBOM) first
@@ -130,6 +138,25 @@ func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 			return fmt.Errorf("scan failed: %w", err)
 		}
 		return finalizeScanOutput(svc, result, opts, len(result.Entries))
+	}
+
+	// Try GitHub Actions workflow YAML before falling back to PURL/URL list.
+	if detectWorkflow != nil && parseWorkflow != nil {
+		wfData, ok, wfErr := detectWorkflow(filePath)
+		if wfErr != nil {
+			return fmt.Errorf("failed to read workflow file '%s': %w", filePath, wfErr)
+		}
+		if ok {
+			// --sample and --line-range are only meaningful for PURL/URL list files;
+			// reject them when the file is a workflow YAML.
+			if opts.SampleSize > 0 {
+				return fmt.Errorf("--sample is not supported for workflow files")
+			}
+			if opts.LineStart > 0 || opts.LineEnd > 0 {
+				return fmt.Errorf("--line-range is not supported for workflow files")
+			}
+			return runScanWorkflow(ctx, svc, wfData, opts, policy, parseWorkflow)
+		}
 	}
 
 	// Fall back to PURL/URL list
@@ -266,6 +293,26 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 		return ErrScanFailPolicy
 	}
 	return nil
+}
+
+// runScanWorkflow parses a GitHub Actions workflow YAML and evaluates referenced Actions.
+func runScanWorkflow(ctx context.Context, svc *scanapp.Service, data []byte, opts ScanOptions, policy domainscan.FailPolicy, parseWorkflow WorkflowParser) error {
+	githubURLs, err := parseWorkflow(data)
+	if err != nil {
+		return fmt.Errorf("failed to parse workflow: %w", err)
+	}
+	if len(githubURLs) == 0 {
+		slog.Info("scan: no supported GitHub Actions references found in workflow; returning empty result")
+		return finalizeScanOutput(svc, &scanapp.Result{}, opts, 0)
+	}
+
+	slog.Info("scan: found GitHub Actions references in workflow", "count", len(githubURLs))
+
+	result, err := svc.RunFromPURLs(ctx, nil, githubURLs, policy)
+	if err != nil {
+		return fmt.Errorf("scan failed: %w", err)
+	}
+	return finalizeScanOutput(svc, result, opts, len(githubURLs))
 }
 
 // isStdinTerminal reports whether stdin is connected to a terminal.
