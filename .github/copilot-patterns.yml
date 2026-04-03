@@ -32,5 +32,10 @@ patterns:
     pr: 101
     file: "internal/infrastructure/github/contents.go"
     date: "2026-04-03"
+  - category: "defensive-coding"
+    summary: "Reuse already-fetched data from prior enrichment steps instead of making redundant API calls in fallback paths"
+    pr: 103
+    file: "internal/infrastructure/integration/service.go"
+    date: "2026-04-03"
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103)
