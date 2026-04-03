@@ -180,7 +180,7 @@ type actionRuns struct {
 func ParseCompositeActionURLs(data []byte) (refs []ActionRef, isComposite bool, err error) {
 	var af actionFile
 	if err := yaml.Unmarshal(data, &af); err != nil {
-		return nil, false, fmt.Errorf("failed to parse action.yml: %w", err)
+		return nil, false, fmt.Errorf("failed to parse action manifest: %w", err)
 	}
 
 	if !strings.EqualFold(af.Runs.Using, "composite") {

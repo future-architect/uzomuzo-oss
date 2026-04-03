@@ -105,12 +105,13 @@ ok       action-transitive   github.com/some/transitive-action Active      No
 ...
 
 --- PURL 6 (action-transitive) ---
+🔗 Via: github.com/some/direct-action
 📦 Package: github.com/some/transitive-action
 ⚖️  Result: Active
 ...
 ```
 
-**JSON/CSV format**: The existing `source` field carries the new values (`"actions-transitive"`). No structural changes needed.
+**JSON/CSV format**: The existing `source` field carries the new value (`"actions-transitive"`) for transitive Action results. In addition, machine-readable output includes the direct parent Action for transitive entries via an additive `via` field in JSON and an additive `via` column in CSV. This is a backward-compatible format extension.
 
 ### No `--depth` flag
 
