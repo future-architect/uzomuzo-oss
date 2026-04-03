@@ -382,6 +382,43 @@ Legend:
 - "derived" flags (fallback_applied / derived_from_version) indicate algorithm intervention
 - `license_resolution_scenario` may have new labels added in the future. Ignore unknown values or bucket as "other"
 
+## Analysis Precision and `GITHUB_TOKEN`
+
+uzomuzo combines data from **deps.dev** (package registry) and **GitHub API** (repository state). When `GITHUB_TOKEN` is not set, GitHub API calls are skipped and analysis relies on deps.dev data only, which significantly reduces lifecycle assessment precision.
+
+### What each data source provides
+
+| Data Source | Available Without Token | Requires `GITHUB_TOKEN` |
+|-------------|------------------------|------------------------|
+| **deps.dev** | Package versions & publish dates, Scorecard metrics, Advisory/CVE counts, Dependent counts, License info | — |
+| **GitHub API** | — | Last human commit date, Bot vs. human commit ratio, Archive/disabled status, Fork detection |
+
+### How missing data affects lifecycle classification
+
+| Actual State | With Token | Without Token | Risk |
+|--------------|-----------|---------------|------|
+| Archived repository | **EOL-Confirmed** | Stalled | False negative — clear EOL signal missed |
+| Unpatched CVEs + no commits for 2+ years | **EOL-Effective** | Stalled | False negative — supply chain risk missed |
+| Active Go/Composer package (commits but no registry publish) | **Active** | Stalled | False positive — healthy package flagged |
+| Frozen utility with zero advisories | **Legacy-Safe** | Stalled | False positive — safe package flagged |
+| Bot-only maintenance (Dependabot/Renovate) | **Stalled** | Active | False negative — automation masquerades as maintenance |
+
+Without `GITHUB_TOKEN`, many packages fall into **Review Needed** instead of actionable categories because the assessor lacks commit-based signals to make a confident determination.
+
+### Recommendation
+
+For production CI gates and security audits, always set `GITHUB_TOKEN`. The token requires no special scopes for public repositories — a default `GITHUB_TOKEN` from GitHub Actions or `gh auth login` is sufficient.
+
+```bash
+# GitHub Actions — automatic
+# GITHUB_TOKEN is available by default in workflows
+
+# Local — via GitHub CLI
+gh auth login
+export GITHUB_TOKEN=$(gh auth token)
+./uzomuzo scan --sbom bom.json --fail-on eol-confirmed
+```
+
 ## Configuration
 
 Environment variable-centric (12-factor). Unset / 0 falls back to safe defaults. See `config.template.env` for the complete list with comments.
