@@ -3,6 +3,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -218,6 +219,17 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 	// Step 1: Convert GitHub URL to basic PURL (without version)
 	basePURL, err := s.githubURLToPURL(ctx, githubURL)
 	if err != nil {
+		// Repos without registry packages (e.g., GitHub Actions) cannot produce a PURL.
+		// Fall back to GitHub-only analysis using repository metadata.
+		// Only match the "no supported package managers" case — other ResourceNotFoundErrors
+		// (e.g., repo not found on GitHub) should propagate as failures.
+		var scorecardErr *common.ScorecardError
+		if errors.As(err, &scorecardErr) && scorecardErr.Type == common.ErrorTypeResourceNotFound &&
+			strings.Contains(scorecardErr.Message, "no supported package managers") {
+			slog.Info("no_registry_package_falling_back_to_github_only",
+				"github_url", githubURL)
+			return s.buildGitHubOnlyAnalysis(ctx, githubURL)
+		}
 		return nil, fmt.Errorf("failed to convert GitHub URL to PURL: %w", err)
 	}
 
@@ -269,6 +281,31 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 	analysis, err := s.FetchAnalysisWithGitHub(ctx, purl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch analysis for PURL %s (from %s): %w", purl, githubURL, err)
+	}
+
+	// If the PURL was generated but the package is not found in deps.dev
+	// (e.g., package.json exists in repo but not published to npm),
+	// fall back to GitHub-only analysis.
+	// Gate on the deps.dev-specific error message to avoid catching unrelated
+	// ResourceNotFoundErrors that may be introduced by other enrichment steps.
+	var depsdevErr *common.ScorecardError
+	if analysis.Error != nil && errors.As(analysis.Error, &depsdevErr) &&
+		depsdevErr.Type == common.ErrorTypeResourceNotFound &&
+		strings.Contains(depsdevErr.Message, "package not found in deps.dev") {
+		slog.Info("deps_dev_package_not_found_falling_back_to_github_only",
+			"purl", purl, "github_url", githubURL)
+		// Reuse the existing analysis if GitHub enrichment already populated RepoState
+		// for the same repository, avoiding a redundant GitHub API call.
+		if analysis.RepoState != nil && analysis.RepoURL != "" && s.validateRepoURLMatch(analysis.RepoURL, githubURL) {
+			analysis.Error = nil
+			analysis.OriginalPURL = githubURL
+			analysis.EffectivePURL = githubURL
+			analysis.Package = nil
+			analysis.ReleaseInfo = nil
+			analysis.EnsureCanonical()
+			return analysis, nil
+		}
+		return s.buildGitHubOnlyAnalysis(ctx, githubURL)
 	}
 
 	// Round-trip validation: verify the resolved package actually belongs to the input repository.

@@ -26,3 +26,4 @@ While correctness and clarity come first, performance is critical in many parts 
 
 - **Port Tests When Replacing Services**: When replacing or refactoring an application service, port all existing unit tests to the new service. Untested replacement code silently loses coverage that the old tests provided.
 - **No Permanently Skipped Tests**: Do not commit tests with `t.Skip()` that have no plan for implementation. Skipped tests create a false sense of coverage and accumulate as dead code. Either implement the test (e.g., by introducing a test seam or mock) or remove it entirely.
+- **Cover New Control Flow Branches with Tests**: When adding a new conditional branch (especially fallback paths or classification logic), add a targeted test case to the existing test suite that exercises the new path. New branches without test coverage are easy to regress silently.

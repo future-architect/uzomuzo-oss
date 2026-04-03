@@ -316,6 +316,14 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 				Reason: fmt.Sprintf("No human commits for > %d yrs and no new release in %d days; scorecard data incomplete", s.rules.EolInactivityDays/365, daysSincePublish),
 				Trace:  []string{"inactive_commit_no_scores_old_publish"}}, nil
 		}
+		// GitHub-only path: commit data present but no publish data and no scorecard.
+		// This occurs for repos without registry packages (e.g., GitHub Actions).
+		// Use commit age alone for classification instead of falling through to ReviewNeeded.
+		if !analysis.HasPublishData() && !hasMaintainedScore {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
+				Reason: fmt.Sprintf("No recent activity; last human commit %d days ago; no registry data available", daysSinceLastHumanCommit),
+				Trace:  []string{"inactive_github_only_stalled"}}, nil
+		}
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: s.buildReviewNeededReason(analysis, scores), Trace: []string{"inactive_commit_data_scores_inconclusive"}}, nil
 	}
 
