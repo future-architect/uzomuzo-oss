@@ -22,33 +22,15 @@ patterns:
     pr: 87
     file: "internal/interfaces/cli/scan.go"
     date: "2026-04-02"
-  - category: "defensive-coding"
-    summary: "Bound goroutine concurrency with a semaphore when spawning one goroutine per input — unbounded fan-out exceeds API rate limits"
-    pr: 101
-    file: "internal/infrastructure/actionscan/discovery.go"
-    date: "2026-04-03"
-  - category: "defensive-coding"
-    summary: "Fail fast when a CLI flag requires credentials — validate GITHUB_TOKEN early at flag parsing, not deep in API calls"
-    pr: 101
-    file: "cmd/uzomuzo/commands.go"
-    date: "2026-04-03"
   - category: "comment-doc-drift"
     summary: "Document external prerequisites (env vars, tokens) alongside feature documentation — not just runtime behavior"
     pr: 101
     file: "docs/usage.md"
-    date: "2026-04-03"
-  - category: "defensive-coding"
-    summary: "Guard against empty config fields with sensible defaults — empty BaseURL produces invalid API URLs"
-    pr: 101
-    file: "internal/infrastructure/github/contents.go"
     date: "2026-04-03"
   - category: "api-consistency"
     summary: "Set User-Agent header on all REST API requests — new endpoints must match existing client conventions"
     pr: 101
     file: "internal/infrastructure/github/contents.go"
     date: "2026-04-03"
-  - category: "testing"
-    summary: "Assert Index/search results are non-negative before comparing indices — -1 silently passes ordering checks"
-    pr: 101
-    file: "internal/interfaces/cli/scan_render_test.go"
-    date: "2026-04-03"
+  # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103)
+  # testing: promoted to testing-performance.instructions.md (PRs #101, #103)
