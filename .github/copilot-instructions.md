@@ -17,6 +17,10 @@ See `.github/instructions/` for detailed rules.
 | [security](instructions/security.instructions.md) | Prompt injection defense, credentials, Go security |
 | [agent-orchestration](instructions/agent-orchestration.instructions.md) | Available agents, usage rules, parallel execution |
 
+## Review Scope
+
+When performing code review on pull requests, **do not review or comment on Markdown files (`*.md`)**. Focus code review on Go source files, YAML workflows, and configuration files only.
+
 ## Quick Reference
 
 - **Language**: Source code = English only. Docs = English (`README.md`, `docs/*.md`). Respond in the user's language.
