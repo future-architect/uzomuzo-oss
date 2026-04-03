@@ -268,7 +268,7 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context, purl, githubURL string) (*domain.Analysis, error) {
 	analysis, err := s.FetchAnalysisWithGitHub(ctx, purl)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch analysis for PURL %s (from %s): %w", purl, githubURL, err)
 	}
 
 	// Round-trip validation: verify the resolved package actually belongs to the input repository.
