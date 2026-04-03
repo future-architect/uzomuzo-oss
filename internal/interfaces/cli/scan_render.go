@@ -187,10 +187,7 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 		counter++
 		// Print source-annotated header, then delegate body to printAnalysisBody (stdout).
 		fmt.Printf("\n%s\n", detailedEntryHeader(counter, e.Source, showSource))
-		if e.Via != "" {
-			fmt.Printf("🔗 Via: %s\n", e.Via)
-		}
-		printAnalysisBody(e.PURL, e.Analysis)
+		printAnalysisBody(e.PURL, e.Analysis, e.Via)
 	}
 	if counter == 0 {
 		if _, err := fmt.Fprintln(w, "No results to display"); err != nil {
