@@ -733,6 +733,12 @@ func displayBatchAnalysesFull(analyses map[string]*analysispkg.Analysis, options
 func printFullAnalysis(purl string, analysis *analysispkg.Analysis, counter *int) {
 	*counter++
 	fmt.Printf("\n--- PURL %d ---\n", *counter)
+	printAnalysisBody(purl, analysis)
+}
+
+// printAnalysisBody prints the analysis detail without the "--- PURL N ---" header.
+// This allows callers to customize the header (e.g., adding source annotation).
+func printAnalysisBody(purl string, analysis *analysispkg.Analysis) {
 	printHeader(purl, analysis)
 	printLifecycle(analysis)
 	printEOLEvidence(analysis)

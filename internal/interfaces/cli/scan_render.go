@@ -179,11 +179,10 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 			}
 			continue
 		}
-		// Reuse the existing printFullAnalysis which writes to stdout.
-		// Note: printFullAnalysis prints its own "--- PURL N ---" header without source annotation.
-		// Source information is shown in the summary table above. A future refactor to make
-		// printFullAnalysis accept io.Writer would allow consistent source annotation here.
-		printFullAnalysis(e.PURL, e.Analysis, &counter)
+		counter++
+		// Print source-annotated header, then delegate body to printAnalysisBody (stdout).
+		fmt.Printf("\n%s\n", detailedEntryHeader(counter, e.Source, showSource))
+		printAnalysisBody(e.PURL, e.Analysis)
 	}
 	if counter == 0 {
 		if _, err := fmt.Fprintln(w, "No results to display"); err != nil {
