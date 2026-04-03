@@ -17,11 +17,6 @@ patterns:
     pr: 87
     file: "internal/interfaces/cli/scan_render.go"
     date: "2026-04-02"
-  - category: "testing"
-    summary: "When replacing an application service, port existing unit tests to the new service to prevent regression"
-    pr: 87
-    file: "internal/application/scan/service.go"
-    date: "2026-04-02"
   - category: "error-handling"
     summary: "Distinguish os.ErrNotExist from other I/O errors when auto-detecting files — treating all errors as 'not found' hides real causes"
     pr: 87
@@ -31,4 +26,14 @@ patterns:
     summary: "Bound goroutine concurrency with a semaphore when spawning one goroutine per input — unbounded fan-out exceeds API rate limits"
     pr: 101
     file: "internal/infrastructure/actionscan/discovery.go"
+    date: "2026-04-03"
+  - category: "defensive-coding"
+    summary: "Fail fast when a CLI flag requires credentials — validate GITHUB_TOKEN early at flag parsing, not deep in API calls"
+    pr: 101
+    file: "cmd/uzomuzo/commands.go"
+    date: "2026-04-03"
+  - category: "comment-doc-drift"
+    summary: "Document external prerequisites (env vars, tokens) alongside feature documentation — not just runtime behavior"
+    pr: 101
+    file: "docs/usage.md"
     date: "2026-04-03"
