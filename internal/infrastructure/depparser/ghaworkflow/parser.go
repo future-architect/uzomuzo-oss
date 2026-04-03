@@ -102,18 +102,29 @@ func extractGitHubURL(uses string) string {
 	return "https://github.com/" + parts[0] + "/" + parts[1]
 }
 
-// IsWorkflowYAML reports whether the file at filePath looks like a GitHub Actions workflow.
-// It checks the file extension and either the path or a content prefix for workflow markers.
-func IsWorkflowYAML(filePath string, prefix []byte) bool {
+// IsWorkflowYAMLByPath reports whether filePath is inside a .github/workflows/ directory
+// and has a YAML extension. This is the fast, I/O-free path check.
+func IsWorkflowYAMLByPath(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	if ext != ".yml" && ext != ".yaml" {
 		return false
 	}
-
-	// Path-based detection: files inside .github/workflows/ are always workflows.
+	// Use "/.github/workflows/" with leading slash to avoid false positives from
+	// paths like "/tmp/not.github/workflows/foo.yml".
 	normalized := filepath.ToSlash(filePath)
-	if strings.Contains(normalized, ".github/workflows/") {
+	return strings.Contains(normalized, "/.github/workflows/") || strings.HasPrefix(normalized, ".github/workflows/")
+}
+
+// IsWorkflowYAML reports whether the file at filePath looks like a GitHub Actions workflow.
+// It checks the file extension and either the path or a content prefix for workflow markers.
+func IsWorkflowYAML(filePath string, prefix []byte) bool {
+	if IsWorkflowYAMLByPath(filePath) {
 		return true
+	}
+
+	ext := strings.ToLower(filepath.Ext(filePath))
+	if ext != ".yml" && ext != ".yaml" {
+		return false
 	}
 
 	// Content-based fallback: look for top-level "on:" and "jobs:" keys.

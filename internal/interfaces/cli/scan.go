@@ -115,7 +115,7 @@ func runScanSBOM(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 	return finalizeScanOutput(svc, result, opts, len(result.Entries))
 }
 
-// runScanFile handles --file input (go.mod, SBOM, or PURL/URL list).
+// runScanFile handles --file input (go.mod, SBOM, GitHub Actions workflow YAML, or PURL/URL list).
 func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy, detectFile FileDetector, detectWorkflow WorkflowDetector, parseWorkflow WorkflowParser) error {
 	filePath := opts.Filename
 

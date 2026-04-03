@@ -171,6 +171,18 @@ func TestIsWorkflowYAML(t *testing.T) {
 			prefix:   []byte("\"on\":\n  push:\njobs:\n  build:\n"),
 			want:     true,
 		},
+		{
+			name:     "false positive path without segment boundary",
+			filePath: "/tmp/not.github/workflows/foo.yml",
+			prefix:   nil,
+			want:     false,
+		},
+		{
+			name:     "relative github workflows path",
+			filePath: ".github/workflows/ci.yml",
+			prefix:   nil,
+			want:     true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -183,7 +195,7 @@ func TestIsWorkflowYAML(t *testing.T) {
 	}
 }
 
-// assertURLsEqual compares two URL slices as unordered sets (YAML map iteration is non-deterministic).
+// assertURLsEqual compares two URL slices as unordered sets because URL order is not part of the parser contract.
 func assertURLsEqual(t *testing.T, got, want []string) {
 	t.Helper()
 	if len(got) != len(want) {
