@@ -70,6 +70,53 @@ func ParseGitHubURLs(data []byte) ([]string, error) {
 	return urls, nil
 }
 
+// ParseWorkflowAll reads a GitHub Actions workflow YAML file and returns both
+// the unique GitHub repository URLs and local action paths from a single unmarshal.
+// This avoids double-parsing for callers that need both results.
+// Jobs are iterated in sorted key order for deterministic output.
+func ParseWorkflowAll(data []byte) (urls []string, localPaths []string, err error) {
+	var wf workflowFile
+	if err := yaml.Unmarshal(data, &wf); err != nil {
+		return nil, nil, fmt.Errorf("failed to parse GitHub Actions workflow YAML: %w", err)
+	}
+
+	jobNames := make([]string, 0, len(wf.Jobs))
+	for name := range wf.Jobs {
+		jobNames = append(jobNames, name)
+	}
+	sort.Strings(jobNames)
+
+	urlSeen := make(map[string]struct{})
+	localSeen := make(map[string]struct{})
+
+	for _, name := range jobNames {
+		j := wf.Jobs[name]
+		// Reusable workflow reference at job level (GitHub URLs only).
+		if u := extractGitHubURL(j.Uses); u != "" {
+			if _, exists := urlSeen[u]; !exists {
+				urlSeen[u] = struct{}{}
+				urls = append(urls, u)
+			}
+		}
+		for _, s := range j.Steps {
+			if u := extractGitHubURL(s.Uses); u != "" {
+				if _, exists := urlSeen[u]; !exists {
+					urlSeen[u] = struct{}{}
+					urls = append(urls, u)
+				}
+			}
+			if p := ExtractLocalActionPath(s.Uses); p != "" {
+				if _, exists := localSeen[p]; !exists {
+					localSeen[p] = struct{}{}
+					localPaths = append(localPaths, p)
+				}
+			}
+		}
+	}
+
+	return urls, localPaths, nil
+}
+
 // extractGitHubURL converts a `uses:` value to a GitHub repository URL.
 // Returns "" for empty strings, local actions (./path), and Docker references (docker://).
 func extractGitHubURL(uses string) string {
@@ -230,9 +277,9 @@ func ExtractLocalActionPath(uses string) string {
 	if p == "" {
 		return ""
 	}
-	// Normalize and reject path traversal attempts.
+	// Normalize and reject path traversal attempts and absolute paths.
 	cleaned := path.Clean(p)
-	if cleaned == "." || strings.HasPrefix(cleaned, "..") {
+	if cleaned == "." || strings.HasPrefix(cleaned, "/") || strings.HasPrefix(cleaned, "..") {
 		return ""
 	}
 	return cleaned

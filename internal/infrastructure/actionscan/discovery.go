@@ -331,7 +331,7 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 			continue // 404 — file disappeared between listing and fetch
 		}
 
-		urls, parseErr := ghaworkflow.ParseGitHubURLs(data)
+		urls, locals, parseErr := ghaworkflow.ParseWorkflowAll(data)
 		if parseErr != nil {
 			errs[fmt.Sprintf("%s/%s/%s", owner, repo, yf.Path)] = parseErr
 			continue
@@ -344,12 +344,6 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 			}
 		}
 
-		// Extract local action paths (uses: ./.github/actions/foo).
-		locals, parseErr := ghaworkflow.ParseLocalActionPaths(data)
-		if parseErr != nil {
-			// Error already covered by ParseGitHubURLs above; skip silently.
-			continue
-		}
 		for _, lp := range locals {
 			if _, exists := localSeen[lp]; !exists {
 				localSeen[lp] = struct{}{}

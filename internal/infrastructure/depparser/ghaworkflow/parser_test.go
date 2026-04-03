@@ -393,6 +393,7 @@ func TestExtractLocalActionPath(t *testing.T) {
 		{name: "clean normalizes redundant slashes", uses: "./.github/actions//foo", want: ".github/actions/foo"},
 		{name: "backslash rejected", uses: ".\\.github\\actions\\foo", want: ""},
 		{name: "dot-dot in middle resolved safely", uses: "./foo/../bar", want: "bar"},
+		{name: "extra slashes produce absolute path rejected", uses: ".///.github/actions/foo", want: ""},
 	}
 
 	for _, tt := range tests {
@@ -479,6 +480,90 @@ jobs:
 			for i := range sortedGot {
 				if sortedGot[i] != sortedWant[i] {
 					t.Errorf("path mismatch:\ngot:  %v\nwant: %v", sortedGot, sortedWant)
+					return
+				}
+			}
+		})
+	}
+}
+
+func TestParseWorkflowAll(t *testing.T) {
+	tests := []struct {
+		name           string
+		yaml           string
+		wantURLs       []string
+		wantLocalPaths []string
+	}{
+		{
+			name: "mixed workflow with external and local actions",
+			yaml: `
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build-frontend
+      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/deploy
+`,
+			wantURLs: []string{
+				"https://github.com/actions/checkout",
+				"https://github.com/actions/setup-node",
+			},
+			wantLocalPaths: []string{
+				".github/actions/build-frontend",
+				".github/actions/deploy",
+			},
+		},
+		{
+			name: "no local actions",
+			yaml: `
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+`,
+			wantURLs:       []string{"https://github.com/actions/checkout"},
+			wantLocalPaths: nil,
+		},
+		{
+			name: "only local actions",
+			yaml: `
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/foo
+`,
+			wantURLs:       nil,
+			wantLocalPaths: []string{".github/actions/foo"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			urls, locals, err := ghaworkflow.ParseWorkflowAll([]byte(tt.yaml))
+			if err != nil {
+				t.Fatalf("ParseWorkflowAll() error = %v", err)
+			}
+			assertURLsEqual(t, urls, tt.wantURLs)
+			if len(locals) != len(tt.wantLocalPaths) {
+				t.Fatalf("got %d local paths, want %d\ngot:  %v\nwant: %v",
+					len(locals), len(tt.wantLocalPaths), locals, tt.wantLocalPaths)
+			}
+			sortedGot := make([]string, len(locals))
+			copy(sortedGot, locals)
+			sort.Strings(sortedGot)
+			sortedWant := make([]string, len(tt.wantLocalPaths))
+			copy(sortedWant, tt.wantLocalPaths)
+			sort.Strings(sortedWant)
+			for i := range sortedGot {
+				if sortedGot[i] != sortedWant[i] {
+					t.Errorf("local path mismatch:\ngot:  %v\nwant: %v", sortedGot, sortedWant)
 					return
 				}
 			}
