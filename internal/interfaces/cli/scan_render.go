@@ -164,6 +164,11 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 			if _, err := fmt.Fprintf(w, "\n%s\n", detailedEntryHeader(counter, e.Source, showSource)); err != nil {
 				return fmt.Errorf("failed to write entry: %w", err)
 			}
+			if e.Via != "" {
+				if _, err := fmt.Fprintf(w, "🔗 Via: %s\n", e.Via); err != nil {
+					return fmt.Errorf("failed to write entry: %w", err)
+				}
+			}
 			if _, err := fmt.Fprintf(w, "Package: %s\n", e.PURL); err != nil {
 				return fmt.Errorf("failed to write entry: %w", err)
 			}
@@ -182,6 +187,9 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 		counter++
 		// Print source-annotated header, then delegate body to printAnalysisBody (stdout).
 		fmt.Printf("\n%s\n", detailedEntryHeader(counter, e.Source, showSource))
+		if e.Via != "" {
+			fmt.Printf("🔗 Via: %s\n", e.Via)
+		}
 		printAnalysisBody(e.PURL, e.Analysis)
 	}
 	if counter == 0 {
@@ -253,6 +261,7 @@ type enrichedJSONEntry struct {
 	Reason string `json:"reason,omitempty"`
 	Error  string `json:"error,omitempty"`
 	Source string `json:"source,omitempty"`
+	Via    string `json:"via,omitempty"`
 }
 
 type enrichedJSONOutput struct {
@@ -288,6 +297,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 		EOL:       eol,
 		Error:     e.ErrorMsg,
 		Source:    string(e.Source),
+		Via:       e.Via,
 	}
 
 	a := e.Analysis
@@ -324,7 +334,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 
 func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	cw := csv.NewWriter(w)
-	if err := cw.Write([]string{"verdict", "purl", "lifecycle", "eol", "eol_reason", "successor", "repo_url", "source"}); err != nil {
+	if err := cw.Write([]string{"verdict", "purl", "lifecycle", "eol", "eol_reason", "successor", "repo_url", "source", "via"}); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
 	for i := range entries {
@@ -341,7 +351,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		}
 
 		if err := cw.Write([]string{
-			string(e.Verdict), e.PURL, maintenance, eol, eolReason, successor, repoURL, string(e.Source),
+			string(e.Verdict), e.PURL, maintenance, eol, eolReason, successor, repoURL, string(e.Source), e.Via,
 		}); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}

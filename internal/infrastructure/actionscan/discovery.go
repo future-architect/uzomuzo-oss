@@ -56,7 +56,7 @@ func NewDiscoveryService(githubClient *github.Client, maxConcurrency int) (*Disc
 //
 // The returned slices are sorted lexicographically for deterministic output.
 // This method satisfies scan.ActionsDiscoverer.
-func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs, transitiveURLs []string, errors map[string]error, err error) {
+func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs []string, transitiveActions map[string]string, errors map[string]error, err error) {
 	result := &DiscoveryResult{
 		Actions: make(map[string]int),
 		Errors:  make(map[string]error),
@@ -102,21 +102,20 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 
 	// Phase 2: Resolve transitive composite action dependencies via BFS (opt-in).
 	if resolveTransitive {
-		transitiveURLs = s.resolveTransitiveActions(ctx, directURLs, result)
+		transitiveActions = s.resolveTransitiveActions(ctx, directURLs, result)
 	}
 
 	// Sort for deterministic output.
 	sort.Strings(directURLs)
-	sort.Strings(transitiveURLs)
 
 	slog.Info("actions discovery complete",
 		"repos_scanned", len(repoURLs),
 		"direct_actions", len(directURLs),
-		"transitive_actions", len(transitiveURLs),
+		"transitive_actions", len(transitiveActions),
 		"errors", len(result.Errors),
 	)
 
-	return directURLs, transitiveURLs, result.Errors, nil
+	return directURLs, transitiveActions, result.Errors, nil
 }
 
 // actionRefKey returns a dedup key for BFS traversal that includes the subdirectory path.
@@ -161,11 +160,14 @@ func buildActionRefFromGitHubURL(rawURL string) (ghaworkflow.ActionRef, error) {
 // resolveTransitiveActions performs BFS to discover actions referenced by composite actions.
 // It fetches action.yml for each queued action, parses composite steps, and adds new
 // action URLs to the queue. The seen set tracks owner/repo/path to handle subdirectory actions.
-func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initialURLs []string, result *DiscoveryResult) []string {
-	// Build queue from initial direct URLs.
+//
+// Returns a map of transitive URL → via URL (the direct action that caused the discovery).
+// For depth > 1 chains (A→B→C), C's via is A (the original direct action), not B.
+func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initialURLs []string, result *DiscoveryResult) map[string]string {
 	type queueItem struct {
 		ref ghaworkflow.ActionRef
 		url string // GitHub URL (https://github.com/owner/repo)
+		via string // The direct action that led to this discovery
 	}
 
 	// Track seen actions by full path (owner/repo/path) to correctly handle
@@ -185,13 +187,13 @@ func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initial
 		if err != nil {
 			continue
 		}
-		queue = append(queue, queueItem{ref: ref, url: u})
+		queue = append(queue, queueItem{ref: ref, url: u, via: u})
 	}
 
-	var transitiveURLs []string
+	// transitive URL → via (direct parent action URL)
+	transitiveActions := make(map[string]string)
 
 	for len(queue) > 0 {
-		// Process current wave.
 		current := queue
 		queue = nil
 
@@ -213,21 +215,21 @@ func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initial
 			for _, ref := range refs {
 				key := actionRefKey(ref)
 				if _, exists := seen[key]; exists {
-					continue // Already discovered (direct or earlier transitive).
+					continue
 				}
 				seen[key] = struct{}{}
 
 				ghURL := ref.GitHubURL()
 				if _, exists := result.Actions[ghURL]; !exists {
-					result.Actions[ghURL] = 1 // Mark as transitive for scan output.
-					transitiveURLs = append(transitiveURLs, ghURL)
+					result.Actions[ghURL] = 1
+					transitiveActions[ghURL] = item.via
 				}
-				queue = append(queue, queueItem{ref: ref, url: ghURL})
+				queue = append(queue, queueItem{ref: ref, url: ghURL, via: item.via})
 			}
 		}
 	}
 
-	return transitiveURLs
+	return transitiveActions
 }
 
 // fetchActionYAML fetches action.yml (or action.yaml as fallback) from a GitHub repository.

@@ -239,8 +239,11 @@ func TestRenderScanCSV_WithSource(t *testing.T) {
 	if !strings.Contains(lines[0], "source") {
 		t.Error("CSV header missing 'source' column")
 	}
-	if !strings.HasSuffix(lines[1], "actions") {
-		t.Errorf("CSV row should end with 'actions', got %q", lines[1])
+	if !strings.Contains(lines[0], "via") {
+		t.Error("CSV header missing 'via' column")
+	}
+	if !strings.Contains(lines[1], "actions") {
+		t.Errorf("CSV row should contain 'actions', got %q", lines[1])
 	}
 }
 
