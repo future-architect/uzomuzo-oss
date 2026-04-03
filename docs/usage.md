@@ -213,7 +213,7 @@ replace  transitive (express)      pkg:npm/inflight@1.0.6      EOL        EOL
 Summary: 3 dependencies | 2 ok | 0 caution | 1 replace | 0 review
 ```
 
-Without `--show-transitive`, only `direct` entries are displayed.
+Without `--show-transitive`, only `direct` entries are displayed — transitive issues are addressed by updating the direct dependency that introduces them.
 
 </details>
 
