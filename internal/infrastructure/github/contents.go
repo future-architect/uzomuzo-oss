@@ -26,6 +26,9 @@ func (c *Client) FetchDirectoryContents(ctx context.Context, owner, repo, path s
 	}
 
 	baseURL := strings.TrimRight(c.config.BaseURL, "/")
+	if baseURL == "" {
+		baseURL = "https://api.github.com"
+	}
 	url := fmt.Sprintf("%s/repos/%s/%s/contents/%s",
 		baseURL, owner, repo, strings.TrimPrefix(path, "/"))
 
@@ -35,6 +38,7 @@ func (c *Client) FetchDirectoryContents(ctx context.Context, owner, repo, path s
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "uzomuzo-github-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 
 	resp, err := c.httpClient.Do(ctx, req)
 	if err != nil {
@@ -74,6 +78,9 @@ func (c *Client) FetchFileContent(ctx context.Context, owner, repo, path string)
 	}
 
 	baseURL := strings.TrimRight(c.config.BaseURL, "/")
+	if baseURL == "" {
+		baseURL = "https://api.github.com"
+	}
 	url := fmt.Sprintf("%s/repos/%s/%s/contents/%s",
 		baseURL, owner, repo, strings.TrimPrefix(path, "/"))
 
@@ -83,6 +90,7 @@ func (c *Client) FetchFileContent(ctx context.Context, owner, repo, path string)
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Accept", "application/vnd.github.raw")
+	req.Header.Set("User-Agent", "uzomuzo-github-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 
 	resp, err := c.httpClient.Do(ctx, req)
 	if err != nil {
