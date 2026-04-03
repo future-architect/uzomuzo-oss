@@ -70,8 +70,16 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 	localActions = make(map[string]string)
 
 	// Phase 1: Discover direct and local actions from workflow files.
+	// Collect per-repo local actions separately, then merge deterministically
+	// after all goroutines complete (sorted by repoURL for stable Via provenance).
+	type repoLocalResult struct {
+		repoURL      string
+		localActions map[string]string
+	}
+
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	var perRepoLocals []repoLocalResult
 	semaphore := make(chan struct{}, s.maxConcurrency)
 
 	for _, repoURL := range repoURLs {
@@ -98,11 +106,11 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 					directURLs = append(directURLs, u)
 				}
 			}
-			for u, localPath := range repoLocalActions {
-				if _, exists := result.Actions[u]; !exists {
-					result.Actions[u] = 0
-					localActions[u] = localPath
-				}
+			if len(repoLocalActions) > 0 {
+				perRepoLocals = append(perRepoLocals, repoLocalResult{
+					repoURL:      repoURL,
+					localActions: repoLocalActions,
+				})
 			}
 			for k, v := range errs {
 				result.Errors[k] = v
@@ -112,6 +120,20 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 	}
 
 	wg.Wait()
+
+	// Merge per-repo local actions deterministically: sort by repoURL so
+	// "first-seen wins" Via provenance is stable across runs.
+	sort.Slice(perRepoLocals, func(i, j int) bool {
+		return perRepoLocals[i].repoURL < perRepoLocals[j].repoURL
+	})
+	for _, prl := range perRepoLocals {
+		for u, localPath := range prl.localActions {
+			if _, exists := result.Actions[u]; !exists {
+				result.Actions[u] = 0
+				localActions[u] = localPath
+			}
+		}
+	}
 
 	// Sort before transitive resolution so BFS seed order is deterministic.
 	sort.Strings(directURLs)

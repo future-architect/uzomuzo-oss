@@ -17,7 +17,7 @@ const (
 	// composite action dependency (an action used by another action).
 	SourceActionsTransitive EntrySource = "actions-transitive"
 	// SourceActionsLocal means this dependency was discovered inside a local composite
-	// action (./.github/actions/foo) referenced by a workflow. Via contains the local path.
+	// action (any ./path referenced by a workflow). Via contains the local path.
 	SourceActionsLocal EntrySource = "actions-local"
 )
 

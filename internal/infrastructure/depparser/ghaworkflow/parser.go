@@ -71,7 +71,10 @@ func ParseGitHubURLs(data []byte) ([]string, error) {
 }
 
 // ParseWorkflowAll reads a GitHub Actions workflow YAML file and returns both
-// the unique GitHub repository URLs and local action paths from a single unmarshal.
+// the unique GitHub repository URLs and step-level local action paths from a
+// single unmarshal. Local action paths are extracted only from step `uses:`
+// values (matching ParseLocalActionPaths); job-level `uses:` values are not
+// included in localPaths.
 // This avoids double-parsing for callers that need both results.
 // Jobs are iterated in sorted key order for deterministic output.
 func ParseWorkflowAll(data []byte) (urls []string, localPaths []string, err error) {
