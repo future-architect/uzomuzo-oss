@@ -47,3 +47,8 @@ patterns:
     pr: 101
     file: "internal/infrastructure/github/contents.go"
     date: "2026-04-03"
+  - category: "testing"
+    summary: "Assert Index/search results are non-negative before comparing indices — -1 silently passes ordering checks"
+    pr: 101
+    file: "internal/interfaces/cli/scan_render_test.go"
+    date: "2026-04-03"
