@@ -236,6 +236,25 @@ that the project's coding rules should prevent in the future.
 This phase uses `.github/copilot-patterns.yml` as a **cross-PR pattern accumulator**.
 Patterns are recorded per-PR and promoted to coding rules once a category reaches 2+ entries.
 
+#### Step 3.0: Sync Rule Files with Main (REQUIRED)
+
+Phase 3 modifies shared files (`.github/copilot-patterns.yml`, `.github/instructions/*.instructions.md`)
+that may have been updated on `main` by other PRs since this branch diverged. To avoid overwriting
+those updates, **merge main into the PR branch before editing any rule files**:
+
+```bash
+git fetch origin main
+git merge origin/main --no-edit
+```
+
+If the merge has conflicts:
+- If conflicts are **only in rule files** (`.github/copilot-patterns.yml`, `.github/instructions/`,
+  `.claude/rules/`): resolve them by keeping both sides (accept all additions from both branches),
+  then continue with Phase 3.
+- If conflicts touch **source code**: abort the merge (`git merge --abort`), skip Phase 3 entirely,
+  and report "Phase 3 skipped: PR branch has merge conflicts with main. Rebase manually before
+  re-running."
+
 #### Step 3.1: Record Current Patterns
 
 For each FIX-classified comment (from the current run AND from already-resolved Copilot threads
