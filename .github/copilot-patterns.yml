@@ -42,6 +42,11 @@ patterns:
     pr: 106
     file: "internal/infrastructure/actionscan/discovery.go"
     date: "2026-04-03"
+  - category: "defensive-coding"
+    summary: "Key error maps by path-aware identifiers — repo-level keys cause subdirectory action errors to overwrite each other"
+    pr: 106
+    file: "internal/infrastructure/actionscan/discovery.go"
+    date: "2026-04-03"
   # comment-doc-drift: promoted to coding-standards.instructions.md (PRs #101, #106)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103)
