@@ -100,13 +100,15 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 
 	wg.Wait()
 
+	// Sort before transitive resolution so BFS seed order is deterministic.
+	// This ensures consistent "via" parent selection when multiple direct actions
+	// lead to the same transitive dependency (lexicographically first wins).
+	sort.Strings(directURLs)
+
 	// Phase 2: Resolve transitive composite action dependencies via BFS (opt-in).
 	if resolveTransitive {
 		transitiveActions = s.resolveTransitiveActions(ctx, directURLs, result)
 	}
-
-	// Sort for deterministic output.
-	sort.Strings(directURLs)
 
 	slog.Info("actions discovery complete",
 		"repos_scanned", len(repoURLs),
