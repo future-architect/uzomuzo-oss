@@ -181,6 +181,11 @@ func buildRefMap(components []component) map[string]string {
 
 func buildRefMapRecursive(components []component, m map[string]string, depth int) {
 	if depth > maxNestingDepth {
+		slog.Warn(
+			"max CycloneDX SBOM component nesting depth exceeded; ref map construction truncated",
+			"maxDepth", maxNestingDepth,
+			"depth", depth,
+		)
 		return
 	}
 	for _, c := range components {
@@ -240,6 +245,9 @@ func resolveDirectPURLs(bom *bomEnvelope, refMap map[string]string) map[string]s
 		} else {
 			slog.Debug("dependency ref not found in component map", "ref", ref)
 		}
+	}
+	if len(directPURLs) == 0 {
+		return nil
 	}
 	return directPURLs
 }

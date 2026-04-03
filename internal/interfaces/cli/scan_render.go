@@ -214,7 +214,9 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 		// Print source-annotated header, then delegate body to printAnalysisBody (stdout).
 		fmt.Printf("\n%s\n", detailedEntryHeader(counter, e.Source, showSource))
 		if e.Relation != depparser.RelationUnknown {
-			fmt.Printf("🔗 Relation: %s\n", formatRelation(e))
+			if _, err := fmt.Fprintf(w, "🔗 Relation: %s\n", formatRelation(e)); err != nil {
+				return fmt.Errorf("failed to write relation: %w", err)
+			}
 		}
 		printAnalysisBody(e.PURL, e.Analysis, e.Via)
 	}
@@ -376,7 +378,14 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 
 func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	cw := csv.NewWriter(w)
-	if err := cw.Write([]string{"verdict", "purl", "relation", "relation_via", "lifecycle", "eol", "eol_reason", "successor", "repo_url", "source", "via"}); err != nil {
+	showRelation := hasRelationInfo(entries)
+
+	header := []string{"verdict", "purl"}
+	if showRelation {
+		header = append(header, "relation", "relation_via")
+	}
+	header = append(header, "lifecycle", "eol", "eol_reason", "successor", "repo_url", "source", "via")
+	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
 	for i := range entries {
@@ -392,9 +401,12 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 			repoURL = a.RepoURL
 		}
 
-		if err := cw.Write([]string{
-			string(e.Verdict), e.PURL, e.Relation.String(), strings.Join(e.ViaParents, ";"), maintenance, eol, eolReason, successor, repoURL, string(e.Source), e.Via,
-		}); err != nil {
+		row := []string{string(e.Verdict), e.PURL}
+		if showRelation {
+			row = append(row, e.Relation.String(), strings.Join(e.ViaParents, ";"))
+		}
+		row = append(row, maintenance, eol, eolReason, successor, repoURL, string(e.Source), e.Via)
+		if err := cw.Write(row); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}
 	}

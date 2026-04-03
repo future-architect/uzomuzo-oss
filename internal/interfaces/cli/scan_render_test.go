@@ -8,6 +8,7 @@ import (
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 )
 
 func makeTestEntries() []domainaudit.AuditEntry {
@@ -244,6 +245,122 @@ func TestRenderScanCSV_WithSource(t *testing.T) {
 	}
 	if !strings.Contains(lines[1], "actions") {
 		t.Errorf("CSV row should contain 'actions', got %q", lines[1])
+	}
+}
+
+func makeRelationEntries() []domainaudit.AuditEntry {
+	return []domainaudit.AuditEntry{
+		{
+			PURL:     "pkg:npm/express@4.18.2",
+			Verdict:  domainaudit.VerdictOK,
+			Relation: depparser.RelationDirect,
+			Analysis: &analysis.Analysis{
+				AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
+					analysis.LifecycleAxis: {Label: analysis.LabelActive},
+				},
+			},
+		},
+		{
+			PURL:       "pkg:npm/body-parser@1.20.0",
+			Verdict:    domainaudit.VerdictCaution,
+			Relation:   depparser.RelationTransitive,
+			ViaParents: []string{"express"},
+			Analysis: &analysis.Analysis{
+				AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
+					analysis.LifecycleAxis: {Label: analysis.LabelStalled},
+				},
+			},
+		},
+	}
+}
+
+func TestRenderScanTable_WithRelationColumn(t *testing.T) {
+	var buf bytes.Buffer
+	entries := makeRelationEntries()
+	if err := renderScanTable(&buf, entries); err != nil {
+		t.Fatalf("renderScanTable() error = %v", err)
+	}
+	output := buf.String()
+	if !strings.Contains(output, "RELATION") {
+		t.Error("table output missing RELATION header when relation info present")
+	}
+	if !strings.Contains(output, "direct") {
+		t.Error("table output missing 'direct' relation")
+	}
+	if !strings.Contains(output, "transitive (express)") {
+		t.Error("table output missing 'transitive (express)' relation")
+	}
+}
+
+func TestRenderScanTable_NoRelationColumnForUnknown(t *testing.T) {
+	entries := makeTestEntries() // all RelationUnknown
+	var buf bytes.Buffer
+	if err := renderScanTable(&buf, entries); err != nil {
+		t.Fatalf("renderScanTable() error = %v", err)
+	}
+	if strings.Contains(buf.String(), "RELATION") {
+		t.Error("table output should not contain RELATION column when all entries have unknown relation")
+	}
+}
+
+func TestRenderScanJSON_WithRelation(t *testing.T) {
+	var buf bytes.Buffer
+	entries := makeRelationEntries()
+	if err := renderScanJSON(&buf, entries); err != nil {
+		t.Fatalf("renderScanJSON() error = %v", err)
+	}
+
+	var out enrichedJSONOutput
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatalf("JSON unmarshal error = %v", err)
+	}
+	if out.Entries[0].Relation != "direct" {
+		t.Errorf("direct entry relation = %q, want %q", out.Entries[0].Relation, "direct")
+	}
+	if out.Entries[1].Relation != "transitive" {
+		t.Errorf("transitive entry relation = %q, want %q", out.Entries[1].Relation, "transitive")
+	}
+	if len(out.Entries[1].RelationVia) != 1 || out.Entries[1].RelationVia[0] != "express" {
+		t.Errorf("transitive entry relation_via = %v, want [express]", out.Entries[1].RelationVia)
+	}
+}
+
+func TestRenderScanJSON_OmitsRelationWhenUnknown(t *testing.T) {
+	var buf bytes.Buffer
+	entries := makeTestEntries()
+	if err := renderScanJSON(&buf, entries); err != nil {
+		t.Fatalf("renderScanJSON() error = %v", err)
+	}
+	// Relation with empty string should be omitted via omitempty.
+	if strings.Contains(buf.String(), `"relation"`) {
+		t.Error("JSON output should omit relation field when RelationUnknown")
+	}
+}
+
+func TestRenderScanCSV_WithRelation(t *testing.T) {
+	var buf bytes.Buffer
+	entries := makeRelationEntries()
+	if err := renderScanCSV(&buf, entries); err != nil {
+		t.Fatalf("renderScanCSV() error = %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if !strings.Contains(lines[0], "relation") {
+		t.Error("CSV header missing 'relation' column when relation info present")
+	}
+	if !strings.Contains(lines[0], "relation_via") {
+		t.Error("CSV header missing 'relation_via' column when relation info present")
+	}
+}
+
+func TestRenderScanCSV_NoRelationColumnForUnknown(t *testing.T) {
+	var buf bytes.Buffer
+	entries := makeTestEntries()
+	if err := renderScanCSV(&buf, entries); err != nil {
+		t.Fatalf("renderScanCSV() error = %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if strings.Contains(lines[0], "relation") {
+		t.Error("CSV header should not contain 'relation' column when all entries have unknown relation")
 	}
 }
 
