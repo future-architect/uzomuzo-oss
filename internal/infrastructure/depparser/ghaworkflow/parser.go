@@ -5,6 +5,7 @@ package ghaworkflow
 
 import (
 	"fmt"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -209,7 +210,8 @@ func ParseCompositeActionURLs(data []byte) (refs []ActionRef, isComposite bool, 
 
 // ExtractLocalActionPath returns the cleaned local path from a uses: directive
 // that starts with "./" (e.g., "./.github/actions/foo" → ".github/actions/foo").
-// Returns "" for non-local references, docker://, or empty strings.
+// Returns "" for non-local references, docker://, empty strings, or paths that
+// attempt directory traversal (e.g., "./../secret" or "./foo/../../../etc").
 func ExtractLocalActionPath(uses string) string {
 	uses = strings.TrimSpace(uses)
 	if uses == "" {
@@ -218,17 +220,27 @@ func ExtractLocalActionPath(uses string) string {
 	if !strings.HasPrefix(uses, "./") {
 		return ""
 	}
-	// Strip "./" prefix and any trailing slashes.
-	path := strings.TrimPrefix(uses, "./")
-	path = strings.TrimRight(path, "/")
-	if path == "" {
+	// Reject backslashes (non-POSIX path separators).
+	if strings.ContainsRune(uses, '\\') {
 		return ""
 	}
-	return path
+	// Strip "./" prefix and any trailing slashes.
+	p := strings.TrimPrefix(uses, "./")
+	p = strings.TrimRight(p, "/")
+	if p == "" {
+		return ""
+	}
+	// Normalize and reject path traversal attempts.
+	cleaned := path.Clean(p)
+	if cleaned == "." || strings.HasPrefix(cleaned, "..") {
+		return ""
+	}
+	return cleaned
 }
 
 // ParseLocalActionPaths reads a GitHub Actions workflow YAML file and returns
-// the unique local action paths referenced by uses: directives (those starting with "./").
+// the unique local action paths referenced by step-level uses: directives
+// (those starting with "./").
 // Paths are cleaned (leading "./" and trailing "/" removed).
 // Jobs are iterated in sorted key order for deterministic output.
 func ParseLocalActionPaths(data []byte) ([]string, error) {

@@ -387,6 +387,12 @@ func TestExtractLocalActionPath(t *testing.T) {
 		{name: "dot-slash only", uses: "./", want: ""},
 		{name: "whitespace around local", uses: "  ./.github/actions/foo  ", want: ".github/actions/foo"},
 		{name: "parent relative", uses: "../some-action", want: ""},
+		{name: "traversal via dot-dot prefix", uses: "./../some-action", want: ""},
+		{name: "embedded dot-dot normalized within repo", uses: "./.github/actions/../secrets", want: ".github/secrets"},
+		{name: "traversal resolved to parent", uses: "./foo/../../../etc", want: ""},
+		{name: "clean normalizes redundant slashes", uses: "./.github/actions//foo", want: ".github/actions/foo"},
+		{name: "backslash rejected", uses: ".\\.github\\actions\\foo", want: ""},
+		{name: "dot-dot in middle resolved safely", uses: "./foo/../bar", want: "bar"},
 	}
 
 	for _, tt := range tests {

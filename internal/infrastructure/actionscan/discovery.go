@@ -376,7 +376,7 @@ func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo 
 			// Extract external action references.
 			refs, isComposite, err := ghaworkflow.ParseCompositeActionURLs(data)
 			if err != nil {
-				errs[fmt.Sprintf("%s/%s/%s/action.yml", owner, repo, localPath)] = err
+				errs[fmt.Sprintf("%s/%s/%s", owner, repo, localPath)] = err
 				continue
 			}
 			if !isComposite {
