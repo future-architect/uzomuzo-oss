@@ -139,7 +139,7 @@ runs:
 	defer srv.Close()
 
 	svc := newTestService(t, srv.URL)
-	directURLs, transitiveActions, errs, err := svc.DiscoverActions(
+	directURLs, _, transitiveActions, errs, err := svc.DiscoverActions(
 		context.Background(),
 		[]string{"https://github.com/myorg/myrepo"},
 		true,
@@ -224,7 +224,7 @@ runs:
 	defer srv.Close()
 
 	svc := newTestService(t, srv.URL)
-	directURLs, transitiveActions, _, err := svc.DiscoverActions(
+	directURLs, _, transitiveActions, _, err := svc.DiscoverActions(
 		context.Background(),
 		[]string{"https://github.com/myorg/myrepo"},
 		true,
@@ -294,7 +294,7 @@ runs:
 	defer srv.Close()
 
 	svc := newTestService(t, srv.URL)
-	directURLs, transitiveActions, _, err := svc.DiscoverActions(
+	directURLs, _, transitiveActions, _, err := svc.DiscoverActions(
 		context.Background(),
 		[]string{"https://github.com/myorg/myrepo"},
 		true,
@@ -356,7 +356,7 @@ runs:
 	defer srv.Close()
 
 	svc := newTestService(t, srv.URL)
-	directURLs, transitiveActions, _, err := svc.DiscoverActions(
+	directURLs, _, transitiveActions, _, err := svc.DiscoverActions(
 		context.Background(),
 		[]string{"https://github.com/myorg/myrepo"},
 		true,
@@ -410,7 +410,7 @@ runs:
 	defer srv.Close()
 
 	svc := newTestService(t, srv.URL)
-	directURLs, transitiveActions, _, err := svc.DiscoverActions(
+	directURLs, _, transitiveActions, _, err := svc.DiscoverActions(
 		context.Background(),
 		[]string{"https://github.com/myorg/myrepo"},
 		false, // disabled
@@ -461,7 +461,7 @@ runs:
 	defer srv.Close()
 
 	svc := newTestService(t, srv.URL)
-	directURLs, _, _, err := svc.DiscoverActions(
+	directURLs, localActions, _, _, err := svc.DiscoverActions(
 		context.Background(),
 		[]string{"https://github.com/myorg/myrepo"},
 		false, // transitive disabled — local resolution is part of Phase 1
@@ -470,14 +470,24 @@ runs:
 		t.Fatalf("DiscoverActions: %v", err)
 	}
 
-	sort.Strings(directURLs)
-	wantDirect := []string{
-		"https://github.com/actions/cache",
-		"https://github.com/actions/checkout",
-		"https://github.com/actions/setup-node",
+	// actions/checkout is direct (from workflow), not local.
+	if len(directURLs) != 1 || directURLs[0] != "https://github.com/actions/checkout" {
+		t.Errorf("direct URLs = %v, want [actions/checkout]", directURLs)
 	}
-	if fmt.Sprintf("%v", directURLs) != fmt.Sprintf("%v", wantDirect) {
-		t.Errorf("direct URLs = %v, want %v", directURLs, wantDirect)
+
+	// actions/setup-node and actions/cache are local (from .github/actions/build-frontend).
+	if len(localActions) != 2 {
+		t.Fatalf("expected 2 local actions, got %d: %v", len(localActions), localActions)
+	}
+	for _, url := range []string{"https://github.com/actions/setup-node", "https://github.com/actions/cache"} {
+		via, ok := localActions[url]
+		if !ok {
+			t.Errorf("expected %s in local actions", url)
+			continue
+		}
+		if via != ".github/actions/build-frontend" {
+			t.Errorf("local action %s via = %q, want %q", url, via, ".github/actions/build-frontend")
+		}
 	}
 }
 
@@ -521,7 +531,7 @@ runs:
 	defer srv.Close()
 
 	svc := newTestService(t, srv.URL)
-	directURLs, _, _, err := svc.DiscoverActions(
+	directURLs, localActions, _, _, err := svc.DiscoverActions(
 		context.Background(),
 		[]string{"https://github.com/myorg/myrepo"},
 		false,
@@ -530,13 +540,22 @@ runs:
 		t.Fatalf("DiscoverActions: %v", err)
 	}
 
-	sort.Strings(directURLs)
-	wantDirect := []string{
-		"https://github.com/actions/checkout",
-		"https://github.com/actions/setup-go",
+	// No direct actions (workflow only uses local ./ actions).
+	if len(directURLs) != 0 {
+		t.Errorf("expected 0 direct URLs, got %v", directURLs)
 	}
-	if fmt.Sprintf("%v", directURLs) != fmt.Sprintf("%v", wantDirect) {
-		t.Errorf("direct URLs = %v, want %v", directURLs, wantDirect)
+
+	// Both external actions discovered via local composite actions.
+	if len(localActions) != 2 {
+		t.Fatalf("expected 2 local actions, got %d: %v", len(localActions), localActions)
+	}
+	// actions/checkout comes from wrapper (first-seen).
+	if via := localActions["https://github.com/actions/checkout"]; via != ".github/actions/wrapper" {
+		t.Errorf("actions/checkout via = %q, want %q", via, ".github/actions/wrapper")
+	}
+	// actions/setup-go comes from inner (via nested BFS).
+	if via := localActions["https://github.com/actions/setup-go"]; via != ".github/actions/inner" {
+		t.Errorf("actions/setup-go via = %q, want %q", via, ".github/actions/inner")
 	}
 }
 
@@ -581,7 +600,7 @@ runs:
 	defer srv.Close()
 
 	svc := newTestService(t, srv.URL)
-	directURLs, _, _, err := svc.DiscoverActions(
+	_, localActions, _, _, err := svc.DiscoverActions(
 		context.Background(),
 		[]string{"https://github.com/myorg/myrepo"},
 		false,
@@ -590,13 +609,14 @@ runs:
 		t.Fatalf("DiscoverActions: %v", err)
 	}
 
-	sort.Strings(directURLs)
-	wantDirect := []string{
-		"https://github.com/alpha/external-a",
-		"https://github.com/beta/external-b",
+	if len(localActions) != 2 {
+		t.Fatalf("expected 2 local actions, got %d: %v", len(localActions), localActions)
 	}
-	if fmt.Sprintf("%v", directURLs) != fmt.Sprintf("%v", wantDirect) {
-		t.Errorf("direct URLs = %v, want %v", directURLs, wantDirect)
+	if via := localActions["https://github.com/alpha/external-a"]; via != ".github/actions/action-a" {
+		t.Errorf("alpha/external-a via = %q, want %q", via, ".github/actions/action-a")
+	}
+	if via := localActions["https://github.com/beta/external-b"]; via != ".github/actions/action-b" {
+		t.Errorf("beta/external-b via = %q, want %q", via, ".github/actions/action-b")
 	}
 }
 
@@ -649,7 +669,7 @@ runs:
 	defer srv.Close()
 
 	svc := newTestService(t, srv.URL)
-	directURLs, transitiveActions, _, err := svc.DiscoverActions(
+	directURLs, localActions, transitiveActions, _, err := svc.DiscoverActions(
 		context.Background(),
 		[]string{"https://github.com/myorg/myrepo"},
 		true, // Enable transitive resolution
@@ -658,9 +678,17 @@ runs:
 		t.Fatalf("DiscoverActions: %v", err)
 	}
 
-	// alpha/action-a should be direct (found via local action).
-	if len(directURLs) != 1 || directURLs[0] != "https://github.com/alpha/action-a" {
-		t.Fatalf("expected [alpha/action-a], got %v", directURLs)
+	// No direct actions (workflow only uses local ./ action).
+	if len(directURLs) != 0 {
+		t.Errorf("expected 0 direct URLs, got %v", directURLs)
+	}
+
+	// alpha/action-a is local (found via .github/actions/setup).
+	if len(localActions) != 1 {
+		t.Fatalf("expected 1 local action, got %d: %v", len(localActions), localActions)
+	}
+	if via := localActions["https://github.com/alpha/action-a"]; via != ".github/actions/setup" {
+		t.Errorf("alpha/action-a via = %q, want %q", via, ".github/actions/setup")
 	}
 
 	// beta/action-b should be transitive (found via alpha/action-a BFS).
@@ -705,7 +733,7 @@ runs:
 	defer srv.Close()
 
 	svc := newTestService(t, srv.URL)
-	directURLs, _, _, err := svc.DiscoverActions(
+	directURLs, _, _, _, err := svc.DiscoverActions(
 		context.Background(),
 		[]string{"https://github.com/myorg/myrepo"},
 		false,
@@ -777,7 +805,7 @@ runs:
 	defer srv.Close()
 
 	svc := newTestService(t, srv.URL)
-	_, transitiveActions, _, err := svc.DiscoverActions(
+	_, _, transitiveActions, _, err := svc.DiscoverActions(
 		context.Background(),
 		[]string{"https://github.com/myorg/myrepo"},
 		true,

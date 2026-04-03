@@ -16,6 +16,9 @@ const (
 	// SourceActionsTransitive means this dependency was discovered as a transitive
 	// composite action dependency (an action used by another action).
 	SourceActionsTransitive EntrySource = "actions-transitive"
+	// SourceActionsLocal means this dependency was discovered inside a local composite
+	// action (./.github/actions/foo) referenced by a workflow. Via contains the local path.
+	SourceActionsLocal EntrySource = "actions-local"
 )
 
 // AuditEntry pairs a dependency's PURL with its analysis result and derived verdict.
@@ -30,8 +33,9 @@ type AuditEntry struct {
 	ErrorMsg string
 	// Source indicates how this entry was discovered (empty = direct input, "actions" = from workflow).
 	Source EntrySource
-	// Via is the direct parent action URL that caused this transitive dependency to be discovered.
-	// Only populated when Source is SourceActionsTransitive.
+	// Via is the direct parent action URL that caused this dependency to be discovered.
+	// Populated when Source is SourceActionsTransitive (parent action URL) or
+	// SourceActionsLocal (local action path, e.g., ".github/actions/build-frontend").
 	Via string
 	// Relation indicates whether this dependency is direct, transitive, or unknown
 	// relative to the user's project. Populated when input is an SBOM or go.mod.
