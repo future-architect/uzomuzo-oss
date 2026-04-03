@@ -80,33 +80,32 @@ A new `EntrySource` constant `SourceActionsTransitive = "actions-transitive"` is
 
 The existing section-based separation (`--- GitHub Actions ---`) is replaced with a `SOURCE` column across all formats. This design anticipates future expansion (e.g., library transitive dependencies) without requiring additional section markers.
 
-**Table format**: A `SOURCE` column is added to the verdict table.
+**Table format**: A `SOURCE` column is added to the verdict table. The following example uses actual CLI output format with full GitHub URLs. The `transitive` source for library dependencies is a future extension; currently only `action-transitive` is implemented.
 
 ```
-VERDICT  SOURCE              PURL                              LIFECYCLE   EOL
-ok       direct              pkg:npm/express@4.18              Active      No
-caution  transitive          pkg:npm/qs@6.5                    Stalled     No
-ok       action              github.com/actions/checkout       Active      No
-replace  action-transitive   github.com/some/abandoned-action  Abandoned   Yes
+VERDICT  SOURCE              PURL                                              LIFECYCLE   EOL
+ok       direct              https://github.com/future-architect/uzomuzo-oss   Active      Not EOL
+ok       action              https://github.com/actions/checkout               Active      Not EOL
+ok       action-transitive   https://github.com/actions/cache                  Active      Not EOL
 ```
 
 **Detailed format**: The summary table at the top includes the `SOURCE` column. Per-entry headers include source annotation when entries have multiple source types (e.g., `--- PURL 1 (direct) ---`, `--- PURL 6 (action) ---`, `--- PURL 12 (action-transitive) ---`).
 
 ```
 --- Summary Table ---
-VERDICT  SOURCE              PURL                              LIFECYCLE   EOL
-ok       direct              pkg:npm/express@4.18              Active      No
-ok       action              github.com/actions/checkout       Active      No
-ok       action-transitive   github.com/some/transitive-action Active      No
+VERDICT  SOURCE              PURL                                              LIFECYCLE   EOL
+ok       direct              https://github.com/future-architect/uzomuzo-oss   Active      Not EOL
+ok       action              https://github.com/actions/checkout               Active      Not EOL
+ok       action-transitive   https://github.com/actions/cache                  Active      Not EOL
 
 --- PURL 1 (direct) ---
-📦 Package: pkg:npm/express@4.18
+📦 Package: https://github.com/future-architect/uzomuzo-oss
 ⚖️  Result: Active
 ...
 
 --- PURL 6 (action-transitive) ---
-🔗 Via: github.com/some/direct-action
-📦 Package: github.com/some/transitive-action
+📦 Package: https://github.com/actions/cache
+🔗 Via: https://github.com/aquasecurity/trivy-action
 ⚖️  Result: Active
 ...
 ```

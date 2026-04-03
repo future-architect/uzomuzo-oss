@@ -164,13 +164,13 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 			if _, err := fmt.Fprintf(w, "\n%s\n", detailedEntryHeader(counter, e.Source, showSource)); err != nil {
 				return fmt.Errorf("failed to write entry: %w", err)
 			}
+			if _, err := fmt.Fprintf(w, "Package: %s\n", e.PURL); err != nil {
+				return fmt.Errorf("failed to write entry: %w", err)
+			}
 			if e.Via != "" {
 				if _, err := fmt.Fprintf(w, "🔗 Via: %s\n", e.Via); err != nil {
 					return fmt.Errorf("failed to write entry: %w", err)
 				}
-			}
-			if _, err := fmt.Fprintf(w, "Package: %s\n", e.PURL); err != nil {
-				return fmt.Errorf("failed to write entry: %w", err)
 			}
 			verdict := string(e.Verdict)
 			if e.ErrorMsg != "" {
