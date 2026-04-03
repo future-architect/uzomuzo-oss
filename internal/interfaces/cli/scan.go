@@ -46,7 +46,7 @@ type ScanOptions struct {
 
 // ActionsDiscovererFactory creates an ActionsDiscoverer from the scan service's analysis service.
 // This avoids importing infrastructure packages directly in the interfaces layer.
-type ActionsDiscovererFactory func(svc *scanapp.Service) scanapp.ActionsDiscoverer
+type ActionsDiscovererFactory func(svc *scanapp.Service) (scanapp.ActionsDiscoverer, error)
 
 // RunScan is the entry point for the "scan" subcommand.
 //
@@ -77,7 +77,10 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 		if actionsFactory == nil {
 			return fmt.Errorf("include actions: actions discoverer factory is required")
 		}
-		discoverer := actionsFactory(scanService)
+		discoverer, err := actionsFactory(scanService)
+		if err != nil {
+			return fmt.Errorf("include actions: %w", err)
+		}
 		if discoverer == nil {
 			return fmt.Errorf("include actions: actions discoverer factory returned nil")
 		}

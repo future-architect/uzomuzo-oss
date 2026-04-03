@@ -8,6 +8,13 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
 )
 
+func TestNewDiscoveryService_NilClient(t *testing.T) {
+	_, err := NewDiscoveryService(nil, 5)
+	if err == nil {
+		t.Fatal("expected error for nil github client")
+	}
+}
+
 func TestDiscoverActions_InvalidURLs(t *testing.T) {
 	cfg := &config.Config{
 		GitHub: config.GitHubConfig{
@@ -16,7 +23,10 @@ func TestDiscoverActions_InvalidURLs(t *testing.T) {
 		},
 	}
 	client := github.NewClient(cfg)
-	svc := NewDiscoveryService(client, 5)
+	svc, err := NewDiscoveryService(client, 5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	urls, errs, err := svc.DiscoverActions(context.Background(), []string{"not-a-url", "https://gitlab.com/foo/bar"})
 	if err != nil {
@@ -38,7 +48,10 @@ func TestDiscoverActions_EmptyInput(t *testing.T) {
 		},
 	}
 	client := github.NewClient(cfg)
-	svc := NewDiscoveryService(client, 5)
+	svc, err := NewDiscoveryService(client, 5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	urls, errs, err := svc.DiscoverActions(context.Background(), nil)
 	if err != nil {

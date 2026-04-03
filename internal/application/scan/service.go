@@ -173,7 +173,10 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 	entries := buildEntries(keys, allAnalyses)
 
 	// Phase B: actions discovery + analysis (if enabled).
-	if actionsCfg.Enabled && actionsCfg.Discoverer != nil && len(githubURLs) > 0 {
+	if actionsCfg.Enabled && actionsCfg.Discoverer == nil {
+		return nil, fmt.Errorf("actions discovery is enabled but discoverer is nil")
+	}
+	if actionsCfg.Enabled && len(githubURLs) > 0 {
 		actionURLs, discoveryErrors, err := actionsCfg.Discoverer.DiscoverActions(ctx, githubURLs)
 		if err != nil {
 			return nil, fmt.Errorf("actions discovery failed: %w", err)

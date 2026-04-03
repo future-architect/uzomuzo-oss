@@ -36,11 +36,14 @@ type DiscoveryService struct {
 
 // NewDiscoveryService creates a DiscoveryService.
 // maxConcurrency limits concurrent GitHub API calls; values ≤ 0 default to 5.
-func NewDiscoveryService(githubClient *github.Client, maxConcurrency int) *DiscoveryService {
+func NewDiscoveryService(githubClient *github.Client, maxConcurrency int) (*DiscoveryService, error) {
+	if githubClient == nil {
+		return nil, fmt.Errorf("new discovery service: github client is nil")
+	}
 	if maxConcurrency <= 0 {
 		maxConcurrency = 5
 	}
-	return &DiscoveryService{githubClient: githubClient, maxConcurrency: maxConcurrency}
+	return &DiscoveryService{githubClient: githubClient, maxConcurrency: maxConcurrency}, nil
 }
 
 // DiscoverActions fetches workflows for each GitHub URL, parses uses: directives,
