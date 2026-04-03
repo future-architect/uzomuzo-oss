@@ -105,12 +105,14 @@ const (
 // sourceDisplayName returns the human-readable display name for an EntrySource.
 func sourceDisplayName(s domainaudit.EntrySource) string {
 	switch s {
+	case domainaudit.SourceDirect:
+		return "direct"
 	case domainaudit.SourceActions:
 		return "action"
 	case domainaudit.SourceActionsTransitive:
 		return "action-transitive"
 	default:
-		return "direct"
+		return string(s)
 	}
 }
 

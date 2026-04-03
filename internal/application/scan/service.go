@@ -190,10 +190,18 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 		}
 
 		// Evaluate direct action URLs.
-		entries = append(entries, s.evaluateActionURLs(ctx, directActionURLs, allAnalyses, domainaudit.SourceActions)...)
+		directEntries, err := s.evaluateActionURLs(ctx, directActionURLs, allAnalyses, domainaudit.SourceActions)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate direct actions: %w", err)
+		}
+		entries = append(entries, directEntries...)
 
 		// Evaluate transitive action URLs.
-		entries = append(entries, s.evaluateActionURLs(ctx, transitiveActionURLs, allAnalyses, domainaudit.SourceActionsTransitive)...)
+		transitiveEntries, err := s.evaluateActionURLs(ctx, transitiveActionURLs, allAnalyses, domainaudit.SourceActionsTransitive)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate transitive actions: %w", err)
+		}
+		entries = append(entries, transitiveEntries...)
 	}
 
 	hasFailure := policy.Evaluate(entries)
@@ -203,7 +211,7 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 // evaluateActionURLs filters, evaluates, and tags action URLs with the given source.
 // URLs already present in existingAnalyses are skipped. Newly evaluated analyses are
 // added to existingAnalyses to prevent double-evaluation across direct/transitive sets.
-func (s *Service) evaluateActionURLs(ctx context.Context, urls []string, existingAnalyses map[string]*analysis.Analysis, source domainaudit.EntrySource) []domainaudit.AuditEntry {
+func (s *Service) evaluateActionURLs(ctx context.Context, urls []string, existingAnalyses map[string]*analysis.Analysis, source domainaudit.EntrySource) ([]domainaudit.AuditEntry, error) {
 	var newURLs []string
 	for _, u := range urls {
 		if _, exists := existingAnalyses[u]; !exists {
@@ -213,14 +221,13 @@ func (s *Service) evaluateActionURLs(ctx context.Context, urls []string, existin
 	newURLs = dedup(newURLs)
 
 	if len(newURLs) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	slog.Info("scan: evaluating discovered Actions", "count", len(newURLs), "source", string(source))
 	actRes, err := s.analysisService.ProcessBatchGitHubURLs(ctx, newURLs)
 	if err != nil {
-		slog.Error("failed to evaluate discovered Actions", "error", err, "source", string(source))
-		return nil
+		return nil, fmt.Errorf("evaluate discovered Actions (%s): %w", source, err)
 	}
 
 	for k, v := range actRes {
@@ -231,7 +238,7 @@ func (s *Service) evaluateActionURLs(ctx context.Context, urls []string, existin
 	for i := range actionEntries {
 		actionEntries[i].Source = source
 	}
-	return actionEntries
+	return actionEntries, nil
 }
 
 // dedup removes duplicate strings while preserving first-seen order.

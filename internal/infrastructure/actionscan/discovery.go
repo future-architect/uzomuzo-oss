@@ -117,9 +117,48 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 	return directURLs, transitiveURLs, result.Errors, nil
 }
 
+// actionRefKey returns a dedup key for BFS traversal that includes the subdirectory path.
+// Different paths within the same repo (e.g., actions/cache vs actions/cache/save) are
+// treated as distinct actions for fetching, while the repo-level URL is used for scan output.
+func actionRefKey(ref ghaworkflow.ActionRef) string {
+	key := ref.Owner + "/" + ref.Repo
+	if ref.Path != "" {
+		key += "/" + ref.Path
+	}
+	return key
+}
+
+// buildActionRefFromGitHubURL parses a GitHub URL into an ActionRef, preserving any
+// subdirectory path beyond owner/repo (e.g., "https://github.com/owner/repo/subpath").
+func buildActionRefFromGitHubURL(rawURL string) (ghaworkflow.ActionRef, error) {
+	owner, repo, err := common.ExtractGitHubOwnerRepo(rawURL)
+	if err != nil {
+		return ghaworkflow.ActionRef{}, fmt.Errorf("extract owner/repo from GitHub URL %q: %w", rawURL, err)
+	}
+
+	ref := ghaworkflow.ActionRef{
+		Owner: owner,
+		Repo:  repo,
+	}
+
+	trimmedURL := strings.TrimSpace(rawURL)
+	trimmedURL = strings.TrimPrefix(trimmedURL, "https://github.com/")
+	trimmedURL = strings.TrimPrefix(trimmedURL, "http://github.com/")
+	if idx := strings.IndexAny(trimmedURL, "?#"); idx >= 0 {
+		trimmedURL = trimmedURL[:idx]
+	}
+
+	parts := strings.Split(trimmedURL, "/")
+	if len(parts) > 2 {
+		ref.Path = strings.Join(parts[2:], "/")
+	}
+
+	return ref, nil
+}
+
 // resolveTransitiveActions performs BFS to discover actions referenced by composite actions.
 // It fetches action.yml for each queued action, parses composite steps, and adds new
-// action URLs to the queue. The seen set (result.Actions) prevents cycles and redundant fetches.
+// action URLs to the queue. The seen set tracks owner/repo/path to handle subdirectory actions.
 func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initialURLs []string, result *DiscoveryResult) []string {
 	// Build queue from initial direct URLs.
 	type queueItem struct {
@@ -127,16 +166,24 @@ func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initial
 		url string // GitHub URL (https://github.com/owner/repo)
 	}
 
-	var queue []queueItem
+	// Track seen actions by full path (owner/repo/path) to correctly handle
+	// subdirectory actions within the same repository.
+	seen := make(map[string]struct{})
 	for _, u := range initialURLs {
-		owner, repo, err := common.ExtractGitHubOwnerRepo(u)
+		ref, err := buildActionRefFromGitHubURL(u)
 		if err != nil {
 			continue
 		}
-		queue = append(queue, queueItem{
-			ref: ghaworkflow.ActionRef{Owner: owner, Repo: repo},
-			url: u,
-		})
+		seen[actionRefKey(ref)] = struct{}{}
+	}
+
+	var queue []queueItem
+	for _, u := range initialURLs {
+		ref, err := buildActionRefFromGitHubURL(u)
+		if err != nil {
+			continue
+		}
+		queue = append(queue, queueItem{ref: ref, url: u})
 	}
 
 	var transitiveURLs []string
@@ -154,7 +201,7 @@ func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initial
 
 			refs, isComposite, err := ghaworkflow.ParseCompositeActionURLs(data)
 			if err != nil {
-				result.Errors[item.url+"/action.yml"] = fmt.Errorf("failed to parse action.yml: %w", err)
+				result.Errors[item.url+"/action.yml"] = err
 				continue
 			}
 			if !isComposite {
@@ -162,12 +209,17 @@ func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initial
 			}
 
 			for _, ref := range refs {
-				ghURL := ref.GitHubURL()
-				if _, exists := result.Actions[ghURL]; exists {
+				key := actionRefKey(ref)
+				if _, exists := seen[key]; exists {
 					continue // Already discovered (direct or earlier transitive).
 				}
-				result.Actions[ghURL] = 1 // Mark as transitive.
-				transitiveURLs = append(transitiveURLs, ghURL)
+				seen[key] = struct{}{}
+
+				ghURL := ref.GitHubURL()
+				if _, exists := result.Actions[ghURL]; !exists {
+					result.Actions[ghURL] = 1 // Mark as transitive for scan output.
+					transitiveURLs = append(transitiveURLs, ghURL)
+				}
 				queue = append(queue, queueItem{ref: ref, url: ghURL})
 			}
 		}
