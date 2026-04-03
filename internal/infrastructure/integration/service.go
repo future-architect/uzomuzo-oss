@@ -218,6 +218,13 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 	// Step 1: Convert GitHub URL to basic PURL (without version)
 	basePURL, err := s.githubURLToPURL(ctx, githubURL)
 	if err != nil {
+		// Repos without registry packages (e.g., GitHub Actions) cannot produce a PURL.
+		// Fall back to GitHub-only analysis using repository metadata.
+		if common.IsResourceNotFoundError(err) {
+			slog.Info("no_registry_package_falling_back_to_github_only",
+				"github_url", githubURL)
+			return s.buildGitHubOnlyAnalysis(ctx, githubURL)
+		}
 		return nil, fmt.Errorf("failed to convert GitHub URL to PURL: %w", err)
 	}
 
@@ -269,6 +276,15 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 	analysis, err := s.FetchAnalysisWithGitHub(ctx, purl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch analysis for PURL %s (from %s): %w", purl, githubURL, err)
+	}
+
+	// If the PURL was generated but the package is not found in deps.dev
+	// (e.g., package.json exists in repo but not published to npm),
+	// fall back to GitHub-only analysis.
+	if analysis.Error != nil && common.IsResourceNotFoundError(analysis.Error) {
+		slog.Info("deps_dev_package_not_found_falling_back_to_github_only",
+			"purl", purl, "github_url", githubURL)
+		return s.buildGitHubOnlyAnalysis(ctx, githubURL)
 	}
 
 	// Round-trip validation: verify the resolved package actually belongs to the input repository.
