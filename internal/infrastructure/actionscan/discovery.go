@@ -349,11 +349,10 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 	return allURLs, errs
 }
 
-// resolveLocalActions performs BFS over local composite actions within a repository.
-// It fetches action.yml for each local path, extracts external action URLs, and
-// follows nested local references (uses: ./) with cycle detection.
-//
-// Returns external GitHub URLs discovered inside local composite actions.
+// resolveLocalActions performs BFS over local composite actions within a repository,
+// fetching action.yml for each local path, extracting external action URLs, and
+// following nested local references (uses: ./) with cycle detection.
+// It returns external GitHub URLs discovered inside local composite actions.
 func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo string, initialPaths []string, errs map[string]error) []string {
 	seen := make(map[string]struct{})
 	for _, p := range initialPaths {
@@ -420,7 +419,7 @@ func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo 
 
 // fetchLocalActionYAML fetches action.yml (or action.yaml as fallback) for a local action
 // path within a repository (e.g., ".github/actions/foo" → fetch ".github/actions/foo/action.yml").
-// Returns nil if neither file exists. Errors are recorded in errs.
+// It returns nil if neither file exists. Errors are recorded in errs.
 func (s *DiscoveryService) fetchLocalActionYAML(ctx context.Context, owner, repo, localPath string, errs map[string]error) []byte {
 	ymlPath := localPath + "/action.yml"
 	data, err := s.githubClient.FetchFileContent(ctx, owner, repo, ymlPath)
