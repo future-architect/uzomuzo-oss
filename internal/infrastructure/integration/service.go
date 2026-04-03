@@ -296,7 +296,7 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 			"purl", purl, "github_url", githubURL)
 		// Reuse the existing analysis if GitHub enrichment already populated RepoState
 		// for the same repository, avoiding a redundant GitHub API call.
-		if analysis.RepoState != nil && s.validateRepoURLMatch(analysis.RepoURL, githubURL) {
+		if analysis.RepoState != nil && analysis.RepoURL != "" && s.validateRepoURLMatch(analysis.RepoURL, githubURL) {
 			analysis.Error = nil
 			analysis.OriginalPURL = githubURL
 			analysis.EffectivePURL = githubURL
