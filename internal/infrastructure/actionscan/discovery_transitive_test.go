@@ -428,6 +428,297 @@ runs:
 	}
 }
 
+// TestLocalAction_SingleLevel tests workflow → local composite action → external action.
+// External actions found inside local actions should appear in direct URLs.
+func TestLocalAction_SingleLevel(t *testing.T) {
+	workflowYAML := []byte(`
+name: CI
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build-frontend
+`)
+
+	localComposite := []byte(`
+name: Build Frontend
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+    - uses: actions/cache@v4
+`)
+
+	routes := map[string][]byte{
+		"myorg/myrepo/.github/workflows":                         directoryJSON(t, []string{"ci.yml"}),
+		"myorg/myrepo/.github/workflows/ci.yml":                  workflowYAML,
+		"myorg/myrepo/.github/actions/build-frontend/action.yml": localComposite,
+	}
+
+	srv := fakeGitHubAPI(t, routes)
+	defer srv.Close()
+
+	svc := newTestService(t, srv.URL)
+	directURLs, _, _, err := svc.DiscoverActions(
+		context.Background(),
+		[]string{"https://github.com/myorg/myrepo"},
+		false, // transitive disabled — local resolution is part of Phase 1
+	)
+	if err != nil {
+		t.Fatalf("DiscoverActions: %v", err)
+	}
+
+	sort.Strings(directURLs)
+	wantDirect := []string{
+		"https://github.com/actions/cache",
+		"https://github.com/actions/checkout",
+		"https://github.com/actions/setup-node",
+	}
+	if fmt.Sprintf("%v", directURLs) != fmt.Sprintf("%v", wantDirect) {
+		t.Errorf("direct URLs = %v, want %v", directURLs, wantDirect)
+	}
+}
+
+// TestLocalAction_NestedLocals tests local action → local action → external action chain.
+func TestLocalAction_NestedLocals(t *testing.T) {
+	workflowYAML := []byte(`
+name: CI
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/wrapper
+`)
+
+	wrapperComposite := []byte(`
+name: Wrapper
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/inner
+    - uses: actions/checkout@v4
+`)
+
+	innerComposite := []byte(`
+name: Inner
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v5
+`)
+
+	routes := map[string][]byte{
+		"myorg/myrepo/.github/workflows":                    directoryJSON(t, []string{"ci.yml"}),
+		"myorg/myrepo/.github/workflows/ci.yml":             workflowYAML,
+		"myorg/myrepo/.github/actions/wrapper/action.yml":   wrapperComposite,
+		"myorg/myrepo/.github/actions/inner/action.yml":     innerComposite,
+	}
+
+	srv := fakeGitHubAPI(t, routes)
+	defer srv.Close()
+
+	svc := newTestService(t, srv.URL)
+	directURLs, _, _, err := svc.DiscoverActions(
+		context.Background(),
+		[]string{"https://github.com/myorg/myrepo"},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("DiscoverActions: %v", err)
+	}
+
+	sort.Strings(directURLs)
+	wantDirect := []string{
+		"https://github.com/actions/checkout",
+		"https://github.com/actions/setup-go",
+	}
+	if fmt.Sprintf("%v", directURLs) != fmt.Sprintf("%v", wantDirect) {
+		t.Errorf("direct URLs = %v, want %v", directURLs, wantDirect)
+	}
+}
+
+// TestLocalAction_CyclicLocals tests local action A → local action B → local action A cycle.
+func TestLocalAction_CyclicLocals(t *testing.T) {
+	workflowYAML := []byte(`
+name: CI
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/action-a
+`)
+
+	localA := []byte(`
+name: Action A
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/action-b
+    - uses: alpha/external-a@v1
+`)
+
+	localB := []byte(`
+name: Action B
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/action-a
+    - uses: beta/external-b@v1
+`)
+
+	routes := map[string][]byte{
+		"myorg/myrepo/.github/workflows":                    directoryJSON(t, []string{"ci.yml"}),
+		"myorg/myrepo/.github/workflows/ci.yml":             workflowYAML,
+		"myorg/myrepo/.github/actions/action-a/action.yml":  localA,
+		"myorg/myrepo/.github/actions/action-b/action.yml":  localB,
+	}
+
+	srv := fakeGitHubAPI(t, routes)
+	defer srv.Close()
+
+	svc := newTestService(t, srv.URL)
+	directURLs, _, _, err := svc.DiscoverActions(
+		context.Background(),
+		[]string{"https://github.com/myorg/myrepo"},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("DiscoverActions: %v", err)
+	}
+
+	sort.Strings(directURLs)
+	wantDirect := []string{
+		"https://github.com/alpha/external-a",
+		"https://github.com/beta/external-b",
+	}
+	if fmt.Sprintf("%v", directURLs) != fmt.Sprintf("%v", wantDirect) {
+		t.Errorf("direct URLs = %v, want %v", directURLs, wantDirect)
+	}
+}
+
+// TestLocalAction_WithTransitive tests that external actions found via local actions
+// are also fed into transitive BFS resolution.
+func TestLocalAction_WithTransitive(t *testing.T) {
+	workflowYAML := []byte(`
+name: CI
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/setup
+`)
+
+	localSetup := []byte(`
+name: Setup
+runs:
+  using: composite
+  steps:
+    - uses: alpha/action-a@v1
+`)
+
+	// alpha/action-a is a composite action that uses beta/action-b.
+	compositeA := []byte(`
+name: Action A
+runs:
+  using: composite
+  steps:
+    - uses: beta/action-b@v1
+`)
+
+	nodeB := []byte(`
+name: Action B
+runs:
+  using: node20
+  main: index.js
+`)
+
+	routes := map[string][]byte{
+		"myorg/myrepo/.github/workflows":                directoryJSON(t, []string{"ci.yml"}),
+		"myorg/myrepo/.github/workflows/ci.yml":         workflowYAML,
+		"myorg/myrepo/.github/actions/setup/action.yml": localSetup,
+		"alpha/action-a/action.yml":                      compositeA,
+		"beta/action-b/action.yml":                       nodeB,
+	}
+
+	srv := fakeGitHubAPI(t, routes)
+	defer srv.Close()
+
+	svc := newTestService(t, srv.URL)
+	directURLs, transitiveActions, _, err := svc.DiscoverActions(
+		context.Background(),
+		[]string{"https://github.com/myorg/myrepo"},
+		true, // Enable transitive resolution
+	)
+	if err != nil {
+		t.Fatalf("DiscoverActions: %v", err)
+	}
+
+	// alpha/action-a should be direct (found via local action).
+	if len(directURLs) != 1 || directURLs[0] != "https://github.com/alpha/action-a" {
+		t.Fatalf("expected [alpha/action-a], got %v", directURLs)
+	}
+
+	// beta/action-b should be transitive (found via alpha/action-a BFS).
+	if len(transitiveActions) != 1 {
+		t.Fatalf("expected 1 transitive action, got %d: %v", len(transitiveActions), transitiveActions)
+	}
+	via, ok := transitiveActions["https://github.com/beta/action-b"]
+	if !ok {
+		t.Fatal("expected beta/action-b in transitive actions")
+	}
+	if via != "https://github.com/alpha/action-a" {
+		t.Errorf("via = %q, want %q", via, "https://github.com/alpha/action-a")
+	}
+}
+
+// TestLocalAction_NonCompositeSkipped tests that non-composite local actions are handled gracefully.
+func TestLocalAction_NonCompositeSkipped(t *testing.T) {
+	workflowYAML := []byte(`
+name: CI
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/node-action
+`)
+
+	nodeAction := []byte(`
+name: Node Action
+runs:
+  using: node20
+  main: index.js
+`)
+
+	routes := map[string][]byte{
+		"myorg/myrepo/.github/workflows":                     directoryJSON(t, []string{"ci.yml"}),
+		"myorg/myrepo/.github/workflows/ci.yml":              workflowYAML,
+		"myorg/myrepo/.github/actions/node-action/action.yml": nodeAction,
+	}
+
+	srv := fakeGitHubAPI(t, routes)
+	defer srv.Close()
+
+	svc := newTestService(t, srv.URL)
+	directURLs, _, _, err := svc.DiscoverActions(
+		context.Background(),
+		[]string{"https://github.com/myorg/myrepo"},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("DiscoverActions: %v", err)
+	}
+
+	if len(directURLs) != 0 {
+		t.Errorf("expected 0 direct URLs for non-composite local action, got %v", directURLs)
+	}
+}
+
 // TestResolveTransitive_DiamondDependency tests A→B, A→C, B→D, C→D.
 // D should appear once in transitive, not duplicated.
 func TestResolveTransitive_DiamondDependency(t *testing.T) {

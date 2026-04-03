@@ -258,7 +258,9 @@ func (s *DiscoveryService) fetchActionYAML(ctx context.Context, ref ghaworkflow.
 	return data // nil if not found
 }
 
-// discoverFromRepo fetches workflow files from a single repository and parses them.
+// discoverFromRepo fetches workflow files from a single repository, parses them,
+// and resolves local composite actions to discover external action dependencies
+// that would otherwise be hidden behind ./ references.
 func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo string) ([]string, map[string]error) {
 	errs := make(map[string]error)
 
@@ -293,6 +295,8 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 
 	seen := make(map[string]struct{})
 	var allURLs []string
+	var localPaths []string
+	localSeen := make(map[string]struct{})
 
 	for _, yf := range yamlFiles {
 		data, fetchErr := s.githubClient.FetchFileContent(ctx, owner, repo, yf.Path)
@@ -316,7 +320,124 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 				allURLs = append(allURLs, u)
 			}
 		}
+
+		// Extract local action paths (uses: ./.github/actions/foo).
+		locals, parseErr := ghaworkflow.ParseLocalActionPaths(data)
+		if parseErr != nil {
+			// Error already covered by ParseGitHubURLs above; skip silently.
+			continue
+		}
+		for _, lp := range locals {
+			if _, exists := localSeen[lp]; !exists {
+				localSeen[lp] = struct{}{}
+				localPaths = append(localPaths, lp)
+			}
+		}
+	}
+
+	// Resolve local composite actions to find external action dependencies.
+	if len(localPaths) > 0 {
+		localURLs := s.resolveLocalActions(ctx, owner, repo, localPaths, errs)
+		for _, u := range localURLs {
+			if _, exists := seen[u]; !exists {
+				seen[u] = struct{}{}
+				allURLs = append(allURLs, u)
+			}
+		}
 	}
 
 	return allURLs, errs
+}
+
+// resolveLocalActions performs BFS over local composite actions within a repository.
+// It fetches action.yml for each local path, extracts external action URLs, and
+// follows nested local references (uses: ./) with cycle detection.
+//
+// Returns external GitHub URLs discovered inside local composite actions.
+func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo string, initialPaths []string, errs map[string]error) []string {
+	seen := make(map[string]struct{})
+	for _, p := range initialPaths {
+		seen[p] = struct{}{}
+	}
+
+	queue := append([]string(nil), initialPaths...)
+	var externalURLs []string
+	externalSeen := make(map[string]struct{})
+
+	for len(queue) > 0 {
+		current := queue
+		queue = nil
+
+		for _, localPath := range current {
+			data := s.fetchLocalActionYAML(ctx, owner, repo, localPath, errs)
+			if data == nil {
+				continue
+			}
+
+			// Extract external action references.
+			refs, isComposite, err := ghaworkflow.ParseCompositeActionURLs(data)
+			if err != nil {
+				errs[fmt.Sprintf("%s/%s/%s/action.yml", owner, repo, localPath)] = err
+				continue
+			}
+			if !isComposite {
+				continue
+			}
+
+			for _, ref := range refs {
+				ghURL := ref.GitHubURL()
+				if _, exists := externalSeen[ghURL]; !exists {
+					externalSeen[ghURL] = struct{}{}
+					externalURLs = append(externalURLs, ghURL)
+				}
+			}
+
+			// Extract nested local action references for BFS continuation.
+			nestedLocals, _, err := ghaworkflow.ParseCompositeLocalActionPaths(data)
+			if err != nil {
+				// Already logged above; skip.
+				continue
+			}
+			for _, nested := range nestedLocals {
+				if _, exists := seen[nested]; !exists {
+					seen[nested] = struct{}{}
+					queue = append(queue, nested)
+				}
+			}
+		}
+	}
+
+	if len(externalURLs) > 0 {
+		slog.Debug("resolved local composite actions",
+			"owner", owner, "repo", repo,
+			"local_actions_scanned", len(seen),
+			"external_urls_found", len(externalURLs),
+		)
+	}
+
+	return externalURLs
+}
+
+// fetchLocalActionYAML fetches action.yml (or action.yaml as fallback) for a local action
+// path within a repository (e.g., ".github/actions/foo" → fetch ".github/actions/foo/action.yml").
+// Returns nil if neither file exists. Errors are recorded in errs.
+func (s *DiscoveryService) fetchLocalActionYAML(ctx context.Context, owner, repo, localPath string, errs map[string]error) []byte {
+	ymlPath := localPath + "/action.yml"
+	data, err := s.githubClient.FetchFileContent(ctx, owner, repo, ymlPath)
+	if err != nil {
+		errs[fmt.Sprintf("%s/%s/%s", owner, repo, ymlPath)] = err
+		return nil
+	}
+	if data != nil {
+		return data
+	}
+
+	// Fallback to action.yaml.
+	yamlPath := localPath + "/action.yaml"
+	data, err = s.githubClient.FetchFileContent(ctx, owner, repo, yamlPath)
+	if err != nil {
+		errs[fmt.Sprintf("%s/%s/%s", owner, repo, yamlPath)] = err
+		return nil
+	}
+	return data
 }
