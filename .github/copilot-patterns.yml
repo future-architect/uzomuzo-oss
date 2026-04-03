@@ -37,3 +37,13 @@ patterns:
     pr: 101
     file: "docs/usage.md"
     date: "2026-04-03"
+  - category: "defensive-coding"
+    summary: "Guard against empty config fields with sensible defaults — empty BaseURL produces invalid API URLs"
+    pr: 101
+    file: "internal/infrastructure/github/contents.go"
+    date: "2026-04-03"
+  - category: "api-consistency"
+    summary: "Set User-Agent header on all REST API requests — new endpoints must match existing client conventions"
+    pr: 101
+    file: "internal/infrastructure/github/contents.go"
+    date: "2026-04-03"
