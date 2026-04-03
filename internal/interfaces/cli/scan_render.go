@@ -102,6 +102,41 @@ const (
 	MarkerDetailedReportBegin = "--- Detailed Report ---"
 )
 
+// sourceDisplayName returns the human-readable display name for an EntrySource.
+func sourceDisplayName(s domainaudit.EntrySource) string {
+	switch s {
+	case domainaudit.SourceActions:
+		return "action"
+	case domainaudit.SourceActionsTransitive:
+		return "action-transitive"
+	default:
+		return "direct"
+	}
+}
+
+// hasMultipleSources reports whether entries contain more than one distinct Source value.
+func hasMultipleSources(entries []domainaudit.AuditEntry) bool {
+	if len(entries) == 0 {
+		return false
+	}
+	first := entries[0].Source
+	for _, e := range entries[1:] {
+		if e.Source != first {
+			return true
+		}
+	}
+	return false
+}
+
+// detailedEntryHeader returns the header for a detailed report entry.
+// When showSource is true, the source is embedded: "--- PURL 1 (action) ---".
+func detailedEntryHeader(counter int, source domainaudit.EntrySource, showSource bool) string {
+	if showSource {
+		return fmt.Sprintf("--- PURL %d (%s) ---", counter, sourceDisplayName(source))
+	}
+	return fmt.Sprintf("--- PURL %d ---", counter)
+}
+
 // renderScanDetailed prints a summary table followed by rich per-package output.
 // The two sections are separated by markers for machine extraction.
 func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
@@ -118,12 +153,13 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 		return fmt.Errorf("failed to write marker: %w", err)
 	}
 
+	showSource := hasMultipleSources(entries)
 	counter := 0
 	for i := range entries {
 		e := &entries[i]
 		if e.Analysis == nil || e.Analysis.Error != nil {
 			counter++
-			if _, err := fmt.Fprintf(w, "\n--- PURL %d ---\n", counter); err != nil {
+			if _, err := fmt.Fprintf(w, "\n%s\n", detailedEntryHeader(counter, e.Source, showSource)); err != nil {
 				return fmt.Errorf("failed to write entry: %w", err)
 			}
 			if _, err := fmt.Fprintf(w, "Package: %s\n", e.PURL); err != nil {
@@ -142,6 +178,9 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 			continue
 		}
 		// Reuse the existing printFullAnalysis which writes to stdout.
+		// Note: printFullAnalysis prints its own "--- PURL N ---" header without source annotation.
+		// Source information is shown in the summary table above. A future refactor to make
+		// printFullAnalysis accept io.Writer would allow consistent source annotation here.
 		printFullAnalysis(e.PURL, e.Analysis, &counter)
 	}
 	if counter == 0 {
@@ -152,37 +191,34 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 	return nil
 }
 
-// MarkerActionsBegin marks the start of the GitHub Actions section in output.
-const MarkerActionsBegin = "--- GitHub Actions ---"
-
 // renderScanTable renders the VERDICT table format.
-// When entries include both direct and actions-sourced items, a separator is printed.
+// When entries have multiple distinct sources, a SOURCE column is included.
 func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
+	showSource := hasMultipleSources(entries)
+
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL"); err != nil {
-		return fmt.Errorf("failed to write table header: %w", err)
+	if showSource {
+		if _, err := fmt.Fprintln(tw, "VERDICT\tSOURCE\tPURL\tLIFECYCLE\tEOL"); err != nil {
+			return fmt.Errorf("failed to write table header: %w", err)
+		}
+	} else {
+		if _, err := fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL"); err != nil {
+			return fmt.Errorf("failed to write table header: %w", err)
+		}
 	}
 
-	actionsSectionStarted := false
 	for i := range entries {
-		// Print separator when transitioning from direct to actions entries.
-		if entries[i].Source == domainaudit.SourceActions && !actionsSectionStarted {
-			actionsSectionStarted = true
-			// Flush and write separator outside tabwriter to avoid column alignment issues.
-			if err := tw.Flush(); err != nil {
-				return fmt.Errorf("failed to flush table output: %w", err)
-			}
-			if _, err := fmt.Fprintf(w, "\n%s\n", MarkerActionsBegin); err != nil {
-				return fmt.Errorf("failed to write actions marker: %w", err)
-			}
-			tw = tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-			if _, err := fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL"); err != nil {
-				return fmt.Errorf("failed to write table header: %w", err)
-			}
-		}
 		maintenance, eol := entryMaintenanceEOL(&entries[i], "—")
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", entries[i].Verdict, entries[i].PURL, maintenance, eol); err != nil {
-			return fmt.Errorf("failed to write table row: %w", err)
+		if showSource {
+			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
+				entries[i].Verdict, sourceDisplayName(entries[i].Source), entries[i].PURL, maintenance, eol); err != nil {
+				return fmt.Errorf("failed to write table row: %w", err)
+			}
+		} else {
+			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
+				entries[i].Verdict, entries[i].PURL, maintenance, eol); err != nil {
+				return fmt.Errorf("failed to write table row: %w", err)
+			}
 		}
 	}
 	if err := tw.Flush(); err != nil {

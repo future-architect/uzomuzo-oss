@@ -1,0 +1,5 @@
+name: "My Node Action"
+description: "A node action for testing"
+runs:
+  using: node20
+  main: dist/index.js

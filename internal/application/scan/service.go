@@ -123,7 +123,10 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 
 // ActionsDiscoverer abstracts the actions discovery infrastructure.
 type ActionsDiscoverer interface {
-	DiscoverActions(ctx context.Context, repoURLs []string) (actionURLs []string, errors map[string]error, err error)
+	// DiscoverActions returns direct and transitive action URLs discovered from repository workflows.
+	// Direct URLs are Actions referenced in workflow files; transitive URLs are discovered by
+	// recursively resolving composite action dependencies.
+	DiscoverActions(ctx context.Context, repoURLs []string) (directURLs, transitiveURLs []string, errors map[string]error, err error)
 }
 
 // ActionsConfig configures optional GitHub Actions health scanning.
@@ -177,7 +180,7 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 		return nil, fmt.Errorf("actions discovery is enabled but discoverer is nil")
 	}
 	if actionsCfg.Enabled && len(githubURLs) > 0 {
-		actionURLs, discoveryErrors, err := actionsCfg.Discoverer.DiscoverActions(ctx, githubURLs)
+		directActionURLs, transitiveActionURLs, discoveryErrors, err := actionsCfg.Discoverer.DiscoverActions(ctx, githubURLs)
 		if err != nil {
 			return nil, fmt.Errorf("actions discovery failed: %w", err)
 		}
@@ -186,32 +189,49 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 			slog.Warn("actions discovery error", "source", src, "error", e)
 		}
 
-		// Filter out URLs already analyzed as main repos.
-		var newURLs []string
-		for _, u := range actionURLs {
-			if _, exists := allAnalyses[u]; !exists {
-				newURLs = append(newURLs, u)
-			}
-		}
-		newURLs = dedup(newURLs)
+		// Evaluate direct action URLs.
+		entries = append(entries, s.evaluateActionURLs(ctx, directActionURLs, allAnalyses, domainaudit.SourceActions)...)
 
-		if len(newURLs) > 0 {
-			slog.Info("scan: evaluating discovered Actions", "count", len(newURLs))
-			actRes, err := s.analysisService.ProcessBatchGitHubURLs(ctx, newURLs)
-			if err != nil {
-				return nil, fmt.Errorf("failed to evaluate discovered Actions: %w", err)
-			}
-
-			actionEntries := buildEntries(newURLs, actRes)
-			for i := range actionEntries {
-				actionEntries[i].Source = domainaudit.SourceActions
-			}
-			entries = append(entries, actionEntries...)
-		}
+		// Evaluate transitive action URLs.
+		entries = append(entries, s.evaluateActionURLs(ctx, transitiveActionURLs, allAnalyses, domainaudit.SourceActionsTransitive)...)
 	}
 
 	hasFailure := policy.Evaluate(entries)
 	return &Result{Entries: entries, HasFailure: hasFailure}, nil
+}
+
+// evaluateActionURLs filters, evaluates, and tags action URLs with the given source.
+// URLs already present in existingAnalyses are skipped. Newly evaluated analyses are
+// added to existingAnalyses to prevent double-evaluation across direct/transitive sets.
+func (s *Service) evaluateActionURLs(ctx context.Context, urls []string, existingAnalyses map[string]*analysis.Analysis, source domainaudit.EntrySource) []domainaudit.AuditEntry {
+	var newURLs []string
+	for _, u := range urls {
+		if _, exists := existingAnalyses[u]; !exists {
+			newURLs = append(newURLs, u)
+		}
+	}
+	newURLs = dedup(newURLs)
+
+	if len(newURLs) == 0 {
+		return nil
+	}
+
+	slog.Info("scan: evaluating discovered Actions", "count", len(newURLs), "source", string(source))
+	actRes, err := s.analysisService.ProcessBatchGitHubURLs(ctx, newURLs)
+	if err != nil {
+		slog.Error("failed to evaluate discovered Actions", "error", err, "source", string(source))
+		return nil
+	}
+
+	for k, v := range actRes {
+		existingAnalyses[k] = v
+	}
+
+	actionEntries := buildEntries(newURLs, actRes)
+	for i := range actionEntries {
+		actionEntries[i].Source = source
+	}
+	return actionEntries
 }
 
 // dedup removes duplicate strings while preserving first-seen order.
