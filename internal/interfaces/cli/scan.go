@@ -47,7 +47,7 @@ type ScanOptions struct {
 //
 // Input resolution order:
 //  1. --sbom: CycloneDX SBOM JSON (or "-" for stdin)
-//  2. --file: go.mod or PURL/URL list file
+//  2. --file: go.mod, GitHub Actions workflow YAML, or PURL/URL list file
 //  3. Positional args: PURLs or GitHub URLs (direct mode)
 //  4. Stdin pipe
 //  5. Auto-detect: go.mod in current directory
@@ -147,6 +147,14 @@ func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 			return fmt.Errorf("failed to read workflow file '%s': %w", filePath, wfErr)
 		}
 		if ok {
+			// --sample and --line-range are only meaningful for PURL/URL list files;
+			// reject them when the file is a workflow YAML.
+			if opts.SampleSize > 0 {
+				return fmt.Errorf("--sample is not supported for workflow files")
+			}
+			if opts.LineStart > 0 || opts.LineEnd > 0 {
+				return fmt.Errorf("--line-range is not supported for workflow files")
+			}
 			return runScanWorkflow(ctx, svc, wfData, opts, policy, parseWorkflow)
 		}
 	}

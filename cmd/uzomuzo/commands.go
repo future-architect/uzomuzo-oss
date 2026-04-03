@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -147,25 +149,43 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 
 // detectWorkflowFile checks whether filePath is a GitHub Actions workflow YAML.
 // Returns the full file data and true if it is a workflow, or (nil, false, nil) otherwise.
+//
+// To avoid unnecessary I/O for non-workflow YAML files (e.g., docker-compose.yml),
+// path-based detection is tried first, then only a small prefix is read for marker
+// detection. The full file is read only after confirming the file is a workflow.
 func detectWorkflowFile(filePath string) ([]byte, bool, error) {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	if ext != ".yml" && ext != ".yaml" {
 		return nil, false, nil
 	}
 
+	// Path-based detection: files inside .github/workflows/ are always workflows.
+	normalized := filepath.ToSlash(filePath)
+	isPathMatch := strings.Contains(normalized, ".github/workflows/")
+
+	if !isPathMatch {
+		// Content-based detection: read only a small prefix for marker detection.
+		f, err := os.Open(filePath)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to open file '%s': %w", filePath, err)
+		}
+		prefix := make([]byte, 1024)
+		n, readErr := f.Read(prefix)
+		_ = f.Close() // best-effort cleanup, original error preserved
+		if readErr != nil && !errors.Is(readErr, io.EOF) {
+			return nil, false, fmt.Errorf("failed to read file '%s': %w", filePath, readErr)
+		}
+		if !ghaworkflow.IsWorkflowYAML(filePath, prefix[:n]) {
+			return nil, false, nil
+		}
+	}
+
+	// Confirmed workflow — read the full file.
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to read file '%s': %w", filePath, err)
 	}
-
-	prefix := data
-	if len(prefix) > 1024 {
-		prefix = prefix[:1024]
-	}
-	if ghaworkflow.IsWorkflowYAML(filePath, prefix) {
-		return data, true, nil
-	}
-	return nil, false, nil
+	return data, true, nil
 }
 
 // buildScanOptions maps urfave/cli flags to ScanOptions.

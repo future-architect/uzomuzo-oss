@@ -6,6 +6,7 @@ package ghaworkflow
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -29,16 +30,25 @@ type step struct {
 // ParseGitHubURLs reads a GitHub Actions workflow YAML file and returns
 // the unique GitHub repository URLs referenced in `uses:` directives.
 // Local actions (./path) and Docker references (docker://image) are skipped.
+// Jobs are iterated in sorted key order for deterministic output.
 func ParseGitHubURLs(data []byte) ([]string, error) {
 	var wf workflowFile
 	if err := yaml.Unmarshal(data, &wf); err != nil {
 		return nil, fmt.Errorf("failed to parse GitHub Actions workflow YAML: %w", err)
 	}
 
+	// Sort job keys for deterministic output ordering.
+	jobNames := make([]string, 0, len(wf.Jobs))
+	for name := range wf.Jobs {
+		jobNames = append(jobNames, name)
+	}
+	sort.Strings(jobNames)
+
 	seen := make(map[string]struct{})
 	var urls []string
 
-	for _, j := range wf.Jobs {
+	for _, name := range jobNames {
+		j := wf.Jobs[name]
 		// Reusable workflow reference at job level.
 		if u := extractGitHubURL(j.Uses); u != "" {
 			if _, exists := seen[u]; !exists {
