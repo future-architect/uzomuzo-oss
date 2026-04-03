@@ -22,11 +22,12 @@ type DirectoryEntry struct {
 // Returns nil (not an error) when the directory does not exist (HTTP 404).
 func (c *Client) FetchDirectoryContents(ctx context.Context, owner, repo, path string) ([]DirectoryEntry, error) {
 	if c.token == "" {
-		return nil, fmt.Errorf("GitHub token required for Contents API")
+		return nil, fmt.Errorf("GitHub token required for Contents API; set GITHUB_TOKEN environment variable")
 	}
 
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s",
-		owner, repo, strings.TrimPrefix(path, "/"))
+	baseURL := strings.TrimRight(c.config.BaseURL, "/")
+	url := fmt.Sprintf("%s/repos/%s/%s/contents/%s",
+		baseURL, owner, repo, strings.TrimPrefix(path, "/"))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -69,11 +70,12 @@ func (c *Client) FetchDirectoryContents(ctx context.Context, owner, repo, path s
 // Returns nil (not an error) when the file does not exist (HTTP 404).
 func (c *Client) FetchFileContent(ctx context.Context, owner, repo, path string) ([]byte, error) {
 	if c.token == "" {
-		return nil, fmt.Errorf("GitHub token required for Contents API")
+		return nil, fmt.Errorf("GitHub token required for Contents API; set GITHUB_TOKEN environment variable")
 	}
 
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s",
-		owner, repo, strings.TrimPrefix(path, "/"))
+	baseURL := strings.TrimRight(c.config.BaseURL, "/")
+	url := fmt.Sprintf("%s/repos/%s/%s/contents/%s",
+		baseURL, owner, repo, strings.TrimPrefix(path, "/"))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

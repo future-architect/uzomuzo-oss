@@ -73,10 +73,17 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 
 	// Build actions config for modes that support --include-actions.
 	var actionsCfg scanapp.ActionsConfig
-	if opts.IncludeActions && actionsFactory != nil {
+	if opts.IncludeActions {
+		if actionsFactory == nil {
+			return fmt.Errorf("include actions: actions discoverer factory is required")
+		}
+		discoverer := actionsFactory(scanService)
+		if discoverer == nil {
+			return fmt.Errorf("include actions: actions discoverer factory returned nil")
+		}
 		actionsCfg = scanapp.ActionsConfig{
 			Enabled:    true,
-			Discoverer: actionsFactory(scanService),
+			Discoverer: discoverer,
 		}
 	}
 

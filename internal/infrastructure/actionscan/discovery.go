@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/ghaworkflow"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
 )
@@ -71,7 +72,7 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 			semaphore <- struct{}{}        // Acquire semaphore
 			defer func() { <-semaphore }() // Release semaphore
 
-			owner, repo, err := parseGitHubURL(repoURL)
+			owner, repo, err := common.ExtractGitHubOwnerRepo(repoURL)
 			if err != nil {
 				mu.Lock()
 				result.Errors[repoURL] = err
@@ -171,19 +172,4 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 	}
 
 	return allURLs, errs
-}
-
-// parseGitHubURL extracts owner and repo from "https://github.com/{owner}/{repo}".
-func parseGitHubURL(url string) (string, string, error) {
-	url = strings.TrimSuffix(strings.TrimSpace(url), "/")
-	prefix := "https://github.com/"
-	if !strings.HasPrefix(url, prefix) {
-		return "", "", fmt.Errorf("not a GitHub URL: %s", url)
-	}
-	rest := strings.TrimPrefix(url, prefix)
-	parts := strings.SplitN(rest, "/", 3)
-	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("invalid GitHub URL (expected owner/repo): %s", url)
-	}
-	return parts[0], parts[1], nil
 }
