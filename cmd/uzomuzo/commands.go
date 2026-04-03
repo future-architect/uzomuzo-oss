@@ -41,6 +41,9 @@ func scanFlags() []urfcli.Flag {
 
 		// Actions scanning
 		&urfcli.BoolFlag{Name: "include-actions", Usage: "Also scan GitHub Actions referenced in target repositories' workflows"},
+
+		// Transitive dependency display
+		&urfcli.BoolFlag{Name: "show-transitive", Usage: "Include transitive dependencies in output (e.g., composite action deps)"},
 	}
 }
 
@@ -59,7 +62,8 @@ func scanCommand(cfg *domaincfg.Config) *urfcli.Command {
    uzomuzo scan --file .github/workflows/ci.yml                   GitHub Actions workflow
    uzomuzo scan                                                   Auto-detect go.mod
    cat purls.txt | uzomuzo scan                                   Pipe PURLs
-   uzomuzo scan https://github.com/owner/repo --include-actions   Scan repo + its Actions
+   uzomuzo scan https://github.com/owner/repo --include-actions                    Scan repo + its Actions
+   uzomuzo scan https://github.com/owner/repo --include-actions --show-transitive  Include transitive action deps
 
 CI gate examples:
    uzomuzo scan --sbom bom.json --fail-on eol-confirmed
@@ -228,6 +232,7 @@ func buildScanOptions(cmd *urfcli.Command) (cli.ScanOptions, error) {
 		FailOnRaw:      cmd.String("fail-on"),
 		SBOMPath:       cmd.String("sbom"),
 		IncludeActions: cmd.Bool("include-actions"),
+		ShowTransitive: cmd.Bool("show-transitive"),
 	}
 	if raw := cmd.String("line-range"); raw != "" {
 		ls, le, err := cli.ParseLineRange(raw)

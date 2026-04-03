@@ -47,15 +47,25 @@ Composite Action chains deeper than 2-3 levels are virtually nonexistent in prac
 
 ## Decision
 
-### Implement transitive Composite Action scanning as part of `--include-actions`
+### Implement transitive Composite Action scanning via `--show-transitive`
 
-When `--include-actions` is specified:
+`--include-actions` discovers only **direct** Actions from workflow files (default behavior unchanged). When `--show-transitive` is also specified, transitive composite action dependencies are resolved and included:
 
 1. Discover direct Actions from workflow files (existing Phase 1 behavior)
-2. For each discovered Action, fetch `action.yml` (or `action.yaml`) from the Action's repository via GitHub Contents API
+2. When `--show-transitive` is set: for each discovered Action, fetch `action.yml` (or `action.yaml`) from the Action's repository via GitHub Contents API
 3. If `runs.using: composite`, extract `steps[].uses` references using the existing `ghaworkflow` parser patterns
 4. Add newly discovered Actions to the scan, recursing until no new Actions are found
 5. Deduplicate via a `seen` set to avoid redundant API calls and prevent cycles
+
+### Default to direct-only: health vs. vulnerability management
+
+For **vulnerability management**, transitive dependencies are critical — a CVE at any depth is directly exploitable. For **health/lifecycle management** (uzomuzo's scope), the calculus is different:
+
+- A healthy, actively maintained direct Action is likely managing its own internal dependencies
+- Transitive health issues are not directly actionable by the user — remediation requires upstream coordination
+- If a direct Action is flagged as stalled/abandoned, that is already sufficient signal without inspecting its internals
+
+Therefore, `--include-actions` defaults to direct-only output. `--show-transitive` is the opt-in for users who want full supply chain visibility. This flag is designed to be generic — it will also control transitive library dependency display in future SBOM scanning enhancements.
 
 ### Distinguish transitive Actions in output via `SOURCE` column
 
@@ -64,7 +74,7 @@ Direct and transitive Actions share the same threat model (runner-level executio
 - **Direct Action** (`source: "actions"`): The user chose to use it and can replace it directly.
 - **Transitive Action** (`source: "actions-transitive"`): The user's direct Action depends on it internally. Remediation requires filing an issue with the Action maintainer or replacing the parent Action entirely.
 
-A new `EntrySource` constant `SourceActionsTransitive = "actions-transitive"` is added to the domain layer. No new CLI flags are added — the distinction is automatic when transitive Actions are discovered.
+A new `EntrySource` constant `SourceActionsTransitive = "actions-transitive"` is added to the domain layer. Transitive entries appear only when `--show-transitive` is specified.
 
 #### Output format changes
 
@@ -118,7 +128,8 @@ Phase 3 can be evaluated independently if the proxy indicator proves insufficien
 - **Full direct-execution supply chain visibility**: All code that runs on the user's CI runner — whether from direct or transitive Action references — is evaluated for lifecycle health.
 - **Security-motivated scope**: The decision is grounded in a concrete threat model (runner-level secret access), not speculative completeness.
 - **Proxy coverage for Phase 3**: Flagging an unhealthy transitive Action implicitly warns about the broader maintenance posture of its parent Action.
-- **No new CLI flags**: Users get deeper scanning automatically with existing `--include-actions`, following the principle of sensible defaults.
+- **Sensible defaults**: `--include-actions` shows only actionable (direct) results by default. `--show-transitive` is opt-in for full supply chain visibility.
+- **Generic transitive flag**: `--show-transitive` is input-mode agnostic, designed to also control future SBOM transitive dependency display.
 - **Actionability-aware output**: Direct and transitive Actions are visually separated in output and distinguishable in machine-readable formats, so users immediately know what they can fix directly vs. what requires upstream action.
 
 ### Negative

@@ -29,7 +29,7 @@ func TestDiscoverActions_InvalidURLs(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	directURLs, transitiveURLs, errs, err := svc.DiscoverActions(context.Background(), []string{"not-a-url", "https://gitlab.com/foo/bar"})
+	directURLs, transitiveURLs, errs, err := svc.DiscoverActions(context.Background(), []string{"not-a-url", "https://gitlab.com/foo/bar"}, false)
 	if err != nil {
 		t.Fatalf("DiscoverActions should not return fatal error: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestDiscoverActions_EmptyInput(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	directURLs, transitiveURLs, errs, err := svc.DiscoverActions(context.Background(), nil)
+	directURLs, transitiveURLs, errs, err := svc.DiscoverActions(context.Background(), nil, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

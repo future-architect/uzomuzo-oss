@@ -125,8 +125,8 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 type ActionsDiscoverer interface {
 	// DiscoverActions returns direct and transitive action URLs discovered from repository workflows.
 	// Direct URLs are Actions referenced in workflow files; transitive URLs are discovered by
-	// recursively resolving composite action dependencies.
-	DiscoverActions(ctx context.Context, repoURLs []string) (directURLs, transitiveURLs []string, errors map[string]error, err error)
+	// recursively resolving composite action dependencies when resolveTransitive is true.
+	DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs, transitiveURLs []string, errors map[string]error, err error)
 }
 
 // ActionsConfig configures optional GitHub Actions health scanning.
@@ -135,6 +135,9 @@ type ActionsConfig struct {
 	Enabled bool
 	// Discoverer performs the actual Actions discovery via GitHub API.
 	Discoverer ActionsDiscoverer
+	// ShowTransitive includes transitive composite action dependencies in the scan results.
+	// When false (default), only direct action references from workflow files are included.
+	ShowTransitive bool
 }
 
 // RunFromPURLsWithActions extends RunFromPURLs with optional GitHub Actions discovery.
@@ -180,7 +183,7 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 		return nil, fmt.Errorf("actions discovery is enabled but discoverer is nil")
 	}
 	if actionsCfg.Enabled && len(githubURLs) > 0 {
-		directActionURLs, transitiveActionURLs, discoveryErrors, err := actionsCfg.Discoverer.DiscoverActions(ctx, githubURLs)
+		directActionURLs, transitiveActionURLs, discoveryErrors, err := actionsCfg.Discoverer.DiscoverActions(ctx, githubURLs, actionsCfg.ShowTransitive)
 		if err != nil {
 			return nil, fmt.Errorf("actions discovery failed: %w", err)
 		}
@@ -196,12 +199,14 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 		}
 		entries = append(entries, directEntries...)
 
-		// Evaluate transitive action URLs.
-		transitiveEntries, err := s.evaluateActionURLs(ctx, transitiveActionURLs, allAnalyses, domainaudit.SourceActionsTransitive)
-		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate transitive actions: %w", err)
+		// Evaluate transitive action URLs (only when --show-transitive is set).
+		if actionsCfg.ShowTransitive && len(transitiveActionURLs) > 0 {
+			transitiveEntries, err := s.evaluateActionURLs(ctx, transitiveActionURLs, allAnalyses, domainaudit.SourceActionsTransitive)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate transitive actions: %w", err)
+			}
+			entries = append(entries, transitiveEntries...)
 		}
-		entries = append(entries, transitiveEntries...)
 	}
 
 	hasFailure := policy.Evaluate(entries)

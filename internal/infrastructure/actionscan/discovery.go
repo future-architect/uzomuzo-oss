@@ -56,7 +56,7 @@ func NewDiscoveryService(githubClient *github.Client, maxConcurrency int) (*Disc
 //
 // The returned slices are sorted lexicographically for deterministic output.
 // This method satisfies scan.ActionsDiscoverer.
-func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []string) (directURLs, transitiveURLs []string, errors map[string]error, err error) {
+func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs, transitiveURLs []string, errors map[string]error, err error) {
 	result := &DiscoveryResult{
 		Actions: make(map[string]int),
 		Errors:  make(map[string]error),
@@ -100,8 +100,10 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 
 	wg.Wait()
 
-	// Phase 2: Resolve transitive composite action dependencies via BFS.
-	transitiveURLs = s.resolveTransitiveActions(ctx, directURLs, result)
+	// Phase 2: Resolve transitive composite action dependencies via BFS (opt-in).
+	if resolveTransitive {
+		transitiveURLs = s.resolveTransitiveActions(ctx, directURLs, result)
+	}
 
 	// Sort for deterministic output.
 	sort.Strings(directURLs)

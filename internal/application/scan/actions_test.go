@@ -16,7 +16,7 @@ type mockDiscoverer struct {
 	errors         map[string]error
 }
 
-func (m *mockDiscoverer) DiscoverActions(_ context.Context, _ []string) ([]string, []string, map[string]error, error) {
+func (m *mockDiscoverer) DiscoverActions(_ context.Context, _ []string, _ bool) ([]string, []string, map[string]error, error) {
 	return m.directURLs, m.transitiveURLs, m.errors, nil
 }
 
