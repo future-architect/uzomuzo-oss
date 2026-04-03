@@ -115,6 +115,18 @@ goimports -w .
 golangci-lint run
 ```
 
+## GitHub Actions Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `ci.yml` | push / PR | Build, test, lint |
+| `dependency-scan.yml` | Monthly cron / manual dispatch | Trivy SBOM generation + `uzomuzo scan` with issue creation |
+| `release.yml` | Tag push | GoReleaser + cosign signing |
+| `codeql.yml` | push / PR / weekly | CodeQL security analysis |
+| `scorecard.yml` | Weekly | OpenSSF Scorecard |
+
+The dependency scan workflow (`dependency-scan.yml`) uses three separate jobs with scoped permissions: `scan` (contents: read), `report` (issues: write), and `notify` (inherits the workflow-level `contents: read` permission). See [Integration Examples](/docs/integration-examples.md#github-actions-scheduled-scanning) for configuration details.
+
 ## Project Structure (DDD Layer Boundaries)
 
 Strict DDD layer boundaries:

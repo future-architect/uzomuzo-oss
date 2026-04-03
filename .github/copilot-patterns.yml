@@ -17,40 +17,20 @@ patterns:
     pr: 87
     file: "internal/interfaces/cli/scan_render.go"
     date: "2026-04-02"
-  - category: "comment-doc-drift"
-    summary: "Comment claimed 'preserves input order' but code groups by type — comments must match actual behavior"
-    pr: 87
-    file: "internal/application/scan/service.go"
-    date: "2026-04-02"
   - category: "ddd-violations"
     summary: "Interfaces layer must not import Infrastructure packages directly — inject dependencies via function types or interfaces"
     pr: 87
     file: "internal/interfaces/cli/scan.go"
-    date: "2026-04-02"
-  - category: "comment-doc-drift"
-    summary: "Flag help text must reflect actual sampling behavior — --sample applies per type, not across combined input"
-    pr: 87
-    file: "cmd/uzomuzo/commands.go"
     date: "2026-04-02"
   - category: "testing"
     summary: "When replacing an application service, port existing unit tests to the new service to prevent regression"
     pr: 87
     file: "internal/application/scan/service.go"
     date: "2026-04-02"
-  - category: "comment-doc-drift"
-    summary: "Docs and README referenced removed flags (--only-eol, --ecosystem, --export-license-csv) across 6+ files after scan refactor"
-    pr: 87
-    file: "README.md"
-    date: "2026-04-02"
   - category: "error-handling"
     summary: "Distinguish os.ErrNotExist from other I/O errors when auto-detecting files — treating all errors as 'not found' hides real causes"
     pr: 87
     file: "internal/interfaces/cli/scan.go"
-    date: "2026-04-02"
-  - category: "comment-doc-drift"
-    summary: "ADR title casing inconsistent — use consistent sentence-style capitalization across all ADRs"
-    pr: 87
-    file: "docs/adr/0004-unify-analyze-audit-into-scan.md"
     date: "2026-04-02"
   - category: "defensive-coding"
     summary: "GitHub issue search uses word-level matching, not exact — add jq post-filter for exact title comparison to prevent false-positive deduplication"
