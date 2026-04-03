@@ -210,6 +210,7 @@ func (s *IntegrationService) extractScorecardChecks(project *depsdev.Project) []
 // 2. Fetches default version from deps.dev
 // 3. Creates versioned PURL for complete analysis
 // 4. Performs full scorecard analysis
+// 5. Validates resolved package repo URL matches input (round-trip check)
 // Flow: GitHub URL
 func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL string) (*domain.Analysis, error) {
 	slog.Debug("analyze_github_url_called", "github_url", githubURL)
@@ -228,7 +229,7 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 		slog.Debug("fetch_version_info_failed", "error", err)
 		// Fallback: proceed with base PURL without version
 		//TODO FetchFrom GrraphQL
-		return s.FetchAnalysisWithGitHub(ctx, basePURL)
+		return s.fetchAndValidateGitHubAnalysis(ctx, basePURL, githubURL)
 	}
 
 	// Extract stable version from release info
@@ -237,7 +238,7 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 		slog.Debug("no_version_data", "purl", basePURL)
 		// Fallback: proceed with base PURL without version
 		//TODO FetchFrom GrraphQL
-		return s.FetchAnalysisWithGitHub(ctx, basePURL)
+		return s.fetchAndValidateGitHubAnalysis(ctx, basePURL, githubURL)
 	}
 
 	// Step 3: Create versioned PURL if stable version is available
@@ -254,8 +255,87 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 		versionedPURL = basePURL
 	}
 
-	// Step 4: Perform full analysis with the versioned PURL
-	return s.FetchAnalysisWithGitHub(ctx, versionedPURL)
+	// Step 4: Perform full analysis with the versioned PURL, then validate
+	return s.fetchAndValidateGitHubAnalysis(ctx, versionedPURL, githubURL)
+}
+
+// fetchAndValidateGitHubAnalysis fetches analysis for a PURL derived from a GitHub URL,
+// then validates that the resolved package's repository URL matches the original GitHub URL.
+// If the resolved repo URL points to a different repository, the deps.dev resolution is
+// discarded and a GitHub-only analysis is returned to prevent misattribution.
+//
+// See: https://github.com/future-architect/uzomuzo-oss/issues/99
+func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context, purl, githubURL string) (*domain.Analysis, error) {
+	analysis, err := s.FetchAnalysisWithGitHub(ctx, purl)
+	if err != nil {
+		return nil, err
+	}
+
+	// Round-trip validation: verify the resolved package actually belongs to the input repository.
+	// deps.dev may return an unrelated package that happens to share the repo name
+	// (e.g., "checkout" → pkg:npm/checkout from github.com/bmeck/node-checkout,
+	//  not the intended github.com/actions/checkout).
+	if !s.validateRepoURLMatch(analysis.RepoURL, githubURL) {
+		slog.Warn("deps_dev_repo_mismatch_detected",
+			"github_url", githubURL,
+			"resolved_purl", purl,
+			"resolved_repo_url", analysis.RepoURL,
+		)
+		return s.buildGitHubOnlyAnalysis(ctx, githubURL)
+	}
+
+	return analysis, nil
+}
+
+// validateRepoURLMatch checks whether the resolved repository URL matches the input GitHub URL.
+// Both URLs are normalized to owner/repo form (case-insensitive) before comparison.
+// Returns true if they match, or if the resolved URL is empty (no data to validate against).
+func (s *IntegrationService) validateRepoURLMatch(resolvedRepoURL, inputGitHubURL string) bool {
+	// If deps.dev returned no repo URL, we cannot validate — allow the result.
+	if resolvedRepoURL == "" {
+		return true
+	}
+
+	inputOwner, inputRepo, err := common.ExtractGitHubOwnerRepo(inputGitHubURL)
+	if err != nil {
+		// Cannot parse the input URL; skip validation rather than rejecting valid results.
+		return true
+	}
+
+	resolvedOwner, resolvedRepo, err := common.ExtractGitHubOwnerRepo(resolvedRepoURL)
+	if err != nil {
+		// Resolved URL is not a GitHub URL (e.g., GitLab, Bitbucket) — mismatch.
+		return false
+	}
+
+	return strings.EqualFold(inputOwner, resolvedOwner) && strings.EqualFold(inputRepo, resolvedRepo)
+}
+
+// buildGitHubOnlyAnalysis creates an Analysis populated solely from GitHub repository metadata,
+// without any deps.dev package resolution. This is the fallback when round-trip validation
+// detects that deps.dev resolved to an unrelated package.
+func (s *IntegrationService) buildGitHubOnlyAnalysis(ctx context.Context, githubURL string) (*domain.Analysis, error) {
+	owner, repo, err := common.ExtractGitHubOwnerRepo(githubURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse GitHub URL for fallback analysis: %w", err)
+	}
+
+	repoURL := fmt.Sprintf("https://github.com/%s/%s", owner, repo)
+	analysis := &domain.Analysis{
+		OriginalPURL:  githubURL,
+		EffectivePURL: githubURL,
+		RepoURL:       repoURL,
+		AnalyzedAt:    time.Now(),
+	}
+	analysis.EnsureCanonical()
+
+	// Enrich with GitHub repository metadata (repo state, commit stats, etc.)
+	analyses := map[string]*domain.Analysis{githubURL: analysis}
+	if err := s.enhanceAnalysesWithGitHubBatch(ctx, analyses); err != nil {
+		slog.Debug("github_only_enhancement_failed", "error", err, "github_url", githubURL)
+	}
+
+	return analysis, nil
 }
 
 // githubURLToPURL converts a GitHub URL to a PURL using GitHub GraphQL API to identify package managers
