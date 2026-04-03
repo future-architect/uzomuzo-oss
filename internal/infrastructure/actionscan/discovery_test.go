@@ -86,7 +86,7 @@ func TestDiscoverActions_InvalidURLs(t *testing.T) {
 		},
 	}
 	client := github.NewClient(cfg)
-	svc := NewDiscoveryService(client)
+	svc := NewDiscoveryService(client, 5)
 
 	urls, errs, err := svc.DiscoverActions(context.Background(), []string{"not-a-url", "https://gitlab.com/foo/bar"})
 	if err != nil {
@@ -108,7 +108,7 @@ func TestDiscoverActions_EmptyInput(t *testing.T) {
 		},
 	}
 	client := github.NewClient(cfg)
-	svc := NewDiscoveryService(client)
+	svc := NewDiscoveryService(client, 5)
 
 	urls, errs, err := svc.DiscoverActions(context.Background(), nil)
 	if err != nil {

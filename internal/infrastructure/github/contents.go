@@ -80,7 +80,7 @@ func (c *Client) FetchFileContent(ctx context.Context, owner, repo, path string)
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Accept", "application/vnd.github.raw+json")
+	req.Header.Set("Accept", "application/vnd.github.raw")
 
 	resp, err := c.httpClient.Do(ctx, req)
 	if err != nil {

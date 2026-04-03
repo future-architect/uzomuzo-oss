@@ -146,7 +146,8 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 	}
 
 	// --include-actions is only supported for GitHub URL inputs (positional args, file list, stdin).
-	// Reject it for --file with structured formats or --sbom early to give a clear error.
+	// Reject it for --sbom early; --file with structured formats is rejected in runScanFile
+	// after file type detection.
 	if opts.IncludeActions && opts.SBOMPath != "" {
 		return fmt.Errorf("--include-actions is not supported with --sbom")
 	}
@@ -159,7 +160,7 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 	// Factory creates an ActionsDiscoverer from the scan service's GitHub client.
 	actionsFactory := func(svc *scanapp.Service) scanapp.ActionsDiscoverer {
 		githubClient := svc.AnalysisService().GitHubClient()
-		return actionscan.NewDiscoveryService(githubClient)
+		return actionscan.NewDiscoveryService(githubClient, cfg.GitHub.MaxConcurrency)
 	}
 
 	return cli.RunScan(ctx, cfg, args, opts, parsers, infradepparser.DetectFileParser, detectWorkflowFile, ghaworkflow.ParseGitHubURLs, actionsFactory)

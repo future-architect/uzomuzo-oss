@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 
@@ -26,24 +27,19 @@ type DiscoveryResult struct {
 	Errors map[string]error
 }
 
-// OrderedURLs returns discovered action URLs sorted by first-seen order.
-func (r *DiscoveryResult) OrderedURLs() []string {
-	// Since maps don't preserve order, rebuild from Actions map sorted by depth then URL.
-	urls := make([]string, 0, len(r.Actions))
-	for u := range r.Actions {
-		urls = append(urls, u)
-	}
-	return urls
-}
-
 // DiscoveryService discovers GitHub Actions referenced by repositories.
 type DiscoveryService struct {
-	githubClient *github.Client
+	githubClient   *github.Client
+	maxConcurrency int
 }
 
 // NewDiscoveryService creates a DiscoveryService.
-func NewDiscoveryService(githubClient *github.Client) *DiscoveryService {
-	return &DiscoveryService{githubClient: githubClient}
+// maxConcurrency limits concurrent GitHub API calls; values ≤ 0 default to 5.
+func NewDiscoveryService(githubClient *github.Client, maxConcurrency int) *DiscoveryService {
+	if maxConcurrency <= 0 {
+		maxConcurrency = 5
+	}
+	return &DiscoveryService{githubClient: githubClient, maxConcurrency: maxConcurrency}
 }
 
 // DiscoverActions fetches workflows for each GitHub URL, parses uses: directives,
@@ -54,7 +50,7 @@ func NewDiscoveryService(githubClient *github.Client) *DiscoveryService {
 // Parse/fetch errors for individual files are collected in DiscoveryResult.Errors
 // rather than aborting the entire scan.
 //
-// The returned actionURLs slice preserves first-seen order across all repositories.
+// The returned actionURLs slice is sorted lexicographically for deterministic output.
 // This method satisfies scan.ActionsDiscoverer.
 func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []string) (actionURLs []string, errors map[string]error, err error) {
 	result := &DiscoveryResult{
@@ -62,15 +58,18 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 		Errors:  make(map[string]error),
 	}
 
-	// Collect URLs in first-seen order with mutex protection.
+	// Collect URLs with mutex protection, bounded by semaphore.
 	var orderedURLs []string
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, s.maxConcurrency)
 
 	for _, repoURL := range repoURLs {
 		wg.Add(1)
 		go func(repoURL string) {
 			defer wg.Done()
+			semaphore <- struct{}{}        // Acquire semaphore
+			defer func() { <-semaphore }() // Release semaphore
 
 			owner, repo, err := parseGitHubURL(repoURL)
 			if err != nil {
@@ -97,6 +96,10 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 	}
 
 	wg.Wait()
+
+	// Sort for deterministic output — goroutine scheduling makes insertion order
+	// non-deterministic across runs.
+	sort.Strings(orderedURLs)
 
 	slog.Info("actions discovery complete",
 		"repos_scanned", len(repoURLs),
