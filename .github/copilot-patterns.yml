@@ -47,6 +47,11 @@ patterns:
     pr: 111
     file: "internal/infrastructure/depparser/ghaworkflow/parser.go"
     date: "2026-04-03"
+  - category: "duplicate-parsing"
+    summary: "Provide a combined parser (ParseWorkflowAll) when callers need both external URLs and local paths, avoiding double YAML unmarshal"
+    pr: 111
+    file: "internal/infrastructure/actionscan/discovery.go"
+    date: "2026-04-03"
   # comment-doc-drift: promoted to coding-standards.instructions.md (PRs #101, #106)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #103, #106, #111)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103)
