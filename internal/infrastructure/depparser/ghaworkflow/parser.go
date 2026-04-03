@@ -320,6 +320,45 @@ func ParseLocalActionPaths(data []byte) ([]string, error) {
 	return paths, nil
 }
 
+// ParseCompositeAll parses an action.yml and returns both external ActionRef values
+// and nested local action paths from a single YAML unmarshal. This avoids double-parsing
+// for callers that need both results (e.g., BFS over local composite actions).
+// Returns isComposite=false if runs.using != "composite".
+func ParseCompositeAll(data []byte) (refs []ActionRef, localPaths []string, isComposite bool, err error) {
+	var af actionFile
+	if err := yaml.Unmarshal(data, &af); err != nil {
+		return nil, nil, false, fmt.Errorf("failed to parse action manifest: %w", err)
+	}
+
+	if !strings.EqualFold(af.Runs.Using, "composite") {
+		return nil, nil, false, nil
+	}
+
+	refSeen := make(map[string]struct{})
+	localSeen := make(map[string]struct{})
+
+	for _, s := range af.Runs.Steps {
+		if ref, ok := ExtractActionRef(s.Uses); ok {
+			key := ref.GitHubURL()
+			if ref.Path != "" {
+				key += "/" + ref.Path
+			}
+			if _, exists := refSeen[key]; !exists {
+				refSeen[key] = struct{}{}
+				refs = append(refs, ref)
+			}
+		}
+		if p := ExtractLocalActionPath(s.Uses); p != "" {
+			if _, exists := localSeen[p]; !exists {
+				localSeen[p] = struct{}{}
+				localPaths = append(localPaths, p)
+			}
+		}
+	}
+
+	return refs, localPaths, true, nil
+}
+
 // ParseCompositeLocalActionPaths parses an action.yml and extracts local action paths
 // from composite steps (uses: ./ references). Returns nil if not a composite action.
 func ParseCompositeLocalActionPaths(data []byte) (paths []string, isComposite bool, err error) {

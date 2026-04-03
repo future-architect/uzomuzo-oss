@@ -353,7 +353,9 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 	}
 
 	// Resolve local composite actions to find external action dependencies.
+	// Sort for deterministic BFS "first-seen wins" Via provenance.
 	if len(localPaths) > 0 {
+		sort.Strings(localPaths)
 		localActions = s.resolveLocalActions(ctx, owner, repo, localPaths, errs)
 	}
 
@@ -384,8 +386,8 @@ func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo 
 				continue
 			}
 
-			// Extract external action references.
-			refs, isComposite, err := ghaworkflow.ParseCompositeActionURLs(data)
+			// Extract both external refs and nested local paths from a single unmarshal.
+			refs, nestedLocals, isComposite, err := ghaworkflow.ParseCompositeAll(data)
 			if err != nil {
 				errs[fmt.Sprintf("%s/%s/%s", owner, repo, localPath)] = err
 				continue
@@ -401,12 +403,6 @@ func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo 
 				}
 			}
 
-			// Extract nested local action references for BFS continuation.
-			nestedLocals, _, err := ghaworkflow.ParseCompositeLocalActionPaths(data)
-			if err != nil {
-				// Already logged above; skip.
-				continue
-			}
 			for _, nested := range nestedLocals {
 				if _, exists := seen[nested]; !exists {
 					seen[nested] = struct{}{}
