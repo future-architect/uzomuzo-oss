@@ -203,7 +203,7 @@ func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initial
 
 			refs, isComposite, err := ghaworkflow.ParseCompositeActionURLs(data)
 			if err != nil {
-				result.Errors[item.url] = err
+				result.Errors[actionRefKey(item.ref)] = err
 				continue
 			}
 			if !isComposite {
