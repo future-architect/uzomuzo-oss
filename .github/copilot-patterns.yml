@@ -37,3 +37,13 @@ patterns:
     pr: 93
     file: "internal/interfaces/cli/scan.go"
     date: "2026-04-03"
+  - category: "comment-doc-drift"
+    summary: "Update function doc comment when adding new code paths — runScanFile handles workflow YAML but comment only listed go.mod/SBOM/PURL"
+    pr: 93
+    file: "internal/interfaces/cli/scan.go"
+    date: "2026-04-03"
+  - category: "comment-doc-drift"
+    summary: "Update test helper comments when underlying behavior changes — assertURLsEqual referenced non-deterministic map iteration after sort was added"
+    pr: 93
+    file: "internal/infrastructure/depparser/ghaworkflow/parser_test.go"
+    date: "2026-04-03"
