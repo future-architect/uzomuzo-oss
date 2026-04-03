@@ -9,6 +9,7 @@ import (
 	"text/tabwriter"
 
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 )
 
 // jsonSummary holds verdict counts for JSON output.
@@ -130,6 +131,31 @@ func hasMultipleSources(entries []domainaudit.AuditEntry) bool {
 	return false
 }
 
+// hasRelationInfo returns true if any entry has a known dependency relation.
+func hasRelationInfo(entries []domainaudit.AuditEntry) bool {
+	for i := range entries {
+		if entries[i].Relation != depparser.RelationUnknown {
+			return true
+		}
+	}
+	return false
+}
+
+// formatRelation returns the display string for a dependency's relation.
+// For transitive deps with known parents: "transitive (express, lodash)"
+// For direct deps: "direct"
+// For unknown: "—"
+func formatRelation(e *domainaudit.AuditEntry) string {
+	relation := e.Relation.String()
+	if relation == "" {
+		return "—"
+	}
+	if e.Relation == depparser.RelationTransitive && len(e.ViaParents) > 0 {
+		return fmt.Sprintf("transitive (%s)", strings.Join(e.ViaParents, ", "))
+	}
+	return relation
+}
+
 // detailedEntryHeader returns the header for a detailed report entry.
 // When showSource is true, the source is embedded: "--- PURL 1 (action) ---".
 func detailedEntryHeader(counter int, source domainaudit.EntrySource, showSource bool) string {
@@ -187,6 +213,9 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 		counter++
 		// Print source-annotated header, then delegate body to printAnalysisBody (stdout).
 		fmt.Printf("\n%s\n", detailedEntryHeader(counter, e.Source, showSource))
+		if e.Relation != depparser.RelationUnknown {
+			fmt.Printf("🔗 Relation: %s\n", formatRelation(e))
+		}
 		printAnalysisBody(e.PURL, e.Analysis, e.Via)
 	}
 	if counter == 0 {
@@ -198,33 +227,45 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 }
 
 // renderScanTable renders the VERDICT table format.
-// When entries have multiple distinct sources, a SOURCE column is included.
+// Conditional columns: SOURCE (when multiple sources), RELATION (when relation info present).
 func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	showSource := hasMultipleSources(entries)
+	showRelation := hasRelationInfo(entries)
+
+	writeHeader := func(tw *tabwriter.Writer) error {
+		var cols []string
+		cols = append(cols, "VERDICT")
+		if showSource {
+			cols = append(cols, "SOURCE")
+		}
+		cols = append(cols, "PURL")
+		if showRelation {
+			cols = append(cols, "RELATION")
+		}
+		cols = append(cols, "LIFECYCLE", "EOL")
+		_, err := fmt.Fprintln(tw, strings.Join(cols, "\t"))
+		return err
+	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if showSource {
-		if _, err := fmt.Fprintln(tw, "VERDICT\tSOURCE\tPURL\tLIFECYCLE\tEOL"); err != nil {
-			return fmt.Errorf("failed to write table header: %w", err)
-		}
-	} else {
-		if _, err := fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL"); err != nil {
-			return fmt.Errorf("failed to write table header: %w", err)
-		}
+	if err := writeHeader(tw); err != nil {
+		return fmt.Errorf("failed to write table header: %w", err)
 	}
 
 	for i := range entries {
 		maintenance, eol := entryMaintenanceEOL(&entries[i], "—")
+		var cols []string
+		cols = append(cols, string(entries[i].Verdict))
 		if showSource {
-			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
-				entries[i].Verdict, sourceDisplayName(entries[i].Source), entries[i].PURL, maintenance, eol); err != nil {
-				return fmt.Errorf("failed to write table row: %w", err)
-			}
-		} else {
-			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
-				entries[i].Verdict, entries[i].PURL, maintenance, eol); err != nil {
-				return fmt.Errorf("failed to write table row: %w", err)
-			}
+			cols = append(cols, sourceDisplayName(entries[i].Source))
+		}
+		cols = append(cols, entries[i].PURL)
+		if showRelation {
+			cols = append(cols, formatRelation(&entries[i]))
+		}
+		cols = append(cols, maintenance, eol)
+		if _, err := fmt.Fprintln(tw, strings.Join(cols, "\t")); err != nil {
+			return fmt.Errorf("failed to write table row: %w", err)
 		}
 	}
 	if err := tw.Flush(); err != nil {
@@ -255,10 +296,12 @@ type enrichedJSONEntry struct {
 	ProjectLicense  string   `json:"project_license,omitempty"`
 	VersionLicenses []string `json:"version_licenses,omitempty"`
 
-	Reason string `json:"reason,omitempty"`
-	Error  string `json:"error,omitempty"`
-	Source string `json:"source,omitempty"`
-	Via    string `json:"via,omitempty"`
+	Reason      string   `json:"reason,omitempty"`
+	Error       string   `json:"error,omitempty"`
+	Source      string   `json:"source,omitempty"`
+	Via         string   `json:"via,omitempty"`
+	Relation    string   `json:"relation,omitempty"`
+	RelationVia []string `json:"relation_via,omitempty"`
 }
 
 type enrichedJSONOutput struct {
@@ -288,13 +331,15 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	maintenance, eol := entryMaintenanceEOL(e, "—")
 
 	je := enrichedJSONEntry{
-		PURL:      e.PURL,
-		Verdict:   string(e.Verdict),
-		Lifecycle: maintenance,
-		EOL:       eol,
-		Error:     e.ErrorMsg,
-		Source:    string(e.Source),
-		Via:       e.Via,
+		PURL:        e.PURL,
+		Verdict:     string(e.Verdict),
+		Lifecycle:   maintenance,
+		EOL:         eol,
+		Error:       e.ErrorMsg,
+		Source:      string(e.Source),
+		Via:         e.Via,
+		Relation:    e.Relation.String(),
+		RelationVia: e.ViaParents,
 	}
 
 	a := e.Analysis
@@ -331,7 +376,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 
 func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	cw := csv.NewWriter(w)
-	if err := cw.Write([]string{"verdict", "purl", "lifecycle", "eol", "eol_reason", "successor", "repo_url", "source", "via"}); err != nil {
+	if err := cw.Write([]string{"verdict", "purl", "relation", "relation_via", "lifecycle", "eol", "eol_reason", "successor", "repo_url", "source", "via"}); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
 	for i := range entries {
@@ -348,7 +393,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		}
 
 		if err := cw.Write([]string{
-			string(e.Verdict), e.PURL, maintenance, eol, eolReason, successor, repoURL, string(e.Source), e.Via,
+			string(e.Verdict), e.PURL, e.Relation.String(), strings.Join(e.ViaParents, ";"), maintenance, eol, eolReason, successor, repoURL, string(e.Source), e.Via,
 		}); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}

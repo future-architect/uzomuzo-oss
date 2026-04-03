@@ -84,8 +84,18 @@ func (s *Service) RunFromPURLs(ctx context.Context, purls, githubURLs []string, 
 	return &Result{Entries: entries, HasFailure: hasFailure}, nil
 }
 
+// ParserConfig configures optional behavior for RunFromParser.
+type ParserConfig struct {
+	// ShowTransitive includes transitive dependencies in the scan results.
+	// When false (default) and the parser provides relation info, only direct
+	// (and unknown) dependencies are included.
+	ShowTransitive bool
+}
+
 // RunFromParser executes the scan pipeline from a dependency parser (SBOM/go.mod).
-func (s *Service) RunFromParser(ctx context.Context, parser depparser.DependencyParser, data []byte, policy domainscan.FailPolicy) (*Result, error) {
+// By default, transitive dependencies are excluded when the parser provides relation info.
+// Set parserCfg.ShowTransitive to include them.
+func (s *Service) RunFromParser(ctx context.Context, parser depparser.DependencyParser, data []byte, policy domainscan.FailPolicy, parserCfg ParserConfig) (*Result, error) {
 	if parser == nil {
 		return nil, fmt.Errorf("scan service: parser is nil")
 	}
@@ -98,18 +108,28 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 		return &Result{}, nil
 	}
 
-	// Deduplicate
+	// Deduplicate while preserving relation info (first-seen wins).
+	// When ShowTransitive is false, skip transitive dependencies to avoid
+	// unnecessary API calls — users can only act on direct dependencies.
 	seen := make(map[string]struct{}, len(deps))
+	relations := make(map[string]depparser.DependencyRelation, len(deps))
+	viaParents := make(map[string][]string, len(deps))
 	var purls []string
 	for _, d := range deps {
 		if _, exists := seen[d.PURL]; exists {
 			continue
 		}
+		if !parserCfg.ShowTransitive && d.Relation == depparser.RelationTransitive {
+			continue
+		}
 		seen[d.PURL] = struct{}{}
+		relations[d.PURL] = d.Relation
+		viaParents[d.PURL] = d.ViaParents
 		purls = append(purls, d.PURL)
 	}
 
-	slog.Info("scan: evaluating dependencies", "count", len(purls), "parser", parser.FormatName())
+	slog.Info("scan: evaluating dependencies", "count", len(purls), "parser", parser.FormatName(),
+		"showTransitive", parserCfg.ShowTransitive)
 
 	analyses, err := s.analysisService.ProcessBatchPURLs(ctx, purls)
 	if err != nil {
@@ -117,6 +137,11 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 	}
 
 	entries := buildEntries(purls, analyses)
+	// Populate relation and via-parents from parser output.
+	for i := range entries {
+		entries[i].Relation = relations[entries[i].PURL]
+		entries[i].ViaParents = viaParents[entries[i].PURL]
+	}
 	hasFailure := policy.Evaluate(entries)
 
 	return &Result{Entries: entries, HasFailure: hasFailure}, nil

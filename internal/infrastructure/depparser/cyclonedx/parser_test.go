@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/cyclonedx"
 )
 
@@ -119,6 +120,109 @@ func TestParser_Parse_InvalidJSON(t *testing.T) {
 	_, err := p.Parse(context.Background(), []byte("not json"))
 	if err == nil {
 		t.Error("Parse() expected error for invalid JSON, got nil")
+	}
+}
+
+func TestParser_Parse_MinimalRelationUnknown(t *testing.T) {
+	p := &cyclonedx.Parser{}
+	deps, err := p.Parse(context.Background(), readTestData(t, "minimal.json"))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	for i, d := range deps {
+		if d.Relation != depparser.RelationUnknown {
+			t.Errorf("deps[%d].Relation = %v, want RelationUnknown", i, d.Relation)
+		}
+	}
+}
+
+func TestParser_Parse_WithDependencies_BOMRef(t *testing.T) {
+	p := &cyclonedx.Parser{}
+	deps, err := p.Parse(context.Background(), readTestData(t, "with_dependencies.json"))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if len(deps) != 3 {
+		t.Fatalf("got %d deps, want 3", len(deps))
+	}
+
+	relations := make(map[string]depparser.DependencyRelation, len(deps))
+	viaParents := make(map[string][]string, len(deps))
+	for _, d := range deps {
+		relations[d.PURL] = d.Relation
+		viaParents[d.PURL] = d.ViaParents
+	}
+
+	if r := relations["pkg:npm/express@4.18.2"]; r != depparser.RelationDirect {
+		t.Errorf("express relation = %v, want RelationDirect", r)
+	}
+	if r := relations["pkg:npm/lodash@4.17.21"]; r != depparser.RelationDirect {
+		t.Errorf("lodash relation = %v, want RelationDirect", r)
+	}
+	if r := relations["pkg:npm/body-parser@1.20.0"]; r != depparser.RelationTransitive {
+		t.Errorf("body-parser relation = %v, want RelationTransitive", r)
+	}
+
+	if len(viaParents["pkg:npm/express@4.18.2"]) != 0 {
+		t.Errorf("express ViaParents = %v, want empty", viaParents["pkg:npm/express@4.18.2"])
+	}
+	bp := viaParents["pkg:npm/body-parser@1.20.0"]
+	if len(bp) != 1 || bp[0] != "express" {
+		t.Errorf("body-parser ViaParents = %v, want [express]", bp)
+	}
+}
+
+func TestParser_Parse_WithDependencies_PURLRef(t *testing.T) {
+	p := &cyclonedx.Parser{}
+	deps, err := p.Parse(context.Background(), readTestData(t, "with_dependencies_purl_ref.json"))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if len(deps) != 2 {
+		t.Fatalf("got %d deps, want 2", len(deps))
+	}
+
+	relations := make(map[string]depparser.DependencyRelation, len(deps))
+	for _, d := range deps {
+		relations[d.PURL] = d.Relation
+	}
+
+	if r := relations["pkg:npm/express@4.18.2"]; r != depparser.RelationDirect {
+		t.Errorf("express relation = %v, want RelationDirect", r)
+	}
+	if r := relations["pkg:npm/body-parser@1.20.0"]; r != depparser.RelationTransitive {
+		t.Errorf("body-parser relation = %v, want RelationTransitive", r)
+	}
+}
+
+func TestParser_Parse_WithDependencies_MultiVia(t *testing.T) {
+	p := &cyclonedx.Parser{}
+	deps, err := p.Parse(context.Background(), readTestData(t, "with_dependencies_multi_via.json"))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if len(deps) != 3 {
+		t.Fatalf("got %d deps, want 3", len(deps))
+	}
+
+	var debugDep *depparser.ParsedDependency
+	for i := range deps {
+		if deps[i].Name == "debug" {
+			debugDep = &deps[i]
+			break
+		}
+	}
+	if debugDep == nil {
+		t.Fatal("debug dep not found")
+	}
+	if debugDep.Relation != depparser.RelationTransitive {
+		t.Errorf("debug relation = %v, want RelationTransitive", debugDep.Relation)
+	}
+	if len(debugDep.ViaParents) != 2 {
+		t.Fatalf("debug ViaParents len = %d, want 2", len(debugDep.ViaParents))
+	}
+	if debugDep.ViaParents[0] != "axios" || debugDep.ViaParents[1] != "express" {
+		t.Errorf("debug ViaParents = %v, want [axios express]", debugDep.ViaParents)
 	}
 }
 

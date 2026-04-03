@@ -4,6 +4,31 @@ package depparser
 
 import "context"
 
+// DependencyRelation describes how a dependency relates to the user's project.
+// The zero value (RelationUnknown) is used when the parser cannot determine the relation.
+type DependencyRelation int
+
+const (
+	// RelationUnknown means the parser cannot determine the dependency relation.
+	RelationUnknown DependencyRelation = iota
+	// RelationDirect means the dependency is directly required by the project.
+	RelationDirect
+	// RelationTransitive means the dependency is pulled in indirectly through another dependency.
+	RelationTransitive
+)
+
+// String returns the human-readable label for the relation.
+func (r DependencyRelation) String() string {
+	switch r {
+	case RelationDirect:
+		return "direct"
+	case RelationTransitive:
+		return "transitive"
+	default:
+		return ""
+	}
+}
+
 // ParsedDependency represents a single dependency extracted from an SBOM or lockfile.
 // This is a Value Object — immutable after creation, defined by its attributes.
 type ParsedDependency struct {
@@ -15,6 +40,12 @@ type ParsedDependency struct {
 	Name string
 	// Version is the package version string.
 	Version string
+	// Relation indicates whether this is a direct or transitive dependency.
+	// The zero value (RelationUnknown) is used when the parser cannot determine this.
+	Relation DependencyRelation
+	// ViaParents lists the short names of direct dependencies through which
+	// this transitive dependency is pulled in. Empty for direct or unknown deps.
+	ViaParents []string
 }
 
 // DependencyParser extracts dependencies from raw input data.
