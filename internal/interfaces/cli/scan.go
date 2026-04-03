@@ -41,7 +41,12 @@ type ScanOptions struct {
 	FailOnRaw           string // raw --fail-on CSV string
 	SBOMPath            string // --sbom flag
 	ConfigSampleDefault int    // Config-level default sample size (applied only to PURL/URL list files)
+	IncludeActions      bool   // --include-actions: scan GitHub Actions referenced by input repos
 }
+
+// ActionsDiscovererFactory creates an ActionsDiscoverer from the scan service's analysis service.
+// This avoids importing infrastructure packages directly in the interfaces layer.
+type ActionsDiscovererFactory func(svc *scanapp.Service) scanapp.ActionsDiscoverer
 
 // RunScan is the entry point for the "scan" subcommand.
 //
@@ -53,7 +58,7 @@ type ScanOptions struct {
 //  5. Auto-detect: go.mod in current directory
 //
 // DDD Layer: Interfaces (CLI handler, delegates to Application)
-func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts ScanOptions, parsers map[string]depparser.DependencyParser, detectFile FileDetector, detectWorkflow WorkflowDetector, parseWorkflow WorkflowParser) error {
+func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts ScanOptions, parsers map[string]depparser.DependencyParser, detectFile FileDetector, detectWorkflow WorkflowDetector, parseWorkflow WorkflowParser, actionsFactory ActionsDiscovererFactory) error {
 	// Parse fail-on policy
 	policy, err := domainscan.ParseFailPolicy(opts.FailOnRaw)
 	if err != nil {
@@ -66,6 +71,15 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 		return fmt.Errorf("failed to initialize scan service: %w", err)
 	}
 
+	// Build actions config for modes that support --include-actions.
+	var actionsCfg scanapp.ActionsConfig
+	if opts.IncludeActions && actionsFactory != nil {
+		actionsCfg = scanapp.ActionsConfig{
+			Enabled:    true,
+			Discoverer: actionsFactory(scanService),
+		}
+	}
+
 	// Route to the appropriate input handler
 	switch {
 	case opts.SBOMPath != "":
@@ -75,13 +89,13 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 		if detectFile == nil {
 			return fmt.Errorf("file detector is required for --file mode")
 		}
-		return runScanFile(ctx, scanService, opts, parsers, policy, detectFile, detectWorkflow, parseWorkflow)
+		return runScanFile(ctx, scanService, opts, parsers, policy, detectFile, detectWorkflow, parseWorkflow, actionsCfg)
 
 	case len(args) > 0:
-		return runScanDirect(ctx, scanService, args, opts, policy)
+		return runScanDirect(ctx, scanService, args, opts, policy, actionsCfg)
 
 	case !isStdinTerminal():
-		return runScanStdin(ctx, scanService, opts, policy)
+		return runScanStdin(ctx, scanService, opts, policy, actionsCfg)
 
 	default:
 		// Auto-detect go.mod in cwd
@@ -116,7 +130,7 @@ func runScanSBOM(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 }
 
 // runScanFile handles --file input (go.mod, SBOM, GitHub Actions workflow YAML, or PURL/URL list).
-func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy, detectFile FileDetector, detectWorkflow WorkflowDetector, parseWorkflow WorkflowParser) error {
+func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy, detectFile FileDetector, detectWorkflow WorkflowDetector, parseWorkflow WorkflowParser, actionsCfg scanapp.ActionsConfig) error {
 	filePath := opts.Filename
 
 	// Try structured format (go.mod / CycloneDX SBOM) first
@@ -160,11 +174,11 @@ func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 	}
 
 	// Fall back to PURL/URL list
-	return runScanPURLList(ctx, svc, opts, filePath, policy)
+	return runScanPURLList(ctx, svc, opts, filePath, policy, actionsCfg)
 }
 
 // runScanPURLList reads a file as a PURL/URL line list and runs the scan.
-func runScanPURLList(ctx context.Context, svc *scanapp.Service, opts ScanOptions, filePath string, policy domainscan.FailPolicy) error {
+func runScanPURLList(ctx context.Context, svc *scanapp.Service, opts ScanOptions, filePath string, policy domainscan.FailPolicy, actionsCfg scanapp.ActionsConfig) error {
 	if err := validateLineRange(&opts.ProcessingOptions); err != nil {
 		return fmt.Errorf("invalid line range: %w", err)
 	}
@@ -187,7 +201,7 @@ func runScanPURLList(ctx context.Context, svc *scanapp.Service, opts ScanOptions
 		return fmt.Errorf("no valid PURLs or GitHub URLs found in file '%s'", filePath)
 	}
 
-	result, err := svc.RunFromPURLs(ctx, purls, githubURLs, policy)
+	result, err := svc.RunFromPURLsWithActions(ctx, purls, githubURLs, policy, actionsCfg)
 	if err != nil {
 		return fmt.Errorf("scan failed: %w", err)
 	}
@@ -196,13 +210,13 @@ func runScanPURLList(ctx context.Context, svc *scanapp.Service, opts ScanOptions
 }
 
 // runScanDirect handles positional args (PURLs / GitHub URLs).
-func runScanDirect(ctx context.Context, svc *scanapp.Service, args []string, opts ScanOptions, policy domainscan.FailPolicy) error {
+func runScanDirect(ctx context.Context, svc *scanapp.Service, args []string, opts ScanOptions, policy domainscan.FailPolicy, actionsCfg scanapp.ActionsConfig) error {
 	purls, githubURLs := categorizeInputs(args)
 	if len(purls) == 0 && len(githubURLs) == 0 {
 		return fmt.Errorf("no valid PURLs or GitHub URLs found in arguments")
 	}
 
-	result, err := svc.RunFromPURLs(ctx, purls, githubURLs, policy)
+	result, err := svc.RunFromPURLsWithActions(ctx, purls, githubURLs, policy, actionsCfg)
 	if err != nil {
 		return fmt.Errorf("scan failed: %w", err)
 	}
@@ -211,7 +225,7 @@ func runScanDirect(ctx context.Context, svc *scanapp.Service, args []string, opt
 }
 
 // runScanStdin reads PURLs/GitHub URLs from stdin.
-func runScanStdin(ctx context.Context, svc *scanapp.Service, opts ScanOptions, policy domainscan.FailPolicy) error {
+func runScanStdin(ctx context.Context, svc *scanapp.Service, opts ScanOptions, policy domainscan.FailPolicy, actionsCfg scanapp.ActionsConfig) error {
 	var lines []string
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
@@ -234,7 +248,7 @@ func runScanStdin(ctx context.Context, svc *scanapp.Service, opts ScanOptions, p
 		return fmt.Errorf("no valid PURLs or GitHub URLs found in stdin")
 	}
 
-	result, err := svc.RunFromPURLs(ctx, purls, githubURLs, policy)
+	result, err := svc.RunFromPURLsWithActions(ctx, purls, githubURLs, policy, actionsCfg)
 	if err != nil {
 		return fmt.Errorf("scan failed: %w", err)
 	}

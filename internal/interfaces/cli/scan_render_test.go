@@ -125,6 +125,121 @@ func TestRenderScanOutput_UnsupportedFormat(t *testing.T) {
 	}
 }
 
+func TestRenderScanTable_WithActionsSeparator(t *testing.T) {
+	entries := []domainaudit.AuditEntry{
+		{
+			PURL:    "https://github.com/owner/repo",
+			Verdict: domainaudit.VerdictOK,
+			Source:  domainaudit.SourceDirect,
+		},
+		{
+			PURL:    "https://github.com/actions/checkout",
+			Verdict: domainaudit.VerdictOK,
+			Source:  domainaudit.SourceActions,
+		},
+		{
+			PURL:    "https://github.com/actions/setup-go",
+			Verdict: domainaudit.VerdictReview,
+			Source:  domainaudit.SourceActions,
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := renderScanTable(&buf, entries); err != nil {
+		t.Fatalf("renderScanTable() error = %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, MarkerActionsBegin) {
+		t.Error("table output missing actions separator marker")
+	}
+	// Direct entry should appear before the marker.
+	directIdx := strings.Index(output, "owner/repo")
+	markerIdx := strings.Index(output, MarkerActionsBegin)
+	if directIdx >= markerIdx {
+		t.Error("direct entry should appear before actions marker")
+	}
+	// Actions entries should appear after the marker.
+	actionsIdx := strings.Index(output, "actions/checkout")
+	if actionsIdx <= markerIdx {
+		t.Error("actions entries should appear after actions marker")
+	}
+}
+
+func TestRenderScanTable_NoSeparatorWithoutActions(t *testing.T) {
+	entries := makeTestEntries()
+	var buf bytes.Buffer
+	if err := renderScanTable(&buf, entries); err != nil {
+		t.Fatalf("renderScanTable() error = %v", err)
+	}
+	if strings.Contains(buf.String(), MarkerActionsBegin) {
+		t.Error("table output should not contain actions marker when no actions entries exist")
+	}
+}
+
+func TestRenderScanJSON_WithSource(t *testing.T) {
+	entries := []domainaudit.AuditEntry{
+		{
+			PURL:    "https://github.com/owner/repo",
+			Verdict: domainaudit.VerdictOK,
+			Source:  domainaudit.SourceDirect,
+		},
+		{
+			PURL:    "https://github.com/actions/checkout",
+			Verdict: domainaudit.VerdictOK,
+			Source:  domainaudit.SourceActions,
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := renderScanJSON(&buf, entries); err != nil {
+		t.Fatalf("renderScanJSON() error = %v", err)
+	}
+
+	var out enrichedJSONOutput
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatalf("JSON unmarshal error = %v", err)
+	}
+
+	if len(out.Entries) != 2 {
+		t.Fatalf("got %d entries, want 2", len(out.Entries))
+	}
+	// Direct entry should have empty source (omitempty).
+	if out.Entries[0].Source != "" {
+		t.Errorf("direct entry source = %q, want empty", out.Entries[0].Source)
+	}
+	// Actions entry should have "actions" source.
+	if out.Entries[1].Source != "actions" {
+		t.Errorf("actions entry source = %q, want %q", out.Entries[1].Source, "actions")
+	}
+}
+
+func TestRenderScanCSV_WithSource(t *testing.T) {
+	entries := []domainaudit.AuditEntry{
+		{
+			PURL:    "https://github.com/actions/checkout",
+			Verdict: domainaudit.VerdictOK,
+			Source:  domainaudit.SourceActions,
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := renderScanCSV(&buf, entries); err != nil {
+		t.Fatalf("renderScanCSV() error = %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("got %d CSV lines, want 2 (header + 1 row)", len(lines))
+	}
+	if !strings.Contains(lines[0], "source") {
+		t.Error("CSV header missing 'source' column")
+	}
+	if !strings.HasSuffix(lines[1], "actions") {
+		t.Errorf("CSV row should end with 'actions', got %q", lines[1])
+	}
+}
+
 func TestResolveFormat(t *testing.T) {
 	tests := []struct {
 		name       string

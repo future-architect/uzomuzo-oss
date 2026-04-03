@@ -11,8 +11,10 @@ import (
 
 	urfcli "github.com/urfave/cli/v3"
 
+	scanapp "github.com/future-architect/uzomuzo-oss/internal/application/scan"
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/actionscan"
 	infradepparser "github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/cyclonedx"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/ghaworkflow"
@@ -36,6 +38,9 @@ func scanFlags() []urfcli.Flag {
 		// File mode options
 		&urfcli.IntFlag{Name: "sample", Usage: "Randomly sample up to N PURLs and N GitHub URLs (file mode only)"},
 		&urfcli.StringFlag{Name: "line-range", Usage: "Limit to line range START:END (file mode only)"},
+
+		// Actions scanning
+		&urfcli.BoolFlag{Name: "include-actions", Usage: "Also scan GitHub Actions referenced in target repositories' workflows"},
 	}
 }
 
@@ -54,6 +59,7 @@ func scanCommand(cfg *domaincfg.Config) *urfcli.Command {
    uzomuzo scan --file .github/workflows/ci.yml                   GitHub Actions workflow
    uzomuzo scan                                                   Auto-detect go.mod
    cat purls.txt | uzomuzo scan                                   Pipe PURLs
+   uzomuzo scan https://github.com/owner/repo --include-actions   Scan repo + its Actions
 
 CI gate examples:
    uzomuzo scan --sbom bom.json --fail-on eol-confirmed
@@ -139,12 +145,24 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 		return fmt.Errorf("positional arguments are not allowed with --file or --sbom")
 	}
 
+	// --include-actions is only supported for GitHub URL inputs (positional args, file list, stdin).
+	// Reject it for --file with structured formats or --sbom early to give a clear error.
+	if opts.IncludeActions && opts.SBOMPath != "" {
+		return fmt.Errorf("--include-actions is not supported with --sbom")
+	}
+
 	parsers := map[string]depparser.DependencyParser{
 		"sbom":  &cyclonedx.Parser{},
 		"gomod": &gomod.Parser{},
 	}
 
-	return cli.RunScan(ctx, cfg, args, opts, parsers, infradepparser.DetectFileParser, detectWorkflowFile, ghaworkflow.ParseGitHubURLs)
+	// Factory creates an ActionsDiscoverer from the scan service's GitHub client.
+	actionsFactory := func(svc *scanapp.Service) scanapp.ActionsDiscoverer {
+		githubClient := svc.AnalysisService().GitHubClient()
+		return actionscan.NewDiscoveryService(githubClient)
+	}
+
+	return cli.RunScan(ctx, cfg, args, opts, parsers, infradepparser.DetectFileParser, detectWorkflowFile, ghaworkflow.ParseGitHubURLs, actionsFactory)
 }
 
 // detectWorkflowFile checks whether filePath is a GitHub Actions workflow YAML.
@@ -196,9 +214,10 @@ func buildScanOptions(cmd *urfcli.Command) (cli.ScanOptions, error) {
 			SampleSize: int(cmd.Int("sample")),
 			Filename:   cmd.String("file"),
 		},
-		Format:    cmd.String("format"),
-		FailOnRaw: cmd.String("fail-on"),
-		SBOMPath:  cmd.String("sbom"),
+		Format:         cmd.String("format"),
+		FailOnRaw:      cmd.String("fail-on"),
+		SBOMPath:       cmd.String("sbom"),
+		IncludeActions: cmd.Bool("include-actions"),
 	}
 	if raw := cmd.String("line-range"); raw != "" {
 		ls, le, err := cli.ParseLineRange(raw)
