@@ -116,6 +116,22 @@ ok       action-transitive   https://github.com/actions/cache                  A
 
 Following the Configuration & Flags Policy (YAGNI), no `--depth` flag is added. The natural rarity of deep Composite Action chains means full traversal terminates quickly. If a depth limit is needed in the future, it can be added without breaking changes.
 
+### Default branch fetch for `action.yml` (no ref pinning)
+
+When fetching `action.yml` from a composite Action's repository, the tool reads from the **default branch (HEAD)**, not the specific ref (tag/SHA) pinned in the `uses:` directive (e.g., `@v4`, `@abc123`).
+
+This was considered and intentionally not implemented. The rationale:
+
+1. **Health assessment is about the repository, not a point-in-time snapshot.** uzomuzo evaluates whether a project is actively maintained — commit activity, release cadence, EOL status. These are repository-level signals that do not vary by tag. A user asking "is this Action healthy?" wants to know its current maintenance posture, not what its `action.yml` looked like at a specific release.
+
+2. **The latest `action.yml` reflects current risk.** If a composite Action's maintainer has since added or removed internal dependencies on their default branch, that is the reality the user will encounter when they next update their pin. Assessing the default branch shows the current supply chain, not a historical one.
+
+3. **Transitive discovery precision is not the goal.** The purpose of `--show-transitive` is to surface whether the Actions in a user's CI pipeline have healthy internal dependencies. Minor differences between a pinned ref and HEAD (e.g., a step added in a newer version) do not change the health assessment meaningfully — the transitive Action's repository is either healthy or it isn't.
+
+4. **Implementation cost is disproportionate.** Ref-pinned fetching would require extending the GitHub Contents API client to accept a `ref` parameter, parsing the ref from every `uses:` directive, and making ref-specific API calls. The precision gain does not justify this complexity for a health/lifecycle tool.
+
+If uzomuzo's scope expands to vulnerability detection or precise dependency graph construction, ref-pinned fetching should be reconsidered.
+
 ### Phase 3 deferred
 
 Scanning Action repositories' package dependencies (go.mod, package.json, etc.) is not included in this decision. The rationale:
