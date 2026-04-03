@@ -152,13 +152,34 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 	return nil
 }
 
+// MarkerActionsBegin marks the start of the GitHub Actions section in output.
+const MarkerActionsBegin = "--- GitHub Actions ---"
+
 // renderScanTable renders the VERDICT table format.
+// When entries include both direct and actions-sourced items, a separator is printed.
 func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	if _, err := fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL"); err != nil {
 		return fmt.Errorf("failed to write table header: %w", err)
 	}
+
+	actionsSectionStarted := false
 	for i := range entries {
+		// Print separator when transitioning from direct to actions entries.
+		if entries[i].Source == domainaudit.SourceActions && !actionsSectionStarted {
+			actionsSectionStarted = true
+			// Flush and write separator outside tabwriter to avoid column alignment issues.
+			if err := tw.Flush(); err != nil {
+				return fmt.Errorf("failed to flush table output: %w", err)
+			}
+			if _, err := fmt.Fprintf(w, "\n%s\n", MarkerActionsBegin); err != nil {
+				return fmt.Errorf("failed to write actions marker: %w", err)
+			}
+			tw = tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+			if _, err := fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL"); err != nil {
+				return fmt.Errorf("failed to write table header: %w", err)
+			}
+		}
 		maintenance, eol := entryMaintenanceEOL(&entries[i], "—")
 		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", entries[i].Verdict, entries[i].PURL, maintenance, eol); err != nil {
 			return fmt.Errorf("failed to write table row: %w", err)
@@ -194,6 +215,7 @@ type enrichedJSONEntry struct {
 
 	Reason string `json:"reason,omitempty"`
 	Error  string `json:"error,omitempty"`
+	Source string `json:"source,omitempty"`
 }
 
 type enrichedJSONOutput struct {
@@ -228,6 +250,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 		Lifecycle: maintenance,
 		EOL:       eol,
 		Error:     e.ErrorMsg,
+		Source:    string(e.Source),
 	}
 
 	a := e.Analysis
@@ -264,7 +287,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 
 func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	cw := csv.NewWriter(w)
-	if err := cw.Write([]string{"verdict", "purl", "lifecycle", "eol", "eol_reason", "successor", "repo_url"}); err != nil {
+	if err := cw.Write([]string{"verdict", "purl", "lifecycle", "eol", "eol_reason", "successor", "repo_url", "source"}); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
 	for i := range entries {
@@ -281,7 +304,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		}
 
 		if err := cw.Write([]string{
-			string(e.Verdict), e.PURL, maintenance, eol, eolReason, successor, repoURL,
+			string(e.Verdict), e.PURL, maintenance, eol, eolReason, successor, repoURL, string(e.Source),
 		}); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}

@@ -91,6 +91,9 @@ uzomuzo scan --sbom bom.json --fail-on eol-confirmed
 trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
   | uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective
 
+# Scan a repo's GitHub Actions dependencies
+uzomuzo scan https://github.com/owner/repo --include-actions
+
 # File input (one PURL per line)
 uzomuzo scan --file input_purls.txt --sample 500
 ```

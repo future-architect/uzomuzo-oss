@@ -121,6 +121,99 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 	return &Result{Entries: entries, HasFailure: hasFailure}, nil
 }
 
+// ActionsDiscoverer abstracts the actions discovery infrastructure.
+type ActionsDiscoverer interface {
+	DiscoverActions(ctx context.Context, repoURLs []string) (actionURLs []string, errors map[string]error, err error)
+}
+
+// ActionsConfig configures optional GitHub Actions health scanning.
+type ActionsConfig struct {
+	// Enabled activates action scanning for GitHub URL inputs.
+	Enabled bool
+	// Discoverer performs the actual Actions discovery via GitHub API.
+	Discoverer ActionsDiscoverer
+}
+
+// RunFromPURLsWithActions extends RunFromPURLs with optional GitHub Actions discovery.
+// When actionsCfg.Enabled is true and githubURLs is non-empty, it discovers Actions
+// referenced in the repositories' workflows and evaluates them alongside the main results.
+func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs []string, policy domainscan.FailPolicy, actionsCfg ActionsConfig) (*Result, error) {
+	// Phase A: standard analysis (same as RunFromPURLs).
+	purls = dedup(purls)
+	githubURLs = dedup(githubURLs)
+
+	allAnalyses := make(map[string]*analysis.Analysis)
+
+	if len(purls) > 0 {
+		slog.Info("scan: evaluating PURLs", "count", len(purls))
+		res, err := s.analysisService.ProcessBatchPURLs(ctx, purls)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate PURLs: %w", err)
+		}
+		for k, v := range res {
+			allAnalyses[k] = v
+		}
+	}
+
+	if len(githubURLs) > 0 {
+		slog.Info("scan: evaluating GitHub URLs", "count", len(githubURLs))
+		res, err := s.analysisService.ProcessBatchGitHubURLs(ctx, githubURLs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate GitHub URLs: %w", err)
+		}
+		for k, v := range res {
+			allAnalyses[k] = v
+		}
+	}
+
+	// Build ordered entry list: PURLs first, then GitHub URLs.
+	keys := make([]string, 0, len(purls)+len(githubURLs))
+	keys = append(keys, purls...)
+	keys = append(keys, githubURLs...)
+	entries := buildEntries(keys, allAnalyses)
+
+	// Phase B: actions discovery + analysis (if enabled).
+	if actionsCfg.Enabled && actionsCfg.Discoverer == nil {
+		return nil, fmt.Errorf("actions discovery is enabled but discoverer is nil")
+	}
+	if actionsCfg.Enabled && len(githubURLs) > 0 {
+		actionURLs, discoveryErrors, err := actionsCfg.Discoverer.DiscoverActions(ctx, githubURLs)
+		if err != nil {
+			return nil, fmt.Errorf("actions discovery failed: %w", err)
+		}
+
+		for src, e := range discoveryErrors {
+			slog.Warn("actions discovery error", "source", src, "error", e)
+		}
+
+		// Filter out URLs already analyzed as main repos.
+		var newURLs []string
+		for _, u := range actionURLs {
+			if _, exists := allAnalyses[u]; !exists {
+				newURLs = append(newURLs, u)
+			}
+		}
+		newURLs = dedup(newURLs)
+
+		if len(newURLs) > 0 {
+			slog.Info("scan: evaluating discovered Actions", "count", len(newURLs))
+			actRes, err := s.analysisService.ProcessBatchGitHubURLs(ctx, newURLs)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate discovered Actions: %w", err)
+			}
+
+			actionEntries := buildEntries(newURLs, actRes)
+			for i := range actionEntries {
+				actionEntries[i].Source = domainaudit.SourceActions
+			}
+			entries = append(entries, actionEntries...)
+		}
+	}
+
+	hasFailure := policy.Evaluate(entries)
+	return &Result{Entries: entries, HasFailure: hasFailure}, nil
+}
+
 // dedup removes duplicate strings while preserving first-seen order.
 func dedup(ss []string) []string {
 	seen := make(map[string]struct{}, len(ss))
