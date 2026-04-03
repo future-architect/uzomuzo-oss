@@ -3,6 +3,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -220,7 +221,11 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 	if err != nil {
 		// Repos without registry packages (e.g., GitHub Actions) cannot produce a PURL.
 		// Fall back to GitHub-only analysis using repository metadata.
-		if common.IsResourceNotFoundError(err) {
+		// Only match the "no supported package managers" case — other ResourceNotFoundErrors
+		// (e.g., repo not found on GitHub) should propagate as failures.
+		var scorecardErr *common.ScorecardError
+		if errors.As(err, &scorecardErr) && scorecardErr.Type == common.ErrorTypeResourceNotFound &&
+			strings.Contains(scorecardErr.Message, "no supported package managers") {
 			slog.Info("no_registry_package_falling_back_to_github_only",
 				"github_url", githubURL)
 			return s.buildGitHubOnlyAnalysis(ctx, githubURL)
@@ -281,7 +286,12 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 	// If the PURL was generated but the package is not found in deps.dev
 	// (e.g., package.json exists in repo but not published to npm),
 	// fall back to GitHub-only analysis.
-	if analysis.Error != nil && common.IsResourceNotFoundError(analysis.Error) {
+	// Gate on the deps.dev-specific error message to avoid catching unrelated
+	// ResourceNotFoundErrors that may be introduced by other enrichment steps.
+	var depsdevErr *common.ScorecardError
+	if analysis.Error != nil && errors.As(analysis.Error, &depsdevErr) &&
+		depsdevErr.Type == common.ErrorTypeResourceNotFound &&
+		strings.Contains(depsdevErr.Message, "package not found in deps.dev") {
 		slog.Info("deps_dev_package_not_found_falling_back_to_github_only",
 			"purl", purl, "github_url", githubURL)
 		return s.buildGitHubOnlyAnalysis(ctx, githubURL)

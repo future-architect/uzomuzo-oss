@@ -389,6 +389,20 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 			description: "npm: commits + no Scorecard → maintenance unknown → Active (not penalized for missing metrics)",
 		},
 		{
+			name: "github_only_inactive_no_publish_no_scorecard_stalled",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 400,
+					LatestHumanCommit:   &oldTime,
+					CommitStats:         &CommitStats{},
+				},
+				// No ReleaseInfo → HasPublishData() == false
+			},
+			scores:      map[string]*ScoreEntity{}, // no Scorecard
+			wantLabel:   LabelStalled,
+			description: "GitHub-only path: inactive commits, no publish data, no scorecard → Stalled (not ReviewNeeded)",
+		},
+		{
 			name: "npm_commits_only_maintained_explicitly_low_stalled",
 			analysis: &Analysis{
 				Package: &Package{Ecosystem: "npm"},
