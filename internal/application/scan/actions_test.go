@@ -43,13 +43,6 @@ func TestEntrySource_Constants(t *testing.T) {
 	}
 }
 
-func TestRunFromPURLsWithActions_DisabledActions(t *testing.T) {
-	// When actions are disabled, RunFromPURLsWithActions should not call the discoverer.
-	// Since we can't easily construct a real AnalysisService in unit tests,
-	// this test documents the expected contract.
-	t.Skip("requires non-nil AnalysisService which needs infrastructure setup")
-}
-
 func TestParseFailPolicy_ForActions(t *testing.T) {
 	// Verify that fail policy works for entries regardless of source.
 	policy, err := domainscan.ParseFailPolicy("")

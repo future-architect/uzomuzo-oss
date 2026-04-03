@@ -100,7 +100,7 @@ When scanning GitHub URLs, `--include-actions` automatically fetches the target 
 
 Output includes a `--- GitHub Actions ---` separator between direct results and discovered Actions. JSON and CSV formats include a `source` field (`"actions"` for discovered entries).
 
-> **Note:** `--include-actions` is opt-in because it makes additional GitHub API calls to fetch workflow files. It is only supported for GitHub URL inputs (not `--sbom` or `--file go.mod`).
+> **Note:** `--include-actions` is opt-in because it makes additional GitHub API calls to fetch workflow files. It requires `GITHUB_TOKEN` to be set (the Contents API is used to fetch workflow YAML). It is only supported for GitHub URL inputs (not `--sbom` or `--file go.mod`).
 
 ### File Input (PURL/URL list)
 

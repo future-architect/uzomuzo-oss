@@ -148,8 +148,13 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 	// --include-actions is only supported for GitHub URL inputs (positional args, file list, stdin).
 	// Reject it for --sbom early; --file with structured formats is rejected in runScanFile
 	// after file type detection.
-	if opts.IncludeActions && opts.SBOMPath != "" {
-		return fmt.Errorf("--include-actions is not supported with --sbom")
+	if opts.IncludeActions {
+		if opts.SBOMPath != "" {
+			return fmt.Errorf("--include-actions is not supported with --sbom")
+		}
+		if cfg.GitHub.Token == "" {
+			return fmt.Errorf("--include-actions requires GITHUB_TOKEN to fetch workflow files via the Contents API")
+		}
 	}
 
 	parsers := map[string]depparser.DependencyParser{
