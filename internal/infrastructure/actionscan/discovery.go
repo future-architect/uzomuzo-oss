@@ -51,7 +51,7 @@ func NewDiscoveryService(githubClient *github.Client, maxConcurrency int) (*Disc
 //
 // Each input URL is expected to be "https://github.com/{owner}/{repo}".
 // Repositories without a .github/workflows/ directory are silently skipped.
-// Parse/fetch errors for individual files are collected in DiscoveryOutput.Errors
+// Parse/fetch errors for individual files are collected in DiscoveryResult.Errors
 // rather than aborting the entire scan.
 //
 // The returned slices are sorted lexicographically for deterministic output.
@@ -203,7 +203,7 @@ func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initial
 
 			refs, isComposite, err := ghaworkflow.ParseCompositeActionURLs(data)
 			if err != nil {
-				result.Errors[item.url+"/action.yml"] = err
+				result.Errors[item.url] = err
 				continue
 			}
 			if !isComposite {

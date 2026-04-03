@@ -90,7 +90,7 @@ ok       action              github.com/actions/checkout       Active      No
 replace  action-transitive   github.com/some/abandoned-action  Abandoned   Yes
 ```
 
-**Detailed format**: The summary table at the top includes the `SOURCE` column. Per-entry detailed headers (`--- PURL N ---`) do not currently include source annotation because `printFullAnalysis` writes directly to stdout; the summary table provides source visibility. Error entries use `detailedEntryHeader` which does include source when shown.
+**Detailed format**: The summary table at the top includes the `SOURCE` column. Per-entry headers include source annotation when entries have multiple source types (e.g., `--- PURL 1 (direct) ---`, `--- PURL 6 (action) ---`, `--- PURL 12 (action-transitive) ---`).
 
 ```
 --- Summary Table ---
@@ -99,8 +99,13 @@ ok       direct              pkg:npm/express@4.18              Active      No
 ok       action              github.com/actions/checkout       Active      No
 ok       action-transitive   github.com/some/transitive-action Active      No
 
---- PURL 1 ---
+--- PURL 1 (direct) ---
 📦 Package: pkg:npm/express@4.18
+⚖️  Result: Active
+...
+
+--- PURL 6 (action-transitive) ---
+📦 Package: github.com/some/transitive-action
 ⚖️  Result: Active
 ...
 ```

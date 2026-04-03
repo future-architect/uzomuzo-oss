@@ -170,11 +170,11 @@ type actionRuns struct {
 	Steps []step `yaml:"steps"`
 }
 
-// ParseCompositeActionURLs parses an action.yml file and extracts GitHub URLs
+// ParseCompositeActionURLs parses an action.yml file and extracts ActionRef values
 // from steps[].uses if the action is a composite action (runs.using: composite).
 //
 // Returns:
-//   - refs: ActionRef values for each uses: directive found in composite steps
+//   - refs: parsed ActionRef values (owner/repo/path/ref) for each uses: directive found in composite steps
 //   - isComposite: true if runs.using == "composite"
 //   - err: non-nil if YAML parsing fails
 func ParseCompositeActionURLs(data []byte) (refs []ActionRef, isComposite bool, err error) {
