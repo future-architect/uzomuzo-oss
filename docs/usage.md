@@ -69,7 +69,7 @@ trivy image my-app:latest --format cyclonedx | ./uzomuzo scan --sbom -
 syft . -o cyclonedx-json | ./uzomuzo scan --sbom -
 ```
 
-When the SBOM includes a CycloneDX `dependencies` section (produced by most modern SBOM generators), uzomuzo classifies dependencies as **direct** or **transitive** based on the dependency graph. By default, only direct dependencies are shown — transitive dependencies are filtered out before API calls to save bandwidth.
+When the SBOM includes a CycloneDX `dependencies` section (produced by most modern SBOM generators), uzomuzo classifies dependencies as **direct** or **transitive** based on the dependency graph. By default, only direct dependencies are shown. In OSS health assessment (unlike vulnerability scanning), transitive dependency issues are not directly actionable by the user — if a transitive dependency has a problem, the resolution path is to update or replace the direct dependency that pulls it in. Filtering also reduces API calls for faster results.
 
 Use `--show-transitive` to include transitive dependencies in the output:
 
