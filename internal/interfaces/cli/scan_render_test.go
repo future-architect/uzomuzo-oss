@@ -155,12 +155,21 @@ func TestRenderScanTable_WithActionsSeparator(t *testing.T) {
 	}
 	// Direct entry should appear before the marker.
 	directIdx := strings.Index(output, "owner/repo")
+	if directIdx == -1 {
+		t.Fatal("table output missing direct entry")
+	}
 	markerIdx := strings.Index(output, MarkerActionsBegin)
+	if markerIdx == -1 {
+		t.Fatal("table output missing actions separator marker")
+	}
 	if directIdx >= markerIdx {
 		t.Error("direct entry should appear before actions marker")
 	}
 	// Actions entries should appear after the marker.
 	actionsIdx := strings.Index(output, "actions/checkout")
+	if actionsIdx == -1 {
+		t.Fatal("table output missing actions entry")
+	}
 	if actionsIdx <= markerIdx {
 		t.Error("actions entries should appear after actions marker")
 	}
