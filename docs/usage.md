@@ -76,6 +76,32 @@ syft . -o cyclonedx-json | ./uzomuzo scan --sbom -
 ./uzomuzo scan --file go.mod       # explicit path
 ```
 
+### GitHub Actions Workflow Input
+
+Scan a GitHub Actions workflow YAML to evaluate the lifecycle health of referenced Actions:
+
+```bash
+./uzomuzo scan --file .github/workflows/ci.yml
+```
+
+This extracts `uses:` directives (e.g., `actions/checkout@v4`) and evaluates each referenced Action as a GitHub repository.
+
+### Actions Discovery (`--include-actions`)
+
+When scanning GitHub URLs, `--include-actions` automatically fetches the target repository's workflow files and evaluates referenced Actions:
+
+```bash
+# Scan a repo AND its GitHub Actions dependencies
+./uzomuzo scan https://github.com/owner/repo --include-actions
+
+# Combined with fail policy
+./uzomuzo scan https://github.com/owner/repo --include-actions --fail-on stalled
+```
+
+Output includes a `--- GitHub Actions ---` separator between direct results and discovered Actions. JSON and CSV formats include a `source` field (`"actions"` for discovered entries).
+
+> **Note:** `--include-actions` is opt-in because it makes additional GitHub API calls to fetch workflow files. It is only supported for GitHub URL inputs (not `--sbom` or `--file go.mod`).
+
 ### File Input (PURL/URL list)
 
 List one identifier per line (PURL or GitHub URL) in a text file:
