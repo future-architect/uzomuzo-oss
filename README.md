@@ -79,8 +79,9 @@ uzomuzo scan pkg:npm/express@4.18.2
 # GitHub repository
 uzomuzo scan https://github.com/expressjs/express
 
-# Scan all project dependencies (CI-friendly)
+# Scan all project dependencies (CI-friendly, direct deps only by default)
 trivy fs . --format cyclonedx | uzomuzo scan --sbom -
+trivy fs . --format cyclonedx | uzomuzo scan --sbom - --show-transitive  # include transitive
 uzomuzo scan                     # auto-detect go.mod in cwd
 uzomuzo scan --format json       # JSON output for CI integration
 

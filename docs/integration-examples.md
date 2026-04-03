@@ -78,6 +78,8 @@ This workflow:
 
 You can omit `--fail-on` to see the full lifecycle classification for every component without failing the build.
 
+> **Note:** When the SBOM includes a CycloneDX `dependencies` section, only **direct** dependencies are shown by default. Add `--show-transitive` to include transitive dependencies in the output. SBOMs without dependency graph information show all components.
+
 ## Repository Transitive Dependency Check
 
 Assess the health of all transitive dependencies of a GitHub repository:
