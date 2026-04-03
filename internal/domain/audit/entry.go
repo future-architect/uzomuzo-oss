@@ -12,6 +12,9 @@ const (
 	SourceDirect EntrySource = ""
 	// SourceActions means this dependency was discovered from a GitHub Actions workflow.
 	SourceActions EntrySource = "actions"
+	// SourceActionsTransitive means this dependency was discovered as a transitive
+	// composite action dependency (an action used by another action).
+	SourceActionsTransitive EntrySource = "actions-transitive"
 )
 
 // AuditEntry pairs a dependency's PURL with its analysis result and derived verdict.
@@ -26,4 +29,7 @@ type AuditEntry struct {
 	ErrorMsg string
 	// Source indicates how this entry was discovered (empty = direct input, "actions" = from workflow).
 	Source EntrySource
+	// Via is the direct parent action URL that caused this transitive dependency to be discovered.
+	// Only populated when Source is SourceActionsTransitive.
+	Via string
 }

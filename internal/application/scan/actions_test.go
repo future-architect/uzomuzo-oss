@@ -11,12 +11,13 @@ import (
 
 // mockDiscoverer implements scan.ActionsDiscoverer for testing.
 type mockDiscoverer struct {
-	actionURLs []string
-	errors     map[string]error
+	directURLs       []string
+	transitiveActions map[string]string
+	errors           map[string]error
 }
 
-func (m *mockDiscoverer) DiscoverActions(_ context.Context, _ []string) ([]string, map[string]error, error) {
-	return m.actionURLs, m.errors, nil
+func (m *mockDiscoverer) DiscoverActions(_ context.Context, _ []string, _ bool) ([]string, map[string]string, map[string]error, error) {
+	return m.directURLs, m.transitiveActions, m.errors, nil
 }
 
 func TestActionsConfig_DisabledByDefault(t *testing.T) {

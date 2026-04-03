@@ -733,7 +733,18 @@ func displayBatchAnalysesFull(analyses map[string]*analysispkg.Analysis, options
 func printFullAnalysis(purl string, analysis *analysispkg.Analysis, counter *int) {
 	*counter++
 	fmt.Printf("\n--- PURL %d ---\n", *counter)
+	printAnalysisBody(purl, analysis, "")
+}
+
+// printAnalysisBody prints the analysis detail without the "--- PURL N ---" header.
+// This allows callers to customize the header (e.g., adding source annotation).
+// The via parameter, when non-empty, is printed after the package header to show
+// which direct action caused a transitive dependency to be discovered.
+func printAnalysisBody(purl string, analysis *analysispkg.Analysis, via string) {
 	printHeader(purl, analysis)
+	if via != "" {
+		fmt.Printf("🔗 Via: %s\n", via)
+	}
 	printLifecycle(analysis)
 	printEOLEvidence(analysis)
 	printEOLCatalog(analysis)

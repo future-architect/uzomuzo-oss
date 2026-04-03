@@ -1,0 +1,16 @@
+name: "My Composite Action"
+description: "A composite action for testing"
+inputs:
+  token:
+    description: "GitHub token"
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+    - run: echo "Hello"
+    - uses: actions/cache/restore@v4
+    - uses: owner/some-action@abc123
+    - uses: ./local-action
+    - uses: docker://alpine:3.18
+    - uses: actions/checkout@v4

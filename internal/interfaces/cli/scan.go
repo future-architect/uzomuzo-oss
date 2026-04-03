@@ -42,6 +42,7 @@ type ScanOptions struct {
 	SBOMPath            string // --sbom flag
 	ConfigSampleDefault int    // Config-level default sample size (applied only to PURL/URL list files)
 	IncludeActions      bool   // --include-actions: scan GitHub Actions referenced by input repos
+	ShowTransitive      bool   // --show-transitive: include transitive dependencies in output
 }
 
 // ActionsDiscovererFactory creates an ActionsDiscoverer from the scan service's analysis service.
@@ -85,8 +86,9 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 			return fmt.Errorf("include actions: actions discoverer factory returned nil")
 		}
 		actionsCfg = scanapp.ActionsConfig{
-			Enabled:    true,
-			Discoverer: discoverer,
+			Enabled:        true,
+			Discoverer:     discoverer,
+			ShowTransitive: opts.ShowTransitive,
 		}
 	}
 

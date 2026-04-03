@@ -125,7 +125,7 @@ func TestRenderScanOutput_UnsupportedFormat(t *testing.T) {
 	}
 }
 
-func TestRenderScanTable_WithActionsSeparator(t *testing.T) {
+func TestRenderScanTable_WithSourceColumn(t *testing.T) {
 	entries := []domainaudit.AuditEntry{
 		{
 			PURL:    "https://github.com/owner/repo",
@@ -138,9 +138,9 @@ func TestRenderScanTable_WithActionsSeparator(t *testing.T) {
 			Source:  domainaudit.SourceActions,
 		},
 		{
-			PURL:    "https://github.com/actions/setup-go",
+			PURL:    "https://github.com/some/transitive",
 			Verdict: domainaudit.VerdictReview,
-			Source:  domainaudit.SourceActions,
+			Source:  domainaudit.SourceActionsTransitive,
 		},
 	}
 
@@ -150,39 +150,25 @@ func TestRenderScanTable_WithActionsSeparator(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, MarkerActionsBegin) {
-		t.Error("table output missing actions separator marker")
+	if !strings.Contains(output, "SOURCE") {
+		t.Error("table output missing SOURCE header when multiple sources exist")
 	}
-	// Direct entry should appear before the marker.
-	directIdx := strings.Index(output, "owner/repo")
-	if directIdx == -1 {
-		t.Fatal("table output missing direct entry")
+	if !strings.Contains(output, "direct") {
+		t.Error("table output missing 'direct' source")
 	}
-	markerIdx := strings.Index(output, MarkerActionsBegin)
-	if markerIdx == -1 {
-		t.Fatal("table output missing actions separator marker")
-	}
-	if directIdx >= markerIdx {
-		t.Error("direct entry should appear before actions marker")
-	}
-	// Actions entries should appear after the marker.
-	actionsIdx := strings.Index(output, "actions/checkout")
-	if actionsIdx == -1 {
-		t.Fatal("table output missing actions entry")
-	}
-	if actionsIdx <= markerIdx {
-		t.Error("actions entries should appear after actions marker")
+	if !strings.Contains(output, "action-transitive") {
+		t.Error("table output missing 'action-transitive' source")
 	}
 }
 
-func TestRenderScanTable_NoSeparatorWithoutActions(t *testing.T) {
-	entries := makeTestEntries()
+func TestRenderScanTable_NoSourceColumnForSingleSource(t *testing.T) {
+	entries := makeTestEntries() // all SourceDirect
 	var buf bytes.Buffer
 	if err := renderScanTable(&buf, entries); err != nil {
 		t.Fatalf("renderScanTable() error = %v", err)
 	}
-	if strings.Contains(buf.String(), MarkerActionsBegin) {
-		t.Error("table output should not contain actions marker when no actions entries exist")
+	if strings.Contains(buf.String(), "SOURCE") {
+		t.Error("table output should not contain SOURCE column when all entries have same source")
 	}
 }
 
@@ -198,6 +184,11 @@ func TestRenderScanJSON_WithSource(t *testing.T) {
 			Verdict: domainaudit.VerdictOK,
 			Source:  domainaudit.SourceActions,
 		},
+		{
+			PURL:    "https://github.com/some/transitive",
+			Verdict: domainaudit.VerdictReview,
+			Source:  domainaudit.SourceActionsTransitive,
+		},
 	}
 
 	var buf bytes.Buffer
@@ -210,8 +201,8 @@ func TestRenderScanJSON_WithSource(t *testing.T) {
 		t.Fatalf("JSON unmarshal error = %v", err)
 	}
 
-	if len(out.Entries) != 2 {
-		t.Fatalf("got %d entries, want 2", len(out.Entries))
+	if len(out.Entries) != 3 {
+		t.Fatalf("got %d entries, want 3", len(out.Entries))
 	}
 	// Direct entry should have empty source (omitempty).
 	if out.Entries[0].Source != "" {
@@ -220,6 +211,10 @@ func TestRenderScanJSON_WithSource(t *testing.T) {
 	// Actions entry should have "actions" source.
 	if out.Entries[1].Source != "actions" {
 		t.Errorf("actions entry source = %q, want %q", out.Entries[1].Source, "actions")
+	}
+	// Transitive entry should have "actions-transitive" source.
+	if out.Entries[2].Source != "actions-transitive" {
+		t.Errorf("transitive entry source = %q, want %q", out.Entries[2].Source, "actions-transitive")
 	}
 }
 
@@ -244,8 +239,11 @@ func TestRenderScanCSV_WithSource(t *testing.T) {
 	if !strings.Contains(lines[0], "source") {
 		t.Error("CSV header missing 'source' column")
 	}
-	if !strings.HasSuffix(lines[1], "actions") {
-		t.Errorf("CSV row should end with 'actions', got %q", lines[1])
+	if !strings.Contains(lines[0], "via") {
+		t.Error("CSV header missing 'via' column")
+	}
+	if !strings.Contains(lines[1], "actions") {
+		t.Errorf("CSV row should contain 'actions', got %q", lines[1])
 	}
 }
 

@@ -102,6 +102,43 @@ const (
 	MarkerDetailedReportBegin = "--- Detailed Report ---"
 )
 
+// sourceDisplayName returns the human-readable display name for an EntrySource.
+func sourceDisplayName(s domainaudit.EntrySource) string {
+	switch s {
+	case domainaudit.SourceDirect:
+		return "direct"
+	case domainaudit.SourceActions:
+		return "action"
+	case domainaudit.SourceActionsTransitive:
+		return "action-transitive"
+	default:
+		return string(s)
+	}
+}
+
+// hasMultipleSources reports whether entries contain more than one distinct Source value.
+func hasMultipleSources(entries []domainaudit.AuditEntry) bool {
+	if len(entries) == 0 {
+		return false
+	}
+	first := entries[0].Source
+	for _, e := range entries[1:] {
+		if e.Source != first {
+			return true
+		}
+	}
+	return false
+}
+
+// detailedEntryHeader returns the header for a detailed report entry.
+// When showSource is true, the source is embedded: "--- PURL 1 (action) ---".
+func detailedEntryHeader(counter int, source domainaudit.EntrySource, showSource bool) string {
+	if showSource {
+		return fmt.Sprintf("--- PURL %d (%s) ---", counter, sourceDisplayName(source))
+	}
+	return fmt.Sprintf("--- PURL %d ---", counter)
+}
+
 // renderScanDetailed prints a summary table followed by rich per-package output.
 // The two sections are separated by markers for machine extraction.
 func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
@@ -118,16 +155,22 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 		return fmt.Errorf("failed to write marker: %w", err)
 	}
 
+	showSource := hasMultipleSources(entries)
 	counter := 0
 	for i := range entries {
 		e := &entries[i]
 		if e.Analysis == nil || e.Analysis.Error != nil {
 			counter++
-			if _, err := fmt.Fprintf(w, "\n--- PURL %d ---\n", counter); err != nil {
+			if _, err := fmt.Fprintf(w, "\n%s\n", detailedEntryHeader(counter, e.Source, showSource)); err != nil {
 				return fmt.Errorf("failed to write entry: %w", err)
 			}
 			if _, err := fmt.Fprintf(w, "Package: %s\n", e.PURL); err != nil {
 				return fmt.Errorf("failed to write entry: %w", err)
+			}
+			if e.Via != "" {
+				if _, err := fmt.Fprintf(w, "🔗 Via: %s\n", e.Via); err != nil {
+					return fmt.Errorf("failed to write entry: %w", err)
+				}
 			}
 			verdict := string(e.Verdict)
 			if e.ErrorMsg != "" {
@@ -141,8 +184,10 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 			}
 			continue
 		}
-		// Reuse the existing printFullAnalysis which writes to stdout.
-		printFullAnalysis(e.PURL, e.Analysis, &counter)
+		counter++
+		// Print source-annotated header, then delegate body to printAnalysisBody (stdout).
+		fmt.Printf("\n%s\n", detailedEntryHeader(counter, e.Source, showSource))
+		printAnalysisBody(e.PURL, e.Analysis, e.Via)
 	}
 	if counter == 0 {
 		if _, err := fmt.Fprintln(w, "No results to display"); err != nil {
@@ -152,37 +197,34 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 	return nil
 }
 
-// MarkerActionsBegin marks the start of the GitHub Actions section in output.
-const MarkerActionsBegin = "--- GitHub Actions ---"
-
 // renderScanTable renders the VERDICT table format.
-// When entries include both direct and actions-sourced items, a separator is printed.
+// When entries have multiple distinct sources, a SOURCE column is included.
 func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
+	showSource := hasMultipleSources(entries)
+
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL"); err != nil {
-		return fmt.Errorf("failed to write table header: %w", err)
+	if showSource {
+		if _, err := fmt.Fprintln(tw, "VERDICT\tSOURCE\tPURL\tLIFECYCLE\tEOL"); err != nil {
+			return fmt.Errorf("failed to write table header: %w", err)
+		}
+	} else {
+		if _, err := fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL"); err != nil {
+			return fmt.Errorf("failed to write table header: %w", err)
+		}
 	}
 
-	actionsSectionStarted := false
 	for i := range entries {
-		// Print separator when transitioning from direct to actions entries.
-		if entries[i].Source == domainaudit.SourceActions && !actionsSectionStarted {
-			actionsSectionStarted = true
-			// Flush and write separator outside tabwriter to avoid column alignment issues.
-			if err := tw.Flush(); err != nil {
-				return fmt.Errorf("failed to flush table output: %w", err)
-			}
-			if _, err := fmt.Fprintf(w, "\n%s\n", MarkerActionsBegin); err != nil {
-				return fmt.Errorf("failed to write actions marker: %w", err)
-			}
-			tw = tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-			if _, err := fmt.Fprintln(tw, "VERDICT\tPURL\tLIFECYCLE\tEOL"); err != nil {
-				return fmt.Errorf("failed to write table header: %w", err)
-			}
-		}
 		maintenance, eol := entryMaintenanceEOL(&entries[i], "—")
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", entries[i].Verdict, entries[i].PURL, maintenance, eol); err != nil {
-			return fmt.Errorf("failed to write table row: %w", err)
+		if showSource {
+			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
+				entries[i].Verdict, sourceDisplayName(entries[i].Source), entries[i].PURL, maintenance, eol); err != nil {
+				return fmt.Errorf("failed to write table row: %w", err)
+			}
+		} else {
+			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
+				entries[i].Verdict, entries[i].PURL, maintenance, eol); err != nil {
+				return fmt.Errorf("failed to write table row: %w", err)
+			}
 		}
 	}
 	if err := tw.Flush(); err != nil {
@@ -216,6 +258,7 @@ type enrichedJSONEntry struct {
 	Reason string `json:"reason,omitempty"`
 	Error  string `json:"error,omitempty"`
 	Source string `json:"source,omitempty"`
+	Via    string `json:"via,omitempty"`
 }
 
 type enrichedJSONOutput struct {
@@ -251,6 +294,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 		EOL:       eol,
 		Error:     e.ErrorMsg,
 		Source:    string(e.Source),
+		Via:       e.Via,
 	}
 
 	a := e.Analysis
@@ -287,7 +331,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 
 func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	cw := csv.NewWriter(w)
-	if err := cw.Write([]string{"verdict", "purl", "lifecycle", "eol", "eol_reason", "successor", "repo_url", "source"}); err != nil {
+	if err := cw.Write([]string{"verdict", "purl", "lifecycle", "eol", "eol_reason", "successor", "repo_url", "source", "via"}); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
 	for i := range entries {
@@ -304,7 +348,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		}
 
 		if err := cw.Write([]string{
-			string(e.Verdict), e.PURL, maintenance, eol, eolReason, successor, repoURL, string(e.Source),
+			string(e.Verdict), e.PURL, maintenance, eol, eolReason, successor, repoURL, string(e.Source), e.Via,
 		}); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}

@@ -47,23 +47,22 @@ func NewDiscoveryService(githubClient *github.Client, maxConcurrency int) (*Disc
 }
 
 // DiscoverActions fetches workflows for each GitHub URL, parses uses: directives,
-// and returns discovered Action URLs. Phase 1 supports depth=1 only (direct workflows).
+// and recursively resolves transitive composite action dependencies.
 //
 // Each input URL is expected to be "https://github.com/{owner}/{repo}".
 // Repositories without a .github/workflows/ directory are silently skipped.
 // Parse/fetch errors for individual files are collected in DiscoveryResult.Errors
 // rather than aborting the entire scan.
 //
-// The returned actionURLs slice is sorted lexicographically for deterministic output.
+// The returned slices are sorted lexicographically for deterministic output.
 // This method satisfies scan.ActionsDiscoverer.
-func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []string) (actionURLs []string, errors map[string]error, err error) {
+func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs []string, transitiveActions map[string]string, errors map[string]error, err error) {
 	result := &DiscoveryResult{
 		Actions: make(map[string]int),
 		Errors:  make(map[string]error),
 	}
 
-	// Collect URLs with mutex protection, bounded by semaphore.
-	var orderedURLs []string
+	// Phase 1: Discover direct actions from workflow files.
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, s.maxConcurrency)
@@ -75,10 +74,10 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 			semaphore <- struct{}{}        // Acquire semaphore
 			defer func() { <-semaphore }() // Release semaphore
 
-			owner, repo, err := common.ExtractGitHubOwnerRepo(repoURL)
-			if err != nil {
+			owner, repo, parseErr := common.ExtractGitHubOwnerRepo(repoURL)
+			if parseErr != nil {
 				mu.Lock()
-				result.Errors[repoURL] = err
+				result.Errors[repoURL] = parseErr
 				mu.Unlock()
 				return
 			}
@@ -89,7 +88,7 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 			for _, u := range urls {
 				if _, exists := result.Actions[u]; !exists {
 					result.Actions[u] = 0
-					orderedURLs = append(orderedURLs, u)
+					directURLs = append(directURLs, u)
 				}
 			}
 			for k, v := range errs {
@@ -101,17 +100,162 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 
 	wg.Wait()
 
-	// Sort for deterministic output — goroutine scheduling makes insertion order
-	// non-deterministic across runs.
-	sort.Strings(orderedURLs)
+	// Sort before transitive resolution so BFS seed order is deterministic.
+	// This ensures consistent "via" parent selection when multiple direct actions
+	// lead to the same transitive dependency (lexicographically first wins).
+	sort.Strings(directURLs)
+
+	// Phase 2: Resolve transitive composite action dependencies via BFS (opt-in).
+	if resolveTransitive {
+		transitiveActions = s.resolveTransitiveActions(ctx, directURLs, result)
+	}
 
 	slog.Info("actions discovery complete",
 		"repos_scanned", len(repoURLs),
-		"actions_found", len(result.Actions),
+		"direct_actions", len(directURLs),
+		"transitive_actions", len(transitiveActions),
 		"errors", len(result.Errors),
 	)
 
-	return orderedURLs, result.Errors, nil
+	return directURLs, transitiveActions, result.Errors, nil
+}
+
+// actionRefKey returns a dedup key for BFS traversal that includes the subdirectory path.
+// Different paths within the same repo (e.g., actions/cache vs actions/cache/save) are
+// treated as distinct actions for fetching, while the repo-level URL is used for scan output.
+func actionRefKey(ref ghaworkflow.ActionRef) string {
+	key := ref.Owner + "/" + ref.Repo
+	if ref.Path != "" {
+		key += "/" + ref.Path
+	}
+	return key
+}
+
+// buildActionRefFromGitHubURL parses a GitHub URL into an ActionRef, preserving any
+// subdirectory path beyond owner/repo (e.g., "https://github.com/owner/repo/subpath").
+func buildActionRefFromGitHubURL(rawURL string) (ghaworkflow.ActionRef, error) {
+	owner, repo, err := common.ExtractGitHubOwnerRepo(rawURL)
+	if err != nil {
+		return ghaworkflow.ActionRef{}, fmt.Errorf("extract owner/repo from GitHub URL %q: %w", rawURL, err)
+	}
+
+	ref := ghaworkflow.ActionRef{
+		Owner: owner,
+		Repo:  repo,
+	}
+
+	trimmedURL := strings.TrimSpace(rawURL)
+	trimmedURL = strings.TrimPrefix(trimmedURL, "https://github.com/")
+	trimmedURL = strings.TrimPrefix(trimmedURL, "http://github.com/")
+	if idx := strings.IndexAny(trimmedURL, "?#"); idx >= 0 {
+		trimmedURL = trimmedURL[:idx]
+	}
+
+	parts := strings.Split(trimmedURL, "/")
+	if len(parts) > 2 {
+		ref.Path = strings.Join(parts[2:], "/")
+	}
+
+	return ref, nil
+}
+
+// resolveTransitiveActions performs BFS to discover actions referenced by composite actions.
+// It fetches action.yml for each queued action, parses composite steps, and adds new
+// action URLs to the queue. The seen set tracks owner/repo/path to handle subdirectory actions.
+//
+// Returns a map of transitive URL → via URL (the direct action that caused the discovery).
+// For depth > 1 chains (A→B→C), C's via is A (the original direct action), not B.
+func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initialURLs []string, result *DiscoveryResult) map[string]string {
+	type queueItem struct {
+		ref ghaworkflow.ActionRef
+		url string // GitHub URL (https://github.com/owner/repo)
+		via string // The direct action that led to this discovery
+	}
+
+	// Track seen actions by full path (owner/repo/path) to correctly handle
+	// subdirectory actions within the same repository.
+	seen := make(map[string]struct{})
+	for _, u := range initialURLs {
+		ref, err := buildActionRefFromGitHubURL(u)
+		if err != nil {
+			continue
+		}
+		seen[actionRefKey(ref)] = struct{}{}
+	}
+
+	var queue []queueItem
+	for _, u := range initialURLs {
+		ref, err := buildActionRefFromGitHubURL(u)
+		if err != nil {
+			continue
+		}
+		queue = append(queue, queueItem{ref: ref, url: u, via: u})
+	}
+
+	// transitive URL → via (direct parent action URL)
+	transitiveActions := make(map[string]string)
+
+	for len(queue) > 0 {
+		current := queue
+		queue = nil
+
+		for _, item := range current {
+			data := s.fetchActionYAML(ctx, item.ref, result)
+			if data == nil {
+				continue
+			}
+
+			refs, isComposite, err := ghaworkflow.ParseCompositeActionURLs(data)
+			if err != nil {
+				result.Errors[actionRefKey(item.ref)] = err
+				continue
+			}
+			if !isComposite {
+				continue
+			}
+
+			for _, ref := range refs {
+				key := actionRefKey(ref)
+				if _, exists := seen[key]; exists {
+					continue
+				}
+				seen[key] = struct{}{}
+
+				ghURL := ref.GitHubURL()
+				if _, exists := result.Actions[ghURL]; !exists {
+					result.Actions[ghURL] = 1
+					transitiveActions[ghURL] = item.via
+				}
+				queue = append(queue, queueItem{ref: ref, url: ghURL, via: item.via})
+			}
+		}
+	}
+
+	return transitiveActions
+}
+
+// fetchActionYAML fetches action.yml (or action.yaml as fallback) from a GitHub repository.
+// Returns nil if neither file exists. Errors are recorded in result.Errors.
+func (s *DiscoveryService) fetchActionYAML(ctx context.Context, ref ghaworkflow.ActionRef, result *DiscoveryResult) []byte {
+	// Try action.yml first.
+	ymlPath := ref.ActionYAMLPath("action.yml")
+	data, err := s.githubClient.FetchFileContent(ctx, ref.Owner, ref.Repo, ymlPath)
+	if err != nil {
+		result.Errors[fmt.Sprintf("%s/%s/%s", ref.Owner, ref.Repo, ymlPath)] = err
+		return nil
+	}
+	if data != nil {
+		return data
+	}
+
+	// Fallback to action.yaml.
+	yamlPath := ref.ActionYAMLPath("action.yaml")
+	data, err = s.githubClient.FetchFileContent(ctx, ref.Owner, ref.Repo, yamlPath)
+	if err != nil {
+		result.Errors[fmt.Sprintf("%s/%s/%s", ref.Owner, ref.Repo, yamlPath)] = err
+		return nil
+	}
+	return data // nil if not found
 }
 
 // discoverFromRepo fetches workflow files from a single repository and parses them.

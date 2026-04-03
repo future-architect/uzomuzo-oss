@@ -102,6 +102,111 @@ func extractGitHubURL(uses string) string {
 	return "https://github.com/" + parts[0] + "/" + parts[1]
 }
 
+// ActionRef represents a parsed GitHub Actions uses: reference with full path detail.
+type ActionRef struct {
+	Owner string // e.g., "actions"
+	Repo  string // e.g., "cache"
+	Path  string // subdirectory path, empty for root actions (e.g., "save" for actions/cache/save)
+	Ref   string // version tag/sha/branch (e.g., "v4")
+}
+
+// GitHubURL returns the GitHub repository URL for this action reference.
+func (r ActionRef) GitHubURL() string {
+	return "https://github.com/" + r.Owner + "/" + r.Repo
+}
+
+// ActionYAMLPath returns the path to fetch action.yml from within the repository.
+// For root actions this is "action.yml"; for subdirectory actions it is "path/action.yml".
+func (r ActionRef) ActionYAMLPath(filename string) string {
+	if r.Path == "" {
+		return filename
+	}
+	return r.Path + "/" + filename
+}
+
+// ExtractActionRef parses a uses: directive into an ActionRef.
+// Returns the zero value and false for local actions (./), docker references, or invalid formats.
+func ExtractActionRef(uses string) (ActionRef, bool) {
+	uses = strings.TrimSpace(uses)
+	if uses == "" {
+		return ActionRef{}, false
+	}
+	if strings.HasPrefix(uses, "./") || strings.HasPrefix(uses, "../") {
+		return ActionRef{}, false
+	}
+	if strings.HasPrefix(uses, "docker://") {
+		return ActionRef{}, false
+	}
+
+	ref := ""
+	if idx := strings.Index(uses, "@"); idx > 0 {
+		ref = uses[idx+1:]
+		uses = uses[:idx]
+	}
+
+	parts := strings.SplitN(uses, "/", 3)
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		return ActionRef{}, false
+	}
+
+	ar := ActionRef{
+		Owner: parts[0],
+		Repo:  parts[1],
+		Ref:   ref,
+	}
+	if len(parts) == 3 && parts[2] != "" {
+		ar.Path = parts[2]
+	}
+	return ar, true
+}
+
+// actionFile is the minimal YAML structure for parsing action.yml files.
+type actionFile struct {
+	Runs actionRuns `yaml:"runs"`
+}
+
+type actionRuns struct {
+	Using string `yaml:"using"`
+	Steps []step `yaml:"steps"`
+}
+
+// ParseCompositeActionURLs parses an action.yml file and extracts ActionRef values
+// from steps[].uses if the action is a composite action (runs.using: composite).
+//
+// Returns:
+//   - refs: parsed ActionRef values (owner/repo/path/ref) for each uses: directive found in composite steps
+//   - isComposite: true if runs.using == "composite"
+//   - err: non-nil if YAML parsing fails
+func ParseCompositeActionURLs(data []byte) (refs []ActionRef, isComposite bool, err error) {
+	var af actionFile
+	if err := yaml.Unmarshal(data, &af); err != nil {
+		return nil, false, fmt.Errorf("failed to parse action manifest: %w", err)
+	}
+
+	if !strings.EqualFold(af.Runs.Using, "composite") {
+		return nil, false, nil
+	}
+
+	seen := make(map[string]struct{})
+	for _, s := range af.Runs.Steps {
+		ref, ok := ExtractActionRef(s.Uses)
+		if !ok {
+			continue
+		}
+		key := ref.GitHubURL()
+		if ref.Path != "" {
+			key += "/" + ref.Path
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		refs = append(refs, ref)
+	}
+
+	return refs, true, nil
+}
+
 // IsWorkflowYAMLByPath reports whether filePath is inside a .github/workflows/ directory
 // and has a YAML extension. This is the fast, I/O-free path check.
 func IsWorkflowYAMLByPath(filePath string) bool {
