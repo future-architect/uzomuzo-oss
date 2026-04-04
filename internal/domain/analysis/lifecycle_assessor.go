@@ -239,17 +239,29 @@ func (s *LifecycleAssessorService) severityAwareLabel(hasHigh bool,
 }
 
 // severitySummary returns a severity breakdown string for reason text, e.g. ", max: HIGH 7.5".
-// Returns empty string if no severity data is available.
+// When unknown-severity advisories exist, includes the count (e.g. ", max: LOW 3.0, unknown: 1")
+// so the reason text stays consistent with the conservative classification that treats unknowns
+// as potentially HIGH. Returns empty string if no severity data is available.
 func (s *LifecycleAssessorService) severitySummary(a *Analysis) string {
 	vd := s.getStableOrMaxVersionDetail(a)
 	if vd == nil || len(vd.Advisories) == 0 {
 		return ""
 	}
+
+	unknownCount := vd.UnknownSeverityAdvisoryCount()
 	maxScore := vd.MaxCVSS3()
+
 	if maxScore <= 0 {
+		if unknownCount > 0 {
+			return fmt.Sprintf(", unknown: %d", unknownCount)
+		}
 		return ""
 	}
+
 	severity := SeverityFromCVSS3(maxScore)
+	if unknownCount > 0 {
+		return fmt.Sprintf(", max: %s %.1f, unknown: %d", severity, maxScore, unknownCount)
+	}
 	return fmt.Sprintf(", max: %s %.1f", severity, maxScore)
 }
 

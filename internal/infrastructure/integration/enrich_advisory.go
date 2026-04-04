@@ -16,8 +16,11 @@ import (
 //
 // Scope: Only StableVersion and MaxSemverVersion are enriched because:
 //   - The lifecycle assessor (getStableOrMaxVersionDetail) only inspects these two.
-//   - CLI output (JSON/CSV) uses LatestVersionDetail() which resolves Stable > MaxSemver first.
-//   - PreRelease and RequestedVersion advisories are not consumed by any current code path.
+//   - CLI output (JSON/CSV) uses LatestVersionDetail(), which prefers Stable > MaxSemver
+//     and usually selects one of those when present.
+//   - PreRelease and RequestedVersion are not used for lifecycle classification. They may
+//     still be selected as a LatestVersionDetail() fallback when Stable and MaxSemver are nil,
+//     and in that case their advisories intentionally remain unenriched by design.
 //   - Skipping them reduces API calls proportionally (see ADR-0010).
 //
 // This is best-effort: fetch failures leave Advisory fields at zero values,
