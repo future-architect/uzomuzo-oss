@@ -167,8 +167,14 @@ func wrapContent(content string, maxWidth int) []string {
 			}
 		}
 		if breakAt <= 0 {
-			// No space found — force break at budget.
-			breakAt = budget
+			// No whitespace found within budget — preserve the unbroken
+			// token (e.g. URL/identifier) instead of splitting mid-token.
+			if first {
+				result = append(result, remaining)
+			} else {
+				result = append(result, strings.Repeat(" ", indent)+remaining)
+			}
+			break
 		}
 
 		line := string(runes[:breakAt])
