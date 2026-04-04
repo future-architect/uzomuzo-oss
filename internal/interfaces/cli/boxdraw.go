@@ -124,9 +124,8 @@ func isWrappableLine(s string) bool {
 		return true
 	case strings.HasPrefix(trimmed, "Description:"):
 		return true
-	case strings.HasPrefix(trimmed, "["):
-		// EOL evidence summary lines like "[npmjs] Stable version is deprecated..."
-		return true
+	// EOL evidence summary lines ("[npmjs] ...") are already condensed summaries
+	// — wrapping them reduces readability. Let the terminal handle overflow.
 	}
 	return false
 }

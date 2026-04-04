@@ -855,7 +855,7 @@ func TestIsWrappableLine(t *testing.T) {
 		{"🔍 Review Needed", true},
 		{"Catalog Reason: why this is EOL", true},
 		{"Fast, unopinionated, minimalist web framework for node.", false},
-		{"[npmjs] Stable version is deprecated in npm registry.", true},
+		{"[npmjs] Stable version is deprecated in npm registry.", false},
 		{"→ https://github.com/advisories/GHSA-xxxx", false},
 		{"Homepage: https://expressjs.com", false},
 		{"Package: pkg:npm/express@4.18.2", false},
