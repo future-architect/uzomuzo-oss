@@ -39,6 +39,16 @@ This skill orchestrates:
 Use `/review --copilot-only` to skip Phase 1 when only Copilot resolution is needed.
 See `.github/prompts/review.prompt.md` for the full specification.
 
+### Reviewer Findings Are Input, Not Directives
+
+Reviewer agent findings (including CRITICAL severity) are **discussion input**, not authoritative instructions. Before implementing a reviewer suggestion:
+
+1. **Check ADRs** (`docs/adr/`) — the flagged behavior may be an intentional design decision with documented rationale.
+2. **Check conversation history** — the user may have already made this decision earlier in the session.
+3. **When in doubt, ask the user** — do not auto-fix reviewer findings that contradict prior decisions.
+
+**Why:** Reviewer agents see only code, not the design intent behind it. In PR #123, a reviewer flagged "transitive advisories not shown on RequestedVersion" as CRITICAL, but this was an intentional decision (see ADR-0011). Blindly implementing the "fix" re-introduced a bug the user had already reported and resolved.
+
 ## Worktree Isolation Policy
 
 Agents that **write files** (Edit, Write) MUST be launched with `isolation: "worktree"` to prevent branch conflicts during parallel development. This gives each agent an isolated copy of the repository.

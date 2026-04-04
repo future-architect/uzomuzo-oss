@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -420,5 +421,130 @@ func TestResolveFormat(t *testing.T) {
 				t.Errorf("ResolveFormat() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRenderScanJSON_TransitiveAdvisories(t *testing.T) {
+	entries := []domainaudit.AuditEntry{
+		{
+			PURL:    "pkg:npm/request@2.88.2",
+			Verdict: domainaudit.VerdictCaution,
+			Analysis: &analysis.Analysis{
+				EffectivePURL: "pkg:npm/request@2.88.2",
+				Package:       &analysis.Package{Ecosystem: "npm", PURL: "pkg:npm/request", Version: "2.88.2"},
+				ReleaseInfo: &analysis.ReleaseInfo{
+					StableVersion: &analysis.VersionDetail{
+						Version: "2.88.2",
+						Advisories: []analysis.Advisory{
+							{ID: "CVE-1", CVSS3Score: 9.8, Severity: "CRITICAL", Relation: analysis.AdvisoryRelationDirect},
+							{ID: "CVE-2", CVSS3Score: 7.2, Severity: "HIGH", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "qs@6.5.5"},
+							{ID: "CVE-3", CVSS3Score: 4.3, Severity: "MEDIUM", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "lodash@4.17.15"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := renderScanJSON(&buf, entries); err != nil {
+		t.Fatalf("renderScanJSON() error = %v", err)
+	}
+
+	var out enrichedJSONOutput
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatalf("JSON unmarshal error = %v", err)
+	}
+
+	e := out.Entries[0]
+	// Total (direct + transitive)
+	if e.AdvisoryCount != 3 {
+		t.Errorf("advisory_count = %d, want 3 (total)", e.AdvisoryCount)
+	}
+	// Direct
+	if e.DirectAdvisoryCount != 1 {
+		t.Errorf("direct_advisory_count = %d, want 1", e.DirectAdvisoryCount)
+	}
+	if e.MaxCVSS3Score != 9.8 {
+		t.Errorf("max_cvss3_score = %f, want 9.8", e.MaxCVSS3Score)
+	}
+	if e.MaxAdvisorySeverity != "CRITICAL" {
+		t.Errorf("max_advisory_severity = %q, want CRITICAL", e.MaxAdvisorySeverity)
+	}
+	// Transitive
+	if e.TransitiveAdvisoryCount != 2 {
+		t.Errorf("transitive_advisory_count = %d, want 2", e.TransitiveAdvisoryCount)
+	}
+	if e.MaxTransitiveCVSS3Score != 7.2 {
+		t.Errorf("max_transitive_cvss3_score = %f, want 7.2", e.MaxTransitiveCVSS3Score)
+	}
+	if e.MaxTransitiveAdvisorySeverity != "HIGH" {
+		t.Errorf("max_transitive_advisory_severity = %q, want HIGH", e.MaxTransitiveAdvisorySeverity)
+	}
+}
+
+func TestRenderScanCSV_TransitiveAdvisories(t *testing.T) {
+	entries := []domainaudit.AuditEntry{
+		{
+			PURL:    "pkg:npm/request@2.88.2",
+			Verdict: domainaudit.VerdictCaution,
+			Analysis: &analysis.Analysis{
+				EffectivePURL: "pkg:npm/request@2.88.2",
+				Package:       &analysis.Package{Ecosystem: "npm", PURL: "pkg:npm/request", Version: "2.88.2"},
+				ReleaseInfo: &analysis.ReleaseInfo{
+					StableVersion: &analysis.VersionDetail{
+						Version: "2.88.2",
+						Advisories: []analysis.Advisory{
+							{ID: "CVE-1", CVSS3Score: 9.8, Severity: "CRITICAL", Relation: analysis.AdvisoryRelationDirect},
+							{ID: "CVE-2", CVSS3Score: 7.2, Severity: "HIGH", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "qs@6.5.5"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := renderScanCSV(&buf, entries); err != nil {
+		t.Fatalf("renderScanCSV() error = %v", err)
+	}
+
+	r := csv.NewReader(strings.NewReader(buf.String()))
+	records, err := r.ReadAll()
+	if err != nil {
+		t.Fatalf("CSV parse error: %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("got %d CSV records, want 2 (header + 1 row)", len(records))
+	}
+
+	header := records[0]
+	row := records[1]
+
+	// Build column index for lookup
+	colIdx := make(map[string]int, len(header))
+	for i, h := range header {
+		colIdx[h] = i
+	}
+
+	// Verify transitive columns exist and have correct values
+	checks := map[string]string{
+		"advisory_count":                 "2",   // total: 1 direct + 1 transitive
+		"max_advisory_severity":          "CRITICAL",
+		"max_cvss3_score":               "9.8",
+		"direct_advisory_count":          "1",
+		"transitive_advisory_count":      "1",
+		"max_transitive_advisory_severity": "HIGH",
+		"max_transitive_cvss3_score":     "7.2",
+	}
+	for col, want := range checks {
+		idx, ok := colIdx[col]
+		if !ok {
+			t.Errorf("CSV header missing column %q", col)
+			continue
+		}
+		if got := row[idx]; got != want {
+			t.Errorf("CSV column %q = %q, want %q", col, got, want)
+		}
 	}
 }

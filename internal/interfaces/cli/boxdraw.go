@@ -622,13 +622,7 @@ func writeBoxReleases(ctx *boxContext) error {
 		if stable.IsDeprecated {
 			deprecated = " ⚠️ [DEPRECATED]"
 		}
-		advCount := len(stable.Advisories)
-		advText := ""
-		if advCount == 1 {
-			advText = "  ⚠️ 1 advisory"
-		} else if advCount > 1 {
-			advText = fmt.Sprintf("  ⚠️ %d advisories", advCount)
-		}
+		advText := advisoryCountText(stable)
 		if !stable.PublishedAt.IsZero() {
 			lines = append(lines, fmt.Sprintf("Stable: %s (%s)%s%s",
 				stable.Version, stable.PublishedAt.Format(dateFormat), advText, deprecated))
@@ -636,7 +630,14 @@ func writeBoxReleases(ctx *boxContext) error {
 			lines = append(lines, fmt.Sprintf("Stable: %s%s%s",
 				stable.Version, advText, deprecated))
 		}
-		lines = append(lines, formatAdvisoryLines(stable.Advisories, eco, name, stable.Version)...)
+		lines = append(lines, formatAdvisoryLines(stable.DirectAdvisories())...)
+		lines = append(lines, formatTransitiveAdvisoryLines(stable.TransitiveAdvisories())...)
+		// deps.dev link after all advisories (direct + transitive are both visible on this page)
+		if len(stable.Advisories) > 0 {
+			if depsdevURL := commonlinks.BuildDepsDevVersionURL(eco, name, stable.Version); depsdevURL != "" {
+				lines = append(lines, fmt.Sprintf("  → %s", depsdevURL))
+			}
+		}
 	}
 
 	preVer := ""
@@ -711,24 +712,15 @@ func writeBoxReleases(ctx *boxContext) error {
 	return nil
 }
 
-// formatAdvisoryLines formats advisory entries sorted by severity (highest first) with truncation.
-// Shows up to maxDisplayAdvisories with ID and severity only (no title — detail is in linked page).
-//
-// Format with severity:  "  CRITICAL (9.8)  CVE-2024-9999"
-// Format without:        "                  CVE-2024-1234"
-func formatAdvisoryLines(advisories []analysispkg.Advisory, ecosystem, name, version string) []string {
-	if len(advisories) == 0 {
-		return nil
-	}
-
-	// Sort by CVSS3 descending (unknown/0 at end), stable sort preserves order for equal scores
-	sorted := make([]analysispkg.Advisory, len(advisories))
+// sortedAdvisoryBlock sorts advisories by CVSS3 descending, truncates to maxDisplayAdvisories,
+// and formats each entry as an indented severity+ID line. indent is the leading whitespace per line.
+func sortedAdvisoryBlock(advisories []analysispkg.Advisory, indent string) (lines []string, sorted []analysispkg.Advisory) {
+	sorted = make([]analysispkg.Advisory, len(advisories))
 	copy(sorted, advisories)
 	sort.SliceStable(sorted, func(i, j int) bool {
 		return sorted[i].CVSS3Score > sorted[j].CVSS3Score
 	})
 
-	var lines []string
 	limit := len(sorted)
 	if limit > maxDisplayAdvisories {
 		limit = maxDisplayAdvisories
@@ -736,29 +728,104 @@ func formatAdvisoryLines(advisories []analysispkg.Advisory, ecosystem, name, ver
 
 	// severityCol is the fixed width for the severity column: "CRITICAL (9.8)" = 14 chars
 	const severityColWidth = 14
-
 	for _, adv := range sorted[:limit] {
 		var sevCol string
 		if adv.CVSS3Score > 0 && adv.Severity != "" {
 			sevCol = fmt.Sprintf("%-8s (%.1f)", adv.Severity, adv.CVSS3Score)
 		}
-		// Pad severity column to fixed width for alignment
 		sevCol = fmt.Sprintf("%-*s", severityColWidth, sevCol)
-
-		lines = append(lines, fmt.Sprintf("  %s  %s", sevCol, adv.ID))
+		lines = append(lines, fmt.Sprintf("%s%s  %s", indent, sevCol, adv.ID))
 	}
 
 	if len(sorted) > maxDisplayAdvisories {
 		remaining := len(sorted) - maxDisplayAdvisories
-		lines = append(lines, fmt.Sprintf("  ... and %d more", remaining))
+		lines = append(lines, fmt.Sprintf("%s... and %d more", indent, remaining))
+	}
+	return lines, sorted
+}
+
+// formatAdvisoryLines formats advisory entries sorted by severity (highest first) with truncation.
+// Shows up to maxDisplayAdvisories with ID and severity only (no title — detail is in linked page).
+//
+// Format with severity:  "  CRITICAL (9.8)  CVE-2024-9999"
+// Format without:        "                  CVE-2024-1234"
+func formatAdvisoryLines(advisories []analysispkg.Advisory) []string {
+	if len(advisories) == 0 {
+		return nil
 	}
 
-	// Always show deps.dev link when advisories exist
-	depsdevURL := commonlinks.BuildDepsDevVersionURL(ecosystem, name, version)
-	if depsdevURL != "" {
-		lines = append(lines, fmt.Sprintf("  → %s", depsdevURL))
+	lines, _ := sortedAdvisoryBlock(advisories, "  ")
+	return lines
+}
+
+// advisoryCountText builds the advisory count annotation for a version line.
+// Returns "" when no advisories exist or vd is nil.
+func advisoryCountText(vd *analysispkg.VersionDetail) string {
+	if vd == nil {
+		return ""
+	}
+	direct := vd.DirectAdvisoryCount()
+	transitive := vd.TransitiveAdvisoryCount()
+	if direct == 0 && transitive == 0 {
+		return ""
+	}
+	if direct == 0 {
+		if transitive == 1 {
+			return "  ⚠️ 1 transitive advisory"
+		}
+		return fmt.Sprintf("  ⚠️ %d transitive advisories", transitive)
+	}
+	base := "  ⚠️ 1 advisory"
+	if direct > 1 {
+		base = fmt.Sprintf("  ⚠️ %d advisories", direct)
+	}
+	if transitive == 0 {
+		return base
+	}
+	return fmt.Sprintf("%s (+ %d transitive)", base, transitive)
+}
+
+// formatTransitiveAdvisoryLines formats transitive advisory entries grouped under a header.
+// Shows dependency names in the header and advisory details indented beneath.
+func formatTransitiveAdvisoryLines(advisories []analysispkg.Advisory) []string {
+	if len(advisories) == 0 {
+		return nil
 	}
 
+	advLines, sorted := sortedAdvisoryBlock(advisories, "    ")
+
+	// Collect unique dependency names only from the displayed (truncated) subset
+	// so the header stays consistent with the visible advisory lines.
+	displayLimit := len(sorted)
+	if displayLimit > maxDisplayAdvisories {
+		displayLimit = maxDisplayAdvisories
+	}
+	seen := make(map[string]bool)
+	var depNames []string
+	for _, a := range sorted[:displayLimit] {
+		if a.DependencyName != "" && !seen[a.DependencyName] {
+			seen[a.DependencyName] = true
+			depNames = append(depNames, a.DependencyName)
+		}
+	}
+
+	// Build header: "Transitive (via dep1, dep2, dep3):" or with truncation
+	const maxDepNames = 3
+	header := "  Transitive"
+	if len(depNames) > 0 {
+		display := depNames
+		suffix := ""
+		if len(depNames) > maxDepNames {
+			display = depNames[:maxDepNames]
+			suffix = fmt.Sprintf(" and %d more", len(depNames)-maxDepNames)
+		}
+		header += fmt.Sprintf(" (via %s%s)", strings.Join(display, ", "), suffix)
+	}
+	header += ":"
+
+	lines := make([]string, 0, 1+len(advLines))
+	lines = append(lines, header)
+	lines = append(lines, advLines...)
 	return lines
 }
 

@@ -314,9 +314,13 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
       "version_licenses": [
         "Apache-2.0"
       ],
-      "advisory_count": 1,
+      "advisory_count": 4,
       "max_advisory_severity": "MEDIUM",
-      "max_cvss3_score": 6.1,
+      "max_cvss3_score": 6.5,
+      "direct_advisory_count": 1,
+      "transitive_advisory_count": 3,
+      "max_transitive_advisory_severity": "MEDIUM",
+      "max_transitive_cvss3_score": 6.5,
       "reason": "Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2"
     }
   ]
@@ -332,8 +336,8 @@ The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, 
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --format csv
-verdict,purl,lifecycle,successor,advisory_count,max_advisory_severity,max_cvss3_score,repo_url,source,via
-replace,pkg:npm/request@2.88.2,EOL-Confirmed,,1,MEDIUM,6.1,https://github.com/request/request,,
+verdict,purl,lifecycle,successor,advisory_count,max_advisory_severity,max_cvss3_score,direct_advisory_count,transitive_advisory_count,max_transitive_advisory_severity,max_transitive_cvss3_score,repo_url,source,via
+replace,pkg:npm/request@2.88.2,EOL-Confirmed,,4,MEDIUM,6.5,1,3,MEDIUM,6.5,https://github.com/request/request,,
 ```
 
 </details>

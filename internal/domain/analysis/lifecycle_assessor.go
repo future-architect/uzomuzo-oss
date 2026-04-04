@@ -116,7 +116,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 			signals := []Signal{commitSignal(analysis), sigAbsent(SignalMaintainedScore)}
 			signals = append(signals, s.collectAdvisorySignals(analysis)...)
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective,
-				Reason: "Unmaintained with unpatched vulnerabilities", Trace: trace, Signals: signals}, nil
+				Reason: "Unmaintained, unpatched vulnerabilities", Trace: trace, Signals: signals}, nil
 		}
 	}
 
@@ -129,7 +129,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 			signals := []Signal{commitSignal(analysis), maintainedSignal(scores)}
 			signals = append(signals, s.collectAdvisorySignals(analysis)...)
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective,
-				Reason: "Unmaintained with unpatched vulnerabilities", Trace: trace, Signals: signals}, nil
+				Reason: "Unmaintained, unpatched vulnerabilities", Trace: trace, Signals: signals}, nil
 		}
 	}
 
@@ -332,7 +332,7 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 				if hasVulnScore && vulnScore < s.rules.VulnerabilityScorePoorMax {
 					signals := []Signal{cSig, mSig}
 					signals = append(signals, s.collectAdvisorySignals(analysis)...)
-					return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective, Reason: "Unmaintained with unpatched vulnerabilities", Signals: signals}, nil
+					return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective, Reason: "Unmaintained, unpatched vulnerabilities", Signals: signals}, nil
 				}
 				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: "Low maintenance, long-term inactive", Signals: []Signal{cSig, mSig}}, nil
 			}
@@ -409,7 +409,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 				LabelStalled, "inactive_no_commit_C2a_low_maint_advisory_low_severity")
 			signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
 			return &AssessmentResult{Axis: LifecycleAxis, Label: label,
-				Reason:  "Unmaintained with unpatched vulnerabilities",
+				Reason:  "Unmaintained, unpatched vulnerabilities",
 				Trace:   []string{trace},
 				Signals: signals}, nil
 		}
@@ -433,7 +433,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 		}
 		signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-			Reason:  "Unpatched vulnerabilities despite recent publish",
+			Reason:  "Unpatched vulnerabilities, recent publish",
 			Trace:   []string{"inactive_no_commit_C3b_advisory_recent_publish"},
 			Signals: signals}, nil
 	}

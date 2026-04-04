@@ -913,6 +913,234 @@ func TestWriteLine_WordWrap(t *testing.T) {
 	}
 }
 
+func TestWriteBoxReleases_TransitiveAdvisories(t *testing.T) {
+	var buf bytes.Buffer
+	advisories := []analysis.Advisory{
+		{ID: "CVE-2024-9999", Source: "CVE", CVSS3Score: 9.8, Severity: "CRITICAL", Relation: analysis.AdvisoryRelationDirect},
+		{ID: "GHSA-xxxx-yyyy", Source: "GHSA", CVSS3Score: 7.5, Severity: "HIGH", Relation: analysis.AdvisoryRelationDirect},
+		{ID: "CVE-2024-5678", Source: "CVE", CVSS3Score: 7.2, Severity: "HIGH", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "qs@6.5.5"},
+		{ID: "CVE-2024-1111", Source: "CVE", CVSS3Score: 4.3, Severity: "MEDIUM", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "lodash@4.17.15"},
+	}
+	entry := &domainaudit.AuditEntry{
+		PURL:    "pkg:npm/test@1.0.0",
+		Verdict: domainaudit.VerdictCaution,
+		Analysis: &analysis.Analysis{
+			EffectivePURL: "pkg:npm/test@1.0.0",
+			Package:       &analysis.Package{Ecosystem: "npm", PURL: "pkg:npm/test", Version: "1.0.0"},
+			ReleaseInfo: &analysis.ReleaseInfo{
+				StableVersion: &analysis.VersionDetail{
+					Version:     "1.0.0",
+					PublishedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					Advisories:  advisories,
+				},
+			},
+		},
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxReleases(ctx); err != nil {
+		t.Fatalf("writeBoxReleases() error = %v", err)
+	}
+	output := buf.String()
+
+	// Count line should show direct + transitive
+	if !strings.Contains(output, "2 advisories (+ 2 transitive)") {
+		t.Errorf("missing split advisory count, got:\n%s", output)
+	}
+	// Direct advisories shown first
+	if !strings.Contains(output, "CVE-2024-9999") {
+		t.Error("missing direct advisory CVE-2024-9999")
+	}
+	// Transitive header
+	if !strings.Contains(output, "Transitive (via qs@6.5.5, lodash@4.17.15):") {
+		t.Errorf("missing transitive header, got:\n%s", output)
+	}
+	// Transitive advisory details
+	if !strings.Contains(output, "CVE-2024-5678") {
+		t.Error("missing transitive advisory CVE-2024-5678")
+	}
+	if !strings.Contains(output, "CVE-2024-1111") {
+		t.Error("missing transitive advisory CVE-2024-1111")
+	}
+	// Single deps.dev link at the bottom (covers both direct and transitive)
+	if !strings.Contains(output, "deps.dev/npm/test/1.0.0") {
+		t.Errorf("missing deps.dev link, got:\n%s", output)
+	}
+}
+
+func TestWriteBoxReleases_OnlyTransitiveAdvisories(t *testing.T) {
+	var buf bytes.Buffer
+	advisories := []analysis.Advisory{
+		{ID: "CVE-2024-5678", Source: "CVE", CVSS3Score: 7.2, Severity: "HIGH", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "qs@6.5.5"},
+	}
+	entry := &domainaudit.AuditEntry{
+		PURL:    "pkg:npm/test@1.0.0",
+		Verdict: domainaudit.VerdictCaution,
+		Analysis: &analysis.Analysis{
+			EffectivePURL: "pkg:npm/test@1.0.0",
+			Package:       &analysis.Package{Ecosystem: "npm", PURL: "pkg:npm/test", Version: "1.0.0"},
+			ReleaseInfo: &analysis.ReleaseInfo{
+				StableVersion: &analysis.VersionDetail{
+					Version:     "1.0.0",
+					PublishedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					Advisories:  advisories,
+				},
+			},
+		},
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxReleases(ctx); err != nil {
+		t.Fatalf("writeBoxReleases() error = %v", err)
+	}
+	output := buf.String()
+
+	// Should show "1 transitive advisory" without "0 advisories" prefix
+	if !strings.Contains(output, "1 transitive advisory") {
+		t.Errorf("expected transitive-only count, got:\n%s", output)
+	}
+	// Should NOT show direct advisory count
+	if strings.Contains(output, "0 advisories") {
+		t.Error("should not show 0 direct advisories")
+	}
+}
+
+func TestFormatTransitiveAdvisoryLines(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		lines := formatTransitiveAdvisoryLines(nil)
+		if lines != nil {
+			t.Errorf("expected nil for empty input, got %v", lines)
+		}
+	})
+
+	t.Run("with truncation", func(t *testing.T) {
+		advisories := []analysis.Advisory{
+			{ID: "CVE-1", CVSS3Score: 9.0, Severity: "CRITICAL", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "a@1.0"},
+			{ID: "CVE-2", CVSS3Score: 7.0, Severity: "HIGH", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "b@2.0"},
+			{ID: "CVE-3", CVSS3Score: 5.0, Severity: "MEDIUM", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "c@3.0"},
+			{ID: "CVE-4", CVSS3Score: 3.0, Severity: "LOW", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "d@4.0"},
+		}
+		lines := formatTransitiveAdvisoryLines(advisories)
+		// Header should only include dep names from displayed (non-truncated) advisories.
+		// With maxDisplayAdvisories=3, only a@1.0, b@2.0, c@3.0 are shown; d@4.0 is truncated.
+		if !strings.Contains(lines[0], "via a@1.0, b@2.0, c@3.0)") {
+			t.Errorf("expected dep names from displayed advisories only, got: %s", lines[0])
+		}
+		// d@4.0 should NOT appear in header since its advisory is truncated
+		if strings.Contains(lines[0], "d@4.0") {
+			t.Errorf("header should not mention dep names from truncated advisories, got: %s", lines[0])
+		}
+		// header(1) + 3 advisories + truncation(1) = 5
+		if len(lines) != 5 {
+			t.Errorf("expected 5 lines, got %d: %v", len(lines), lines)
+		}
+		if !strings.Contains(lines[4], "... and 1 more") {
+			t.Errorf("expected truncation message, got: %s", lines[4])
+		}
+	})
+
+	t.Run("indented deeper than direct", func(t *testing.T) {
+		advisories := []analysis.Advisory{
+			{ID: "CVE-1", CVSS3Score: 7.0, Severity: "HIGH", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "foo@1.0"},
+		}
+		lines := formatTransitiveAdvisoryLines(advisories)
+		// Transitive lines use 4-space indent (vs 2-space for direct)
+		if !strings.HasPrefix(lines[1], "    ") {
+			t.Errorf("expected 4-space indent for transitive advisory, got: %q", lines[1])
+		}
+	})
+
+	t.Run("empty dependency names", func(t *testing.T) {
+		advisories := []analysis.Advisory{
+			{ID: "CVE-1", CVSS3Score: 7.0, Severity: "HIGH", Relation: analysis.AdvisoryRelationTransitive},
+		}
+		lines := formatTransitiveAdvisoryLines(advisories)
+		// Header should omit "(via ...)" when all DependencyName are empty
+		if lines[0] != "  Transitive:" {
+			t.Errorf("expected plain header without via, got: %q", lines[0])
+		}
+	})
+}
+
+func TestAdvisoryCountText(t *testing.T) {
+	tests := []struct {
+		name     string
+		vd       *analysis.VersionDetail
+		expected string
+	}{
+		{
+			name:     "nil version detail",
+			vd:       nil,
+			expected: "",
+		},
+		{
+			name:     "no advisories",
+			vd:       &analysis.VersionDetail{},
+			expected: "",
+		},
+		{
+			name: "one direct only",
+			vd: &analysis.VersionDetail{
+				Advisories: []analysis.Advisory{{ID: "CVE-1", Relation: analysis.AdvisoryRelationDirect}},
+			},
+			expected: "  ⚠️ 1 advisory",
+		},
+		{
+			name: "multiple direct only",
+			vd: &analysis.VersionDetail{
+				Advisories: []analysis.Advisory{
+					{ID: "CVE-1", Relation: analysis.AdvisoryRelationDirect},
+					{ID: "CVE-2", Relation: analysis.AdvisoryRelationDirect},
+				},
+			},
+			expected: "  ⚠️ 2 advisories",
+		},
+		{
+			name: "direct plus transitive",
+			vd: &analysis.VersionDetail{
+				Advisories: []analysis.Advisory{
+					{ID: "CVE-1", Relation: analysis.AdvisoryRelationDirect},
+					{ID: "CVE-2", Relation: analysis.AdvisoryRelationTransitive},
+					{ID: "CVE-3", Relation: analysis.AdvisoryRelationTransitive},
+				},
+			},
+			expected: "  ⚠️ 1 advisory (+ 2 transitive)",
+		},
+		{
+			name: "transitive only",
+			vd: &analysis.VersionDetail{
+				Advisories: []analysis.Advisory{
+					{ID: "CVE-1", Relation: analysis.AdvisoryRelationTransitive},
+				},
+			},
+			expected: "  ⚠️ 1 transitive advisory",
+		},
+		{
+			name: "multiple transitive only",
+			vd: &analysis.VersionDetail{
+				Advisories: []analysis.Advisory{
+					{ID: "CVE-1", Relation: analysis.AdvisoryRelationTransitive},
+					{ID: "CVE-2", Relation: analysis.AdvisoryRelationTransitive},
+				},
+			},
+			expected: "  ⚠️ 2 transitive advisories",
+		},
+		{
+			name: "legacy empty relation treated as direct",
+			vd: &analysis.VersionDetail{
+				Advisories: []analysis.Advisory{{ID: "CVE-1"}},
+			},
+			expected: "  ⚠️ 1 advisory",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := advisoryCountText(tt.vd)
+			if got != tt.expected {
+				t.Errorf("advisoryCountText() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
 // NOTE: Unit tests for BuildDepsDevURL/BuildDepsDevVersionURL live in
 // internal/common/links/depsdev_test.go. The CLI tests above verify that
 // box output renders deps.dev links correctly (integration-level coverage).
