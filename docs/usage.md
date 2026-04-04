@@ -257,9 +257,9 @@ Rules:
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --format table
-STATUS      PURL                    LIFECYCLE
-🔴 replace   pkg:npm/request@2.88.2  EOL-Confirmed
-✅ ok        pkg:npm/express@4.18.2  Active
+STATUS     PURL                    LIFECYCLE
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed
+✅ ok       pkg:npm/express@4.18.2  Active
 
 ── Summary ─────────────────────────────────────────────────
 │ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -308,11 +308,16 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
       "lifecycle": "EOL-Confirmed",
       "repo_url": "https://github.com/request/request",
       "overall_score": 3.6,
-      "dependent_count": 186345,
+      "dependent_count": 186349,
       "stable_version": "2.88.2",
       "project_license": "Apache-2.0",
-      "version_licenses": ["Apache-2.0"],
-      "reason": "Registry deprecated"
+      "version_licenses": [
+        "Apache-2.0"
+      ],
+      "advisory_count": 1,
+      "max_advisory_severity": "MEDIUM",
+      "max_cvss3_score": 6.1,
+      "reason": "Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2"
     }
   ]
 }
@@ -327,8 +332,8 @@ The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, 
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --format csv
-verdict,purl,lifecycle,successor,repo_url
-replace,pkg:npm/request@2.88.2,EOL-Confirmed,,https://github.com/request/request
+verdict,purl,lifecycle,successor,advisory_count,max_advisory_severity,max_cvss3_score,repo_url,source,via
+replace,pkg:npm/request@2.88.2,EOL-Confirmed,,1,MEDIUM,6.1,https://github.com/request/request,,
 ```
 
 </details>
@@ -356,8 +361,8 @@ Without `--fail-on`, exit code is always 0 regardless of scan results.
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-confirmed --format table
-STATUS      PURL                    LIFECYCLE
-🔴 replace   pkg:npm/request@2.88.2  EOL-Confirmed
+STATUS     PURL                    LIFECYCLE
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -369,8 +374,8 @@ STATUS      PURL                    LIFECYCLE
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-effective --format table
-STATUS      PURL                    LIFECYCLE
-🔴 replace   pkg:npm/request@2.88.2  EOL-Confirmed
+STATUS     PURL                    LIFECYCLE
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -382,9 +387,9 @@ STATUS      PURL                    LIFECYCLE
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --fail-on eol-confirmed,stalled --format table
-STATUS      PURL                    LIFECYCLE
-🔴 replace   pkg:npm/request@2.88.2  EOL-Confirmed
-✅ ok        pkg:npm/express@4.18.2  Active
+STATUS     PURL                    LIFECYCLE
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed
+✅ ok       pkg:npm/express@4.18.2  Active
 
 ── Summary ─────────────────────────────────────────────────
 │ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review

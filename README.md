@@ -309,9 +309,9 @@ Successor is `golang-jwt/jwt`. **Migrate immediately.**
 ```text
 ── pkg:npm/request@2.88.2 ──────────────────────────────────
 │ 🏊🏾 Simplified HTTP request client.
-│ 🔴 EOL-Confirmed: Registry deprecated
+│ 🔴 EOL-Confirmed: Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2
 ├─ Signals ─────────────────────────────────────────────────
-│ EOL Source: registry-deprecated
+│ EOL Source: npmjs
 ├─ EOL ─────────────────────────────────────────────────────
 │ Evidence (1):
 │   [npmjs] Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2 (confidence 0.90)
