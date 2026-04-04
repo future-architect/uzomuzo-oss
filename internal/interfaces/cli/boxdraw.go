@@ -784,13 +784,19 @@ func renderBoxEntryError(ctx *boxContext) error {
 // e.g. "depsdev-project-spdx" → "depsdev", "project-fallback" → "fallback".
 func shortenLicenseSource(s string) string {
 	switch s {
-	case "depsdev-project-spdx", "depsdev-project-nonstandard", "depsdev-version-spdx", "depsdev-version-raw":
+	case analysispkg.LicenseSourceDepsDevProjectSPDX,
+		analysispkg.LicenseSourceDepsDevProjectNonStandard,
+		analysispkg.LicenseSourceDepsDevVersionSPDX,
+		analysispkg.LicenseSourceDepsDevVersionRaw:
 		return "depsdev"
-	case "github-project-spdx", "github-project-nonstandard", "github-version-spdx", "github-version-raw":
+	case analysispkg.LicenseSourceGitHubProjectSPDX,
+		analysispkg.LicenseSourceGitHubProjectNonStandard,
+		analysispkg.LicenseSourceGitHubVersionSPDX,
+		analysispkg.LicenseSourceGitHubVersionRaw:
 		return "github"
-	case "project-fallback":
+	case analysispkg.LicenseSourceProjectFallback:
 		return "fallback"
-	case "derived-from-version":
+	case analysispkg.LicenseSourceDerivedFromVersion:
 		return "derived"
 	default:
 		return s

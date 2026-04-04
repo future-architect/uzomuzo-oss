@@ -729,7 +729,7 @@ func displayBatchAnalysesFull(analyses map[string]*analysispkg.Analysis, options
 			// Log and continue on render error: batch mode should not abort for one bad entry.
 			// Unlike scan_render.go (which propagates errors), batch output is best-effort.
 			if err := renderBoxEntry(os.Stdout, entry); err != nil {
-				slog.Error("failed to render box entry", "error", err, "purl", it.key)
+				slog.Error("failed to render box entry", "error", err, "ref", it.key)
 			}
 		}
 	}

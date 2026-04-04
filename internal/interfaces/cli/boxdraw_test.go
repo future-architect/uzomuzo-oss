@@ -612,24 +612,25 @@ func TestRenderScanDetailed_BoxFormat(t *testing.T) {
 
 func TestShortenLicenseSource(t *testing.T) {
 	tests := []struct {
+		name  string
 		input string
 		want  string
 	}{
-		{"depsdev-project-spdx", "depsdev"},
-		{"depsdev-project-nonstandard", "depsdev"},
-		{"depsdev-version-spdx", "depsdev"},
-		{"depsdev-version-raw", "depsdev"},
-		{"github-project-spdx", "github"},
-		{"github-project-nonstandard", "github"},
-		{"github-version-spdx", "github"},
-		{"github-version-raw", "github"},
-		{"project-fallback", "fallback"},
-		{"derived-from-version", "derived"},
-		{"unknown-source", "unknown-source"},
-		{"", ""},
+		{"depsdev-project-spdx", analysis.LicenseSourceDepsDevProjectSPDX, "depsdev"},
+		{"depsdev-project-nonstandard", analysis.LicenseSourceDepsDevProjectNonStandard, "depsdev"},
+		{"depsdev-version-spdx", analysis.LicenseSourceDepsDevVersionSPDX, "depsdev"},
+		{"depsdev-version-raw", analysis.LicenseSourceDepsDevVersionRaw, "depsdev"},
+		{"github-project-spdx", analysis.LicenseSourceGitHubProjectSPDX, "github"},
+		{"github-project-nonstandard", analysis.LicenseSourceGitHubProjectNonStandard, "github"},
+		{"github-version-spdx", analysis.LicenseSourceGitHubVersionSPDX, "github"},
+		{"github-version-raw", analysis.LicenseSourceGitHubVersionRaw, "github"},
+		{"project-fallback", analysis.LicenseSourceProjectFallback, "fallback"},
+		{"derived-from-version", analysis.LicenseSourceDerivedFromVersion, "derived"},
+		{"unknown-source", "unknown-source", "unknown-source"},
+		{"empty", "", ""},
 	}
 	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			got := shortenLicenseSource(tt.input)
 			if got != tt.want {
 				t.Errorf("shortenLicenseSource(%q) = %q, want %q", tt.input, got, tt.want)
