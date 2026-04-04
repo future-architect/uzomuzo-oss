@@ -33,18 +33,30 @@
 ```text
 $ uzomuzo scan pkg:npm/express@4.18.2
 
+--- Summary Table ---
+STATUS     PURL                    LIFECYCLE
+✅ ok       pkg:npm/express@4.18.2  Active
+
+── Summary ─────────────────────────────────────────────────
+│ 1 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 0 replace | 🔍 0 review
+└───────────────────────────────────────────────────────────
+
+--- Detailed Report ---
+
+--- PURL 1 ---
 ── pkg:npm/express@4.18.2 ──────────────────────────────────
 │ Fast, unopinionated, minimalist web framework for node.
 │ ✅ Active: Actively maintained with recent releases
 ├─ Signals ─────────────────────────────────────────────────
 │ Recent Stable Release: true
-│ Last Human Commit: (unavailable)
+│ Last Human Commit: 2026-03-31
 │ Maintained Score: 10/10
 ├─ Health ──────────────────────────────────────────────────
-│ 68892 stars
+│ 68888 stars
 │ Used by: 2211 packages
 │ Depends on: 31 direct, 39 transitive
 │ Score: 8.4/10  Maintained: 10.0/10
+│ Last Commit: 2026-03-31
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 5.2.1 (2025-12-01)
 │ Pre-release: 5.0.0-beta.3 (2024-03-25)
@@ -103,8 +115,8 @@ When transitive dependencies are included, output shows a `RELATION` column indi
 $ uzomuzo scan --file go.mod -f table
 
 STATUS      PURL                                                        RELATION  LIFECYCLE
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed
 ⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Effective
 ✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active
 
 ── Summary ─────────────────────────────────────────────────
