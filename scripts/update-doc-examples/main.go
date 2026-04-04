@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 )
 
@@ -146,6 +147,11 @@ func main() {
 				fmt.Printf("Skipping %s: required tool(s) not found: %v\n", rf.ID, rf.Requires)
 				continue
 			}
+			cleaned := path.Clean(rf.OutputFile)
+			if cleaned == "." || strings.HasPrefix(cleaned, "..") || strings.ContainsRune(rf.OutputFile, '\\') {
+				fatalf("raw command %q: output_file %q escapes repo root", rf.ID, rf.OutputFile)
+			}
+
 			fmt.Printf("Running shell: %s\n", rf.Shell)
 			output, err := runShellCommand(rf.Shell)
 			if err != nil && !rf.IgnoreExitCode {
@@ -209,8 +215,14 @@ func replaceBlock(content, id, newBlock, fenceLang string) (string, error) {
 	}
 	endIdx += afterBegin
 
-	replacement := fmt.Sprintf("%s```%s\n%s\n```\n%s",
-		beginMarker, fenceLang, newBlock, endMarker)
+	// Check for duplicate end markers.
+	if strings.Contains(content[endIdx+len(endMarker):], endMarker) {
+		return "", fmt.Errorf("duplicate marker %q found", endMarker)
+	}
+
+	fence := fenceDelimiter(newBlock)
+	replacement := fmt.Sprintf("%s%s%s\n%s\n%s\n%s",
+		beginMarker, fence, fenceLang, newBlock, fence, endMarker)
 
 	var sb strings.Builder
 	sb.Grow(len(content))
@@ -218,6 +230,29 @@ func replaceBlock(content, id, newBlock, fenceLang string) (string, error) {
 	sb.WriteString(replacement)
 	sb.WriteString(content[endIdx+len(endMarker):])
 	return sb.String(), nil
+}
+
+// fenceDelimiter returns a backtick fence string long enough to avoid
+// collisions with backtick runs inside content. It uses at least 3 backticks
+// and increases the count if the content contains a run of 3+ backticks.
+func fenceDelimiter(content string) string {
+	maxRun := 0
+	cur := 0
+	for _, ch := range content {
+		if ch == '`' {
+			cur++
+			if cur > maxRun {
+				maxRun = cur
+			}
+		} else {
+			cur = 0
+		}
+	}
+	n := 3
+	if maxRun >= 3 {
+		n = maxRun + 1
+	}
+	return strings.Repeat("`", n)
 }
 
 // runCommand executes the binary with args and returns stdout.

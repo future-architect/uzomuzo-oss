@@ -56,6 +56,14 @@ func TestReplaceBlock(t *testing.T) {
 			wantErr:   "duplicate",
 		},
 		{
+			name:      "duplicate end markers",
+			content:   "<!-- begin:output:dup-end -->\n```text\na\n```\n<!-- end:output:dup-end -->\nstuff\n<!-- end:output:dup-end -->",
+			id:        "dup-end",
+			newBlock:  "new",
+			fenceLang: "text",
+			wantErr:   "duplicate",
+		},
+		{
 			name:      "missing end marker",
 			content:   "<!-- begin:output:noend -->\n```text\ncontent\n```\n",
 			id:        "noend",
@@ -72,12 +80,12 @@ func TestReplaceBlock(t *testing.T) {
 			want:      "<!-- begin:output:empty -->\n```text\n\n```\n<!-- end:output:empty -->",
 		},
 		{
-			name:      "block with nested code fences",
+			name:      "block with nested code fences uses dynamic delimiter",
 			content:   "<!-- begin:output:nested -->\n```text\nold\n```\n<!-- end:output:nested -->",
 			id:        "nested",
 			newBlock:  "line1\n```\ninner fence\n```\nline2",
 			fenceLang: "text",
-			want:      "<!-- begin:output:nested -->\n```text\nline1\n```\ninner fence\n```\nline2\n```\n<!-- end:output:nested -->",
+			want:      "<!-- begin:output:nested -->\n````text\nline1\n```\ninner fence\n```\nline2\n````\n<!-- end:output:nested -->",
 		},
 		{
 			name:      "id with special regex characters",
