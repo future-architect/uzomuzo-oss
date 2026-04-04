@@ -108,7 +108,7 @@ func TestAnalysis_FinalMaintenanceStatus(t *testing.T) {
 		{name: "nil_receiver", a: nil, want: LabelReviewNeeded},
 		{name: "eol_confirmed", a: &Analysis{EOL: EOLStatus{State: EOLEndOfLife}, AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: lr}}, want: LabelEOLConfirmed},
 		{name: "eol_effective", a: &Analysis{EOL: EOLStatus{State: EOLEndOfLife, ScheduledAt: &scheduledAt}, AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: lr}}, want: LabelEOLEffective},
-		{name: "eol_scheduled", a: &Analysis{EOL: EOLStatus{State: EOLScheduled}, AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: lr}}, want: LabelEOLScheduled},
+		{name: "eol_scheduled", a: &Analysis{EOL: EOLStatus{State: EOLScheduled, ScheduledAt: &scheduledAt}, AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: lr}}, want: LabelEOLScheduled},
 		{name: "axis_only", a: &Analysis{AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: lr}}, want: LabelStalled},
 		{name: "none", a: &Analysis{}, want: LabelReviewNeeded},
 	}

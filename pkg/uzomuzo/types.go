@@ -105,7 +105,7 @@ func FinalMaintenanceStatus(a *Analysis) MaintenanceStatus { return a.FinalMaint
 // LifecycleSummary provides a consolidated snapshot combining lifecycle assessment + primary-source EOL.
 // This decouples callers from internal domain structs while giving richer context.
 type LifecycleSummary struct {
-	FinalLabel        MaintenanceStatus // priority-ordered final label (EOL > Scheduled EOL > LifecycleAssessment > Review Needed)
+	FinalLabel        MaintenanceStatus // priority-ordered final status (EOL-Confirmed/EOL-Effective > EOL-Scheduled > lifecycle-derived status > Review Needed)
 	MaintenanceStatus MaintenanceStatus // raw maintenance status label (may be empty)
 	LifecycleReason   string        // rationale for lifecycle assessment
 	EOLState          string        // raw EOL state (Unknown / NotEOL / EOL / Planned)
