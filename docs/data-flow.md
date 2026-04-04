@@ -159,6 +159,8 @@ In addition to direct advisories (reported by the deps.dev PURL API), uzomuzo fe
 
 Transitive advisories are distinguished from direct advisories via `Advisory.Relation` (`DIRECT`/`TRANSITIVE`) and `Advisory.DependencyName` (e.g., `qs@6.5.5`). All output formats (detailed box, JSON, CSV) display them separately.
 
+**Ecosystem limitation:** Transitive advisory scanning reuses the `GetDependencies` graph, so it shares the same ecosystem restriction: npm, Maven, PyPI, and Cargo only. Go, NuGet, and RubyGems packages do not receive transitive advisory data.
+
 ---
 
 ## EOL Detection
