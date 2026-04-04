@@ -132,6 +132,21 @@ patterns:
     pr: 115
     file: "internal/interfaces/cli/boxdraw.go"
     date: "2026-04-04"
+  - category: "comment-doc-drift"
+    summary: "Doc comments and inline comments describing enum precedence/taxonomy still used old labels after introducing new MaintenanceStatus constants"
+    pr: 121
+    file: "internal/domain/analysis/aggregates.go"
+    date: "2026-04-04"
+  - category: "comment-doc-drift"
+    summary: "Struct field comment referenced old label names (EOL > Scheduled EOL) after type was changed to MaintenanceStatus with expanded taxonomy"
+    pr: 121
+    file: "pkg/uzomuzo/types.go"
+    date: "2026-04-04"
+  - category: "testing"
+    summary: "Test data for EOLScheduled state omitted ScheduledAt field — test fixtures should populate all fields that the state semantically implies"
+    pr: 121
+    file: "internal/domain/analysis/aggregates_extra_test.go"
+    date: "2026-04-04"
   # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)
