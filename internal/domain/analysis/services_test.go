@@ -790,6 +790,104 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 			},
 			want: LabelStalled, // C1: Maintained ≥ 3 → Stalled (NOT LegacySafe from sentinel 999.0)
 		},
+		// ── Severity-aware lifecycle branching tests ──
+		{
+			name: "C3a_high_severity_advisory_old_publish_eol_effective",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					IsArchived: false,
+					IsDisabled: false,
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{
+						Version:     "1.0.0",
+						PublishedAt: now.AddDate(-3, 0, 0), // >730 days
+						Advisories:  []Advisory{{ID: "GHSA-HHH", Source: "GHSA", URL: "https://ghsa.example/HHH", CVSS3Score: 9.8, Severity: "CRITICAL"}},
+					},
+				},
+			},
+			scores: map[string]*ScoreEntity{},
+			want:   LabelEOLEffective, // C3a: HIGH+ severity advisory + old publish → EOL-Effective
+		},
+		{
+			name: "C3a_low_severity_advisory_old_publish_stalled",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					IsArchived: false,
+					IsDisabled: false,
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{
+						Version:     "1.0.0",
+						PublishedAt: now.AddDate(-3, 0, 0), // >730 days
+						Advisories:  []Advisory{{ID: "GHSA-LLL", Source: "GHSA", URL: "https://ghsa.example/LLL", CVSS3Score: 3.5, Severity: "LOW"}},
+					},
+				},
+			},
+			scores: map[string]*ScoreEntity{},
+			want:   LabelStalled, // C3a: LOW severity only + old publish → Stalled (not EOL-Effective)
+		},
+		{
+			name: "C2a_high_severity_advisory_low_maint_eol_effective",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					IsArchived: false,
+					IsDisabled: false,
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{
+						Version:     "1.0.0",
+						PublishedAt: now.AddDate(-3, 0, 0), // >730 days
+						Advisories:  []Advisory{{ID: "GHSA-III", Source: "GHSA", URL: "https://ghsa.example/III", CVSS3Score: 7.5, Severity: "HIGH"}},
+					},
+				},
+			},
+			scores: map[string]*ScoreEntity{
+				"Maintained": NewScoreEntity("Maintained", 1, 10, "Poorly maintained"),
+			},
+			want: LabelEOLEffective, // C2a: HIGH severity + low maintenance + old publish → EOL-Effective
+		},
+		{
+			name: "C2a_low_severity_advisory_low_maint_stalled",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					IsArchived: false,
+					IsDisabled: false,
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{
+						Version:     "1.0.0",
+						PublishedAt: now.AddDate(-3, 0, 0), // >730 days
+						Advisories:  []Advisory{{ID: "GHSA-JJJ", Source: "GHSA", URL: "https://ghsa.example/JJJ", CVSS3Score: 4.0, Severity: "MEDIUM"}},
+					},
+				},
+			},
+			scores: map[string]*ScoreEntity{
+				"Maintained": NewScoreEntity("Maintained", 1, 10, "Poorly maintained"),
+			},
+			want: LabelStalled, // C2a: LOW/MEDIUM severity only + low maintenance → Stalled (not EOL-Effective)
+		},
+		{
+			name: "C3a_mixed_known_low_and_unknown_severity_conservative_fallback",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					IsArchived: false,
+					IsDisabled: false,
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{
+						Version:     "1.0.0",
+						PublishedAt: now.AddDate(-3, 0, 0), // >730 days
+						Advisories: []Advisory{
+							{ID: "GHSA-KKK", Source: "GHSA", URL: "https://ghsa.example/KKK", CVSS3Score: 3.0, Severity: "LOW"},
+							{ID: "GHSA-UNK", Source: "GHSA", URL: "https://ghsa.example/UNK"}, // unknown severity (fetch failed)
+						},
+					},
+				},
+			},
+			scores: map[string]*ScoreEntity{},
+			want:   LabelEOLEffective, // C3a: mixed known LOW + unknown → conservative fallback → EOL-Effective
+		},
 	}
 
 	for _, tt := range tests {

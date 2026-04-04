@@ -363,12 +363,28 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	je.Successor = a.EOL.Successor
 	je.Archived = a.IsArchived()
 
-	if a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
-		je.StableVersion = a.ReleaseInfo.StableVersion.Version
-		je.AdvisoryCount = len(a.ReleaseInfo.StableVersion.Advisories)
-		if maxScore := a.ReleaseInfo.StableVersion.MaxCVSS3(); maxScore > 0 {
-			je.MaxCVSS3Score = maxScore
-			je.MaxAdvisorySeverity = domain.SeverityFromCVSS3(maxScore)
+	if a.ReleaseInfo != nil {
+		if a.ReleaseInfo.StableVersion != nil {
+			je.StableVersion = a.ReleaseInfo.StableVersion.Version
+		}
+
+		latestWithAdvisories := a.ReleaseInfo.StableVersion
+		if latestWithAdvisories == nil {
+			latestWithAdvisories = a.ReleaseInfo.MaxSemverVersion
+		}
+		if latestWithAdvisories == nil {
+			latestWithAdvisories = a.ReleaseInfo.PreReleaseVersion
+		}
+		if latestWithAdvisories == nil {
+			latestWithAdvisories = a.ReleaseInfo.RequestedVersion
+		}
+
+		if latestWithAdvisories != nil {
+			je.AdvisoryCount = len(latestWithAdvisories.Advisories)
+			if maxScore := latestWithAdvisories.MaxCVSS3(); maxScore > 0 {
+				je.MaxCVSS3Score = maxScore
+				je.MaxAdvisorySeverity = domain.SeverityFromCVSS3(maxScore)
+			}
 		}
 	}
 	if a.ProjectLicense.Identifier != "" {
@@ -414,11 +430,23 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 			eolReason = a.EOL.FinalReason()
 			successor = a.EOL.Successor
 			repoURL = a.RepoURL
-			if a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
-				advisoryCount = fmt.Sprintf("%d", len(a.ReleaseInfo.StableVersion.Advisories))
-				if maxScore := a.ReleaseInfo.StableVersion.MaxCVSS3(); maxScore > 0 {
-					maxSeverity = domain.SeverityFromCVSS3(maxScore)
-					maxCVSS3Score = fmt.Sprintf("%.1f", maxScore)
+			if a.ReleaseInfo != nil {
+				advisoryVersion := a.ReleaseInfo.StableVersion
+				if advisoryVersion == nil {
+					advisoryVersion = a.ReleaseInfo.MaxSemverVersion
+				}
+				if advisoryVersion == nil {
+					advisoryVersion = a.ReleaseInfo.PreReleaseVersion
+				}
+				if advisoryVersion == nil {
+					advisoryVersion = a.ReleaseInfo.RequestedVersion
+				}
+				if advisoryVersion != nil {
+					advisoryCount = fmt.Sprintf("%d", len(advisoryVersion.Advisories))
+					if maxScore := advisoryVersion.MaxCVSS3(); maxScore > 0 {
+						maxSeverity = domain.SeverityFromCVSS3(maxScore)
+						maxCVSS3Score = fmt.Sprintf("%.1f", maxScore)
+					}
 				}
 			}
 		}

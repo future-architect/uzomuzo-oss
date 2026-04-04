@@ -213,15 +213,15 @@ func (s *LifecycleAssessorService) getStableOrMaxVersionDetail(a *Analysis) *Ver
 }
 
 // hasHighSeverityAdvisories returns true if the analysis has any advisory with CVSS3 >= threshold,
-// or if severity data is unavailable (all unknown) and advisories exist (conservative fallback).
+// or if any advisory severity is unavailable and advisories exist (conservative fallback).
 func (s *LifecycleAssessorService) hasHighSeverityAdvisories(a *Analysis) bool {
 	vd := s.getStableOrMaxVersionDetail(a)
 	if vd == nil || len(vd.Advisories) == 0 {
 		return false
 	}
 	unknownCount := vd.UnknownSeverityAdvisoryCount()
-	if unknownCount == len(vd.Advisories) {
-		// All severity unknown — fall back to count-based (treated as potentially high).
+	if unknownCount > 0 {
+		// Any unknown severity triggers conservative fallback (treated as potentially high).
 		return true
 	}
 	return vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) > 0
