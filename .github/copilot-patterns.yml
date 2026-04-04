@@ -37,101 +37,6 @@ patterns:
     pr: 116
     file: "internal/infrastructure/integration/enrich_advisory.go"
     date: "2026-04-04"
-  - category: "api-consistency"
-    summary: "Output formats (JSON, CSV) must use the same data-source fallback chain as domain logic (e.g., stable→MaxSemver→PreRelease→Requested)"
-    pr: 116
-    file: "internal/interfaces/cli/scan_render.go"
-    date: "2026-04-04"
-  - category: "testing"
-    summary: "New severity-aware branching paths (HIGH→EOL-Effective, LOW→Stalled) lacked targeted tests exercising both sides of the threshold"
-    pr: 116
-    file: "internal/domain/analysis/lifecycle_assessor.go"
-    date: "2026-04-04"
-  - category: "testing"
-    summary: "New enrichment path (dedup, batch fetch, severity population, sort) was untested — add focused unit tests for helper functions"
-    pr: 116
-    file: "internal/infrastructure/integration/enrich_advisory.go"
-    date: "2026-04-04"
-  - category: "defensive-coding"
-    summary: "Cache negative (404) results for immutable lookups to prevent redundant HTTP calls within the same process"
-    pr: 116
-    file: "internal/infrastructure/depsdev/depsdev.go"
-    date: "2026-04-04"
-  - category: "api-consistency"
-    summary: "Remove unused parameters from function signatures — dead parameters add noise and confuse callers about required context"
-    pr: 116
-    file: "internal/domain/analysis/lifecycle_assessor.go"
-    date: "2026-04-04"
-  - category: "defensive-coding"
-    summary: "Guard nil struct before method call — CSV renderer called LatestVersionDetail() on potentially nil ReleaseInfo while JSON renderer had the guard"
-    pr: 116
-    file: "internal/interfaces/cli/scan_render.go"
-    date: "2026-04-04"
-  - category: "testing"
-    summary: "New HTTP endpoints (FetchAdvisory/FetchAdvisoriesBatch) with caching and batch parallelism lacked httptest-based coverage"
-    pr: 116
-    file: "internal/infrastructure/depsdev/depsdev.go"
-    date: "2026-04-04"
-  - category: "api-consistency"
-    summary: "Reason text (severitySummary) must surface unknown-severity advisory counts to stay consistent with conservative lifecycle classification"
-    pr: 116
-    file: "internal/domain/analysis/lifecycle_assessor.go"
-    date: "2026-04-04"
-  - category: "defensive-coding"
-    summary: "Filter empty advisory IDs before adding to dedup set — empty IDs trigger invalid API requests to base path"
-    pr: 116
-    file: "internal/infrastructure/integration/enrich_advisory.go"
-    date: "2026-04-04"
-  - category: "defensive-coding"
-    summary: "Normalize and filter empty/whitespace IDs in batch fetch before deduplication — prevents invalid HTTP requests and cache pollution"
-    pr: 116
-    file: "internal/infrastructure/depsdev/depsdev.go"
-    date: "2026-04-04"
-  - category: "defensive-coding"
-    summary: "Use select on ctx.Done() when acquiring semaphore in batch goroutines — plain channel send blocks even after context cancellation"
-    pr: 116
-    file: "internal/infrastructure/depsdev/depsdev.go"
-    date: "2026-04-04"
-  - category: "api-consistency"
-    summary: "Key output format branching on each field's own availability — don't couple display of Title to presence of Severity when they are independently populated"
-    pr: 116
-    file: "internal/interfaces/cli/batch.go"
-    date: "2026-04-04"
-  - category: "defensive-coding"
-    summary: "Use utf8.RuneCountInString (not len) when computing terminal display widths — multi-byte box-drawing and emoji characters cause incorrect sizing with byte count"
-    pr: 115
-    file: "internal/interfaces/cli/boxdraw.go"
-    date: "2026-04-04"
-  - category: "api-consistency"
-    summary: "Use host-agnostic labels (e.g., 'Repository:') unless the host is confirmed — hardcoding 'GitHub:' misleads for non-GitHub repos"
-    pr: 115
-    file: "internal/interfaces/cli/boxdraw.go"
-    date: "2026-04-04"
-  - category: "api-consistency"
-    summary: "Render all populated data fields — dropping advisory URLs when the struct has a URL field prevents users from clicking through to detail pages"
-    pr: 115
-    file: "internal/interfaces/cli/boxdraw.go"
-    date: "2026-04-04"
-  - category: "testing"
-    summary: "Do not duplicate unit tests across packages — URL builder tests in CLI duplicated identical coverage from common/links/depsdev_test.go"
-    pr: 115
-    file: "internal/interfaces/cli/boxdraw_test.go"
-    date: "2026-04-04"
-  - category: "testing"
-    summary: "Scope test assertions to the specific output region under test — broad substring checks (e.g., Contains(output, emoji)) can match unrelated sections (e.g., summary box vs table row)"
-    pr: 115
-    file: "internal/interfaces/cli/scan_render_test.go"
-    date: "2026-04-04"
-  - category: "defensive-coding"
-    summary: "Clamp computed sizes to zero (not a forced minimum) when content already exceeds budget — forcing a minimum padding makes output wider than the declared width"
-    pr: 115
-    file: "internal/interfaces/cli/boxdraw.go"
-    date: "2026-04-04"
-  - category: "defensive-coding"
-    summary: "Use case-insensitive comparison for URL host detection — URLs are case-insensitive per RFC and user/API data may use mixed case"
-    pr: 115
-    file: "internal/interfaces/cli/boxdraw.go"
-    date: "2026-04-04"
   - category: "comment-doc-drift"
     summary: "Doc comments and inline comments describing enum precedence/taxonomy still used old labels after introducing new MaintenanceStatus constants"
     pr: 121
@@ -142,14 +47,9 @@ patterns:
     pr: 121
     file: "pkg/uzomuzo/types.go"
     date: "2026-04-04"
-  - category: "testing"
-    summary: "Test data for EOLScheduled state omitted ScheduledAt field — test fixtures should populate all fields that the state semantically implies"
-    pr: 121
-    file: "internal/domain/analysis/aggregates_extra_test.go"
-    date: "2026-04-04"
-  # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107)
-  # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
-  # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)
+  # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107, #115, #116)
+  # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111, #115, #116, #123)
+  # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107, #115, #116, #121)
   # comment-doc-drift: promoted to coding-standards.instructions.md (PRs #101, #106, #111, #116)
   # deterministic-output: promoted to coding-standards.instructions.md (PRs #106, #111)
   # naming-consistency: promoted to coding-standards.instructions.md (PRs #87, #116)
