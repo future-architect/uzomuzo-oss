@@ -928,19 +928,17 @@ func printReleaseInfo(a *analysispkg.Analysis) {
 				fmt.Printf("   ↳ Stable Advisories: %d\n", advCount)
 			}
 			for _, adv := range stable.Advisories {
-				if adv.Severity != "" {
-					if adv.URL != "" {
-						fmt.Printf("      • [%s] %s — %s (%s %.1f) %s\n", adv.Source, adv.ID, adv.Title, adv.Severity, adv.CVSS3Score, adv.URL)
-					} else {
-						fmt.Printf("      • [%s] %s — %s (%s %.1f)\n", adv.Source, adv.ID, adv.Title, adv.Severity, adv.CVSS3Score)
-					}
-				} else {
-					if adv.URL != "" {
-						fmt.Printf("      • [%s] %s %s\n", adv.Source, adv.ID, adv.URL)
-					} else {
-						fmt.Printf("      • [%s] %s\n", adv.Source, adv.ID)
-					}
+					advisoryText := fmt.Sprintf("      • [%s] %s", adv.Source, adv.ID)
+				if adv.Title != "" {
+					advisoryText += fmt.Sprintf(" — %s", adv.Title)
 				}
+				if adv.CVSS3Score > 0 && adv.Severity != "" {
+					advisoryText += fmt.Sprintf(" (%s %.1f)", adv.Severity, adv.CVSS3Score)
+				}
+				if adv.URL != "" {
+					advisoryText += fmt.Sprintf(" %s", adv.URL)
+				}
+				fmt.Println(advisoryText)
 			}
 		} else {
 			fmt.Printf("   ↳ Stable Advisories: 0\n")
