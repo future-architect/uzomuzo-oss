@@ -22,16 +22,6 @@ patterns:
     pr: 111
     file: "internal/infrastructure/depparser/ghaworkflow/parser.go"
     date: "2026-04-03"
-  - category: "comment-doc-drift"
-    summary: "When a function scans only step-level uses: (not job-level), the docstring must say so explicitly"
-    pr: 111
-    file: "internal/infrastructure/depparser/ghaworkflow/parser.go"
-    date: "2026-04-03"
-  - category: "comment-doc-drift"
-    summary: "Comment overstated constraint (./.github/actions/foo) when any ./path is valid — use general form"
-    pr: 111
-    file: "internal/domain/audit/entry.go"
-    date: "2026-04-03"
   - category: "duplicate-parsing"
     summary: "Provide a combined parser (ParseWorkflowAll) when callers need both external URLs and local paths, avoiding double YAML unmarshal"
     pr: 111
@@ -41,6 +31,11 @@ patterns:
     summary: "Use DEBUG for routine per-run telemetry; reserve INFO for exceptional/diagnostic events in infrastructure clients"
     pr: 116
     file: "internal/infrastructure/depsdev/depsdev.go"
+    date: "2026-04-04"
+  - category: "logging-consistency"
+    summary: "Use snake_case for slog event names (not spaces) for consistency with other integration-layer debug events and easier log filtering"
+    pr: 116
+    file: "internal/infrastructure/integration/enrich_advisory.go"
     date: "2026-04-04"
   - category: "api-consistency"
     summary: "Output formats (JSON, CSV) must use the same data-source fallback chain as domain logic (e.g., stable→MaxSemver→PreRelease→Requested)"
@@ -82,14 +77,9 @@ patterns:
     pr: 116
     file: "internal/domain/analysis/lifecycle_assessor.go"
     date: "2026-04-04"
-  - category: "comment-doc-drift"
-    summary: "Doc comment claimed PreRelease/Requested advisories 'are not consumed by any current code path' but LatestVersionDetail() can select them as fallback"
-    pr: 116
-    file: "internal/infrastructure/integration/enrich_advisory.go"
-    date: "2026-04-04"
   # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)
-  # comment-doc-drift: promoted to coding-standards.instructions.md (PRs #101, #106)
+  # comment-doc-drift: promoted to coding-standards.instructions.md (PRs #101, #106, #111, #116)
   # deterministic-output: promoted to coding-standards.instructions.md (PRs #106, #111)
   # naming-consistency: promoted to coding-standards.instructions.md (PRs #87, #116)
