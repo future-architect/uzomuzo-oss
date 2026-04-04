@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	commonlinks "github.com/future-architect/uzomuzo-oss/internal/common/links"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
@@ -112,6 +113,21 @@ func TestWriteBoxOrigin_DirectPURL(t *testing.T) {
 	}
 	if buf.Len() != 0 {
 		t.Error("writeBoxOrigin should produce no output for direct PURL with no relation")
+	}
+}
+
+func TestWriteBoxOrigin_DirectRelation(t *testing.T) {
+	var buf bytes.Buffer
+	entry := &domainaudit.AuditEntry{
+		PURL:     "pkg:npm/express@4.18.2",
+		Relation: depparser.RelationDirect,
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxOrigin(ctx); err != nil {
+		t.Fatalf("writeBoxOrigin() error = %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("writeBoxOrigin should produce no output for direct relation, got %q", buf.String())
 	}
 }
 
@@ -510,13 +526,15 @@ func TestBuildDepsDevURL(t *testing.T) {
 	}{
 		{"npm", "express", "https://deps.dev/npm/express"},
 		{"PyPI", "requests", "https://deps.dev/pypi/requests"},
+		{"golang", "golang.org/x/sys", "https://deps.dev/go/golang.org/x/sys"},
+		{"gem", "rails", "https://deps.dev/rubygems/rails"},
 		{"", "express", ""},
 		{"npm", "", ""},
 	}
 	for _, tt := range tests {
-		got := buildDepsDevURL(tt.eco, tt.name)
+		got := commonlinks.BuildDepsDevURL(tt.eco, tt.name)
 		if got != tt.want {
-			t.Errorf("buildDepsDevURL(%q, %q) = %q, want %q", tt.eco, tt.name, got, tt.want)
+			t.Errorf("BuildDepsDevURL(%q, %q) = %q, want %q", tt.eco, tt.name, got, tt.want)
 		}
 	}
 }
@@ -526,14 +544,15 @@ func TestBuildDepsDevVersionURL(t *testing.T) {
 		eco, name, ver, want string
 	}{
 		{"npm", "express", "4.18.2", "https://deps.dev/npm/express/4.18.2"},
+		{"golang", "golang.org/x/sys", "v0.1.0", "https://deps.dev/go/golang.org/x/sys/v0.1.0"},
 		{"", "express", "1.0.0", ""},
 		{"npm", "", "1.0.0", ""},
 		{"npm", "express", "", ""},
 	}
 	for _, tt := range tests {
-		got := buildDepsDevVersionURL(tt.eco, tt.name, tt.ver)
+		got := commonlinks.BuildDepsDevVersionURL(tt.eco, tt.name, tt.ver)
 		if got != tt.want {
-			t.Errorf("buildDepsDevVersionURL(%q, %q, %q) = %q, want %q", tt.eco, tt.name, tt.ver, got, tt.want)
+			t.Errorf("BuildDepsDevVersionURL(%q, %q, %q) = %q, want %q", tt.eco, tt.name, tt.ver, got, tt.want)
 		}
 	}
 }

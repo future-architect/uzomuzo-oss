@@ -7,12 +7,13 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
+	commonlinks "github.com/future-architect/uzomuzo-oss/internal/common/links"
+	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	analysispkg "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
-
-	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
 
 // defaultBarWidth is the character width of decorative ── bars in left-border output.
@@ -84,8 +85,9 @@ func writeLine(ctx *boxContext, format string, args ...any) error {
 }
 
 // buildBar constructs a decorative bar like "── title ────────..." or "├─ label ────────...".
+// Uses rune count (not byte count) so multi-byte box-drawing characters size correctly.
 func buildBar(prefix, middle string, width int) string {
-	remaining := width - len(prefix) - len(middle)
+	remaining := width - utf8.RuneCountInString(prefix) - utf8.RuneCountInString(middle)
 	if remaining < minBarPadding {
 		remaining = minBarPadding
 	}
@@ -137,28 +139,6 @@ func verdictLabel(v domainaudit.Verdict) string {
 }
 
 // ---------------------------------------------------------------------------
-// deps.dev URL helpers (built inline to avoid importing infrastructure layer)
-// ---------------------------------------------------------------------------
-
-// buildDepsDevURL returns the deps.dev package overview page (no version).
-func buildDepsDevURL(ecosystem, name string) string {
-	eco := strings.ToLower(strings.TrimSpace(ecosystem))
-	if eco == "" || name == "" {
-		return ""
-	}
-	return fmt.Sprintf("https://deps.dev/%s/%s", eco, name)
-}
-
-// buildDepsDevVersionURL returns the deps.dev version-specific page.
-func buildDepsDevVersionURL(ecosystem, name, version string) string {
-	eco := strings.ToLower(strings.TrimSpace(ecosystem))
-	if eco == "" || name == "" || version == "" {
-		return ""
-	}
-	return fmt.Sprintf("https://deps.dev/%s/%s/%s", eco, name, version)
-}
-
-// ---------------------------------------------------------------------------
 // Section renderers
 // ---------------------------------------------------------------------------
 
@@ -197,10 +177,11 @@ func writeBoxIdentity(ctx *boxContext) error {
 }
 
 // writeBoxOrigin writes the Origin section (source, relation, via).
-// Returns nil without writing if no provenance info exists (direct PURL with no relation).
+// Returns nil without writing for direct PURLs with direct/unknown relation (no provenance noise).
+// Only shown for action/transitive entries where origin context is meaningful.
 func writeBoxOrigin(ctx *boxContext) error {
 	hasOrigin := ctx.entry.Source != domainaudit.SourceDirect ||
-		ctx.entry.Relation != depparser.RelationUnknown ||
+		ctx.entry.Relation == depparser.RelationTransitive ||
 		ctx.entry.Via != ""
 	if !hasOrigin {
 		return nil
@@ -213,7 +194,7 @@ func writeBoxOrigin(ctx *boxContext) error {
 			return err
 		}
 	}
-	if ctx.entry.Relation != depparser.RelationUnknown {
+	if ctx.entry.Relation == depparser.RelationTransitive {
 		if err := writeLine(ctx, "Relation: %s", formatRelation(ctx.entry)); err != nil {
 			return err
 		}
@@ -523,7 +504,7 @@ func formatAdvisoryLines(advisories []analysispkg.Advisory, ecosystem, name, ver
 	}
 	if len(advisories) > maxDisplayAdvisories {
 		remaining := len(advisories) - maxDisplayAdvisories
-		depsdevURL := buildDepsDevVersionURL(ecosystem, name, version)
+		depsdevURL := commonlinks.BuildDepsDevVersionURL(ecosystem, name, version)
 		if depsdevURL != "" {
 			lines = append(lines, fmt.Sprintf("  ... and %d more → %s", remaining, depsdevURL))
 		} else {
@@ -652,7 +633,7 @@ func writeBoxLinks(ctx *boxContext) error {
 
 	// deps.dev link (package-level, no version)
 	eco, name := packageEcoName(a)
-	if depsdevURL := buildDepsDevURL(eco, name); depsdevURL != "" {
+	if depsdevURL := commonlinks.BuildDepsDevURL(eco, name); depsdevURL != "" {
 		lines = append(lines, fmt.Sprintf("deps.dev: %s", depsdevURL))
 	}
 
@@ -769,4 +750,3 @@ func packageEcoName(a *analysispkg.Analysis) (ecosystem, name string) {
 	}
 	return parsed.GetEcosystem(), parsed.GetPackageName()
 }
-
