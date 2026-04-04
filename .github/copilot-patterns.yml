@@ -97,6 +97,41 @@ patterns:
     pr: 116
     file: "internal/interfaces/cli/batch.go"
     date: "2026-04-04"
+  - category: "defensive-coding"
+    summary: "Use utf8.RuneCountInString (not len) when computing terminal display widths — multi-byte box-drawing and emoji characters cause incorrect sizing with byte count"
+    pr: 115
+    file: "internal/interfaces/cli/boxdraw.go"
+    date: "2026-04-04"
+  - category: "api-consistency"
+    summary: "Use host-agnostic labels (e.g., 'Repository:') unless the host is confirmed — hardcoding 'GitHub:' misleads for non-GitHub repos"
+    pr: 115
+    file: "internal/interfaces/cli/boxdraw.go"
+    date: "2026-04-04"
+  - category: "api-consistency"
+    summary: "Render all populated data fields — dropping advisory URLs when the struct has a URL field prevents users from clicking through to detail pages"
+    pr: 115
+    file: "internal/interfaces/cli/boxdraw.go"
+    date: "2026-04-04"
+  - category: "testing"
+    summary: "Do not duplicate unit tests across packages — URL builder tests in CLI duplicated identical coverage from common/links/depsdev_test.go"
+    pr: 115
+    file: "internal/interfaces/cli/boxdraw_test.go"
+    date: "2026-04-04"
+  - category: "testing"
+    summary: "Scope test assertions to the specific output region under test — broad substring checks (e.g., Contains(output, emoji)) can match unrelated sections (e.g., summary box vs table row)"
+    pr: 115
+    file: "internal/interfaces/cli/scan_render_test.go"
+    date: "2026-04-04"
+  - category: "defensive-coding"
+    summary: "Clamp computed sizes to zero (not a forced minimum) when content already exceeds budget — forcing a minimum padding makes output wider than the declared width"
+    pr: 115
+    file: "internal/interfaces/cli/boxdraw.go"
+    date: "2026-04-04"
+  - category: "defensive-coding"
+    summary: "Use case-insensitive comparison for URL host detection — URLs are case-insensitive per RFC and user/API data may use mixed case"
+    pr: 115
+    file: "internal/interfaces/cli/boxdraw.go"
+    date: "2026-04-04"
   # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)

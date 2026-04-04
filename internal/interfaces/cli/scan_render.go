@@ -159,16 +159,7 @@ func formatRelation(e *domainaudit.AuditEntry) string {
 	return relation
 }
 
-// detailedEntryHeader returns the header for a detailed report entry.
-// When showSource is true, the source is embedded: "--- PURL 1 (action) ---".
-func detailedEntryHeader(counter int, source domainaudit.EntrySource, showSource bool) string {
-	if showSource {
-		return fmt.Sprintf("--- PURL %d (%s) ---", counter, sourceDisplayName(source))
-	}
-	return fmt.Sprintf("--- PURL %d ---", counter)
-}
-
-// renderScanDetailed prints a summary table followed by rich per-package output.
+// renderScanDetailed prints a summary table followed by rich per-package box output.
 // The two sections are separated by markers for machine extraction.
 func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 	// Summary table section
@@ -184,44 +175,16 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 		return fmt.Errorf("failed to write marker: %w", err)
 	}
 
-	showSource := hasMultipleSources(entries)
 	counter := 0
 	for i := range entries {
-		e := &entries[i]
-		if e.Analysis == nil || e.Analysis.Error != nil {
-			counter++
-			if _, err := fmt.Fprintf(w, "\n%s\n", detailedEntryHeader(counter, e.Source, showSource)); err != nil {
-				return fmt.Errorf("failed to write entry: %w", err)
-			}
-			if _, err := fmt.Fprintf(w, "Package: %s\n", e.PURL); err != nil {
-				return fmt.Errorf("failed to write entry: %w", err)
-			}
-			if e.Via != "" {
-				if _, err := fmt.Fprintf(w, "🔗 Via: %s\n", e.Via); err != nil {
-					return fmt.Errorf("failed to write entry: %w", err)
-				}
-			}
-			verdict := string(e.Verdict)
-			if e.ErrorMsg != "" {
-				if _, err := fmt.Fprintf(w, "Verdict: %s (error: %s)\n", verdict, e.ErrorMsg); err != nil {
-					return fmt.Errorf("failed to write entry: %w", err)
-				}
-			} else {
-				if _, err := fmt.Fprintf(w, "Verdict: %s\n", verdict); err != nil {
-					return fmt.Errorf("failed to write entry: %w", err)
-				}
-			}
-			continue
-		}
 		counter++
-		// Print source-annotated header, then delegate body to printAnalysisBody (stdout).
-		fmt.Printf("\n%s\n", detailedEntryHeader(counter, e.Source, showSource))
-		if e.Relation != depparser.RelationUnknown {
-			if _, err := fmt.Fprintf(w, "🔗 Relation: %s\n", formatRelation(e)); err != nil {
-				return fmt.Errorf("failed to write relation: %w", err)
-			}
+		// Preserve machine-parseable marker outside the box
+		if _, err := fmt.Fprintf(w, "\n--- PURL %d ---\n", counter); err != nil {
+			return fmt.Errorf("failed to write entry marker: %w", err)
 		}
-		printAnalysisBody(e.PURL, e.Analysis, e.Via)
+		if err := renderBoxEntry(w, &entries[i]); err != nil {
+			return fmt.Errorf("failed to write box entry: %w", err)
+		}
 	}
 	if counter == 0 {
 		if _, err := fmt.Fprintln(w, "No results to display"); err != nil {
@@ -231,7 +194,16 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 	return nil
 }
 
-// renderScanTable renders the VERDICT table format.
+// tableVerdictDisplay returns the verdict string with emoji prefix for table output.
+// The result is fixed-width padded so tabwriter aligns subsequent columns correctly
+// despite emoji taking variable display width.
+func tableVerdictDisplay(v domainaudit.Verdict) string {
+	icon := verdictIcon(v)
+	// Pad verdict text to 7 chars (length of "replace") so columns after it align.
+	return fmt.Sprintf("%s %-7s", icon, string(v))
+}
+
+// renderScanTable renders the STATUS table format.
 // Conditional columns: SOURCE (when multiple sources), RELATION (when relation info present).
 func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	showSource := hasMultipleSources(entries)
@@ -239,7 +211,7 @@ func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 
 	writeHeader := func(tw *tabwriter.Writer) error {
 		var cols []string
-		cols = append(cols, "VERDICT")
+		cols = append(cols, "STATUS")
 		if showSource {
 			cols = append(cols, "SOURCE")
 		}
@@ -248,19 +220,21 @@ func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 			cols = append(cols, "RELATION")
 		}
 		cols = append(cols, "LIFECYCLE", "EOL")
-		_, err := fmt.Fprintln(tw, strings.Join(cols, "\t"))
-		return err
+		if _, err := fmt.Fprintln(tw, strings.Join(cols, "\t")); err != nil {
+			return fmt.Errorf("failed to write table header: %w", err)
+		}
+		return nil
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	if err := writeHeader(tw); err != nil {
-		return fmt.Errorf("failed to write table header: %w", err)
+		return err
 	}
 
 	for i := range entries {
 		maintenance, eol := entryMaintenanceEOL(&entries[i], "—")
 		var cols []string
-		cols = append(cols, string(entries[i].Verdict))
+		cols = append(cols, tableVerdictDisplay(entries[i].Verdict))
 		if showSource {
 			cols = append(cols, sourceDisplayName(entries[i].Source))
 		}
@@ -276,10 +250,21 @@ func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("failed to flush table output: %w", err)
 	}
+	// Summary box
+	if err := renderSummaryBox(w, entries); err != nil {
+		return fmt.Errorf("failed to write summary box: %w", err)
+	}
+	return nil
+}
+
+// renderSummaryBox renders the summary line in a left-border box.
+func renderSummaryBox(w io.Writer, entries []domainaudit.AuditEntry) error {
 	s := computeSummary(entries)
-	if _, err := fmt.Fprintf(w, "\nSummary: %d dependencies | %d ok | %d caution | %d replace | %d review\n",
-		s.Total, s.OK, s.Caution, s.Replace, s.Review); err != nil {
-		return fmt.Errorf("failed to write summary: %w", err)
+	summaryLine := fmt.Sprintf("%d dependencies | ✅ %d ok | ⚠️ %d caution | 🔴 %d replace | 🔍 %d review",
+		s.Total, s.OK, s.Caution, s.Replace, s.Review)
+	bar := buildBar("── ", "Summary ", defaultBarWidth)
+	if _, err := fmt.Fprintf(w, "\n%s\n│ %s\n└%s\n", bar, summaryLine, strings.Repeat("─", defaultBarWidth-1)); err != nil {
+		return fmt.Errorf("failed to write summary box: %w", err)
 	}
 	return nil
 }

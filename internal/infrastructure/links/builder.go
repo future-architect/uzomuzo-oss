@@ -5,6 +5,8 @@ package links
 import (
 	"fmt"
 	"strings"
+
+	commonlinks "github.com/future-architect/uzomuzo-oss/internal/common/links"
 )
 
 // BuildPackageRegistryURL returns the ecosystem's canonical registry landing page (package-wide).
@@ -60,6 +62,18 @@ func BuildVersionRegistryURL(ecosystem, name, version string) string {
 		return fmt.Sprintf("https://pkg.go.dev/%s@%s", name, version)
 	}
 	return ""
+}
+
+// BuildDepsDevURL returns the deps.dev package overview page URL (no version).
+// Delegates to common/links for ecosystem normalization (golang->go, gem->rubygems, etc.).
+func BuildDepsDevURL(ecosystem, name string) string {
+	return commonlinks.BuildDepsDevURL(ecosystem, name)
+}
+
+// BuildDepsDevVersionURL returns the deps.dev version-specific page URL.
+// Delegates to common/links for ecosystem normalization (golang->go, gem->rubygems, etc.).
+func BuildDepsDevVersionURL(ecosystem, name, version string) string {
+	return commonlinks.BuildDepsDevVersionURL(ecosystem, name, version)
 }
 
 // BuildGitHubReleaseNotesURL attempts to build a GitHub release/tag URL if repoURL is a GitHub repo.
