@@ -198,7 +198,7 @@ func replaceBlock(content, id, newBlock, fenceLang string) (string, error) {
 	}
 
 	// Check for duplicate begin markers.
-	if strings.Index(content[beginIdx+len(beginMarker):], beginMarker) >= 0 {
+	if strings.Contains(content[beginIdx+len(beginMarker):], beginMarker) {
 		return "", fmt.Errorf("duplicate marker %q found", beginMarker)
 	}
 
