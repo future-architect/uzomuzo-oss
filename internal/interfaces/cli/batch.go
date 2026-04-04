@@ -721,7 +721,7 @@ func displayBatchAnalysesFull(analyses map[string]*analysispkg.Analysis, options
 		for _, it := range bucket {
 			purlCount++
 			label := "PURL"
-			if strings.HasPrefix(it.key, "https://") || strings.HasPrefix(it.key, "http://") {
+			if strings.HasPrefix(it.key, "https://") || strings.HasPrefix(it.key, "http://") || common.IsValidGitHubURL(it.key) {
 				label = "URL"
 			}
 			fmt.Printf("\n--- %s %d ---\n", label, purlCount)
