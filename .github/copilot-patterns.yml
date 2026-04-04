@@ -47,6 +47,8 @@ patterns:
     pr: 121
     file: "internal/domain/analysis/aggregates_extra_test.go"
     date: "2026-04-04"
+  # defensive-coding: refined existing rule "Use Case-Insensitive Comparison for URL Components" (PR #119, boxdraw.go:680)
+  # defensive-coding: already covered by "Branch Output Display on Each Field's Own Availability" (PR #119, boxdraw.go:314)
   # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107, #115, #116)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111, #115, #116)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107, #115, #116, #119)
