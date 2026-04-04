@@ -165,8 +165,9 @@ func main() {
 				fatalf("raw command %q: %v", rf.ID, err)
 			}
 
-			fmt.Printf("Running shell: %s\n", rf.Shell)
-			output, err := runShellCommand(rf.Shell)
+			shell := strings.ReplaceAll(rf.Shell, "{{binary}}", cfg.Binary)
+			fmt.Printf("Running shell: %s\n", shell)
+			output, err := runShellCommand(shell)
 			if err != nil && !rf.IgnoreExitCode {
 				fatalf("raw command %q failed: %v", rf.ID, err)
 			}
@@ -213,6 +214,11 @@ func runCheckMarkers(cfg Config) {
 
 	for _, cmd := range cfg.Commands {
 		for _, f := range cmd.Files {
+			if err := validateRelativePath(f, "file"); err != nil {
+				fmt.Fprintf(os.Stderr, "ERROR: command %q: %v\n", cmd.ID, err)
+				errs++
+				continue
+			}
 			if _, ok := fileContents[f]; !ok {
 				data, err := os.ReadFile(f)
 				if err != nil {
@@ -245,6 +251,13 @@ func runCheckMarkers(cfg Config) {
 				fmt.Fprintf(os.Stderr, "ERROR: %s: missing end marker for %q\n", f, cmd.ID)
 				errs++
 				continue
+			}
+
+			// Check for duplicate end markers.
+			afterEnd := afterBegin + endIdx + len(endMarker)
+			if strings.Contains(content[afterEnd:], endMarker) {
+				fmt.Fprintf(os.Stderr, "ERROR: %s: duplicate end marker for %q\n", f, cmd.ID)
+				errs++
 			}
 
 			blockContent := strings.TrimSpace(content[afterBegin : afterBegin+endIdx])

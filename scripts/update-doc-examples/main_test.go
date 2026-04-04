@@ -5,6 +5,35 @@ import (
 	"testing"
 )
 
+func TestValidateRelativePath(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		{name: "valid relative path", path: "docs/usage.md", wantErr: false},
+		{name: "valid nested path", path: "scripts/update-doc-examples/main.go", wantErr: false},
+		{name: "valid simple file", path: "README.md", wantErr: false},
+		{name: "absolute path unix", path: "/tmp/evil", wantErr: true},
+		{name: "traversal prefix", path: "../outside", wantErr: true},
+		{name: "traversal nested", path: "foo/../../outside", wantErr: true},
+		{name: "bare dot", path: ".", wantErr: true},
+		{name: "backslash", path: "foo\\bar", wantErr: true},
+		{name: "cleaned to dot", path: "foo/..", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRelativePath(tt.path, "test")
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected error for path %q, got nil", tt.path)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error for path %q: %v", tt.path, err)
+			}
+		})
+	}
+}
+
 func TestReplaceBlock(t *testing.T) {
 	tests := []struct {
 		name      string
