@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,13 +30,14 @@ jobs:
 
   doc-examples:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.head_ref }}
+          # PR: checkout head branch for pushback. Manual/push: checkout default ref.
+          ref: ${{ github.head_ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
