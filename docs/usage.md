@@ -33,21 +33,21 @@
 $ uzomuzo scan pkg:npm/express@4.18.2
 
 ── pkg:npm/express@4.18.2 ──────────────────────────────────
-│ Description: Fast, unopinionated, minimalist web framework for node.
-│ ✅ Active
-│ Reason: Recent stable package version published with recent human commits; maintenance score ≥ 3
+│ Fast, unopinionated, minimalist web framework for node.
+│ ✅ Active: Actively maintained with recent releases
+├─ Signals ─────────────────────────────────────────────────
+│ Recent Stable Release: true
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 10/10
 ├─ Health ──────────────────────────────────────────────────
-│ 68888 stars
+│ 68892 stars
 │ Used by: 2211 packages
 │ Depends on: 31 direct, 39 transitive
 │ Score: 8.4/10  Maintained: 10.0/10
-│ Last Commit: 2026-03-31
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 5.2.1 (2025-12-01)
 │ Pre-release: 5.0.0-beta.3 (2024-03-25)
 │ Requested: 4.18.2 (2022-10-08)
-├─ License ─────────────────────────────────────────────────
-│ MIT (depsdev)
 ├─ Links ───────────────────────────────────────────────────
 │ Homepage: https://expressjs.com
 │ Repository: https://github.com/expressjs/express
@@ -99,10 +99,10 @@ When transitive dependencies are included, output shows a `RELATION` column indi
 ```text
 $ uzomuzo scan --file go.mod -f table
 
-STATUS      PURL                                                        RELATION  LIFECYCLE      EOL
-⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled        Not EOL
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  Not EOL
-✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Not EOL
+STATUS      PURL                                                        RELATION  LIFECYCLE
+⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Effective
+✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active
 
 ── Summary ─────────────────────────────────────────────────
 │ 3 dependencies | ✅ 1 ok | ⚠️ 1 caution | 🔴 1 replace | 🔍 0 review
@@ -257,9 +257,9 @@ Rules:
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --format table
-STATUS      PURL                    LIFECYCLE  EOL
-🔴 replace   pkg:npm/request@2.88.2  EOL        EOL
-✅ ok        pkg:npm/express@4.18.2  Active     Not EOL
+STATUS      PURL                    LIFECYCLE
+🔴 replace   pkg:npm/request@2.88.2  EOL-Confirmed
+✅ ok        pkg:npm/express@4.18.2  Active
 
 ── Summary ─────────────────────────────────────────────────
 │ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -275,10 +275,10 @@ When scanning an SBOM that includes dependency graph information, a `RELATION` c
 
 ```text
 $ trivy fs . --format cyclonedx | uzomuzo scan --sbom - --show-transitive --format table
-STATUS      RELATION                  PURL                        LIFECYCLE  EOL
-✅ ok        direct                    pkg:npm/express@4.18.2      Active     Not EOL
-✅ ok        transitive (express)      pkg:npm/accepts@1.3.8       Active     Not EOL
-🔴 replace   transitive (express)      pkg:npm/inflight@1.0.6      EOL        EOL
+STATUS      RELATION                  PURL                        LIFECYCLE
+✅ ok        direct                    pkg:npm/express@4.18.2      Active
+✅ ok        transitive (express)      pkg:npm/accepts@1.3.8       Active
+🔴 replace   transitive (express)      pkg:npm/inflight@1.0.6      EOL-Confirmed
 
 ── Summary ─────────────────────────────────────────────────
 │ 3 dependencies | ✅ 2 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -305,16 +305,14 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
     {
       "purl": "pkg:npm/request@2.88.2",
       "verdict": "replace",
-      "lifecycle": "EOL",
-      "eol": "EOL",
-      "eol_reason": "Stable version is deprecated in npm registry. ...",
+      "lifecycle": "EOL-Confirmed",
       "repo_url": "https://github.com/request/request",
       "overall_score": 3.6,
       "dependent_count": 186345,
       "stable_version": "2.88.2",
       "project_license": "Apache-2.0",
       "version_licenses": ["Apache-2.0"],
-      "reason": "Primary-source EOL"
+      "reason": "Registry deprecated"
     }
   ]
 }
@@ -329,8 +327,8 @@ The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, 
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --format csv
-verdict,purl,lifecycle,eol,eol_reason,successor,repo_url
-replace,pkg:npm/request@2.88.2,EOL,EOL,"Stable version is deprecated in npm registry. ...",https://github.com/request/request
+verdict,purl,lifecycle,successor,repo_url
+replace,pkg:npm/request@2.88.2,EOL-Confirmed,,https://github.com/request/request
 ```
 
 </details>
@@ -358,8 +356,8 @@ Without `--fail-on`, exit code is always 0 regardless of scan results.
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-confirmed --format table
-STATUS      PURL                    LIFECYCLE  EOL
-🔴 replace   pkg:npm/request@2.88.2  EOL        EOL
+STATUS      PURL                    LIFECYCLE
+🔴 replace   pkg:npm/request@2.88.2  EOL-Confirmed
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -371,8 +369,8 @@ STATUS      PURL                    LIFECYCLE  EOL
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-effective --format table
-STATUS      PURL                    LIFECYCLE  EOL
-🔴 replace   pkg:npm/request@2.88.2  EOL        EOL
+STATUS      PURL                    LIFECYCLE
+🔴 replace   pkg:npm/request@2.88.2  EOL-Confirmed
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -384,9 +382,9 @@ STATUS      PURL                    LIFECYCLE  EOL
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --fail-on eol-confirmed,stalled --format table
-STATUS      PURL                    LIFECYCLE  EOL
-🔴 replace   pkg:npm/request@2.88.2  EOL        EOL
-✅ ok        pkg:npm/express@4.18.2  Active     Not EOL
+STATUS      PURL                    LIFECYCLE
+🔴 replace   pkg:npm/request@2.88.2  EOL-Confirmed
+✅ ok        pkg:npm/express@4.18.2  Active
 
 ── Summary ─────────────────────────────────────────────────
 │ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review

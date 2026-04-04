@@ -18,22 +18,24 @@ A package with zero CVEs today may have been abandoned for years — no one is w
 
 ```text
 ── pkg:npm/dicer@0.3.1 ─────────────────────────────────────
-│ Description: A very fast streaming multipart parser for node.js
-│ 🔴 EOL-Effective
-│ Reason: Scorecard data incomplete; open advisories (1, max: HIGH 7.5) and no human commits > 2 yrs
+│ A very fast streaming multipart parser for node.js
+│ 🔴 EOL-Effective: Unmaintained with unpatched
+│                  vulnerabilities
+├─ Signals ─────────────────────────────────────────────────
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 0/10
+│ Days Since Release: 1567
+│ Advisories: 1
+│ Max Advisory Severity: HIGH 7.5
 ├─ Health ──────────────────────────────────────────────────
 │ 188 stars
 │ Used by: 1271 packages
 │ Depends on: 1 direct, 0 transitive
 │ Score: 2.8/10  Maintained: 0.0/10
-│ Last Commit: 2023-07-15
 ├─ Releases ────────────────────────────────────────────────
-│ Stable: 0.3.1 (2021-12-19)  ⚠️ Advisories: 1 (max: HIGH 7.5)
-│   HIGH     (7.5)  GHSA-wm7h-9275-46v2  Crash in HeaderParser in dicer
-│   → https://github.com/advisories/GHSA-wm7h-9275-46v2
+│ Stable: 0.3.1 (2021-12-19)  ⚠️ 1 advisory
+│   HIGH     (7.5)  GHSA-wm7h-9275-46v2
 │   → https://deps.dev/npm/dicer/0.3.1
-├─ License ─────────────────────────────────────────────────
-│ MIT (project: depsdev / version: fallback)
 ├─ Links ───────────────────────────────────────────────────
 │ Repository: https://github.com/mscdex/dicer
 │ Registry: https://www.npmjs.com/package/dicer
@@ -162,21 +164,21 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 
 ```text
 ── pkg:npm/express@4.18.2 ──────────────────────────────────
-│ Description: Fast, unopinionated, minimalist web framework for node.
-│ ✅ Active
-│ Reason: Recent stable package version published with recent human commits; maintenance score ≥ 3
+│ Fast, unopinionated, minimalist web framework for node.
+│ ✅ Active: Actively maintained with recent releases
+├─ Signals ─────────────────────────────────────────────────
+│ Recent Stable Release: true
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 10/10
 ├─ Health ──────────────────────────────────────────────────
-│ 68888 stars
+│ 68892 stars
 │ Used by: 2211 packages
 │ Depends on: 31 direct, 39 transitive
 │ Score: 8.4/10  Maintained: 10.0/10
-│ Last Commit: 2026-03-31
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 5.2.1 (2025-12-01)
 │ Pre-release: 5.0.0-beta.3 (2024-03-25)
 │ Requested: 4.18.2 (2022-10-08)
-├─ License ─────────────────────────────────────────────────
-│ MIT (depsdev)
 ├─ Links ───────────────────────────────────────────────────
 │ Homepage: https://expressjs.com
 │ Repository: https://github.com/expressjs/express
@@ -185,23 +187,23 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 └───────────────────────────────────────────────────────────
 ```
 
-### Legacy-Safe — `moment` (2K+ dependents)
+### Stalled — `moment` (2K+ dependents)
 
 ```text
 ── pkg:npm/moment@2.29.4 ───────────────────────────────────
-│ Description: Parse, validate, manipulate, and display dates in javascript.
-│ ✅ Legacy-Safe
-│ Reason: No known advisories; no human commits for > 2 yrs
+│ Parse, validate, manipulate, and display dates in
+│   javascript.
+│ ⚠️ Stalled: Low maintenance, no commit data
+├─ Signals ─────────────────────────────────────────────────
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 0/10
 ├─ Health ──────────────────────────────────────────────────
-│ 48015 stars
-│ Used by: 2451 packages
+│ 48019 stars
+│ Used by: 2452 packages
 │ Score: 3.1/10  Maintained: 0.0/10
-│ Last Commit: 2024-02-18
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.30.1 (2023-12-27)
 │ Requested: 2.29.4 (2022-07-06)
-├─ License ─────────────────────────────────────────────────
-│ MIT (depsdev)
 ├─ Links ───────────────────────────────────────────────────
 │ Homepage: momentjs.com
 │ Repository: https://github.com/moment/moment
@@ -210,25 +212,24 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 └───────────────────────────────────────────────────────────
 ```
 
-Scorecard says Maintained 0.0 — but zero advisories and does one thing perfectly. uzomuzo classifies it as **frozen and safe**.
+Scorecard says Maintained 0.0 — but zero advisories and does one thing perfectly. Watch for maintenance decline.
 
 ### Stalled — `gorilla/mux` (22K stars)
 
 ```text
 ── pkg:golang/github.com/gorilla/mux@1.8.1 ─────────────────
-│ Description: Package gorilla/mux is a powerful HTTP router and URL matcher for building Go web servers with 🦍
-│ ⚠️ Stalled
-│ Reason: Low maintenance; last human commit within 2 yrs
+│ Package gorilla/mux is a powerful HTTP router and URL
+│   matcher for building Go web servers with 🦍
+│ ⚠️ Stalled: Low maintenance, no commit data
+├─ Signals ─────────────────────────────────────────────────
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 0/10
 ├─ Health ──────────────────────────────────────────────────
-│ 21812 stars
+│ 21814 stars
 │ Score: 4.9/10  Maintained: 0.0/10
-│ Last Commit: 2024-06-19
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: v1.8.1 (2023-10-18)
 │ Highest (SemVer): v1.8.2-0.20240619235004-fe14465e5077 (2024-06-19)
-├─ License ─────────────────────────────────────────────────
-│ Project: BSD-3-Clause (depsdev)
-│ Requested Version: (none)
 ├─ Links ───────────────────────────────────────────────────
 │ Homepage: https://gorilla.github.io
 │ Repository: https://github.com/gorilla/mux
@@ -237,94 +238,30 @@ Scorecard says Maintained 0.0 — but zero advisories and does one thing perfect
 └───────────────────────────────────────────────────────────
 ```
 
-No release since 2023, Maintained 0.0, but last commit within 2 yrs. Not dead, not active — clearly declining.
-
-### EOL-Confirmed — `request` (186K dependents, npm deprecated)
-
-```text
-── pkg:npm/request@2.88.2 ──────────────────────────────────
-│ Description: 🏊🏾 Simplified HTTP request client.
-│ 🔴 EOL-Confirmed
-│ Reason: Primary-source EOL
-├─ EOL ─────────────────────────────────────────────────────
-│ Evidence (1):
-│   [npmjs] Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2 (confidence 0.90)
-│     ↳ https://registry.npmjs.org/request
-├─ Health ──────────────────────────────────────────────────
-│ 25578 stars
-│ Used by: 186349 packages
-│ Depends on: 20 direct, 26 transitive
-│ Score: 3.6/10  Maintained: 0.0/10
-│ Last Commit: 2020-02-11
-├─ Releases ────────────────────────────────────────────────
-│ Stable: 2.88.2 (2020-02-11)  ⚠️ Advisories: 1 (max: MEDIUM 6.1) ⚠️ [DEPRECATED]
-│   MEDIUM   (6.1)  GHSA-p8p7-x288-28g6  Server-Side Request Forgery in Request
-│   → https://github.com/advisories/GHSA-p8p7-x288-28g6
-│   → https://deps.dev/npm/request/2.88.2
-├─ License ─────────────────────────────────────────────────
-│ Apache-2.0 (depsdev)
-├─ Links ───────────────────────────────────────────────────
-│ Repository: https://github.com/request/request
-│ Registry: https://www.npmjs.com/package/request
-│ deps.dev: https://deps.dev/npm/request
-└───────────────────────────────────────────────────────────
-```
-
-186K dependents. npm deprecated with deprecation message and advisory. Last release 2020. **Migrate immediately.**
-
-### EOL-Confirmed — `dgrijalva/jwt-go` (archived repository)
-
-```text
-── pkg:golang/github.com/dgrijalva/jwt-go@3.2.0 ────────────
-│ Description: ARCHIVE - Golang implementation of JSON Web Tokens (JWT). This project is now maintained at:
-│ 🔴 EOL-Confirmed
-│ Reason: Repository is archived or disabled on GitHub
-├─ Health ──────────────────────────────────────────────────
-│ 📦 Archived
-│ 10759 stars
-│ Score: 2.8/10  Maintained: 0.0/10
-│ Last Commit: 2021-08-02
-├─ Releases ────────────────────────────────────────────────
-│ Stable: v3.2.0+incompatible (2018-03-08)  ⚠️ Advisories: 2 (max: HIGH 7.5, 1 unknown)
-│   HIGH     (7.5)  GHSA-w73w-5m7g-f7qc  Authorization bypass in github.com/dgrijalva/jwt-go
-│   → https://github.com/advisories/GHSA-w73w-5m7g-f7qc
-│                   GO-2020-0017  Authorization bypass in github.com/dgrijalva/jwt-go
-│   → https://osv.dev/GO-2020-0017
-│   → https://deps.dev/go/github.com/dgrijalva/jwt-go/v3.2.0+incompatible
-│ Highest (SemVer): v4.0.0-20210802184156-9742bd7fca1c+incompatible (2021-08-02)
-├─ License ─────────────────────────────────────────────────
-│ Project: MIT (depsdev)
-│ Requested Version: (none)
-├─ Links ───────────────────────────────────────────────────
-│ Homepage: https://github.com/golang-jwt/jwt
-│ Repository: https://github.com/dgrijalva/jwt-go
-│ Registry: https://pkg.go.dev/github.com%2Fdgrijalva%2Fjwt-go
-│ deps.dev: https://deps.dev/go/github.com/dgrijalva/jwt-go
-└───────────────────────────────────────────────────────────
-```
-
-GitHub archived with unpatched HIGH advisories. Successor is `golang-jwt/jwt`. **Migrate immediately.**
+No release since 2023, Maintained 0.0. Not dead, not active — clearly declining.
 
 ### EOL-Effective — `dicer` (busboy → multer → express)
 
 ```text
 ── pkg:npm/dicer@0.3.1 ─────────────────────────────────────
-│ Description: A very fast streaming multipart parser for node.js
-│ 🔴 EOL-Effective
-│ Reason: Scorecard data incomplete; open advisories (1, max: HIGH 7.5) and no human commits > 2 yrs
+│ A very fast streaming multipart parser for node.js
+│ 🔴 EOL-Effective: Unmaintained with unpatched
+│                  vulnerabilities
+├─ Signals ─────────────────────────────────────────────────
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 0/10
+│ Days Since Release: 1567
+│ Advisories: 1
+│ Max Advisory Severity: HIGH 7.5
 ├─ Health ──────────────────────────────────────────────────
 │ 188 stars
 │ Used by: 1271 packages
 │ Depends on: 1 direct, 0 transitive
 │ Score: 2.8/10  Maintained: 0.0/10
-│ Last Commit: 2023-07-15
 ├─ Releases ────────────────────────────────────────────────
-│ Stable: 0.3.1 (2021-12-19)  ⚠️ Advisories: 1 (max: HIGH 7.5)
-│   HIGH     (7.5)  GHSA-wm7h-9275-46v2  Crash in HeaderParser in dicer
-│   → https://github.com/advisories/GHSA-wm7h-9275-46v2
+│ Stable: 0.3.1 (2021-12-19)  ⚠️ 1 advisory
+│   HIGH     (7.5)  GHSA-wm7h-9275-46v2
 │   → https://deps.dev/npm/dicer/0.3.1
-├─ License ─────────────────────────────────────────────────
-│ MIT (project: depsdev / version: fallback)
 ├─ Links ───────────────────────────────────────────────────
 │ Repository: https://github.com/mscdex/dicer
 │ Registry: https://www.npmjs.com/package/dicer
@@ -333,6 +270,69 @@ GitHub archived with unpatched HIGH advisories. Successor is `golang-jwt/jwt`. *
 ```
 
 No deprecation, no archive — but unpatched ReDoS + zero maintenance. **SCA blind spot.**
+
+### EOL-Effective — `dgrijalva/jwt-go` (archived repository)
+
+```text
+── pkg:golang/github.com/dgrijalva/jwt-go@3.2.0 ────────────
+│ ARCHIVE - Golang implementation of JSON Web Tokens (JWT).
+│   This project is now maintained at:
+│ 🔴 EOL-Effective: Unmaintained with unpatched
+│                  vulnerabilities
+├─ Signals ─────────────────────────────────────────────────
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 0/10
+│ Days Since Release: 1706
+│ Advisories: 2
+│ Max Advisory Severity: HIGH 7.5
+├─ Health ──────────────────────────────────────────────────
+│ 10758 stars
+│ Score: 2.8/10  Maintained: 0.0/10
+├─ Releases ────────────────────────────────────────────────
+│ Stable: v3.2.0+incompatible (2018-03-08)  ⚠️ 2 advisories
+│   HIGH     (7.5)  GHSA-w73w-5m7g-f7qc
+│                   GO-2020-0017
+│   → https://deps.dev/go/github.com/dgrijalva/jwt-go/v3.2.0+incompatible
+│ Highest (SemVer): v4.0.0-20210802184156-9742bd7fca1c+incompatible (2021-08-02)
+├─ Links ───────────────────────────────────────────────────
+│ Homepage: https://github.com/golang-jwt/jwt
+│ Repository: https://github.com/dgrijalva/jwt-go
+│ Registry: https://pkg.go.dev/github.com%2Fdgrijalva%2Fjwt-go
+│ deps.dev: https://deps.dev/go/github.com/dgrijalva/jwt-go
+└───────────────────────────────────────────────────────────
+```
+
+Successor is `golang-jwt/jwt`. **Migrate immediately.**
+
+### EOL-Confirmed — `request` (186K dependents, npm deprecated)
+
+```text
+── pkg:npm/request@2.88.2 ──────────────────────────────────
+│ 🏊🏾 Simplified HTTP request client.
+│ 🔴 EOL-Confirmed: Registry deprecated
+├─ Signals ─────────────────────────────────────────────────
+│ EOL Source: registry-deprecated
+├─ EOL ─────────────────────────────────────────────────────
+│ Evidence (1):
+│   [npmjs] Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2 (confidence 0.90)
+│     ↳ https://registry.npmjs.org/request
+├─ Health ──────────────────────────────────────────────────
+│ 25580 stars
+│ Used by: 186349 packages
+│ Depends on: 20 direct, 26 transitive
+│ Score: 3.6/10  Maintained: 0.0/10
+├─ Releases ────────────────────────────────────────────────
+│ Stable: 2.88.2 (2020-02-11)  ⚠️ 1 advisory ⚠️ [DEPRECATED]
+│   MEDIUM   (6.1)  GHSA-p8p7-x288-28g6
+│   → https://deps.dev/npm/request/2.88.2
+├─ Links ───────────────────────────────────────────────────
+│ Repository: https://github.com/request/request
+│ Registry: https://www.npmjs.com/package/request
+│ deps.dev: https://deps.dev/npm/request
+└───────────────────────────────────────────────────────────
+```
+
+186K dependents. npm deprecated with deprecation message and advisory. Last release 2020. **Migrate immediately.**
 
 </details>
 
@@ -345,16 +345,16 @@ $ uzomuzo scan pkg:npm/express@4.18.2 pkg:npm/moment@2.29.4 \
     pkg:golang/github.com/dgrijalva/jwt-go@3.2.0 pkg:npm/request@2.88.2 \
     -f table
 
-STATUS      PURL                                          LIFECYCLE      EOL
-✅ ok        pkg:npm/express@4.18.2                        Active         Not EOL
-✅ ok        pkg:npm/moment@2.29.4                         Legacy-Safe    Not EOL
-⚠️ caution  pkg:golang/github.com/gorilla/mux@1.8.1       Stalled        Not EOL
-🔴 replace   pkg:npm/dicer@0.3.1                           EOL-Effective  Not EOL
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  Not EOL
-🔴 replace   pkg:npm/request@2.88.2                        EOL            EOL
+STATUS      PURL                                          LIFECYCLE
+✅ ok        pkg:npm/express@4.18.2                        Active
+⚠️ caution  pkg:npm/moment@2.29.4                         Stalled
+⚠️ caution  pkg:golang/github.com/gorilla/mux@1.8.1       Stalled
+🔴 replace   pkg:npm/dicer@0.3.1                           EOL-Effective
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Effective
+🔴 replace   pkg:npm/request@2.88.2                        EOL-Confirmed
 
 ── Summary ─────────────────────────────────────────────────
-│ 6 dependencies | ✅ 2 ok | ⚠️ 1 caution | 🔴 3 replace | 🔍 0 review
+│ 6 dependencies | ✅ 1 ok | ⚠️ 2 caution | 🔴 3 replace | 🔍 0 review
 └───────────────────────────────────────────────────────────
 ```
 
@@ -366,10 +366,10 @@ STATUS      PURL                                          LIFECYCLE      EOL
 ```text
 $ uzomuzo scan --file go.mod -f table
 
-STATUS      PURL                                                        RELATION  LIFECYCLE      EOL
-⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled        Not EOL
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  Not EOL
-✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Not EOL
+STATUS      PURL                                                        RELATION  LIFECYCLE
+⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Effective
+✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active
 
 ── Summary ─────────────────────────────────────────────────
 │ 3 dependencies | ✅ 1 ok | ⚠️ 1 caution | 🔴 1 replace | 🔍 0 review
