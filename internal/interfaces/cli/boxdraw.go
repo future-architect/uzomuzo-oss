@@ -314,11 +314,9 @@ func writeBoxOrigin(ctx *boxContext) error {
 	return nil
 }
 
-// writeBoxVerdict writes the Status section with emoji icon.
+// writeBoxVerdict writes lifecycle verdict inline (no section bar).
+// Displayed immediately after identity, before any section bars.
 func writeBoxVerdict(ctx *boxContext) error {
-	if err := writeSectionBar(ctx, "Status"); err != nil {
-		return err
-	}
 	icon := verdictIcon(ctx.entry.Verdict)
 	label := verdictLabel(ctx.entry.Verdict)
 
@@ -873,8 +871,8 @@ func renderBoxEntry(w io.Writer, entry *domainaudit.AuditEntry) error {
 	for _, fn := range []func() error{
 		func() error { return writeTopBar(ctx) },
 		func() error { return writeBoxIdentity(ctx) },
-		func() error { return writeBoxOrigin(ctx) },
 		func() error { return writeBoxVerdict(ctx) },
+		func() error { return writeBoxOrigin(ctx) },
 		func() error { return writeBoxEOL(ctx) },
 		func() error { return writeBoxHealth(ctx) },
 		func() error { return writeBoxReleases(ctx) },
@@ -907,9 +905,6 @@ func renderBoxEntryError(ctx *boxContext) error {
 		if err := writeLine(ctx, "Via: %s", ctx.entry.Via); err != nil {
 			return wrap(err)
 		}
-	}
-	if err := writeSectionBar(ctx, "Status"); err != nil {
-		return wrap(err)
 	}
 	icon := verdictIcon(ctx.entry.Verdict)
 	label := verdictLabel(ctx.entry.Verdict)

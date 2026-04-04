@@ -207,8 +207,9 @@ func TestWriteBoxVerdict(t *testing.T) {
 			if !strings.Contains(output, tt.icon) {
 				t.Errorf("missing verdict icon %q in output", tt.icon)
 			}
-			if !strings.Contains(output, "├─ Status") {
-				t.Error("missing Status section header")
+			// Verdict is now inline (no section bar), just check icon is present
+			if !strings.Contains(output, "│ "+tt.icon) {
+				t.Errorf("missing inline verdict line with icon %q", tt.icon)
 			}
 		})
 	}
@@ -523,8 +524,8 @@ func TestRenderBoxEntry_FullEntry(t *testing.T) {
 	if !strings.Contains(output, "──") {
 		t.Error("missing top bar")
 	}
-	if !strings.Contains(output, "├─ Status") {
-		t.Error("missing Status section")
+	if !strings.Contains(output, "│ ✅") {
+		t.Error("missing inline verdict line")
 	}
 	if !strings.Contains(output, "└─") {
 		t.Error("missing bottom bar")
@@ -587,9 +588,6 @@ func TestRenderScanDetailed_BoxFormat(t *testing.T) {
 	// Box-drawing characters present
 	if !strings.Contains(output, "──") {
 		t.Error("missing top bar")
-	}
-	if !strings.Contains(output, "├─") {
-		t.Error("missing section separator")
 	}
 	if !strings.Contains(output, "└─") {
 		t.Error("missing bottom bar")
