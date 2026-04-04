@@ -14,7 +14,7 @@
 //
 // Flags:
 //
-//	--dry-run          Print diffs, exit 1 if any block changed (for CI)
+//	--dry-run          Report changed blocks, exit 1 if any differ (for CI)
 //	--skip-build       Use existing binary instead of rebuilding
 //	--skip-juice-shop  Skip commands that require trivy
 package main
@@ -22,11 +22,11 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 )
 
@@ -52,6 +52,7 @@ type Command struct {
 }
 
 // RawFile defines a shell command whose stdout is written to a file directly.
+// The Shell field is safe because commands.json is embedded at compile time.
 type RawFile struct {
 	ID             string   `json:"id"`
 	Shell          string   `json:"shell"`
@@ -61,7 +62,7 @@ type RawFile struct {
 }
 
 func main() {
-	dryRun := flag.Bool("dry-run", false, "print diffs and exit 1 if any block changed")
+	dryRun := flag.Bool("dry-run", false, "report changed blocks and exit 1 if any differ")
 	skipBuild := flag.Bool("skip-build", false, "use existing binary")
 	skipJuiceShop := flag.Bool("skip-juice-shop", false, "skip commands requiring trivy")
 	flag.Parse()
@@ -92,14 +93,25 @@ func main() {
 		}
 	}
 
+	// Cache command output by args to avoid redundant API calls.
+	outputCache := make(map[string]string)
+
 	changed := 0
 
 	// Process each command.
 	for _, cmd := range cfg.Commands {
-		fmt.Printf("Running: %s %s\n", cfg.Binary, strings.Join(cmd.Args, " "))
-		output, err := runCommand(cfg.Binary, cmd.Args)
-		if err != nil && !cmd.IgnoreExitCode {
-			fatalf("command %q failed: %v\nOutput:\n%s", cmd.ID, err, output)
+		cacheKey := strings.Join(cmd.Args, "\x00")
+		output, cached := outputCache[cacheKey]
+		if !cached {
+			fmt.Printf("Running: %s %s\n", cfg.Binary, strings.Join(cmd.Args, " "))
+			var err error
+			output, err = runCommand(cfg.Binary, cmd.Args)
+			if err != nil && !cmd.IgnoreExitCode {
+				fatalf("command %q failed: %v\nOutput:\n%s", cmd.ID, err, output)
+			}
+			outputCache[cacheKey] = output
+		} else {
+			fmt.Printf("Cached:  %s [%s]\n", cmd.ID, strings.Join(cmd.Args[:min(3, len(cmd.Args))], " "))
 		}
 
 		// Build the replacement block content.
@@ -115,9 +127,9 @@ func main() {
 
 		for _, f := range cmd.Files {
 			content := fileContents[f]
-			replaced, ok := replaceBlock(content, cmd.ID, block.String(), cmd.FenceLang)
-			if !ok {
-				fatalf("marker <!-- begin:output:%s --> not found in %s", cmd.ID, f)
+			replaced, err := replaceBlock(content, cmd.ID, block.String(), cmd.FenceLang)
+			if err != nil {
+				fatalf("%s: %v", f, err)
 			}
 			if replaced != content {
 				changed++
@@ -127,7 +139,7 @@ func main() {
 		}
 	}
 
-	// Process raw file outputs.
+	// Process raw file outputs (requires shell; input is compile-time embedded).
 	if !*skipJuiceShop {
 		for _, rf := range cfg.RawFiles {
 			if !hasRequiredTools(rf.Requires) {
@@ -139,7 +151,10 @@ func main() {
 			if err != nil && !rf.IgnoreExitCode {
 				fatalf("raw command %q failed: %v", rf.ID, err)
 			}
-			existing, _ := os.ReadFile(rf.OutputFile)
+			existing, err := os.ReadFile(rf.OutputFile)
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				fatalf("read %s: %v", rf.OutputFile, err)
+			}
 			if string(existing) != output {
 				changed++
 				fmt.Printf("  Updated: %s\n", rf.OutputFile)
@@ -152,7 +167,7 @@ func main() {
 		}
 	}
 
-	// Write updated files.
+	// In dry-run mode, report changes without writing files.
 	if *dryRun {
 		if changed > 0 {
 			fmt.Printf("\nDry run: %d block(s) would be updated. Run without --dry-run to apply.\n", changed)
@@ -171,20 +186,41 @@ func main() {
 }
 
 // replaceBlock replaces the content between begin/end markers for the given
-// block ID. Returns the modified string and whether the marker was found.
-func replaceBlock(content, id, newBlock, fenceLang string) (string, bool) {
-	pattern := regexp.MustCompile(
-		`(?s)(<!-- begin:output:` + regexp.QuoteMeta(id) + ` -->\n).*?(<!-- end:output:` + regexp.QuoteMeta(id) + ` -->)`,
-	)
-	if !pattern.MatchString(content) {
-		return content, false
+// block ID using index-based string splicing (avoids regex $ expansion and
+// detects duplicate markers). Returns the modified string or an error.
+func replaceBlock(content, id, newBlock, fenceLang string) (string, error) {
+	beginMarker := "<!-- begin:output:" + id + " -->\n"
+	endMarker := "<!-- end:output:" + id + " -->"
+
+	beginIdx := strings.Index(content, beginMarker)
+	if beginIdx < 0 {
+		return "", fmt.Errorf("marker %q not found", beginMarker)
 	}
-	replacement := fmt.Sprintf("<!-- begin:output:%s -->\n```%s\n%s\n```\n<!-- end:output:%s -->",
-		id, fenceLang, newBlock, id)
-	return pattern.ReplaceAllString(content, replacement), true
+
+	// Check for duplicate begin markers.
+	if strings.Index(content[beginIdx+len(beginMarker):], beginMarker) >= 0 {
+		return "", fmt.Errorf("duplicate marker %q found", beginMarker)
+	}
+
+	afterBegin := beginIdx + len(beginMarker)
+	endIdx := strings.Index(content[afterBegin:], endMarker)
+	if endIdx < 0 {
+		return "", fmt.Errorf("end marker %q not found (begin at offset %d)", endMarker, beginIdx)
+	}
+	endIdx += afterBegin
+
+	replacement := fmt.Sprintf("%s```%s\n%s\n```\n%s",
+		beginMarker, fenceLang, newBlock, endMarker)
+
+	var sb strings.Builder
+	sb.Grow(len(content))
+	sb.WriteString(content[:beginIdx])
+	sb.WriteString(replacement)
+	sb.WriteString(content[endIdx+len(endMarker):])
+	return sb.String(), nil
 }
 
-// runCommand executes the binary with args and returns combined stdout.
+// runCommand executes the binary with args and returns stdout.
 func runCommand(binary string, args []string) (string, error) {
 	cmd := exec.Command(binary, args...)
 	cmd.Stderr = os.Stderr
@@ -192,7 +228,7 @@ func runCommand(binary string, args []string) (string, error) {
 	return string(out), err
 }
 
-// runShell executes a command directly (no shell).
+// runShell executes a command directly (no shell interpretation).
 func runShell(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = os.Stdout
@@ -201,6 +237,7 @@ func runShell(name string, args ...string) error {
 }
 
 // runShellCommand executes a command via sh -c and returns stdout.
+// The input is trusted (compile-time embedded via go:embed).
 func runShellCommand(shell string) (string, error) {
 	cmd := exec.Command("sh", "-c", shell)
 	cmd.Stderr = os.Stderr
@@ -218,6 +255,7 @@ func hasRequiredTools(tools []string) bool {
 	return true
 }
 
+// fatalf prints an error message to stderr and exits with code 1.
 func fatalf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "error: "+format+"\n", args...)
 	os.Exit(1)

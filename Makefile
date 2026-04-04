@@ -12,12 +12,15 @@ sync-instructions:
 		echo "  $$src → $$dest"; \
 	done
 
-# update-doc-examples: rebuild binary and refresh all doc output blocks
+# update-doc-examples: rebuild binary then refresh all doc output blocks.
+# Two-step build: "go build" produces the binary whose output we capture,
+# then "go run" executes the replacement script with --skip-build.
 update-doc-examples:
 	go build -o uzomuzo ./cmd/uzomuzo
 	go run ./scripts/update-doc-examples --skip-build
 
-# check-doc-examples: dry-run mode for CI (exit 1 if any block would change)
+# check-doc-examples: dry-run mode for CI (exit 1 if any block would change).
+# --skip-juice-shop: trivy is not available in standard CI runners.
 check-doc-examples:
 	go build -o uzomuzo ./cmd/uzomuzo
 	go run ./scripts/update-doc-examples --skip-build --dry-run --skip-juice-shop
