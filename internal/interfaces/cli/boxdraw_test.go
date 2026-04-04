@@ -279,13 +279,12 @@ func TestWriteBoxHealth_Archived(t *testing.T) {
 
 func TestWriteBoxReleases_Advisories(t *testing.T) {
 	var buf bytes.Buffer
-	advisories := make([]analysis.Advisory, 5)
-	for i := range advisories {
-		advisories[i] = analysis.Advisory{
-			ID:     "CVE-2024-" + string(rune('0'+i)),
-			Source: "CVE",
-			URL:    "https://nvd.nist.gov/vuln/detail/CVE-2024-" + string(rune('0'+i)),
-		}
+	advisories := []analysis.Advisory{
+		{ID: "CVE-2024-9999", Source: "CVE", CVSS3Score: 9.8, Severity: "CRITICAL", Title: "Remote code execution"},
+		{ID: "GHSA-xxxx-yyyy", Source: "GHSA", CVSS3Score: 7.5, Severity: "HIGH", Title: "SQL Injection"},
+		{ID: "CVE-2024-5678", Source: "CVE", CVSS3Score: 7.2, Severity: "HIGH", Title: "Path traversal"},
+		{ID: "CVE-2024-1111", Source: "CVE", CVSS3Score: 4.3, Severity: "MEDIUM", Title: "Info disclosure"},
+		{ID: "CVE-2024-0000", Source: "CVE", CVSS3Score: 0, Title: ""},
 	}
 	entry := &domainaudit.AuditEntry{
 		PURL:    "pkg:npm/test@1.0.0",
@@ -310,16 +309,25 @@ func TestWriteBoxReleases_Advisories(t *testing.T) {
 	if !strings.Contains(output, "⚠️ Advisories: 5") {
 		t.Error("missing advisory warning count")
 	}
-	// Should show first 3
-	cveCount := strings.Count(output, "[CVE]")
-	if cveCount != 3 {
-		t.Errorf("expected 3 advisory lines, got %d", cveCount)
+	if !strings.Contains(output, "max: CRITICAL 9.8") {
+		t.Error("missing severity summary")
 	}
+	// Top 3 by severity should be shown (CRITICAL, HIGH, HIGH)
+	if !strings.Contains(output, "CVE-2024-9999") {
+		t.Error("missing highest severity advisory")
+	}
+	if !strings.Contains(output, "CRITICAL") {
+		t.Error("missing CRITICAL severity label")
+	}
+	if !strings.Contains(output, "Remote code execution") {
+		t.Error("missing advisory title")
+	}
+	// Should show 3 advisory lines, then truncation
 	if !strings.Contains(output, "... and 2 more") {
 		t.Error("missing truncation message")
 	}
 	if !strings.Contains(output, "deps.dev/npm/test/1.0.0") {
-		t.Error("missing deps.dev version URL in truncation link")
+		t.Error("missing deps.dev version URL")
 	}
 }
 
@@ -336,7 +344,7 @@ func TestWriteBoxReleases_FewAdvisories(t *testing.T) {
 					Version:     "1.0.0",
 					PublishedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 					Advisories: []analysis.Advisory{
-						{ID: "GHSA-xxxx-yyyy", Source: "GHSA", URL: "https://github.com/advisories/GHSA-xxxx-yyyy"},
+						{ID: "GHSA-xxxx-yyyy", Source: "GHSA", CVSS3Score: 5.3, Severity: "MEDIUM", Title: "XSS vulnerability"},
 					},
 				},
 			},
@@ -347,11 +355,89 @@ func TestWriteBoxReleases_FewAdvisories(t *testing.T) {
 		t.Fatalf("writeBoxReleases() error = %v", err)
 	}
 	output := buf.String()
-	if !strings.Contains(output, "[GHSA] GHSA-xxxx-yyyy") {
-		t.Error("missing advisory line")
+	if !strings.Contains(output, "GHSA-xxxx-yyyy") {
+		t.Error("missing advisory ID")
+	}
+	if !strings.Contains(output, "MEDIUM") {
+		t.Error("missing severity label")
+	}
+	if !strings.Contains(output, "XSS vulnerability") {
+		t.Error("missing advisory title")
 	}
 	if strings.Contains(output, "... and") {
 		t.Error("should not have truncation for <= 3 advisories")
+	}
+	// deps.dev link should still appear
+	if !strings.Contains(output, "deps.dev/npm/test/1.0.0") {
+		t.Error("missing deps.dev link")
+	}
+}
+
+func TestWriteBoxReleases_UnknownSeverity(t *testing.T) {
+	var buf bytes.Buffer
+	entry := &domainaudit.AuditEntry{
+		PURL:    "pkg:npm/test@1.0.0",
+		Verdict: domainaudit.VerdictCaution,
+		Analysis: &analysis.Analysis{
+			EffectivePURL: "pkg:npm/test@1.0.0",
+			Package:       &analysis.Package{Ecosystem: "npm", PURL: "pkg:npm/test", Version: "1.0.0"},
+			ReleaseInfo: &analysis.ReleaseInfo{
+				StableVersion: &analysis.VersionDetail{
+					Version:     "1.0.0",
+					PublishedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					Advisories: []analysis.Advisory{
+						{ID: "CVE-2024-1234", Source: "CVE"},
+						{ID: "CVE-2024-5678", Source: "CVE"},
+					},
+				},
+			},
+		},
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxReleases(ctx); err != nil {
+		t.Fatalf("writeBoxReleases() error = %v", err)
+	}
+	output := buf.String()
+	if !strings.Contains(output, "CVE-2024-1234") {
+		t.Error("missing advisory ID")
+	}
+	// No severity labels should appear
+	if strings.Contains(output, "HIGH") || strings.Contains(output, "CRITICAL") {
+		t.Error("should not show severity for unknown advisories")
+	}
+}
+
+func TestAdvisorySeveritySummary(t *testing.T) {
+	tests := []struct {
+		name string
+		vd   *analysis.VersionDetail
+		want string
+	}{
+		{"nil", nil, ""},
+		{"no advisories", &analysis.VersionDetail{}, ""},
+		{"all known", &analysis.VersionDetail{
+			Advisories: []analysis.Advisory{
+				{CVSS3Score: 9.8}, {CVSS3Score: 7.5},
+			},
+		}, " (max: CRITICAL 9.8)"},
+		{"mixed known/unknown", &analysis.VersionDetail{
+			Advisories: []analysis.Advisory{
+				{CVSS3Score: 7.5}, {CVSS3Score: 0},
+			},
+		}, " (max: HIGH 7.5, 1 unknown)"},
+		{"all unknown", &analysis.VersionDetail{
+			Advisories: []analysis.Advisory{
+				{CVSS3Score: 0}, {CVSS3Score: 0},
+			},
+		}, " (2 unknown)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := advisorySeveritySummary(tt.vd)
+			if got != tt.want {
+				t.Errorf("advisorySeveritySummary() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

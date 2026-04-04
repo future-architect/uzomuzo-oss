@@ -417,7 +417,7 @@ func writeBoxReleases(ctx *boxContext) error {
 		advCount := len(stable.Advisories)
 		advText := fmt.Sprintf("Advisories: %d", advCount)
 		if advCount > 0 {
-			advText = fmt.Sprintf("⚠️ Advisories: %d", advCount)
+			advText = fmt.Sprintf("⚠️ Advisories: %d%s", advCount, advisorySeveritySummary(stable))
 		}
 		lines = append(lines, fmt.Sprintf("Stable: %s (%s)  %s%s",
 			stable.Version, stable.PublishedAt.Format(dateFormat), advText, deprecated))
@@ -488,30 +488,82 @@ func writeBoxReleases(ctx *boxContext) error {
 	return nil
 }
 
-// formatAdvisoryLines formats advisory entries with truncation.
-// Shows up to maxDisplayAdvisories, then "... and N more → deps.dev URL".
+// formatAdvisoryLines formats advisory entries sorted by severity (highest first) with truncation.
+// Shows up to maxDisplayAdvisories with aligned columns, then a deps.dev link for the full list.
+//
+// Format with severity:  "  CRITICAL (9.8)  CVE-2024-9999  Crash in HeaderParser"
+// Format without:        "                  CVE-2024-1234"
 func formatAdvisoryLines(advisories []analysispkg.Advisory, ecosystem, name, version string) []string {
 	if len(advisories) == 0 {
 		return nil
 	}
+
+	// Sort by CVSS3 descending (unknown/0 at end), stable sort preserves order for equal scores
+	sorted := make([]analysispkg.Advisory, len(advisories))
+	copy(sorted, advisories)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].CVSS3Score > sorted[j].CVSS3Score
+	})
+
 	var lines []string
-	limit := len(advisories)
+	limit := len(sorted)
 	if limit > maxDisplayAdvisories {
 		limit = maxDisplayAdvisories
 	}
-	for _, adv := range advisories[:limit] {
-		lines = append(lines, fmt.Sprintf("  [%s] %s (%s)", adv.Source, adv.ID, adv.URL))
-	}
-	if len(advisories) > maxDisplayAdvisories {
-		remaining := len(advisories) - maxDisplayAdvisories
-		depsdevURL := commonlinks.BuildDepsDevVersionURL(ecosystem, name, version)
-		if depsdevURL != "" {
-			lines = append(lines, fmt.Sprintf("  ... and %d more → %s", remaining, depsdevURL))
-		} else {
-			lines = append(lines, fmt.Sprintf("  ... and %d more", remaining))
+
+	// severityCol is the fixed width for the severity column: "CRITICAL (9.8)" = 14 chars
+	const severityColWidth = 14
+
+	for _, adv := range sorted[:limit] {
+		var sevCol string
+		if adv.CVSS3Score > 0 && adv.Severity != "" {
+			sevCol = fmt.Sprintf("%-8s (%.1f)", adv.Severity, adv.CVSS3Score)
 		}
+		// Pad severity column to fixed width for alignment
+		sevCol = fmt.Sprintf("%-*s", severityColWidth, sevCol)
+
+		title := ""
+		if adv.Title != "" {
+			title = "  " + adv.Title
+		}
+		lines = append(lines, fmt.Sprintf("  %s  %s%s", sevCol, adv.ID, title))
 	}
+
+	if len(sorted) > maxDisplayAdvisories {
+		remaining := len(sorted) - maxDisplayAdvisories
+		lines = append(lines, fmt.Sprintf("  ... and %d more", remaining))
+	}
+
+	// Always show deps.dev link when advisories exist
+	depsdevURL := commonlinks.BuildDepsDevVersionURL(ecosystem, name, version)
+	if depsdevURL != "" {
+		lines = append(lines, fmt.Sprintf("  → %s", depsdevURL))
+	}
+
 	return lines
+}
+
+// advisorySeveritySummary returns a severity summary string for the advisory count line.
+// e.g., " (max: CRITICAL 9.8)" or " (max: HIGH 7.5, 2 unknown)" or "".
+func advisorySeveritySummary(vd *analysispkg.VersionDetail) string {
+	if vd == nil || len(vd.Advisories) == 0 {
+		return ""
+	}
+	unknownCount := vd.UnknownSeverityAdvisoryCount()
+	maxScore := vd.MaxCVSS3()
+
+	if maxScore <= 0 {
+		if unknownCount > 0 {
+			return fmt.Sprintf(" (%d unknown)", unknownCount)
+		}
+		return ""
+	}
+
+	severity := analysispkg.SeverityFromCVSS3(maxScore)
+	if unknownCount > 0 {
+		return fmt.Sprintf(" (max: %s %.1f, %d unknown)", severity, maxScore, unknownCount)
+	}
+	return fmt.Sprintf(" (max: %s %.1f)", severity, maxScore)
 }
 
 // writeBoxLicenses writes the License section.
