@@ -92,6 +92,11 @@ patterns:
     pr: 116
     file: "internal/infrastructure/depsdev/depsdev.go"
     date: "2026-04-04"
+  - category: "api-consistency"
+    summary: "Key output format branching on each field's own availability — don't couple display of Title to presence of Severity when they are independently populated"
+    pr: 116
+    file: "internal/interfaces/cli/batch.go"
+    date: "2026-04-04"
   # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)
