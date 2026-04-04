@@ -631,7 +631,7 @@ func writeBoxReleases(ctx *boxContext) error {
 				stable.Version, advText, deprecated))
 		}
 		lines = append(lines, formatAdvisoryLines(stable.DirectAdvisories(), eco, name, stable.Version)...)
-		lines = append(lines, formatTransitiveAdvisoryLines(stable.TransitiveAdvisories())...)
+		lines = append(lines, formatTransitiveAdvisoryLines(stable.TransitiveAdvisories(), eco)...)
 	}
 
 	preVer := ""
@@ -787,8 +787,9 @@ func advisoryCountText(vd *analysispkg.VersionDetail) string {
 }
 
 // formatTransitiveAdvisoryLines formats transitive advisory entries grouped under a header.
-// Shows dependency names in the header and advisory details indented beneath.
-func formatTransitiveAdvisoryLines(advisories []analysispkg.Advisory) []string {
+// Shows dependency names in the header, advisory details indented beneath, and deps.dev links
+// for each affected transitive dependency.
+func formatTransitiveAdvisoryLines(advisories []analysispkg.Advisory, ecosystem string) []string {
 	if len(advisories) == 0 {
 		return nil
 	}
@@ -819,10 +820,30 @@ func formatTransitiveAdvisoryLines(advisories []analysispkg.Advisory) []string {
 	}
 	header += ":"
 
-	lines := make([]string, 0, 1+len(advLines))
+	lines := make([]string, 0, 1+len(advLines)+len(depNames))
 	lines = append(lines, header)
 	lines = append(lines, advLines...)
+
+	// Append deps.dev links for each transitive dependency
+	for _, dep := range depNames {
+		if name, version, ok := splitDepNameVersion(dep); ok {
+			if url := commonlinks.BuildDepsDevVersionURL(ecosystem, name, version); url != "" {
+				lines = append(lines, fmt.Sprintf("    → %s", url))
+			}
+		}
+	}
+
 	return lines
+}
+
+// splitDepNameVersion splits "name@version" into (name, version, true).
+// Returns ("", "", false) if the format is invalid.
+func splitDepNameVersion(dep string) (string, string, bool) {
+	idx := strings.LastIndex(dep, "@")
+	if idx <= 0 || idx == len(dep)-1 {
+		return "", "", false
+	}
+	return dep[:idx], dep[idx+1:], true
 }
 
 // License section removed from detailed output — license data is available
