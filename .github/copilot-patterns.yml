@@ -61,3 +61,4 @@ patterns:
   # comment-doc-drift: already covered by promoted rule in coding-standards (PR #119, boxdraw.go:88 — writeLine comment overstated URL-exclusion heuristic)
   # defensive-coding: already covered by budget guard rule (PR #119, boxdraw.go:171 — preserve unbroken tokens instead of force-splitting mid-token)
   # api-consistency: already covered by "Branch Output Display on Each Field's Own Availability" (PR #123, boxdraw.go:634 — deps.dev link coupled to direct advisory presence instead of any-advisory presence)
+  # api-consistency: already covered by "Consistent Conditional Columns Across Output Formats" (PR #123, scan_render.go:433 — blank vs "0" for zero-count numeric CSV columns)
