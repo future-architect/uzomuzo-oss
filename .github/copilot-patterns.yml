@@ -42,6 +42,16 @@ patterns:
     pr: 116
     file: "internal/infrastructure/depsdev/depsdev.go"
     date: "2026-04-04"
+  - category: "api-consistency"
+    summary: "Output formats (JSON, CSV) must use the same data-source fallback chain as domain logic (e.g., stable→MaxSemver→PreRelease→Requested)"
+    pr: 116
+    file: "internal/interfaces/cli/scan_render.go"
+    date: "2026-04-04"
+  - category: "testing"
+    summary: "New severity-aware branching paths (HIGH→EOL-Effective, LOW→Stalled) lacked targeted tests exercising both sides of the threshold"
+    pr: 116
+    file: "internal/domain/analysis/lifecycle_assessor.go"
+    date: "2026-04-04"
   # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)
