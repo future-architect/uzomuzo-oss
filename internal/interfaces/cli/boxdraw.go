@@ -538,8 +538,10 @@ func writeBoxReleases(ctx *boxContext) error {
 		}
 		advCount := len(stable.Advisories)
 		advText := ""
-		if advCount > 0 {
-			advText = fmt.Sprintf("  ⚠️ Advisories: %d%s", advCount, advisorySeveritySummary(stable))
+		if advCount == 1 {
+			advText = "  ⚠️ 1 advisory"
+		} else if advCount > 1 {
+			advText = fmt.Sprintf("  ⚠️ %d advisories", advCount)
 		}
 		if !stable.PublishedAt.IsZero() {
 			lines = append(lines, fmt.Sprintf("Stable: %s (%s)%s%s",
@@ -658,11 +660,6 @@ func formatAdvisoryLines(advisories []analysispkg.Advisory, ecosystem, name, ver
 		sevCol = fmt.Sprintf("%-*s", severityColWidth, sevCol)
 
 		lines = append(lines, fmt.Sprintf("  %s  %s", sevCol, adv.ID))
-
-		advisoryURL := strings.TrimSpace(adv.URL)
-		if advisoryURL != "" {
-			lines = append(lines, fmt.Sprintf("  → %s", advisoryURL))
-		}
 	}
 
 	if len(sorted) > maxDisplayAdvisories {
@@ -677,29 +674,6 @@ func formatAdvisoryLines(advisories []analysispkg.Advisory, ecosystem, name, ver
 	}
 
 	return lines
-}
-
-// advisorySeveritySummary returns a severity summary string for the advisory count line.
-// e.g., " (max: CRITICAL 9.8)" or " (max: HIGH 7.5, 2 unknown)" or "".
-func advisorySeveritySummary(vd *analysispkg.VersionDetail) string {
-	if vd == nil || len(vd.Advisories) == 0 {
-		return ""
-	}
-	unknownCount := vd.UnknownSeverityAdvisoryCount()
-	maxScore := vd.MaxCVSS3()
-
-	if maxScore <= 0 {
-		if unknownCount > 0 {
-			return fmt.Sprintf(" (%d unknown)", unknownCount)
-		}
-		return ""
-	}
-
-	severity := analysispkg.SeverityFromCVSS3(maxScore)
-	if unknownCount > 0 {
-		return fmt.Sprintf(" (max: %s %.1f, %d unknown)", severity, maxScore, unknownCount)
-	}
-	return fmt.Sprintf(" (max: %s %.1f)", severity, maxScore)
 }
 
 // License section removed from detailed output — license data is available

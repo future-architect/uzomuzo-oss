@@ -306,11 +306,8 @@ func TestWriteBoxReleases_Advisories(t *testing.T) {
 		t.Fatalf("writeBoxReleases() error = %v", err)
 	}
 	output := buf.String()
-	if !strings.Contains(output, "⚠️ Advisories: 5") {
-		t.Error("missing advisory warning count")
-	}
-	if !strings.Contains(output, "max: CRITICAL 9.8") {
-		t.Error("missing severity summary")
+	if !strings.Contains(output, "⚠️ 5 advisories") {
+		t.Error("missing advisory count")
 	}
 	// Top 3 by severity should be shown (CRITICAL, HIGH, HIGH)
 	if !strings.Contains(output, "CVE-2024-9999") {
@@ -402,39 +399,7 @@ func TestWriteBoxReleases_UnknownSeverity(t *testing.T) {
 	}
 }
 
-func TestAdvisorySeveritySummary(t *testing.T) {
-	tests := []struct {
-		name string
-		vd   *analysis.VersionDetail
-		want string
-	}{
-		{"nil", nil, ""},
-		{"no advisories", &analysis.VersionDetail{}, ""},
-		{"all known", &analysis.VersionDetail{
-			Advisories: []analysis.Advisory{
-				{CVSS3Score: 9.8}, {CVSS3Score: 7.5},
-			},
-		}, " (max: CRITICAL 9.8)"},
-		{"mixed known/unknown", &analysis.VersionDetail{
-			Advisories: []analysis.Advisory{
-				{CVSS3Score: 7.5}, {CVSS3Score: 0},
-			},
-		}, " (max: HIGH 7.5, 1 unknown)"},
-		{"all unknown", &analysis.VersionDetail{
-			Advisories: []analysis.Advisory{
-				{CVSS3Score: 0}, {CVSS3Score: 0},
-			},
-		}, " (2 unknown)"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := advisorySeveritySummary(tt.vd)
-			if got != tt.want {
-				t.Errorf("advisorySeveritySummary() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
+// advisorySeveritySummary removed — max severity summary no longer shown on the stable line.
 
 func TestWriteBoxReleases_Deprecated(t *testing.T) {
 	var buf bytes.Buffer
@@ -894,7 +859,7 @@ func TestIsWrappableLine(t *testing.T) {
 		{"→ https://github.com/advisories/GHSA-xxxx", false},
 		{"Homepage: https://expressjs.com", false},
 		{"Package: pkg:npm/express@4.18.2", false},
-		{"Stable: 1.0.0 (2024-01-01)  ⚠️ Advisories: 5 (max: CRITICAL 9.8)", false},
+		{"Stable: 1.0.0 (2024-01-01)  ⚠️ 5 advisories", false},
 		{"MIT (depsdev)", false},
 		{"  HIGH     (7.5)  GHSA-wm7h-9275-46v2  Crash in HeaderParser", false},
 	}
