@@ -134,7 +134,7 @@ Output blocks in Markdown are wrapped with HTML comment markers:
 
 The script (`scripts/update-doc-examples/`) reads command definitions from an embedded `commands.json`, runs each command, and replaces the content between matching markers.
 
-### CI Automation
+### CI Automation (PR)
 
 The `doc-examples` CI job runs on every PR and does two things:
 
@@ -142,6 +142,16 @@ The `doc-examples` CI job runs on every PR and does two things:
 2. **Auto-update** — runs `make update-doc-examples`, and if any output blocks changed, commits and pushes the update automatically
 
 This means you don't need to run `make update-doc-examples` locally — CI will do it for you. The auto-commit uses `[skip ci]` to avoid triggering another CI run.
+
+### Manual Trigger (GitHub UI)
+
+To force-refresh all doc examples without creating a PR:
+
+1. Go to **Actions** tab → **CI** workflow
+2. Click **"Run workflow"** → select the target branch (e.g. `main`) → click **"Run workflow"**
+3. The `doc-examples` job builds the binary, runs all 17 commands, and auto-commits any changes
+
+This is useful for periodic refresh (star counts, dependent counts drift over time) or after merging output-affecting changes.
 
 ### Adding a New Output Block
 
@@ -154,7 +164,7 @@ This means you don't need to run `make update-doc-examples` locally — CI will 
    <!-- end:output:my-new-block -->
    ```
 2. Add a command entry to `scripts/update-doc-examples/commands.json`
-3. Run `make update-doc-examples` to populate the block
+3. Run `make update-doc-examples` to populate the block (or let CI do it)
 
 ## Testing / Quality
 
