@@ -1477,13 +1477,17 @@ func (c *DepsDevClient) FetchAdvisoriesBatch(ctx context.Context, advisoryIDs []
 		return make(map[string]*AdvisoryDetail)
 	}
 
-	// Deduplicate IDs.
+	// Normalize and deduplicate IDs.
 	seen := make(map[string]struct{}, len(advisoryIDs))
 	unique := make([]string, 0, len(advisoryIDs))
 	for _, id := range advisoryIDs {
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			unique = append(unique, id)
+		trimmedID := strings.TrimSpace(id)
+		if trimmedID == "" {
+			continue
+		}
+		if _, exists := seen[trimmedID]; !exists {
+			seen[trimmedID] = struct{}{}
+			unique = append(unique, trimmedID)
 		}
 	}
 
@@ -1497,8 +1501,13 @@ func (c *DepsDevClient) FetchAdvisoriesBatch(ctx context.Context, advisoryIDs []
 		wg.Add(1)
 		go func(advisoryID string) {
 			defer wg.Done()
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
+
+			select {
+			case semaphore <- struct{}{}:
+				defer func() { <-semaphore }()
+			case <-ctx.Done():
+				return
+			}
 
 			detail, err := c.FetchAdvisory(ctx, advisoryID)
 			if err != nil {

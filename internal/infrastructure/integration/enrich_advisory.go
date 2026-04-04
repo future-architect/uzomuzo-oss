@@ -64,6 +64,9 @@ func collectAdvisoryIDs(vd *domain.VersionDetail, idSet map[string]struct{}) {
 		return
 	}
 	for _, adv := range vd.Advisories {
+		if adv.ID == "" {
+			continue
+		}
 		idSet[adv.ID] = struct{}{}
 	}
 }
