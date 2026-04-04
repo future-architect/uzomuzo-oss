@@ -65,3 +65,4 @@ patterns:
   # comment-doc-drift: already covered by promoted rule (PR #123, helpers.go:165 — comment claimed UI URL in summary but implementation no longer includes it)
   # naming-consistency: already covered by promoted rule (PR #123, lifecycle_assessor.go:432,437 — "vulns" abbreviation inconsistent with "vulnerabilities" used elsewhere)
   # deterministic-output: already covered by promoted rule (PR #123, enrich_transitive_advisory.go:76 — nondeterministic map iteration for transitive advisory entries)
+  # api-consistency: already covered by "Branch Output Display" spirit (PR #123, boxdraw.go:804 — header dep names derived from full list instead of displayed/truncated subset)
