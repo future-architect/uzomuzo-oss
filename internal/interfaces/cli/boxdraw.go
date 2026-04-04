@@ -22,6 +22,9 @@ const defaultBarWidth = 60
 // Remaining advisories are summarized with a deps.dev link.
 const maxDisplayAdvisories = 3
 
+// minBarPadding is the minimum number of trailing ─ characters on a bar line.
+const minBarPadding = 3
+
 // boxContext holds all data needed to render a single box entry.
 type boxContext struct {
 	w        io.Writer
@@ -48,35 +51,43 @@ func newBoxContext(w io.Writer, entry *domainaudit.AuditEntry, barWidth int) *bo
 func writeTopBar(ctx *boxContext) error {
 	title := boxTitle(ctx.entry)
 	bar := buildBar("──", " "+title+" ", ctx.barWidth)
-	_, err := fmt.Fprintln(ctx.w, bar)
-	return err
+	if _, err := fmt.Fprintln(ctx.w, bar); err != nil {
+		return fmt.Errorf("failed to write top bar: %w", err)
+	}
+	return nil
 }
 
 // writeSectionBar writes: ├─ label ──────────...
 func writeSectionBar(ctx *boxContext, label string) error {
 	bar := buildBar("├─", " "+label+" ", ctx.barWidth)
-	_, err := fmt.Fprintln(ctx.w, bar)
-	return err
+	if _, err := fmt.Fprintln(ctx.w, bar); err != nil {
+		return fmt.Errorf("failed to write section bar %q: %w", label, err)
+	}
+	return nil
 }
 
 // writeBottomBar writes: └──────────────────...
 func writeBottomBar(ctx *boxContext) error {
-	_, err := fmt.Fprintln(ctx.w, "└"+strings.Repeat("─", ctx.barWidth-1))
-	return err
+	if _, err := fmt.Fprintln(ctx.w, "└"+strings.Repeat("─", ctx.barWidth-1)); err != nil {
+		return fmt.Errorf("failed to write bottom bar: %w", err)
+	}
+	return nil
 }
 
 // writeLine writes: │ content
 func writeLine(ctx *boxContext, format string, args ...any) error {
 	content := fmt.Sprintf(format, args...)
-	_, err := fmt.Fprintf(ctx.w, "│ %s\n", content)
-	return err
+	if _, err := fmt.Fprintf(ctx.w, "│ %s\n", content); err != nil {
+		return fmt.Errorf("failed to write box line: %w", err)
+	}
+	return nil
 }
 
 // buildBar constructs a decorative bar like "── title ────────..." or "├─ label ────────...".
 func buildBar(prefix, middle string, width int) string {
 	remaining := width - len(prefix) - len(middle)
-	if remaining < 3 {
-		remaining = 3
+	if remaining < minBarPadding {
+		remaining = minBarPadding
 	}
 	return prefix + middle + strings.Repeat("─", remaining)
 }
@@ -679,64 +690,59 @@ func renderBoxEntry(w io.Writer, entry *domainaudit.AuditEntry) error {
 		return renderBoxEntryError(ctx)
 	}
 
-	if err := writeTopBar(ctx); err != nil {
-		return err
+	for _, fn := range []func() error{
+		func() error { return writeTopBar(ctx) },
+		func() error { return writeBoxIdentity(ctx) },
+		func() error { return writeBoxOrigin(ctx) },
+		func() error { return writeBoxVerdict(ctx) },
+		func() error { return writeBoxEOL(ctx) },
+		func() error { return writeBoxHealth(ctx) },
+		func() error { return writeBoxReleases(ctx) },
+		func() error { return writeBoxLicenses(ctx) },
+		func() error { return writeBoxLinks(ctx) },
+		func() error { return writeBottomBar(ctx) },
+	} {
+		if err := fn(); err != nil {
+			return fmt.Errorf("failed to render box for %s: %w", entry.PURL, err)
+		}
 	}
-	if err := writeBoxIdentity(ctx); err != nil {
-		return err
-	}
-	if err := writeBoxOrigin(ctx); err != nil {
-		return err
-	}
-	if err := writeBoxVerdict(ctx); err != nil {
-		return err
-	}
-	if err := writeBoxEOL(ctx); err != nil {
-		return err
-	}
-	if err := writeBoxHealth(ctx); err != nil {
-		return err
-	}
-	if err := writeBoxReleases(ctx); err != nil {
-		return err
-	}
-	if err := writeBoxLicenses(ctx); err != nil {
-		return err
-	}
-	if err := writeBoxLinks(ctx); err != nil {
-		return err
-	}
-	return writeBottomBar(ctx)
+	return nil
 }
 
 // renderBoxEntryError writes a minimal box for entries with nil analysis or errors.
 func renderBoxEntryError(ctx *boxContext) error {
+	wrap := func(err error) error {
+		return fmt.Errorf("failed to render error box for %s: %w", ctx.entry.PURL, err)
+	}
 	if err := writeTopBar(ctx); err != nil {
-		return err
+		return wrap(err)
 	}
 	if err := writeLine(ctx, "Package: %s", ctx.entry.PURL); err != nil {
-		return err
+		return wrap(err)
 	}
 	if ctx.entry.Via != "" {
 		if err := writeLine(ctx, "Via: %s", ctx.entry.Via); err != nil {
-			return err
+			return wrap(err)
 		}
 	}
 	if err := writeSectionBar(ctx, "Verdict"); err != nil {
-		return err
+		return wrap(err)
 	}
 	icon := verdictIcon(ctx.entry.Verdict)
 	label := verdictLabel(ctx.entry.Verdict)
 	if ctx.entry.ErrorMsg != "" {
 		if err := writeLine(ctx, "%s %s (error: %s)", icon, label, ctx.entry.ErrorMsg); err != nil {
-			return err
+			return wrap(err)
 		}
 	} else {
 		if err := writeLine(ctx, "%s %s", icon, label); err != nil {
-			return err
+			return wrap(err)
 		}
 	}
-	return writeBottomBar(ctx)
+	if err := writeBottomBar(ctx); err != nil {
+		return wrap(err)
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------
