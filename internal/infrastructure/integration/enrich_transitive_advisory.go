@@ -37,6 +37,7 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 		}
 		markDirectAdvisories(a.ReleaseInfo.StableVersion)
 		markDirectAdvisories(a.ReleaseInfo.MaxSemverVersion)
+		markDirectAdvisories(a.ReleaseInfo.RequestedVersion)
 	}
 
 	// Collect transitive advisory keys for all dependency graphs.
@@ -119,11 +120,14 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 			}
 		}
 		graphVersion := graphSELFVersion(depsGraphResults[p])
-		if vd := a.ReleaseInfo.StableVersion; vd != nil && (graphVersion == "" || vd.Version == graphVersion) {
-			appendTransitiveAdvisories(vd, entries)
-		}
-		if vd := a.ReleaseInfo.MaxSemverVersion; vd != nil && (graphVersion == "" || vd.Version == graphVersion) {
-			appendTransitiveAdvisories(vd, entries)
+		for _, vd := range []*domain.VersionDetail{
+			a.ReleaseInfo.StableVersion,
+			a.ReleaseInfo.MaxSemverVersion,
+			a.ReleaseInfo.RequestedVersion,
+		} {
+			if vd != nil && (graphVersion == "" || vd.Version == graphVersion) {
+				appendTransitiveAdvisories(vd, entries)
+			}
 		}
 	}
 }
@@ -172,6 +176,9 @@ func appendTransitiveAdvisories(vd *domain.VersionDetail, advisories []domain.Ad
 		existing[a.ID] = struct{}{}
 	}
 	sort.SliceStable(vd.Advisories, func(i, j int) bool {
-		return vd.Advisories[i].CVSS3Score > vd.Advisories[j].CVSS3Score
+		if vd.Advisories[i].CVSS3Score != vd.Advisories[j].CVSS3Score {
+			return vd.Advisories[i].CVSS3Score > vd.Advisories[j].CVSS3Score
+		}
+		return vd.Advisories[i].ID < vd.Advisories[j].ID
 	})
 }

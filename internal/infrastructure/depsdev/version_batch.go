@@ -80,7 +80,7 @@ func (c *DepsDevClient) FetchTransitiveAdvisoryKeys(ctx context.Context, deps *D
 
 					resp, err := c.fetchPackageInfo(ctx, di.purl)
 					if err != nil {
-						slog.Debug("transitive advisory lookup failed", "purl", di.purl, "error", err)
+						slog.Debug("transitive_advisory_lookup_failed", "purl", di.purl, "error", err)
 						continue
 					}
 					if resp == nil || len(resp.Version.AdvisoryKeys) == 0 {
@@ -110,6 +110,9 @@ dispatch:
 		"dependencies_queried", len(targets),
 		"with_advisories", len(results),
 	)
+	if err := ctx.Err(); err != nil {
+		return results, fmt.Errorf("transitive advisory fetch interrupted: %w", err)
+	}
 	return results, nil
 }
 

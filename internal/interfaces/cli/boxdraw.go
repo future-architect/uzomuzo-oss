@@ -687,12 +687,20 @@ func writeBoxReleases(ctx *boxContext) error {
 			if rv.IsDeprecated {
 				deprecated = " ⚠️ [DEPRECATED]"
 			}
+			advText := advisoryCountText(rv)
 			if !rv.PublishedAt.IsZero() {
-				lines = append(lines, fmt.Sprintf("Requested: %s (%s)%s",
-					rv.Version, rv.PublishedAt.Format(dateFormat), deprecated))
+				lines = append(lines, fmt.Sprintf("Requested: %s (%s)%s%s",
+					rv.Version, rv.PublishedAt.Format(dateFormat), advText, deprecated))
 			} else {
-				lines = append(lines, fmt.Sprintf("Requested: %s%s",
-					rv.Version, deprecated))
+				lines = append(lines, fmt.Sprintf("Requested: %s%s%s",
+					rv.Version, advText, deprecated))
+			}
+			lines = append(lines, formatAdvisoryLines(rv.DirectAdvisories())...)
+			lines = append(lines, formatTransitiveAdvisoryLines(rv.TransitiveAdvisories())...)
+			if len(rv.Advisories) > 0 {
+				if depsdevURL := commonlinks.BuildDepsDevVersionURL(eco, name, rv.Version); depsdevURL != "" {
+					lines = append(lines, fmt.Sprintf("  → %s", depsdevURL))
+				}
 			}
 		}
 	}
