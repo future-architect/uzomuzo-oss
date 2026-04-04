@@ -36,17 +36,19 @@ $ uzomuzo scan pkg:npm/express@4.18.2
 │ Description: Fast, unopinionated, minimalist web framework for node.
 ├─ Status ──────────────────────────────────────────────────
 │ ✅ Active
-│ Reason: Recent stable package version published; maintenance score ≥ 3
+│ Reason: Recent stable package version published with recent human commits; maintenance score ≥ 3
 ├─ Health ──────────────────────────────────────────────────
-│ 68892 stars
+│ 68888 stars
 │ Used by: 2211 packages
 │ Depends on: 31 direct, 39 transitive
 │ Score: 8.4/10  Maintained: 10.0/10
+│ Last Commit: 2026-03-31
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 5.2.1 (2025-12-01)
+│ Pre-release: 5.0.0-beta.3 (2024-03-25)
 │ Requested: 4.18.2 (2022-10-08)
 ├─ License ─────────────────────────────────────────────────
-│ MIT (depsdev / depsdev)
+│ MIT (depsdev)
 ├─ Links ───────────────────────────────────────────────────
 │ Homepage: https://expressjs.com
 │ Repository: https://github.com/expressjs/express
@@ -92,6 +94,26 @@ When transitive dependencies are included, output shows a `RELATION` column indi
 ./uzomuzo scan --file go.mod       # explicit path
 ```
 
+<details>
+<summary><strong>Example: go.mod (table output with RELATION column)</strong></summary>
+
+```text
+$ uzomuzo scan --file go.mod -f table
+
+STATUS      PURL                                                        RELATION  LIFECYCLE      EOL
+⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled        Not EOL
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  Not EOL
+✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Not EOL
+
+── Summary ─────────────────────────────────────────────────
+│ 3 dependencies | ✅ 1 ok | ⚠️ 1 caution | 🔴 1 replace | 🔍 0 review
+└───────────────────────────────────────────────────────────
+```
+
+go.mod input adds a `RELATION` column showing `direct` or `indirect` dependency relationship.
+
+</details>
+
 ### GitHub Actions Workflow Input
 
 Scan a GitHub Actions workflow YAML to evaluate the lifecycle health of referenced Actions:
@@ -101,6 +123,53 @@ Scan a GitHub Actions workflow YAML to evaluate the lifecycle health of referenc
 ```
 
 This extracts `uses:` directives (e.g., `actions/checkout@v4`) and evaluates each referenced Action as a GitHub repository.
+
+<details>
+<summary><strong>Example: GitHub Actions workflow (detailed output)</strong></summary>
+
+```text
+$ uzomuzo scan --file .github/workflows/ci.yml -f detailed
+
+── https://github.com/actions/checkout ─────────────────────
+│ Description: Action for checking out a repo
+├─ Status ──────────────────────────────────────────────────
+│ ✅ Active
+│ Reason: Recent human commits but no recent package publishing; maintenance score unavailable (Scorecard not found)
+├─ Health ──────────────────────────────────────────────────
+│ 7733 stars
+│ Last Commit: 2026-01-09
+├─ License ─────────────────────────────────────────────────
+│ Project: MIT (github)
+│ Requested Version: (none)
+├─ Links ───────────────────────────────────────────────────
+│ Homepage: https://github.com/features/actions
+│ Repository: https://github.com/actions/checkout
+└───────────────────────────────────────────────────────────
+
+── https://github.com/golangci/golangci-lint-action ────────
+│ Package: pkg:golang/github.com/golangci/golangci-lint-action@v1.2.2
+│ Description: Official GitHub Action for golangci-lint from its authors
+├─ Status ──────────────────────────────────────────────────
+│ ✅ Active
+│ Reason: Recent human commits (VCS-direct ecosystem; commits deliver updates to consumers); maintenance score ≥ 3
+├─ Health ──────────────────────────────────────────────────
+│ 1419 stars
+│ Score: 6.9/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-01
+├─ Releases ────────────────────────────────────────────────
+│ Stable: v1.2.2 (2020-07-10)
+│ Highest (SemVer): v1.2.3-0.20260105112450-f75c1c4ee8cf (2026-01-05)
+├─ License ─────────────────────────────────────────────────
+│ MIT (depsdev)
+├─ Links ───────────────────────────────────────────────────
+│ Homepage: https://github.com/marketplace/actions/golangci-lint
+│ Repository: https://github.com/golangci/golangci-lint-action
+│ Registry: https://pkg.go.dev/github.com%2Fgolangci%2Fgolangci-lint-action
+│ deps.dev: https://deps.dev/go/github.com/golangci/golangci-lint-action
+└───────────────────────────────────────────────────────────
+```
+
+</details>
 
 ### Actions Discovery (`--include-actions`)
 
