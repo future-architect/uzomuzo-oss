@@ -157,28 +157,21 @@ func decideNpmEOL(pkgID, version string, info *npmjs.DeprecationInfo) (state dom
 	// Evidence should include the exact registry endpoint used for lifecycle classification (Reference)
 	// and provide a human-friendly UI URL in the summary for quick verification.
 	regURL := "https://registry.npmjs.org/" + url.PathEscape(pkgID)
-	uiURL := "https://www.npmjs.com/package/" + pkgID + "/v/" + version
 	if info.Unpublished {
 		evidences = append(evidences, domain.EOLEvidence{
 			Source:     "npmjs",
 			Reference:  regURL,
 			Confidence: 0.95,
-			Summary:    "Stable version is unpublished in npm registry. UI: " + uiURL,
+			Summary:    "Stable version is unpublished in npm registry",
 		})
 		return domain.EOLEndOfLife, successor, evidences
 	}
 	if info.Deprecated {
-		msg := "Stable version is deprecated in npm registry."
-		if info.Message != "" {
-			msg += " Message: " + info.Message
-		}
-		// Add UI URL for convenient inspection
-		msg += " UI: " + uiURL
 		evidences = append(evidences, domain.EOLEvidence{
 			Source:     "npmjs",
 			Reference:  regURL,
 			Confidence: 0.9,
-			Summary:    msg,
+			Summary:    "Stable version is deprecated in npm registry",
 		})
 		return domain.EOLEndOfLife, successor, evidences
 	}
