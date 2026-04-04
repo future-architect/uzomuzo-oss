@@ -102,10 +102,12 @@ func writeLine(ctx *boxContext, format string, args ...any) error {
 	return nil
 }
 
-// isWrappableLine returns true only for free-text fields that benefit from
-// word-wrapping: verdict+reason lines (emoji prefix), Catalog Reason,
-// plain description text, and EOL evidence summaries.
-// Everything else (URLs, identifiers, structured data) is left unwrapped.
+// isWrappableLine returns true only for the labeled free-text fields handled
+// by writeLine: verdict+reason lines (emoji prefix), Catalog Reason, and
+// Description: lines.
+// Unlabeled description text is wrapped separately by writeBoxIdentity.
+// Everything else — including URLs, identifiers, structured data, and
+// evidence summary lines — is left unwrapped.
 func isWrappableLine(s string) bool {
 	trimmed := strings.TrimLeft(s, " ")
 
@@ -125,8 +127,8 @@ func isWrappableLine(s string) bool {
 		return true
 	case strings.HasPrefix(trimmed, "Description:"):
 		return true
-	// EOL evidence summary lines ("[npmjs] ...") are already condensed summaries
-	// — wrapping them reduces readability. Let the terminal handle overflow.
+		// EOL evidence summary lines ("[npmjs] ...") are already condensed summaries
+		// — wrapping them reduces readability. Let the terminal handle overflow.
 	}
 	return false
 }
@@ -519,9 +521,11 @@ func writeBoxHealth(ctx *boxContext) error {
 	if a.RepoState != nil {
 		if a.RepoState.IsArchived {
 			lines = append(lines, "📦 Archived")
-		} else if a.RepoState.IsDisabled {
+		}
+		if a.RepoState.IsDisabled {
 			lines = append(lines, "⛔ Disabled")
-		} else if a.RepoState.IsFork {
+		}
+		if a.RepoState.IsFork {
 			if a.RepoState.ForkSource != "" {
 				lines = append(lines, fmt.Sprintf("⚠️ Fork of %s", a.RepoState.ForkSource))
 			} else {

@@ -342,22 +342,21 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 				Trace:   []string{"inactive_commit_maintenance_ok_partial_scores"},
 				Signals: []Signal{cSig, mSig}}, nil
 		}
-		daysSincePublish := analysis.GetDaysSinceLatestPublish()
-		publishSig := sigAbsent(SignalDaysSinceRelease)
 		if analysis.HasPublishData() {
-			publishSig = sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))
-		}
-		if daysSincePublish <= s.rules.EolInactivityDays {
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-				Reason:  "No recent activity, recent publish",
-				Trace:   []string{"inactive_commit_no_scores_recent_publish"},
-				Signals: []Signal{cSig, publishSig}}, nil
-		}
-		if daysSinceLastHumanCommit > s.rules.EolInactivityDays && daysSincePublish > s.rules.EolInactivityDays {
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-				Reason:  "Long-term inactive, no recent releases",
-				Trace:   []string{"inactive_commit_no_scores_old_publish"},
-				Signals: []Signal{cSig, publishSig}}, nil
+			daysSincePublish := analysis.GetDaysSinceLatestPublish()
+			publishSig := sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))
+			if daysSincePublish <= s.rules.EolInactivityDays {
+				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
+					Reason:  "No recent activity, recent publish",
+					Trace:   []string{"inactive_commit_no_scores_recent_publish"},
+					Signals: []Signal{cSig, publishSig}}, nil
+			}
+			if daysSinceLastHumanCommit > s.rules.EolInactivityDays && daysSincePublish > s.rules.EolInactivityDays {
+				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
+					Reason:  "Long-term inactive, no recent releases",
+					Trace:   []string{"inactive_commit_no_scores_old_publish"},
+					Signals: []Signal{cSig, publishSig}}, nil
+			}
 		}
 		if !analysis.HasPublishData() && !hasMaintainedScore {
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
@@ -401,7 +400,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 
 	// C2: Scorecard Maintained < threshold
 	if hasMaintainedScore && !isMaintenanceOk {
-		if hasAdvisories && daysSincePublish > s.rules.EolInactivityDays {
+		if hasAdvisories && analysis.HasPublishData() && daysSincePublish > s.rules.EolInactivityDays {
 			label, trace := s.severityAwareLabel(hasHighSeverity,
 				LabelEOLEffective, "inactive_no_commit_C2a_low_maint_advisory_old_publish",
 				LabelStalled, "inactive_no_commit_C2a_low_maint_advisory_low_severity")
@@ -419,7 +418,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 
 	// C3: No scorecard — deps.dev signals only
 	if hasAdvisories {
-		if daysSincePublish > s.rules.EolInactivityDays {
+		if analysis.HasPublishData() && daysSincePublish > s.rules.EolInactivityDays {
 			label, trace := s.severityAwareLabel(hasHighSeverity,
 				LabelEOLEffective, "inactive_no_commit_C3a_advisory_old_publish",
 				LabelStalled, "inactive_no_commit_C3a_advisory_low_severity")
@@ -436,20 +435,20 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 			Signals: signals}, nil
 	}
 
-	// No advisories path
-	if daysSincePublish <= s.rules.RecentStableWindowDays {
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive,
-			Reason:  "Recently published, no known vulnerabilities",
-			Trace:   []string{"inactive_no_commit_C3c_no_advisory_recent_publish"},
-			Signals: []Signal{dSig, sig(SignalAdvisoryCount, "0")}}, nil
-	}
-	if daysSincePublish <= s.rules.EolInactivityDays {
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-			Reason:  "No vulnerabilities but no recent releases",
-			Trace:   []string{"inactive_no_commit_C3d_no_advisory_mid_publish"},
-			Signals: []Signal{dSig, sig(SignalAdvisoryCount, "0")}}, nil
-	}
+	// No advisories path — only use publish-age thresholds when publish data exists
 	if analysis.HasPublishData() {
+		if daysSincePublish <= s.rules.RecentStableWindowDays {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive,
+				Reason:  "Recently published, no known vulnerabilities",
+				Trace:   []string{"inactive_no_commit_C3c_no_advisory_recent_publish"},
+				Signals: []Signal{dSig, sig(SignalAdvisoryCount, "0")}}, nil
+		}
+		if daysSincePublish <= s.rules.EolInactivityDays {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
+				Reason:  "No vulnerabilities but no recent releases",
+				Trace:   []string{"inactive_no_commit_C3d_no_advisory_mid_publish"},
+				Signals: []Signal{dSig, sig(SignalAdvisoryCount, "0")}}, nil
+		}
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelLegacySafe,
 			Reason:  "Dormant but no known vulnerabilities",
 			Trace:   []string{"inactive_no_commit_C3e_no_advisory_old_publish"},
