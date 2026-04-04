@@ -361,21 +361,24 @@ func (a *Analysis) GetLifecycleResult() *AssessmentResult {
 // ============================================================================
 
 // FinalMaintenanceStatus derives a single high-level maintenance status for UI/consumers.
-// Precedence: EOL > Scheduled EOL > lifecycle assessment label > Review Needed.
-func (a *Analysis) FinalMaintenanceStatus() string {
+// Precedence: EOL (EOL-Confirmed or EOL-Effective) > EOL-Scheduled > lifecycle assessment label > Review Needed.
+func (a *Analysis) FinalMaintenanceStatus() MaintenanceStatus {
 	if a == nil {
-		return "Review Needed"
+		return LabelReviewNeeded
 	}
 	if a.EOL.IsEOL() {
-		return "EOL"
+		if a.EOL.ScheduledAt != nil {
+			return LabelEOLEffective
+		}
+		return LabelEOLConfirmed
 	}
 	if a.EOL.IsPlannedEOL() {
-		return "Scheduled EOL"
+		return LabelEOLScheduled
 	}
 	if lr := a.GetLifecycleResult(); lr != nil {
-		return string(lr.Label)
+		return lr.Label
 	}
-	return "Review Needed"
+	return LabelReviewNeeded
 }
 
 // DisplayPURL returns the most user-meaningful PURL for presentation (original if available, otherwise effective).

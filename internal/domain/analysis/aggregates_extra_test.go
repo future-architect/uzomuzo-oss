@@ -98,18 +98,19 @@ func TestAnalysis_EnsureCanonical(t *testing.T) {
 }
 
 func TestAnalysis_FinalMaintenanceStatus(t *testing.T) {
-	// Helper to clone axis result map
 	lr := &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled}
+	scheduledAt := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name string
 		a    *Analysis
-		want string
+		want MaintenanceStatus
 	}{
-		{name: "nil_receiver", a: nil, want: "Review Needed"},
-		{name: "eol_overrides_axis", a: &Analysis{EOL: EOLStatus{State: EOLEndOfLife}, AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: lr}}, want: "EOL"},
-		{name: "scheduled_eol_over_axis", a: &Analysis{EOL: EOLStatus{State: EOLScheduled}, AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: lr}}, want: "Scheduled EOL"},
-		{name: "axis_only", a: &Analysis{AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: lr}}, want: "Stalled"},
-		{name: "none", a: &Analysis{}, want: "Review Needed"},
+		{name: "nil_receiver", a: nil, want: LabelReviewNeeded},
+		{name: "eol_confirmed", a: &Analysis{EOL: EOLStatus{State: EOLEndOfLife}, AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: lr}}, want: LabelEOLConfirmed},
+		{name: "eol_effective", a: &Analysis{EOL: EOLStatus{State: EOLEndOfLife, ScheduledAt: &scheduledAt}, AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: lr}}, want: LabelEOLEffective},
+		{name: "eol_scheduled", a: &Analysis{EOL: EOLStatus{State: EOLScheduled, ScheduledAt: &scheduledAt}, AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: lr}}, want: LabelEOLScheduled},
+		{name: "axis_only", a: &Analysis{AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: lr}}, want: LabelStalled},
+		{name: "none", a: &Analysis{}, want: LabelReviewNeeded},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

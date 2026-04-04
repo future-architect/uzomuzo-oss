@@ -100,13 +100,13 @@ const (
 
 // FinalMaintenanceStatus returns the final single maintenance status (wrapper over Analysis.FinalMaintenanceStatus).
 // Prefer this over directly inspecting LifecycleAssessment/EOL for simple UI decisions.
-func FinalMaintenanceStatus(a *Analysis) string { return a.FinalMaintenanceStatus() }
+func FinalMaintenanceStatus(a *Analysis) MaintenanceStatus { return a.FinalMaintenanceStatus() }
 
 // LifecycleSummary provides a consolidated snapshot combining lifecycle assessment + primary-source EOL.
 // This decouples callers from internal domain structs while giving richer context.
 type LifecycleSummary struct {
-	FinalLabel        string        // priority-ordered final label (EOL > Scheduled EOL > LifecycleAssessment > Review Needed)
-	MaintenanceStatus string        // raw maintenance status label (may be empty)
+	FinalLabel        MaintenanceStatus // priority-ordered final status (EOL-Confirmed/EOL-Effective > EOL-Scheduled > lifecycle-derived status > Review Needed)
+	MaintenanceStatus MaintenanceStatus // raw maintenance status label (may be empty)
 	LifecycleReason   string        // rationale for lifecycle assessment
 	EOLState          string        // raw EOL state (Unknown / NotEOL / EOL / Planned)
 	EOLHumanState     string        // human-friendly EOL state label
@@ -121,7 +121,7 @@ type LifecycleSummary struct {
 // Safe for nil input.
 func BuildLifecycleSummary(a *Analysis) LifecycleSummary {
 	if a == nil {
-		return LifecycleSummary{FinalLabel: "Review Needed", EOLState: string(EOLUnknown), EOLHumanState: "Unknown"}
+		return LifecycleSummary{FinalLabel: LabelReviewNeeded, EOLState: string(EOLUnknown), EOLHumanState: "Unknown"}
 	}
 	ls := LifecycleSummary{FinalLabel: a.FinalMaintenanceStatus(), EOLState: string(a.EOL.State), EOLHumanState: a.EOL.HumanState(), Successor: a.EOL.Successor, ScheduledAt: a.EOL.ScheduledAt}
 	ls.EOLReason = a.EOL.Reason
@@ -131,7 +131,7 @@ func BuildLifecycleSummary(a *Analysis) LifecycleSummary {
 		copy(ls.EOLEvidences, a.EOL.Evidences)
 	}
 	if lr := a.GetLifecycleResult(); lr != nil {
-		ls.MaintenanceStatus = string(lr.Label)
+		ls.MaintenanceStatus = lr.Label
 		ls.LifecycleReason = lr.Reason
 	}
 	return ls
