@@ -80,6 +80,10 @@ func main() {
 		return
 	}
 
+	if err := validateRelativePath(cfg.Binary, "binary"); err != nil {
+		fatalf("config: %v", err)
+	}
+
 	if !*skipBuild {
 		fmt.Println("Building uzomuzo...")
 		if err := runShell("go", "build", "-o", cfg.Binary, "./cmd/uzomuzo"); err != nil {
@@ -87,10 +91,13 @@ func main() {
 		}
 	}
 
-	// Read all target files into memory.
+	// Validate and read all target files into memory.
 	fileContents := make(map[string]string)
 	for _, cmd := range cfg.Commands {
 		for _, f := range cmd.Files {
+			if err := validateRelativePath(f, "file"); err != nil {
+				fatalf("command %q: %v", cmd.ID, err)
+			}
 			if _, ok := fileContents[f]; !ok {
 				data, err := os.ReadFile(f)
 				if err != nil {
@@ -154,9 +161,8 @@ func main() {
 				fmt.Printf("Skipping %s: required tool(s) not found: %v\n", rf.ID, rf.Requires)
 				continue
 			}
-			cleaned := path.Clean(rf.OutputFile)
-			if cleaned == "." || strings.HasPrefix(cleaned, "..") || strings.ContainsRune(rf.OutputFile, '\\') {
-				fatalf("raw command %q: output_file %q escapes repo root", rf.ID, rf.OutputFile)
+			if err := validateRelativePath(rf.OutputFile, "output_file"); err != nil {
+				fatalf("raw command %q: %v", rf.ID, err)
 			}
 
 			fmt.Printf("Running shell: %s\n", rf.Shell)
@@ -218,7 +224,7 @@ func runCheckMarkers(cfg Config) {
 			}
 
 			content := fileContents[f]
-			beginMarker := "<!-- begin:output:" + cmd.ID + " -->"
+			beginMarker := "<!-- begin:output:" + cmd.ID + " -->\n"
 			endMarker := "<!-- end:output:" + cmd.ID + " -->"
 
 			beginIdx := strings.Index(content, beginMarker)
@@ -354,6 +360,16 @@ func hasRequiredTools(tools []string) bool {
 		}
 	}
 	return true
+}
+
+// validateRelativePath rejects paths that could escape the repo root:
+// absolute paths, traversal (".."), bare ".", and backslashes.
+func validateRelativePath(p, label string) error {
+	cleaned := path.Clean(p)
+	if path.IsAbs(cleaned) || cleaned == "." || strings.HasPrefix(cleaned, "..") || strings.ContainsRune(p, '\\') {
+		return fmt.Errorf("%s path %q escapes repo root", label, p)
+	}
+	return nil
 }
 
 // fatalf prints an error message to stderr and exits with code 1.
