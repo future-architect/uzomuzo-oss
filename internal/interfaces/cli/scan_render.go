@@ -425,12 +425,8 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 						maxSeverity = domain.SeverityFromCVSS3(maxScore)
 						maxCVSS3Score = fmt.Sprintf("%.1f", maxScore)
 					}
-					if dc := vd.DirectAdvisoryCount(); dc > 0 {
-						directAdvisoryCount = fmt.Sprintf("%d", dc)
-					}
-					if tc := vd.TransitiveAdvisoryCount(); tc > 0 {
-						transitiveAdvisoryCount = fmt.Sprintf("%d", tc)
-					}
+					directAdvisoryCount = fmt.Sprintf("%d", vd.DirectAdvisoryCount())
+					transitiveAdvisoryCount = fmt.Sprintf("%d", vd.TransitiveAdvisoryCount())
 					if maxTScore := vd.MaxTransitiveCVSS3(); maxTScore > 0 {
 						maxTransitiveSeverity = domain.SeverityFromCVSS3(maxTScore)
 						maxTransitiveCVSS3Score = fmt.Sprintf("%.1f", maxTScore)
