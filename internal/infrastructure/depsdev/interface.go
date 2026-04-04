@@ -34,6 +34,10 @@ type Client interface {
 	// Returns a map of canonical (versionless) PURL -> DependenciesResponse.
 	// Supported ecosystems: npm, cargo, maven, pypi.
 	FetchDependenciesBatch(ctx context.Context, purls []string) map[string]*DependenciesResponse
+	// FetchAdvisoriesBatch fetches advisory details (CVSS3 score, title) for multiple advisory IDs in parallel.
+	// Returns a map of advisory ID -> AdvisoryDetail. Unknown/failed IDs are silently omitted.
+	// Results are cached in-memory since advisory metadata is immutable.
+	FetchAdvisoriesBatch(ctx context.Context, advisoryIDs []string) map[string]*AdvisoryDetail
 }
 
 // Config is the configuration for depsdev clients

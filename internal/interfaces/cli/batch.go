@@ -920,9 +920,19 @@ func printReleaseInfo(a *analysispkg.Analysis) {
 		}
 		advCount := len(stable.Advisories)
 		if advCount > 0 {
-			fmt.Printf("   ↳ Stable Advisories: %d\n", advCount)
+			maxScore := stable.MaxCVSS3()
+			if maxScore > 0 {
+				severity := analysispkg.SeverityFromCVSS3(maxScore)
+				fmt.Printf("   ↳ Stable Advisories: %d (max: %s %.1f)\n", advCount, severity, maxScore)
+			} else {
+				fmt.Printf("   ↳ Stable Advisories: %d\n", advCount)
+			}
 			for _, adv := range stable.Advisories {
-				fmt.Printf("      • [%s] %s (%s)\n", adv.Source, adv.ID, adv.URL)
+				if adv.Severity != "" {
+					fmt.Printf("      • [%s] %s — %s (%s %.1f)\n", adv.Source, adv.ID, adv.Title, adv.Severity, adv.CVSS3Score)
+				} else {
+					fmt.Printf("      • [%s] %s\n", adv.Source, adv.ID)
+				}
 			}
 		} else {
 			fmt.Printf("   ↳ Stable Advisories: 0\n")

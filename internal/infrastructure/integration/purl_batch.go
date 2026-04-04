@@ -96,6 +96,10 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	}()
 	enrichWg.Wait()
 
+	// Advisory severity enrichment (best-effort).
+	// Runs after populateReleaseInfo (via populateAnalysisFromBatchResult) so advisory IDs are available.
+	s.enrichAdvisorySeverity(ctx, analyses)
+
 	total := len(analyses)
 	pct := func(n int) float64 {
 		if total == 0 {

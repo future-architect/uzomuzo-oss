@@ -124,6 +124,62 @@ type Advisory struct {
 	ID     string
 	Source string
 	URL    string
+	// Title is the advisory summary (e.g., "SQL Injection in foo"). Empty if not fetched.
+	Title string
+	// CVSS3Score is the CVSS v3 base score (0.0–10.0). Zero means unknown/not fetched.
+	CVSS3Score float64
+	// Severity is derived from CVSS3Score: NONE/LOW/MEDIUM/HIGH/CRITICAL. Empty means unknown.
+	Severity string
+}
+
+// SeverityFromCVSS3 maps a CVSS v3 base score to a severity label per the CVSS v3 specification.
+// Returns empty string for zero (unknown/not fetched).
+func SeverityFromCVSS3(score float64) string {
+	switch {
+	case score <= 0:
+		return ""
+	case score <= 3.9:
+		return "LOW"
+	case score <= 6.9:
+		return "MEDIUM"
+	case score <= 8.9:
+		return "HIGH"
+	default:
+		return "CRITICAL"
+	}
+}
+
+// MaxCVSS3 returns the highest CVSS3 score among advisories, or 0 if none have severity data.
+func (vd *VersionDetail) MaxCVSS3() float64 {
+	var max float64
+	for _, a := range vd.Advisories {
+		if a.CVSS3Score > max {
+			max = a.CVSS3Score
+		}
+	}
+	return max
+}
+
+// HighSeverityAdvisoryCount returns the count of advisories with CVSS3 >= threshold.
+func (vd *VersionDetail) HighSeverityAdvisoryCount(threshold float64) int {
+	count := 0
+	for _, a := range vd.Advisories {
+		if a.CVSS3Score >= threshold {
+			count++
+		}
+	}
+	return count
+}
+
+// UnknownSeverityAdvisoryCount returns the count of advisories without severity data (CVSS3Score == 0).
+func (vd *VersionDetail) UnknownSeverityAdvisoryCount() int {
+	count := 0
+	for _, a := range vd.Advisories {
+		if a.CVSS3Score <= 0 {
+			count++
+		}
+	}
+	return count
 }
 
 // LatestAdvisories returns (count, advisories) for the "latest" version per priority order:

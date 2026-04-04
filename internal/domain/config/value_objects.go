@@ -51,6 +51,7 @@ var DefaultValues = DefaultConfigValues{
 		VulnerabilityScorePoorMax:  3.0,
 		MaxBotCommitRatio:          0.7,
 		ResidualAdvisoryThreshold:  1,
+		HighSeverityCVSSThreshold:  7.0,
 		CommitActivityWindowDays:   365,
 	},
 	Maven: MavenConfig{
@@ -144,6 +145,7 @@ type LifecycleAssessmentConfig struct {
 	VulnerabilityScorePoorMax  float64 `yaml:"vulnerability_score_poor_max" json:"vulnerability_score_poor_max"`
 	MaxBotCommitRatio          float64 `yaml:"max_bot_commit_ratio" json:"max_bot_commit_ratio"`
 	ResidualAdvisoryThreshold  int     `yaml:"residual_advisory_threshold" json:"residual_advisory_threshold"`
+	HighSeverityCVSSThreshold  float64 `yaml:"high_severity_cvss_threshold" json:"high_severity_cvss_threshold"`
 	CommitActivityWindowDays   int     `yaml:"commit_activity_window_days" json:"commit_activity_window_days"`
 }
 
@@ -181,6 +183,9 @@ func NormalizeLifecycleConfig(c *LifecycleAssessmentConfig) {
 	}
 	if c.ResidualAdvisoryThreshold == 0 {
 		c.ResidualAdvisoryThreshold = def.ResidualAdvisoryThreshold
+	}
+	if c.HighSeverityCVSSThreshold == 0 {
+		c.HighSeverityCVSSThreshold = def.HighSeverityCVSSThreshold
 	}
 	if c.CommitActivityWindowDays == 0 {
 		c.CommitActivityWindowDays = def.CommitActivityWindowDays
