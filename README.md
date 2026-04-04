@@ -14,6 +14,7 @@ A package with zero CVEs today may have been abandoned for years — no one is w
 
 ### What SCA misses — EOL-Effective
 
+<!-- begin:output:dicer-detailed -->
 ```text
 ── pkg:npm/dicer@0.3.1 ─────────────────────────────────────
 │ A very fast streaming multipart parser for node.js
@@ -40,6 +41,7 @@ A package with zero CVEs today may have been abandoned for years — no one is w
 │ deps.dev: https://deps.dev/npm/dicer
 └───────────────────────────────────────────────────────────
 ```
+<!-- end:output:dicer-detailed -->
 
 No official deprecation, no archived repository — yet `dicer` has an unpatched ReDoS vulnerability (CVSS 7.5 — HIGH severity) with zero human commits in over two years. SCA tools report "1 CVE" and move on. uzomuzo recognizes the combination of HIGH/CRITICAL unpatched advisory + maintenance absence as **effectively end-of-life**. This package sits in the Express dependency chain (via busboy → multer), meaning millions of applications silently depend on abandoned code.
 
@@ -160,6 +162,7 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 
 ### Active — `express` (193K dependents)
 
+<!-- begin:output:express-detailed -->
 ```text
 ── pkg:npm/express@4.18.2 ──────────────────────────────────
 │ Fast, unopinionated, minimalist web framework for node.
@@ -184,9 +187,11 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 │ deps.dev: https://deps.dev/npm/express
 └───────────────────────────────────────────────────────────
 ```
+<!-- end:output:express-detailed -->
 
 ### Stalled — `moment` (2K+ dependents)
 
+<!-- begin:output:moment-detailed -->
 ```text
 ── pkg:npm/moment@2.29.4 ───────────────────────────────────
 │ Parse, validate, manipulate, and display dates in
@@ -209,11 +214,13 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 │ deps.dev: https://deps.dev/npm/moment
 └───────────────────────────────────────────────────────────
 ```
+<!-- end:output:moment-detailed -->
 
 Scorecard says Maintained 0.0 — but zero advisories and does one thing perfectly. Watch for maintenance decline.
 
 ### Stalled — `gorilla/mux` (22K stars)
 
+<!-- begin:output:gorilla-mux-detailed -->
 ```text
 ── pkg:golang/github.com/gorilla/mux@1.8.1 ─────────────────
 │ Package gorilla/mux is a powerful HTTP router and URL
@@ -235,11 +242,13 @@ Scorecard says Maintained 0.0 — but zero advisories and does one thing perfect
 │ deps.dev: https://deps.dev/go/github.com/gorilla/mux
 └───────────────────────────────────────────────────────────
 ```
+<!-- end:output:gorilla-mux-detailed -->
 
 No release since 2023, Maintained 0.0. Not dead, not active — clearly declining.
 
 ### EOL-Effective — `dicer` (busboy → multer → express)
 
+<!-- begin:output:dicer-detailed-states -->
 ```text
 ── pkg:npm/dicer@0.3.1 ─────────────────────────────────────
 │ A very fast streaming multipart parser for node.js
@@ -266,11 +275,13 @@ No release since 2023, Maintained 0.0. Not dead, not active — clearly declinin
 │ deps.dev: https://deps.dev/npm/dicer
 └───────────────────────────────────────────────────────────
 ```
+<!-- end:output:dicer-detailed-states -->
 
 No deprecation, no archive — but unpatched ReDoS + zero maintenance. **SCA blind spot.**
 
 ### EOL-Effective — `dgrijalva/jwt-go` (archived repository)
 
+<!-- begin:output:jwt-go-detailed -->
 ```text
 ── pkg:golang/github.com/dgrijalva/jwt-go@3.2.0 ────────────
 │ ARCHIVE - Golang implementation of JSON Web Tokens (JWT).
@@ -299,11 +310,13 @@ No deprecation, no archive — but unpatched ReDoS + zero maintenance. **SCA bli
 │ deps.dev: https://deps.dev/go/github.com/dgrijalva/jwt-go
 └───────────────────────────────────────────────────────────
 ```
+<!-- end:output:jwt-go-detailed -->
 
 Successor is `golang-jwt/jwt`. **Migrate immediately.**
 
 ### EOL-Confirmed — `request` (186K dependents, npm deprecated)
 
+<!-- begin:output:request-detailed -->
 ```text
 ── pkg:npm/request@2.88.2 ──────────────────────────────────
 │ 🏊🏾 Simplified HTTP request client.
@@ -329,6 +342,7 @@ Successor is `golang-jwt/jwt`. **Migrate immediately.**
 │ deps.dev: https://deps.dev/npm/request
 └───────────────────────────────────────────────────────────
 ```
+<!-- end:output:request-detailed -->
 
 186K dependents. npm deprecated with deprecation message and advisory. Last release 2020. **Migrate immediately.**
 
@@ -337,6 +351,7 @@ Successor is `golang-jwt/jwt`. **Migrate immediately.**
 <details>
 <summary><strong>Sample Output — Table format (mixed statuses)</strong></summary>
 
+<!-- begin:output:all-states-table -->
 ```text
 $ uzomuzo scan pkg:npm/express@4.18.2 pkg:npm/moment@2.29.4 \
     pkg:golang/github.com/gorilla/mux@1.8.1 pkg:npm/dicer@0.3.1 \
@@ -355,12 +370,14 @@ STATUS      PURL                                          LIFECYCLE
 │ 6 dependencies | ✅ 1 ok | ⚠️ 2 caution | 🔴 3 replace | 🔍 0 review
 └───────────────────────────────────────────────────────────
 ```
+<!-- end:output:all-states-table -->
 
 </details>
 
 <details>
 <summary><strong>Sample Output — go.mod input</strong></summary>
 
+<!-- begin:output:gomod-table -->
 ```text
 $ uzomuzo scan --file go.mod -f table
 
@@ -373,6 +390,7 @@ STATUS      PURL                                                        RELATION
 │ 3 dependencies | ✅ 1 ok | ⚠️ 1 caution | 🔴 1 replace | 🔍 0 review
 └───────────────────────────────────────────────────────────
 ```
+<!-- end:output:gomod-table -->
 
 go.mod input adds a `RELATION` column showing `direct` or `indirect` dependency relationship.
 

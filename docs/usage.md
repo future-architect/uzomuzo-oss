@@ -29,6 +29,7 @@
 <details>
 <summary><strong>Example: Single PURL (detailed output)</strong></summary>
 
+<!-- begin:output:usage-express-detailed -->
 ```text
 $ uzomuzo scan pkg:npm/express@4.18.2
 
@@ -55,6 +56,7 @@ $ uzomuzo scan pkg:npm/express@4.18.2
 │ deps.dev: https://deps.dev/npm/express
 └───────────────────────────────────────────────────────────
 ```
+<!-- end:output:usage-express-detailed -->
 
 For ≤3 inputs, the `detailed` format is used automatically. Use `--format detailed` to force it for larger inputs.
 
@@ -96,6 +98,7 @@ When transitive dependencies are included, output shows a `RELATION` column indi
 <details>
 <summary><strong>Example: go.mod (table output with RELATION column)</strong></summary>
 
+<!-- begin:output:usage-gomod-table -->
 ```text
 $ uzomuzo scan --file go.mod -f table
 
@@ -108,6 +111,7 @@ STATUS      PURL                                                        RELATION
 │ 3 dependencies | ✅ 1 ok | ⚠️ 1 caution | 🔴 1 replace | 🔍 0 review
 └───────────────────────────────────────────────────────────
 ```
+<!-- end:output:usage-gomod-table -->
 
 go.mod input adds a `RELATION` column showing `direct` or `indirect` dependency relationship.
 
@@ -255,6 +259,7 @@ Rules:
 <details>
 <summary><strong>Example: <code>--format table</code></strong></summary>
 
+<!-- begin:output:usage-request-table -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --format table
 STATUS     PURL                    LIFECYCLE
@@ -265,6 +270,7 @@ STATUS     PURL                    LIFECYCLE
 │ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
 └───────────────────────────────────────────────────────────
 ```
+<!-- end:output:usage-request-table -->
 
 </details>
 
@@ -292,6 +298,7 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
 <details>
 <summary><strong>Example: <code>--format json</code></strong></summary>
 
+<!-- begin:output:usage-request-json -->
 ```json
 {
   "summary": {
@@ -322,6 +329,7 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
   ]
 }
 ```
+<!-- end:output:usage-request-json -->
 
 The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, scores, license info), making it suitable for CI pipelines and downstream tooling without needing a separate detailed run.
 
@@ -330,11 +338,13 @@ The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, 
 <details>
 <summary><strong>Example: <code>--format csv</code></strong></summary>
 
+<!-- begin:output:usage-request-csv -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --format csv
 verdict,purl,lifecycle,successor,advisory_count,max_advisory_severity,max_cvss3_score,repo_url,source,via
 replace,pkg:npm/request@2.88.2,EOL-Confirmed,,1,MEDIUM,6.1,https://github.com/request/request,,
 ```
+<!-- end:output:usage-request-csv -->
 
 </details>
 
@@ -359,6 +369,7 @@ Without `--fail-on`, exit code is always 0 regardless of scan results.
 
 **Exit 1 — label matches a dependency:**
 
+<!-- begin:output:usage-failon-match -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-confirmed --format table
 STATUS     PURL                    LIFECYCLE
@@ -369,9 +380,11 @@ STATUS     PURL                    LIFECYCLE
 └───────────────────────────────────────────────────────────
 # exit code: 1  (request is EOL-Confirmed → matches --fail-on eol-confirmed)
 ```
+<!-- end:output:usage-failon-match -->
 
 **Exit 0 — label does not match:**
 
+<!-- begin:output:usage-failon-nomatch -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-effective --format table
 STATUS     PURL                    LIFECYCLE
@@ -382,9 +395,11 @@ STATUS     PURL                    LIFECYCLE
 └───────────────────────────────────────────────────────────
 # exit code: 0  (request is EOL-Confirmed, not EOL-Effective → no match)
 ```
+<!-- end:output:usage-failon-nomatch -->
 
 **Multiple labels — exit 1 if any label matches any dependency:**
 
+<!-- begin:output:usage-failon-multi -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --fail-on eol-confirmed,stalled --format table
 STATUS     PURL                    LIFECYCLE
@@ -396,6 +411,7 @@ STATUS     PURL                    LIFECYCLE
 └───────────────────────────────────────────────────────────
 # exit code: 1  (request matches eol-confirmed)
 ```
+<!-- end:output:usage-failon-multi -->
 
 `--fail-on` works with all output formats (`table`, `json`, `csv`). Output is produced normally before the exit code is set.
 
