@@ -26,7 +26,7 @@ type jsonSummary struct {
 // Returns placeholder strings when Analysis is nil.
 func entryMaintenanceEOL(e *domainaudit.AuditEntry, placeholder string) (maintenance, eol string) {
 	if e.Analysis != nil {
-		return e.Analysis.FinalMaintenanceStatus(), e.Analysis.EOL.HumanState()
+		return e.Analysis.FinalMaintenanceStatus().String(), e.Analysis.EOL.HumanState()
 	}
 	return placeholder, placeholder
 }
