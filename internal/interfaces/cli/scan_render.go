@@ -262,7 +262,7 @@ func renderSummaryBox(w io.Writer, entries []domainaudit.AuditEntry) error {
 	s := computeSummary(entries)
 	summaryLine := fmt.Sprintf("%d dependencies | ✅ %d ok | ⚠️ %d caution | 🔴 %d replace | 🔍 %d review",
 		s.Total, s.OK, s.Caution, s.Replace, s.Review)
-	bar := "── Summary " + strings.Repeat("─", defaultBarWidth-len("── Summary "))
+	bar := buildBar("── ", "Summary ", defaultBarWidth)
 	if _, err := fmt.Fprintf(w, "\n%s\n│ %s\n└%s\n", bar, summaryLine, strings.Repeat("─", defaultBarWidth-1)); err != nil {
 		return fmt.Errorf("failed to write summary box: %w", err)
 	}

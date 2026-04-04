@@ -731,6 +731,8 @@ func renderBoxEntryError(ctx *boxContext) error {
 // ---------------------------------------------------------------------------
 
 // packageEcoName extracts ecosystem and package name suitable for deps.dev URLs.
+// It uses Namespace()+Name() (not GetPackageName()) so that scoped npm packages,
+// composer vendor/name, and golang module paths are preserved without URL-escaping.
 // Uses the EffectivePURL (resolved PURL) to parse ecosystem and API-compatible name.
 func packageEcoName(a *analysispkg.Analysis) (ecosystem, name string) {
 	if a == nil {
@@ -748,5 +750,10 @@ func packageEcoName(a *analysispkg.Analysis) (ecosystem, name string) {
 	if err != nil {
 		return "", ""
 	}
-	return parsed.GetEcosystem(), parsed.GetPackageName()
+	ns := parsed.Namespace()
+	name = parsed.Name()
+	if ns != "" {
+		name = ns + "/" + name
+	}
+	return parsed.GetEcosystem(), name
 }
