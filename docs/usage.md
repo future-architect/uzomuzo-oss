@@ -33,25 +33,24 @@
 $ uzomuzo scan pkg:npm/express@4.18.2
 
 ── pkg:npm/express@4.18.2 ──────────────────────────────────
-│ Package: pkg:npm/express@4.18.2
 │ Description: Fast, unopinionated, minimalist web framework for node.
-│   Homepage: https://expressjs.com
-│   Registry: https://www.npmjs.com/package/express
-├─ Verdict ─────────────────────────────────────────────────
+├─ Status ──────────────────────────────────────────────────
 │ ✅ Active
 │ Reason: Recent stable package version published; maintenance score ≥ 3
 ├─ Health ──────────────────────────────────────────────────
-│ GitHub: Normal (68892 stars)
+│ 68892 stars
 │ Used by: 2211 packages
 │ Depends on: 31 direct, 39 transitive
 │ Score: 8.4/10  Maintained: 10.0/10
 ├─ Releases ────────────────────────────────────────────────
-│ Stable: 5.2.1 (2025-12-01)  Advisories: 0
+│ Stable: 5.2.1 (2025-12-01)
 │ Requested: 4.18.2 (2022-10-08)
 ├─ License ─────────────────────────────────────────────────
-│ MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+│ MIT (depsdev / depsdev)
 ├─ Links ───────────────────────────────────────────────────
+│ Homepage: https://expressjs.com
 │ Repository: https://github.com/expressjs/express
+│ Registry: https://www.npmjs.com/package/express
 │ deps.dev: https://deps.dev/npm/express
 └───────────────────────────────────────────────────────────
 ```

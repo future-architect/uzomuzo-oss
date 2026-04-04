@@ -215,11 +215,12 @@ func TestDisplayBatchAnalysesFull_Licenses_Same(t *testing.T) {
 		t.Fatalf("copy error: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "License: MIT") {
-		t.Fatalf("expected collapsed single-line license, got: %s", out)
+	// Box format: collapsed license shows "MIT (depsdev / depsdev)"
+	if !strings.Contains(out, "MIT (depsdev / depsdev)") {
+		t.Fatalf("expected collapsed single-line license with shortened source, got: %s", out)
 	}
-	if strings.Contains(out, "Licenses:") {
-		t.Fatalf("did not expect plural header in collapsed mode: %s", out)
+	if !strings.Contains(out, "├─ License") {
+		t.Fatalf("expected License section bar, got: %s", out)
 	}
 }
 
@@ -245,13 +246,11 @@ func TestDisplayBatchAnalysesFull_Licenses_Different(t *testing.T) {
 		t.Fatalf("copy error: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "Licenses:") {
-		t.Fatalf("expected plural header for differing licenses, got: %s", out)
+	// Box format: License section with separate project and version lines
+	if !strings.Contains(out, "├─ License") {
+		t.Fatalf("expected License section bar, got: %s", out)
 	}
 	if !strings.Contains(out, "Project: Apache-2.0") || !strings.Contains(out, "Requested Version: MIT") {
 		t.Fatalf("expected project & requested lines, got: %s", out)
-	}
-	if strings.Contains(out, "License: Apache-2.0") {
-		t.Fatalf("unexpected collapsed single-line for differing licenses: %s", out)
 	}
 }

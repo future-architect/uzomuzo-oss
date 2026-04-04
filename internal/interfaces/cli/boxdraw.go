@@ -144,33 +144,25 @@ func verdictLabel(v domainaudit.Verdict) string {
 // Section renderers
 // ---------------------------------------------------------------------------
 
-// writeBoxIdentity writes the Identity section (package, description, homepage, registry).
+// writeBoxIdentity writes the Identity section (package, description).
+// Homepage and Registry URLs are rendered in the Links section instead.
 func writeBoxIdentity(ctx *boxContext) error {
 	a := ctx.analysis
+	// Skip Package: line when it would be identical to the top bar title
 	displayPackage := ctx.entry.PURL
 	if a != nil {
 		if dp := a.DisplayPURL(); dp != "" && dp != ctx.entry.PURL {
 			displayPackage = dp
 		}
 	}
-	if err := writeLine(ctx, "Package: %s", displayPackage); err != nil {
-		return err
+	if displayPackage != boxTitle(ctx.entry) {
+		if err := writeLine(ctx, "Package: %s", displayPackage); err != nil {
+			return err
+		}
 	}
 	if a != nil && a.Repository != nil && a.Repository.Description != "" {
 		if desc := truncateDescription(a.Repository.Description); desc != "" {
 			if err := writeLine(ctx, "Description: %s", desc); err != nil {
-				return err
-			}
-		}
-	}
-	if a != nil && a.PackageLinks != nil {
-		if a.PackageLinks.HomepageURL != "" {
-			if err := writeLine(ctx, "  Homepage: %s", a.PackageLinks.HomepageURL); err != nil {
-				return err
-			}
-		}
-		if a.PackageLinks.RegistryURL != "" {
-			if err := writeLine(ctx, "  Registry: %s", a.PackageLinks.RegistryURL); err != nil {
 				return err
 			}
 		}
@@ -209,9 +201,9 @@ func writeBoxOrigin(ctx *boxContext) error {
 	return nil
 }
 
-// writeBoxVerdict writes the Verdict section with emoji icon.
+// writeBoxVerdict writes the Status section with emoji icon.
 func writeBoxVerdict(ctx *boxContext) error {
-	if err := writeSectionBar(ctx, "Verdict"); err != nil {
+	if err := writeSectionBar(ctx, "Status"); err != nil {
 		return err
 	}
 	icon := verdictIcon(ctx.entry.Verdict)
@@ -317,33 +309,23 @@ func writeBoxHealth(ctx *boxContext) error {
 
 	var lines []string
 
-	// Repo state — use "GitHub:" only when URL is a GitHub repo, otherwise "Repository:".
-	if a.RepoURL != "" {
-		state := "Normal"
-		if a.RepoState != nil {
-			if a.RepoState.IsArchived {
-				state = "📦 Archived"
-			} else if a.RepoState.IsDisabled {
-				state = "⛔ Disabled"
-			} else if a.RepoState.IsFork {
-				if a.RepoState.ForkSource != "" {
-					state = fmt.Sprintf("Fork of %s", a.RepoState.ForkSource)
-				} else {
-					state = "Fork"
-				}
+	// Repo state — only show anomalous states (Archived/Disabled/Fork).
+	// "Normal" is omitted as it carries no information.
+	if a.RepoURL != "" && a.RepoState != nil {
+		if a.RepoState.IsArchived {
+			lines = append(lines, "📦 Archived")
+		} else if a.RepoState.IsDisabled {
+			lines = append(lines, "⛔ Disabled")
+		} else if a.RepoState.IsFork {
+			if a.RepoState.ForkSource != "" {
+				lines = append(lines, fmt.Sprintf("⚠️ Fork of %s", a.RepoState.ForkSource))
+			} else {
+				lines = append(lines, "⚠️ Fork")
 			}
 		}
-		label := "Repository"
-		if strings.Contains(strings.ToLower(a.RepoURL), "github.com") {
-			label = "GitHub"
-		}
-		repoLine := fmt.Sprintf("%s: %s", label, state)
-		if a.Repository != nil && a.Repository.StarsCount > 0 {
-			repoLine += fmt.Sprintf(" (%d stars)", a.Repository.StarsCount)
-		}
-		lines = append(lines, repoLine)
-	} else {
-		slog.Debug("No repository URL found; Scorecard data unavailable")
+	}
+	if a.Repository != nil && a.Repository.StarsCount > 0 {
+		lines = append(lines, fmt.Sprintf("%d stars", a.Repository.StarsCount))
 	}
 
 	// Dependent count
@@ -413,69 +395,70 @@ func writeBoxReleases(ctx *boxContext) error {
 	var lines []string
 	eco, name := packageEcoName(a)
 
+	stableVer := ""
+
 	// Stable version
 	if a.ReleaseInfo.StableVersion != nil && !a.ReleaseInfo.StableVersion.PublishedAt.IsZero() {
 		stable := a.ReleaseInfo.StableVersion
+		stableVer = stable.Version
 		deprecated := ""
 		if stable.IsDeprecated {
 			deprecated = " ⚠️ [DEPRECATED]"
 		}
 		advCount := len(stable.Advisories)
-		advText := fmt.Sprintf("Advisories: %d", advCount)
+		advText := ""
 		if advCount > 0 {
-			advText = fmt.Sprintf("⚠️ Advisories: %d%s", advCount, advisorySeveritySummary(stable))
+			advText = fmt.Sprintf("  ⚠️ Advisories: %d%s", advCount, advisorySeveritySummary(stable))
 		}
-		lines = append(lines, fmt.Sprintf("Stable: %s (%s)  %s%s",
+		lines = append(lines, fmt.Sprintf("Stable: %s (%s)%s%s",
 			stable.Version, stable.PublishedAt.Format(dateFormat), advText, deprecated))
-		if stable.RegistryURL != "" {
-			lines = append(lines, fmt.Sprintf("  ↳ Version Page: %s", stable.RegistryURL))
-		}
 		lines = append(lines, formatAdvisoryLines(stable.Advisories, eco, name, stable.Version)...)
 	}
 
-	// Pre-release
+	preVer := ""
+
+	// Pre-release (skip if same version as stable)
 	if a.ReleaseInfo.PreReleaseVersion != nil && !a.ReleaseInfo.PreReleaseVersion.PublishedAt.IsZero() {
 		pre := a.ReleaseInfo.PreReleaseVersion
-		deprecated := ""
-		if pre.IsDeprecated {
-			deprecated = " ⚠️ [DEPRECATED]"
-		}
-		lines = append(lines, fmt.Sprintf("Pre-release: %s (%s)%s",
-			pre.Version, pre.PublishedAt.Format(dateFormat), deprecated))
-		if pre.RegistryURL != "" {
-			lines = append(lines, fmt.Sprintf("  ↳ Version Page: %s", pre.RegistryURL))
+		// Always track preVer for downstream dedup even when skipped
+		preVer = pre.Version
+		if pre.Version != stableVer {
+			deprecated := ""
+			if pre.IsDeprecated {
+				deprecated = " ⚠️ [DEPRECATED]"
+			}
+			lines = append(lines, fmt.Sprintf("Pre-release: %s (%s)%s",
+				pre.Version, pre.PublishedAt.Format(dateFormat), deprecated))
 		}
 	}
 
-	// Max semver
+	// Max semver (skip if same as pre-release or stable)
 	if a.ReleaseInfo.MaxSemverVersion != nil && a.ReleaseInfo.MaxSemverVersion.Version != "" {
 		maxv := a.ReleaseInfo.MaxSemverVersion
-		deprecated := ""
-		if maxv.IsDeprecated {
-			deprecated = " ⚠️ [DEPRECATED]"
-		}
-		if !maxv.PublishedAt.IsZero() {
-			lines = append(lines, fmt.Sprintf("Highest (SemVer): %s (%s)%s",
-				maxv.Version, maxv.PublishedAt.Format(dateFormat), deprecated))
-		} else {
-			lines = append(lines, fmt.Sprintf("Highest (SemVer): %s%s", maxv.Version, deprecated))
-		}
-		if maxv.RegistryURL != "" {
-			lines = append(lines, fmt.Sprintf("  ↳ Version Page: %s", maxv.RegistryURL))
+		if maxv.Version != stableVer && maxv.Version != preVer {
+			deprecated := ""
+			if maxv.IsDeprecated {
+				deprecated = " ⚠️ [DEPRECATED]"
+			}
+			if !maxv.PublishedAt.IsZero() {
+				lines = append(lines, fmt.Sprintf("Highest (SemVer): %s (%s)%s",
+					maxv.Version, maxv.PublishedAt.Format(dateFormat), deprecated))
+			} else {
+				lines = append(lines, fmt.Sprintf("Highest (SemVer): %s%s", maxv.Version, deprecated))
+			}
 		}
 	}
 
-	// Requested version
+	// Requested version (skip if same as stable or pre-release)
 	if a.ReleaseInfo.RequestedVersion != nil && !a.ReleaseInfo.RequestedVersion.PublishedAt.IsZero() {
 		rv := a.ReleaseInfo.RequestedVersion
-		deprecated := ""
-		if rv.IsDeprecated {
-			deprecated = " ⚠️ [DEPRECATED]"
-		}
-		lines = append(lines, fmt.Sprintf("Requested: %s (%s)%s",
-			rv.Version, rv.PublishedAt.Format(dateFormat), deprecated))
-		if rv.RegistryURL != "" {
-			lines = append(lines, fmt.Sprintf("  ↳ Version Page: %s", rv.RegistryURL))
+		if rv.Version != stableVer && rv.Version != preVer {
+			deprecated := ""
+			if rv.IsDeprecated {
+				deprecated = " ⚠️ [DEPRECATED]"
+			}
+			lines = append(lines, fmt.Sprintf("Requested: %s (%s)%s",
+				rv.Version, rv.PublishedAt.Format(dateFormat), deprecated))
 		}
 	}
 
@@ -598,7 +581,7 @@ func writeBoxLicenses(ctx *boxContext) error {
 	collapse := proj.Identifier != "" && len(reqs) == 1 && strings.EqualFold(proj.Identifier, reqs[0].Identifier)
 	if collapse {
 		if proj.Source != "" {
-			return writeLine(ctx, "%s (source: %s / %s)", proj.Identifier, proj.Source, reqs[0].Source)
+			return writeLine(ctx, "%s (%s / %s)", proj.Identifier, shortenLicenseSource(proj.Source), shortenLicenseSource(reqs[0].Source))
 		}
 		return writeLine(ctx, "%s", proj.Identifier)
 	}
@@ -606,7 +589,7 @@ func writeBoxLicenses(ctx *boxContext) error {
 	// Project license
 	if proj.Identifier != "" {
 		if proj.Source != "" {
-			if err := writeLine(ctx, "Project: %s (source: %s)", proj.Identifier, proj.Source); err != nil {
+			if err := writeLine(ctx, "Project: %s (%s)", proj.Identifier, shortenLicenseSource(proj.Source)); err != nil {
 				return err
 			}
 		} else {
@@ -615,7 +598,7 @@ func writeBoxLicenses(ctx *boxContext) error {
 			}
 		}
 	} else if proj.IsNonStandard() && proj.Raw != "" {
-		if err := writeLine(ctx, "Project: (non-standard raw=%s source=%s)", proj.Raw, proj.Source); err != nil {
+		if err := writeLine(ctx, "Project: (non-standard raw=%s)", proj.Raw); err != nil {
 			return err
 		}
 	} else if proj.IsZero() {
@@ -623,7 +606,7 @@ func writeBoxLicenses(ctx *boxContext) error {
 			return err
 		}
 	} else {
-		if err := writeLine(ctx, "Project: (unclassified source=%s raw=%s)", proj.Source, proj.Raw); err != nil {
+		if err := writeLine(ctx, "Project: (unclassified raw=%s)", proj.Raw); err != nil {
 			return err
 		}
 	}
@@ -644,7 +627,7 @@ func writeBoxLicenses(ctx *boxContext) error {
 				ids = append(ids, rl.Identifier)
 			}
 			if firstSource != "" {
-				if err := writeLine(ctx, "Requested Version: %s (source: %s)", strings.Join(ids, ", "), firstSource); err != nil {
+				if err := writeLine(ctx, "Requested Version: %s (%s)", strings.Join(ids, ", "), shortenLicenseSource(firstSource)); err != nil {
 					return err
 				}
 			} else {
@@ -655,7 +638,7 @@ func writeBoxLicenses(ctx *boxContext) error {
 		} else {
 			for i, rl := range reqs {
 				if rl.Source != "" {
-					if err := writeLine(ctx, "Requested Version[%d]: %s (source: %s)", i, rl.Identifier, rl.Source); err != nil {
+					if err := writeLine(ctx, "Requested Version[%d]: %s (%s)", i, rl.Identifier, shortenLicenseSource(rl.Source)); err != nil {
 						return err
 					}
 				} else {
@@ -673,7 +656,7 @@ func writeBoxLicenses(ctx *boxContext) error {
 	return nil
 }
 
-// writeBoxLinks writes the Links section (repository, registry, deps.dev, scorecard).
+// writeBoxLinks writes the Links section (homepage, repository, registry, deps.dev).
 // Returns nil without writing if no URLs exist.
 func writeBoxLinks(ctx *boxContext) error {
 	a := ctx.analysis
@@ -683,6 +666,12 @@ func writeBoxLinks(ctx *boxContext) error {
 
 	var lines []string
 
+	// Homepage and Registry moved here from Identity section
+	if a.PackageLinks != nil {
+		if a.PackageLinks.HomepageURL != "" {
+			lines = append(lines, fmt.Sprintf("Homepage: %s", a.PackageLinks.HomepageURL))
+		}
+	}
 	if a.RepoURL != "" {
 		repoURL := a.RepoURL
 		if !strings.HasPrefix(repoURL, "http://") && !strings.HasPrefix(repoURL, "https://") {
@@ -690,21 +679,16 @@ func writeBoxLinks(ctx *boxContext) error {
 		}
 		lines = append(lines, fmt.Sprintf("Repository: %s", repoURL))
 	}
-	if a.PackageLinks != nil && a.PackageLinks.RegistryURL != "" {
-		lines = append(lines, fmt.Sprintf("Registry: %s", a.PackageLinks.RegistryURL))
+	if a.PackageLinks != nil {
+		if a.PackageLinks.RegistryURL != "" {
+			lines = append(lines, fmt.Sprintf("Registry: %s", a.PackageLinks.RegistryURL))
+		}
 	}
 
 	// deps.dev link (package-level, no version)
 	eco, name := packageEcoName(a)
 	if depsdevURL := commonlinks.BuildDepsDevURL(eco, name); depsdevURL != "" {
 		lines = append(lines, fmt.Sprintf("deps.dev: %s", depsdevURL))
-	}
-
-	if a.ScorecardURL != "" {
-		lines = append(lines, fmt.Sprintf("Scorecard: %s", a.ScorecardURL))
-	}
-	if a.ScorecardAPIURL != "" {
-		lines = append(lines, fmt.Sprintf("Scorecard API: %s", a.ScorecardAPIURL))
 	}
 
 	if len(lines) == 0 {
@@ -761,15 +745,18 @@ func renderBoxEntryError(ctx *boxContext) error {
 	if err := writeTopBar(ctx); err != nil {
 		return wrap(err)
 	}
-	if err := writeLine(ctx, "Package: %s", ctx.entry.PURL); err != nil {
-		return wrap(err)
+	// Skip Package: line when identical to top bar title (consistent with writeBoxIdentity)
+	if ctx.entry.PURL != boxTitle(ctx.entry) {
+		if err := writeLine(ctx, "Package: %s", ctx.entry.PURL); err != nil {
+			return wrap(err)
+		}
 	}
 	if ctx.entry.Via != "" {
 		if err := writeLine(ctx, "Via: %s", ctx.entry.Via); err != nil {
 			return wrap(err)
 		}
 	}
-	if err := writeSectionBar(ctx, "Verdict"); err != nil {
+	if err := writeSectionBar(ctx, "Status"); err != nil {
 		return wrap(err)
 	}
 	icon := verdictIcon(ctx.entry.Verdict)
@@ -792,6 +779,23 @@ func renderBoxEntryError(ctx *boxContext) error {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// shortenLicenseSource abbreviates verbose license source identifiers for display.
+// e.g. "depsdev-project-spdx" → "depsdev", "project-fallback" → "fallback".
+func shortenLicenseSource(s string) string {
+	switch s {
+	case "depsdev-project-spdx", "depsdev-project-nonstandard", "depsdev-version-spdx", "depsdev-version-raw":
+		return "depsdev"
+	case "github-project-spdx", "github-project-nonstandard", "github-version-spdx", "github-version-raw":
+		return "github"
+	case "project-fallback":
+		return "fallback"
+	case "derived-from-version":
+		return "derived"
+	default:
+		return s
+	}
+}
 
 // packageEcoName extracts ecosystem and package name suitable for deps.dev URLs.
 // It uses Namespace()+Name() (not GetPackageName()) so that scoped npm packages,
