@@ -159,16 +159,7 @@ func formatRelation(e *domainaudit.AuditEntry) string {
 	return relation
 }
 
-// detailedEntryHeader returns the header for a detailed report entry.
-// When showSource is true, the source is embedded: "--- PURL 1 (action) ---".
-func detailedEntryHeader(counter int, source domainaudit.EntrySource, showSource bool) string {
-	if showSource {
-		return fmt.Sprintf("--- PURL %d (%s) ---", counter, sourceDisplayName(source))
-	}
-	return fmt.Sprintf("--- PURL %d ---", counter)
-}
-
-// renderScanDetailed prints a summary table followed by rich per-package output.
+// renderScanDetailed prints a summary table followed by rich per-package box output.
 // The two sections are separated by markers for machine extraction.
 func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 	// Summary table section
@@ -184,44 +175,16 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 		return fmt.Errorf("failed to write marker: %w", err)
 	}
 
-	showSource := hasMultipleSources(entries)
 	counter := 0
 	for i := range entries {
-		e := &entries[i]
-		if e.Analysis == nil || e.Analysis.Error != nil {
-			counter++
-			if _, err := fmt.Fprintf(w, "\n%s\n", detailedEntryHeader(counter, e.Source, showSource)); err != nil {
-				return fmt.Errorf("failed to write entry: %w", err)
-			}
-			if _, err := fmt.Fprintf(w, "Package: %s\n", e.PURL); err != nil {
-				return fmt.Errorf("failed to write entry: %w", err)
-			}
-			if e.Via != "" {
-				if _, err := fmt.Fprintf(w, "🔗 Via: %s\n", e.Via); err != nil {
-					return fmt.Errorf("failed to write entry: %w", err)
-				}
-			}
-			verdict := string(e.Verdict)
-			if e.ErrorMsg != "" {
-				if _, err := fmt.Fprintf(w, "Verdict: %s (error: %s)\n", verdict, e.ErrorMsg); err != nil {
-					return fmt.Errorf("failed to write entry: %w", err)
-				}
-			} else {
-				if _, err := fmt.Fprintf(w, "Verdict: %s\n", verdict); err != nil {
-					return fmt.Errorf("failed to write entry: %w", err)
-				}
-			}
-			continue
-		}
 		counter++
-		// Print source-annotated header, then delegate body to printAnalysisBody (stdout).
-		fmt.Printf("\n%s\n", detailedEntryHeader(counter, e.Source, showSource))
-		if e.Relation != depparser.RelationUnknown {
-			if _, err := fmt.Fprintf(w, "🔗 Relation: %s\n", formatRelation(e)); err != nil {
-				return fmt.Errorf("failed to write relation: %w", err)
-			}
+		// Preserve machine-parseable marker outside the box
+		if _, err := fmt.Fprintf(w, "\n--- PURL %d ---\n", counter); err != nil {
+			return fmt.Errorf("failed to write entry marker: %w", err)
 		}
-		printAnalysisBody(e.PURL, e.Analysis, e.Via)
+		if err := renderBoxEntry(w, &entries[i]); err != nil {
+			return fmt.Errorf("failed to write box entry: %w", err)
+		}
 	}
 	if counter == 0 {
 		if _, err := fmt.Fprintln(w, "No results to display"); err != nil {
