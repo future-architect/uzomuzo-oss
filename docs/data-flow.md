@@ -148,6 +148,17 @@ The lifecycle assessor is severity-aware: only HIGH or CRITICAL advisories trigg
   - HIGH/CRITICAL advisory + dormant (2+ yrs without human commits) → **EOL-Effective**
   - LOW/MEDIUM-only advisories + dormant → **Stalled** (not escalated to EOL-Effective)
 
+### Transitive Advisory Scanning
+
+In addition to direct advisories (reported by the deps.dev PURL API), uzomuzo fetches advisories from transitive dependencies:
+
+1. **Reuse dependency graph** — the `GetDependencies` response (already fetched for dependency counts) provides the full resolved dependency tree.
+2. **Fetch transitive advisory keys** — each dependency node is queried via the PURL endpoint in parallel (10 goroutines max) to collect `advisoryKeys`.
+3. **Enrich with severity** — the existing `FetchAdvisoriesBatch` pipeline adds CVSS3 scores and severity labels.
+4. **Deduplicate** — if a transitive advisory ID matches a direct one, `DIRECT` wins.
+
+Transitive advisories are distinguished from direct advisories via `Advisory.Relation` (`DIRECT`/`TRANSITIVE`) and `Advisory.DependencyName` (e.g., `qs@6.5.5`). All output formats (detailed box, JSON, CSV) display them separately.
+
 ---
 
 ## EOL Detection

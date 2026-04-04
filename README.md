@@ -320,9 +320,13 @@ Successor is `golang-jwt/jwt`. **Migrate immediately.**
 │ Depends on: 20 direct, 26 transitive
 │ Score: 3.6/10  Maintained: 0.0/10
 ├─ Releases ────────────────────────────────────────────────
-│ Stable: 2.88.2 (2020-02-11)  ⚠️ 1 advisory ⚠️ [DEPRECATED]
+│ Stable: 2.88.2 (2020-02-11)  ⚠️ 1 advisory (+ 3 transitive) ⚠️ [DEPRECATED]
 │   MEDIUM   (6.1)  GHSA-p8p7-x288-28g6
 │   → https://deps.dev/npm/request/2.88.2
+│   Transitive (via tough-cookie@2.5.0, qs@6.5.5, form-data@2.3.3):
+│     MEDIUM   (6.5)  GHSA-72xf-g2v4-qvf3
+│     LOW      (3.7)  GHSA-6rw7-vpxm-498p
+│                     GHSA-fjxv-7rqg-78g4
 ├─ Links ───────────────────────────────────────────────────
 │ Repository: https://github.com/request/request
 │ Registry: https://www.npmjs.com/package/request
@@ -330,7 +334,7 @@ Successor is `golang-jwt/jwt`. **Migrate immediately.**
 └───────────────────────────────────────────────────────────
 ```
 
-186K dependents. npm deprecated with deprecation message and advisory. Last release 2020. **Migrate immediately.**
+186K dependents. npm deprecated with deprecation message, 1 direct advisory + 3 transitive advisories from vulnerable sub-dependencies. Last release 2020. **Migrate immediately.**
 
 </details>
 

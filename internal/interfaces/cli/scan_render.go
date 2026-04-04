@@ -284,9 +284,17 @@ type enrichedJSONEntry struct {
 	ProjectLicense  string   `json:"project_license,omitempty"`
 	VersionLicenses []string `json:"version_licenses,omitempty"`
 
+	// AdvisoryCount is the total number of advisories (direct + transitive).
 	AdvisoryCount       int     `json:"advisory_count,omitempty"`
 	MaxAdvisorySeverity string  `json:"max_advisory_severity,omitempty"`
 	MaxCVSS3Score       float64 `json:"max_cvss3_score,omitempty"`
+
+	// DirectAdvisoryCount is the number of advisories affecting the package directly.
+	DirectAdvisoryCount int `json:"direct_advisory_count,omitempty"`
+	// TransitiveAdvisoryCount is the number of advisories from transitive dependencies.
+	TransitiveAdvisoryCount       int     `json:"transitive_advisory_count,omitempty"`
+	MaxTransitiveAdvisorySeverity string  `json:"max_transitive_advisory_severity,omitempty"`
+	MaxTransitiveCVSS3Score       float64 `json:"max_transitive_cvss3_score,omitempty"`
 
 	Reason      string   `json:"reason,omitempty"`
 	Error       string   `json:"error,omitempty"`
@@ -351,9 +359,15 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 
 		if vd := a.ReleaseInfo.LatestVersionDetail(); vd != nil {
 			je.AdvisoryCount = len(vd.Advisories)
+			je.DirectAdvisoryCount = vd.DirectAdvisoryCount()
 			if maxScore := vd.MaxCVSS3(); maxScore > 0 {
 				je.MaxCVSS3Score = maxScore
 				je.MaxAdvisorySeverity = domain.SeverityFromCVSS3(maxScore)
+			}
+			je.TransitiveAdvisoryCount = vd.TransitiveAdvisoryCount()
+			if maxTScore := vd.MaxTransitiveCVSS3(); maxTScore > 0 {
+				je.MaxTransitiveCVSS3Score = maxTScore
+				je.MaxTransitiveAdvisorySeverity = domain.SeverityFromCVSS3(maxTScore)
 			}
 		}
 	}
@@ -382,7 +396,9 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	if showRelation {
 		header = append(header, "relation", "relation_via")
 	}
-	header = append(header, "lifecycle", "successor", "advisory_count", "max_advisory_severity", "max_cvss3_score", "repo_url", "source", "via")
+	header = append(header, "lifecycle", "successor", "advisory_count", "max_advisory_severity", "max_cvss3_score",
+		"direct_advisory_count", "transitive_advisory_count", "max_transitive_advisory_severity", "max_transitive_cvss3_score",
+		"repo_url", "source", "via")
 	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
@@ -395,6 +411,10 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		advisoryCount := ""
 		maxSeverity := ""
 		maxCVSS3Score := ""
+		directAdvisoryCount := ""
+		transitiveAdvisoryCount := ""
+		maxTransitiveSeverity := ""
+		maxTransitiveCVSS3Score := ""
 		if a := e.Analysis; a != nil {
 			successor = a.EOL.Successor
 			repoURL = a.RepoURL
@@ -405,6 +425,16 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 						maxSeverity = domain.SeverityFromCVSS3(maxScore)
 						maxCVSS3Score = fmt.Sprintf("%.1f", maxScore)
 					}
+					if dc := vd.DirectAdvisoryCount(); dc > 0 {
+						directAdvisoryCount = fmt.Sprintf("%d", dc)
+					}
+					if tc := vd.TransitiveAdvisoryCount(); tc > 0 {
+						transitiveAdvisoryCount = fmt.Sprintf("%d", tc)
+					}
+					if maxTScore := vd.MaxTransitiveCVSS3(); maxTScore > 0 {
+						maxTransitiveSeverity = domain.SeverityFromCVSS3(maxTScore)
+						maxTransitiveCVSS3Score = fmt.Sprintf("%.1f", maxTScore)
+					}
 				}
 			}
 		}
@@ -413,7 +443,9 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		if showRelation {
 			row = append(row, e.Relation.String(), strings.Join(e.ViaParents, ";"))
 		}
-		row = append(row, maintenance, successor, advisoryCount, maxSeverity, maxCVSS3Score, repoURL, string(e.Source), e.Via)
+		row = append(row, maintenance, successor, advisoryCount, maxSeverity, maxCVSS3Score,
+			directAdvisoryCount, transitiveAdvisoryCount, maxTransitiveSeverity, maxTransitiveCVSS3Score,
+			repoURL, string(e.Source), e.Via)
 		if err := cw.Write(row); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}
