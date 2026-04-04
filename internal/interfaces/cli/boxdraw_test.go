@@ -947,17 +947,18 @@ func TestWrapContent(t *testing.T) {
 	}{
 		{
 			name:     "short_no_wrap",
-			content:  "Reason: all good",
+			content:  "🔴 EOL-Confirmed: Primary-source EOL",
 			maxWidth: 60,
-			want:     []string{"Reason: all good"},
+			want:     []string{"🔴 EOL-Confirmed: Primary-source EOL"},
 		},
 		{
-			name:     "long_reason_wraps",
-			content:  "Reason: Scorecard data incomplete; open advisories (1, max: HIGH 7.5) and no human commits > 2 yrs",
+			name:     "long_verdict_reason_wraps",
+			content:  "🔴 EOL-Effective: Scorecard data incomplete; open advisories (1, max: HIGH 7.5) and no human commits > 2 yrs",
 			maxWidth: 58,
 			want: []string{
-				"Reason: Scorecard data incomplete; open advisories (1,",
-				"        max: HIGH 7.5) and no human commits > 2 yrs",
+				"🔴 EOL-Effective: Scorecard data incomplete; open",
+				"                    advisories (1, max: HIGH 7.5) and no",
+				"                    human commits > 2 yrs",
 			},
 		},
 		{
@@ -991,9 +992,12 @@ func TestIsWrappableLine(t *testing.T) {
 		input string
 		want  bool
 	}{
-		{"Reason: some long explanation", true},
+		{"✅ Active: Recent stable package version published", true},
+		{"🔴 EOL-Confirmed: Primary-source EOL", true},
+		{"⚠️ Stalled: Low maintenance; last human commit within 2 yrs", true},
+		{"🔍 Review Needed", true},
 		{"Catalog Reason: why this is EOL", true},
-		{"Description: A very long description", true},
+		{"Fast, unopinionated, minimalist web framework for node.", false},
 		{"[npmjs] Stable version is deprecated in npm registry.", true},
 		{"→ https://github.com/advisories/GHSA-xxxx", false},
 		{"Homepage: https://expressjs.com", false},
@@ -1032,16 +1036,23 @@ func TestWriteLine_WordWrap(t *testing.T) {
 		t.Fatalf("writeBoxVerdict() error = %v", err)
 	}
 	output := buf.String()
-	// Reason should be wrapped across multiple lines
+	// Verdict+reason line should be wrapped across multiple lines
 	lines := strings.Split(output, "\n")
-	var reasonLines []string
+	var verdictLines []string
 	for _, l := range lines {
-		if strings.Contains(l, "Reason:") || (len(reasonLines) > 0 && strings.HasPrefix(l, "│ ") && !strings.Contains(l, "├─") && !strings.Contains(l, "└─") && !strings.Contains(l, "🔴")) {
-			reasonLines = append(reasonLines, l)
+		if strings.Contains(l, "🔴") || (len(verdictLines) > 0 && strings.HasPrefix(l, "│ ") && !strings.Contains(l, "├─") && !strings.Contains(l, "└─")) {
+			verdictLines = append(verdictLines, l)
 		}
 	}
-	if len(reasonLines) < 2 {
-		t.Errorf("expected Reason to wrap across multiple lines, got %d line(s):\n%s", len(reasonLines), output)
+	if len(verdictLines) < 2 {
+		t.Errorf("expected verdict+reason to wrap across multiple lines, got %d line(s):\n%s", len(verdictLines), output)
+	}
+	// Verify it contains both label and reason
+	if !strings.Contains(output, "EOL-Effective") {
+		t.Error("missing lifecycle label")
+	}
+	if !strings.Contains(output, "Scorecard data incomplete") {
+		t.Error("missing reason text")
 	}
 }
 

@@ -102,16 +102,19 @@ func writeLine(ctx *boxContext, format string, args ...any) error {
 }
 
 // isWrappableLine returns true only for free-text fields that benefit from
-// word-wrapping: Reason, Catalog Reason, Evidence summaries, Description.
+// word-wrapping: verdict+reason lines (emoji prefix), Catalog Reason,
+// plain description text, and EOL evidence summaries.
 // Everything else (URLs, identifiers, structured data) is left unwrapped.
 func isWrappableLine(s string) bool {
 	trimmed := strings.TrimLeft(s, " ")
 	switch {
-	case strings.HasPrefix(trimmed, "Reason:"):
+	case strings.HasPrefix(trimmed, "✅"),
+		strings.HasPrefix(trimmed, "⚠️"),
+		strings.HasPrefix(trimmed, "🔴"),
+		strings.HasPrefix(trimmed, "🔍"):
+		// Verdict line: "icon Label: reason"
 		return true
 	case strings.HasPrefix(trimmed, "Catalog Reason:"):
-		return true
-	case strings.HasPrefix(trimmed, "Description:"):
 		return true
 	case strings.HasPrefix(trimmed, "[") && !strings.Contains(trimmed, "://"):
 		// EOL evidence summary lines like "[npmjs] Stable version is deprecated..."
@@ -282,7 +285,7 @@ func writeBoxIdentity(ctx *boxContext) error {
 	}
 	if a != nil && a.Repository != nil && a.Repository.Description != "" {
 		if desc := truncateDescription(a.Repository.Description); desc != "" {
-			if err := writeLine(ctx, "Description: %s", desc); err != nil {
+			if err := writeLine(ctx, "%s", desc); err != nil {
 				return err
 			}
 		}
@@ -322,26 +325,28 @@ func writeBoxOrigin(ctx *boxContext) error {
 }
 
 // writeBoxVerdict writes lifecycle verdict inline (no section bar).
+// Format: "icon Label: reason" on a single line (word-wrapped if long).
 // Displayed immediately after identity, before any section bars.
 func writeBoxVerdict(ctx *boxContext) error {
 	icon := verdictIcon(ctx.entry.Verdict)
 	label := verdictLabel(ctx.entry.Verdict)
+	reason := ""
 
-	// Use lifecycle label if available for more specific display
+	// Use lifecycle label and reason if available
 	if ctx.analysis != nil {
 		if lr := ctx.analysis.GetLifecycleResult(); lr != nil {
 			label = string(lr.Label)
+			reason = lr.Reason
 		}
 	}
 
-	if err := writeLine(ctx, "%s %s", icon, label); err != nil {
-		return err
-	}
-	if ctx.analysis != nil {
-		if lr := ctx.analysis.GetLifecycleResult(); lr != nil && lr.Reason != "" {
-			if err := writeLine(ctx, "Reason: %s", lr.Reason); err != nil {
-				return err
-			}
+	if reason != "" {
+		if err := writeLine(ctx, "%s %s: %s", icon, label, reason); err != nil {
+			return err
+		}
+	} else {
+		if err := writeLine(ctx, "%s %s", icon, label); err != nil {
+			return err
 		}
 	}
 	if strings.EqualFold(os.Getenv("LOG_LEVEL"), "debug") {
