@@ -182,25 +182,35 @@ func (vd *VersionDetail) UnknownSeverityAdvisoryCount() int {
 	return count
 }
 
+// LatestVersionDetail returns the highest-priority VersionDetail per priority order:
+// Stable > MaxSemver > PreRelease > Requested. Returns nil if no version exists.
+func (ri *ReleaseInfo) LatestVersionDetail() *VersionDetail {
+	if ri == nil {
+		return nil
+	}
+	if ri.StableVersion != nil {
+		return ri.StableVersion
+	}
+	if ri.MaxSemverVersion != nil {
+		return ri.MaxSemverVersion
+	}
+	if ri.PreReleaseVersion != nil {
+		return ri.PreReleaseVersion
+	}
+	if ri.RequestedVersion != nil {
+		return ri.RequestedVersion
+	}
+	return nil
+}
+
 // LatestAdvisories returns (count, advisories) for the "latest" version per priority order:
 // Stable > MaxSemver > PreRelease > Requested. If Stable exists it is always chosen even if zero length.
 func (ri *ReleaseInfo) LatestAdvisories() (int, []Advisory) {
-	if ri == nil {
+	vd := ri.LatestVersionDetail()
+	if vd == nil {
 		return 0, nil
 	}
-	if ri.StableVersion != nil {
-		return len(ri.StableVersion.Advisories), ri.StableVersion.Advisories
-	}
-	if ri.MaxSemverVersion != nil {
-		return len(ri.MaxSemverVersion.Advisories), ri.MaxSemverVersion.Advisories
-	}
-	if ri.PreReleaseVersion != nil {
-		return len(ri.PreReleaseVersion.Advisories), ri.PreReleaseVersion.Advisories
-	}
-	if ri.RequestedVersion != nil {
-		return len(ri.RequestedVersion.Advisories), ri.RequestedVersion.Advisories
-	}
-	return 0, nil
+	return len(vd.Advisories), vd.Advisories
 }
 
 // Score represents an individual scorecard score
