@@ -134,9 +134,14 @@ Output blocks in Markdown are wrapped with HTML comment markers:
 
 The script (`scripts/update-doc-examples/`) reads command definitions from an embedded `commands.json`, runs each command, and replaces the content between matching markers.
 
-### CI Check
+### CI Automation
 
-The `doc-examples` CI job runs `make check-doc-examples` on every PR. It validates that every command defined in `commands.json` has matching `begin/end` markers in the target Markdown files. This catches missing or broken markers without requiring API calls (output content is not compared, since values like star counts change daily).
+The `doc-examples` CI job runs on every PR and does two things:
+
+1. **Marker validation** — checks that every command in `commands.json` has matching `begin/end` markers (fast, no API calls)
+2. **Auto-update** — runs `make update-doc-examples`, and if any output blocks changed, commits and pushes the update automatically
+
+This means you don't need to run `make update-doc-examples` locally — CI will do it for you. The auto-commit uses `[skip ci]` to avoid triggering another CI run.
 
 ### Adding a New Output Block
 
