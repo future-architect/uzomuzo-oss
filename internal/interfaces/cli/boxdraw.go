@@ -595,15 +595,21 @@ func writeBoxLicenses(ctx *boxContext) error {
 	// Collapse when project and single version license match
 	collapse := proj.Identifier != "" && len(reqs) == 1 && strings.EqualFold(proj.Identifier, reqs[0].Identifier)
 	if collapse {
-		if proj.Source != "" {
-			projShort := shortenLicenseSource(proj.Source)
-			verShort := shortenLicenseSource(reqs[0].Source)
+		projShort := shortenLicenseSource(proj.Source)
+		verShort := shortenLicenseSource(reqs[0].Source)
+		switch {
+		case proj.Source != "" && reqs[0].Source != "":
 			if projShort == verShort {
 				return writeLine(ctx, "%s (%s)", proj.Identifier, projShort)
 			}
 			return writeLine(ctx, "%s (project: %s / version: %s)", proj.Identifier, projShort, verShort)
+		case proj.Source != "":
+			return writeLine(ctx, "%s (%s)", proj.Identifier, projShort)
+		case reqs[0].Source != "":
+			return writeLine(ctx, "%s (%s)", proj.Identifier, verShort)
+		default:
+			return writeLine(ctx, "%s", proj.Identifier)
 		}
-		return writeLine(ctx, "%s", proj.Identifier)
 	}
 
 	// Project license
