@@ -37,7 +37,6 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 		}
 		markDirectAdvisories(a.ReleaseInfo.StableVersion)
 		markDirectAdvisories(a.ReleaseInfo.MaxSemverVersion)
-		markDirectAdvisories(a.ReleaseInfo.RequestedVersion)
 	}
 
 	// Collect transitive advisory keys for all dependency graphs.
@@ -123,7 +122,6 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 		for _, vd := range []*domain.VersionDetail{
 			a.ReleaseInfo.StableVersion,
 			a.ReleaseInfo.MaxSemverVersion,
-			a.ReleaseInfo.RequestedVersion,
 		} {
 			if vd != nil && (graphVersion == "" || vd.Version == graphVersion) {
 				appendTransitiveAdvisories(vd, entries)
