@@ -961,12 +961,9 @@ func TestWriteBoxReleases_TransitiveAdvisories(t *testing.T) {
 	if !strings.Contains(output, "CVE-2024-1111") {
 		t.Error("missing transitive advisory CVE-2024-1111")
 	}
-	// deps.dev links for transitive dependencies
-	if !strings.Contains(output, "deps.dev/npm/qs/6.5.5") {
-		t.Errorf("missing deps.dev link for qs@6.5.5, got:\n%s", output)
-	}
-	if !strings.Contains(output, "deps.dev/npm/lodash/4.17.15") {
-		t.Errorf("missing deps.dev link for lodash@4.17.15, got:\n%s", output)
+	// Single deps.dev link at the bottom (covers both direct and transitive)
+	if !strings.Contains(output, "deps.dev/npm/test/1.0.0") {
+		t.Errorf("missing deps.dev link, got:\n%s", output)
 	}
 }
 
@@ -1008,7 +1005,7 @@ func TestWriteBoxReleases_OnlyTransitiveAdvisories(t *testing.T) {
 
 func TestFormatTransitiveAdvisoryLines(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		lines := formatTransitiveAdvisoryLines(nil, "npm")
+		lines := formatTransitiveAdvisoryLines(nil)
 		if lines != nil {
 			t.Errorf("expected nil for empty input, got %v", lines)
 		}
@@ -1021,21 +1018,17 @@ func TestFormatTransitiveAdvisoryLines(t *testing.T) {
 			{ID: "CVE-3", CVSS3Score: 5.0, Severity: "MEDIUM", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "c@3.0"},
 			{ID: "CVE-4", CVSS3Score: 3.0, Severity: "LOW", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "d@4.0"},
 		}
-		lines := formatTransitiveAdvisoryLines(advisories, "npm")
+		lines := formatTransitiveAdvisoryLines(advisories)
 		// Header should truncate dep names at 3
 		if !strings.Contains(lines[0], "via a@1.0, b@2.0, c@3.0 and 1 more") {
 			t.Errorf("expected truncated dep names in header, got: %s", lines[0])
 		}
-		// header(1) + 3 advisories + truncation(1) + 4 deps.dev links = 9
-		if len(lines) != 9 {
-			t.Errorf("expected 9 lines, got %d: %v", len(lines), lines)
+		// header(1) + 3 advisories + truncation(1) = 5
+		if len(lines) != 5 {
+			t.Errorf("expected 5 lines, got %d: %v", len(lines), lines)
 		}
 		if !strings.Contains(lines[4], "... and 1 more") {
 			t.Errorf("expected truncation message, got: %s", lines[4])
-		}
-		// deps.dev links for each dependency
-		if !strings.Contains(lines[5], "deps.dev/npm/a/1.0") {
-			t.Errorf("missing deps.dev link for a@1.0, got: %s", lines[5])
 		}
 	})
 
@@ -1043,21 +1036,10 @@ func TestFormatTransitiveAdvisoryLines(t *testing.T) {
 		advisories := []analysis.Advisory{
 			{ID: "CVE-1", CVSS3Score: 7.0, Severity: "HIGH", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "foo@1.0"},
 		}
-		lines := formatTransitiveAdvisoryLines(advisories, "npm")
+		lines := formatTransitiveAdvisoryLines(advisories)
 		// Transitive lines use 4-space indent (vs 2-space for direct)
 		if !strings.HasPrefix(lines[1], "    ") {
 			t.Errorf("expected 4-space indent for transitive advisory, got: %q", lines[1])
-		}
-		// deps.dev link for the transitive dependency
-		found := false
-		for _, l := range lines {
-			if strings.Contains(l, "deps.dev/npm/foo/1.0") {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("missing deps.dev link for foo@1.0, got: %v", lines)
 		}
 	})
 
@@ -1065,7 +1047,7 @@ func TestFormatTransitiveAdvisoryLines(t *testing.T) {
 		advisories := []analysis.Advisory{
 			{ID: "CVE-1", CVSS3Score: 7.0, Severity: "HIGH", Relation: analysis.AdvisoryRelationTransitive},
 		}
-		lines := formatTransitiveAdvisoryLines(advisories, "npm")
+		lines := formatTransitiveAdvisoryLines(advisories)
 		// Header should omit "(via ...)" when all DependencyName are empty
 		if lines[0] != "  Transitive:" {
 			t.Errorf("expected plain header without via, got: %q", lines[0])

@@ -327,9 +327,7 @@ Successor is `golang-jwt/jwt`. **Migrate immediately.**
 │     MEDIUM   (6.5)  GHSA-72xf-g2v4-qvf3
 │     LOW      (3.7)  GHSA-6rw7-vpxm-498p
 │                     GHSA-fjxv-7rqg-78g4
-│     → https://deps.dev/npm/tough-cookie/2.5.0
-│     → https://deps.dev/npm/qs/6.5.5
-│     → https://deps.dev/npm/form-data/2.3.3
+│   → https://deps.dev/npm/request/2.88.2
 ├─ Links ───────────────────────────────────────────────────
 │ Repository: https://github.com/request/request
 │ Registry: https://www.npmjs.com/package/request
