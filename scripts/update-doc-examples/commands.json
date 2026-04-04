@@ -1,0 +1,130 @@
+{
+  "binary": "./uzomuzo",
+  "commands": [
+    {
+      "id": "dicer-detailed",
+      "args": ["scan", "pkg:npm/dicer@0.3.1", "-f", "detailed"],
+      "files": ["README.md"],
+      "fence_lang": "text"
+    },
+    {
+      "id": "express-detailed",
+      "args": ["scan", "pkg:npm/express@4.18.2", "-f", "detailed"],
+      "files": ["README.md"],
+      "fence_lang": "text"
+    },
+    {
+      "id": "moment-detailed",
+      "args": ["scan", "pkg:npm/moment@2.29.4", "-f", "detailed"],
+      "files": ["README.md"],
+      "fence_lang": "text"
+    },
+    {
+      "id": "gorilla-mux-detailed",
+      "args": ["scan", "pkg:golang/github.com/gorilla/mux@1.8.1", "-f", "detailed"],
+      "files": ["README.md"],
+      "fence_lang": "text"
+    },
+    {
+      "id": "dicer-detailed-states",
+      "args": ["scan", "pkg:npm/dicer@0.3.1", "-f", "detailed"],
+      "files": ["README.md"],
+      "fence_lang": "text"
+    },
+    {
+      "id": "jwt-go-detailed",
+      "args": ["scan", "pkg:golang/github.com/dgrijalva/jwt-go@3.2.0", "-f", "detailed"],
+      "files": ["README.md"],
+      "fence_lang": "text"
+    },
+    {
+      "id": "request-detailed",
+      "args": ["scan", "pkg:npm/request@2.88.2", "-f", "detailed"],
+      "files": ["README.md"],
+      "fence_lang": "text"
+    },
+    {
+      "id": "all-states-table",
+      "args": ["scan", "pkg:npm/express@4.18.2", "pkg:npm/moment@2.29.4", "pkg:golang/github.com/gorilla/mux@1.8.1", "pkg:npm/dicer@0.3.1", "pkg:golang/github.com/dgrijalva/jwt-go@3.2.0", "pkg:npm/request@2.88.2", "-f", "table"],
+      "files": ["README.md"],
+      "fence_lang": "text",
+      "prepend": "$ uzomuzo scan pkg:npm/express@4.18.2 pkg:npm/moment@2.29.4 \\\n    pkg:golang/github.com/gorilla/mux@1.8.1 pkg:npm/dicer@0.3.1 \\\n    pkg:golang/github.com/dgrijalva/jwt-go@3.2.0 pkg:npm/request@2.88.2 \\\n    -f table\n\n"
+    },
+    {
+      "id": "gomod-table",
+      "args": ["scan", "--file", "testdata/gomod-doc/go.mod", "-f", "table"],
+      "files": ["README.md"],
+      "fence_lang": "text",
+      "prepend": "$ uzomuzo scan --file go.mod -f table\n\n"
+    },
+    {
+      "id": "usage-express-detailed",
+      "args": ["scan", "pkg:npm/express@4.18.2", "-f", "detailed"],
+      "files": ["docs/usage.md"],
+      "fence_lang": "text",
+      "prepend": "$ uzomuzo scan pkg:npm/express@4.18.2\n\n"
+    },
+    {
+      "id": "usage-gomod-table",
+      "args": ["scan", "--file", "testdata/gomod-doc/go.mod", "-f", "table"],
+      "files": ["docs/usage.md"],
+      "fence_lang": "text",
+      "prepend": "$ uzomuzo scan --file go.mod -f table\n\n"
+    },
+    {
+      "id": "usage-request-table",
+      "args": ["scan", "pkg:npm/request@2.88.2", "pkg:npm/express@4.18.2", "-f", "table"],
+      "files": ["docs/usage.md"],
+      "fence_lang": "text",
+      "prepend": "$ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --format table\n"
+    },
+    {
+      "id": "usage-request-json",
+      "args": ["scan", "pkg:npm/request@2.88.2", "-f", "json"],
+      "files": ["docs/usage.md"],
+      "fence_lang": "json"
+    },
+    {
+      "id": "usage-request-csv",
+      "args": ["scan", "pkg:npm/request@2.88.2", "-f", "csv"],
+      "files": ["docs/usage.md"],
+      "fence_lang": "text",
+      "prepend": "$ uzomuzo scan pkg:npm/request@2.88.2 --format csv\n"
+    },
+    {
+      "id": "usage-failon-match",
+      "args": ["scan", "pkg:npm/request@2.88.2", "--fail-on", "eol-confirmed", "--format", "table"],
+      "files": ["docs/usage.md"],
+      "fence_lang": "text",
+      "prepend": "$ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-confirmed --format table\n",
+      "append": "# exit code: 1  (request is EOL-Confirmed → matches --fail-on eol-confirmed)",
+      "ignore_exit_code": true
+    },
+    {
+      "id": "usage-failon-nomatch",
+      "args": ["scan", "pkg:npm/request@2.88.2", "--fail-on", "eol-effective", "--format", "table"],
+      "files": ["docs/usage.md"],
+      "fence_lang": "text",
+      "prepend": "$ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-effective --format table\n",
+      "append": "# exit code: 0  (request is EOL-Confirmed, not EOL-Effective → no match)"
+    },
+    {
+      "id": "usage-failon-multi",
+      "args": ["scan", "pkg:npm/request@2.88.2", "pkg:npm/express@4.18.2", "--fail-on", "eol-confirmed,stalled", "--format", "table"],
+      "files": ["docs/usage.md"],
+      "fence_lang": "text",
+      "prepend": "$ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --fail-on eol-confirmed,stalled --format table\n",
+      "append": "# exit code: 1  (request matches eol-confirmed)",
+      "ignore_exit_code": true
+    }
+  ],
+  "raw_files": [
+    {
+      "id": "juice-shop",
+      "shell": "trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 | {{binary}} scan --sbom - --fail-on eol-confirmed,eol-effective",
+      "output_file": "docs/assets/juice-shop-eol-result.txt",
+      "requires": ["trivy"],
+      "ignore_exit_code": true
+    }
+  ]
+}

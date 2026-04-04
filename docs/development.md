@@ -102,6 +102,70 @@ Verify after adding:
 - [ ] Corresponding file exists on the `.claude/` side (shim or generated)
 - [ ] `go test ./...` passes
 
+## Documentation Output Examples (`update-doc-examples`)
+
+README.md and docs/usage.md contain CLI output examples that must match actual binary output. A Go script automates keeping these in sync.
+
+### When to Run
+
+- After changing CLI output rendering (`boxdraw.go`, `scan_render.go`, table/JSON/CSV formatters)
+- After changing lifecycle classification logic (labels, reason strings)
+- After adding or removing output example blocks in documentation
+
+### How to Run
+
+```bash
+make update-doc-examples    # build binary, run all commands, update doc blocks
+git diff                    # review changes
+git add -p && git commit    # commit updated output
+```
+
+### How It Works
+
+Output blocks in Markdown are wrapped with HTML comment markers:
+
+```markdown
+<!-- begin:output:express-detailed -->
+` `` text
+... CLI output replaced automatically ...
+` `` 
+<!-- end:output:express-detailed -->
+```
+
+The script (`scripts/update-doc-examples/`) reads command definitions from an embedded `commands.json`, runs each command, and replaces the content between matching markers.
+
+### CI Automation (PR)
+
+The `doc-examples` CI job runs on every PR and does two things:
+
+1. **Marker validation** — checks that every command in `commands.json` has matching `begin/end` markers (fast, no API calls)
+2. **Auto-update** — runs `make update-doc-examples`, and if any output blocks changed, commits and pushes the update automatically
+
+This means you don't need to run `make update-doc-examples` locally — CI will do it for you. The auto-commit uses `[skip ci]` to avoid triggering another CI run.
+
+### Manual Trigger (GitHub UI)
+
+To force-refresh all doc examples without creating a PR:
+
+1. Go to **Actions** tab → **CI** workflow
+2. Click **"Run workflow"** → select the target branch (e.g. `main`) → click **"Run workflow"**
+3. The `doc-examples` job builds the binary, runs all 17 commands, and auto-commits any changes
+
+This is useful for periodic refresh (star counts, dependent counts drift over time) or after merging output-affecting changes.
+
+### Adding a New Output Block
+
+1. Add the marker pair to the Markdown file:
+   ```markdown
+   <!-- begin:output:my-new-block -->
+   ```text
+   placeholder
+   ```
+   <!-- end:output:my-new-block -->
+   ```
+2. Add a command entry to `scripts/update-doc-examples/commands.json`
+3. Run `make update-doc-examples` to populate the block (or let CI do it)
+
 ## Testing / Quality
 
 ```bash
@@ -119,7 +183,7 @@ golangci-lint run
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `ci.yml` | push / PR | Build, test, lint |
+| `ci.yml` | push / PR | Build, test, lint, doc-examples check |
 | `dependency-scan.yml` | Monthly cron / manual dispatch | Trivy SBOM generation + `uzomuzo scan` with issue creation |
 | `release.yml` | Tag push | GoReleaser + cosign signing |
 | `codeql.yml` | push / PR / weekly | CodeQL security analysis |
