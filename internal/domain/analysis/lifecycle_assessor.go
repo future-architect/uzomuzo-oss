@@ -107,7 +107,8 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis) {
 			count, _ := s.getStableOrMaxAdvisory(analysis)
 			trace = append(trace, "scorecard_missing residual_vuln_override")
-			signals := append(s.collectAdvisorySignals(analysis), commitSignal(analysis), sigAbsent(SignalMaintainedScore))
+			signals := []Signal{commitSignal(analysis), sigAbsent(SignalMaintainedScore)}
+			signals = append(signals, s.collectAdvisorySignals(analysis)...)
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective,
 				Reason: fmt.Sprintf("Scorecard data missing; open advisories (%d%s) and no human commits > %d yrs", count, s.severitySummary(analysis), s.rules.EolInactivityDays/365), Trace: trace, Signals: signals}, nil
 		}
@@ -120,7 +121,8 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis) {
 			count, _ := s.getStableOrMaxAdvisory(analysis)
 			trace = append(trace, "scorecard_incomplete residual_vuln_override")
-			signals := append(s.collectAdvisorySignals(analysis), commitSignal(analysis), maintainedSignal(scores))
+			signals := []Signal{commitSignal(analysis), maintainedSignal(scores)}
+			signals = append(signals, s.collectAdvisorySignals(analysis)...)
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective,
 				Reason: fmt.Sprintf("Scorecard data incomplete; open advisories (%d%s) and no human commits > %d yrs", count, s.severitySummary(analysis), s.rules.EolInactivityDays/365), Trace: trace, Signals: signals}, nil
 		}
@@ -286,34 +288,32 @@ func (s *LifecycleAssessorService) assessActiveState(analysis *Analysis, scores 
 	hasRecentHumanCommit := analysis.HasRecentHumanCommit(s.rules.MaxHumanCommitGapDays)
 	isMaintenanceOk := analysis.IsMaintenanceOk()
 
+	// A recent stable/prerelease publish is the strongest activity signal — someone actively
+	// packaged and released the software. Commit data and maintenance score are supplementary.
 	if hasRecentStable {
 		reason := "Recent stable package version published"
 		trace := "active_stable"
-		signals := []Signal{sig(SignalRecentStableRelease, "true")}
+		signals := []Signal{sig(SignalRecentStableRelease, "true"), commitSignal(analysis), maintainedSignal(scores)}
 		if hasRecentHumanCommit {
 			reason += " with recent human commits"
 			trace += "_recent_commits"
-			signals = append(signals, commitSignal(analysis))
 		}
 		if isMaintenanceOk {
 			reason += fmt.Sprintf("; maintenance score ≥ %.0f", s.rules.MaintenanceScoreMin)
 			trace += "_maintenance_ok"
-			signals = append(signals, maintainedSignal(scores))
 		}
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: reason, Trace: []string{trace}, Signals: signals}, nil
 	} else if hasRecentPrerelease {
 		reason := "Recent pre-release version published"
 		trace := "active_prerelease"
-		signals := []Signal{sig(SignalRecentStableRelease, "pre-release")}
+		signals := []Signal{sig(SignalRecentStableRelease, "pre-release"), commitSignal(analysis), maintainedSignal(scores)}
 		if hasRecentHumanCommit {
 			reason += " with recent human commits"
 			trace += "_recent_commits"
-			signals = append(signals, commitSignal(analysis))
 		}
 		if isMaintenanceOk {
 			reason += fmt.Sprintf("; maintenance score ≥ %.0f", s.rules.MaintenanceScoreMin)
 			trace += "_maintenance_ok"
-			signals = append(signals, maintainedSignal(scores))
 		}
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: reason, Trace: []string{trace}, Signals: signals}, nil
 	} else { // hasRecentCommit only
@@ -356,11 +356,15 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 		cSig := commitSignal(analysis)
 		mSig := maintainedSignal(scores)
 
+		// High vulnerability score (≥8): prioritize safety classification
 		if hasVulnScore && vulnScore >= s.rules.VulnerabilityScoreGoodMin {
+			advSignals := s.collectAdvisorySignals(analysis)
 			if lastHumanCommitYears >= float64(s.rules.LegacyFrozenYears) {
-				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelLegacySafe, Reason: fmt.Sprintf("No human commits ≥ %d yrs and almost no unpatched vulns", s.rules.LegacyFrozenYears), Trace: []string{"inactive_legacy_safe_vuln_score_high"}, Signals: []Signal{cSig, sig(SignalAdvisoryCount, "0")}}, nil
+				signals := append([]Signal{cSig}, advSignals...)
+				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelLegacySafe, Reason: fmt.Sprintf("No human commits ≥ %d yrs and almost no unpatched vulns", s.rules.LegacyFrozenYears), Trace: []string{"inactive_legacy_safe_vuln_score_high"}, Signals: signals}, nil
 			}
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Few unpatched vulns, but no human commits within %d days", s.rules.MaxHumanCommitGapDays), Trace: []string{"inactive_stalled_vuln_score_high_recent"}, Signals: []Signal{cSig, sig(SignalAdvisoryCount, "0")}}, nil
+			signals := append([]Signal{cSig}, advSignals...)
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Few unpatched vulns, but no human commits within %d days", s.rules.MaxHumanCommitGapDays), Trace: []string{"inactive_stalled_vuln_score_high_recent"}, Signals: signals}, nil
 		}
 
 		advisoryCount, _ := s.getStableOrMaxAdvisory(analysis)
@@ -371,15 +375,17 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 				Signals: []Signal{cSig, sig(SignalAdvisoryCount, "0")}}, nil
 		}
 
+		// Low maintenance score (<3): branch based on EOL_DAYS (2 years)
 		if hasMaintainedScore && !isMaintenanceOk {
-			baseSignals := []Signal{cSig, mSig}
 			if daysSinceLastHumanCommit > s.rules.EolInactivityDays {
 				if hasVulnScore && vulnScore < s.rules.VulnerabilityScorePoorMax {
-					return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective, Reason: fmt.Sprintf("Low maintenance, > %d yrs no human commits, many unpatched vulns", s.rules.EolInactivityDays/365), Signals: append(baseSignals, s.collectAdvisorySignals(analysis)...)}, nil
+					signals := []Signal{cSig, mSig}
+					signals = append(signals, s.collectAdvisorySignals(analysis)...)
+					return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective, Reason: fmt.Sprintf("Low maintenance, > %d yrs no human commits, many unpatched vulns", s.rules.EolInactivityDays/365), Signals: signals}, nil
 				}
-				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Low maintenance and no human commits for > %d yrs", s.rules.EolInactivityDays/365), Signals: baseSignals}, nil
+				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Low maintenance and no human commits for > %d yrs", s.rules.EolInactivityDays/365), Signals: []Signal{cSig, mSig}}, nil
 			}
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Low maintenance; last human commit within %d yrs", s.rules.EolInactivityDays/365), Signals: baseSignals}, nil
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Low maintenance; last human commit within %d yrs", s.rules.EolInactivityDays/365), Signals: []Signal{cSig, mSig}}, nil
 		}
 
 		if hasMaintainedScore && isMaintenanceOk {
