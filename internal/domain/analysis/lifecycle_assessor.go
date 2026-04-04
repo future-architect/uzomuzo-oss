@@ -20,6 +20,7 @@ type LifecycleAssessmentRules struct {
 	VulnerabilityScoreGoodMin  float64
 	VulnerabilityScorePoorMax  float64
 	ResidualAdvisoryThreshold  int
+	HighSeverityCVSSThreshold  float64
 }
 
 // LifecycleAssessorService implements lifecycle/activity assessment logic.
@@ -46,6 +47,7 @@ func NewLifecycleAssessorServiceWithConfig(c cfg.LifecycleAssessmentConfig) *Lif
 		VulnerabilityScoreGoodMin:  c.VulnerabilityScoreGoodMin,
 		VulnerabilityScorePoorMax:  c.VulnerabilityScorePoorMax,
 		ResidualAdvisoryThreshold:  c.ResidualAdvisoryThreshold,
+		HighSeverityCVSSThreshold:  c.HighSeverityCVSSThreshold,
 	}
 	return &LifecycleAssessorService{rules: rules}
 }
@@ -94,7 +96,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 			count, _ := s.getStableOrMaxAdvisory(analysis)
 			trace = append(trace, "scorecard_missing residual_vuln_override")
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective,
-				Reason: fmt.Sprintf("Scorecard data missing; open advisories (%d) and no human commits > %d yrs", count, s.rules.EolInactivityDays/365), Trace: trace}, nil
+				Reason: fmt.Sprintf("Scorecard data missing; open advisories (%d%s) and no human commits > %d yrs", count, s.severitySummary(analysis), s.rules.EolInactivityDays/365), Trace: trace}, nil
 		}
 	}
 
@@ -106,7 +108,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 			count, _ := s.getStableOrMaxAdvisory(analysis)
 			trace = append(trace, "scorecard_incomplete residual_vuln_override")
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective,
-				Reason: fmt.Sprintf("Scorecard data incomplete; open advisories (%d) and no human commits > %d yrs", count, s.rules.EolInactivityDays/365), Trace: trace}, nil
+				Reason: fmt.Sprintf("Scorecard data incomplete; open advisories (%d%s) and no human commits > %d yrs", count, s.severitySummary(analysis), s.rules.EolInactivityDays/365), Trace: trace}, nil
 		}
 	}
 
@@ -169,7 +171,17 @@ func (s *LifecycleAssessorService) shouldOverrideToEOLDueToResidualVulns(a *Anal
 		return false
 	}
 	count, _ := s.getStableOrMaxAdvisory(a)
-	return count >= s.rules.ResidualAdvisoryThreshold && count > 0
+	if count < s.rules.ResidualAdvisoryThreshold || count == 0 {
+		return false
+	}
+	// Only use severity-based override logic when all advisories have known severity.
+	// If any advisory severity is unknown, fall back to the existing count-based logic
+	// because unknown advisories may still be HIGH/CRITICAL.
+	vd := s.getStableOrMaxVersionDetail(a)
+	if vd != nil && vd.UnknownSeverityAdvisoryCount() == 0 {
+		return vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) > 0
+	}
+	return true
 }
 
 // getStableOrMaxAdvisory returns the advisory count and slice choosing Stable over MaxSemver fallback.
@@ -186,6 +198,71 @@ func (s *LifecycleAssessorService) getStableOrMaxAdvisory(a *Analysis) (int, []A
 		return len(a.ReleaseInfo.MaxSemverVersion.Advisories), a.ReleaseInfo.MaxSemverVersion.Advisories
 	}
 	return 0, nil
+}
+
+// getStableOrMaxVersionDetail returns the VersionDetail used for advisory analysis,
+// choosing Stable over MaxSemver fallback.
+func (s *LifecycleAssessorService) getStableOrMaxVersionDetail(a *Analysis) *VersionDetail {
+	if a == nil || a.ReleaseInfo == nil {
+		return nil
+	}
+	if a.ReleaseInfo.StableVersion != nil {
+		return a.ReleaseInfo.StableVersion
+	}
+	return a.ReleaseInfo.MaxSemverVersion
+}
+
+// hasHighSeverityAdvisories returns true if the analysis has any advisory with CVSS3 >= threshold,
+// or if any advisory severity is unavailable and advisories exist (conservative fallback).
+func (s *LifecycleAssessorService) hasHighSeverityAdvisories(a *Analysis) bool {
+	vd := s.getStableOrMaxVersionDetail(a)
+	if vd == nil || len(vd.Advisories) == 0 {
+		return false
+	}
+	unknownCount := vd.UnknownSeverityAdvisoryCount()
+	if unknownCount > 0 {
+		// Any unknown severity triggers conservative fallback (treated as potentially high).
+		return true
+	}
+	return vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) > 0
+}
+
+// severityAwareLabel returns the appropriate label and trace based on whether HIGH+ advisories exist.
+// When severity data shows only LOW/MEDIUM, the lowLabel is used instead of highLabel.
+func (s *LifecycleAssessorService) severityAwareLabel(hasHigh bool,
+	highLabel MaintenanceStatus, highTrace string, lowLabel MaintenanceStatus, lowTrace string,
+) (MaintenanceStatus, string) {
+	if hasHigh {
+		return highLabel, highTrace
+	}
+	return lowLabel, lowTrace
+}
+
+// severitySummary returns a severity breakdown string for reason text, e.g. ", max: HIGH 7.5".
+// When unknown-severity advisories exist, includes the count (e.g. ", max: LOW 3.0, unknown: 1")
+// so the reason text stays consistent with the conservative classification that treats unknowns
+// as potentially HIGH. Returns empty string if no severity data is available.
+func (s *LifecycleAssessorService) severitySummary(a *Analysis) string {
+	vd := s.getStableOrMaxVersionDetail(a)
+	if vd == nil || len(vd.Advisories) == 0 {
+		return ""
+	}
+
+	unknownCount := vd.UnknownSeverityAdvisoryCount()
+	maxScore := vd.MaxCVSS3()
+
+	if maxScore <= 0 {
+		if unknownCount > 0 {
+			return fmt.Sprintf(", unknown: %d", unknownCount)
+		}
+		return ""
+	}
+
+	severity := SeverityFromCVSS3(maxScore)
+	if unknownCount > 0 {
+		return fmt.Sprintf(", max: %s %.1f, unknown: %d", severity, maxScore, unknownCount)
+	}
+	return fmt.Sprintf(", max: %s %.1f", severity, maxScore)
 }
 
 // assessActiveState handles active repository states using domain models
@@ -343,6 +420,8 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	daysSincePublish := analysis.GetDaysSinceLatestPublish()
 	advisoryCount, _ := s.getStableOrMaxAdvisory(analysis)
 	hasAdvisories := advisoryCount >= s.rules.ResidualAdvisoryThreshold && advisoryCount > 0
+	// Determine if HIGH+ severity advisories exist (for severity-aware EOL classification).
+	hasHighSeverity := s.hasHighSeverityAdvisories(analysis)
 
 	// C1: Scorecard Maintained ≥ threshold → Stalled (confirmed maintenance despite no commit data)
 	if hasMaintainedScore && isMaintenanceOk {
@@ -353,11 +432,15 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 
 	// C2: Scorecard Maintained < threshold (scorecard present but low maintenance)
 	if hasMaintainedScore && !isMaintenanceOk {
-		// C2a: Advisories + old publish → EOL-Effective
+		// C2a: Advisories + old publish → EOL-Effective (if HIGH+ severity or unknown),
+		// Stalled (if only LOW/MEDIUM severity known).
 		if hasAdvisories && daysSincePublish > s.rules.EolInactivityDays {
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective,
-				Reason: fmt.Sprintf("Low maintenance score; open advisories (%d) on latest version, no new release in %d days", advisoryCount, daysSincePublish),
-				Trace:  []string{"inactive_no_commit_C2a_low_maint_advisory_old_publish"}}, nil
+			label, trace := s.severityAwareLabel(hasHighSeverity,
+				LabelEOLEffective, "inactive_no_commit_C2a_low_maint_advisory_old_publish",
+				LabelStalled, "inactive_no_commit_C2a_low_maint_advisory_low_severity")
+			return &AssessmentResult{Axis: LifecycleAxis, Label: label,
+				Reason: fmt.Sprintf("Low maintenance score; open advisories (%d%s) on latest version, no new release in %d days", advisoryCount, s.severitySummary(analysis), daysSincePublish),
+				Trace:  []string{trace}}, nil
 		}
 		// C2b: Otherwise → Stalled
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
@@ -367,15 +450,18 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 
 	// C3: No scorecard — deps.dev signals only (publish recency + advisories)
 	if hasAdvisories {
-		// C3a: Advisories + old publish → EOL-Effective (consumer cannot fix via package manager)
+		// C3a: Advisories + old publish → EOL-Effective (if HIGH+) or Stalled (if LOW/MEDIUM only)
 		if daysSincePublish > s.rules.EolInactivityDays {
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective,
-				Reason: fmt.Sprintf("Open advisories (%d) on latest version, no new release in %d days; consumers cannot resolve vulnerabilities via package manager", advisoryCount, daysSincePublish),
-				Trace:  []string{"inactive_no_commit_C3a_advisory_old_publish"}}, nil
+			label, trace := s.severityAwareLabel(hasHighSeverity,
+				LabelEOLEffective, "inactive_no_commit_C3a_advisory_old_publish",
+				LabelStalled, "inactive_no_commit_C3a_advisory_low_severity")
+			return &AssessmentResult{Axis: LifecycleAxis, Label: label,
+				Reason: fmt.Sprintf("Open advisories (%d%s) on latest version, no new release in %d days; consumers cannot resolve vulnerabilities via package manager", advisoryCount, s.severitySummary(analysis), daysSincePublish),
+				Trace:  []string{trace}}, nil
 		}
 		// C3b1/C3b2: Advisories + recent/mid publish → Stalled
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-			Reason: fmt.Sprintf("Open advisories (%d) on latest version despite publish %d days ago", advisoryCount, daysSincePublish),
+			Reason: fmt.Sprintf("Open advisories (%d%s) on latest version despite publish %d days ago", advisoryCount, s.severitySummary(analysis), daysSincePublish),
 			Trace:  []string{"inactive_no_commit_C3b_advisory_recent_publish"}}, nil
 	}
 

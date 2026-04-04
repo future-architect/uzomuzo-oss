@@ -26,7 +26,7 @@ A package with zero CVEs today may have been abandoned for years — no one is w
 💻 Latest Commit: 2023-07-15
 ```
 
-No official deprecation, no archived repository — yet `dicer` has an unpatched ReDoS vulnerability with zero human commits in over two years. SCA tools report "1 CVE" and move on. uzomuzo recognizes the combination of unpatched advisory + maintenance absence as **effectively end-of-life**. This package sits in the Express dependency chain (via busboy → multer), meaning millions of applications silently depend on abandoned code.
+No official deprecation, no archived repository — yet `dicer` has an unpatched ReDoS vulnerability (CVSS 7.5 — HIGH severity) with zero human commits in over two years. SCA tools report "1 CVE" and move on. uzomuzo recognizes the combination of HIGH/CRITICAL unpatched advisory + maintenance absence as **effectively end-of-life**. This package sits in the Express dependency chain (via busboy → multer), meaning millions of applications silently depend on abandoned code.
 
 ### Real-world scan: OWASP Juice Shop
 
@@ -104,7 +104,7 @@ See [Usage](docs/usage.md) for full CLI reference and [Integration Examples](doc
 
 ## Lifecycle Classification
 
-uzomuzo classifies each package into one of seven lifecycle states using a multi-signal decision tree (OpenSSF Scorecard, human commit recency, release activity, registry EOL flags, and unpatched advisory counts):
+uzomuzo classifies each package into one of seven lifecycle states using a multi-signal decision tree (OpenSSF Scorecard, human commit recency, release activity, registry EOL flags, advisory severity, and unpatched advisory counts):
 
 | Label | Meaning | Action |
 | --- | --- | --- |
@@ -112,7 +112,7 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | **Legacy-Safe** | No recent activity, but zero vulnerabilities — frozen and stable | Accept risk or pin version |
 | **Stalled** | Maintenance declining: low score or commits stopped | Monitor; plan migration |
 | **EOL-Confirmed** | Repository archived/disabled, or registry explicitly marks EOL | Migrate immediately |
-| **EOL-Effective** | No official EOL, but 2+ yrs without human commits AND unpatched vulns | Migrate; treat as EOL |
+| **EOL-Effective** | No official EOL, but 2+ yrs without human commits AND HIGH/CRITICAL unpatched vulns | Migrate; treat as EOL |
 | **EOL-Scheduled** | Future EOL date announced (not yet reached) | Plan migration before EOL date |
 | **Review Needed** | Insufficient data for automated classification | Manual investigation required |
 

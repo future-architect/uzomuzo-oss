@@ -119,12 +119,13 @@ The lifecycle assessor uses two distinct decision paths depending on `GITHUB_TOK
 │  • VCS-direct ecosystem detection (Go, Composer)                   │
 │  • Scorecard absence vs. low score distinction                     │
 │  • Zero-advisory + dormant commit → Legacy-Safe                    │
-│  • Unpatched vulns + dormant → EOL-Effective                       │
+│  • HIGH/CRITICAL vulns + dormant → EOL-Effective                   │
+│  • LOW/MEDIUM-only vulns + dormant → Stalled (severity-aware)      │
 │  • Archive/disable status → EOL-Confirmed                          │
 ├─────────────────────────────────────────────────────────────────────┤
 │ Path B: Without GITHUB_TOKEN (basic precision)                     │
 │                                                                     │
-│ Data: deps.dev only (publish dates, advisories)                    │
+│ Data: deps.dev only (publish dates, advisories, severity)          │
 │                                                                     │
 │ Capabilities:                                                       │
 │  • Publish recency + advisories → coarse classification            │
@@ -134,6 +135,18 @@ The lifecycle assessor uses two distinct decision paths depending on `GITHUB_TOK
 ```
 
 The domain layer branches on `Analysis.HasCommitData()` to prevent sentinel values (9999 days) from leaking into commit-based comparisons when commit history is unavailable. See [Assessment Precision](../README.md#assessment-precision-by-data-availability) for the full capability comparison.
+
+### Advisory Severity Enrichment
+
+The lifecycle assessor is severity-aware: only HIGH or CRITICAL advisories trigger the EOL-Effective classification when combined with dormant maintenance.
+
+- **Data source**: deps.dev advisory API (`GET /v3alpha/advisories/{id}`) provides CVSS3 scores for each advisory.
+- **Scope**: Only Stable and MaxSemver versions are enriched with severity data (per ADR-0010). Development/pre-release versions skip severity enrichment to reduce API calls.
+- **Severity thresholds**: CVSS3 >= 7.0 is classified as HIGH; CVSS3 >= 9.0 is classified as CRITICAL. The threshold is configurable via `HighSeverityCVSSThreshold` (default 7.0).
+- **Fallback behavior**: When the advisory API is unavailable or returns no CVSS3 score, the advisory is conservatively treated as HIGH severity (same behavior as before the severity-aware change). This ensures no regression in detection coverage.
+- **Classification impact**:
+  - HIGH/CRITICAL advisory + dormant (2+ yrs without human commits) → **EOL-Effective**
+  - LOW/MEDIUM-only advisories + dormant → **Stalled** (not escalated to EOL-Effective)
 
 ---
 

@@ -102,6 +102,10 @@ func (s *stubDepsDevClient) FetchDependenciesBatch(_ context.Context, _ []string
 	return s.dependenciesResults
 }
 
+func (s *stubDepsDevClient) FetchAdvisoriesBatch(_ context.Context, _ []string) map[string]*depsdev.AdvisoryDetail {
+	return make(map[string]*depsdev.AdvisoryDetail)
+}
+
 func TestEnrichDependentCounts_Phase1(t *testing.T) {
 	tests := []struct {
 		name        string

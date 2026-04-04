@@ -64,6 +64,9 @@ func (s *IntegrationService) AnalyzeFromGitHubURLs(ctx context.Context, githubUR
 		analyses[r.githubURL] = r.analysis
 	}
 
+	// Advisory severity enrichment (best-effort, after all analyses are populated).
+	s.enrichAdvisorySeverity(ctx, analyses)
+
 	slog.Debug("completed_github_url_batch", "total", len(analyses))
 	return analyses, nil
 }

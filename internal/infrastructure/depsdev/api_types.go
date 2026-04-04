@@ -215,6 +215,17 @@ type AdvisoryKey struct {
 	ID string `json:"id"`
 }
 
+// AdvisoryDetail represents the response from GET /v3alpha/advisories/{id}.
+// It contains severity metadata not available in the per-version advisoryKeys.
+type AdvisoryDetail struct {
+	AdvisoryKey AdvisoryKey `json:"advisoryKey"`
+	URL         string      `json:"url"`
+	Title       string      `json:"title"`
+	Aliases     []string    `json:"aliases"`
+	CVSS3Score  float64     `json:"cvss3Score"`
+	CVSS3Vector string      `json:"cvss3Vector"`
+}
+
 // SLSAProvenance represents SLSA provenance information
 type SLSAProvenance struct {
 	SourceRepository string `json:"sourceRepository"`
