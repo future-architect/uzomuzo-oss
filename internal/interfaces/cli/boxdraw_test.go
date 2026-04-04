@@ -207,8 +207,9 @@ func TestWriteBoxVerdict(t *testing.T) {
 			if !strings.Contains(output, tt.icon) {
 				t.Errorf("missing verdict icon %q in output", tt.icon)
 			}
-			if !strings.Contains(output, "├─ Verdict") {
-				t.Error("missing Verdict section header")
+			// Verdict is now inline (no section bar), just check icon is present
+			if !strings.Contains(output, "│ "+tt.icon) {
+				t.Errorf("missing inline verdict line with icon %q", tt.icon)
 			}
 		})
 	}
@@ -305,11 +306,8 @@ func TestWriteBoxReleases_Advisories(t *testing.T) {
 		t.Fatalf("writeBoxReleases() error = %v", err)
 	}
 	output := buf.String()
-	if !strings.Contains(output, "⚠️ Advisories: 5") {
-		t.Error("missing advisory warning count")
-	}
-	if !strings.Contains(output, "max: CRITICAL 9.8") {
-		t.Error("missing severity summary")
+	if !strings.Contains(output, "⚠️ 5 advisories") {
+		t.Error("missing advisory count")
 	}
 	// Top 3 by severity should be shown (CRITICAL, HIGH, HIGH)
 	if !strings.Contains(output, "CVE-2024-9999") {
@@ -318,9 +316,7 @@ func TestWriteBoxReleases_Advisories(t *testing.T) {
 	if !strings.Contains(output, "CRITICAL") {
 		t.Error("missing CRITICAL severity label")
 	}
-	if !strings.Contains(output, "Remote code execution") {
-		t.Error("missing advisory title")
-	}
+	// Advisory titles are intentionally omitted — detail is in the linked page
 	// Should show 3 advisory lines, then truncation
 	if !strings.Contains(output, "... and 2 more") {
 		t.Error("missing truncation message")
@@ -359,9 +355,6 @@ func TestWriteBoxReleases_FewAdvisories(t *testing.T) {
 	}
 	if !strings.Contains(output, "MEDIUM") {
 		t.Error("missing severity label")
-	}
-	if !strings.Contains(output, "XSS vulnerability") {
-		t.Error("missing advisory title")
 	}
 	if strings.Contains(output, "... and") {
 		t.Error("should not have truncation for <= 3 advisories")
@@ -406,39 +399,7 @@ func TestWriteBoxReleases_UnknownSeverity(t *testing.T) {
 	}
 }
 
-func TestAdvisorySeveritySummary(t *testing.T) {
-	tests := []struct {
-		name string
-		vd   *analysis.VersionDetail
-		want string
-	}{
-		{"nil", nil, ""},
-		{"no advisories", &analysis.VersionDetail{}, ""},
-		{"all known", &analysis.VersionDetail{
-			Advisories: []analysis.Advisory{
-				{CVSS3Score: 9.8}, {CVSS3Score: 7.5},
-			},
-		}, " (max: CRITICAL 9.8)"},
-		{"mixed known/unknown", &analysis.VersionDetail{
-			Advisories: []analysis.Advisory{
-				{CVSS3Score: 7.5}, {CVSS3Score: 0},
-			},
-		}, " (max: HIGH 7.5, 1 unknown)"},
-		{"all unknown", &analysis.VersionDetail{
-			Advisories: []analysis.Advisory{
-				{CVSS3Score: 0}, {CVSS3Score: 0},
-			},
-		}, " (2 unknown)"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := advisorySeveritySummary(tt.vd)
-			if got != tt.want {
-				t.Errorf("advisorySeveritySummary() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
+// advisorySeveritySummary removed — max severity summary no longer shown on the stable line.
 
 func TestWriteBoxReleases_Deprecated(t *testing.T) {
 	var buf bytes.Buffer
@@ -473,8 +434,10 @@ func TestWriteBoxLinks(t *testing.T) {
 		Analysis: &analysis.Analysis{
 			EffectivePURL: "pkg:npm/express@4.18.2",
 			RepoURL:       "github.com/expressjs/express",
-			PackageLinks:  &analysis.PackageLinks{RegistryURL: "https://www.npmjs.com/package/express"},
-			ScorecardURL:  "https://scorecard.dev/viewer/?uri=github.com/expressjs/express",
+			PackageLinks: &analysis.PackageLinks{
+				HomepageURL: "https://expressjs.com",
+				RegistryURL: "https://www.npmjs.com/package/express",
+			},
 		},
 	}
 	ctx := newBoxContext(&buf, entry, 60)
@@ -482,6 +445,9 @@ func TestWriteBoxLinks(t *testing.T) {
 		t.Fatalf("writeBoxLinks() error = %v", err)
 	}
 	output := buf.String()
+	if !strings.Contains(output, "Homepage: https://expressjs.com") {
+		t.Error("missing homepage link")
+	}
 	if !strings.Contains(output, "Repository: https://github.com/expressjs/express") {
 		t.Error("missing repository link")
 	}
@@ -491,8 +457,8 @@ func TestWriteBoxLinks(t *testing.T) {
 	if !strings.Contains(output, "deps.dev: https://deps.dev/npm/express") {
 		t.Error("missing deps.dev link")
 	}
-	if !strings.Contains(output, "Scorecard:") {
-		t.Error("missing scorecard link")
+	if strings.Contains(output, "Scorecard") {
+		t.Error("scorecard link should not be shown")
 	}
 }
 
@@ -518,8 +484,8 @@ func TestRenderBoxEntry_FullEntry(t *testing.T) {
 	if !strings.Contains(output, "──") {
 		t.Error("missing top bar")
 	}
-	if !strings.Contains(output, "├─ Verdict") {
-		t.Error("missing Verdict section")
+	if !strings.Contains(output, "│ ✅") {
+		t.Error("missing inline verdict line")
 	}
 	if !strings.Contains(output, "└─") {
 		t.Error("missing bottom bar")
@@ -583,9 +549,6 @@ func TestRenderScanDetailed_BoxFormat(t *testing.T) {
 	if !strings.Contains(output, "──") {
 		t.Error("missing top bar")
 	}
-	if !strings.Contains(output, "├─") {
-		t.Error("missing section separator")
-	}
 	if !strings.Contains(output, "└─") {
 		t.Error("missing bottom bar")
 	}
@@ -602,6 +565,351 @@ func TestRenderScanDetailed_BoxFormat(t *testing.T) {
 	}
 	if !strings.Contains(output, "🔍") {
 		t.Error("missing Review verdict icon")
+	}
+}
+
+// License section tests removed — License section is no longer rendered in detailed output.
+// License data is available via --format csv and --export-license-csv.
+
+func TestWriteBoxReleases_VersionDeduplication(t *testing.T) {
+	t.Run("stable_equals_requested", func(t *testing.T) {
+		var buf bytes.Buffer
+		entry := &domainaudit.AuditEntry{
+			PURL:    "pkg:npm/test@1.0.0",
+			Verdict: domainaudit.VerdictOK,
+			Analysis: &analysis.Analysis{
+				ReleaseInfo: &analysis.ReleaseInfo{
+					StableVersion: &analysis.VersionDetail{
+						Version:     "1.0.0",
+						PublishedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					},
+					RequestedVersion: &analysis.VersionDetail{
+						Version:     "1.0.0",
+						PublishedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					},
+				},
+			},
+		}
+		ctx := newBoxContext(&buf, entry, 60)
+		if err := writeBoxReleases(ctx); err != nil {
+			t.Fatalf("writeBoxReleases() error = %v", err)
+		}
+		output := buf.String()
+		if !strings.Contains(output, "Stable: 1.0.0") {
+			t.Error("missing Stable version")
+		}
+		if strings.Contains(output, "Requested:") {
+			t.Error("Requested should be suppressed when equal to Stable")
+		}
+	})
+
+	t.Run("prerelease_equals_stable", func(t *testing.T) {
+		var buf bytes.Buffer
+		entry := &domainaudit.AuditEntry{
+			PURL:    "pkg:npm/test@1.0.0",
+			Verdict: domainaudit.VerdictOK,
+			Analysis: &analysis.Analysis{
+				ReleaseInfo: &analysis.ReleaseInfo{
+					StableVersion: &analysis.VersionDetail{
+						Version:     "1.0.0",
+						PublishedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					},
+					PreReleaseVersion: &analysis.VersionDetail{
+						Version:     "1.0.0",
+						PublishedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					},
+				},
+			},
+		}
+		ctx := newBoxContext(&buf, entry, 60)
+		if err := writeBoxReleases(ctx); err != nil {
+			t.Fatalf("writeBoxReleases() error = %v", err)
+		}
+		output := buf.String()
+		if strings.Contains(output, "Pre-release:") {
+			t.Error("Pre-release should be suppressed when equal to Stable")
+		}
+	})
+
+	t.Run("highest_equals_prerelease", func(t *testing.T) {
+		var buf bytes.Buffer
+		entry := &domainaudit.AuditEntry{
+			PURL:    "pkg:npm/test@1.0.0",
+			Verdict: domainaudit.VerdictOK,
+			Analysis: &analysis.Analysis{
+				ReleaseInfo: &analysis.ReleaseInfo{
+					StableVersion: &analysis.VersionDetail{
+						Version:     "1.0.0",
+						PublishedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					},
+					PreReleaseVersion: &analysis.VersionDetail{
+						Version:     "2.0.0-beta.1",
+						PublishedAt: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
+					},
+					MaxSemverVersion: &analysis.VersionDetail{
+						Version:     "2.0.0-beta.1",
+						PublishedAt: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
+					},
+				},
+			},
+		}
+		ctx := newBoxContext(&buf, entry, 60)
+		if err := writeBoxReleases(ctx); err != nil {
+			t.Fatalf("writeBoxReleases() error = %v", err)
+		}
+		output := buf.String()
+		if !strings.Contains(output, "Pre-release: 2.0.0-beta.1") {
+			t.Error("missing Pre-release version")
+		}
+		if strings.Contains(output, "Highest (SemVer):") {
+			t.Error("Highest should be suppressed when equal to Pre-release")
+		}
+	})
+
+	t.Run("all_different", func(t *testing.T) {
+		var buf bytes.Buffer
+		entry := &domainaudit.AuditEntry{
+			PURL:    "pkg:npm/test@0.9.0",
+			Verdict: domainaudit.VerdictOK,
+			Analysis: &analysis.Analysis{
+				ReleaseInfo: &analysis.ReleaseInfo{
+					StableVersion: &analysis.VersionDetail{
+						Version:     "1.0.0",
+						PublishedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					},
+					PreReleaseVersion: &analysis.VersionDetail{
+						Version:     "2.0.0-beta.1",
+						PublishedAt: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
+					},
+					MaxSemverVersion: &analysis.VersionDetail{
+						Version:     "2.0.0-rc.1",
+						PublishedAt: time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC),
+					},
+					RequestedVersion: &analysis.VersionDetail{
+						Version:     "0.9.0",
+						PublishedAt: time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC),
+					},
+				},
+			},
+		}
+		ctx := newBoxContext(&buf, entry, 60)
+		if err := writeBoxReleases(ctx); err != nil {
+			t.Fatalf("writeBoxReleases() error = %v", err)
+		}
+		output := buf.String()
+		if !strings.Contains(output, "Stable: 1.0.0") {
+			t.Error("missing Stable")
+		}
+		if !strings.Contains(output, "Pre-release: 2.0.0-beta.1") {
+			t.Error("missing Pre-release")
+		}
+		if !strings.Contains(output, "Highest (SemVer): 2.0.0-rc.1") {
+			t.Error("missing Highest")
+		}
+		if !strings.Contains(output, "Requested: 0.9.0") {
+			t.Error("missing Requested")
+		}
+	})
+}
+
+func TestWriteBoxReleases_ZeroAdvisoriesHidden(t *testing.T) {
+	var buf bytes.Buffer
+	entry := &domainaudit.AuditEntry{
+		PURL:    "pkg:npm/test@1.0.0",
+		Verdict: domainaudit.VerdictOK,
+		Analysis: &analysis.Analysis{
+			ReleaseInfo: &analysis.ReleaseInfo{
+				StableVersion: &analysis.VersionDetail{
+					Version:     "1.0.0",
+					PublishedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				},
+			},
+		},
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxReleases(ctx); err != nil {
+		t.Fatalf("writeBoxReleases() error = %v", err)
+	}
+	output := buf.String()
+	if strings.Contains(output, "Advisories") {
+		t.Error("Advisories: 0 should not be displayed")
+	}
+}
+
+func TestWriteBoxHealth_NormalState(t *testing.T) {
+	var buf bytes.Buffer
+	entry := &domainaudit.AuditEntry{
+		PURL:    "pkg:npm/test@1.0.0",
+		Verdict: domainaudit.VerdictOK,
+		Analysis: &analysis.Analysis{
+			RepoURL: "github.com/test/repo",
+			RepoState: &analysis.RepoState{
+				IsArchived: false,
+				IsDisabled: false,
+				IsFork:     false,
+			},
+			Repository: &analysis.Repository{
+				StarsCount: 500,
+			},
+		},
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxHealth(ctx); err != nil {
+		t.Fatalf("writeBoxHealth() error = %v", err)
+	}
+	output := buf.String()
+	if strings.Contains(output, "Normal") {
+		t.Error("Normal state should not be displayed")
+	}
+	if strings.Contains(output, "GitHub:") {
+		t.Error("GitHub: label should not be displayed for normal repos")
+	}
+	if !strings.Contains(output, "500 stars") {
+		t.Error("missing star count")
+	}
+}
+
+func TestWriteBoxHealth_NilRepoState(t *testing.T) {
+	var buf bytes.Buffer
+	entry := &domainaudit.AuditEntry{
+		PURL:    "pkg:npm/test@1.0.0",
+		Verdict: domainaudit.VerdictOK,
+		Analysis: &analysis.Analysis{
+			RepoURL:   "github.com/test/repo",
+			RepoState: nil,
+			Repository: &analysis.Repository{
+				StarsCount: 200,
+			},
+		},
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxHealth(ctx); err != nil {
+		t.Fatalf("writeBoxHealth() error = %v", err)
+	}
+	output := buf.String()
+	if !strings.Contains(output, "200 stars") {
+		t.Error("missing star count with nil RepoState")
+	}
+	if strings.Contains(output, "Normal") || strings.Contains(output, "GitHub:") {
+		t.Error("should not show Normal/GitHub with nil RepoState")
+	}
+}
+
+func TestWrapContent(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		maxWidth int
+		want     []string
+	}{
+		{
+			name:     "short_no_wrap",
+			content:  "🔴 EOL-Confirmed: Primary-source EOL",
+			maxWidth: 60,
+			want:     []string{"🔴 EOL-Confirmed: Primary-source EOL"},
+		},
+		{
+			name:     "long_verdict_reason_wraps",
+			content:  "🔴 EOL-Effective: Scorecard data incomplete; open advisories (1, max: HIGH 7.5) and no human commits > 2 yrs",
+			maxWidth: 58,
+			want: []string{
+				"🔴 EOL-Effective: Scorecard data incomplete; open",
+				"                 advisories (1, max: HIGH 7.5) and no",
+				"                 human commits > 2 yrs",
+			},
+		},
+		{
+			name:     "no_label_uses_2_indent",
+			content:  "This is a very long line without any label colon pattern that should still wrap correctly at word boundaries",
+			maxWidth: 40,
+			want: []string{
+				"This is a very long line without any",
+				"  label colon pattern that should still",
+				"  wrap correctly at word boundaries",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := wrapContent(tt.content, tt.maxWidth)
+			if len(got) != len(tt.want) {
+				t.Fatalf("wrapContent() returned %d lines, want %d\ngot:  %q\nwant: %q", len(got), len(tt.want), got, tt.want)
+			}
+			for i, line := range got {
+				if line != tt.want[i] {
+					t.Errorf("line[%d] = %q, want %q", i, line, tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestIsWrappableLine(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"✅ Active: Recent stable package version published", true},
+		{"🔴 EOL-Confirmed: Primary-source EOL", true},
+		{"⚠️ Stalled: Low maintenance; last human commit within 2 yrs", true},
+		{"🔍 Review Needed", true},
+		{"Catalog Reason: why this is EOL", true},
+		{"Fast, unopinionated, minimalist web framework for node.", false},
+		{"[npmjs] Stable version is deprecated in npm registry.", false},
+		{"→ https://github.com/advisories/GHSA-xxxx", false},
+		{"Homepage: https://expressjs.com", false},
+		{"Package: pkg:npm/express@4.18.2", false},
+		{"Stable: 1.0.0 (2024-01-01)  ⚠️ 5 advisories", false},
+		{"MIT (depsdev)", false},
+		{"  HIGH     (7.5)  GHSA-wm7h-9275-46v2  Crash in HeaderParser", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input[:min(30, len(tt.input))], func(t *testing.T) {
+			got := isWrappableLine(tt.input)
+			if got != tt.want {
+				t.Errorf("isWrappableLine(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWriteLine_WordWrap(t *testing.T) {
+	var buf bytes.Buffer
+	a := &analysis.Analysis{
+		AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
+			analysis.LifecycleAxis: {
+				Label:  analysis.LabelEOLEffective,
+				Reason: "Scorecard data incomplete; open advisories (1, max: HIGH 7.5) and no human commits > 2 yrs",
+			},
+		},
+	}
+	entry := &domainaudit.AuditEntry{
+		PURL:     "pkg:npm/test@1.0.0",
+		Verdict:  domainaudit.VerdictReplace,
+		Analysis: a,
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxVerdict(ctx); err != nil {
+		t.Fatalf("writeBoxVerdict() error = %v", err)
+	}
+	output := buf.String()
+	// Verdict+reason line should be wrapped across multiple lines
+	lines := strings.Split(output, "\n")
+	var verdictLines []string
+	for _, l := range lines {
+		if strings.Contains(l, "🔴") || (len(verdictLines) > 0 && strings.HasPrefix(l, "│ ") && !strings.Contains(l, "├─") && !strings.Contains(l, "└─")) {
+			verdictLines = append(verdictLines, l)
+		}
+	}
+	if len(verdictLines) < 2 {
+		t.Errorf("expected verdict+reason to wrap across multiple lines, got %d line(s):\n%s", len(verdictLines), output)
+	}
+	// Verify it contains both label and reason
+	if !strings.Contains(output, "EOL-Effective") {
+		t.Error("missing lifecycle label")
+	}
+	if !strings.Contains(output, "Scorecard data incomplete") {
+		t.Error("missing reason text")
 	}
 }
 

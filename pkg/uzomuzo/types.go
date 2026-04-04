@@ -32,6 +32,34 @@ type ScoreEntity = domain.ScoreEntity
 // AssessmentResult represents a single axis assessment result (currently lifecycle axis is implemented).
 type AssessmentResult = domain.AssessmentResult
 
+// Signal records a single data point evaluated during lifecycle assessment.
+type Signal = domain.Signal
+
+// SignalRole classifies how a signal contributed to the assessment decision.
+type SignalRole = domain.SignalRole
+
+// Signal role values.
+const (
+	SignalUsed   SignalRole = domain.SignalUsed
+	SignalAbsent SignalRole = domain.SignalAbsent
+)
+
+// Well-known signal names for lifecycle assessment interpretation.
+const (
+	SignalEOLSource           = domain.SignalEOLSource
+	SignalEOLScheduledDate    = domain.SignalEOLScheduledDate
+	SignalRepoArchived        = domain.SignalRepoArchived
+	SignalRepoDisabled        = domain.SignalRepoDisabled
+	SignalMaintainedScore     = domain.SignalMaintainedScore
+	SignalLastHumanCommit     = domain.SignalLastHumanCommit
+	SignalRecentStableRelease = domain.SignalRecentStableRelease
+	SignalRecentPreRelease    = domain.SignalRecentPreRelease
+	SignalAdvisoryCount       = domain.SignalAdvisoryCount
+	SignalMaxAdvisorySeverity = domain.SignalMaxAdvisorySeverity
+	SignalDaysSinceRelease    = domain.SignalDaysSinceRelease
+	SignalEcosystemDelivery   = domain.SignalEcosystemDelivery
+)
+
 // RepoState contains repository activity & archive/disable flags.
 type RepoState = domain.RepoState
 
@@ -107,14 +135,14 @@ func FinalMaintenanceStatus(a *Analysis) MaintenanceStatus { return a.FinalMaint
 type LifecycleSummary struct {
 	FinalLabel        MaintenanceStatus // priority-ordered final status (EOL-Confirmed/EOL-Effective > EOL-Scheduled > lifecycle-derived status > Review Needed)
 	MaintenanceStatus MaintenanceStatus // raw maintenance status label (may be empty)
-	LifecycleReason   string        // rationale for lifecycle assessment
-	EOLState          string        // raw EOL state (Unknown / NotEOL / EOL / Planned)
-	EOLHumanState     string        // human-friendly EOL state label
-	Successor         string        // successor project reference (when available)
-	ScheduledAt       *time.Time    // scheduled EOL date (for scheduled state)
-	EOLEvidences      []EOLEvidence // evidence list (may be empty)
-	EOLReason         string        // catalog human judgment reason (English)
-	EOLReasonJa       string        // catalog human judgment reason Japanese (if available)
+	LifecycleReason   string            // rationale for lifecycle assessment
+	EOLState          string            // raw EOL state (Unknown / NotEOL / EOL / Planned)
+	EOLHumanState     string            // human-friendly EOL state label
+	Successor         string            // successor project reference (when available)
+	ScheduledAt       *time.Time        // scheduled EOL date (for scheduled state)
+	EOLEvidences      []EOLEvidence     // evidence list (may be empty)
+	EOLReason         string            // catalog human judgment reason (English)
+	EOLReasonJa       string            // catalog human judgment reason Japanese (if available)
 }
 
 // BuildLifecycleSummary constructs a LifecycleSummary from an Analysis.

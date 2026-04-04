@@ -219,7 +219,7 @@ func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 		if showRelation {
 			cols = append(cols, "RELATION")
 		}
-		cols = append(cols, "LIFECYCLE", "EOL")
+		cols = append(cols, "LIFECYCLE")
 		if _, err := fmt.Fprintln(tw, strings.Join(cols, "\t")); err != nil {
 			return fmt.Errorf("failed to write table header: %w", err)
 		}
@@ -232,7 +232,7 @@ func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	}
 
 	for i := range entries {
-		maintenance, eol := entryMaintenanceEOL(&entries[i], "—")
+		maintenance, _ := entryMaintenanceEOL(&entries[i], "—")
 		var cols []string
 		cols = append(cols, tableVerdictDisplay(entries[i].Verdict))
 		if showSource {
@@ -242,7 +242,7 @@ func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 		if showRelation {
 			cols = append(cols, formatRelation(&entries[i]))
 		}
-		cols = append(cols, maintenance, eol)
+		cols = append(cols, maintenance)
 		if _, err := fmt.Fprintln(tw, strings.Join(cols, "\t")); err != nil {
 			return fmt.Errorf("failed to write table row: %w", err)
 		}
@@ -274,8 +274,6 @@ type enrichedJSONEntry struct {
 	PURL      string `json:"purl"`
 	Verdict   string `json:"verdict"`
 	Lifecycle string `json:"lifecycle"`
-	EOL       string `json:"eol"`
-	EOLReason string `json:"eol_reason,omitempty"`
 	Successor string `json:"successor,omitempty"`
 
 	RepoURL         string   `json:"repo_url,omitempty"`
@@ -322,13 +320,12 @@ func renderScanJSON(w io.Writer, entries []domainaudit.AuditEntry) error {
 
 // newEnrichedJSONEntry converts a single AuditEntry into the enriched JSON DTO.
 func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
-	maintenance, eol := entryMaintenanceEOL(e, "—")
+	maintenance, _ := entryMaintenanceEOL(e, "—")
 
 	je := enrichedJSONEntry{
 		PURL:        e.PURL,
 		Verdict:     string(e.Verdict),
 		Lifecycle:   maintenance,
-		EOL:         eol,
 		Error:       e.ErrorMsg,
 		Source:      string(e.Source),
 		Via:         e.Via,
@@ -344,7 +341,6 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	je.RepoURL = a.RepoURL
 	je.OverallScore = a.OverallScore
 	je.DependentCount = a.DependentCount
-	je.EOLReason = a.EOL.FinalReason()
 	je.Successor = a.EOL.Successor
 	je.Archived = a.IsArchived()
 
@@ -386,22 +382,20 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	if showRelation {
 		header = append(header, "relation", "relation_via")
 	}
-	header = append(header, "lifecycle", "eol", "eol_reason", "successor", "advisory_count", "max_advisory_severity", "max_cvss3_score", "repo_url", "source", "via")
+	header = append(header, "lifecycle", "successor", "advisory_count", "max_advisory_severity", "max_cvss3_score", "repo_url", "source", "via")
 	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
 	for i := range entries {
 		e := &entries[i]
-		maintenance, eol := entryMaintenanceEOL(e, "")
+		maintenance, _ := entryMaintenanceEOL(e, "")
 
-		eolReason := ""
 		successor := ""
 		repoURL := ""
 		advisoryCount := ""
 		maxSeverity := ""
 		maxCVSS3Score := ""
 		if a := e.Analysis; a != nil {
-			eolReason = a.EOL.FinalReason()
 			successor = a.EOL.Successor
 			repoURL = a.RepoURL
 			if a.ReleaseInfo != nil {
@@ -419,7 +413,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		if showRelation {
 			row = append(row, e.Relation.String(), strings.Join(e.ViaParents, ";"))
 		}
-		row = append(row, maintenance, eol, eolReason, successor, advisoryCount, maxSeverity, maxCVSS3Score, repoURL, string(e.Source), e.Via)
+		row = append(row, maintenance, successor, advisoryCount, maxSeverity, maxCVSS3Score, repoURL, string(e.Source), e.Via)
 		if err := cw.Write(row); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}

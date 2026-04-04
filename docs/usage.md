@@ -33,25 +33,25 @@
 $ uzomuzo scan pkg:npm/express@4.18.2
 
 ── pkg:npm/express@4.18.2 ──────────────────────────────────
-│ Package: pkg:npm/express@4.18.2
-│ Description: Fast, unopinionated, minimalist web framework for node.
-│   Homepage: https://expressjs.com
-│   Registry: https://www.npmjs.com/package/express
-├─ Verdict ─────────────────────────────────────────────────
-│ ✅ Active
-│ Reason: Recent stable package version published; maintenance score ≥ 3
+│ Fast, unopinionated, minimalist web framework for node.
+│ ✅ Active: Actively maintained with recent releases
+├─ Signals ─────────────────────────────────────────────────
+│ Recent Stable Release: true
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 10/10
 ├─ Health ──────────────────────────────────────────────────
-│ GitHub: Normal (68892 stars)
+│ 68892 stars
 │ Used by: 2211 packages
 │ Depends on: 31 direct, 39 transitive
 │ Score: 8.4/10  Maintained: 10.0/10
 ├─ Releases ────────────────────────────────────────────────
-│ Stable: 5.2.1 (2025-12-01)  Advisories: 0
+│ Stable: 5.2.1 (2025-12-01)
+│ Pre-release: 5.0.0-beta.3 (2024-03-25)
 │ Requested: 4.18.2 (2022-10-08)
-├─ License ─────────────────────────────────────────────────
-│ MIT (source: depsdev-project-spdx / depsdev-version-spdx)
 ├─ Links ───────────────────────────────────────────────────
+│ Homepage: https://expressjs.com
 │ Repository: https://github.com/expressjs/express
+│ Registry: https://www.npmjs.com/package/express
 │ deps.dev: https://deps.dev/npm/express
 └───────────────────────────────────────────────────────────
 ```
@@ -93,6 +93,26 @@ When transitive dependencies are included, output shows a `RELATION` column indi
 ./uzomuzo scan --file go.mod       # explicit path
 ```
 
+<details>
+<summary><strong>Example: go.mod (table output with RELATION column)</strong></summary>
+
+```text
+$ uzomuzo scan --file go.mod -f table
+
+STATUS      PURL                                                        RELATION  LIFECYCLE
+⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Effective
+✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active
+
+── Summary ─────────────────────────────────────────────────
+│ 3 dependencies | ✅ 1 ok | ⚠️ 1 caution | 🔴 1 replace | 🔍 0 review
+└───────────────────────────────────────────────────────────
+```
+
+go.mod input adds a `RELATION` column showing `direct` or `indirect` dependency relationship.
+
+</details>
+
 ### GitHub Actions Workflow Input
 
 Scan a GitHub Actions workflow YAML to evaluate the lifecycle health of referenced Actions:
@@ -102,6 +122,51 @@ Scan a GitHub Actions workflow YAML to evaluate the lifecycle health of referenc
 ```
 
 This extracts `uses:` directives (e.g., `actions/checkout@v4`) and evaluates each referenced Action as a GitHub repository.
+
+<details>
+<summary><strong>Example: GitHub Actions workflow (detailed output)</strong></summary>
+
+```text
+$ uzomuzo scan --file .github/workflows/ci.yml -f detailed
+
+── https://github.com/actions/checkout ─────────────────────
+│ Description: Action for checking out a repo
+│ ✅ Active
+│ Reason: Recent human commits but no recent package publishing; maintenance score unavailable (Scorecard not found)
+├─ Health ──────────────────────────────────────────────────
+│ 7733 stars
+│ Last Commit: 2026-01-09
+├─ License ─────────────────────────────────────────────────
+│ Project: MIT (github)
+│ Requested Version: (none)
+├─ Links ───────────────────────────────────────────────────
+│ Homepage: https://github.com/features/actions
+│ Repository: https://github.com/actions/checkout
+└───────────────────────────────────────────────────────────
+
+── https://github.com/golangci/golangci-lint-action ────────
+│ Package: pkg:golang/github.com/golangci/golangci-lint-action@v1.2.2
+│ Description: Official GitHub Action for golangci-lint from its authors
+│ ✅ Active
+│ Reason: Recent human commits (VCS-direct ecosystem; commits deliver updates to consumers); maintenance score ≥ 3
+├─ Health ──────────────────────────────────────────────────
+│ 1419 stars
+│ Score: 6.9/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-01
+├─ Releases ────────────────────────────────────────────────
+│ Stable: v1.2.2 (2020-07-10)
+│ Highest (SemVer): v1.2.3-0.20260105112450-f75c1c4ee8cf (2026-01-05)
+├─ License ─────────────────────────────────────────────────
+│ MIT (depsdev)
+├─ Links ───────────────────────────────────────────────────
+│ Homepage: https://github.com/marketplace/actions/golangci-lint
+│ Repository: https://github.com/golangci/golangci-lint-action
+│ Registry: https://pkg.go.dev/github.com%2Fgolangci%2Fgolangci-lint-action
+│ deps.dev: https://deps.dev/go/github.com/golangci/golangci-lint-action
+└───────────────────────────────────────────────────────────
+```
+
+</details>
 
 ### Actions Discovery (`--include-actions`)
 
@@ -192,9 +257,9 @@ Rules:
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --format table
-STATUS      PURL                    LIFECYCLE  EOL
-🔴 replace   pkg:npm/request@2.88.2  EOL        EOL
-✅ ok        pkg:npm/express@4.18.2  Active     Not EOL
+STATUS     PURL                    LIFECYCLE
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed
+✅ ok       pkg:npm/express@4.18.2  Active
 
 ── Summary ─────────────────────────────────────────────────
 │ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -210,10 +275,10 @@ When scanning an SBOM that includes dependency graph information, a `RELATION` c
 
 ```text
 $ trivy fs . --format cyclonedx | uzomuzo scan --sbom - --show-transitive --format table
-STATUS      RELATION                  PURL                        LIFECYCLE  EOL
-✅ ok        direct                    pkg:npm/express@4.18.2      Active     Not EOL
-✅ ok        transitive (express)      pkg:npm/accepts@1.3.8       Active     Not EOL
-🔴 replace   transitive (express)      pkg:npm/inflight@1.0.6      EOL        EOL
+STATUS      RELATION                  PURL                        LIFECYCLE
+✅ ok        direct                    pkg:npm/express@4.18.2      Active
+✅ ok        transitive (express)      pkg:npm/accepts@1.3.8       Active
+🔴 replace   transitive (express)      pkg:npm/inflight@1.0.6      EOL-Confirmed
 
 ── Summary ─────────────────────────────────────────────────
 │ 3 dependencies | ✅ 2 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -240,16 +305,19 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
     {
       "purl": "pkg:npm/request@2.88.2",
       "verdict": "replace",
-      "lifecycle": "EOL",
-      "eol": "EOL",
-      "eol_reason": "Stable version is deprecated in npm registry. ...",
+      "lifecycle": "EOL-Confirmed",
       "repo_url": "https://github.com/request/request",
       "overall_score": 3.6,
-      "dependent_count": 186345,
+      "dependent_count": 186349,
       "stable_version": "2.88.2",
       "project_license": "Apache-2.0",
-      "version_licenses": ["Apache-2.0"],
-      "reason": "Primary-source EOL"
+      "version_licenses": [
+        "Apache-2.0"
+      ],
+      "advisory_count": 1,
+      "max_advisory_severity": "MEDIUM",
+      "max_cvss3_score": 6.1,
+      "reason": "Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2"
     }
   ]
 }
@@ -264,8 +332,8 @@ The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, 
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --format csv
-verdict,purl,lifecycle,eol,eol_reason,successor,repo_url
-replace,pkg:npm/request@2.88.2,EOL,EOL,"Stable version is deprecated in npm registry. ...",https://github.com/request/request
+verdict,purl,lifecycle,successor,advisory_count,max_advisory_severity,max_cvss3_score,repo_url,source,via
+replace,pkg:npm/request@2.88.2,EOL-Confirmed,,1,MEDIUM,6.1,https://github.com/request/request,,
 ```
 
 </details>
@@ -293,8 +361,8 @@ Without `--fail-on`, exit code is always 0 regardless of scan results.
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-confirmed --format table
-STATUS      PURL                    LIFECYCLE  EOL
-🔴 replace   pkg:npm/request@2.88.2  EOL        EOL
+STATUS     PURL                    LIFECYCLE
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -306,8 +374,8 @@ STATUS      PURL                    LIFECYCLE  EOL
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-effective --format table
-STATUS      PURL                    LIFECYCLE  EOL
-🔴 replace   pkg:npm/request@2.88.2  EOL        EOL
+STATUS     PURL                    LIFECYCLE
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -319,9 +387,9 @@ STATUS      PURL                    LIFECYCLE  EOL
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --fail-on eol-confirmed,stalled --format table
-STATUS      PURL                    LIFECYCLE  EOL
-🔴 replace   pkg:npm/request@2.88.2  EOL        EOL
-✅ ok        pkg:npm/express@4.18.2  Active     Not EOL
+STATUS     PURL                    LIFECYCLE
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed
+✅ ok       pkg:npm/express@4.18.2  Active
 
 ── Summary ─────────────────────────────────────────────────
 │ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
