@@ -32,25 +32,28 @@
 ```text
 $ uzomuzo scan pkg:npm/express@4.18.2
 
---- PURL 1 ---
-📦 Package: pkg:npm/express@4.18.2
-🧾 Description: Fast, unopinionated, minimalist web framework for node.
-   🔗 Homepage: https://expressjs.com
-   🗃 Registry: https://www.npmjs.com/package/express
-⚖️  Result: 🟢 Active
-💭 Reason: Recent stable package version published; maintenance score ≥ 3
-📊 GitHub Info: Normal (⭐ 68886 stars)
-👥 Used by: 2210 packages
-📦 Depends on: 31 direct, 39 transitive
-🏆 Overall Score: 8.4/10
-  🔧 Maintained: 10.0/10
-📦 Latest Stable Release: 5.2.1 (2025-12-01)
-   ↳ Stable Advisories: 0
-📦 Highest Version (SemVer): 5.2.1 (2025-12-01)
-📋 Requested Version: 4.18.2 (2022-10-08)
-📄 License: MIT (source: depsdev-project-spdx / depsdev-version-spdx)
-🔗 Repository: https://github.com/expressjs/express
-🔗 Scorecard: https://scorecard.dev/viewer/?uri=github.com%2Fexpressjs%2Fexpress
+── pkg:npm/express@4.18.2 ──────────────────────────────────
+│ Package: pkg:npm/express@4.18.2
+│ Description: Fast, unopinionated, minimalist web framework for node.
+│   Homepage: https://expressjs.com
+│   Registry: https://www.npmjs.com/package/express
+├─ Verdict ─────────────────────────────────────────────────
+│ ✅ Active
+│ Reason: Recent stable package version published; maintenance score ≥ 3
+├─ Health ──────────────────────────────────────────────────
+│ GitHub: Normal (68892 stars)
+│ Used by: 2211 packages
+│ Depends on: 31 direct, 39 transitive
+│ Score: 8.4/10  Maintained: 10.0/10
+├─ Releases ────────────────────────────────────────────────
+│ Stable: 5.2.1 (2025-12-01)  Advisories: 0
+│ Requested: 4.18.2 (2022-10-08)
+├─ License ─────────────────────────────────────────────────
+│ MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+├─ Links ───────────────────────────────────────────────────
+│ Repository: https://github.com/expressjs/express
+│ deps.dev: https://deps.dev/npm/express
+└───────────────────────────────────────────────────────────
 ```
 
 For ≤3 inputs, the `detailed` format is used automatically. Use `--format detailed` to force it for larger inputs.
@@ -112,7 +115,7 @@ When scanning GitHub URLs, `--include-actions` automatically fetches the target 
 ./uzomuzo scan https://github.com/owner/repo --include-actions --fail-on stalled
 ```
 
-Output includes a `--- GitHub Actions ---` separator between direct results and discovered Actions. JSON and CSV formats include a `source` field (`"actions"` for discovered entries).
+Output includes a `SOURCE` column to distinguish direct results from discovered Actions. JSON and CSV formats include a `source` field (`"actions"` for discovered entries).
 
 > **Note:** `--include-actions` is opt-in because it makes additional GitHub API calls to fetch workflow files. It requires `GITHUB_TOKEN` to be set (the Contents API is used to fetch workflow YAML). It is only supported for GitHub URL inputs (not `--sbom` or `--file go.mod`).
 
@@ -189,11 +192,13 @@ Rules:
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --format table
-VERDICT  PURL                    LIFECYCLE  EOL
-replace  pkg:npm/request@2.88.2  EOL        EOL
-ok       pkg:npm/express@4.18.2  Active     Not EOL
+STATUS      PURL                    LIFECYCLE  EOL
+🔴 replace   pkg:npm/request@2.88.2  EOL        EOL
+✅ ok        pkg:npm/express@4.18.2  Active     Not EOL
 
-Summary: 2 dependencies | 1 ok | 0 caution | 1 replace | 0 review
+── Summary ─────────────────────────────────────────────────
+│ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
+└───────────────────────────────────────────────────────────
 ```
 
 </details>
@@ -205,12 +210,14 @@ When scanning an SBOM that includes dependency graph information, a `RELATION` c
 
 ```text
 $ trivy fs . --format cyclonedx | uzomuzo scan --sbom - --show-transitive --format table
-VERDICT  RELATION                  PURL                        LIFECYCLE  EOL
-ok       direct                    pkg:npm/express@4.18.2      Active     Not EOL
-ok       transitive (express)      pkg:npm/accepts@1.3.8       Active     Not EOL
-replace  transitive (express)      pkg:npm/inflight@1.0.6      EOL        EOL
+STATUS      RELATION                  PURL                        LIFECYCLE  EOL
+✅ ok        direct                    pkg:npm/express@4.18.2      Active     Not EOL
+✅ ok        transitive (express)      pkg:npm/accepts@1.3.8       Active     Not EOL
+🔴 replace   transitive (express)      pkg:npm/inflight@1.0.6      EOL        EOL
 
-Summary: 3 dependencies | 2 ok | 0 caution | 1 replace | 0 review
+── Summary ─────────────────────────────────────────────────
+│ 3 dependencies | ✅ 2 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
+└───────────────────────────────────────────────────────────
 ```
 
 Without `--show-transitive`, only `direct` entries are displayed — transitive issues are addressed by updating the direct dependency that introduces them.
@@ -286,10 +293,12 @@ Without `--fail-on`, exit code is always 0 regardless of scan results.
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-confirmed --format table
-VERDICT  PURL                    LIFECYCLE  EOL
-replace  pkg:npm/request@2.88.2  EOL        EOL
+STATUS      PURL                    LIFECYCLE  EOL
+🔴 replace   pkg:npm/request@2.88.2  EOL        EOL
 
-Summary: 1 dependencies | 0 ok | 0 caution | 1 replace | 0 review
+── Summary ─────────────────────────────────────────────────
+│ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
+└───────────────────────────────────────────────────────────
 # exit code: 1  (request is EOL-Confirmed → matches --fail-on eol-confirmed)
 ```
 
@@ -297,10 +306,12 @@ Summary: 1 dependencies | 0 ok | 0 caution | 1 replace | 0 review
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-effective --format table
-VERDICT  PURL                    LIFECYCLE  EOL
-replace  pkg:npm/request@2.88.2  EOL        EOL
+STATUS      PURL                    LIFECYCLE  EOL
+🔴 replace   pkg:npm/request@2.88.2  EOL        EOL
 
-Summary: 1 dependencies | 0 ok | 0 caution | 1 replace | 0 review
+── Summary ─────────────────────────────────────────────────
+│ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
+└───────────────────────────────────────────────────────────
 # exit code: 0  (request is EOL-Confirmed, not EOL-Effective → no match)
 ```
 
@@ -308,11 +319,13 @@ Summary: 1 dependencies | 0 ok | 0 caution | 1 replace | 0 review
 
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --fail-on eol-confirmed,stalled --format table
-VERDICT  PURL                    LIFECYCLE  EOL
-replace  pkg:npm/request@2.88.2  EOL        EOL
-ok       pkg:npm/express@4.18.2  Active     Not EOL
+STATUS      PURL                    LIFECYCLE  EOL
+🔴 replace   pkg:npm/request@2.88.2  EOL        EOL
+✅ ok        pkg:npm/express@4.18.2  Active     Not EOL
 
-Summary: 2 dependencies | 1 ok | 0 caution | 1 replace | 0 review
+── Summary ─────────────────────────────────────────────────
+│ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
+└───────────────────────────────────────────────────────────
 # exit code: 1  (request matches eol-confirmed)
 ```
 

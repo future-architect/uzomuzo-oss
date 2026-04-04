@@ -42,24 +42,24 @@ A `RELATION` column is added to output when SBOM input is used:
 **Table format:**
 
 ```
-VERDICT  RELATION                  PURL                        LIFECYCLE   EOL
-ok       direct                    pkg:npm/express@4.18.2      Active      Not EOL
-ok       transitive (express)      pkg:npm/accepts@1.3.8       Active      Not EOL
+STATUS      RELATION                  PURL                        LIFECYCLE   EOL
+✅ ok        direct                    pkg:npm/express@4.18.2      Active      Not EOL
+✅ ok        transitive (express)      pkg:npm/accepts@1.3.8       Active      Not EOL
 ```
 
 **Detailed format** includes a `Relation:` line per entry:
 
 ```
---- PURL 1 ---
-📦 Package: pkg:npm/express@4.18.2
-🔗 Relation: direct
-⚖️  Result: 🟢 Active
+── pkg:npm/express@4.18.2 (direct) ─────────────────────────
+│ Package: pkg:npm/express@4.18.2
+├─ Verdict ─────────────────────────────────────────────────
+│ ✅ Active
 ...
 
---- PURL 2 ---
-📦 Package: pkg:npm/accepts@1.3.8
-🔗 Relation: transitive (express)
-⚖️  Result: 🟢 Active
+── pkg:npm/accepts@1.3.8 (transitive via express) ──────────
+│ Package: pkg:npm/accepts@1.3.8
+├─ Verdict ─────────────────────────────────────────────────
+│ ✅ Active
 ...
 ```
 

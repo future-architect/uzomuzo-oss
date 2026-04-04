@@ -17,13 +17,26 @@ A package with zero CVEs today may have been abandoned for years — no one is w
 ### What SCA misses — EOL-Effective
 
 ```text
-📦 Package: pkg:npm/dicer@0.3.0
-⚖️  Result: 🛑 EOL-Effective
-💭 Reason: Scorecard data incomplete; open advisories (1) and no human commits > 2 yrs
-📦 Latest Stable Release: 0.3.1 (2021-12-19)
-   ↳ Stable Advisories: 1
-      • [GHSA] GHSA-wm7h-9275-46v2
-💻 Latest Commit: 2023-07-15
+── pkg:npm/dicer@0.3.1 ─────────────────────────────────────
+│ Package: pkg:npm/dicer@0.3.1
+│ Description: A very fast streaming multipart parser for node.js
+├─ Verdict ─────────────────────────────────────────────────
+│ 🔴 EOL-Effective
+│ Reason: Low maintenance score; open advisories (1, max: HIGH 7.5) on latest version, no new release in 1566 days
+├─ Health ──────────────────────────────────────────────────
+│ GitHub: Normal (188 stars)
+│ Used by: 1271 packages
+│ Score: 2.8/10  Maintained: 0.0/10
+├─ Releases ────────────────────────────────────────────────
+│ Stable: 0.3.1 (2021-12-19)  ⚠️ Advisories: 1 (max: HIGH 7.5)
+│   HIGH     (7.5)  GHSA-wm7h-9275-46v2  Crash in HeaderParser in dicer
+│   → https://deps.dev/npm/dicer/0.3.1
+├─ License ─────────────────────────────────────────────────
+│ MIT (source: depsdev-project-spdx / project-fallback)
+├─ Links ───────────────────────────────────────────────────
+│ Repository: https://github.com/mscdex/dicer
+│ deps.dev: https://deps.dev/npm/dicer
+└───────────────────────────────────────────────────────────
 ```
 
 No official deprecation, no archived repository — yet `dicer` has an unpatched ReDoS vulnerability (CVSS 7.5 — HIGH severity) with zero human commits in over two years. SCA tools report "1 CVE" and move on. uzomuzo recognizes the combination of HIGH/CRITICAL unpatched advisory + maintenance absence as **effectively end-of-life**. This package sits in the Express dependency chain (via busboy → multer), meaning millions of applications silently depend on abandoned code.
@@ -146,29 +159,51 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 ### Active — `express` (193K dependents)
 
 ```text
-📦 Package: pkg:npm/express@4.22.1
-⚖️  Result: 🟢 Active
-💭 Reason: Recent stable package version published with recent human commits; maintenance score ≥ 3
-📊 GitHub Info: Normal (⭐ 68954 stars)
-👥 Dependents: 192926
-🏆 Overall Score: 8.3/10
-  🔧 Maintained: 10.0/10
-📦 Latest Stable Release: 5.2.1 (2025-12-01)
-💻 Latest Commit: 2026-03-01
+── pkg:npm/express@4.18.2 ──────────────────────────────────
+│ Package: pkg:npm/express@4.18.2
+│ Description: Fast, unopinionated, minimalist web framework for node.
+│   Homepage: https://expressjs.com
+│   Registry: https://www.npmjs.com/package/express
+├─ Verdict ─────────────────────────────────────────────────
+│ ✅ Active
+│ Reason: Recent stable package version published; maintenance score ≥ 3
+├─ Health ──────────────────────────────────────────────────
+│ GitHub: Normal (68892 stars)
+│ Used by: 2211 packages
+│ Depends on: 31 direct, 39 transitive
+│ Score: 8.4/10  Maintained: 10.0/10
+├─ Releases ────────────────────────────────────────────────
+│ Stable: 5.2.1 (2025-12-01)  Advisories: 0
+│ Requested: 4.18.2 (2022-10-08)
+├─ License ─────────────────────────────────────────────────
+│ MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+├─ Links ───────────────────────────────────────────────────
+│ Repository: https://github.com/expressjs/express
+│ deps.dev: https://deps.dev/npm/express
+└───────────────────────────────────────────────────────────
 ```
 
 ### Legacy-Safe — `function-bind` (1M+ dependents)
 
 ```text
-📦 Package: pkg:npm/function-bind@1.1.2
-⚖️  Result: 🔵 Legacy-Safe
-💭 Reason: No known advisories; no human commits for > 2 yrs
-👥 Dependents: 1061436
-🏆 Overall Score: 4.5/10
-  🔧 Maintained: 0.0/10
-📦 Latest Stable Release: 1.1.2 (2023-10-12)
-   ↳ Stable Advisories: 0
-💻 Latest Commit: 2023-10-12
+── pkg:npm/function-bind@1.1.2 ─────────────────────────────
+│ Package: pkg:npm/function-bind@1.1.2
+├─ Verdict ─────────────────────────────────────────────────
+│ ✅ Legacy-Safe
+│ Reason: No known advisories; no human commits for > 2 yrs
+├─ Health ──────────────────────────────────────────────────
+│ GitHub: Normal (139 stars)
+│ Used by: 1077300 packages
+│ Score: 4.5/10  Maintained: 0.0/10
+│ Last Commit: 2023-10-12
+├─ Releases ────────────────────────────────────────────────
+│ Stable: 1.1.2 (2023-10-12)  Advisories: 0
+├─ License ─────────────────────────────────────────────────
+│ MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+├─ Links ───────────────────────────────────────────────────
+│ Repository: https://github.com/raynos/function-bind
+│ deps.dev: https://deps.dev/npm/function-bind
+└───────────────────────────────────────────────────────────
 ```
 
 Scorecard says Maintained 0.0 — but zero advisories and does one thing perfectly. uzomuzo classifies it as **frozen and safe**.
@@ -176,14 +211,26 @@ Scorecard says Maintained 0.0 — but zero advisories and does one thing perfect
 ### Stalled — `grunt` (12K stars)
 
 ```text
-📦 Package: pkg:npm/grunt@1.6.1
-⚖️  Result: ⚪ Stalled
-💭 Reason: Recent human commits, no recent package publishing, maintenance score < 3
-📊 GitHub Info: Normal (⭐ 12253 stars)
-🏆 Overall Score: 4.0/10
-  🔧 Maintained: 0.0/10
-📦 Latest Stable Release: 1.6.1 (2023-01-31)
-💻 Latest Commit: 2025-11-05
+── pkg:npm/grunt@1.6.1 ─────────────────────────────────────
+│ Package: pkg:npm/grunt@1.6.1
+│ Description: Grunt: The JavaScript Task Runner
+│   Homepage: http://gruntjs.com/
+├─ Verdict ─────────────────────────────────────────────────
+│ ⚠️ Stalled
+│ Reason: Recent human commits, no recent package publishing, maintenance score < 3
+├─ Health ──────────────────────────────────────────────────
+│ GitHub: Normal (12244 stars)
+│ Used by: 1113 packages
+│ Score: 4.0/10  Maintained: 0.0/10
+│ Last Commit: 2025-11-05
+├─ Releases ────────────────────────────────────────────────
+│ Stable: 1.6.1 (2023-01-31)  Advisories: 0
+├─ License ─────────────────────────────────────────────────
+│ MIT (source: derived-from-version / depsdev-version-spdx)
+├─ Links ───────────────────────────────────────────────────
+│ Repository: https://github.com/gruntjs/grunt
+│ deps.dev: https://deps.dev/npm/grunt
+└───────────────────────────────────────────────────────────
 ```
 
 Still has occasional commits, but no npm release since 2023. Not dead, not active — clearly declining.
@@ -191,16 +238,29 @@ Still has occasional commits, but no npm release since 2023. Not dead, not activ
 ### EOL-Confirmed — `inflight` (556K dependents)
 
 ```text
-📦 Package: pkg:npm/inflight@1.0.6
-⚖️  Result: 🔴 EOL-Confirmed
-💭 Reason: Repository is archived or disabled on GitHub
-📚 EOL Evidence:
-   • [npmjs] Stable version is deprecated in npm registry.
-     Message: This module is not supported, and leaks memory. Do not use it.
-🔁 Successor: lru-cache
-📊 GitHub Info: 📦 Archived (⭐ 76 stars)
-👥 Dependents: 556304
-📦 Latest Stable Release: 1.0.6 (2016-10-13) [DEPRECATED]
+── pkg:npm/inflight@1.0.6 ──────────────────────────────────
+│ Package: pkg:npm/inflight@1.0.6
+│ Description: Add callbacks to requests in flight to avoid async duplication
+├─ Verdict ─────────────────────────────────────────────────
+│ 🔴 EOL-Confirmed
+│ Reason: Repository is archived or disabled on GitHub
+├─ EOL ─────────────────────────────────────────────────────
+│ ➡️ Successor: it
+│ Evidence (1):
+│   [npmjs] Stable version is deprecated in npm registry.
+├─ Health ──────────────────────────────────────────────────
+│ GitHub: 📦 Archived (76 stars)
+│ Used by: 556777 packages
+│ Score: 2.9/10  Maintained: 0.0/10
+│ Last Commit: 2024-05-23
+├─ Releases ────────────────────────────────────────────────
+│ Stable: 1.0.6 (2016-10-13)  Advisories: 0 ⚠️ [DEPRECATED]
+├─ License ─────────────────────────────────────────────────
+│ ISC (source: derived-from-version / depsdev-version-spdx)
+├─ Links ───────────────────────────────────────────────────
+│ Repository: https://github.com/npm/inflight
+│ deps.dev: https://deps.dev/npm/inflight
+└───────────────────────────────────────────────────────────
 ```
 
 556K dependents. GitHub archived, npm deprecated. Last release 2016. **Migrate immediately.**
@@ -208,17 +268,26 @@ Still has occasional commits, but no npm release since 2023. Not dead, not activ
 ### EOL-Effective — `dicer` (busboy → multer → express)
 
 ```text
-📦 Package: pkg:npm/dicer@0.3.0
-⚖️  Result: 🛑 EOL-Effective
-💭 Reason: Scorecard data incomplete; open advisories (1) and no human commits > 2 yrs
-📊 GitHub Info: Normal (⭐ 188 stars)
-👥 Dependents: 4689
-🏆 Overall Score: 2.8/10
-  🔧 Maintained: 0.0/10
-📦 Latest Stable Release: 0.3.1 (2021-12-19)
-   ↳ Stable Advisories: 1
-      • [GHSA] GHSA-wm7h-9275-46v2
-💻 Latest Commit: 2023-07-15
+── pkg:npm/dicer@0.3.1 ─────────────────────────────────────
+│ Package: pkg:npm/dicer@0.3.1
+│ Description: A very fast streaming multipart parser for node.js
+├─ Verdict ─────────────────────────────────────────────────
+│ 🔴 EOL-Effective
+│ Reason: Low maintenance score; open advisories (1, max: HIGH 7.5) on latest version, no new release in 1566 days
+├─ Health ──────────────────────────────────────────────────
+│ GitHub: Normal (188 stars)
+│ Used by: 1271 packages
+│ Score: 2.8/10  Maintained: 0.0/10
+├─ Releases ────────────────────────────────────────────────
+│ Stable: 0.3.1 (2021-12-19)  ⚠️ Advisories: 1 (max: HIGH 7.5)
+│   HIGH     (7.5)  GHSA-wm7h-9275-46v2  Crash in HeaderParser in dicer
+│   → https://deps.dev/npm/dicer/0.3.1
+├─ License ─────────────────────────────────────────────────
+│ MIT (source: depsdev-project-spdx / project-fallback)
+├─ Links ───────────────────────────────────────────────────
+│ Repository: https://github.com/mscdex/dicer
+│ deps.dev: https://deps.dev/npm/dicer
+└───────────────────────────────────────────────────────────
 ```
 
 No deprecation, no archive — but unpatched ReDoS + zero maintenance. **SCA blind spot.**
