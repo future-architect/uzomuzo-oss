@@ -42,10 +42,7 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 	// Collect transitive advisory keys for all dependency graphs.
 	// Multiple original PURLs may resolve to the same effective dependency graph.
 	// Cache transitive advisory keys per graph to avoid repeating external API calls.
-	type transitiveEntry struct {
-		advisory domain.Advisory
-	}
-	perAnalysis := make(map[string][]transitiveEntry, len(depsGraphResults))
+	perAnalysis := make(map[string][]domain.Advisory, len(depsGraphResults))
 	allAdvisoryIDs := make(map[string]struct{})
 	transitiveKeysByDeps := make(map[*depsdev.DependenciesResponse]map[string][]depsdev.AdvisoryKey, len(depsGraphResults))
 
@@ -74,18 +71,16 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 		// Collect all transitive entries without pre-filtering by direct advisory IDs.
 		// Deduplication against direct advisories is performed per-VersionDetail in
 		// appendTransitiveAdvisories, ensuring each version is evaluated independently.
-		var entries []transitiveEntry
+		var entries []domain.Advisory
 		for depName, advisoryKeys := range transitiveKeys {
 			for _, ak := range advisoryKeys {
 				srcName, url := classifyAdvisory(ak.ID)
-				entries = append(entries, transitiveEntry{
-					advisory: domain.Advisory{
-						ID:             ak.ID,
-						Source:         srcName,
-						URL:            url,
-						Relation:       domain.AdvisoryRelationTransitive,
-						DependencyName: depName,
-					},
+				entries = append(entries, domain.Advisory{
+					ID:             ak.ID,
+					Source:         srcName,
+					URL:            url,
+					Relation:       domain.AdvisoryRelationTransitive,
+					DependencyName: depName,
 				})
 				allAdvisoryIDs[ak.ID] = struct{}{}
 			}
@@ -114,19 +109,14 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 			continue
 		}
 		for i := range entries {
-			adv := &entries[i].advisory
-			if detail, ok := details[adv.ID]; ok {
-				adv.Title = detail.Title
-				adv.CVSS3Score = detail.CVSS3Score
-				adv.Severity = domain.SeverityFromCVSS3(detail.CVSS3Score)
+			if detail, ok := details[entries[i].ID]; ok {
+				entries[i].Title = detail.Title
+				entries[i].CVSS3Score = detail.CVSS3Score
+				entries[i].Severity = domain.SeverityFromCVSS3(detail.CVSS3Score)
 			}
 		}
-		advisories := make([]domain.Advisory, len(entries))
-		for i, e := range entries {
-			advisories[i] = e.advisory
-		}
-		appendTransitiveAdvisories(a.ReleaseInfo.StableVersion, advisories)
-		appendTransitiveAdvisories(a.ReleaseInfo.MaxSemverVersion, advisories)
+		appendTransitiveAdvisories(a.ReleaseInfo.StableVersion, entries)
+		appendTransitiveAdvisories(a.ReleaseInfo.MaxSemverVersion, entries)
 	}
 }
 
