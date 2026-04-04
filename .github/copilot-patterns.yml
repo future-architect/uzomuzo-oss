@@ -77,6 +77,16 @@ patterns:
     pr: 116
     file: "internal/infrastructure/depsdev/depsdev.go"
     date: "2026-04-04"
+  - category: "api-consistency"
+    summary: "Reason text (severitySummary) must surface unknown-severity advisory counts to stay consistent with conservative lifecycle classification"
+    pr: 116
+    file: "internal/domain/analysis/lifecycle_assessor.go"
+    date: "2026-04-04"
+  - category: "comment-doc-drift"
+    summary: "Doc comment claimed PreRelease/Requested advisories 'are not consumed by any current code path' but LatestVersionDetail() can select them as fallback"
+    pr: 116
+    file: "internal/infrastructure/integration/enrich_advisory.go"
+    date: "2026-04-04"
   # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)
