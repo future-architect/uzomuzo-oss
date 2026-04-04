@@ -98,6 +98,10 @@ f, err := os.CreateTemp("", "myapp-*")
 defer os.Remove(f.Name())
 ```
 
+## Learned from Copilot Reviews
+
+- **Validate Config-Sourced Paths, Not Just User Input**: Path traversal prevention applies to **all** externally-defined paths — including those read from configuration files, embedded JSON, or YAML — not only direct user input. Normalize with `path.Clean`, reject results that equal `"."` or start with `".."`, and reject backslashes. Even trusted-at-compile-time data can be changed by a future edit, so enforce repo-root constraints defensively.
+
 ## Security Response Protocol
 
 If security issue found:

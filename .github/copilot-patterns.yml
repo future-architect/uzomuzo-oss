@@ -17,11 +17,7 @@ patterns:
     pr: 87
     file: "internal/interfaces/cli/scan.go"
     date: "2026-04-02"
-  - category: "security"
-    summary: "Normalize repository-scoped paths with path.Clean and reject traversal attempts (../ escaping repo root)"
-    pr: 111
-    file: "internal/infrastructure/depparser/ghaworkflow/parser.go"
-    date: "2026-04-03"
+  # security: promoted to security.instructions.md (PRs #111, #127 — validate config-sourced paths, not just user input)
   - category: "duplicate-parsing"
     summary: "Provide a combined parser (ParseWorkflowAll) when callers need both external URLs and local paths, avoiding double YAML unmarshal"
     pr: 111
@@ -47,6 +43,8 @@ patterns:
     pr: 121
     file: "internal/domain/analysis/aggregates_extra_test.go"
     date: "2026-04-04"
+  # comment-doc-drift: already covered by promoted rule in coding-standards (PR #127, main.go:203 — replaceBlock comment claimed duplicate marker detection but only checked begin markers)
+  # defensive-coding: already covered by promoted rules (PR #127, main.go:214 — dynamic Markdown fence delimiter to avoid backtick collisions)
   # defensive-coding: refined existing rule "Use Case-Insensitive Comparison for URL Components" (PR #119, boxdraw.go:680)
   # defensive-coding: already covered by "Branch Output Display on Each Field's Own Availability" (PR #119, boxdraw.go:314, boxdraw.go:403, boxdraw.go:606, boxdraw.go:741)
   # defensive-coding: guard loop/slice budgets against non-positive values to prevent panic/infinite loop (PR #119, boxdraw.go:163)
