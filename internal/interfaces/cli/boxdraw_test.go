@@ -1019,9 +1019,14 @@ func TestFormatTransitiveAdvisoryLines(t *testing.T) {
 			{ID: "CVE-4", CVSS3Score: 3.0, Severity: "LOW", Relation: analysis.AdvisoryRelationTransitive, DependencyName: "d@4.0"},
 		}
 		lines := formatTransitiveAdvisoryLines(advisories)
-		// Header should truncate dep names at 3
-		if !strings.Contains(lines[0], "via a@1.0, b@2.0, c@3.0 and 1 more") {
-			t.Errorf("expected truncated dep names in header, got: %s", lines[0])
+		// Header should only include dep names from displayed (non-truncated) advisories.
+		// With maxDisplayAdvisories=3, only a@1.0, b@2.0, c@3.0 are shown; d@4.0 is truncated.
+		if !strings.Contains(lines[0], "via a@1.0, b@2.0, c@3.0)") {
+			t.Errorf("expected dep names from displayed advisories only, got: %s", lines[0])
+		}
+		// d@4.0 should NOT appear in header since its advisory is truncated
+		if strings.Contains(lines[0], "d@4.0") {
+			t.Errorf("header should not mention dep names from truncated advisories, got: %s", lines[0])
 		}
 		// header(1) + 3 advisories + truncation(1) = 5
 		if len(lines) != 5 {

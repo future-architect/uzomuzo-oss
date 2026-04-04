@@ -794,10 +794,15 @@ func formatTransitiveAdvisoryLines(advisories []analysispkg.Advisory) []string {
 
 	advLines, sorted := sortedAdvisoryBlock(advisories, "    ")
 
-	// Collect unique dependency names in order of first appearance (sorted by severity)
+	// Collect unique dependency names only from the displayed (truncated) subset
+	// so the header stays consistent with the visible advisory lines.
+	displayLimit := len(sorted)
+	if displayLimit > maxDisplayAdvisories {
+		displayLimit = maxDisplayAdvisories
+	}
 	seen := make(map[string]bool)
 	var depNames []string
-	for _, a := range sorted {
+	for _, a := range sorted[:displayLimit] {
 		if a.DependencyName != "" && !seen[a.DependencyName] {
 			seen[a.DependencyName] = true
 			depNames = append(depNames, a.DependencyName)
