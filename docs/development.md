@@ -136,7 +136,7 @@ The script (`scripts/update-doc-examples/`) reads command definitions from an em
 
 ### CI Check
 
-The `doc-examples` CI job runs `make check-doc-examples` (dry-run mode) on every PR. If any output block differs from actual CLI output, the job fails with a message listing which blocks are stale.
+The `doc-examples` CI job runs `make check-doc-examples` on every PR. It validates that every command defined in `commands.json` has matching `begin/end` markers in the target Markdown files. This catches missing or broken markers without requiring API calls (output content is not compared, since values like star counts change daily).
 
 ### Adding a New Output Block
 

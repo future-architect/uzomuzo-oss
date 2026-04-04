@@ -19,8 +19,9 @@ update-doc-examples:
 	go build -o uzomuzo ./cmd/uzomuzo
 	go run ./scripts/update-doc-examples --skip-build
 
-# check-doc-examples: dry-run mode for CI (exit 1 if any block would change).
-# --skip-juice-shop: trivy is not available in standard CI runners.
+# check-doc-examples: validate marker structure in CI (no binary or API calls needed).
+# Checks that every command in commands.json has matching begin/end markers
+# in the target Markdown files. Does not compare output content (which varies
+# due to non-deterministic API data like star counts and release dates).
 check-doc-examples:
-	go build -o uzomuzo ./cmd/uzomuzo
-	go run ./scripts/update-doc-examples --skip-build --dry-run --skip-juice-shop
+	go run ./scripts/update-doc-examples --check-markers

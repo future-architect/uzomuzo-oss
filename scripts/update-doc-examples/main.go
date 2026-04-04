@@ -14,7 +14,8 @@
 //
 // Flags:
 //
-//	--dry-run          Report changed blocks, exit 1 if any differ (for CI)
+//	--dry-run          Report changed blocks, exit 1 if any differ
+//	--check-markers    Validate marker presence and structure only (no binary needed; for CI)
 //	--skip-build       Use existing binary instead of rebuilding
 //	--skip-juice-shop  Skip commands that require trivy
 package main
@@ -64,6 +65,7 @@ type RawFile struct {
 
 func main() {
 	dryRun := flag.Bool("dry-run", false, "report changed blocks and exit 1 if any differ")
+	checkMarkers := flag.Bool("check-markers", false, "validate marker presence and structure only (no binary needed)")
 	skipBuild := flag.Bool("skip-build", false, "use existing binary")
 	skipJuiceShop := flag.Bool("skip-juice-shop", false, "skip commands requiring trivy")
 	flag.Parse()
@@ -71,6 +73,11 @@ func main() {
 	var cfg Config
 	if err := json.Unmarshal(commandsJSON, &cfg); err != nil {
 		fatalf("parse commands.json: %v", err)
+	}
+
+	if *checkMarkers {
+		runCheckMarkers(cfg)
+		return
 	}
 
 	if !*skipBuild {
@@ -189,6 +196,65 @@ func main() {
 		}
 	}
 	fmt.Printf("\nDone: %d block(s) updated.\n", changed)
+}
+
+// runCheckMarkers validates that every command in commands.json has matching
+// begin/end markers in the target files and that marker blocks are non-empty.
+// This mode does not require the uzomuzo binary or any API calls.
+func runCheckMarkers(cfg Config) {
+	fileContents := make(map[string]string)
+	errs := 0
+
+	for _, cmd := range cfg.Commands {
+		for _, f := range cmd.Files {
+			if _, ok := fileContents[f]; !ok {
+				data, err := os.ReadFile(f)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "ERROR: read %s: %v\n", f, err)
+					errs++
+					continue
+				}
+				fileContents[f] = string(data)
+			}
+
+			content := fileContents[f]
+			beginMarker := "<!-- begin:output:" + cmd.ID + " -->"
+			endMarker := "<!-- end:output:" + cmd.ID + " -->"
+
+			beginIdx := strings.Index(content, beginMarker)
+			if beginIdx < 0 {
+				fmt.Fprintf(os.Stderr, "ERROR: %s: missing begin marker for %q\n", f, cmd.ID)
+				errs++
+				continue
+			}
+
+			afterBegin := beginIdx + len(beginMarker)
+			if strings.Contains(content[afterBegin:], beginMarker) {
+				fmt.Fprintf(os.Stderr, "ERROR: %s: duplicate begin marker for %q\n", f, cmd.ID)
+				errs++
+			}
+
+			endIdx := strings.Index(content[afterBegin:], endMarker)
+			if endIdx < 0 {
+				fmt.Fprintf(os.Stderr, "ERROR: %s: missing end marker for %q\n", f, cmd.ID)
+				errs++
+				continue
+			}
+
+			blockContent := strings.TrimSpace(content[afterBegin : afterBegin+endIdx])
+			if blockContent == "" {
+				fmt.Fprintf(os.Stderr, "WARN:  %s: empty block for %q\n", f, cmd.ID)
+			} else {
+				fmt.Printf("OK: %s [%s]\n", f, cmd.ID)
+			}
+		}
+	}
+
+	if errs > 0 {
+		fmt.Fprintf(os.Stderr, "\n%d marker error(s) found.\n", errs)
+		os.Exit(1)
+	}
+	fmt.Printf("\nAll %d marker(s) validated successfully.\n", len(cfg.Commands))
 }
 
 // replaceBlock replaces the content between begin/end markers for the given
