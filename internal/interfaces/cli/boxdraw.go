@@ -143,6 +143,13 @@ func wrapContent(content string, maxWidth int) []string {
 		// Label is too wide for meaningful wrap — fall back to 2-char indent.
 		indent = 2
 	}
+	return wrapContentWithIndent(content, maxWidth, indent)
+}
+
+// wrapContentWithIndent breaks content into lines with a caller-specified
+// continuation indent. Use this for unlabeled free text where the automatic
+// label-detection in wrapContent would misfire on content containing ": ".
+func wrapContentWithIndent(content string, maxWidth, indent int) []string {
 
 	var result []string
 	remaining := content
@@ -297,11 +304,12 @@ func writeBoxIdentity(ctx *boxContext) error {
 	}
 	if a != nil && a.Repository != nil && a.Repository.Description != "" {
 		if desc := truncateDescription(a.Repository.Description); desc != "" {
-			// Description is free text without a label prefix; wrap it directly
-			// rather than relying on writeLine's prefix-based wrapping detection.
+			// Description is free text without a label prefix; use a fixed
+			// continuation indent (2 spaces) to avoid misdetecting ": " in
+			// natural-language text as a label pattern.
 			maxWidth := ctx.barWidth - 2 // subtract "│ " prefix width
 			if maxWidth > 0 && utf8.RuneCountInString(desc) > maxWidth {
-				for _, line := range wrapContent(desc, maxWidth) {
+				for _, line := range wrapContentWithIndent(desc, maxWidth, 2) {
 					if _, err := fmt.Fprintf(ctx.w, "│ %s\n", line); err != nil {
 						return fmt.Errorf("failed to write box line: %w", err)
 					}

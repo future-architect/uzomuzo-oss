@@ -84,7 +84,10 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 	}
 	// 1. Archive/disable check
 	if analysis != nil && (analysis.IsArchived() || analysis.IsDisabled()) {
-		signals := []Signal{sig(SignalRepoArchived, fmt.Sprintf("%v", analysis.IsArchived()))}
+		var signals []Signal
+		if analysis.IsArchived() {
+			signals = append(signals, sig(SignalRepoArchived, "true"))
+		}
 		if analysis.IsDisabled() {
 			signals = append(signals, sig(SignalRepoDisabled, "true"))
 		}
@@ -349,13 +352,13 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
 					Reason:  "No recent activity, recent publish",
 					Trace:   []string{"inactive_commit_no_scores_recent_publish"},
-					Signals: []Signal{cSig, publishSig}}, nil
+					Signals: []Signal{cSig, publishSig, mSig}}, nil
 			}
 			if daysSinceLastHumanCommit > s.rules.EolInactivityDays && daysSincePublish > s.rules.EolInactivityDays {
 				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
 					Reason:  "Long-term inactive, no recent releases",
 					Trace:   []string{"inactive_commit_no_scores_old_publish"},
-					Signals: []Signal{cSig, publishSig}}, nil
+					Signals: []Signal{cSig, publishSig, mSig}}, nil
 			}
 		}
 		if !analysis.HasPublishData() && !hasMaintainedScore {
