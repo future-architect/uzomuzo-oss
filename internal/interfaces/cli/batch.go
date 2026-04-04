@@ -720,7 +720,11 @@ func displayBatchAnalysesFull(analyses map[string]*analysispkg.Analysis, options
 	for _, bucket := range [][]item{actives, stalled, eols, reviews, others} {
 		for _, it := range bucket {
 			purlCount++
-			fmt.Printf("\n--- PURL %d ---\n", purlCount)
+			label := "PURL"
+			if strings.HasPrefix(it.key, "https://") || strings.HasPrefix(it.key, "http://") {
+				label = "URL"
+			}
+			fmt.Printf("\n--- %s %d ---\n", label, purlCount)
 			entry := &domainaudit.AuditEntry{
 				PURL:     it.key,
 				Analysis: it.a,

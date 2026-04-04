@@ -138,6 +138,15 @@ func wrapContent(content string, maxWidth int) []string {
 		if !first {
 			budget = maxWidth - indent
 		}
+		if budget <= 0 {
+			// Budget too small for meaningful wrapping — return content as-is.
+			if first {
+				result = append(result, remaining)
+			} else {
+				result = append(result, strings.Repeat(" ", indent)+remaining)
+			}
+			break
+		}
 		if utf8.RuneCountInString(remaining) <= budget {
 			if first {
 				result = append(result, remaining)
@@ -728,16 +737,28 @@ func writeBoxLicenses(ctx *boxContext) error {
 			}
 		}
 	} else if proj.IsNonStandard() && proj.Raw != "" {
-		if err := writeLine(ctx, "Project: (non-standard raw=%s)", proj.Raw); err != nil {
-			return err
+		if proj.Source != "" {
+			if err := writeLine(ctx, "Project: (non-standard raw=%s source=%s)", proj.Raw, shortenLicenseSource(proj.Source)); err != nil {
+				return err
+			}
+		} else {
+			if err := writeLine(ctx, "Project: (non-standard raw=%s)", proj.Raw); err != nil {
+				return err
+			}
 		}
 	} else if proj.IsZero() {
 		if err := writeLine(ctx, "Project: (not detected)"); err != nil {
 			return err
 		}
 	} else {
-		if err := writeLine(ctx, "Project: (unclassified raw=%s)", proj.Raw); err != nil {
-			return err
+		if proj.Source != "" {
+			if err := writeLine(ctx, "Project: (unclassified source=%s raw=%s)", shortenLicenseSource(proj.Source), proj.Raw); err != nil {
+				return err
+			}
+		} else {
+			if err := writeLine(ctx, "Project: (unclassified raw=%s)", proj.Raw); err != nil {
+				return err
+			}
 		}
 	}
 
