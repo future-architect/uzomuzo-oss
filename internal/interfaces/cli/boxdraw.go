@@ -314,6 +314,65 @@ func writeBoxIdentity(ctx *boxContext) error {
 	return nil
 }
 
+// writeBoxSignals writes the Signals section — data points that directly
+// influenced the lifecycle verdict. Returns nil if no signals exist.
+func writeBoxSignals(ctx *boxContext) error {
+	a := ctx.analysis
+	if a == nil {
+		return nil
+	}
+	lr := a.GetLifecycleResult()
+	if lr == nil || len(lr.Signals) == 0 {
+		return nil
+	}
+	if err := writeSectionBar(ctx, "Signals"); err != nil {
+		return err
+	}
+	for _, s := range lr.Signals {
+		label := signalDisplayName(s.Name)
+		if s.Role == analysispkg.SignalAbsent {
+			if err := writeLine(ctx, "%s: (unavailable)", label); err != nil {
+				return err
+			}
+		} else {
+			if err := writeLine(ctx, "%s: %s", label, s.Value); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// signalDisplayName maps machine signal names to human-readable labels.
+func signalDisplayName(name string) string {
+	switch name {
+	case analysispkg.SignalEOLCatalog:
+		return "EOL Catalog"
+	case analysispkg.SignalEOLScheduledDate:
+		return "EOL Scheduled Date"
+	case analysispkg.SignalRepoArchived:
+		return "Repo Archived"
+	case analysispkg.SignalRepoDisabled:
+		return "Repo Disabled"
+	case analysispkg.SignalMaintainedScore:
+		return "Maintained Score"
+	case analysispkg.SignalLastHumanCommit:
+		return "Last Human Commit"
+	case analysispkg.SignalRecentStableRelease:
+		return "Recent Stable Release"
+	case analysispkg.SignalAdvisoryCount:
+		return "Advisories"
+	case analysispkg.SignalMaxAdvisorySeverity:
+		return "Max Advisory Severity"
+	case analysispkg.SignalDaysSinceRelease:
+		return "Days Since Release"
+	case analysispkg.SignalEcosystemDelivery:
+		return "Ecosystem Delivery"
+	default:
+		return name
+	}
+}
+
 // writeBoxOrigin writes the Origin section (source, relation, via).
 // Returns nil without writing for direct PURLs with direct/unknown relation (no provenance noise).
 // Only shown for action/transitive entries where origin context is meaningful.
@@ -759,6 +818,7 @@ func renderBoxEntry(w io.Writer, entry *domainaudit.AuditEntry) error {
 		func() error { return writeTopBar(ctx) },
 		func() error { return writeBoxIdentity(ctx) },
 		func() error { return writeBoxVerdict(ctx) },
+		func() error { return writeBoxSignals(ctx) },
 		func() error { return writeBoxOrigin(ctx) },
 		func() error { return writeBoxEOL(ctx) },
 		func() error { return writeBoxHealth(ctx) },

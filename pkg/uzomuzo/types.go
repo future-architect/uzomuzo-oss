@@ -32,6 +32,12 @@ type ScoreEntity = domain.ScoreEntity
 // AssessmentResult represents a single axis assessment result (currently lifecycle axis is implemented).
 type AssessmentResult = domain.AssessmentResult
 
+// Signal records a single data point evaluated during lifecycle assessment.
+type Signal = domain.Signal
+
+// SignalRole classifies how a signal contributed to the assessment decision.
+type SignalRole = domain.SignalRole
+
 // RepoState contains repository activity & archive/disable flags.
 type RepoState = domain.RepoState
 
