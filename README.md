@@ -4,8 +4,6 @@
 
 **Proactive lifecycle governance for OSS supply chains.** Detects abandoned, stalled, and effectively dead dependencies that traditional SCA tools report as "0 vulnerabilities — safe."
 
-![uzomuzo demo](docs/assets/demo.gif)
-
 > `./uzomuzo scan pkg:npm/inflight@1.0.6` — inflight has 556K dependents, yet its repository is archived and npm has deprecated it. uzomuzo detects this as **EOL-Confirmed** in seconds.
 
 ## The Problem: The CVE Blind Spot
