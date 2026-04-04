@@ -311,7 +311,7 @@ func writeBoxHealth(ctx *boxContext) error {
 
 	// Repo state — only show anomalous states (Archived/Disabled/Fork).
 	// "Normal" is omitted as it carries no information.
-	if a.RepoURL != "" && a.RepoState != nil {
+	if a.RepoState != nil {
 		if a.RepoState.IsArchived {
 			lines = append(lines, "📦 Archived")
 		} else if a.RepoState.IsDisabled {
@@ -674,7 +674,8 @@ func writeBoxLinks(ctx *boxContext) error {
 	}
 	if a.RepoURL != "" {
 		repoURL := a.RepoURL
-		if !strings.HasPrefix(repoURL, "http://") && !strings.HasPrefix(repoURL, "https://") {
+		lower := strings.ToLower(repoURL)
+		if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
 			repoURL = "https://" + repoURL
 		}
 		lines = append(lines, fmt.Sprintf("Repository: %s", repoURL))
