@@ -632,6 +632,14 @@ func writeBoxReleases(ctx *boxContext) error {
 		}
 		lines = append(lines, formatAdvisoryLines(stable.DirectAdvisories(), eco, name, stable.Version)...)
 		lines = append(lines, formatTransitiveAdvisoryLines(stable.TransitiveAdvisories())...)
+		// When only transitive advisories exist, formatAdvisoryLines is a no-op
+		// so the deps.dev link is not emitted. Add it here to avoid a regression.
+		if stable.DirectAdvisoryCount() == 0 && stable.TransitiveAdvisoryCount() > 0 {
+			depsdevURL := commonlinks.BuildDepsDevVersionURL(eco, name, stable.Version)
+			if depsdevURL != "" {
+				lines = append(lines, fmt.Sprintf("  → %s", depsdevURL))
+			}
+		}
 	}
 
 	preVer := ""
