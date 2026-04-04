@@ -981,10 +981,10 @@ func TestLifecycleAssessorService_Signals(t *testing.T) {
 				},
 			},
 			scores:         map[string]*ScoreEntity{},
-			eol:            EOLStatus{State: EOLEndOfLife},
+			eol:            EOLStatus{State: EOLEndOfLife, Evidences: []EOLEvidence{{Source: "npmjs", Summary: "Deprecated in registry", Confidence: 0.9}}},
 			wantSignalName: SignalEOLSource,
 			wantRole:       SignalUsed,
-			wantValue:      "registry-deprecated",
+			wantValue:      "npmjs",
 		},
 		{
 			name: "planned_eol_emits_eol_source_signal",
@@ -1038,9 +1038,9 @@ func TestLifecycleAssessorService_Signals(t *testing.T) {
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, ""),
 			},
 			eol:            EOLStatus{State: EOLNotEOL},
-			wantSignalName: SignalRecentStableRelease,
+			wantSignalName: SignalRecentPreRelease,
 			wantRole:       SignalUsed,
-			wantValue:      "pre-release",
+			wantValue:      "true",
 		},
 	}
 

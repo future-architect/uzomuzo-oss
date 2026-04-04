@@ -47,6 +47,7 @@ const (
 	SignalMaintainedScore     = "maintained_score"
 	SignalLastHumanCommit     = "last_human_commit"
 	SignalRecentStableRelease = "recent_stable_release"
+	SignalRecentPreRelease    = "recent_pre_release"
 	SignalAdvisoryCount       = "advisory_count"
 	SignalMaxAdvisorySeverity = "max_advisory_severity"
 	SignalDaysSinceRelease    = "days_since_release"

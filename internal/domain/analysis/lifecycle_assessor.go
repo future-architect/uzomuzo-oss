@@ -4,6 +4,7 @@ package analysis
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	cfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
@@ -93,12 +94,16 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 
 	// 1.5 Primary-source EOL status override
 	if in.EOL.IsEOL() {
-		reason := "Registry deprecated"
+		reason := in.EOL.FinalReason()
+		if reason == "" {
+			reason = "End of life"
+		}
 		if in.EOL.Successor != "" {
 			reason += "; successor: " + in.EOL.Successor
 		}
+		signalSource := eolEvidenceSource(in.EOL)
 		trace = append(trace, "primary_source_eol override")
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLConfirmed, Reason: reason, Trace: trace, Signals: []Signal{sig(SignalEOLSource, "registry-deprecated")}}, nil
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLConfirmed, Reason: reason, Trace: trace, Signals: []Signal{sig(SignalEOLSource, signalSource)}}, nil
 	}
 
 	// 2. Data validity check — residual vulnerability override
@@ -262,7 +267,7 @@ func (s *LifecycleAssessorService) assessActiveState(analysis *Analysis, scores 
 		signals := []Signal{sig(SignalRecentStableRelease, "true"), commitSignal(analysis), maintainedSignal(scores)}
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: "Actively maintained with recent releases", Trace: []string{"active_stable"}, Signals: signals}, nil
 	} else if hasRecentPrerelease {
-		signals := []Signal{sig(SignalRecentStableRelease, "pre-release"), commitSignal(analysis), maintainedSignal(scores)}
+		signals := []Signal{sig(SignalRecentPreRelease, "true"), commitSignal(analysis), maintainedSignal(scores)}
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: "Actively maintained with recent pre-release", Trace: []string{"active_prerelease"}, Signals: signals}, nil
 	} else { // hasRecentCommit only
 		if analysis.IsVCSDirectDelivery() {
@@ -487,6 +492,18 @@ func (s *LifecycleAssessorService) getScoreValue(scores map[string]*ScoreEntity,
 		return float64(score.Value())
 	}
 	return -1.0
+}
+
+// eolEvidenceSource derives a signal value from the EOL evidence source.
+// Falls back to "primary-source" when no evidence is available.
+func eolEvidenceSource(eol EOLStatus) string {
+	if len(eol.Evidences) > 0 {
+		src := eol.Evidences[0].Source
+		if src != "" {
+			return strings.ToLower(src)
+		}
+	}
+	return "primary-source"
 }
 
 // severitySummary and buildReviewNeededReason removed — Reason text is now

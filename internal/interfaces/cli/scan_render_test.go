@@ -131,6 +131,13 @@ func TestRenderScanCSV(t *testing.T) {
 	if !strings.Contains(lines[0], "lifecycle") {
 		t.Errorf("CSV header = %q, want to contain 'lifecycle'", lines[0])
 	}
+	for _, removed := range []string{"eol", "eol_reason"} {
+		for _, col := range strings.Split(lines[0], ",") {
+			if col == removed {
+				t.Errorf("CSV header should not contain removed column %q, got header: %s", removed, lines[0])
+			}
+		}
+	}
 }
 
 func TestRenderScanOutput_UnsupportedFormat(t *testing.T) {

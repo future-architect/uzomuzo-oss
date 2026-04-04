@@ -360,6 +360,8 @@ func signalDisplayName(name string) string {
 		return "Last Human Commit"
 	case analysispkg.SignalRecentStableRelease:
 		return "Recent Stable Release"
+	case analysispkg.SignalRecentPreRelease:
+		return "Recent Pre-Release"
 	case analysispkg.SignalAdvisoryCount:
 		return "Advisories"
 	case analysispkg.SignalMaxAdvisorySeverity:
