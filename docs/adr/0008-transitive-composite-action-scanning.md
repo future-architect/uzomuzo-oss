@@ -83,30 +83,32 @@ The existing section-based separation (`--- GitHub Actions ---`) is replaced wit
 **Table format**: A `SOURCE` column is added to the verdict table. The following example uses actual CLI output format with full GitHub URLs. The `transitive` source for library dependencies is a future extension; currently only `action-transitive` is implemented.
 
 ```
-VERDICT  SOURCE              PURL                                              LIFECYCLE   EOL
-ok       direct              https://github.com/future-architect/uzomuzo-oss   Active      Not EOL
-ok       action              https://github.com/actions/checkout               Active      Not EOL
-ok       action-transitive   https://github.com/actions/cache                  Active      Not EOL
+STATUS      SOURCE              PURL                                              LIFECYCLE   EOL
+✅ ok        direct              https://github.com/future-architect/uzomuzo-oss   Active      Not EOL
+✅ ok        action              https://github.com/actions/checkout               Active      Not EOL
+✅ ok        action-transitive   https://github.com/actions/cache                  Active      Not EOL
 ```
 
 **Detailed format**: The summary table at the top includes the `SOURCE` column. Per-entry headers include source annotation when entries have multiple source types (e.g., `--- PURL 1 (direct) ---`, `--- PURL 6 (action) ---`, `--- PURL 12 (action-transitive) ---`).
 
 ```
 --- Summary Table ---
-VERDICT  SOURCE              PURL                                              LIFECYCLE   EOL
-ok       direct              https://github.com/future-architect/uzomuzo-oss   Active      Not EOL
-ok       action              https://github.com/actions/checkout               Active      Not EOL
-ok       action-transitive   https://github.com/actions/cache                  Active      Not EOL
+STATUS      SOURCE              PURL                                              LIFECYCLE   EOL
+✅ ok        direct              https://github.com/future-architect/uzomuzo-oss   Active      Not EOL
+✅ ok        action              https://github.com/actions/checkout               Active      Not EOL
+✅ ok        action-transitive   https://github.com/actions/cache                  Active      Not EOL
 
---- PURL 1 (direct) ---
-📦 Package: https://github.com/future-architect/uzomuzo-oss
-⚖️  Result: Active
+── https://github.com/future-architect/uzomuzo-oss (direct) ──
+│ Package: https://github.com/future-architect/uzomuzo-oss
+├─ Verdict ─────────────────────────────────────────────────
+│ ✅ Active
 ...
 
---- PURL 6 (action-transitive) ---
-📦 Package: https://github.com/actions/cache
-🔗 Via: https://github.com/aquasecurity/trivy-action
-⚖️  Result: Active
+── https://github.com/actions/cache (action-transitive) ────
+│ Package: https://github.com/actions/cache
+│ Via: https://github.com/aquasecurity/trivy-action
+├─ Verdict ─────────────────────────────────────────────────
+│ ✅ Active
 ...
 ```
 
