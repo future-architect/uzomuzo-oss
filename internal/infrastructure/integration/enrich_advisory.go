@@ -75,8 +75,8 @@ func enrichVersionAdvisories(vd *domain.VersionDetail, details map[string]*depsd
 			adv.Severity = domain.SeverityFromCVSS3(detail.CVSS3Score)
 		}
 	}
-	// Sort by CVSS3 score descending so highest severity appears first.
-	sort.Slice(vd.Advisories, func(i, j int) bool {
+	// Use a stable sort so advisories with equal scores keep their existing order.
+	sort.SliceStable(vd.Advisories, func(i, j int) bool {
 		return vd.Advisories[i].CVSS3Score > vd.Advisories[j].CVSS3Score
 	})
 }

@@ -929,9 +929,17 @@ func printReleaseInfo(a *analysispkg.Analysis) {
 			}
 			for _, adv := range stable.Advisories {
 				if adv.Severity != "" {
-					fmt.Printf("      • [%s] %s — %s (%s %.1f)\n", adv.Source, adv.ID, adv.Title, adv.Severity, adv.CVSS3Score)
+					if adv.URL != "" {
+						fmt.Printf("      • [%s] %s — %s (%s %.1f) %s\n", adv.Source, adv.ID, adv.Title, adv.Severity, adv.CVSS3Score, adv.URL)
+					} else {
+						fmt.Printf("      • [%s] %s — %s (%s %.1f)\n", adv.Source, adv.ID, adv.Title, adv.Severity, adv.CVSS3Score)
+					}
 				} else {
-					fmt.Printf("      • [%s] %s\n", adv.Source, adv.ID)
+					if adv.URL != "" {
+						fmt.Printf("      • [%s] %s %s\n", adv.Source, adv.ID, adv.URL)
+					} else {
+						fmt.Printf("      • [%s] %s\n", adv.Source, adv.ID)
+					}
 				}
 			}
 		} else {

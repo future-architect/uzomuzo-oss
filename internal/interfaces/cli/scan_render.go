@@ -396,7 +396,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	if showRelation {
 		header = append(header, "relation", "relation_via")
 	}
-	header = append(header, "lifecycle", "eol", "eol_reason", "successor", "advisory_count", "max_advisory_severity", "repo_url", "source", "via")
+	header = append(header, "lifecycle", "eol", "eol_reason", "successor", "advisory_count", "max_advisory_severity", "max_cvss3_score", "repo_url", "source", "via")
 	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
@@ -409,6 +409,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		repoURL := ""
 		advisoryCount := ""
 		maxSeverity := ""
+		maxCVSS3Score := ""
 		if a := e.Analysis; a != nil {
 			eolReason = a.EOL.FinalReason()
 			successor = a.EOL.Successor
@@ -416,7 +417,8 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 			if a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
 				advisoryCount = fmt.Sprintf("%d", len(a.ReleaseInfo.StableVersion.Advisories))
 				if maxScore := a.ReleaseInfo.StableVersion.MaxCVSS3(); maxScore > 0 {
-					maxSeverity = fmt.Sprintf("%s (%.1f)", domain.SeverityFromCVSS3(maxScore), maxScore)
+					maxSeverity = domain.SeverityFromCVSS3(maxScore)
+					maxCVSS3Score = fmt.Sprintf("%.1f", maxScore)
 				}
 			}
 		}
@@ -425,7 +427,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		if showRelation {
 			row = append(row, e.Relation.String(), strings.Join(e.ViaParents, ";"))
 		}
-		row = append(row, maintenance, eol, eolReason, successor, advisoryCount, maxSeverity, repoURL, string(e.Source), e.Via)
+		row = append(row, maintenance, eol, eolReason, successor, advisoryCount, maxSeverity, maxCVSS3Score, repoURL, string(e.Source), e.Via)
 		if err := cw.Write(row); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}

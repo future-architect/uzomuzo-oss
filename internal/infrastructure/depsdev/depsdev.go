@@ -1515,7 +1515,7 @@ func (c *DepsDevClient) FetchAdvisoriesBatch(ctx context.Context, advisoryIDs []
 
 	wg.Wait()
 
-	slog.Info("advisory severity fetch complete",
+	slog.Debug("advisory severity fetch complete",
 		"requested", len(advisoryIDs),
 		"unique", len(unique),
 		"fetched", len(results),

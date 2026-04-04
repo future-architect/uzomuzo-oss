@@ -174,10 +174,11 @@ func (s *LifecycleAssessorService) shouldOverrideToEOLDueToResidualVulns(a *Anal
 	if count < s.rules.ResidualAdvisoryThreshold || count == 0 {
 		return false
 	}
-	// If severity data is available, only HIGH+ advisories trigger EOL override.
-	// If no severity data exists (all unknown), fall back to count-based logic.
+	// Only use severity-based override logic when all advisories have known severity.
+	// If any advisory severity is unknown, fall back to the existing count-based logic
+	// because unknown advisories may still be HIGH/CRITICAL.
 	vd := s.getStableOrMaxVersionDetail(a)
-	if vd != nil && vd.UnknownSeverityAdvisoryCount() < len(vd.Advisories) {
+	if vd != nil && vd.UnknownSeverityAdvisoryCount() == 0 {
 		return vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) > 0
 	}
 	return true
