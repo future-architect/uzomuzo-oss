@@ -4,7 +4,6 @@ package analysis
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	cfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
@@ -252,33 +251,6 @@ func (s *LifecycleAssessorService) severityAwareLabel(hasHigh bool,
 	return lowLabel, lowTrace
 }
 
-// severitySummary returns a severity breakdown string for reason text, e.g. ", max: HIGH 7.5".
-// When unknown-severity advisories exist, includes the count (e.g. ", max: LOW 3.0, unknown: 1")
-// so the reason text stays consistent with the conservative classification that treats unknowns
-// as potentially HIGH. Returns empty string if no severity data is available.
-func (s *LifecycleAssessorService) severitySummary(a *Analysis) string {
-	vd := s.getStableOrMaxVersionDetail(a)
-	if vd == nil || len(vd.Advisories) == 0 {
-		return ""
-	}
-
-	unknownCount := vd.UnknownSeverityAdvisoryCount()
-	maxScore := vd.MaxCVSS3()
-
-	if maxScore <= 0 {
-		if unknownCount > 0 {
-			return fmt.Sprintf(", unknown: %d", unknownCount)
-		}
-		return ""
-	}
-
-	severity := SeverityFromCVSS3(maxScore)
-	if unknownCount > 0 {
-		return fmt.Sprintf(", max: %s %.1f, unknown: %d", severity, maxScore, unknownCount)
-	}
-	return fmt.Sprintf(", max: %s %.1f", severity, maxScore)
-}
-
 // assessActiveState handles active repository states using domain models
 func (s *LifecycleAssessorService) assessActiveState(analysis *Analysis, scores map[string]*ScoreEntity) (*AssessmentResult, error) {
 	hasRecentStable := analysis.HasRecentStableRelease(s.rules.RecentStableWindowDays)
@@ -517,68 +489,5 @@ func (s *LifecycleAssessorService) getScoreValue(scores map[string]*ScoreEntity,
 	return -1.0
 }
 
-// buildReviewNeededReason composes an actionable reason string for "Review Needed" lifecycle classifications by
-// enumerating which key signals are missing or inconclusive.
-// This function stays within the domain layer and uses only domain models.
-func (s *LifecycleAssessorService) buildReviewNeededReason(a *Analysis, scores map[string]*ScoreEntity) string {
-	parts := make([]string, 0, 4)
-
-	// Scorecard presence and missing fields
-	maintained := s.getScoreValue(scores, "Maintained")
-	vuln := s.getScoreValue(scores, "Vulnerabilities")
-	if len(scores) == 0 {
-		parts = append(parts, "Scorecard: missing")
-	} else {
-		missing := make([]string, 0, 2)
-		if maintained < 0 {
-			missing = append(missing, "Maintained")
-		}
-		if vuln < 0 {
-			missing = append(missing, "Vulnerabilities")
-		}
-		if len(missing) > 0 {
-			parts = append(parts, "Scorecard: missing "+strings.Join(missing, " & "))
-		}
-	}
-
-	// Activity signals (releases/commits)
-	if a != nil {
-		hasStable := a.HasRecentStableRelease(s.rules.RecentStableWindowDays)
-		hasPre := a.HasRecentPrereleaseRelease(s.rules.RecentPrereleaseWindowDays)
-		hasCommit := a.HasRecentHumanCommit(s.rules.MaxHumanCommitGapDays)
-
-		sigsMissing := make([]string, 0, 3)
-		if !hasStable {
-			sigsMissing = append(sigsMissing, "stable release")
-		}
-		if !hasPre {
-			sigsMissing = append(sigsMissing, "pre-release")
-		}
-		if !hasCommit {
-			sigsMissing = append(sigsMissing, fmt.Sprintf("human commit (>%d days)", s.rules.MaxHumanCommitGapDays))
-		}
-		if len(sigsMissing) > 0 {
-			parts = append(parts, "Signals missing: "+strings.Join(sigsMissing, ", "))
-		}
-
-		// Commit recency details if available
-		if a.RepoState != nil && a.RepoState.LatestHumanCommit != nil {
-			days := a.GetDaysSinceLastHumanCommit()
-			parts = append(parts, fmt.Sprintf("last human commit %d days ago", days))
-		} else {
-			parts = append(parts, "last human commit date unknown")
-		}
-
-		// Advisory count for actionability
-		if count, _ := s.getStableOrMaxAdvisory(a); count > 0 {
-			parts = append(parts, fmt.Sprintf("open advisories: %d", count))
-		}
-	} else {
-		parts = append(parts, "Analysis data missing")
-	}
-
-	if len(parts) == 0 {
-		return "manual review suggested"
-	}
-	return "manual review suggested (" + strings.Join(parts, "; ") + ")"
-}
+// severitySummary and buildReviewNeededReason removed — Reason text is now
+// concise one-line summaries; detailed data is in Signals.
