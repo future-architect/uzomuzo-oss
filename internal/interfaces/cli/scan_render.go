@@ -419,11 +419,13 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 			eolReason = a.EOL.FinalReason()
 			successor = a.EOL.Successor
 			repoURL = a.RepoURL
-			if vd := a.ReleaseInfo.LatestVersionDetail(); vd != nil {
-				advisoryCount = fmt.Sprintf("%d", len(vd.Advisories))
-				if maxScore := vd.MaxCVSS3(); maxScore > 0 {
-					maxSeverity = domain.SeverityFromCVSS3(maxScore)
-					maxCVSS3Score = fmt.Sprintf("%.1f", maxScore)
+			if a.ReleaseInfo != nil {
+				if vd := a.ReleaseInfo.LatestVersionDetail(); vd != nil {
+					advisoryCount = fmt.Sprintf("%d", len(vd.Advisories))
+					if maxScore := vd.MaxCVSS3(); maxScore > 0 {
+						maxSeverity = domain.SeverityFromCVSS3(maxScore)
+						maxCVSS3Score = fmt.Sprintf("%.1f", maxScore)
+					}
 				}
 			}
 		}
