@@ -315,7 +315,7 @@ func writeBoxHealth(ctx *boxContext) error {
 
 	var lines []string
 
-	// Repo state
+	// Repo state — use "GitHub:" only when URL is a GitHub repo, otherwise "Repository:".
 	if a.RepoURL != "" {
 		state := "Normal"
 		if a.RepoState != nil {
@@ -331,13 +331,17 @@ func writeBoxHealth(ctx *boxContext) error {
 				}
 			}
 		}
-		ghLine := fmt.Sprintf("GitHub: %s", state)
-		if a.Repository != nil && a.Repository.StarsCount > 0 {
-			ghLine += fmt.Sprintf(" (%d stars)", a.Repository.StarsCount)
+		label := "Repository"
+		if strings.Contains(a.RepoURL, "github.com") {
+			label = "GitHub"
 		}
-		lines = append(lines, ghLine)
+		repoLine := fmt.Sprintf("%s: %s", label, state)
+		if a.Repository != nil && a.Repository.StarsCount > 0 {
+			repoLine += fmt.Sprintf(" (%d stars)", a.Repository.StarsCount)
+		}
+		lines = append(lines, repoLine)
 	} else {
-		lines = append(lines, "Hint: No repository URL found; Scorecard data unavailable")
+		slog.Debug("No repository URL found; Scorecard data unavailable")
 	}
 
 	// Dependent count
@@ -527,6 +531,11 @@ func formatAdvisoryLines(advisories []analysispkg.Advisory, ecosystem, name, ver
 			title = "  " + adv.Title
 		}
 		lines = append(lines, fmt.Sprintf("  %s  %s%s", sevCol, adv.ID, title))
+
+		advisoryURL := strings.TrimSpace(adv.URL)
+		if advisoryURL != "" {
+			lines = append(lines, fmt.Sprintf("  → %s", advisoryURL))
+		}
 	}
 
 	if len(sorted) > maxDisplayAdvisories {

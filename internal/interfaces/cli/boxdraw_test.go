@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	commonlinks "github.com/future-architect/uzomuzo-oss/internal/common/links"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
@@ -606,39 +605,6 @@ func TestRenderScanDetailed_BoxFormat(t *testing.T) {
 	}
 }
 
-func TestBuildDepsDevURL(t *testing.T) {
-	tests := []struct {
-		eco, name, want string
-	}{
-		{"npm", "express", "https://deps.dev/npm/express"},
-		{"PyPI", "requests", "https://deps.dev/pypi/requests"},
-		{"golang", "golang.org/x/sys", "https://deps.dev/go/golang.org/x/sys"},
-		{"gem", "rails", "https://deps.dev/rubygems/rails"},
-		{"", "express", ""},
-		{"npm", "", ""},
-	}
-	for _, tt := range tests {
-		got := commonlinks.BuildDepsDevURL(tt.eco, tt.name)
-		if got != tt.want {
-			t.Errorf("BuildDepsDevURL(%q, %q) = %q, want %q", tt.eco, tt.name, got, tt.want)
-		}
-	}
-}
-
-func TestBuildDepsDevVersionURL(t *testing.T) {
-	tests := []struct {
-		eco, name, ver, want string
-	}{
-		{"npm", "express", "4.18.2", "https://deps.dev/npm/express/4.18.2"},
-		{"golang", "golang.org/x/sys", "v0.1.0", "https://deps.dev/go/golang.org/x/sys/v0.1.0"},
-		{"", "express", "1.0.0", ""},
-		{"npm", "", "1.0.0", ""},
-		{"npm", "express", "", ""},
-	}
-	for _, tt := range tests {
-		got := commonlinks.BuildDepsDevVersionURL(tt.eco, tt.name, tt.ver)
-		if got != tt.want {
-			t.Errorf("BuildDepsDevVersionURL(%q, %q, %q) = %q, want %q", tt.eco, tt.name, tt.ver, got, tt.want)
-		}
-	}
-}
+// NOTE: Unit tests for BuildDepsDevURL/BuildDepsDevVersionURL live in
+// internal/common/links/depsdev_test.go. The CLI tests above verify that
+// box output renders deps.dev links correctly (integration-level coverage).
