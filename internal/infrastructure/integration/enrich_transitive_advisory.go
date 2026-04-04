@@ -71,8 +71,19 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 		// Collect all transitive entries without pre-filtering by direct advisory IDs.
 		// Deduplication against direct advisories is performed per-VersionDetail in
 		// appendTransitiveAdvisories, ensuring each version is evaluated independently.
+		// Sort dependency names for deterministic output order.
+		depNames := make([]string, 0, len(transitiveKeys))
+		for depName := range transitiveKeys {
+			depNames = append(depNames, depName)
+		}
+		sort.Strings(depNames)
+
 		var entries []domain.Advisory
-		for depName, advisoryKeys := range transitiveKeys {
+		for _, depName := range depNames {
+			advisoryKeys := append([]depsdev.AdvisoryKey(nil), transitiveKeys[depName]...)
+			sort.Slice(advisoryKeys, func(i, j int) bool {
+				return advisoryKeys[i].ID < advisoryKeys[j].ID
+			})
 			for _, ak := range advisoryKeys {
 				srcName, url := classifyAdvisory(ak.ID)
 				entries = append(entries, domain.Advisory{

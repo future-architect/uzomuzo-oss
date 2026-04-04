@@ -154,8 +154,7 @@ func decideNpmEOL(pkgID, version string, info *npmjs.DeprecationInfo) (state dom
 		return domain.EOLNotEOL, "", nil
 	}
 	successor = info.Successor
-	// Evidence should include the exact registry endpoint used for lifecycle classification (Reference)
-	// and provide a human-friendly UI URL in the summary for quick verification.
+	// Evidence should include the exact registry endpoint used for lifecycle classification (Reference).
 	regURL := "https://registry.npmjs.org/" + url.PathEscape(pkgID)
 	if info.Unpublished {
 		evidences = append(evidences, domain.EOLEvidence{

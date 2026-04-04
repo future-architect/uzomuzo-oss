@@ -427,13 +427,13 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 				LabelStalled, "inactive_no_commit_C3a_advisory_low_severity")
 			signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
 			return &AssessmentResult{Axis: LifecycleAxis, Label: label,
-				Reason:  "Unpatched vulns, no recent releases",
+				Reason:  "Unpatched vulnerabilities, no recent releases",
 				Trace:   []string{trace},
 				Signals: signals}, nil
 		}
 		signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-			Reason:  "Unpatched vulns, recent publish",
+			Reason:  "Unpatched vulnerabilities, recent publish",
 			Trace:   []string{"inactive_no_commit_C3b_advisory_recent_publish"},
 			Signals: signals}, nil
 	}
