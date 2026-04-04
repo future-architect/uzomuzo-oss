@@ -162,7 +162,7 @@ func decideNpmEOL(pkgID, version string, info *npmjs.DeprecationInfo) (state dom
 			Source:     "npmjs",
 			Reference:  regURL,
 			Confidence: 0.95,
-			Summary:    "Stable version is unpublished in npm registry",
+			Summary:    "Unpublished in npm registry",
 		})
 		return domain.EOLEndOfLife, successor, evidences
 	}
@@ -171,7 +171,7 @@ func decideNpmEOL(pkgID, version string, info *npmjs.DeprecationInfo) (state dom
 			Source:     "npmjs",
 			Reference:  regURL,
 			Confidence: 0.9,
-			Summary:    "Stable version is deprecated in npm registry",
+			Summary:    "Deprecated in npm registry",
 		})
 		return domain.EOLEndOfLife, successor, evidences
 	}

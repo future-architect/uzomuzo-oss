@@ -118,7 +118,7 @@ func TestDecideNpmEOL(t *testing.T) {
 	if ref := evidences[0].Reference; !strings.Contains(ref, "https://registry.npmjs.org/") {
 		t.Errorf("expected registry reference, got %s", ref)
 	}
-	if sum := evidences[0].Summary; !strings.Contains(sum, "deprecated in npm registry") {
+	if sum := evidences[0].Summary; !strings.Contains(sum, "Deprecated in npm registry") {
 		t.Errorf("expected deprecation summary, got %s", sum)
 	}
 
@@ -133,7 +133,7 @@ func TestDecideNpmEOL(t *testing.T) {
 	if ref := evidences2[0].Reference; !strings.Contains(ref, "https://registry.npmjs.org/") {
 		t.Errorf("expected registry reference for unpublished, got %s", ref)
 	}
-	if sum := evidences2[0].Summary; !strings.Contains(sum, "unpublished in npm registry") {
+	if sum := evidences2[0].Summary; !strings.Contains(sum, "Unpublished in npm registry") {
 		t.Errorf("expected unpublished summary, got %s", sum)
 	}
 
