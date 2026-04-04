@@ -58,14 +58,21 @@ func TestRenderScanTable(t *testing.T) {
 	if !strings.Contains(output, "replace") {
 		t.Error("table output missing replace verdict")
 	}
-	if !strings.Contains(output, "Summary:") {
-		t.Error("table output missing summary")
+	if !strings.Contains(output, "── Summary") {
+		t.Error("table output missing summary box")
 	}
 	if !strings.Contains(output, "1 ok") {
 		t.Error("summary missing ok count")
 	}
 	if !strings.Contains(output, "1 replace") {
 		t.Error("summary missing replace count")
+	}
+	// Verdict emoji in table rows
+	if !strings.Contains(output, "✅") {
+		t.Error("table output missing OK verdict icon")
+	}
+	if !strings.Contains(output, "🔴") {
+		t.Error("table output missing Replace verdict icon")
 	}
 }
 

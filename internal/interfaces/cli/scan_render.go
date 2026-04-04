@@ -194,6 +194,15 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 	return nil
 }
 
+// tableVerdictDisplay returns the verdict string with emoji prefix for table output.
+// The result is fixed-width padded so tabwriter aligns subsequent columns correctly
+// despite emoji taking variable display width.
+func tableVerdictDisplay(v domainaudit.Verdict) string {
+	icon := verdictIcon(v)
+	// Pad verdict text to 7 chars (length of "replace") so columns after it align.
+	return fmt.Sprintf("%s %-7s", icon, string(v))
+}
+
 // renderScanTable renders the VERDICT table format.
 // Conditional columns: SOURCE (when multiple sources), RELATION (when relation info present).
 func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
@@ -211,19 +220,21 @@ func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 			cols = append(cols, "RELATION")
 		}
 		cols = append(cols, "LIFECYCLE", "EOL")
-		_, err := fmt.Fprintln(tw, strings.Join(cols, "\t"))
-		return err
+		if _, err := fmt.Fprintln(tw, strings.Join(cols, "\t")); err != nil {
+			return fmt.Errorf("failed to write table header: %w", err)
+		}
+		return nil
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	if err := writeHeader(tw); err != nil {
-		return fmt.Errorf("failed to write table header: %w", err)
+		return err
 	}
 
 	for i := range entries {
 		maintenance, eol := entryMaintenanceEOL(&entries[i], "—")
 		var cols []string
-		cols = append(cols, string(entries[i].Verdict))
+		cols = append(cols, tableVerdictDisplay(entries[i].Verdict))
 		if showSource {
 			cols = append(cols, sourceDisplayName(entries[i].Source))
 		}
@@ -239,10 +250,21 @@ func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("failed to flush table output: %w", err)
 	}
+	// Summary box
+	if err := renderSummaryBox(w, entries); err != nil {
+		return fmt.Errorf("failed to write summary box: %w", err)
+	}
+	return nil
+}
+
+// renderSummaryBox renders the summary line in a left-border box.
+func renderSummaryBox(w io.Writer, entries []domainaudit.AuditEntry) error {
 	s := computeSummary(entries)
-	if _, err := fmt.Fprintf(w, "\nSummary: %d dependencies | %d ok | %d caution | %d replace | %d review\n",
-		s.Total, s.OK, s.Caution, s.Replace, s.Review); err != nil {
-		return fmt.Errorf("failed to write summary: %w", err)
+	summaryLine := fmt.Sprintf("%d dependencies | ✅ %d ok | ⚠️ %d caution | 🔴 %d replace | 🔍 %d review",
+		s.Total, s.OK, s.Caution, s.Replace, s.Review)
+	bar := "── Summary " + strings.Repeat("─", defaultBarWidth-len("── Summary "))
+	if _, err := fmt.Fprintf(w, "\n%s\n│ %s\n└%s\n", bar, summaryLine, strings.Repeat("─", defaultBarWidth-1)); err != nil {
+		return fmt.Errorf("failed to write summary box: %w", err)
 	}
 	return nil
 }
