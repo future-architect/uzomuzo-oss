@@ -76,9 +76,10 @@ func writeBottomBar(ctx *boxContext) error {
 }
 
 // writeLine writes: │ content
-// Long text lines are word-wrapped at barWidth. URL-containing lines and
-// lines starting with identifiers (Package:, →, ↳) are never wrapped to
-// preserve terminal link detection and copy-paste usability.
+// Long text lines are word-wrapped at barWidth when isWrappableLine returns
+// true (Reason:, Description:, and evidence summaries without URLs).
+// All other lines — URLs, identifiers, structured data — are left unwrapped
+// to preserve terminal link detection and copy-paste usability.
 func writeLine(ctx *boxContext, format string, args ...any) error {
 	content := fmt.Sprintf(format, args...)
 	maxWidth := ctx.barWidth - 2 // subtract "│ " prefix width
