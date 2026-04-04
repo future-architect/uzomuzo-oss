@@ -203,7 +203,7 @@ func tableVerdictDisplay(v domainaudit.Verdict) string {
 	return fmt.Sprintf("%s %-7s", icon, string(v))
 }
 
-// renderScanTable renders the VERDICT table format.
+// renderScanTable renders the STATUS table format.
 // Conditional columns: SOURCE (when multiple sources), RELATION (when relation info present).
 func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	showSource := hasMultipleSources(entries)
@@ -211,7 +211,7 @@ func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 
 	writeHeader := func(tw *tabwriter.Writer) error {
 		var cols []string
-		cols = append(cols, "VERDICT")
+		cols = append(cols, "STATUS")
 		if showSource {
 			cols = append(cols, "SOURCE")
 		}

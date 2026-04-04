@@ -46,8 +46,8 @@ func TestRenderScanTable(t *testing.T) {
 
 	output := buf.String()
 
-	if !strings.Contains(output, "VERDICT") {
-		t.Error("table output missing VERDICT header")
+	if !strings.Contains(output, "STATUS") {
+		t.Error("table output missing STATUS header")
 	}
 	if !strings.Contains(output, "PURL") {
 		t.Error("table output missing PURL header")
