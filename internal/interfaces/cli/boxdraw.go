@@ -88,7 +88,9 @@ func writeLine(ctx *boxContext, format string, args ...any) error {
 // Uses rune count (not byte count) so multi-byte box-drawing characters size correctly.
 func buildBar(prefix, middle string, width int) string {
 	remaining := width - utf8.RuneCountInString(prefix) - utf8.RuneCountInString(middle)
-	if remaining < minBarPadding {
+	if remaining < 0 {
+		remaining = 0
+	} else if remaining < minBarPadding {
 		remaining = minBarPadding
 	}
 	return prefix + middle + strings.Repeat("─", remaining)
@@ -332,7 +334,7 @@ func writeBoxHealth(ctx *boxContext) error {
 			}
 		}
 		label := "Repository"
-		if strings.Contains(a.RepoURL, "github.com") {
+		if strings.Contains(strings.ToLower(a.RepoURL), "github.com") {
 			label = "GitHub"
 		}
 		repoLine := fmt.Sprintf("%s: %s", label, state)

@@ -67,12 +67,20 @@ func TestRenderScanTable(t *testing.T) {
 	if !strings.Contains(output, "1 replace") {
 		t.Error("summary missing replace count")
 	}
-	// Verdict emoji in table rows
-	if !strings.Contains(output, "✅") {
-		t.Error("table output missing OK verdict icon")
+	// Verdict emoji in table rows (scoped to rows containing PURLs, not summary box)
+	hasEmojiRow := func(emoji, purl string) bool {
+		for _, line := range strings.Split(output, "\n") {
+			if strings.Contains(line, emoji) && strings.Contains(line, purl) {
+				return true
+			}
+		}
+		return false
 	}
-	if !strings.Contains(output, "🔴") {
-		t.Error("table output missing Replace verdict icon")
+	if !hasEmojiRow("✅", "pkg:npm/express@4.18.2") {
+		t.Error("table row for express missing OK verdict icon")
+	}
+	if !hasEmojiRow("🔴", "pkg:npm/request@2.88.2") {
+		t.Error("table row for request missing Replace verdict icon")
 	}
 }
 
