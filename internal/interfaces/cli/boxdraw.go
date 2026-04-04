@@ -397,8 +397,8 @@ func writeBoxReleases(ctx *boxContext) error {
 
 	stableVer := ""
 
-	// Stable version
-	if a.ReleaseInfo.StableVersion != nil && !a.ReleaseInfo.StableVersion.PublishedAt.IsZero() {
+	// Stable version — gate on Version, not PublishedAt, so advisories are never hidden.
+	if a.ReleaseInfo.StableVersion != nil && a.ReleaseInfo.StableVersion.Version != "" {
 		stable := a.ReleaseInfo.StableVersion
 		stableVer = stable.Version
 		deprecated := ""
@@ -410,15 +410,20 @@ func writeBoxReleases(ctx *boxContext) error {
 		if advCount > 0 {
 			advText = fmt.Sprintf("  ⚠️ Advisories: %d%s", advCount, advisorySeveritySummary(stable))
 		}
-		lines = append(lines, fmt.Sprintf("Stable: %s (%s)%s%s",
-			stable.Version, stable.PublishedAt.Format(dateFormat), advText, deprecated))
+		if !stable.PublishedAt.IsZero() {
+			lines = append(lines, fmt.Sprintf("Stable: %s (%s)%s%s",
+				stable.Version, stable.PublishedAt.Format(dateFormat), advText, deprecated))
+		} else {
+			lines = append(lines, fmt.Sprintf("Stable: %s%s%s",
+				stable.Version, advText, deprecated))
+		}
 		lines = append(lines, formatAdvisoryLines(stable.Advisories, eco, name, stable.Version)...)
 	}
 
 	preVer := ""
 
 	// Pre-release (skip if same version as stable)
-	if a.ReleaseInfo.PreReleaseVersion != nil && !a.ReleaseInfo.PreReleaseVersion.PublishedAt.IsZero() {
+	if a.ReleaseInfo.PreReleaseVersion != nil && a.ReleaseInfo.PreReleaseVersion.Version != "" {
 		pre := a.ReleaseInfo.PreReleaseVersion
 		// Always track preVer for downstream dedup even when skipped
 		preVer = pre.Version
@@ -427,8 +432,13 @@ func writeBoxReleases(ctx *boxContext) error {
 			if pre.IsDeprecated {
 				deprecated = " ⚠️ [DEPRECATED]"
 			}
-			lines = append(lines, fmt.Sprintf("Pre-release: %s (%s)%s",
-				pre.Version, pre.PublishedAt.Format(dateFormat), deprecated))
+			if !pre.PublishedAt.IsZero() {
+				lines = append(lines, fmt.Sprintf("Pre-release: %s (%s)%s",
+					pre.Version, pre.PublishedAt.Format(dateFormat), deprecated))
+			} else {
+				lines = append(lines, fmt.Sprintf("Pre-release: %s%s",
+					pre.Version, deprecated))
+			}
 		}
 	}
 
@@ -450,15 +460,20 @@ func writeBoxReleases(ctx *boxContext) error {
 	}
 
 	// Requested version (skip if same as stable or pre-release)
-	if a.ReleaseInfo.RequestedVersion != nil && !a.ReleaseInfo.RequestedVersion.PublishedAt.IsZero() {
+	if a.ReleaseInfo.RequestedVersion != nil && a.ReleaseInfo.RequestedVersion.Version != "" {
 		rv := a.ReleaseInfo.RequestedVersion
 		if rv.Version != stableVer && rv.Version != preVer {
 			deprecated := ""
 			if rv.IsDeprecated {
 				deprecated = " ⚠️ [DEPRECATED]"
 			}
-			lines = append(lines, fmt.Sprintf("Requested: %s (%s)%s",
-				rv.Version, rv.PublishedAt.Format(dateFormat), deprecated))
+			if !rv.PublishedAt.IsZero() {
+				lines = append(lines, fmt.Sprintf("Requested: %s (%s)%s",
+					rv.Version, rv.PublishedAt.Format(dateFormat), deprecated))
+			} else {
+				lines = append(lines, fmt.Sprintf("Requested: %s%s",
+					rv.Version, deprecated))
+			}
 		}
 	}
 
