@@ -77,9 +77,10 @@ func writeBottomBar(ctx *boxContext) error {
 
 // writeLine writes: │ content
 // Long text lines are word-wrapped at barWidth when isWrappableLine returns
-// true (Reason:, Description:, and evidence summaries without URLs).
-// All other lines — URLs, identifiers, structured data — are left unwrapped
-// to preserve terminal link detection and copy-paste usability.
+// true for known free-text fields such as Reason: and Description:.
+// All other lines — including URLs, identifiers, structured data, and
+// evidence summary lines — are left unwrapped to preserve terminal link
+// detection and copy-paste usability.
 func writeLine(ctx *boxContext, format string, args ...any) error {
 	content := fmt.Sprintf(format, args...)
 	maxWidth := ctx.barWidth - 2 // subtract "│ " prefix width

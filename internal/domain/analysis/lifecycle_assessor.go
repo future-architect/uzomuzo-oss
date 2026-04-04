@@ -343,17 +343,21 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 				Signals: []Signal{cSig, mSig}}, nil
 		}
 		daysSincePublish := analysis.GetDaysSinceLatestPublish()
+		publishSig := sigAbsent(SignalDaysSinceRelease)
+		if analysis.HasPublishData() {
+			publishSig = sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))
+		}
 		if daysSincePublish <= s.rules.EolInactivityDays {
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
 				Reason:  "No recent activity, recent publish",
 				Trace:   []string{"inactive_commit_no_scores_recent_publish"},
-				Signals: []Signal{cSig, sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))}}, nil
+				Signals: []Signal{cSig, publishSig}}, nil
 		}
 		if daysSinceLastHumanCommit > s.rules.EolInactivityDays && daysSincePublish > s.rules.EolInactivityDays {
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
 				Reason:  "Long-term inactive, no recent releases",
 				Trace:   []string{"inactive_commit_no_scores_old_publish"},
-				Signals: []Signal{cSig, sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))}}, nil
+				Signals: []Signal{cSig, publishSig}}, nil
 		}
 		if !analysis.HasPublishData() && !hasMaintainedScore {
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
@@ -382,7 +386,10 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	hasHighSeverity := s.hasHighSeverityAdvisories(analysis)
 	cSig := sigAbsent(SignalLastHumanCommit) // no commit data in this path
 	mSig := maintainedSignal(scores)
-	dSig := sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))
+	dSig := sigAbsent(SignalDaysSinceRelease)
+	if analysis.HasPublishData() {
+		dSig = sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))
+	}
 
 	// C1: Scorecard Maintained ≥ threshold
 	if hasMaintainedScore && isMaintenanceOk {
