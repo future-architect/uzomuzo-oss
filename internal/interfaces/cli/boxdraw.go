@@ -76,12 +76,116 @@ func writeBottomBar(ctx *boxContext) error {
 }
 
 // writeLine writes: │ content
+// Long text lines are word-wrapped at barWidth. URL-containing lines and
+// lines starting with identifiers (Package:, →, ↳) are never wrapped to
+// preserve terminal link detection and copy-paste usability.
 func writeLine(ctx *boxContext, format string, args ...any) error {
 	content := fmt.Sprintf(format, args...)
-	if _, err := fmt.Fprintf(ctx.w, "│ %s\n", content); err != nil {
-		return fmt.Errorf("failed to write box line: %w", err)
+	maxWidth := ctx.barWidth - 2 // subtract "│ " prefix width
+
+	// Only wrap known free-text fields; skip everything else.
+	if maxWidth <= 0 || utf8.RuneCountInString(content) <= maxWidth || !isWrappableLine(content) {
+		if _, err := fmt.Fprintf(ctx.w, "│ %s\n", content); err != nil {
+			return fmt.Errorf("failed to write box line: %w", err)
+		}
+		return nil
+	}
+
+	lines := wrapContent(content, maxWidth)
+	for _, line := range lines {
+		if _, err := fmt.Fprintf(ctx.w, "│ %s\n", line); err != nil {
+			return fmt.Errorf("failed to write box line: %w", err)
+		}
 	}
 	return nil
+}
+
+// isWrappableLine returns true only for free-text fields that benefit from
+// word-wrapping: Reason, Catalog Reason, Evidence summaries, Description.
+// Everything else (URLs, identifiers, structured data) is left unwrapped.
+func isWrappableLine(s string) bool {
+	trimmed := strings.TrimLeft(s, " ")
+	switch {
+	case strings.HasPrefix(trimmed, "Reason:"):
+		return true
+	case strings.HasPrefix(trimmed, "Catalog Reason:"):
+		return true
+	case strings.HasPrefix(trimmed, "Description:"):
+		return true
+	case strings.HasPrefix(trimmed, "[") && !strings.Contains(trimmed, "://"):
+		// EOL evidence summary lines like "[npmjs] Stable version is deprecated..."
+		return true
+	}
+	return false
+}
+
+// wrapContent breaks content into lines that fit within maxWidth runes.
+// The first line keeps the original indent. Continuation lines are indented
+// to align with the text after the label (e.g., "Reason: " → 8-char indent).
+func wrapContent(content string, maxWidth int) []string {
+	// Determine continuation indent from label prefix (e.g., "Reason: " → 8).
+	indent := findLabelIndent(content)
+	if indent >= maxWidth/2 {
+		// Label is too wide for meaningful wrap — fall back to 2-char indent.
+		indent = 2
+	}
+
+	var result []string
+	remaining := content
+	first := true
+	for utf8.RuneCountInString(remaining) > 0 {
+		budget := maxWidth
+		if !first {
+			budget = maxWidth - indent
+		}
+		if utf8.RuneCountInString(remaining) <= budget {
+			if first {
+				result = append(result, remaining)
+			} else {
+				result = append(result, strings.Repeat(" ", indent)+remaining)
+			}
+			break
+		}
+
+		// Find the last space within budget for a clean break.
+		runes := []rune(remaining)
+		breakAt := -1
+		for i := budget; i > 0; i-- {
+			if runes[i] == ' ' {
+				breakAt = i
+				break
+			}
+		}
+		if breakAt <= 0 {
+			// No space found — force break at budget.
+			breakAt = budget
+		}
+
+		line := string(runes[:breakAt])
+		if first {
+			result = append(result, line)
+			first = false
+		} else {
+			result = append(result, strings.Repeat(" ", indent)+line)
+		}
+		remaining = strings.TrimLeft(string(runes[breakAt:]), " ")
+	}
+	return result
+}
+
+// findLabelIndent returns the number of characters to use as continuation
+// indent, based on the label prefix of the content (e.g., "Reason: " → 8).
+// For lines without a recognized label pattern, returns 2.
+func findLabelIndent(s string) int {
+	trimmed := strings.TrimLeft(s, " ")
+	leadingSpaces := utf8.RuneCountInString(s) - utf8.RuneCountInString(trimmed)
+
+	// Look for "Label: " pattern
+	idx := strings.Index(trimmed, ": ")
+	if idx > 0 && idx < 30 {
+		return leadingSpaces + idx + 2 // include ": "
+	}
+	return 2
 }
 
 // buildBar constructs a decorative bar like "── title ────────..." or "├─ label ────────...".

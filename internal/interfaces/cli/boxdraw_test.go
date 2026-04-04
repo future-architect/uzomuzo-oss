@@ -940,6 +940,113 @@ func TestWriteBoxHealth_NilRepoState(t *testing.T) {
 	}
 }
 
+func TestWrapContent(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		maxWidth int
+		want     []string
+	}{
+		{
+			name:     "short_no_wrap",
+			content:  "Reason: all good",
+			maxWidth: 60,
+			want:     []string{"Reason: all good"},
+		},
+		{
+			name:     "long_reason_wraps",
+			content:  "Reason: Scorecard data incomplete; open advisories (1, max: HIGH 7.5) and no human commits > 2 yrs",
+			maxWidth: 58,
+			want: []string{
+				"Reason: Scorecard data incomplete; open advisories (1,",
+				"        max: HIGH 7.5) and no human commits > 2 yrs",
+			},
+		},
+		{
+			name:     "no_label_uses_2_indent",
+			content:  "This is a very long line without any label colon pattern that should still wrap correctly at word boundaries",
+			maxWidth: 40,
+			want: []string{
+				"This is a very long line without any",
+				"  label colon pattern that should still",
+				"  wrap correctly at word boundaries",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := wrapContent(tt.content, tt.maxWidth)
+			if len(got) != len(tt.want) {
+				t.Fatalf("wrapContent() returned %d lines, want %d\ngot:  %q\nwant: %q", len(got), len(tt.want), got, tt.want)
+			}
+			for i, line := range got {
+				if line != tt.want[i] {
+					t.Errorf("line[%d] = %q, want %q", i, line, tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestIsWrappableLine(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"Reason: some long explanation", true},
+		{"Catalog Reason: why this is EOL", true},
+		{"Description: A very long description", true},
+		{"[npmjs] Stable version is deprecated in npm registry.", true},
+		{"→ https://github.com/advisories/GHSA-xxxx", false},
+		{"Homepage: https://expressjs.com", false},
+		{"Package: pkg:npm/express@4.18.2", false},
+		{"Stable: 1.0.0 (2024-01-01)  ⚠️ Advisories: 5 (max: CRITICAL 9.8)", false},
+		{"MIT (depsdev)", false},
+		{"  HIGH     (7.5)  GHSA-wm7h-9275-46v2  Crash in HeaderParser", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input[:min(30, len(tt.input))], func(t *testing.T) {
+			got := isWrappableLine(tt.input)
+			if got != tt.want {
+				t.Errorf("isWrappableLine(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWriteLine_WordWrap(t *testing.T) {
+	var buf bytes.Buffer
+	a := &analysis.Analysis{
+		AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
+			analysis.LifecycleAxis: {
+				Label:  analysis.LabelEOLEffective,
+				Reason: "Scorecard data incomplete; open advisories (1, max: HIGH 7.5) and no human commits > 2 yrs",
+			},
+		},
+	}
+	entry := &domainaudit.AuditEntry{
+		PURL:     "pkg:npm/test@1.0.0",
+		Verdict:  domainaudit.VerdictReplace,
+		Analysis: a,
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxVerdict(ctx); err != nil {
+		t.Fatalf("writeBoxVerdict() error = %v", err)
+	}
+	output := buf.String()
+	// Reason should be wrapped across multiple lines
+	lines := strings.Split(output, "\n")
+	var reasonLines []string
+	for _, l := range lines {
+		if strings.Contains(l, "Reason:") || (len(reasonLines) > 0 && strings.HasPrefix(l, "│ ") && !strings.Contains(l, "├─") && !strings.Contains(l, "└─") && !strings.Contains(l, "🔴")) {
+			reasonLines = append(reasonLines, l)
+		}
+	}
+	if len(reasonLines) < 2 {
+		t.Errorf("expected Reason to wrap across multiple lines, got %d line(s):\n%s", len(reasonLines), output)
+	}
+}
+
 // NOTE: Unit tests for BuildDepsDevURL/BuildDepsDevVersionURL live in
 // internal/common/links/depsdev_test.go. The CLI tests above verify that
 // box output renders deps.dev links correctly (integration-level coverage).
