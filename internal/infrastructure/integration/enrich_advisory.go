@@ -9,14 +9,21 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 )
 
-// enrichAdvisorySeverity fetches CVSS3 scores for all advisories across analyses
-// and populates Title, CVSS3Score, and Severity on each Advisory.
+// enrichAdvisorySeverity fetches CVSS3 scores for advisories on lifecycle-relevant
+// versions (Stable, MaxSemver) across analyses and populates Title, CVSS3Score,
+// and Severity on each Advisory.
 // Advisories are sorted by CVSS3 score descending (highest severity first) after enrichment.
+//
+// Scope: Only StableVersion and MaxSemverVersion are enriched because:
+//   - The lifecycle assessor (getStableOrMaxVersionDetail) only inspects these two.
+//   - CLI output (JSON/CSV) uses LatestVersionDetail() which resolves Stable > MaxSemver first.
+//   - PreRelease and RequestedVersion advisories are not consumed by any current code path.
+//   - Skipping them reduces API calls proportionally (see ADR-0010).
 //
 // This is best-effort: fetch failures leave Advisory fields at zero values,
 // and the lifecycle assessor falls back to count-based logic for unknown-severity advisories.
 func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyses map[string]*domain.Analysis) {
-	// Collect unique advisory IDs across all analyses.
+	// Collect unique advisory IDs from lifecycle-relevant versions only.
 	idSet := make(map[string]struct{})
 	for _, a := range analyses {
 		if a == nil || a.ReleaseInfo == nil {
@@ -24,8 +31,6 @@ func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyse
 		}
 		collectAdvisoryIDs(a.ReleaseInfo.StableVersion, idSet)
 		collectAdvisoryIDs(a.ReleaseInfo.MaxSemverVersion, idSet)
-		collectAdvisoryIDs(a.ReleaseInfo.PreReleaseVersion, idSet)
-		collectAdvisoryIDs(a.ReleaseInfo.RequestedVersion, idSet)
 	}
 
 	if len(idSet) == 0 {
@@ -40,15 +45,13 @@ func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyse
 	slog.Debug("fetching advisory severity", "unique_ids", len(ids))
 	details := s.depsdevClient.FetchAdvisoriesBatch(ctx, ids)
 
-	// Enrich each advisory with fetched severity data.
+	// Enrich lifecycle-relevant versions only.
 	for _, a := range analyses {
 		if a == nil || a.ReleaseInfo == nil {
 			continue
 		}
 		enrichVersionAdvisories(a.ReleaseInfo.StableVersion, details)
 		enrichVersionAdvisories(a.ReleaseInfo.MaxSemverVersion, details)
-		enrichVersionAdvisories(a.ReleaseInfo.PreReleaseVersion, details)
-		enrichVersionAdvisories(a.ReleaseInfo.RequestedVersion, details)
 	}
 }
 
