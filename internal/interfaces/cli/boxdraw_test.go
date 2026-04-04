@@ -639,6 +639,59 @@ func TestShortenLicenseSource(t *testing.T) {
 	}
 }
 
+func TestWriteBoxLicense_SourceDisplay(t *testing.T) {
+	t.Run("same_source_collapsed", func(t *testing.T) {
+		var buf bytes.Buffer
+		entry := &domainaudit.AuditEntry{
+			PURL:    "pkg:npm/test@1.0.0",
+			Verdict: domainaudit.VerdictOK,
+			Analysis: &analysis.Analysis{
+				ProjectLicense: analysis.ResolvedLicense{
+					Identifier: "MIT", Source: analysis.LicenseSourceDepsDevProjectSPDX, IsSPDX: true,
+				},
+				RequestedVersionLicenses: []analysis.ResolvedLicense{
+					{Identifier: "MIT", Source: analysis.LicenseSourceDepsDevVersionSPDX, IsSPDX: true},
+				},
+			},
+		}
+		ctx := newBoxContext(&buf, entry, 60)
+		if err := writeBoxLicenses(ctx); err != nil {
+			t.Fatalf("writeBoxLicense() error = %v", err)
+		}
+		output := buf.String()
+		if !strings.Contains(output, "MIT (depsdev)") {
+			t.Errorf("expected collapsed single source, got:\n%s", output)
+		}
+		if strings.Contains(output, "/") {
+			t.Errorf("expected no slash separator when sources match, got:\n%s", output)
+		}
+	})
+
+	t.Run("different_sources_labeled", func(t *testing.T) {
+		var buf bytes.Buffer
+		entry := &domainaudit.AuditEntry{
+			PURL:    "pkg:npm/test@1.0.0",
+			Verdict: domainaudit.VerdictOK,
+			Analysis: &analysis.Analysis{
+				ProjectLicense: analysis.ResolvedLicense{
+					Identifier: "MIT", Source: analysis.LicenseSourceDepsDevProjectSPDX, IsSPDX: true,
+				},
+				RequestedVersionLicenses: []analysis.ResolvedLicense{
+					{Identifier: "MIT", Source: analysis.LicenseSourceProjectFallback, IsSPDX: true},
+				},
+			},
+		}
+		ctx := newBoxContext(&buf, entry, 60)
+		if err := writeBoxLicenses(ctx); err != nil {
+			t.Fatalf("writeBoxLicense() error = %v", err)
+		}
+		output := buf.String()
+		if !strings.Contains(output, "MIT (project: depsdev / version: fallback)") {
+			t.Errorf("expected labeled sources, got:\n%s", output)
+		}
+	})
+}
+
 func TestWriteBoxReleases_VersionDeduplication(t *testing.T) {
 	t.Run("stable_equals_requested", func(t *testing.T) {
 		var buf bytes.Buffer

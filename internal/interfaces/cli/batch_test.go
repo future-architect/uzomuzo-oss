@@ -215,8 +215,8 @@ func TestDisplayBatchAnalysesFull_Licenses_Same(t *testing.T) {
 		t.Fatalf("copy error: %v", err)
 	}
 	out := buf.String()
-	// Box format: collapsed license shows "MIT (depsdev / depsdev)"
-	if !strings.Contains(out, "MIT (depsdev / depsdev)") {
+	// Box format: collapsed license shows "MIT (depsdev)" when both sources shorten to the same value
+	if !strings.Contains(out, "MIT (depsdev)") {
 		t.Fatalf("expected collapsed single-line license with shortened source, got: %s", out)
 	}
 	if !strings.Contains(out, "├─ License") {

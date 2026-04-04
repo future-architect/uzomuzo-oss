@@ -596,7 +596,12 @@ func writeBoxLicenses(ctx *boxContext) error {
 	collapse := proj.Identifier != "" && len(reqs) == 1 && strings.EqualFold(proj.Identifier, reqs[0].Identifier)
 	if collapse {
 		if proj.Source != "" {
-			return writeLine(ctx, "%s (%s / %s)", proj.Identifier, shortenLicenseSource(proj.Source), shortenLicenseSource(reqs[0].Source))
+			projShort := shortenLicenseSource(proj.Source)
+			verShort := shortenLicenseSource(reqs[0].Source)
+			if projShort == verShort {
+				return writeLine(ctx, "%s (%s)", proj.Identifier, projShort)
+			}
+			return writeLine(ctx, "%s (project: %s / version: %s)", proj.Identifier, projShort, verShort)
 		}
 		return writeLine(ctx, "%s", proj.Identifier)
 	}
