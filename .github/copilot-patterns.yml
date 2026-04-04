@@ -57,6 +57,16 @@ patterns:
     pr: 116
     file: "internal/infrastructure/integration/enrich_advisory.go"
     date: "2026-04-04"
+  - category: "defensive-coding"
+    summary: "Cache negative (404) results for immutable lookups to prevent redundant HTTP calls within the same process"
+    pr: 116
+    file: "internal/infrastructure/depsdev/depsdev.go"
+    date: "2026-04-04"
+  - category: "api-consistency"
+    summary: "Remove unused parameters from function signatures — dead parameters add noise and confuse callers about required context"
+    pr: 116
+    file: "internal/domain/analysis/lifecycle_assessor.go"
+    date: "2026-04-04"
   # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)
