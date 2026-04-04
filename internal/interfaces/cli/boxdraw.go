@@ -207,10 +207,12 @@ func findLabelIndent(s string) int {
 	trimmed := strings.TrimLeft(s, " ")
 	leadingSpaces := utf8.RuneCountInString(s) - utf8.RuneCountInString(trimmed)
 
-	// Look for "Label: " pattern
+	// Look for "Label: " pattern — use rune count (not byte index) for
+	// correct alignment with multi-byte characters (e.g., emoji prefixes).
 	idx := strings.Index(trimmed, ": ")
 	if idx > 0 && idx < 30 {
-		return leadingSpaces + idx + 2 // include ": "
+		labelWidth := utf8.RuneCountInString(trimmed[:idx])
+		return leadingSpaces + labelWidth + 2 // include ": "
 	}
 	return 2
 }
@@ -293,8 +295,19 @@ func writeBoxIdentity(ctx *boxContext) error {
 	}
 	if a != nil && a.Repository != nil && a.Repository.Description != "" {
 		if desc := truncateDescription(a.Repository.Description); desc != "" {
-			if err := writeLine(ctx, "%s", desc); err != nil {
-				return err
+			// Description is free text without a label prefix; wrap it directly
+			// rather than relying on writeLine's prefix-based wrapping detection.
+			maxWidth := ctx.barWidth - 2 // subtract "│ " prefix width
+			if maxWidth > 0 && utf8.RuneCountInString(desc) > maxWidth {
+				for _, line := range wrapContent(desc, maxWidth) {
+					if _, err := fmt.Fprintf(ctx.w, "│ %s\n", line); err != nil {
+						return fmt.Errorf("failed to write box line: %w", err)
+					}
+				}
+			} else {
+				if _, err := fmt.Fprintf(ctx.w, "│ %s\n", desc); err != nil {
+					return fmt.Errorf("failed to write box line: %w", err)
+				}
 			}
 		}
 	}
@@ -592,7 +605,7 @@ func writeBoxReleases(ctx *boxContext) error {
 		}
 	}
 
-	// Requested version (skip if same as stable or pre-release)
+	// Requested version (skip if same as stable)
 	if a.ReleaseInfo.RequestedVersion != nil && a.ReleaseInfo.RequestedVersion.Version != "" {
 		rv := a.ReleaseInfo.RequestedVersion
 		if rv.Version != stableVer {

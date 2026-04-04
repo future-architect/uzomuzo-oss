@@ -814,8 +814,8 @@ func TestWrapContent(t *testing.T) {
 			maxWidth: 58,
 			want: []string{
 				"🔴 EOL-Effective: Scorecard data incomplete; open",
-				"                    advisories (1, max: HIGH 7.5) and no",
-				"                    human commits > 2 yrs",
+				"                 advisories (1, max: HIGH 7.5) and no",
+				"                 human commits > 2 yrs",
 			},
 		},
 		{
