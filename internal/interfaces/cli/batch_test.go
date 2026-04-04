@@ -1,9 +1,6 @@
 package cli
 
 import (
-	"bytes"
-	"io"
-	"os"
 	"strings"
 	"testing"
 
@@ -193,64 +190,5 @@ func TestDisplayFunctions_NoPanic(t *testing.T) {
 }
 
 // License display tests
-func TestDisplayBatchAnalysesFull_Licenses_Same(t *testing.T) {
-	analysis := &domain.Analysis{OriginalPURL: "pkg:npm/example@1.0.0", EffectivePURL: "pkg:npm/example@1.0.0", ProjectLicense: domain.ResolvedLicense{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX}, RequestedVersionLicenses: []domain.ResolvedLicense{{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevVersionSPDX}}}
-	analysis.EnsureCanonical()
-	analyses := map[string]*domain.Analysis{"pkg:npm/example@1.0.0": analysis}
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("pipe error: %v", err)
-	}
-	t.Cleanup(func() {
-		os.Stdout = oldStdout
-		_ = r.Close()
-	})
-	os.Stdout = w
-	displayBatchAnalysesFull(analyses, ProcessingOptions{})
-	_ = w.Close() // best-effort cleanup
-	os.Stdout = oldStdout
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
-		t.Fatalf("copy error: %v", err)
-	}
-	out := buf.String()
-	// Box format: collapsed license shows "MIT (depsdev)" when both sources shorten to the same value
-	if !strings.Contains(out, "MIT (depsdev)") {
-		t.Fatalf("expected collapsed single-line license with shortened source, got: %s", out)
-	}
-	if !strings.Contains(out, "├─ License") {
-		t.Fatalf("expected License section bar, got: %s", out)
-	}
-}
-
-func TestDisplayBatchAnalysesFull_Licenses_Different(t *testing.T) {
-	analysis := &domain.Analysis{OriginalPURL: "pkg:npm/example@2.0.0", EffectivePURL: "pkg:npm/example@2.0.0", ProjectLicense: domain.ResolvedLicense{Identifier: "Apache-2.0", Raw: "Apache-2.0", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX}, RequestedVersionLicenses: []domain.ResolvedLicense{{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevVersionSPDX}}}
-	analysis.EnsureCanonical()
-	analyses := map[string]*domain.Analysis{"pkg:npm/example@2.0.0": analysis}
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("pipe error: %v", err)
-	}
-	t.Cleanup(func() {
-		os.Stdout = oldStdout
-		_ = r.Close()
-	})
-	os.Stdout = w
-	displayBatchAnalysesFull(analyses, ProcessingOptions{})
-	_ = w.Close() // best-effort cleanup
-	os.Stdout = oldStdout
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
-		t.Fatalf("copy error: %v", err)
-	}
-	out := buf.String()
-	// Box format: License section with separate project and version lines
-	if !strings.Contains(out, "├─ License") {
-		t.Fatalf("expected License section bar, got: %s", out)
-	}
-	if !strings.Contains(out, "Project: Apache-2.0") || !strings.Contains(out, "Requested Version: MIT") {
-		t.Fatalf("expected project & requested lines, got: %s", out)
-	}
-}
+// License section tests removed — License section is no longer rendered in detailed output.
+// License data is available via --format csv and --export-license-csv.

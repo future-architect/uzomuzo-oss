@@ -624,9 +624,9 @@ func writeBoxReleases(ctx *boxContext) error {
 }
 
 // formatAdvisoryLines formats advisory entries sorted by severity (highest first) with truncation.
-// Shows up to maxDisplayAdvisories with aligned columns, then a deps.dev link for the full list.
+// Shows up to maxDisplayAdvisories with ID and severity only (no title — detail is in linked page).
 //
-// Format with severity:  "  CRITICAL (9.8)  CVE-2024-9999  Crash in HeaderParser"
+// Format with severity:  "  CRITICAL (9.8)  CVE-2024-9999"
 // Format without:        "                  CVE-2024-1234"
 func formatAdvisoryLines(advisories []analysispkg.Advisory, ecosystem, name, version string) []string {
 	if len(advisories) == 0 {
@@ -657,11 +657,7 @@ func formatAdvisoryLines(advisories []analysispkg.Advisory, ecosystem, name, ver
 		// Pad severity column to fixed width for alignment
 		sevCol = fmt.Sprintf("%-*s", severityColWidth, sevCol)
 
-		title := ""
-		if adv.Title != "" {
-			title = "  " + adv.Title
-		}
-		lines = append(lines, fmt.Sprintf("  %s  %s%s", sevCol, adv.ID, title))
+		lines = append(lines, fmt.Sprintf("  %s  %s", sevCol, adv.ID))
 
 		advisoryURL := strings.TrimSpace(adv.URL)
 		if advisoryURL != "" {
@@ -706,124 +702,8 @@ func advisorySeveritySummary(vd *analysispkg.VersionDetail) string {
 	return fmt.Sprintf(" (max: %s %.1f)", severity, maxScore)
 }
 
-// writeBoxLicenses writes the License section.
-// Returns nil without writing if no license data exists.
-func writeBoxLicenses(ctx *boxContext) error {
-	a := ctx.analysis
-	if a == nil {
-		return nil
-	}
-	proj := a.ProjectLicense
-	reqs := a.RequestedVersionLicenses
-	if proj.IsZero() && len(reqs) == 0 {
-		return nil
-	}
-
-	if err := writeSectionBar(ctx, "License"); err != nil {
-		return err
-	}
-
-	// Collapse when project and single version license match
-	collapse := proj.Identifier != "" && len(reqs) == 1 && strings.EqualFold(proj.Identifier, reqs[0].Identifier)
-	if collapse {
-		projShort := shortenLicenseSource(proj.Source)
-		verShort := shortenLicenseSource(reqs[0].Source)
-		switch {
-		case proj.Source != "" && reqs[0].Source != "":
-			if projShort == verShort {
-				return writeLine(ctx, "%s (%s)", proj.Identifier, projShort)
-			}
-			return writeLine(ctx, "%s (project: %s / version: %s)", proj.Identifier, projShort, verShort)
-		case proj.Source != "":
-			return writeLine(ctx, "%s (%s)", proj.Identifier, projShort)
-		case reqs[0].Source != "":
-			return writeLine(ctx, "%s (%s)", proj.Identifier, verShort)
-		default:
-			return writeLine(ctx, "%s", proj.Identifier)
-		}
-	}
-
-	// Project license
-	if proj.Identifier != "" {
-		if proj.Source != "" {
-			if err := writeLine(ctx, "Project: %s (%s)", proj.Identifier, shortenLicenseSource(proj.Source)); err != nil {
-				return err
-			}
-		} else {
-			if err := writeLine(ctx, "Project: %s", proj.Identifier); err != nil {
-				return err
-			}
-		}
-	} else if proj.IsNonStandard() && proj.Raw != "" {
-		if proj.Source != "" {
-			if err := writeLine(ctx, "Project: (non-standard raw=%s source=%s)", proj.Raw, shortenLicenseSource(proj.Source)); err != nil {
-				return err
-			}
-		} else {
-			if err := writeLine(ctx, "Project: (non-standard raw=%s)", proj.Raw); err != nil {
-				return err
-			}
-		}
-	} else if proj.IsZero() {
-		if err := writeLine(ctx, "Project: (not detected)"); err != nil {
-			return err
-		}
-	} else {
-		if proj.Source != "" {
-			if err := writeLine(ctx, "Project: (unclassified source=%s raw=%s)", shortenLicenseSource(proj.Source), proj.Raw); err != nil {
-				return err
-			}
-		} else {
-			if err := writeLine(ctx, "Project: (unclassified raw=%s)", proj.Raw); err != nil {
-				return err
-			}
-		}
-	}
-
-	// Version licenses
-	if len(reqs) > 0 {
-		allSameSource := true
-		firstSource := reqs[0].Source
-		for _, rl := range reqs {
-			if rl.Source != firstSource {
-				allSameSource = false
-				break
-			}
-		}
-		if allSameSource {
-			ids := make([]string, 0, len(reqs))
-			for _, rl := range reqs {
-				ids = append(ids, rl.Identifier)
-			}
-			if firstSource != "" {
-				if err := writeLine(ctx, "Requested Version: %s (%s)", strings.Join(ids, ", "), shortenLicenseSource(firstSource)); err != nil {
-					return err
-				}
-			} else {
-				if err := writeLine(ctx, "Requested Version: %s", strings.Join(ids, ", ")); err != nil {
-					return err
-				}
-			}
-		} else {
-			for i, rl := range reqs {
-				if rl.Source != "" {
-					if err := writeLine(ctx, "Requested Version[%d]: %s (%s)", i, rl.Identifier, shortenLicenseSource(rl.Source)); err != nil {
-						return err
-					}
-				} else {
-					if err := writeLine(ctx, "Requested Version[%d]: %s", i, rl.Identifier); err != nil {
-						return err
-					}
-				}
-			}
-		}
-	} else {
-		if err := writeLine(ctx, "Requested Version: (none)"); err != nil {
-			return err
-		}
-	}
-	return nil
-}
+// License section removed from detailed output — license data is available
+// via --format csv and --export-license-csv for compliance workflows.
 
 // writeBoxLinks writes the Links section (homepage, repository, registry, deps.dev).
 // Returns nil without writing if no URLs exist.
@@ -896,7 +776,6 @@ func renderBoxEntry(w io.Writer, entry *domainaudit.AuditEntry) error {
 		func() error { return writeBoxEOL(ctx) },
 		func() error { return writeBoxHealth(ctx) },
 		func() error { return writeBoxReleases(ctx) },
-		func() error { return writeBoxLicenses(ctx) },
 		func() error { return writeBoxLinks(ctx) },
 		func() error { return writeBottomBar(ctx) },
 	} {
@@ -946,29 +825,6 @@ func renderBoxEntryError(ctx *boxContext) error {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-// shortenLicenseSource abbreviates verbose license source identifiers for display.
-// e.g. "depsdev-project-spdx" → "depsdev", "project-fallback" → "fallback".
-func shortenLicenseSource(s string) string {
-	switch s {
-	case analysispkg.LicenseSourceDepsDevProjectSPDX,
-		analysispkg.LicenseSourceDepsDevProjectNonStandard,
-		analysispkg.LicenseSourceDepsDevVersionSPDX,
-		analysispkg.LicenseSourceDepsDevVersionRaw:
-		return "depsdev"
-	case analysispkg.LicenseSourceGitHubProjectSPDX,
-		analysispkg.LicenseSourceGitHubProjectNonStandard,
-		analysispkg.LicenseSourceGitHubVersionSPDX,
-		analysispkg.LicenseSourceGitHubVersionRaw:
-		return "github"
-	case analysispkg.LicenseSourceProjectFallback:
-		return "fallback"
-	case analysispkg.LicenseSourceDerivedFromVersion:
-		return "derived"
-	default:
-		return s
-	}
-}
 
 // packageEcoName extracts ecosystem and package name suitable for deps.dev URLs.
 // It uses Namespace()+Name() (not GetPackageName()) so that scoped npm packages,

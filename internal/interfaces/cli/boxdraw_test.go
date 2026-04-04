@@ -319,9 +319,7 @@ func TestWriteBoxReleases_Advisories(t *testing.T) {
 	if !strings.Contains(output, "CRITICAL") {
 		t.Error("missing CRITICAL severity label")
 	}
-	if !strings.Contains(output, "Remote code execution") {
-		t.Error("missing advisory title")
-	}
+	// Advisory titles are intentionally omitted — detail is in the linked page
 	// Should show 3 advisory lines, then truncation
 	if !strings.Contains(output, "... and 2 more") {
 		t.Error("missing truncation message")
@@ -360,9 +358,6 @@ func TestWriteBoxReleases_FewAdvisories(t *testing.T) {
 	}
 	if !strings.Contains(output, "MEDIUM") {
 		t.Error("missing severity label")
-	}
-	if !strings.Contains(output, "XSS vulnerability") {
-		t.Error("missing advisory title")
 	}
 	if strings.Contains(output, "... and") {
 		t.Error("should not have truncation for <= 3 advisories")
@@ -608,111 +603,8 @@ func TestRenderScanDetailed_BoxFormat(t *testing.T) {
 	}
 }
 
-func TestShortenLicenseSource(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{"depsdev-project-spdx", analysis.LicenseSourceDepsDevProjectSPDX, "depsdev"},
-		{"depsdev-project-nonstandard", analysis.LicenseSourceDepsDevProjectNonStandard, "depsdev"},
-		{"depsdev-version-spdx", analysis.LicenseSourceDepsDevVersionSPDX, "depsdev"},
-		{"depsdev-version-raw", analysis.LicenseSourceDepsDevVersionRaw, "depsdev"},
-		{"github-project-spdx", analysis.LicenseSourceGitHubProjectSPDX, "github"},
-		{"github-project-nonstandard", analysis.LicenseSourceGitHubProjectNonStandard, "github"},
-		{"github-version-spdx", analysis.LicenseSourceGitHubVersionSPDX, "github"},
-		{"github-version-raw", analysis.LicenseSourceGitHubVersionRaw, "github"},
-		{"project-fallback", analysis.LicenseSourceProjectFallback, "fallback"},
-		{"derived-from-version", analysis.LicenseSourceDerivedFromVersion, "derived"},
-		{"unknown-source", "unknown-source", "unknown-source"},
-		{"empty", "", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := shortenLicenseSource(tt.input)
-			if got != tt.want {
-				t.Errorf("shortenLicenseSource(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestWriteBoxLicense_SourceDisplay(t *testing.T) {
-	t.Run("same_source_collapsed", func(t *testing.T) {
-		var buf bytes.Buffer
-		entry := &domainaudit.AuditEntry{
-			PURL:    "pkg:npm/test@1.0.0",
-			Verdict: domainaudit.VerdictOK,
-			Analysis: &analysis.Analysis{
-				ProjectLicense: analysis.ResolvedLicense{
-					Identifier: "MIT", Source: analysis.LicenseSourceDepsDevProjectSPDX, IsSPDX: true,
-				},
-				RequestedVersionLicenses: []analysis.ResolvedLicense{
-					{Identifier: "MIT", Source: analysis.LicenseSourceDepsDevVersionSPDX, IsSPDX: true},
-				},
-			},
-		}
-		ctx := newBoxContext(&buf, entry, 60)
-		if err := writeBoxLicenses(ctx); err != nil {
-			t.Fatalf("writeBoxLicense() error = %v", err)
-		}
-		output := buf.String()
-		if !strings.Contains(output, "MIT (depsdev)") {
-			t.Errorf("expected collapsed single source, got:\n%s", output)
-		}
-		if strings.Contains(output, "/") {
-			t.Errorf("expected no slash separator when sources match, got:\n%s", output)
-		}
-	})
-
-	t.Run("version_source_only", func(t *testing.T) {
-		var buf bytes.Buffer
-		entry := &domainaudit.AuditEntry{
-			PURL:    "pkg:npm/test@1.0.0",
-			Verdict: domainaudit.VerdictOK,
-			Analysis: &analysis.Analysis{
-				ProjectLicense: analysis.ResolvedLicense{
-					Identifier: "MIT", Source: "", IsSPDX: true,
-				},
-				RequestedVersionLicenses: []analysis.ResolvedLicense{
-					{Identifier: "MIT", Source: analysis.LicenseSourceDepsDevVersionSPDX, IsSPDX: true},
-				},
-			},
-		}
-		ctx := newBoxContext(&buf, entry, 60)
-		if err := writeBoxLicenses(ctx); err != nil {
-			t.Fatalf("writeBoxLicense() error = %v", err)
-		}
-		output := buf.String()
-		if !strings.Contains(output, "MIT (depsdev)") {
-			t.Errorf("expected version source shown when project source empty, got:\n%s", output)
-		}
-	})
-
-	t.Run("different_sources_labeled", func(t *testing.T) {
-		var buf bytes.Buffer
-		entry := &domainaudit.AuditEntry{
-			PURL:    "pkg:npm/test@1.0.0",
-			Verdict: domainaudit.VerdictOK,
-			Analysis: &analysis.Analysis{
-				ProjectLicense: analysis.ResolvedLicense{
-					Identifier: "MIT", Source: analysis.LicenseSourceDepsDevProjectSPDX, IsSPDX: true,
-				},
-				RequestedVersionLicenses: []analysis.ResolvedLicense{
-					{Identifier: "MIT", Source: analysis.LicenseSourceProjectFallback, IsSPDX: true},
-				},
-			},
-		}
-		ctx := newBoxContext(&buf, entry, 60)
-		if err := writeBoxLicenses(ctx); err != nil {
-			t.Fatalf("writeBoxLicense() error = %v", err)
-		}
-		output := buf.String()
-		if !strings.Contains(output, "MIT (project: depsdev / version: fallback)") {
-			t.Errorf("expected labeled sources, got:\n%s", output)
-		}
-	})
-}
+// License section tests removed — License section is no longer rendered in detailed output.
+// License data is available via --format csv and --export-license-csv.
 
 func TestWriteBoxReleases_VersionDeduplication(t *testing.T) {
 	t.Run("stable_equals_requested", func(t *testing.T) {
