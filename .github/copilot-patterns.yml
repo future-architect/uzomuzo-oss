@@ -67,6 +67,11 @@ patterns:
     pr: 116
     file: "internal/domain/analysis/lifecycle_assessor.go"
     date: "2026-04-04"
+  - category: "defensive-coding"
+    summary: "Guard nil struct before method call — CSV renderer called LatestVersionDetail() on potentially nil ReleaseInfo while JSON renderer had the guard"
+    pr: 116
+    file: "internal/interfaces/cli/scan_render.go"
+    date: "2026-04-04"
   # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)
