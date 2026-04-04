@@ -72,6 +72,11 @@ patterns:
     pr: 116
     file: "internal/interfaces/cli/scan_render.go"
     date: "2026-04-04"
+  - category: "testing"
+    summary: "New HTTP endpoints (FetchAdvisory/FetchAdvisoriesBatch) with caching and batch parallelism lacked httptest-based coverage"
+    pr: 116
+    file: "internal/infrastructure/depsdev/depsdev.go"
+    date: "2026-04-04"
   # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)
