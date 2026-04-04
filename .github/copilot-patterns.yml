@@ -12,11 +12,6 @@
 #       file: "<path>"
 #       date: "YYYY-MM-DD"
 patterns:
-  - category: "naming-consistency"
-    summary: "Keep field/column names consistent across output formats — if JSON uses 'eol_reason', CSV should too"
-    pr: 87
-    file: "internal/interfaces/cli/scan_render.go"
-    date: "2026-04-02"
   - category: "error-handling"
     summary: "Distinguish os.ErrNotExist from other I/O errors when auto-detecting files — treating all errors as 'not found' hides real causes"
     pr: 87
@@ -42,8 +37,14 @@ patterns:
     pr: 111
     file: "internal/infrastructure/actionscan/discovery.go"
     date: "2026-04-03"
+  - category: "logging-consistency"
+    summary: "Use DEBUG for routine per-run telemetry; reserve INFO for exceptional/diagnostic events in infrastructure clients"
+    pr: 116
+    file: "internal/infrastructure/depsdev/depsdev.go"
+    date: "2026-04-04"
   # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111)
   # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107)
   # comment-doc-drift: promoted to coding-standards.instructions.md (PRs #101, #106)
   # deterministic-output: promoted to coding-standards.instructions.md (PRs #106, #111)
+  # naming-consistency: promoted to coding-standards.instructions.md (PRs #87, #116)
