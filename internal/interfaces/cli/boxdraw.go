@@ -107,6 +107,12 @@ func writeLine(ctx *boxContext, format string, args ...any) error {
 // Everything else (URLs, identifiers, structured data) is left unwrapped.
 func isWrappableLine(s string) bool {
 	trimmed := strings.TrimLeft(s, " ")
+
+	// Never wrap lines that contain URLs — preserve terminal link detection.
+	if strings.Contains(trimmed, "://") {
+		return false
+	}
+
 	switch {
 	case strings.HasPrefix(trimmed, "✅"),
 		strings.HasPrefix(trimmed, "⚠️"),
@@ -116,7 +122,9 @@ func isWrappableLine(s string) bool {
 		return true
 	case strings.HasPrefix(trimmed, "Catalog Reason:"):
 		return true
-	case strings.HasPrefix(trimmed, "[") && !strings.Contains(trimmed, "://"):
+	case strings.HasPrefix(trimmed, "Description:"):
+		return true
+	case strings.HasPrefix(trimmed, "["):
 		// EOL evidence summary lines like "[npmjs] Stable version is deprecated..."
 		return true
 	}
@@ -585,7 +593,7 @@ func writeBoxReleases(ctx *boxContext) error {
 	// Requested version (skip if same as stable or pre-release)
 	if a.ReleaseInfo.RequestedVersion != nil && a.ReleaseInfo.RequestedVersion.Version != "" {
 		rv := a.ReleaseInfo.RequestedVersion
-		if rv.Version != stableVer && rv.Version != preVer {
+		if rv.Version != stableVer {
 			deprecated := ""
 			if rv.IsDeprecated {
 				deprecated = " ⚠️ [DEPRECATED]"
