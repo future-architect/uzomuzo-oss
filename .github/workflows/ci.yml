@@ -27,6 +27,20 @@ jobs:
       - name: Vet
         run: go vet ./... || echo "::warning::go vet found issues (non-blocking)"
 
+  doc-examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+
+      - name: Check doc examples are up to date
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make check-doc-examples
+
   lint:
     runs-on: ubuntu-latest
     steps:
