@@ -346,8 +346,8 @@ func writeBoxSignals(ctx *boxContext) error {
 // signalDisplayName maps machine signal names to human-readable labels.
 func signalDisplayName(name string) string {
 	switch name {
-	case analysispkg.SignalEOLCatalog:
-		return "EOL Catalog"
+	case analysispkg.SignalEOLSource:
+		return "EOL Source"
 	case analysispkg.SignalEOLScheduledDate:
 		return "EOL Scheduled Date"
 	case analysispkg.SignalRepoArchived:

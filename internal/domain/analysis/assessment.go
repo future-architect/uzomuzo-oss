@@ -40,7 +40,7 @@ type Signal struct {
 
 // Well-known signal names used by the lifecycle assessor.
 const (
-	SignalEOLCatalog          = "eol_catalog"
+	SignalEOLSource           = "eol_source"
 	SignalEOLScheduledDate    = "eol_scheduled_date"
 	SignalRepoArchived        = "repo_archived"
 	SignalRepoDisabled        = "repo_disabled"

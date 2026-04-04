@@ -71,7 +71,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 	// 0. Scheduled EOL (advance notice) – design: show scheduled if not yet archived/confirmed
 	if in.EOL.IsPlannedEOL() {
 		reason := "Scheduled EOL"
-		signals := []Signal{sig(SignalEOLCatalog, "scheduled")}
+		signals := []Signal{sig(SignalEOLSource, "scheduled")}
 		if in.EOL.ScheduledAt != nil {
 			reason = fmt.Sprintf("Scheduled EOL on %s", in.EOL.ScheduledAt.Format("2006-01-02"))
 			signals = append(signals, sig(SignalEOLScheduledDate, in.EOL.ScheduledAt.Format("2006-01-02")))
@@ -99,7 +99,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 			reason = fmt.Sprintf("%s; successor: %s", reason, in.EOL.Successor)
 		}
 		trace = append(trace, "primary_source_eol override")
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLConfirmed, Reason: reason, Trace: trace, Signals: []Signal{sig(SignalEOLCatalog, "eol")}}, nil
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLConfirmed, Reason: reason, Trace: trace, Signals: []Signal{sig(SignalEOLSource, "registry-deprecated")}}, nil
 	}
 
 	// 2. Data validity check
@@ -530,8 +530,9 @@ func commitSignal(a *Analysis) Signal {
 }
 
 // maintainedSignal returns a signal for the Maintained scorecard score.
+// Returns absent when score is missing or negative (not available).
 func maintainedSignal(scores map[string]*ScoreEntity) Signal {
-	if score, ok := scores["Maintained"]; ok && score != nil {
+	if score, ok := scores["Maintained"]; ok && score != nil && score.Value() >= 0 {
 		return sig(SignalMaintainedScore, fmt.Sprintf("%d/10", score.Value()))
 	}
 	return sigAbsent(SignalMaintainedScore)

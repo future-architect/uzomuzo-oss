@@ -914,3 +914,168 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestLifecycleAssessorService_Signals(t *testing.T) {
+	now := time.Now()
+	recentTime := now.AddDate(0, 0, -10)
+
+	tests := []struct {
+		name           string
+		analysis       *Analysis
+		scores         map[string]*ScoreEntity
+		eol            EOLStatus
+		wantSignalName string
+		wantRole       SignalRole
+		wantValue      string
+	}{
+		{
+			name: "active_project_emits_recent_stable_release_signal",
+			analysis: &Analysis{
+				Scores: map[string]*ScoreEntity{
+					"Maintained":      NewScoreEntity("Maintained", 8, 10, ""),
+					"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, ""),
+				},
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 5,
+					LatestHumanCommit:   &recentTime,
+					CommitStats:         &CommitStats{},
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: recentTime},
+				},
+			},
+			scores: map[string]*ScoreEntity{
+				"Maintained":      NewScoreEntity("Maintained", 8, 10, ""),
+				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, ""),
+			},
+			eol:            EOLStatus{State: EOLNotEOL},
+			wantSignalName: SignalRecentStableRelease,
+			wantRole:       SignalUsed,
+			wantValue:      "true",
+		},
+		{
+			name: "archived_project_emits_repo_archived_signal",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 200,
+					LatestHumanCommit:   ptrTime(now.AddDate(0, 0, -200)),
+					CommitStats:         &CommitStats{},
+					IsArchived:          true,
+				},
+			},
+			scores: map[string]*ScoreEntity{
+				"Maintained": NewScoreEntity("Maintained", 6, 10, ""),
+			},
+			eol:            EOLStatus{State: EOLNotEOL},
+			wantSignalName: SignalRepoArchived,
+			wantRole:       SignalUsed,
+			wantValue:      "true",
+		},
+		{
+			name: "primary_source_eol_emits_eol_source_signal",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 100,
+					LatestHumanCommit:   ptrTime(now.AddDate(0, 0, -100)),
+					CommitStats:         &CommitStats{},
+				},
+			},
+			scores:         map[string]*ScoreEntity{},
+			eol:            EOLStatus{State: EOLEndOfLife},
+			wantSignalName: SignalEOLSource,
+			wantRole:       SignalUsed,
+			wantValue:      "registry-deprecated",
+		},
+		{
+			name: "planned_eol_emits_eol_source_signal",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 10,
+					LatestHumanCommit:   &recentTime,
+					CommitStats:         &CommitStats{},
+				},
+			},
+			scores:         map[string]*ScoreEntity{},
+			eol:            EOLStatus{State: EOLScheduled},
+			wantSignalName: SignalEOLSource,
+			wantRole:       SignalUsed,
+			wantValue:      "scheduled",
+		},
+		{
+			name: "negative_maintained_score_emits_absent_signal",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 5,
+					LatestHumanCommit:   &recentTime,
+					CommitStats:         &CommitStats{},
+				},
+				ReleaseInfo: &ReleaseInfo{
+					StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: recentTime},
+				},
+			},
+			scores: map[string]*ScoreEntity{
+				"Maintained":      NewScoreEntity("Maintained", -1, 10, ""),
+				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, ""),
+			},
+			eol:            EOLStatus{State: EOLNotEOL},
+			wantSignalName: SignalMaintainedScore,
+			wantRole:       SignalAbsent,
+		},
+		{
+			name: "pre_release_activity_emits_recent_pre_release_signal",
+			analysis: &Analysis{
+				RepoState: &RepoState{
+					DaysSinceLastCommit: 5,
+					LatestHumanCommit:   &recentTime,
+					CommitStats:         &CommitStats{},
+				},
+				ReleaseInfo: &ReleaseInfo{
+					PreReleaseVersion: &VersionDetail{Version: "2.0.0-beta.1", PublishedAt: recentTime},
+				},
+			},
+			scores: map[string]*ScoreEntity{
+				"Maintained":      NewScoreEntity("Maintained", 8, 10, ""),
+				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, ""),
+			},
+			eol:            EOLStatus{State: EOLNotEOL},
+			wantSignalName: SignalRecentStableRelease,
+			wantRole:       SignalUsed,
+			wantValue:      "pre-release",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := NewLifecycleAssessorService()
+			ctx := context.Background()
+			in := AssessmentInput{Analysis: tt.analysis, Scores: tt.scores, EOL: tt.eol}
+			res, err := service.Assess(ctx, in)
+			if err != nil {
+				t.Fatalf("Assess() error = %v", err)
+			}
+			if res == nil {
+				t.Fatal("Assess() returned nil result")
+			}
+			if len(res.Signals) == 0 {
+				t.Fatal("Assess() returned no signals")
+			}
+
+			var found bool
+			for _, s := range res.Signals {
+				if s.Name == tt.wantSignalName {
+					found = true
+					if s.Role != tt.wantRole {
+						t.Errorf("Signal %q role = %v, want %v", s.Name, s.Role, tt.wantRole)
+					}
+					if tt.wantValue != "" && s.Value != tt.wantValue {
+						t.Errorf("Signal %q value = %q, want %q", s.Name, s.Value, tt.wantValue)
+					}
+					break
+				}
+			}
+			if !found {
+				t.Errorf("Signal %q not found in result signals: %v", tt.wantSignalName, res.Signals)
+			}
+		})
+	}
+}
