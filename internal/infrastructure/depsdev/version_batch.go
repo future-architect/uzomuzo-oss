@@ -55,36 +55,55 @@ func (c *DepsDevClient) FetchTransitiveAdvisoryKeys(ctx context.Context, deps *D
 	const maxWorkers = 10
 	results := make(map[string][]AdvisoryKey, len(targets))
 	var mu sync.Mutex
-	semaphore := make(chan struct{}, maxWorkers)
+
+	jobs := make(chan depInfo)
 	var wg sync.WaitGroup
 
-	for _, t := range targets {
-		wg.Add(1)
-		go func(di depInfo) {
-			defer wg.Done()
-
-			select {
-			case semaphore <- struct{}{}:
-				defer func() { <-semaphore }()
-			case <-ctx.Done():
-				return
-			}
-
-			resp, err := c.fetchPackageInfo(ctx, di.purl)
-			if err != nil {
-				slog.Debug("transitive advisory lookup failed", "purl", di.purl, "error", err)
-				return
-			}
-			if resp == nil || len(resp.Version.AdvisoryKeys) == 0 {
-				return
-			}
-
-			mu.Lock()
-			results[di.nodeKey] = resp.Version.AdvisoryKeys
-			mu.Unlock()
-		}(t)
+	workerCount := maxWorkers
+	if len(targets) < workerCount {
+		workerCount = len(targets)
 	}
 
+	for range workerCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case di, ok := <-jobs:
+					if !ok {
+						return
+					}
+
+					resp, err := c.fetchPackageInfo(ctx, di.purl)
+					if err != nil {
+						slog.Debug("transitive advisory lookup failed", "purl", di.purl, "error", err)
+						continue
+					}
+					if resp == nil || len(resp.Version.AdvisoryKeys) == 0 {
+						continue
+					}
+
+					mu.Lock()
+					results[di.nodeKey] = resp.Version.AdvisoryKeys
+					mu.Unlock()
+				}
+			}
+		}()
+	}
+
+dispatch:
+	for _, t := range targets {
+		select {
+		case <-ctx.Done():
+			break dispatch
+		case jobs <- t:
+		}
+	}
+	close(jobs)
 	wg.Wait()
 
 	slog.Debug("transitive_advisory_keys_complete",

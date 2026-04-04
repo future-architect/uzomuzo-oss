@@ -40,12 +40,14 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 	}
 
 	// Collect transitive advisory keys for all dependency graphs.
-	// Each analysis may have its own dependency graph.
+	// Multiple original PURLs may resolve to the same effective dependency graph.
+	// Cache transitive advisory keys per graph to avoid repeating external API calls.
 	type transitiveEntry struct {
 		advisory domain.Advisory
 	}
 	perAnalysis := make(map[string][]transitiveEntry, len(depsGraphResults))
 	allAdvisoryIDs := make(map[string]struct{})
+	transitiveKeysByDeps := make(map[*depsdev.DependenciesResponse]map[string][]depsdev.AdvisoryKey, len(depsGraphResults))
 
 	for _, p := range purls {
 		deps, ok := depsGraphResults[p]
@@ -53,10 +55,15 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 			continue
 		}
 
-		transitiveKeys, err := s.depsdevClient.FetchTransitiveAdvisoryKeys(ctx, deps)
-		if err != nil {
-			slog.Debug("transitive_advisory_fetch_failed", "purl", p, "error", err)
-			continue
+		transitiveKeys, cached := transitiveKeysByDeps[deps]
+		if !cached {
+			var err error
+			transitiveKeys, err = s.depsdevClient.FetchTransitiveAdvisoryKeys(ctx, deps)
+			if err != nil {
+				slog.Debug("transitive_advisory_fetch_failed", "purl", p, "error", err)
+				continue
+			}
+			transitiveKeysByDeps[deps] = transitiveKeys
 		}
 
 		a := analyses[p]
@@ -64,15 +71,12 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 			continue
 		}
 
-		// Build a set of existing direct advisory IDs for dedup.
-		directIDs := collectDirectAdvisoryIDSet(a.ReleaseInfo.StableVersion, a.ReleaseInfo.MaxSemverVersion)
-
+		// Collect all transitive entries without pre-filtering by direct advisory IDs.
+		// Deduplication against direct advisories is performed per-VersionDetail in
+		// appendTransitiveAdvisories, ensuring each version is evaluated independently.
 		var entries []transitiveEntry
 		for depName, advisoryKeys := range transitiveKeys {
 			for _, ak := range advisoryKeys {
-				if _, isDirect := directIDs[ak.ID]; isDirect {
-					continue // skip: already a direct advisory
-				}
 				srcName, url := classifyAdvisory(ak.ID)
 				entries = append(entries, transitiveEntry{
 					advisory: domain.Advisory{
@@ -136,20 +140,6 @@ func markDirectAdvisories(vd *domain.VersionDetail) {
 			vd.Advisories[i].Relation = domain.AdvisoryRelationDirect
 		}
 	}
-}
-
-// collectDirectAdvisoryIDSet builds a set of advisory IDs from lifecycle-relevant versions.
-func collectDirectAdvisoryIDSet(versions ...*domain.VersionDetail) map[string]struct{} {
-	ids := make(map[string]struct{})
-	for _, vd := range versions {
-		if vd == nil {
-			continue
-		}
-		for _, a := range vd.Advisories {
-			ids[a.ID] = struct{}{}
-		}
-	}
-	return ids
 }
 
 // appendTransitiveAdvisories appends transitive advisories to a VersionDetail, deduplicating
