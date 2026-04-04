@@ -57,46 +57,66 @@ func (s *LifecycleAssessorService) Assess(ctx context.Context, in AssessmentInpu
 	return s.assessInternal(ctx, in)
 }
 
+// sig creates a Signal with Role=SignalUsed.
+func sig(name, value string) Signal { return Signal{Name: name, Value: value, Role: SignalUsed} }
+
+// sigAbsent creates a Signal with Role=SignalAbsent.
+func sigAbsent(name string) Signal { return Signal{Name: name, Role: SignalAbsent} }
+
 // assessInternal contains the decision tree producing an AssessmentResult for the lifecycle axis with trace.
 func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in AssessmentInput) (*AssessmentResult, error) {
 	analysis := in.Analysis
 	scores := in.Scores
 	trace := []string{"start lifecycle assessment"}
-	// 0. Scheduled EOL (advance notice) – design: show scheduled if not yet archived/confirmed
+	// 0. Scheduled EOL (advance notice)
 	if in.EOL.IsPlannedEOL() {
 		reason := "Scheduled EOL"
+		signals := []Signal{sig(SignalEOLSource, "scheduled")}
 		if in.EOL.ScheduledAt != nil {
-			reason = fmt.Sprintf("Scheduled EOL on %s", in.EOL.ScheduledAt.Format("2006-01-02"))
+			reason = "Scheduled EOL"
+			signals = append(signals, sig(SignalEOLScheduledDate, in.EOL.ScheduledAt.Format("2006-01-02")))
 		}
 		if in.EOL.Successor != "" {
-			reason = fmt.Sprintf("%s; successor: %s", reason, in.EOL.Successor)
+			reason += "; successor: " + in.EOL.Successor
 		}
 		trace = append(trace, "planned_eol override")
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLScheduled, Reason: reason, Trace: trace}, nil
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLScheduled, Reason: reason, Trace: trace, Signals: signals}, nil
 	}
 	// 1. Archive/disable check
 	if analysis != nil && (analysis.IsArchived() || analysis.IsDisabled()) {
-		trace = append(trace, "repo archived_or_disabled")
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLConfirmed, Reason: "Repository is archived or disabled on GitHub", Trace: trace}, nil
-	}
-
-	// 1.5 Primary-source EOL status override (provided by Infrastructure)
-	if in.EOL.IsEOL() {
-		reason := "Primary-source EOL"
-		if in.EOL.Successor != "" {
-			reason = fmt.Sprintf("%s; successor: %s", reason, in.EOL.Successor)
+		var signals []Signal
+		if analysis.IsArchived() {
+			signals = append(signals, sig(SignalRepoArchived, "true"))
 		}
-		trace = append(trace, "primary_source_eol override")
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLConfirmed, Reason: reason, Trace: trace}, nil
+		if analysis.IsDisabled() {
+			signals = append(signals, sig(SignalRepoDisabled, "true"))
+		}
+		trace = append(trace, "repo archived_or_disabled")
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLConfirmed, Reason: "Repository archived or disabled", Trace: trace, Signals: signals}, nil
 	}
 
-	// 2. Data validity check
+	// 1.5 Primary-source EOL status override
+	if in.EOL.IsEOL() {
+		reason := in.EOL.FinalReason()
+		if reason == "" {
+			reason = "End of life"
+		}
+		if in.EOL.Successor != "" {
+			reason += "; successor: " + in.EOL.Successor
+		}
+		signalSource := eolEvidenceSource(in.EOL)
+		trace = append(trace, "primary_source_eol override")
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLConfirmed, Reason: reason, Trace: trace, Signals: []Signal{sig(SignalEOLSource, signalSource)}}, nil
+	}
+
+	// 2. Data validity check — residual vulnerability override
 	if len(scores) == 0 {
 		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis) {
-			count, _ := s.getStableOrMaxAdvisory(analysis)
 			trace = append(trace, "scorecard_missing residual_vuln_override")
+			signals := []Signal{commitSignal(analysis), sigAbsent(SignalMaintainedScore)}
+			signals = append(signals, s.collectAdvisorySignals(analysis)...)
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective,
-				Reason: fmt.Sprintf("Scorecard data missing; open advisories (%d%s) and no human commits > %d yrs", count, s.severitySummary(analysis), s.rules.EolInactivityDays/365), Trace: trace}, nil
+				Reason: "Unmaintained with unpatched vulnerabilities", Trace: trace, Signals: signals}, nil
 		}
 	}
 
@@ -105,10 +125,11 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 
 	if maintainedScore < 0 || vulnScore < 0 {
 		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis) {
-			count, _ := s.getStableOrMaxAdvisory(analysis)
 			trace = append(trace, "scorecard_incomplete residual_vuln_override")
+			signals := []Signal{commitSignal(analysis), maintainedSignal(scores)}
+			signals = append(signals, s.collectAdvisorySignals(analysis)...)
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective,
-				Reason: fmt.Sprintf("Scorecard data incomplete; open advisories (%d%s) and no human commits > %d yrs", count, s.severitySummary(analysis), s.rules.EolInactivityDays/365), Trace: trace}, nil
+				Reason: "Unmaintained with unpatched vulnerabilities", Trace: trace, Signals: signals}, nil
 		}
 	}
 
@@ -127,11 +148,11 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 			return res, nil
 		}
 
-		// 3.5. Commit data validity check (for extremely old data)
+		// 3.5. Commit data validity check
 		threshold := s.rules.RecentStableWindowDays * s.rules.LegacyFrozenYears * 10
 		if analysis.GetDaysSinceLastCommit() >= threshold {
 			trace = append(trace, "commit_data_missing_threshold")
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: "Human commit data missing", Trace: trace}, nil
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: "Commit data missing", Trace: trace, Signals: []Signal{sigAbsent(SignalLastHumanCommit)}}, nil
 		}
 
 		// 4. Detailed lifecycle classification of inactive state
@@ -145,7 +166,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 
 	// Fallback when no analysis data available
 	trace = append(trace, "no_analysis_data")
-	return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: s.buildReviewNeededReason(nil, scores), Trace: trace}, nil
+	return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: "Insufficient data for assessment", Trace: trace, Signals: []Signal{sigAbsent(SignalLastHumanCommit), sigAbsent(SignalMaintainedScore)}}, nil
 }
 
 // shouldOverrideToEOLDueToResidualVulns returns true when Scorecard data is missing/incomplete
@@ -238,91 +259,32 @@ func (s *LifecycleAssessorService) severityAwareLabel(hasHigh bool,
 	return lowLabel, lowTrace
 }
 
-// severitySummary returns a severity breakdown string for reason text, e.g. ", max: HIGH 7.5".
-// When unknown-severity advisories exist, includes the count (e.g. ", max: LOW 3.0, unknown: 1")
-// so the reason text stays consistent with the conservative classification that treats unknowns
-// as potentially HIGH. Returns empty string if no severity data is available.
-func (s *LifecycleAssessorService) severitySummary(a *Analysis) string {
-	vd := s.getStableOrMaxVersionDetail(a)
-	if vd == nil || len(vd.Advisories) == 0 {
-		return ""
-	}
-
-	unknownCount := vd.UnknownSeverityAdvisoryCount()
-	maxScore := vd.MaxCVSS3()
-
-	if maxScore <= 0 {
-		if unknownCount > 0 {
-			return fmt.Sprintf(", unknown: %d", unknownCount)
-		}
-		return ""
-	}
-
-	severity := SeverityFromCVSS3(maxScore)
-	if unknownCount > 0 {
-		return fmt.Sprintf(", max: %s %.1f, unknown: %d", severity, maxScore, unknownCount)
-	}
-	return fmt.Sprintf(", max: %s %.1f", severity, maxScore)
-}
-
 // assessActiveState handles active repository states using domain models
 func (s *LifecycleAssessorService) assessActiveState(analysis *Analysis, scores map[string]*ScoreEntity) (*AssessmentResult, error) {
 	hasRecentStable := analysis.HasRecentStableRelease(s.rules.RecentStableWindowDays)
 	hasRecentPrerelease := analysis.HasRecentPrereleaseRelease(s.rules.RecentPrereleaseWindowDays)
-	hasRecentHumanCommit := analysis.HasRecentHumanCommit(s.rules.MaxHumanCommitGapDays)
 	isMaintenanceOk := analysis.IsMaintenanceOk()
 
-	// Detailed active-state logic (priority: stable > prerelease > commits)
-	// A recent stable/prerelease publish is the strongest activity signal — someone actively
-	// packaged and released the software. Commit data and maintenance score are supplementary.
+	// A recent stable/prerelease publish is the strongest activity signal.
 	if hasRecentStable {
-		reason := "Recent stable package version published"
-		trace := "active_stable"
-		if hasRecentHumanCommit {
-			reason += " with recent human commits"
-			trace += "_recent_commits"
-		}
-		if isMaintenanceOk {
-			reason += fmt.Sprintf("; maintenance score ≥ %.0f", s.rules.MaintenanceScoreMin)
-			trace += "_maintenance_ok"
-		}
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: reason, Trace: []string{trace}}, nil
+		signals := []Signal{sig(SignalRecentStableRelease, "true"), commitSignal(analysis), maintainedSignal(scores)}
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: "Actively maintained with recent releases", Trace: []string{"active_stable"}, Signals: signals}, nil
 	} else if hasRecentPrerelease {
-		reason := "Recent pre-release version published"
-		trace := "active_prerelease"
-		if hasRecentHumanCommit {
-			reason += " with recent human commits"
-			trace += "_recent_commits"
-		}
-		if isMaintenanceOk {
-			reason += fmt.Sprintf("; maintenance score ≥ %.0f", s.rules.MaintenanceScoreMin)
-			trace += "_maintenance_ok"
-		}
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: reason, Trace: []string{trace}}, nil
+		signals := []Signal{sig(SignalRecentPreRelease, "true"), commitSignal(analysis), maintainedSignal(scores)}
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: "Actively maintained with recent pre-release", Trace: []string{"active_prerelease"}, Signals: signals}, nil
 	} else { // hasRecentCommit only
-		// VCS-direct ecosystems (Go, Composer): commits are the delivery mechanism,
-		// so recent commits alone are sufficient evidence of active maintenance.
 		if analysis.IsVCSDirectDelivery() {
-			reason := "Recent human commits (VCS-direct ecosystem; commits deliver updates to consumers)"
-			if isMaintenanceOk {
-				reason += fmt.Sprintf("; maintenance score ≥ %.0f", s.rules.MaintenanceScoreMin)
-			}
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: reason, Trace: []string{"active_commits_only_vcs_direct"}}, nil
+			signals := []Signal{commitSignal(analysis), sig(SignalEcosystemDelivery, "vcs-direct"), maintainedSignal(scores)}
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: "Active commits (VCS-direct delivery)", Trace: []string{"active_commits_only_vcs_direct"}, Signals: signals}, nil
 		}
-		// Registry-dependent ecosystems (npm, pypi, maven, etc.): commits without
-		// publishing do not reach consumers via the package manager.
 		hasMaintainedScore := s.getScoreValue(scores, "Maintained") >= 0
 		if isMaintenanceOk {
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: fmt.Sprintf("Recent human commits but no recent package publishing; maintenance score ≥ %.0f", s.rules.MaintenanceScoreMin), Trace: []string{"active_commits_only_maintenance_ok"}}, nil
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: "Active commits, no recent publish", Trace: []string{"active_commits_only_maintenance_ok"}, Signals: []Signal{commitSignal(analysis), maintainedSignal(scores)}}, nil
 		}
 		if !hasMaintainedScore {
-			// Scorecard data unavailable — maintenance quality is unknown, not proven low.
-			// Recent human commits are direct evidence of an active maintainer, so we
-			// classify as Active rather than penalizing for missing third-party metrics.
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: "Recent human commits but no recent package publishing; maintenance score unavailable (Scorecard not found)", Trace: []string{"active_commits_only_maintenance_unknown"}}, nil
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive, Reason: "Active commits, scorecard unavailable", Trace: []string{"active_commits_only_maintenance_unknown"}, Signals: []Signal{commitSignal(analysis), sigAbsent(SignalMaintainedScore)}}, nil
 		}
-		// Scorecard present AND Maintained < threshold — confirmed low maintenance.
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Recent human commits, no recent package publishing, maintenance score < %.0f", s.rules.MaintenanceScoreMin), Trace: []string{"active_commits_only_maintenance_low"}}, nil
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: "Active commits but low maintenance", Trace: []string{"active_commits_only_maintenance_low"}, Signals: []Signal{commitSignal(analysis), maintainedSignal(scores)}}, nil
 	}
 }
 
@@ -339,73 +301,76 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 	// Note: Primary-source EOL is handled at entry (in.EOL). Do not re-evaluate here to avoid duplication.
 
 	// ── Path A: Commit data available (GITHUB_TOKEN set) ──
-	// Uses actual commit timestamps + scorecard for precise classification.
 	if analysis.HasCommitData() {
 		daysSinceLastHumanCommit := analysis.GetDaysSinceLastHumanCommit()
 		lastHumanCommitYears := analysis.GetLastHumanCommitYears()
+		cSig := commitSignal(analysis)
+		mSig := maintainedSignal(scores)
 
 		// High vulnerability score (≥8): prioritize safety classification
 		if hasVulnScore && vulnScore >= s.rules.VulnerabilityScoreGoodMin {
+			advSignals := s.collectAdvisorySignals(analysis)
 			if lastHumanCommitYears >= float64(s.rules.LegacyFrozenYears) {
-				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelLegacySafe, Reason: fmt.Sprintf("No human commits ≥ %d yrs and almost no unpatched vulns", s.rules.LegacyFrozenYears), Trace: []string{"inactive_legacy_safe_vuln_score_high"}}, nil
+				signals := append([]Signal{cSig}, advSignals...)
+				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelLegacySafe, Reason: "Dormant but no known vulnerabilities", Trace: []string{"inactive_legacy_safe_vuln_score_high"}, Signals: signals}, nil
 			}
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Few unpatched vulns, but no human commits within %d days", s.rules.MaxHumanCommitGapDays), Trace: []string{"inactive_stalled_vuln_score_high_recent"}}, nil
+			signals := append([]Signal{cSig}, advSignals...)
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: "Low vulnerability risk but inactive", Trace: []string{"inactive_stalled_vuln_score_high_recent"}, Signals: signals}, nil
 		}
 
-		// Zero advisories + long-term inactive → Legacy-Safe
-		// Packages with no known advisories that have been dormant beyond EolInactivityDays
-		// are effectively "complete" — safe to use despite inactivity. This catches the
-		// common pattern of small, finished utility packages (e.g. function-bind, concat-map)
-		// that Scorecard penalizes for inactivity but pose no security risk.
 		advisoryCount, _ := s.getStableOrMaxAdvisory(analysis)
 		if advisoryCount == 0 && daysSinceLastHumanCommit > s.rules.EolInactivityDays {
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelLegacySafe,
-				Reason: fmt.Sprintf("No known advisories; no human commits for > %d yrs", s.rules.EolInactivityDays/365),
-				Trace:  []string{"inactive_legacy_safe_no_advisories_dormant"}}, nil
+				Reason:  "Dormant but no known vulnerabilities",
+				Trace:   []string{"inactive_legacy_safe_no_advisories_dormant"},
+				Signals: []Signal{cSig, sig(SignalAdvisoryCount, "0")}}, nil
 		}
 
 		// Low maintenance score (<3): branch based on EOL_DAYS (2 years)
 		if hasMaintainedScore && !isMaintenanceOk {
 			if daysSinceLastHumanCommit > s.rules.EolInactivityDays {
 				if hasVulnScore && vulnScore < s.rules.VulnerabilityScorePoorMax {
-					return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective, Reason: fmt.Sprintf("Low maintenance, > %d yrs no human commits, many unpatched vulns", s.rules.EolInactivityDays/365)}, nil
+					signals := []Signal{cSig, mSig}
+					signals = append(signals, s.collectAdvisorySignals(analysis)...)
+					return &AssessmentResult{Axis: LifecycleAxis, Label: LabelEOLEffective, Reason: "Unmaintained with unpatched vulnerabilities", Signals: signals}, nil
 				}
-				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Low maintenance and no human commits for > %d yrs", s.rules.EolInactivityDays/365)}, nil
+				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: "Low maintenance, long-term inactive", Signals: []Signal{cSig, mSig}}, nil
 			}
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: fmt.Sprintf("Low maintenance; last human commit within %d yrs", s.rules.EolInactivityDays/365)}, nil
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled, Reason: "Low maintenance", Signals: []Signal{cSig, mSig}}, nil
 		}
 
-		// Commit data present but scores inconclusive — use commit age + publish recency
-		// to avoid unnecessary ReviewNeeded when we have sufficient activity signals.
 		if hasMaintainedScore && isMaintenanceOk {
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-				Reason: fmt.Sprintf("Scorecard Maintained(%.0f) ≥ %.0f but no recent activity; partial scorecard data", maintainedScore, s.rules.MaintenanceScoreMin),
-				Trace:  []string{"inactive_commit_maintenance_ok_partial_scores"}}, nil
+				Reason:  "Maintained but no recent activity",
+				Trace:   []string{"inactive_commit_maintenance_ok_partial_scores"},
+				Signals: []Signal{cSig, mSig}}, nil
 		}
-		daysSincePublish := analysis.GetDaysSinceLatestPublish()
-		if daysSincePublish <= s.rules.EolInactivityDays {
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-				Reason: fmt.Sprintf("Scorecard data incomplete; latest version published %d days ago (within %d-day threshold)", daysSincePublish, s.rules.EolInactivityDays),
-				Trace:  []string{"inactive_commit_no_scores_recent_publish"}}, nil
+		if analysis.HasPublishData() {
+			daysSincePublish := analysis.GetDaysSinceLatestPublish()
+			publishSig := sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))
+			if daysSincePublish <= s.rules.EolInactivityDays {
+				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
+					Reason:  "No recent activity, recent publish",
+					Trace:   []string{"inactive_commit_no_scores_recent_publish"},
+					Signals: []Signal{cSig, publishSig, mSig}}, nil
+			}
+			if daysSinceLastHumanCommit > s.rules.EolInactivityDays && daysSincePublish > s.rules.EolInactivityDays {
+				return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
+					Reason:  "Long-term inactive, no recent releases",
+					Trace:   []string{"inactive_commit_no_scores_old_publish"},
+					Signals: []Signal{cSig, publishSig, mSig}}, nil
+			}
 		}
-		if daysSinceLastHumanCommit > s.rules.EolInactivityDays && daysSincePublish > s.rules.EolInactivityDays {
-			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-				Reason: fmt.Sprintf("No human commits for > %d yrs and no new release in %d days; scorecard data incomplete", s.rules.EolInactivityDays/365, daysSincePublish),
-				Trace:  []string{"inactive_commit_no_scores_old_publish"}}, nil
-		}
-		// GitHub-only path: commit data present but no publish data and no scorecard.
-		// This occurs for repos without registry packages (e.g., GitHub Actions).
-		// Use commit age alone for classification instead of falling through to ReviewNeeded.
 		if !analysis.HasPublishData() && !hasMaintainedScore {
 			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-				Reason: fmt.Sprintf("No recent activity; last human commit %d days ago; no registry data available", daysSinceLastHumanCommit),
-				Trace:  []string{"inactive_github_only_stalled"}}, nil
+				Reason:  "No recent activity, no registry data",
+				Trace:   []string{"inactive_github_only_stalled"},
+				Signals: []Signal{cSig, sigAbsent(SignalMaintainedScore)}}, nil
 		}
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: s.buildReviewNeededReason(analysis, scores), Trace: []string{"inactive_commit_data_scores_inconclusive"}}, nil
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: "Insufficient data for assessment", Trace: []string{"inactive_commit_data_scores_inconclusive"}, Signals: []Signal{cSig, mSig}}, nil
 	}
 
 	// ── Path B: No commit data (no GITHUB_TOKEN) ──
-	// Uses scorecard + publish recency + advisories from deps.dev.
 	return s.assessInactiveNoCommitData(analysis, scores, maintainedScore, hasMaintainedScore, isMaintenanceOk)
 }
 
@@ -420,73 +385,114 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	daysSincePublish := analysis.GetDaysSinceLatestPublish()
 	advisoryCount, _ := s.getStableOrMaxAdvisory(analysis)
 	hasAdvisories := advisoryCount >= s.rules.ResidualAdvisoryThreshold && advisoryCount > 0
-	// Determine if HIGH+ severity advisories exist (for severity-aware EOL classification).
 	hasHighSeverity := s.hasHighSeverityAdvisories(analysis)
-
-	// C1: Scorecard Maintained ≥ threshold → Stalled (confirmed maintenance despite no commit data)
-	if hasMaintainedScore && isMaintenanceOk {
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-			Reason: fmt.Sprintf("Commit data unavailable; scorecard Maintained(%.0f) ≥ %.0f indicates ongoing maintenance", maintainedScore, s.rules.MaintenanceScoreMin),
-			Trace:  []string{"inactive_no_commit_C1_maintenance_ok"}}, nil
+	cSig := sigAbsent(SignalLastHumanCommit) // no commit data in this path
+	mSig := maintainedSignal(scores)
+	dSig := sigAbsent(SignalDaysSinceRelease)
+	if analysis.HasPublishData() {
+		dSig = sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))
 	}
 
-	// C2: Scorecard Maintained < threshold (scorecard present but low maintenance)
+	// C1: Scorecard Maintained ≥ threshold
+	if hasMaintainedScore && isMaintenanceOk {
+		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
+			Reason:  "Maintained but no commit data",
+			Trace:   []string{"inactive_no_commit_C1_maintenance_ok"},
+			Signals: []Signal{cSig, mSig}}, nil
+	}
+
+	// C2: Scorecard Maintained < threshold
 	if hasMaintainedScore && !isMaintenanceOk {
-		// C2a: Advisories + old publish → EOL-Effective (if HIGH+ severity or unknown),
-		// Stalled (if only LOW/MEDIUM severity known).
-		if hasAdvisories && daysSincePublish > s.rules.EolInactivityDays {
+		if hasAdvisories && analysis.HasPublishData() && daysSincePublish > s.rules.EolInactivityDays {
 			label, trace := s.severityAwareLabel(hasHighSeverity,
 				LabelEOLEffective, "inactive_no_commit_C2a_low_maint_advisory_old_publish",
 				LabelStalled, "inactive_no_commit_C2a_low_maint_advisory_low_severity")
+			signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
 			return &AssessmentResult{Axis: LifecycleAxis, Label: label,
-				Reason: fmt.Sprintf("Low maintenance score; open advisories (%d%s) on latest version, no new release in %d days", advisoryCount, s.severitySummary(analysis), daysSincePublish),
-				Trace:  []string{trace}}, nil
+				Reason:  "Unmaintained with unpatched vulnerabilities",
+				Trace:   []string{trace},
+				Signals: signals}, nil
 		}
-		// C2b: Otherwise → Stalled
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-			Reason: fmt.Sprintf("Commit data unavailable; low maintenance score (%.0f < %.0f)", maintainedScore, s.rules.MaintenanceScoreMin),
-			Trace:  []string{"inactive_no_commit_C2b_low_maint"}}, nil
+			Reason:  "Low maintenance, no commit data",
+			Trace:   []string{"inactive_no_commit_C2b_low_maint"},
+			Signals: []Signal{cSig, mSig}}, nil
 	}
 
-	// C3: No scorecard — deps.dev signals only (publish recency + advisories)
+	// C3: No scorecard — deps.dev signals only
 	if hasAdvisories {
-		// C3a: Advisories + old publish → EOL-Effective (if HIGH+) or Stalled (if LOW/MEDIUM only)
-		if daysSincePublish > s.rules.EolInactivityDays {
+		if analysis.HasPublishData() && daysSincePublish > s.rules.EolInactivityDays {
 			label, trace := s.severityAwareLabel(hasHighSeverity,
 				LabelEOLEffective, "inactive_no_commit_C3a_advisory_old_publish",
 				LabelStalled, "inactive_no_commit_C3a_advisory_low_severity")
+			signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
 			return &AssessmentResult{Axis: LifecycleAxis, Label: label,
-				Reason: fmt.Sprintf("Open advisories (%d%s) on latest version, no new release in %d days; consumers cannot resolve vulnerabilities via package manager", advisoryCount, s.severitySummary(analysis), daysSincePublish),
-				Trace:  []string{trace}}, nil
+				Reason:  "Unpatched vulnerabilities, no recent releases",
+				Trace:   []string{trace},
+				Signals: signals}, nil
 		}
-		// C3b1/C3b2: Advisories + recent/mid publish → Stalled
+		signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-			Reason: fmt.Sprintf("Open advisories (%d%s) on latest version despite publish %d days ago", advisoryCount, s.severitySummary(analysis), daysSincePublish),
-			Trace:  []string{"inactive_no_commit_C3b_advisory_recent_publish"}}, nil
+			Reason:  "Unpatched vulnerabilities despite recent publish",
+			Trace:   []string{"inactive_no_commit_C3b_advisory_recent_publish"},
+			Signals: signals}, nil
 	}
 
-	// No advisories path
-	// C3c: No advisories + publish ≤ RecentStableWindowDays → Active
-	if daysSincePublish <= s.rules.RecentStableWindowDays {
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive,
-			Reason: fmt.Sprintf("No known advisories and latest version published %d days ago (within %d-day window)", daysSincePublish, s.rules.RecentStableWindowDays),
-			Trace:  []string{"inactive_no_commit_C3c_no_advisory_recent_publish"}}, nil
-	}
-	// C3d: No advisories + publish 366–730 days → Stalled
-	if daysSincePublish <= s.rules.EolInactivityDays {
-		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
-			Reason: fmt.Sprintf("No known advisories but no new release in %d days", daysSincePublish),
-			Trace:  []string{"inactive_no_commit_C3d_no_advisory_mid_publish"}}, nil
-	}
-	// C3e: No advisories + publish > 730 days → Legacy Safe
+	// No advisories path — only use publish-age thresholds when publish data exists
 	if analysis.HasPublishData() {
+		if daysSincePublish <= s.rules.RecentStableWindowDays {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelActive,
+				Reason:  "Recently published, no known vulnerabilities",
+				Trace:   []string{"inactive_no_commit_C3c_no_advisory_recent_publish"},
+				Signals: []Signal{dSig, sig(SignalAdvisoryCount, "0")}}, nil
+		}
+		if daysSincePublish <= s.rules.EolInactivityDays {
+			return &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled,
+				Reason:  "No vulnerabilities but no recent releases",
+				Trace:   []string{"inactive_no_commit_C3d_no_advisory_mid_publish"},
+				Signals: []Signal{dSig, sig(SignalAdvisoryCount, "0")}}, nil
+		}
 		return &AssessmentResult{Axis: LifecycleAxis, Label: LabelLegacySafe,
-			Reason: fmt.Sprintf("No known advisories; frozen for %d days with no security concerns", daysSincePublish),
-			Trace:  []string{"inactive_no_commit_C3e_no_advisory_old_publish"}}, nil
+			Reason:  "Dormant but no known vulnerabilities",
+			Trace:   []string{"inactive_no_commit_C3e_no_advisory_old_publish"},
+			Signals: []Signal{dSig, sig(SignalAdvisoryCount, "0")}}, nil
 	}
 
-	// Fallback: no publish data, no scorecard, no commit data → ReviewNeeded
-	return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: s.buildReviewNeededReason(analysis, scores), Trace: []string{"inactive_no_commit_fallback_review_needed"}}, nil
+	return &AssessmentResult{Axis: LifecycleAxis, Label: LabelReviewNeeded, Reason: "Insufficient data for assessment", Trace: []string{"inactive_no_commit_fallback_review_needed"}, Signals: []Signal{cSig, mSig}}, nil
+}
+
+// collectAdvisorySignals returns advisory-related signals for the analysis.
+func (s *LifecycleAssessorService) collectAdvisorySignals(a *Analysis) []Signal {
+	count, _ := s.getStableOrMaxAdvisory(a)
+	if count == 0 {
+		return []Signal{sig(SignalAdvisoryCount, "0")}
+	}
+	signals := []Signal{sig(SignalAdvisoryCount, fmt.Sprintf("%d", count))}
+	vd := s.getStableOrMaxVersionDetail(a)
+	if vd != nil {
+		maxScore := vd.MaxCVSS3()
+		if maxScore > 0 {
+			signals = append(signals, sig(SignalMaxAdvisorySeverity, fmt.Sprintf("%s %.1f", SeverityFromCVSS3(maxScore), maxScore)))
+		}
+	}
+	return signals
+}
+
+// commitSignal returns a signal for last human commit date.
+func commitSignal(a *Analysis) Signal {
+	if a != nil && a.HasCommitData() && a.RepoState != nil && a.RepoState.LatestHumanCommit != nil {
+		return sig(SignalLastHumanCommit, a.RepoState.LatestHumanCommit.Format("2006-01-02"))
+	}
+	return sigAbsent(SignalLastHumanCommit)
+}
+
+// maintainedSignal returns a signal for the Maintained scorecard score.
+// Returns absent when score is missing or negative (not available).
+func maintainedSignal(scores map[string]*ScoreEntity) Signal {
+	if score, ok := scores["Maintained"]; ok && score != nil && score.Value() >= 0 {
+		return sig(SignalMaintainedScore, fmt.Sprintf("%d/10", score.Value()))
+	}
+	return sigAbsent(SignalMaintainedScore)
 }
 
 // getScoreValue safely gets a score value by name
@@ -497,68 +503,17 @@ func (s *LifecycleAssessorService) getScoreValue(scores map[string]*ScoreEntity,
 	return -1.0
 }
 
-// buildReviewNeededReason composes an actionable reason string for "Review Needed" lifecycle classifications by
-// enumerating which key signals are missing or inconclusive.
-// This function stays within the domain layer and uses only domain models.
-func (s *LifecycleAssessorService) buildReviewNeededReason(a *Analysis, scores map[string]*ScoreEntity) string {
-	parts := make([]string, 0, 4)
-
-	// Scorecard presence and missing fields
-	maintained := s.getScoreValue(scores, "Maintained")
-	vuln := s.getScoreValue(scores, "Vulnerabilities")
-	if len(scores) == 0 {
-		parts = append(parts, "Scorecard: missing")
-	} else {
-		missing := make([]string, 0, 2)
-		if maintained < 0 {
-			missing = append(missing, "Maintained")
-		}
-		if vuln < 0 {
-			missing = append(missing, "Vulnerabilities")
-		}
-		if len(missing) > 0 {
-			parts = append(parts, "Scorecard: missing "+strings.Join(missing, " & "))
+// eolEvidenceSource derives a signal value from the EOL evidence source.
+// Falls back to "primary-source" when no evidence is available.
+func eolEvidenceSource(eol EOLStatus) string {
+	if len(eol.Evidences) > 0 {
+		src := eol.Evidences[0].Source
+		if src != "" {
+			return strings.ToLower(src)
 		}
 	}
-
-	// Activity signals (releases/commits)
-	if a != nil {
-		hasStable := a.HasRecentStableRelease(s.rules.RecentStableWindowDays)
-		hasPre := a.HasRecentPrereleaseRelease(s.rules.RecentPrereleaseWindowDays)
-		hasCommit := a.HasRecentHumanCommit(s.rules.MaxHumanCommitGapDays)
-
-		sigsMissing := make([]string, 0, 3)
-		if !hasStable {
-			sigsMissing = append(sigsMissing, "stable release")
-		}
-		if !hasPre {
-			sigsMissing = append(sigsMissing, "pre-release")
-		}
-		if !hasCommit {
-			sigsMissing = append(sigsMissing, fmt.Sprintf("human commit (>%d days)", s.rules.MaxHumanCommitGapDays))
-		}
-		if len(sigsMissing) > 0 {
-			parts = append(parts, "Signals missing: "+strings.Join(sigsMissing, ", "))
-		}
-
-		// Commit recency details if available
-		if a.RepoState != nil && a.RepoState.LatestHumanCommit != nil {
-			days := a.GetDaysSinceLastHumanCommit()
-			parts = append(parts, fmt.Sprintf("last human commit %d days ago", days))
-		} else {
-			parts = append(parts, "last human commit date unknown")
-		}
-
-		// Advisory count for actionability
-		if count, _ := s.getStableOrMaxAdvisory(a); count > 0 {
-			parts = append(parts, fmt.Sprintf("open advisories: %d", count))
-		}
-	} else {
-		parts = append(parts, "Analysis data missing")
-	}
-
-	if len(parts) == 0 {
-		return "manual review suggested"
-	}
-	return "manual review suggested (" + strings.Join(parts, "; ") + ")"
+	return "primary-source"
 }
+
+// severitySummary and buildReviewNeededReason removed — Reason text is now
+// concise one-line summaries; detailed data is in Signals.

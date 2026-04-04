@@ -2,9 +2,7 @@
 
 [![CI](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml) [![Dependency Scan](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/future-architect/uzomuzo-oss)](https://goreportcard.com/report/github.com/future-architect/uzomuzo-oss) [![Go Reference](https://pkg.go.dev/badge/github.com/future-architect/uzomuzo-oss.svg)](https://pkg.go.dev/github.com/future-architect/uzomuzo-oss) [![Release](https://img.shields.io/github/v/release/future-architect/uzomuzo-oss)](https://github.com/future-architect/uzomuzo-oss/releases/latest) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-**Proactive lifecycle governance for OSS supply chains.** Detects abandoned, stalled, and effectively dead dependencies that traditional SCA tools report as "0 vulnerabilities — safe."
-
-![uzomuzo demo](docs/assets/demo.gif)
+**Find abandoned dependencies before they become vulnerabilities.** SCA tools report "0 CVEs — safe." uzomuzo detects the packages no one is maintaining anymore.
 
 > `./uzomuzo scan pkg:npm/inflight@1.0.6` — inflight has 556K dependents, yet its repository is archived and npm has deprecated it. uzomuzo detects this as **EOL-Confirmed** in seconds.
 
@@ -18,23 +16,27 @@ A package with zero CVEs today may have been abandoned for years — no one is w
 
 ```text
 ── pkg:npm/dicer@0.3.1 ─────────────────────────────────────
-│ Package: pkg:npm/dicer@0.3.1
-│ Description: A very fast streaming multipart parser for node.js
-├─ Verdict ─────────────────────────────────────────────────
-│ 🔴 EOL-Effective
-│ Reason: Low maintenance score; open advisories (1, max: HIGH 7.5) on latest version, no new release in 1566 days
+│ A very fast streaming multipart parser for node.js
+│ 🔴 EOL-Effective: Unmaintained with unpatched
+│                  vulnerabilities
+├─ Signals ─────────────────────────────────────────────────
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 0/10
+│ Days Since Release: 1567
+│ Advisories: 1
+│ Max Advisory Severity: HIGH 7.5
 ├─ Health ──────────────────────────────────────────────────
-│ GitHub: Normal (188 stars)
+│ 188 stars
 │ Used by: 1271 packages
+│ Depends on: 1 direct, 0 transitive
 │ Score: 2.8/10  Maintained: 0.0/10
 ├─ Releases ────────────────────────────────────────────────
-│ Stable: 0.3.1 (2021-12-19)  ⚠️ Advisories: 1 (max: HIGH 7.5)
-│   HIGH     (7.5)  GHSA-wm7h-9275-46v2  Crash in HeaderParser in dicer
+│ Stable: 0.3.1 (2021-12-19)  ⚠️ 1 advisory
+│   HIGH     (7.5)  GHSA-wm7h-9275-46v2
 │   → https://deps.dev/npm/dicer/0.3.1
-├─ License ─────────────────────────────────────────────────
-│ MIT (source: depsdev-project-spdx / project-fallback)
 ├─ Links ───────────────────────────────────────────────────
 │ Repository: https://github.com/mscdex/dicer
+│ Registry: https://www.npmjs.com/package/dicer
 │ deps.dev: https://deps.dev/npm/dicer
 └───────────────────────────────────────────────────────────
 ```
@@ -154,143 +156,270 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | **Graduated precision** | Works without GitHub token (deps.dev only); adding a token unlocks commit history and Scorecard for high-precision assessment. |
 
 <details>
-<summary><strong>Sample Output — All lifecycle states</strong></summary>
+<summary><strong>Sample Output — All lifecycle states (detailed format)</strong></summary>
 
 ### Active — `express` (193K dependents)
 
 ```text
 ── pkg:npm/express@4.18.2 ──────────────────────────────────
-│ Package: pkg:npm/express@4.18.2
-│ Description: Fast, unopinionated, minimalist web framework for node.
-│   Homepage: https://expressjs.com
-│   Registry: https://www.npmjs.com/package/express
-├─ Verdict ─────────────────────────────────────────────────
-│ ✅ Active
-│ Reason: Recent stable package version published; maintenance score ≥ 3
+│ Fast, unopinionated, minimalist web framework for node.
+│ ✅ Active: Actively maintained with recent releases
+├─ Signals ─────────────────────────────────────────────────
+│ Recent Stable Release: true
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 10/10
 ├─ Health ──────────────────────────────────────────────────
-│ GitHub: Normal (68892 stars)
+│ 68892 stars
 │ Used by: 2211 packages
 │ Depends on: 31 direct, 39 transitive
 │ Score: 8.4/10  Maintained: 10.0/10
 ├─ Releases ────────────────────────────────────────────────
-│ Stable: 5.2.1 (2025-12-01)  Advisories: 0
+│ Stable: 5.2.1 (2025-12-01)
+│ Pre-release: 5.0.0-beta.3 (2024-03-25)
 │ Requested: 4.18.2 (2022-10-08)
-├─ License ─────────────────────────────────────────────────
-│ MIT (source: depsdev-project-spdx / depsdev-version-spdx)
 ├─ Links ───────────────────────────────────────────────────
+│ Homepage: https://expressjs.com
 │ Repository: https://github.com/expressjs/express
+│ Registry: https://www.npmjs.com/package/express
 │ deps.dev: https://deps.dev/npm/express
 └───────────────────────────────────────────────────────────
 ```
 
-### Legacy-Safe — `function-bind` (1M+ dependents)
+### Stalled — `moment` (2K+ dependents)
 
 ```text
-── pkg:npm/function-bind@1.1.2 ─────────────────────────────
-│ Package: pkg:npm/function-bind@1.1.2
-├─ Verdict ─────────────────────────────────────────────────
-│ ✅ Legacy-Safe
-│ Reason: No known advisories; no human commits for > 2 yrs
+── pkg:npm/moment@2.29.4 ───────────────────────────────────
+│ Parse, validate, manipulate, and display dates in
+│   javascript.
+│ ⚠️ Stalled: Low maintenance, no commit data
+├─ Signals ─────────────────────────────────────────────────
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 0/10
 ├─ Health ──────────────────────────────────────────────────
-│ GitHub: Normal (139 stars)
-│ Used by: 1077300 packages
-│ Score: 4.5/10  Maintained: 0.0/10
-│ Last Commit: 2023-10-12
+│ 48019 stars
+│ Used by: 2452 packages
+│ Score: 3.1/10  Maintained: 0.0/10
 ├─ Releases ────────────────────────────────────────────────
-│ Stable: 1.1.2 (2023-10-12)  Advisories: 0
-├─ License ─────────────────────────────────────────────────
-│ MIT (source: depsdev-project-spdx / depsdev-version-spdx)
+│ Stable: 2.30.1 (2023-12-27)
+│ Requested: 2.29.4 (2022-07-06)
 ├─ Links ───────────────────────────────────────────────────
-│ Repository: https://github.com/raynos/function-bind
-│ deps.dev: https://deps.dev/npm/function-bind
+│ Homepage: momentjs.com
+│ Repository: https://github.com/moment/moment
+│ Registry: https://www.npmjs.com/package/moment
+│ deps.dev: https://deps.dev/npm/moment
 └───────────────────────────────────────────────────────────
 ```
 
-Scorecard says Maintained 0.0 — but zero advisories and does one thing perfectly. uzomuzo classifies it as **frozen and safe**.
+Scorecard says Maintained 0.0 — but zero advisories and does one thing perfectly. Watch for maintenance decline.
 
-### Stalled — `grunt` (12K stars)
+### Stalled — `gorilla/mux` (22K stars)
 
 ```text
-── pkg:npm/grunt@1.6.1 ─────────────────────────────────────
-│ Package: pkg:npm/grunt@1.6.1
-│ Description: Grunt: The JavaScript Task Runner
-│   Homepage: http://gruntjs.com/
-├─ Verdict ─────────────────────────────────────────────────
-│ ⚠️ Stalled
-│ Reason: Recent human commits, no recent package publishing, maintenance score < 3
+── pkg:golang/github.com/gorilla/mux@1.8.1 ─────────────────
+│ Package gorilla/mux is a powerful HTTP router and URL
+│   matcher for building Go web servers with 🦍
+│ ⚠️ Stalled: Low maintenance, no commit data
+├─ Signals ─────────────────────────────────────────────────
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 0/10
 ├─ Health ──────────────────────────────────────────────────
-│ GitHub: Normal (12244 stars)
-│ Used by: 1113 packages
-│ Score: 4.0/10  Maintained: 0.0/10
-│ Last Commit: 2025-11-05
+│ 21814 stars
+│ Score: 4.9/10  Maintained: 0.0/10
 ├─ Releases ────────────────────────────────────────────────
-│ Stable: 1.6.1 (2023-01-31)  Advisories: 0
-├─ License ─────────────────────────────────────────────────
-│ MIT (source: derived-from-version / depsdev-version-spdx)
+│ Stable: v1.8.1 (2023-10-18)
+│ Highest (SemVer): v1.8.2-0.20240619235004-fe14465e5077 (2024-06-19)
 ├─ Links ───────────────────────────────────────────────────
-│ Repository: https://github.com/gruntjs/grunt
-│ deps.dev: https://deps.dev/npm/grunt
+│ Homepage: https://gorilla.github.io
+│ Repository: https://github.com/gorilla/mux
+│ Registry: https://pkg.go.dev/github.com%2Fgorilla%2Fmux
+│ deps.dev: https://deps.dev/go/github.com/gorilla/mux
 └───────────────────────────────────────────────────────────
 ```
 
-Still has occasional commits, but no npm release since 2023. Not dead, not active — clearly declining.
-
-### EOL-Confirmed — `inflight` (556K dependents)
-
-```text
-── pkg:npm/inflight@1.0.6 ──────────────────────────────────
-│ Package: pkg:npm/inflight@1.0.6
-│ Description: Add callbacks to requests in flight to avoid async duplication
-├─ Verdict ─────────────────────────────────────────────────
-│ 🔴 EOL-Confirmed
-│ Reason: Repository is archived or disabled on GitHub
-├─ EOL ─────────────────────────────────────────────────────
-│ ➡️ Successor: it
-│ Evidence (1):
-│   [npmjs] Stable version is deprecated in npm registry.
-├─ Health ──────────────────────────────────────────────────
-│ GitHub: 📦 Archived (76 stars)
-│ Used by: 556777 packages
-│ Score: 2.9/10  Maintained: 0.0/10
-│ Last Commit: 2024-05-23
-├─ Releases ────────────────────────────────────────────────
-│ Stable: 1.0.6 (2016-10-13)  Advisories: 0 ⚠️ [DEPRECATED]
-├─ License ─────────────────────────────────────────────────
-│ ISC (source: derived-from-version / depsdev-version-spdx)
-├─ Links ───────────────────────────────────────────────────
-│ Repository: https://github.com/npm/inflight
-│ deps.dev: https://deps.dev/npm/inflight
-└───────────────────────────────────────────────────────────
-```
-
-556K dependents. GitHub archived, npm deprecated. Last release 2016. **Migrate immediately.**
+No release since 2023, Maintained 0.0. Not dead, not active — clearly declining.
 
 ### EOL-Effective — `dicer` (busboy → multer → express)
 
 ```text
 ── pkg:npm/dicer@0.3.1 ─────────────────────────────────────
-│ Package: pkg:npm/dicer@0.3.1
-│ Description: A very fast streaming multipart parser for node.js
-├─ Verdict ─────────────────────────────────────────────────
-│ 🔴 EOL-Effective
-│ Reason: Low maintenance score; open advisories (1, max: HIGH 7.5) on latest version, no new release in 1566 days
+│ A very fast streaming multipart parser for node.js
+│ 🔴 EOL-Effective: Unmaintained with unpatched
+│                  vulnerabilities
+├─ Signals ─────────────────────────────────────────────────
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 0/10
+│ Days Since Release: 1567
+│ Advisories: 1
+│ Max Advisory Severity: HIGH 7.5
 ├─ Health ──────────────────────────────────────────────────
-│ GitHub: Normal (188 stars)
+│ 188 stars
 │ Used by: 1271 packages
+│ Depends on: 1 direct, 0 transitive
 │ Score: 2.8/10  Maintained: 0.0/10
 ├─ Releases ────────────────────────────────────────────────
-│ Stable: 0.3.1 (2021-12-19)  ⚠️ Advisories: 1 (max: HIGH 7.5)
-│   HIGH     (7.5)  GHSA-wm7h-9275-46v2  Crash in HeaderParser in dicer
+│ Stable: 0.3.1 (2021-12-19)  ⚠️ 1 advisory
+│   HIGH     (7.5)  GHSA-wm7h-9275-46v2
 │   → https://deps.dev/npm/dicer/0.3.1
-├─ License ─────────────────────────────────────────────────
-│ MIT (source: depsdev-project-spdx / project-fallback)
 ├─ Links ───────────────────────────────────────────────────
 │ Repository: https://github.com/mscdex/dicer
+│ Registry: https://www.npmjs.com/package/dicer
 │ deps.dev: https://deps.dev/npm/dicer
 └───────────────────────────────────────────────────────────
 ```
 
 No deprecation, no archive — but unpatched ReDoS + zero maintenance. **SCA blind spot.**
+
+### EOL-Effective — `dgrijalva/jwt-go` (archived repository)
+
+```text
+── pkg:golang/github.com/dgrijalva/jwt-go@3.2.0 ────────────
+│ ARCHIVE - Golang implementation of JSON Web Tokens (JWT).
+│   This project is now maintained at:
+│ 🔴 EOL-Effective: Unmaintained with unpatched
+│                  vulnerabilities
+├─ Signals ─────────────────────────────────────────────────
+│ Last Human Commit: (unavailable)
+│ Maintained Score: 0/10
+│ Days Since Release: 1706
+│ Advisories: 2
+│ Max Advisory Severity: HIGH 7.5
+├─ Health ──────────────────────────────────────────────────
+│ 10758 stars
+│ Score: 2.8/10  Maintained: 0.0/10
+├─ Releases ────────────────────────────────────────────────
+│ Stable: v3.2.0+incompatible (2018-03-08)  ⚠️ 2 advisories
+│   HIGH     (7.5)  GHSA-w73w-5m7g-f7qc
+│                   GO-2020-0017
+│   → https://deps.dev/go/github.com/dgrijalva/jwt-go/v3.2.0+incompatible
+│ Highest (SemVer): v4.0.0-20210802184156-9742bd7fca1c+incompatible (2021-08-02)
+├─ Links ───────────────────────────────────────────────────
+│ Homepage: https://github.com/golang-jwt/jwt
+│ Repository: https://github.com/dgrijalva/jwt-go
+│ Registry: https://pkg.go.dev/github.com%2Fdgrijalva%2Fjwt-go
+│ deps.dev: https://deps.dev/go/github.com/dgrijalva/jwt-go
+└───────────────────────────────────────────────────────────
+```
+
+Successor is `golang-jwt/jwt`. **Migrate immediately.**
+
+### EOL-Confirmed — `request` (186K dependents, npm deprecated)
+
+```text
+── pkg:npm/request@2.88.2 ──────────────────────────────────
+│ 🏊🏾 Simplified HTTP request client.
+│ 🔴 EOL-Confirmed: Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2
+├─ Signals ─────────────────────────────────────────────────
+│ EOL Source: npmjs
+├─ EOL ─────────────────────────────────────────────────────
+│ Evidence (1):
+│   [npmjs] Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2 (confidence 0.90)
+│     ↳ https://registry.npmjs.org/request
+├─ Health ──────────────────────────────────────────────────
+│ 25580 stars
+│ Used by: 186349 packages
+│ Depends on: 20 direct, 26 transitive
+│ Score: 3.6/10  Maintained: 0.0/10
+├─ Releases ────────────────────────────────────────────────
+│ Stable: 2.88.2 (2020-02-11)  ⚠️ 1 advisory ⚠️ [DEPRECATED]
+│   MEDIUM   (6.1)  GHSA-p8p7-x288-28g6
+│   → https://deps.dev/npm/request/2.88.2
+├─ Links ───────────────────────────────────────────────────
+│ Repository: https://github.com/request/request
+│ Registry: https://www.npmjs.com/package/request
+│ deps.dev: https://deps.dev/npm/request
+└───────────────────────────────────────────────────────────
+```
+
+186K dependents. npm deprecated with deprecation message and advisory. Last release 2020. **Migrate immediately.**
+
+</details>
+
+<details>
+<summary><strong>Sample Output — Table format (mixed statuses)</strong></summary>
+
+```text
+$ uzomuzo scan pkg:npm/express@4.18.2 pkg:npm/moment@2.29.4 \
+    pkg:golang/github.com/gorilla/mux@1.8.1 pkg:npm/dicer@0.3.1 \
+    pkg:golang/github.com/dgrijalva/jwt-go@3.2.0 pkg:npm/request@2.88.2 \
+    -f table
+
+STATUS      PURL                                          LIFECYCLE
+✅ ok        pkg:npm/express@4.18.2                        Active
+⚠️ caution  pkg:npm/moment@2.29.4                         Stalled
+⚠️ caution  pkg:golang/github.com/gorilla/mux@1.8.1       Stalled
+🔴 replace   pkg:npm/dicer@0.3.1                           EOL-Effective
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Effective
+🔴 replace   pkg:npm/request@2.88.2                        EOL-Confirmed
+
+── Summary ─────────────────────────────────────────────────
+│ 6 dependencies | ✅ 1 ok | ⚠️ 2 caution | 🔴 3 replace | 🔍 0 review
+└───────────────────────────────────────────────────────────
+```
+
+</details>
+
+<details>
+<summary><strong>Sample Output — go.mod input</strong></summary>
+
+```text
+$ uzomuzo scan --file go.mod -f table
+
+STATUS      PURL                                                        RELATION  LIFECYCLE
+⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Effective
+✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active
+
+── Summary ─────────────────────────────────────────────────
+│ 3 dependencies | ✅ 1 ok | ⚠️ 1 caution | 🔴 1 replace | 🔍 0 review
+└───────────────────────────────────────────────────────────
+```
+
+go.mod input adds a `RELATION` column showing `direct` or `indirect` dependency relationship.
+
+</details>
+
+<details>
+<summary><strong>Sample Output — GitHub Actions workflow input</strong></summary>
+
+```text
+$ uzomuzo scan --file .github/workflows/ci.yml -f detailed
+
+── https://github.com/actions/checkout ─────────────────────
+│ Description: Action for checking out a repo
+│ ✅ Active
+│ Reason: Recent human commits but no recent package publishing; maintenance score unavailable (Scorecard not found)
+├─ Health ──────────────────────────────────────────────────
+│ 7733 stars
+│ Last Commit: 2026-01-09
+├─ License ─────────────────────────────────────────────────
+│ Project: MIT (github)
+│ Requested Version: (none)
+├─ Links ───────────────────────────────────────────────────
+│ Homepage: https://github.com/features/actions
+│ Repository: https://github.com/actions/checkout
+└───────────────────────────────────────────────────────────
+
+── https://github.com/actions/setup-go ─────────────────────
+│ Package: pkg:golang/github.com/actions/setup-go@v6.4.0+incompatible
+│ Description: Set up your GitHub Actions workflow with a specific version of Go
+│ ✅ Active
+│ Reason: Recent stable package version published with recent human commits; maintenance score ≥ 3
+├─ Health ──────────────────────────────────────────────────
+│ 1673 stars
+│ Score: 6.1/10  Maintained: 10.0/10
+│ Last Commit: 2026-03-17
+├─ Releases ────────────────────────────────────────────────
+│ Stable: v6.4.0+incompatible (2026-03-17)
+├─ License ─────────────────────────────────────────────────
+│ MIT (depsdev)
+├─ Links ───────────────────────────────────────────────────
+│ Repository: https://github.com/actions/setup-go
+│ Registry: https://pkg.go.dev/github.com%2Factions%2Fsetup-go
+│ deps.dev: https://deps.dev/go/github.com/actions/setup-go
+└───────────────────────────────────────────────────────────
+```
+
+Workflow scan extracts `uses:` directives and evaluates each referenced Action as a GitHub repository.
 
 </details>
 

@@ -39,7 +39,7 @@ Wait for both agents to complete.
 
 #### Step 1.2: Apply Fixes
 
-After collecting findings from both agents, **directly fix** all CRITICAL and HIGH issues **within the diff under review**. For MEDIUM and LOW issues, fix them if the fix is straightforward and low-risk **and can be done entirely within the diff**. Any findings that would require changes outside the diff must be treated as skipped/unfixable for Phase 1 and only reported, not edited.
+After collecting findings from both agents, **directly fix all issues regardless of severity** (CRITICAL, HIGH, MEDIUM, and LOW) **within the diff under review**. The goal is to eliminate all findings before push so that Copilot has nothing to flag. Any findings that would require changes outside the diff must be treated as skipped/unfixable for Phase 1 and only reported, not edited.
 
 **Do NOT post review comments to the PR.** The goal is to fix the code, not to leave comments.
 

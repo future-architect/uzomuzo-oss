@@ -135,9 +135,8 @@ Fix: Move parallel processing to internal/infrastructure/integration/
 
 ## Approval Criteria
 
-- APPROVE: No CRITICAL or HIGH issues
-- WARNING: MEDIUM issues only (can merge with caution)
-- BLOCK: CRITICAL or HIGH issues found
+- APPROVE: No issues at any severity level
+- BLOCK: Any unresolved issues found (CRITICAL, HIGH, MEDIUM, or LOW)
 
 ## Quick Checks via Bash
 
