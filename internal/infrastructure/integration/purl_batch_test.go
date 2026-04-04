@@ -72,8 +72,10 @@ func TestResolvedVersion(t *testing.T) {
 
 // stubDepsDevClient implements depsdev.Client for testing enrichment functions.
 type stubDepsDevClient struct {
-	dependentResults    map[string]*depsdev.DependentsResponse
-	dependenciesResults map[string]*depsdev.DependenciesResponse
+	dependentResults          map[string]*depsdev.DependentsResponse
+	dependenciesResults       map[string]*depsdev.DependenciesResponse
+	transitiveAdvisoryResults map[string][]depsdev.AdvisoryKey
+	advisoryDetails           map[string]*depsdev.AdvisoryDetail
 }
 
 func (s *stubDepsDevClient) GetDetailsForPURLs(_ context.Context, _ []string) (map[string]*depsdev.BatchResult, error) {
@@ -103,7 +105,17 @@ func (s *stubDepsDevClient) FetchDependenciesBatch(_ context.Context, _ []string
 }
 
 func (s *stubDepsDevClient) FetchAdvisoriesBatch(_ context.Context, _ []string) map[string]*depsdev.AdvisoryDetail {
+	if s.advisoryDetails != nil {
+		return s.advisoryDetails
+	}
 	return make(map[string]*depsdev.AdvisoryDetail)
+}
+
+func (s *stubDepsDevClient) FetchTransitiveAdvisoryKeys(_ context.Context, deps *depsdev.DependenciesResponse) (map[string][]depsdev.AdvisoryKey, error) {
+	if s.transitiveAdvisoryResults == nil {
+		return make(map[string][]depsdev.AdvisoryKey), nil
+	}
+	return s.transitiveAdvisoryResults, nil
 }
 
 func TestEnrichDependentCounts_Phase1(t *testing.T) {

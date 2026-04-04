@@ -130,6 +130,73 @@ type Advisory struct {
 	CVSS3Score float64
 	// Severity is derived from CVSS3Score: NONE/LOW/MEDIUM/HIGH/CRITICAL. Empty means unknown.
 	Severity string
+	// Relation indicates whether this advisory affects the package directly or via a transitive dependency.
+	// Values: "DIRECT", "TRANSITIVE", or "" (unknown/legacy — treated as direct).
+	Relation string
+	// DependencyName identifies the transitive dependency this advisory originates from.
+	// Format: "name@version" (e.g., "qs@6.5.5"). Empty for direct advisories.
+	DependencyName string
+}
+
+// Advisory Relation constants.
+const (
+	AdvisoryRelationDirect     = "DIRECT"
+	AdvisoryRelationTransitive = "TRANSITIVE"
+)
+
+// DirectAdvisories returns advisories that affect the package directly (Relation is DIRECT or empty).
+func (vd *VersionDetail) DirectAdvisories() []Advisory {
+	var result []Advisory
+	for _, a := range vd.Advisories {
+		if a.Relation == AdvisoryRelationDirect || a.Relation == "" {
+			result = append(result, a)
+		}
+	}
+	return result
+}
+
+// TransitiveAdvisories returns advisories that affect transitive dependencies.
+func (vd *VersionDetail) TransitiveAdvisories() []Advisory {
+	var result []Advisory
+	for _, a := range vd.Advisories {
+		if a.Relation == AdvisoryRelationTransitive {
+			result = append(result, a)
+		}
+	}
+	return result
+}
+
+// DirectAdvisoryCount returns the count of direct advisories.
+func (vd *VersionDetail) DirectAdvisoryCount() int {
+	count := 0
+	for _, a := range vd.Advisories {
+		if a.Relation == AdvisoryRelationDirect || a.Relation == "" {
+			count++
+		}
+	}
+	return count
+}
+
+// TransitiveAdvisoryCount returns the count of transitive advisories.
+func (vd *VersionDetail) TransitiveAdvisoryCount() int {
+	count := 0
+	for _, a := range vd.Advisories {
+		if a.Relation == AdvisoryRelationTransitive {
+			count++
+		}
+	}
+	return count
+}
+
+// MaxTransitiveCVSS3 returns the highest CVSS3 score among transitive advisories, or 0 if none.
+func (vd *VersionDetail) MaxTransitiveCVSS3() float64 {
+	var max float64
+	for _, a := range vd.Advisories {
+		if a.Relation == AdvisoryRelationTransitive && a.CVSS3Score > max {
+			max = a.CVSS3Score
+		}
+	}
+	return max
 }
 
 // SeverityFromCVSS3 maps a CVSS v3 base score to a severity label per the CVSS v3 specification.

@@ -11,6 +11,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/common"
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 )
 
 // AnalyzeFromPURLs efficiently fetches analyses for multiple PURLs using optimized batch processing.
@@ -81,6 +82,7 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// Dependent count + dependency count enrichment (best-effort, parallel).
 	// These are independent enrichment steps hitting different deps.dev endpoints,
 	// so running them concurrently halves wall-clock time for large batches (30k+ PURLs).
+	var depsGraphResults map[string]*depsdev.DependenciesResponse
 	var enrichWg sync.WaitGroup
 	enrichWg.Add(2)
 	go func() {
@@ -92,13 +94,18 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 		// Uses latestReleaseVersion (stable > prerelease) instead of resolvedVersion
 		// because catalog DB stores version-agnostic package data; the latest release
 		// best represents the current dependency surface for OSS selection.
-		s.enrichDependencyCounts(ctx, purls, analyses)
+		depsGraphResults = s.enrichDependencyCounts(ctx, purls, analyses)
 	}()
 	enrichWg.Wait()
 
 	// Advisory severity enrichment (best-effort).
 	// Runs after populateReleaseInfo (via populateAnalysisFromBatchResult) so advisory IDs are available.
 	s.enrichAdvisorySeverity(ctx, analyses)
+
+	// Transitive advisory enrichment (best-effort).
+	// Reuses dependency graph data from enrichDependencyCounts to avoid redundant API calls.
+	// Runs after enrichAdvisorySeverity so direct advisories are already enriched.
+	s.enrichTransitiveAdvisories(ctx, purls, analyses, depsGraphResults)
 
 	total := len(analyses)
 	pct := func(n int) float64 {
@@ -243,6 +250,7 @@ func dependenciesSupportedEcosystem(eco string) bool {
 
 // enrichDependencyCounts fetches dependency counts (direct + transitive) from deps.dev
 // and populates Analysis.DirectDepsCount and Analysis.TransitiveDepsCount.
+// Returns the raw DependenciesResponse map for downstream use (e.g., transitive advisory enrichment).
 //
 // Version selection: StableVersion > PrereleaseVersion (latest release for catalog DB).
 // Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
@@ -250,7 +258,7 @@ func dependenciesSupportedEcosystem(eco string) bool {
 // wasting HTTP round-trips on guaranteed 404 responses (important for large batches).
 //
 // DDD Layer: Infrastructure (best-effort enrichment)
-func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls []string, analyses map[string]*domain.Analysis) {
+func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls []string, analyses map[string]*domain.Analysis) map[string]*depsdev.DependenciesResponse {
 	effectivePURLs := make([]string, 0, len(purls))
 	// Multiple original PURLs may resolve to the same effective PURL (e.g., case
 	// variants like pkg:npm/React and pkg:npm/react). Use a slice of original keys
@@ -290,6 +298,10 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 	slog.Debug("dependency_count_filtered", "total_purls", len(purls), "supported_purls", len(effectivePURLs))
 
 	depsResults := s.depsdevClient.FetchDependenciesBatch(ctx, effectivePURLs)
+
+	// Map results back to original PURLs and populate counts.
+	// Also build a per-original-PURL map for downstream transitive advisory enrichment.
+	perPURL := make(map[string]*depsdev.DependenciesResponse, len(purls))
 	for ep, originalKeys := range effectiveToOriginals {
 		key := purl.CanonicalKey(ep)
 		if key == "" {
@@ -306,8 +318,10 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 				continue
 			}
 			a.DirectDepsCount, a.TransitiveDepsCount = direct, transitive
+			perPURL[originalKey] = resp
 		}
 	}
+	return perPURL
 }
 
 // latestReleaseVersion returns the latest release version for dependency count queries.

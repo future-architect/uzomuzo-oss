@@ -38,6 +38,10 @@ type Client interface {
 	// Returns a map of advisory ID -> AdvisoryDetail. Unknown/failed IDs are silently omitted.
 	// Results are cached in-memory since advisory metadata is immutable.
 	FetchAdvisoriesBatch(ctx context.Context, advisoryIDs []string) map[string]*AdvisoryDetail
+	// FetchTransitiveAdvisoryKeys fetches advisory keys for dependency graph nodes (excluding SELF).
+	// Returns a map of "name@version" -> []AdvisoryKey.
+	// Supported ecosystems: npm, cargo, maven, pypi (same as GetDependencies).
+	FetchTransitiveAdvisoryKeys(ctx context.Context, deps *DependenciesResponse) (map[string][]AdvisoryKey, error)
 }
 
 // Config is the configuration for depsdev clients
