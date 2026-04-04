@@ -57,3 +57,4 @@ patterns:
   # deterministic-output: promoted to coding-standards.instructions.md (PRs #106, #111)
   # naming-consistency: promoted to coding-standards.instructions.md (PRs #87, #116, #119 — context-sensitive labels for mixed input types)
   # logging-consistency: promoted to coding-standards.instructions.md (PRs #116, #119)
+  # defensive-coding: already covered by "Consolidate Detection Heuristics — Single Source of Truth" (PR #119, batch.go:724 — use common.IsValidGitHubURL instead of partial scheme-prefix check)
