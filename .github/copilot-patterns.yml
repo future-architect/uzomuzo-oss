@@ -59,3 +59,4 @@ patterns:
   # logging-consistency: promoted to coding-standards.instructions.md (PRs #116, #119)
   # defensive-coding: already covered by "Consolidate Detection Heuristics — Single Source of Truth" (PR #119, batch.go:724 — use common.IsValidGitHubURL instead of partial scheme-prefix check)
   # comment-doc-drift: already covered by promoted rule in coding-standards (PR #119, boxdraw.go:88 — writeLine comment overstated URL-exclusion heuristic)
+  # defensive-coding: already covered by budget guard rule (PR #119, boxdraw.go:171 — preserve unbroken tokens instead of force-splitting mid-token)
