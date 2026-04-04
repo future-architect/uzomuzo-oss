@@ -34,7 +34,6 @@ $ uzomuzo scan pkg:npm/express@4.18.2
 
 ── pkg:npm/express@4.18.2 ──────────────────────────────────
 │ Description: Fast, unopinionated, minimalist web framework for node.
-├─ Status ──────────────────────────────────────────────────
 │ ✅ Active
 │ Reason: Recent stable package version published with recent human commits; maintenance score ≥ 3
 ├─ Health ──────────────────────────────────────────────────
@@ -132,7 +131,6 @@ $ uzomuzo scan --file .github/workflows/ci.yml -f detailed
 
 ── https://github.com/actions/checkout ─────────────────────
 │ Description: Action for checking out a repo
-├─ Status ──────────────────────────────────────────────────
 │ ✅ Active
 │ Reason: Recent human commits but no recent package publishing; maintenance score unavailable (Scorecard not found)
 ├─ Health ──────────────────────────────────────────────────
@@ -149,7 +147,6 @@ $ uzomuzo scan --file .github/workflows/ci.yml -f detailed
 ── https://github.com/golangci/golangci-lint-action ────────
 │ Package: pkg:golang/github.com/golangci/golangci-lint-action@v1.2.2
 │ Description: Official GitHub Action for golangci-lint from its authors
-├─ Status ──────────────────────────────────────────────────
 │ ✅ Active
 │ Reason: Recent human commits (VCS-direct ecosystem; commits deliver updates to consumers); maintenance score ≥ 3
 ├─ Health ──────────────────────────────────────────────────

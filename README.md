@@ -19,7 +19,6 @@ A package with zero CVEs today may have been abandoned for years — no one is w
 ```text
 ── pkg:npm/dicer@0.3.1 ─────────────────────────────────────
 │ Description: A very fast streaming multipart parser for node.js
-├─ Status ──────────────────────────────────────────────────
 │ 🔴 EOL-Effective
 │ Reason: Scorecard data incomplete; open advisories (1, max: HIGH 7.5) and no human commits > 2 yrs
 ├─ Health ──────────────────────────────────────────────────
@@ -164,7 +163,6 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 ```text
 ── pkg:npm/express@4.18.2 ──────────────────────────────────
 │ Description: Fast, unopinionated, minimalist web framework for node.
-├─ Status ──────────────────────────────────────────────────
 │ ✅ Active
 │ Reason: Recent stable package version published with recent human commits; maintenance score ≥ 3
 ├─ Health ──────────────────────────────────────────────────
@@ -192,7 +190,6 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 ```text
 ── pkg:npm/moment@2.29.4 ───────────────────────────────────
 │ Description: Parse, validate, manipulate, and display dates in javascript.
-├─ Status ──────────────────────────────────────────────────
 │ ✅ Legacy-Safe
 │ Reason: No known advisories; no human commits for > 2 yrs
 ├─ Health ──────────────────────────────────────────────────
@@ -220,7 +217,6 @@ Scorecard says Maintained 0.0 — but zero advisories and does one thing perfect
 ```text
 ── pkg:golang/github.com/gorilla/mux@1.8.1 ─────────────────
 │ Description: Package gorilla/mux is a powerful HTTP router and URL matcher for building Go web servers with 🦍
-├─ Status ──────────────────────────────────────────────────
 │ ⚠️ Stalled
 │ Reason: Low maintenance; last human commit within 2 yrs
 ├─ Health ──────────────────────────────────────────────────
@@ -248,7 +244,6 @@ No release since 2023, Maintained 0.0, but last commit within 2 yrs. Not dead, n
 ```text
 ── pkg:npm/request@2.88.2 ──────────────────────────────────
 │ Description: 🏊🏾 Simplified HTTP request client.
-├─ Status ──────────────────────────────────────────────────
 │ 🔴 EOL-Confirmed
 │ Reason: Primary-source EOL
 ├─ EOL ─────────────────────────────────────────────────────
@@ -282,7 +277,6 @@ No release since 2023, Maintained 0.0, but last commit within 2 yrs. Not dead, n
 ```text
 ── pkg:golang/github.com/dgrijalva/jwt-go@3.2.0 ────────────
 │ Description: ARCHIVE - Golang implementation of JSON Web Tokens (JWT). This project is now maintained at:
-├─ Status ──────────────────────────────────────────────────
 │ 🔴 EOL-Confirmed
 │ Reason: Repository is archived or disabled on GitHub
 ├─ Health ──────────────────────────────────────────────────
@@ -316,7 +310,6 @@ GitHub archived with unpatched HIGH advisories. Successor is `golang-jwt/jwt`. *
 ```text
 ── pkg:npm/dicer@0.3.1 ─────────────────────────────────────
 │ Description: A very fast streaming multipart parser for node.js
-├─ Status ──────────────────────────────────────────────────
 │ 🔴 EOL-Effective
 │ Reason: Scorecard data incomplete; open advisories (1, max: HIGH 7.5) and no human commits > 2 yrs
 ├─ Health ──────────────────────────────────────────────────
@@ -395,7 +388,6 @@ $ uzomuzo scan --file .github/workflows/ci.yml -f detailed
 
 ── https://github.com/actions/checkout ─────────────────────
 │ Description: Action for checking out a repo
-├─ Status ──────────────────────────────────────────────────
 │ ✅ Active
 │ Reason: Recent human commits but no recent package publishing; maintenance score unavailable (Scorecard not found)
 ├─ Health ──────────────────────────────────────────────────
@@ -412,7 +404,6 @@ $ uzomuzo scan --file .github/workflows/ci.yml -f detailed
 ── https://github.com/actions/setup-go ─────────────────────
 │ Package: pkg:golang/github.com/actions/setup-go@v6.4.0+incompatible
 │ Description: Set up your GitHub Actions workflow with a specific version of Go
-├─ Status ──────────────────────────────────────────────────
 │ ✅ Active
 │ Reason: Recent stable package version published with recent human commits; maintenance score ≥ 3
 ├─ Health ──────────────────────────────────────────────────
