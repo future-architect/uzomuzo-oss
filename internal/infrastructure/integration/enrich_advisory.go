@@ -45,7 +45,7 @@ func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyse
 		ids = append(ids, id)
 	}
 
-	slog.Debug("fetching advisory severity", "unique_ids", len(ids))
+	slog.Debug("fetching_advisory_severity", "unique_ids", len(ids))
 	details := s.depsdevClient.FetchAdvisoriesBatch(ctx, ids)
 
 	// Enrich lifecycle-relevant versions only.
