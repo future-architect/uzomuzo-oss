@@ -229,7 +229,7 @@ func (s *LifecycleAssessorService) hasHighSeverityAdvisories(a *Analysis) bool {
 
 // severityAwareLabel returns the appropriate label and trace based on whether HIGH+ advisories exist.
 // When severity data shows only LOW/MEDIUM, the lowLabel is used instead of highLabel.
-func (s *LifecycleAssessorService) severityAwareLabel(hasHigh bool, _ *Analysis,
+func (s *LifecycleAssessorService) severityAwareLabel(hasHigh bool,
 	highLabel MaintenanceStatus, highTrace string, lowLabel MaintenanceStatus, lowTrace string,
 ) (MaintenanceStatus, string) {
 	if hasHigh {
@@ -423,7 +423,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 		// C2a: Advisories + old publish → EOL-Effective (if HIGH+ severity or unknown),
 		// Stalled (if only LOW/MEDIUM severity known).
 		if hasAdvisories && daysSincePublish > s.rules.EolInactivityDays {
-			label, trace := s.severityAwareLabel(hasHighSeverity, analysis,
+			label, trace := s.severityAwareLabel(hasHighSeverity,
 				LabelEOLEffective, "inactive_no_commit_C2a_low_maint_advisory_old_publish",
 				LabelStalled, "inactive_no_commit_C2a_low_maint_advisory_low_severity")
 			return &AssessmentResult{Axis: LifecycleAxis, Label: label,
@@ -440,7 +440,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	if hasAdvisories {
 		// C3a: Advisories + old publish → EOL-Effective (if HIGH+) or Stalled (if LOW/MEDIUM only)
 		if daysSincePublish > s.rules.EolInactivityDays {
-			label, trace := s.severityAwareLabel(hasHighSeverity, analysis,
+			label, trace := s.severityAwareLabel(hasHighSeverity,
 				LabelEOLEffective, "inactive_no_commit_C3a_advisory_old_publish",
 				LabelStalled, "inactive_no_commit_C3a_advisory_low_severity")
 			return &AssessmentResult{Axis: LifecycleAxis, Label: label,

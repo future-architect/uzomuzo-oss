@@ -1448,6 +1448,8 @@ func (c *DepsDevClient) FetchAdvisory(ctx context.Context, advisoryID string) (*
 
 	if resp.StatusCode == http.StatusNotFound {
 		slog.Debug("advisory: 404 not found", "id", advisoryID)
+		var missing *AdvisoryDetail
+		c.advisoryCache.Store(advisoryID, missing)
 		return nil, nil
 	}
 	if resp.StatusCode != http.StatusOK {
