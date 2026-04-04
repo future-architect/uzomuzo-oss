@@ -103,6 +103,9 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 	details := s.depsdevClient.FetchAdvisoriesBatch(ctx, ids)
 
 	// Append enriched transitive advisories to lifecycle-relevant versions.
+	// Only attach to versions whose dependency graph was actually fetched.
+	// The graph is fetched for the PURL's version (requested or effective),
+	// which may differ from StableVersion when users specify an older version.
 	for p, entries := range perAnalysis {
 		a := analyses[p]
 		if a == nil || a.ReleaseInfo == nil {
@@ -115,9 +118,28 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 				entries[i].Severity = domain.SeverityFromCVSS3(detail.CVSS3Score)
 			}
 		}
-		appendTransitiveAdvisories(a.ReleaseInfo.StableVersion, entries)
-		appendTransitiveAdvisories(a.ReleaseInfo.MaxSemverVersion, entries)
+		graphVersion := graphSELFVersion(depsGraphResults[p])
+		if vd := a.ReleaseInfo.StableVersion; vd != nil && (graphVersion == "" || vd.Version == graphVersion) {
+			appendTransitiveAdvisories(vd, entries)
+		}
+		if vd := a.ReleaseInfo.MaxSemverVersion; vd != nil && (graphVersion == "" || vd.Version == graphVersion) {
+			appendTransitiveAdvisories(vd, entries)
+		}
 	}
+}
+
+// graphSELFVersion extracts the version of the root (SELF) node from a dependency graph.
+// Returns "" if the graph is nil or has no SELF node.
+func graphSELFVersion(deps *depsdev.DependenciesResponse) string {
+	if deps == nil {
+		return ""
+	}
+	for _, n := range deps.Nodes {
+		if n.Relation == "SELF" {
+			return n.VersionKey.Version
+		}
+	}
+	return ""
 }
 
 // markDirectAdvisories sets Relation to DIRECT on all existing advisories in a VersionDetail.
