@@ -198,6 +198,11 @@ func TestDiscoverFromRepo_ContextCancellation(t *testing.T) {
 		fileNames[i] = fmt.Sprintf("wf%d.yml", i)
 	}
 
+	// Precompute directory listing JSON outside the handler goroutine so that
+	// t.Fatalf (called by directoryJSON on marshal error) is never invoked
+	// from a non-test goroutine.
+	dirJSON := directoryJSON(t, fileNames)
+
 	// Track how many file-content requests arrive at the server.
 	var fetchStarted atomic.Int32
 	// Gate: file-content handlers block until this channel is closed.
@@ -217,7 +222,7 @@ func TestDiscoverFromRepo_ContextCancellation(t *testing.T) {
 		// Directory listing request.
 		if contentPath == ".github/workflows" && accept != "application/vnd.github.raw" {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(directoryJSON(t, fileNames))
+			_, _ = w.Write(dirJSON)
 			return
 		}
 
@@ -271,7 +276,17 @@ func TestDiscoverFromRepo_ContextCancellation(t *testing.T) {
 	// Unblock the in-flight HTTP handlers so their goroutines can complete.
 	close(gate)
 
-	done.Wait()
+	doneCh := make(chan struct{})
+	go func() {
+		done.Wait()
+		close(doneCh)
+	}()
+
+	select {
+	case <-doneCh:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("timed out waiting for discoverFromRepo workers to finish after cancellation; fetches started=%d", fetchStarted.Load())
+	}
 
 	// Verify: at least one error should be context.Canceled from the cancellation path.
 	cancelledCount := 0
