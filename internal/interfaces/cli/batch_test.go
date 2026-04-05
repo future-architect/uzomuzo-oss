@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -215,7 +216,7 @@ func TestCategorizeFileLines_UnrecognizedThreshold(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpFile := t.TempDir() + "/test-input"
+			tmpFile := filepath.Join(t.TempDir(), "test-input")
 			if err := os.WriteFile(tmpFile, []byte(tt.content), 0o644); err != nil {
 				t.Fatalf("failed to write temp file: %v", err)
 			}

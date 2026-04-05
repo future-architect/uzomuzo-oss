@@ -16,7 +16,8 @@ import (
 )
 
 // goModSniffPrefixLen is the number of bytes to read for content-based go.mod detection.
-// A go.mod file always starts with a "module" directive within the first few hundred bytes.
+// A go.mod file typically starts with a "module" directive within the first few hundred bytes,
+// preceded only by comments and blank lines.
 const goModSniffPrefixLen = 512
 
 // DetectFileParser inspects filePath and returns the matching parser and file data.

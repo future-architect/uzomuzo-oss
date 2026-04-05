@@ -3,6 +3,7 @@ package depparser_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
@@ -144,7 +145,7 @@ func TestDetectFileParser_ContentSniffing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpFile := t.TempDir() + "/test-file"
+			tmpFile := filepath.Join(t.TempDir(), "test-file")
 			if err := os.WriteFile(tmpFile, []byte(tt.content), 0o644); err != nil {
 				t.Fatalf("failed to write temp file: %v", err)
 			}
