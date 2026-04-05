@@ -44,6 +44,9 @@ func scanFlags() []urfcli.Flag {
 
 		// Transitive dependency display
 		&urfcli.BoolFlag{Name: "show-transitive", Usage: "Include transitive dependencies in output (requires --include-actions; e.g., composite action deps)"},
+
+		// Output filtering
+		&urfcli.StringFlag{Name: "show-only", Usage: "Show only entries with specified verdicts (comma-separated: ok,caution,replace,review)"},
 	}
 }
 
@@ -116,6 +119,13 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 	opts, err := buildScanOptions(cmd)
 	if err != nil {
 		return fmt.Errorf("invalid flags: %w", err)
+	}
+
+	// Validate --show-only early (before API calls)
+	if opts.ShowOnlyRaw != "" {
+		if _, err := cli.ParseShowOnly(opts.ShowOnlyRaw); err != nil {
+			return fmt.Errorf("invalid flags: %w", err)
+		}
 	}
 
 	// --file and --sbom are mutually exclusive
@@ -230,6 +240,7 @@ func buildScanOptions(cmd *urfcli.Command) (cli.ScanOptions, error) {
 		},
 		Format:         cmd.String("format"),
 		FailOnRaw:      cmd.String("fail-on"),
+		ShowOnlyRaw:    cmd.String("show-only"),
 		SBOMPath:       cmd.String("sbom"),
 		IncludeActions: cmd.Bool("include-actions"),
 		ShowTransitive: cmd.Bool("show-transitive"),

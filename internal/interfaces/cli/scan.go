@@ -39,6 +39,7 @@ type ScanOptions struct {
 
 	Format              string // "detailed", "table", "json", "csv" (empty = smart default)
 	FailOnRaw           string // raw --fail-on CSV string
+	ShowOnlyRaw         string // raw --show-only CSV string (ok,caution,replace,review)
 	SBOMPath            string // --sbom flag
 	ConfigSampleDefault int    // Config-level default sample size (applied only to PURL/URL list files)
 	IncludeActions      bool   // --include-actions: scan GitHub Actions referenced by input repos
@@ -305,7 +306,14 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 		return fmt.Errorf("invalid output format: %w", err)
 	}
 
-	if err := renderScanOutput(os.Stdout, result.Entries, format); err != nil {
+	showOnly, err := ParseShowOnly(opts.ShowOnlyRaw)
+	if err != nil {
+		return fmt.Errorf("invalid --show-only filter: %w", err)
+	}
+	displayEntries := filterEntriesByVerdict(result.Entries, showOnly)
+	filterActive := showOnly != nil
+
+	if err := renderScanOutput(os.Stdout, result.Entries, displayEntries, format, filterActive); err != nil {
 		return fmt.Errorf("failed to render output: %w", err)
 	}
 

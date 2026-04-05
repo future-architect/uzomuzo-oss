@@ -121,7 +121,7 @@
   "raw_files": [
     {
       "id": "juice-shop",
-      "shell": "trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 | {{binary}} scan --sbom - --fail-on eol-confirmed,eol-effective --format detailed",
+      "shell": "trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 | {{binary}} scan --sbom - --fail-on eol-confirmed,eol-effective --format detailed --show-only replace",
       "output_file": "docs/assets/juice-shop-eol-result.txt",
       "requires": ["trivy"],
       "ignore_exit_code": true
