@@ -6,7 +6,7 @@ type BuildIntegrityLabel string
 const (
 	// BuildLabelHardened indicates strong build pipeline protection (score >= 7.5).
 	BuildLabelHardened BuildIntegrityLabel = "Hardened"
-	// BuildLabelModerate indicates moderate build pipeline protection (score 2.5-7.4).
+	// BuildLabelModerate indicates moderate build pipeline protection (score >= 2.5 and < 7.5).
 	BuildLabelModerate BuildIntegrityLabel = "Moderate"
 	// BuildLabelWeak indicates minimal build pipeline protection (score < 2.5).
 	BuildLabelWeak BuildIntegrityLabel = "Weak"
