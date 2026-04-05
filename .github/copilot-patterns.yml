@@ -56,3 +56,8 @@ patterns:
   # comment-doc-drift: already covered by promoted rule (PR #130, ci.yml:40 — checkout comment said "default ref" but workflow_dispatch uses user-selected ref)
   # comment-doc-drift: already covered by promoted rule (PR #140, detect.go:21 — comment claimed "always" for sniff window but long headers can push directive past 512 bytes)
   # testing: promoted to testing-performance.instructions.md (PRs #121, #140 — use filepath.Join for portable temp file paths in tests)
+  - category: "whitespace-agnostic-matching"
+    summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
+    pr: 140
+    file: "internal/infrastructure/depparser/detect.go"
+    date: "2026-04-05"
