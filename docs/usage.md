@@ -64,7 +64,7 @@ STATUS     BUILD         PURL                    LIFECYCLE
 │   Pinned Dependencies  6/10
 │   Attestation          —
 ├─ Health ──────────────────────────────────────────────────
-│ 68889 stars
+│ 68887 stars
 │ Used by: 2211 packages
 │ Depends on: 31 direct, 39 transitive
 │ Score: 8.4/10  Maintained: 10.0/10
