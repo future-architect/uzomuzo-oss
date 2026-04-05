@@ -113,6 +113,20 @@ const (
 )
 
 // =============================
+// Build Integrity Labels (constants)
+// =============================
+
+// BuildIntegrityLabel represents the build integrity assessment outcome.
+type BuildIntegrityLabel = domain.BuildIntegrityLabel
+
+const (
+	BuildLabelHardened BuildIntegrityLabel = domain.BuildLabelHardened
+	BuildLabelModerate BuildIntegrityLabel = domain.BuildLabelModerate
+	BuildLabelWeak     BuildIntegrityLabel = domain.BuildLabelWeak
+	BuildLabelUngraded BuildIntegrityLabel = domain.BuildLabelUngraded
+)
+
+// =============================
 // EOL States (constants)
 // =============================
 const (

@@ -19,6 +19,9 @@ const (
 	SignalPinnedDependencies   = "pinned_dependencies"
 	SignalSLSAVerified         = "slsa_verified"
 	SignalAttestationVerified  = "attestation_verified"
+
+	// ScoreUngraded is the sentinel value stored in Meta["score"] for Ungraded results.
+	ScoreUngraded = "-1"
 )
 
 // buildSignalDef maps a signal to its Scorecard check name and weight.
@@ -110,7 +113,7 @@ func (s *BuildHealthAssessorService) Assess(ctx context.Context, in AssessmentIn
 			Reason:  "No build integrity data available",
 			Trace:   trace,
 			Signals: signals,
-			Meta:    map[string]string{"score": "-1"},
+			Meta:    map[string]string{"score": ScoreUngraded},
 		}, nil
 	}
 

@@ -399,7 +399,7 @@ func writeBoxBuildIntegrity(ctx *boxContext) error {
 
 	scoreStr := br.Meta["score"]
 	header := br.Label
-	if scoreStr != "" && scoreStr != "-1" {
+	if scoreStr != "" && scoreStr != analysispkg.ScoreUngraded {
 		header = fmt.Sprintf("%s %s/10", br.Label, scoreStr)
 	}
 
@@ -410,11 +410,11 @@ func writeBoxBuildIntegrity(ctx *boxContext) error {
 	for _, s := range br.Signals {
 		label := buildSignalDisplayName(s.Name)
 		if s.Role == analysispkg.SignalAbsent {
-			if err := writeLine(ctx, "  %s  —", label); err != nil {
+			if err := writeLine(ctx, "  %-20s —", label); err != nil {
 				return err
 			}
 		} else {
-			if err := writeLine(ctx, "  %s  %s", label, s.Value); err != nil {
+			if err := writeLine(ctx, "  %-20s %s", label, s.Value); err != nil {
 				return err
 			}
 		}
@@ -424,32 +424,23 @@ func writeBoxBuildIntegrity(ctx *boxContext) error {
 
 // buildSignalDisplayName maps build signal machine names to human-readable labels.
 func buildSignalDisplayName(name string) string {
-	switch name {
-	case analysispkg.SignalDangerousWorkflow:
-		return "Dangerous Workflow"
-	case analysispkg.SignalBranchProtection:
-		return "Branch Protection "
-	case analysispkg.SignalCodeReview:
-		return "Code Review       "
-	case analysispkg.SignalTokenPermissions:
-		return "Token Permissions  "
-	case analysispkg.SignalBinaryArtifacts:
-		return "Binary Artifacts   "
-	case analysispkg.SignalSignedReleases:
-		return "Signed Releases    "
-	case analysispkg.SignalSLSAVerified:
-		return "SLSA Provenance    "
-	case analysispkg.SignalSAST:
-		return "SAST               "
-	case analysispkg.SignalPackaging:
-		return "Packaging          "
-	case analysispkg.SignalPinnedDependencies:
-		return "Pinned Dependencies"
-	case analysispkg.SignalAttestationVerified:
-		return "Attestation        "
-	default:
-		return name
+	m := map[string]string{
+		analysispkg.SignalDangerousWorkflow:   "Dangerous Workflow",
+		analysispkg.SignalBranchProtection:    "Branch Protection",
+		analysispkg.SignalCodeReview:          "Code Review",
+		analysispkg.SignalTokenPermissions:    "Token Permissions",
+		analysispkg.SignalBinaryArtifacts:     "Binary Artifacts",
+		analysispkg.SignalSignedReleases:      "Signed Releases",
+		analysispkg.SignalSLSAVerified:        "SLSA Provenance",
+		analysispkg.SignalSAST:               "SAST",
+		analysispkg.SignalPackaging:           "Packaging",
+		analysispkg.SignalPinnedDependencies:  "Pinned Dependencies",
+		analysispkg.SignalAttestationVerified: "Attestation",
 	}
+	if label, ok := m[name]; ok {
+		return label
+	}
+	return name
 }
 
 // writeBoxOrigin writes the Origin section (source, relation, via).
