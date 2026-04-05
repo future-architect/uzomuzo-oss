@@ -46,7 +46,7 @@ func scanFlags() []urfcli.Flag {
 		&urfcli.BoolFlag{Name: "show-transitive", Usage: "Include transitive dependencies in output (requires --include-actions; e.g., composite action deps)"},
 
 		// Output filtering
-		&urfcli.StringFlag{Name: "show-only", Usage: "Show only entries with specified verdicts (comma-separated: ok,caution,replace,review)"},
+		&urfcli.StringFlag{Name: "show-only", Usage: "Show only entries with specified verdicts (comma-separated: ok,caution,replace,review). replace = dependency should be replaced (EOL, archived, etc.)"},
 	}
 }
 
