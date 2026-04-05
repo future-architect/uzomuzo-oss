@@ -35,18 +35,12 @@ STATUS     PURL                 LIFECYCLE      BUILD
 │ Maintained Score: 0/10
 │ Advisories: 1
 │ Max Advisory Severity: HIGH 7.5
-├─ Build Integrity: Moderate 3.5/10 ────────────────────────
-│   Dangerous Workflow   10/10
-│   Branch Protection    0/10
-│   Code Review          0/10
-│   Token Permissions    0/10
-│   Binary Artifacts     10/10
-│   Signed Releases      —
-│   SLSA Provenance      —
-│   SAST                 0/10
-│   Packaging            —
-│   Pinned Dependencies  0/10
-│   Attestation          —
+├─ Build Integrity: Moderate 3.5/10 (7/11) ─────────────────
+│   Dangerous Workflow  10  Branch Protection    0
+│   Code Review          0  Token Permissions    0
+│   Binary Artifacts    10  Signed Releases      —
+│   SLSA Provenance      —  SAST                 0
+│   Pinned Deps          0
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fmscdex%2Fdicer
 ├─ Health ──────────────────────────────────────────────────
 │ 188 stars
@@ -210,18 +204,12 @@ STATUS     PURL                    LIFECYCLE  BUILD
 │ Recent Stable Release: true
 │ Last Human Commit: 2026-03-31
 │ Maintained Score: 10/10
-├─ Build Integrity: Hardened 9.4/10 ────────────────────────
-│   Dangerous Workflow   10/10
-│   Branch Protection    —
-│   Code Review          9/10
-│   Token Permissions    10/10
-│   Binary Artifacts     10/10
-│   Signed Releases      —
-│   SLSA Provenance      —
-│   SAST                 10/10
-│   Packaging            —
-│   Pinned Dependencies  6/10
-│   Attestation          —
+├─ Build Integrity: Hardened 9.4/10 (6/11) ─────────────────
+│   Dangerous Workflow  10  Branch Protection    —
+│   Code Review          9  Token Permissions   10
+│   Binary Artifacts    10  Signed Releases      —
+│   SLSA Provenance      —  SAST                10
+│   Pinned Deps          6
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fexpressjs%2Fexpress
 ├─ Health ──────────────────────────────────────────────────
 │ 68887 stars
@@ -264,18 +252,12 @@ STATUS      PURL                   LIFECYCLE    BUILD
 ├─ Signals ─────────────────────────────────────────────────
 │ Last Human Commit: 2024-02-18
 │ Advisories: 0
-├─ Build Integrity: Moderate 4.1/10 ────────────────────────
-│   Dangerous Workflow   10/10
-│   Branch Protection    —
-│   Code Review          0/10
-│   Token Permissions    0/10
-│   Binary Artifacts     10/10
-│   Signed Releases      —
-│   SLSA Provenance      —
-│   SAST                 0/10
-│   Packaging            —
-│   Pinned Dependencies  0/10
-│   Attestation          —
+├─ Build Integrity: Moderate 4.1/10 (6/11) ─────────────────
+│   Dangerous Workflow  10  Branch Protection    —
+│   Code Review          0  Token Permissions    0
+│   Binary Artifacts    10  Signed Releases      —
+│   SLSA Provenance      —  SAST                 0
+│   Pinned Deps          0
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fmoment%2Fmoment
 ├─ Health ──────────────────────────────────────────────────
 │ 48015 stars
@@ -318,18 +300,12 @@ STATUS      PURL                                     LIFECYCLE  BUILD
 ├─ Signals ─────────────────────────────────────────────────
 │ Last Human Commit: 2024-06-19
 │ Maintained Score: 0/10
-├─ Build Integrity: Moderate 5.7/10 ────────────────────────
-│   Dangerous Workflow   10/10
-│   Branch Protection    —
-│   Code Review          9/10
-│   Token Permissions    0/10
-│   Binary Artifacts     10/10
-│   Signed Releases      —
-│   SLSA Provenance      —
-│   SAST                 0/10
-│   Packaging            —
-│   Pinned Dependencies  0/10
-│   Attestation          —
+├─ Build Integrity: Moderate 5.7/10 (6/11) ─────────────────
+│   Dangerous Workflow  10  Branch Protection    —
+│   Code Review          9  Token Permissions    0
+│   Binary Artifacts    10  Signed Releases      —
+│   SLSA Provenance      —  SAST                 0
+│   Pinned Deps          0
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fgorilla%2Fmux
 ├─ Health ──────────────────────────────────────────────────
 │ 21813 stars
@@ -372,18 +348,12 @@ STATUS     PURL                 LIFECYCLE      BUILD
 │ Maintained Score: 0/10
 │ Advisories: 1
 │ Max Advisory Severity: HIGH 7.5
-├─ Build Integrity: Moderate 3.5/10 ────────────────────────
-│   Dangerous Workflow   10/10
-│   Branch Protection    0/10
-│   Code Review          0/10
-│   Token Permissions    0/10
-│   Binary Artifacts     10/10
-│   Signed Releases      —
-│   SLSA Provenance      —
-│   SAST                 0/10
-│   Packaging            —
-│   Pinned Dependencies  0/10
-│   Attestation          —
+├─ Build Integrity: Moderate 3.5/10 (7/11) ─────────────────
+│   Dangerous Workflow  10  Branch Protection    0
+│   Code Review          0  Token Permissions    0
+│   Binary Artifacts    10  Signed Releases      —
+│   SLSA Provenance      —  SAST                 0
+│   Pinned Deps          0
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fmscdex%2Fdicer
 ├─ Health ──────────────────────────────────────────────────
 │ 188 stars
@@ -426,18 +396,11 @@ STATUS     PURL                                          LIFECYCLE      BUILD
 │ 🔴 EOL-Confirmed: Repository archived or disabled
 ├─ Signals ─────────────────────────────────────────────────
 │ Repo Archived: true
-├─ Build Integrity: Moderate 4.1/10 ────────────────────────
-│   Dangerous Workflow   —
-│   Branch Protection    0/10
-│   Code Review          5/10
-│   Token Permissions    —
-│   Binary Artifacts     10/10
-│   Signed Releases      —
-│   SLSA Provenance      —
-│   SAST                 0/10
-│   Packaging            —
-│   Pinned Dependencies  —
-│   Attestation          —
+├─ Build Integrity: Moderate 4.1/10 (4/11) ─────────────────
+│   Dangerous Workflow   —  Branch Protection    0
+│   Code Review          5  Token Permissions    —
+│   Binary Artifacts    10  Signed Releases      —
+│   SLSA Provenance      —  SAST                 0
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fdgrijalva%2Fjwt-go
 ├─ Health ──────────────────────────────────────────────────
 │ 📦 Archived
@@ -481,18 +444,11 @@ STATUS     PURL                    LIFECYCLE      BUILD
 │ 🔴 EOL-Confirmed: Deprecated in npm registry
 ├─ Signals ─────────────────────────────────────────────────
 │ EOL Source: npmjs
-├─ Build Integrity: Moderate 6.4/10 ────────────────────────
-│   Dangerous Workflow   —
-│   Branch Protection    —
-│   Code Review          7/10
-│   Token Permissions    —
-│   Binary Artifacts     10/10
-│   Signed Releases      —
-│   SLSA Provenance      —
-│   SAST                 0/10
-│   Packaging            —
-│   Pinned Dependencies  —
-│   Attestation          —
+├─ Build Integrity: Moderate 6.4/10 (3/11) ─────────────────
+│   Dangerous Workflow   —  Branch Protection    —
+│   Code Review          7  Token Permissions    —
+│   Binary Artifacts    10  Signed Releases      —
+│   SLSA Provenance      —  SAST                 0
 │   → https://scorecard.dev/viewer/?uri=github.com%2Frequest%2Frequest
 ├─ EOL ─────────────────────────────────────────────────────
 │ Evidence (1):
