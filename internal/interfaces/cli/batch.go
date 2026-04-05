@@ -138,6 +138,12 @@ func ProcessFileMode(ctx context.Context, cfg *domaincfg.Config, filePath string
 	return processMixedContent(ctx, cfg, purls, githubURLs, opts)
 }
 
+// unrecognizedLineThreshold is the fraction of non-blank, non-comment lines that must be
+// unrecognized (neither PURL nor GitHub URL) before categorizeFileLines returns an error.
+// This catches cases where a structured file (e.g., go.mod) bypasses format detection and
+// is silently misinterpreted as a PURL list.
+const unrecognizedLineThreshold = 0.5
+
 // categorizeFileLines reads file and categorizes each line (unified function)
 func categorizeFileLines(filename string, opts ProcessingOptions) (purls []string, githubURLs []string, err error) {
 	file, err := os.Open(filename)
@@ -152,6 +158,8 @@ func categorizeFileLines(filename string, opts ProcessingOptions) (purls []strin
 
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
+	unrecognized := 0
+	contentLines := 0
 
 	for scanner.Scan() {
 		lineNum++
@@ -169,11 +177,13 @@ func categorizeFileLines(filename string, opts ProcessingOptions) (purls []strin
 			continue
 		}
 
+		contentLines++
 		if strings.HasPrefix(line, "pkg:") {
 			purls = append(purls, line)
 		} else if common.IsValidGitHubURL(line) {
 			githubURLs = append(githubURLs, line)
 		} else {
+			unrecognized++
 			slog.Warn("Unsupported line format",
 				"file", filename,
 				"line", lineNum,
@@ -184,6 +194,15 @@ func categorizeFileLines(filename string, opts ProcessingOptions) (purls []strin
 
 	if err := scanner.Err(); err != nil {
 		return nil, nil, fmt.Errorf("error reading file '%s': %w", filename, err)
+	}
+
+	// Failsafe: if the majority of content lines are unrecognized, the file is likely
+	// a structured format (go.mod, requirements.txt, etc.) that was not detected.
+	if contentLines > 0 && float64(unrecognized)/float64(contentLines) > unrecognizedLineThreshold {
+		return nil, nil, fmt.Errorf(
+			"file '%s' does not appear to be a PURL/URL list: %d/%d lines unrecognized. "+
+				"If this is a go.mod or other dependency file, ensure the format is detected correctly or convert to CycloneDX SBOM first",
+			filename, unrecognized, contentLines)
 	}
 
 	return purls, githubURLs, nil
