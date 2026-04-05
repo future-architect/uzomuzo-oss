@@ -355,10 +355,18 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 	)
 
 	for _, yf := range yamlFiles {
+		select {
+		case fileSem <- struct{}{}:
+		case <-ctx.Done():
+			fileMu.Lock()
+			errs[fmt.Sprintf("%s/%s/%s", owner, repo, yf.Path)] = ctx.Err()
+			fileMu.Unlock()
+			continue
+		}
+
 		fileWG.Add(1)
 		go func(yf github.DirectoryEntry) {
 			defer fileWG.Done()
-			fileSem <- struct{}{}
 			defer func() { <-fileSem }()
 
 			data, fetchErr := s.githubClient.FetchFileContent(ctx, owner, repo, yf.Path)
