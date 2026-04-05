@@ -340,7 +340,7 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
       "transitive_advisory_count": 3,
       "max_transitive_advisory_severity": "MEDIUM",
       "max_transitive_cvss3_score": 6.5,
-      "reason": "Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2"
+      "reason": "Deprecated in npm registry"
     }
   ]
 }
