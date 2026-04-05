@@ -124,7 +124,7 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 	// Validate --show-only early (before API calls)
 	if opts.ShowOnlyRaw != "" {
 		if _, err := cli.ParseShowOnly(opts.ShowOnlyRaw); err != nil {
-			return err
+			return fmt.Errorf("invalid flags: %w", err)
 		}
 	}
 
