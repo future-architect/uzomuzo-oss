@@ -28,6 +28,10 @@ type DiscoveryResult struct {
 	Errors map[string]error
 }
 
+// maxFileFetchConcurrency limits concurrent workflow file fetches within a single repository.
+// Kept small to avoid bursting the GitHub API when combined with repo-level concurrency.
+const maxFileFetchConcurrency = 5
+
 // DiscoveryService discovers GitHub Actions referenced by repositories.
 type DiscoveryService struct {
 	githubClient   *github.Client
@@ -343,36 +347,76 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 	var localPaths []string
 	localSeen := make(map[string]struct{})
 
+	// Fetch and parse workflow files concurrently to reduce sequential API latency.
+	var (
+		fileMu  sync.Mutex
+		fileWG  sync.WaitGroup
+		fileSem = make(chan struct{}, maxFileFetchConcurrency)
+	)
+
 	for _, yf := range yamlFiles {
-		data, fetchErr := s.githubClient.FetchFileContent(ctx, owner, repo, yf.Path)
-		if fetchErr != nil {
-			errs[fmt.Sprintf("%s/%s/%s", owner, repo, yf.Path)] = fetchErr
-			continue
-		}
-		if data == nil {
-			continue // 404 — file disappeared between listing and fetch
-		}
-
-		urls, locals, parseErr := ghaworkflow.ParseWorkflowAll(data)
-		if parseErr != nil {
-			errs[fmt.Sprintf("%s/%s/%s", owner, repo, yf.Path)] = parseErr
+		// Pre-check: if the context is already cancelled, skip deterministically
+		// without entering the select. When both fileSem and ctx.Done() are ready,
+		// select can non-deterministically choose the semaphore path, starting
+		// unnecessary goroutines after cancellation.
+		if err := ctx.Err(); err != nil {
+			fileMu.Lock()
+			errs[fmt.Sprintf("%s/%s/%s", owner, repo, yf.Path)] = err
+			fileMu.Unlock()
 			continue
 		}
 
-		for _, u := range urls {
-			if _, exists := seen[u]; !exists {
-				seen[u] = struct{}{}
-				directURLs = append(directURLs, u)
-			}
+		select {
+		case fileSem <- struct{}{}:
+		case <-ctx.Done():
+			fileMu.Lock()
+			errs[fmt.Sprintf("%s/%s/%s", owner, repo, yf.Path)] = ctx.Err()
+			fileMu.Unlock()
+			continue
 		}
 
-		for _, lp := range locals {
-			if _, exists := localSeen[lp]; !exists {
-				localSeen[lp] = struct{}{}
-				localPaths = append(localPaths, lp)
+		fileWG.Add(1)
+		go func(yf github.DirectoryEntry) {
+			defer fileWG.Done()
+			defer func() { <-fileSem }()
+
+			data, fetchErr := s.githubClient.FetchFileContent(ctx, owner, repo, yf.Path)
+			if fetchErr != nil {
+				fileMu.Lock()
+				errs[fmt.Sprintf("%s/%s/%s", owner, repo, yf.Path)] = fetchErr
+				fileMu.Unlock()
+				return
 			}
-		}
+			if data == nil {
+				return // 404 — file disappeared between listing and fetch
+			}
+
+			urls, locals, parseErr := ghaworkflow.ParseWorkflowAll(data)
+			if parseErr != nil {
+				fileMu.Lock()
+				errs[fmt.Sprintf("%s/%s/%s", owner, repo, yf.Path)] = parseErr
+				fileMu.Unlock()
+				return
+			}
+
+			fileMu.Lock()
+			for _, u := range urls {
+				if _, exists := seen[u]; !exists {
+					seen[u] = struct{}{}
+					directURLs = append(directURLs, u)
+				}
+			}
+			for _, lp := range locals {
+				if _, exists := localSeen[lp]; !exists {
+					localSeen[lp] = struct{}{}
+					localPaths = append(localPaths, lp)
+				}
+			}
+			fileMu.Unlock()
+		}(yf)
 	}
+
+	fileWG.Wait()
 
 	// Resolve local composite actions to find external action dependencies.
 	// Sort for deterministic BFS "first-seen wins" Via provenance.
