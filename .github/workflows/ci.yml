@@ -33,10 +33,11 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          # PR: checkout head branch for pushback. Manual/push: checkout default ref.
+          # PR: checkout head branch for pushback. Manual: checkout default ref.
           ref: ${{ github.head_ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -52,7 +53,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make update-doc-examples
 
-      - name: Commit updated doc examples
+      - name: Commit updated doc examples (PR)
+        if: github.event_name == 'pull_request'
         run: |
           git diff --quiet README.md docs/usage.md && exit 0
           git config user.name "github-actions[bot]"
@@ -60,6 +62,24 @@ jobs:
           git add README.md docs/usage.md
           git commit -m "docs: update output examples [skip ci]"
           git push
+
+      - name: Create PR with updated doc examples (manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git diff --quiet README.md docs/usage.md && echo "No changes" && exit 0
+          BRANCH="docs/update-examples-$(date +%Y%m%d-%H%M%S)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add README.md docs/usage.md
+          git commit -m "docs: update output examples"
+          git push -u origin "$BRANCH"
+          gh pr create \
+            --title "docs: refresh output examples" \
+            --body "Automated refresh of documentation output examples via \`workflow_dispatch\`." \
+            --base main
 
   lint:
     runs-on: ubuntu-latest
