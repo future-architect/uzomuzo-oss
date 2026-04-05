@@ -36,9 +36,20 @@ This is distinct from vulnerability scanning (Trivy/Snyk) which detects **known 
 
 ## Decision
 
-### Grade System
+### Label System
 
-Introduce a **Build Integrity Grade** (A/B/C/D) for each dependency, derived from a single weighted average of build-related signals.
+Introduce a **Build Integrity Label** with numeric score for each dependency. No letter grades (A/B/C/D) — label + score provides sufficient information without redundancy.
+
+| Label | Score Range | Verdict | Interpretation |
+|-------|-------------|---------|----------------|
+| `Hardened` | ≥ 7.5 | `ok` | Strong resistance — core protections in place |
+| `Moderate` | 2.5–7.4 | `caution` | Improvement needed — meaningful gaps present |
+| `Weak` | < 2.5 | `replace` | Minimal resistance — build pipeline largely unprotected |
+| `Ungraded` | No signals | *(none)* | Insufficient data to grade |
+
+Score is on the 0–10 scale (same as Scorecard). Thresholds are aligned with Scorecard's risk-level weight boundaries (High=7.5, Low=2.5).
+
+`Ungraded` does **not** map to a verdict — see [Verdict Integration](#verdict-integration) for rationale.
 
 ### Weighting: Aligned with OpenSSF Scorecard Risk Levels
 
@@ -71,7 +82,7 @@ All Scorecard checks use their official risk-level weight. SLSA Provenance and A
 | `Pinned-Dependencies` | Scorecard | Medium | **5.0** | CI dependency substitution |
 | Attestation `Verified` | deps.dev | Medium* | **5.0** | Unverifiable build attestation |
 
-*SLSA/Attestation weights are assigned by analogy: SLSA provenance verification is comparable to Signed-Releases (High); attestation is a supporting signal (Medium).
+*SLSA/Attestation weights are assigned by analogy: SLSA provenance verification is comparable to Signed-Releases (High); attestation is a supporting signal (Medium). These are our editorial assignments, not Scorecard's.
 
 **Excluded Scorecard checks** (not directly related to build tamper resistance):
 
@@ -103,7 +114,7 @@ Where:
 - Attestation Verified: `score_i` = 10 if any attestation is verified, 0 otherwise
 - Missing/inconclusive checks: **excluded from both numerator and denominator** (same as Scorecard behavior)
 
-**Key difference from ADR's earlier draft:** Missing signals are excluded (not treated as 0). This follows Scorecard's own convention — an inconclusive check does not penalize the score. However, if **no signals at all** are available, the grade is `N/A` (Ungraded).
+If **no signals at all** are available, the label is `Ungraded`.
 
 **Example calculation** for a package with Branch-Protection=8, Code-Review=7, Dangerous-Workflow=10, Pinned-Dependencies=3, no SLSA:
 
@@ -111,34 +122,14 @@ Where:
 score = (7.5×8 + 7.5×7 + 10.0×10 + 5.0×3) / (7.5 + 7.5 + 10.0 + 5.0)
       = (60 + 52.5 + 100 + 15) / 30.0
       = 227.5 / 30.0
-      = 7.58 out of 10
+      = 7.58 out of 10  → Hardened
 ```
 
-### Grade Thresholds
+### SLSA/Attestation Version Selection
 
-Score is on the 0–10 scale (same as Scorecard):
+SLSA Provenance and Attestation are per-version data from the deps.dev Version API. We use the **StableVersion** (latest stable release) as the evaluation target, consistent with uzomuzo's lifecycle assessment which also evaluates the current health of a package based on its latest release.
 
-| Grade | Score Range | Interpretation |
-|-------|-------------|----------------|
-| **A** | ≥ 7.5 | Strong resistance — core protections in place across source and artifacts |
-| **B** | 5.0–7.4 | Moderate resistance — meaningful gaps but some protections present |
-| **C** | 2.5–4.9 | Weak resistance — significant gaps in protection |
-| **D** | < 2.5 | Minimal resistance — build pipeline largely unprotected |
-| **N/A** | No signals available | Insufficient data to grade |
-
-Thresholds are aligned with Scorecard's risk-level weight boundaries (Critical=10, High=7.5, Medium=5.0, Low=2.5) for conceptual consistency.
-
-### Labels for BuildHealthAxis
-
-Introduce dedicated labels (not reuse `MaintenanceStatus`):
-
-| Label | Maps to Grade | Maps to Verdict |
-|-------|---------------|-----------------|
-| `Hardened` | A | `ok` |
-| `Moderate` | B | `ok` |
-| `Weak` | C | `caution` |
-| `Exposed` | D | `replace` |
-| `Ungraded` | N/A | `review` |
+When `SlsaProvenances` or `Attestations` contain multiple entries, **any single verified entry** is sufficient for the signal to be true. One verified provenance proves that at least one build path has verifiable provenance.
 
 ### Missing Signal Handling
 
@@ -146,40 +137,72 @@ Following Scorecard's own convention for inconclusive checks:
 
 - **Exclude missing checks** from both numerator and denominator of the weighted average
 - Record as `SignalAbsent` in the assessment trace for transparency
-- If **no build-related signals are available at all** (no Scorecard + no SLSA), grade is `N/A` (Ungraded)
+- If **no build-related signals are available at all** (no Scorecard + no SLSA), label is `Ungraded`
 - SLSA/Attestation: absence means the signal is simply not included (not penalized as 0)
 
 Rationale: Scorecard excludes inconclusive checks rather than treating them as 0 (`GetAggregateScore` skips `score < 0`). We follow the same principle — a missing check means "we don't know", not "the protection is absent". This avoids unfairly penalizing packages in ecosystems where certain checks are not applicable (e.g., `Packaging` may not apply to all ecosystems).
 
-**Note:** This differs from "absence of protection = risk" reasoning. A check that Scorecard **ran and scored 0** does mean the protection is absent. A check that **was not evaluated** is a different situation. The distinction is preserved in the Signal trace (`SignalUsed` with value "0/10" vs `SignalAbsent`).
+**Note:** A check that Scorecard **ran and scored 0** means the protection is absent. A check that **was not evaluated** is a different situation. The distinction is preserved in the Signal trace (`SignalUsed` with value "0/10" vs `SignalAbsent`).
 
 ### Verdict Integration
 
-The existing `CompositeAssessor` already runs both `LifecycleAssessorService` and `BuildHealthAssessorService`. The final verdict (`ok`/`caution`/`replace`/`review`) should take the **worst** of lifecycle and build integrity verdicts:
+The existing `CompositeAssessor` already runs both `LifecycleAssessorService` and `BuildHealthAssessorService`. The final verdict takes the **worst** of lifecycle and build integrity verdicts:
 
 ```
 final_verdict = max_severity(lifecycle_verdict, build_integrity_verdict)
 ```
 
-This ensures a well-maintained but build-exposed dependency is flagged appropriately.
+**Exception: `Ungraded` does not participate in verdict composition.** When Build Integrity data is unavailable (no Scorecard, no SLSA), the verdict is determined by lifecycle alone. This prevents mass `review` verdicts for packages without Scorecard coverage (npm packages without GitHub repos, private registries, GitLab/Bitbucket-hosted projects). The BUILD column displays `—` to make the data gap visible without polluting the verdict.
+
+#### Implementation: `DeriveVerdict` Refactoring
+
+`DeriveVerdict` in `audit/verdict.go` is refactored into two private functions:
+
+```go
+func DeriveVerdict(a *analysis.Analysis) Verdict {
+    return maxSeverity(deriveLifecycleVerdict(a), deriveBuildVerdict(a))
+}
+
+func deriveLifecycleVerdict(a *analysis.Analysis) Verdict { /* existing logic */ }
+func deriveBuildVerdict(a *analysis.Analysis) Verdict {
+    // Ungraded → VerdictOK (no downgrade)
+    // Hardened → VerdictOK
+    // Moderate → VerdictCaution
+    // Weak → VerdictReplace
+}
+```
+
+This preserves `DeriveVerdict` as the single entry point (no caller changes) while enabling independent testing of each axis.
+
+### Type Design: `AssessmentResult.Label` as `string`
+
+`AssessmentResult.Label` is changed from `MaintenanceStatus` to `string`. Each assessor defines its own typed label constants internally:
+
+- `BuildHealthAssessorService` uses `BuildIntegrityLabel` type (`Hardened`, `Moderate`, `Weak`, `Ungraded`)
+- `LifecycleAssessorService` continues using `MaintenanceStatus` type (`Active`, `Stalled`, etc.)
+
+Both convert to `string` when populating `AssessmentResult`. This avoids forced coupling between axis-specific label sets while keeping `AssessmentResult` as a generic cross-axis structure.
 
 ### CLI Display
 
 **Summary table** — Add `BUILD` column:
 
 ```
-STATUS  BUILD  PURL                        LIFECYCLE
-✅      A      pkg:golang/go.uber.org/zap  Active
-⚠️      C      pkg:npm/lodash              Legacy-Safe
-🔴      D      pkg:pypi/requests           Stalled
+STATUS  BUILD           PURL                           LIFECYCLE
+✅      Hardened 8.1    pkg:golang/go.uber.org/zap     Active
+⚠️      Moderate 4.2   pkg:npm/lodash                 Legacy-Safe
+🔴      Weak 1.3       pkg:pypi/requests              Stalled
+✅      —               pkg:npm/some-private-pkg       Active
 ```
+
+`—` indicates Ungraded (no Scorecard or SLSA data available).
 
 **Detail view** — Add Build Integrity section to the existing box:
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
 │  pkg:npm/lodash@4.17.21                                       │
-│  Lifecycle: ⚠️ Legacy-Safe    Build Integrity: C (4.2/10)    │
+│  Lifecycle: ⚠️ Legacy-Safe    Build Integrity: Moderate 4.2  │
 ├───────────────────────────────────────────────────────────────┤
 │  Build Integrity Signals:                                     │
 │    Dangerous Workflow ✅ 10/10  [Critical]                    │
@@ -195,41 +218,87 @@ STATUS  BUILD  PURL                        LIFECYCLE
 
 Signals are ordered by weight (Critical → High → Medium) for scanability. Missing signals (marked `—`) are excluded from the score calculation but shown for transparency.
 
+### Output Schema
+
+**JSON:**
+
+```json
+{
+  "purl": "pkg:npm/lodash@4.17.21",
+  "verdict": "caution",
+  "lifecycle": "Legacy-Safe",
+  "build_integrity": "Moderate",
+  "build_integrity_score": 4.2,
+  ...
+}
+```
+
+Summary includes build integrity tallies:
+
+```json
+{
+  "summary": {
+    "total": 10,
+    "ok": 3, "caution": 5, "replace": 1, "review": 1,
+    "build_integrity": {
+      "hardened": 2, "moderate": 4, "weak": 1, "ungraded": 3
+    }
+  }
+}
+```
+
+**CSV:**
+
+Add two columns after `lifecycle`: `build_integrity` (label string) and `build_integrity_score` (float).
+
+Individual signal scores are **not** included — the existing `ExportScorecard` CSV already exports all Scorecard check scores. This avoids duplication.
+
+### `--show-only` Filter
+
+Phase 1 uses the existing `--show-only` verdict filter only. Build Integrity contributes to the composite verdict via `max_severity`, so `--show-only caution` will include packages downgraded by build integrity.
+
+A dedicated `--show-only-build` flag is **not added** in Phase 1. If demand is confirmed through user feedback, it can be introduced later without breaking changes.
+
 ## Implementation Plan
 
 ### Phase 1: Data Pipeline (low cost)
 
 1. Propagate `SLSAProvenance` and `Attestation` from infrastructure `Version` struct to domain `Analysis`
 2. Add fields to `Analysis`: `SLSAVerified bool`, `AttestationVerified bool`
-3. Populate in `populate_project.go` alongside existing Scorecard flow
+3. Use StableVersion's SLSA/Attestation data; any single verified entry = true
+4. Populate in `populate_project.go` alongside existing Scorecard flow
 
 ### Phase 2: Grading Logic (medium cost)
 
-1. Define `BuildIntegrityLabel` type and constants (`Hardened`, `Moderate`, `Weak`, `Exposed`, `Ungraded`)
-2. Implement scoring algorithm in `BuildHealthAssessorService.Assess()` (replacing current stub)
-3. Define build-integrity Signal constants and record all evaluated checks
-4. Add `BuildIntegrityGrade` / `BuildIntegrityScore` to `AssessmentResult.Meta`
+1. Change `AssessmentResult.Label` from `MaintenanceStatus` to `string`
+2. Define `BuildIntegrityLabel` type and constants (`Hardened`, `Moderate`, `Weak`, `Ungraded`)
+3. Implement scoring algorithm in `BuildHealthAssessorService.Assess()` (replacing current stub)
+4. Define build-integrity Signal constants and record all evaluated checks
+5. Refactor `DeriveVerdict` into `deriveLifecycleVerdict` + `deriveBuildVerdict` + `maxSeverity`
+6. Test with synthetic table-driven tests covering: all signals present, partial signals, no signals, boundary values (7.5, 2.5), SLSA verified/absent, score 0 vs absent distinction
 
 ### Phase 3: Display (low cost)
 
-1. Add BUILD column to summary table
+1. Add BUILD column to summary table (`—` for Ungraded)
 2. Add Build Integrity section to detail box
-3. Add build integrity fields to JSON/CSV output
-4. Enable `--show-only` to filter on composite verdict (already works — verdict takes worst of both axes)
+3. Add `build_integrity` and `build_integrity_score` to JSON/CSV output
+4. Add `build_integrity` tallies to JSON summary
 
 ### Phase 4: Tuning (ongoing)
 
 1. Validate grading against known-compromised packages (event-stream, ua-parser-js, colors.js)
-2. Adjust weights and thresholds based on real-world distribution
+2. Validate score distribution against real-world data using Scorecard snapshots in `testdata/`
 3. Consider ecosystem-specific adjustments (e.g., Go modules with sumdb provide some artifact integrity by default)
+4. Evaluate whether `--show-only-build` filter is needed based on user feedback
 
 ## Consequences
 
 - **Scorecard-aligned weighting** — Weights are derived from Scorecard's official risk levels, not custom heuristics. This makes the grading defensible and easy to explain. If Scorecard changes weights in future versions, we should re-evaluate alignment.
-- **New assessment axis visible to users** — `BUILD` column in output; may initially confuse users unfamiliar with supply chain concepts
-- **Score distribution concern** — With missing signals excluded (not penalized), packages with few evaluated checks may receive artificially high grades. Phase 4 tuning should validate the distribution against real-world data and consider a minimum signal count for grade A/B.
-- **No new API calls** — All data is already fetched; implementation is pure domain logic + display
-- **Verdict severity escalation** — A well-maintained package can now get `caution` or `replace` verdict due to build integrity. This is intentional but will need documentation explaining why a "healthy" package is flagged
+- **New assessment axis visible to users** — `BUILD` column in output; may initially confuse users unfamiliar with supply chain concepts.
+- **Score distribution concern** — With missing signals excluded (not penalized), packages with few evaluated checks may receive artificially high grades. Phase 4 tuning should validate the distribution against real-world data and consider a minimum signal count for Hardened.
+- **No new API calls** — All data is already fetched; implementation is pure domain logic + display.
+- **Verdict severity escalation** — A well-maintained package can now get `caution` or `replace` verdict due to build integrity. This is intentional but will need documentation explaining why a "healthy" package is flagged.
+- **Ungraded packages are not penalized** — Verdict composition skips Ungraded to avoid mass `review` noise. Users see `—` in the BUILD column and can investigate manually.
 - **SLSA/Attestation weight is an editorial decision** — Unlike Scorecard checks, SLSA and Attestation weights (High/Medium) are our assignment, not Scorecard's. Document this clearly so future maintainers know which weights are upstream-derived and which are our own.
 
 ## Differentiation
@@ -238,7 +307,7 @@ Signals are ordered by weight (Critical → High → Medium) for scanability. Mi
 |------|----------------|------------------------|
 | Trivy/Snyk | Known vulnerabilities (CVE) | Structural resistance to **future** compromise |
 | socket.dev | Already-injected malware | Resistance to malware **injection** |
-| Scorecard CLI | Per-project detailed scores | **Batch** evaluation across all dependencies with actionable grade |
+| Scorecard CLI | Per-project detailed scores | **Batch** evaluation across all dependencies with actionable label |
 | deps.dev | Individual SLSA provenance | Combined source + artifact assessment with severity integration |
 
 uzomuzo's unique value: **"This dependency hasn't been compromised yet, but if someone tried, here's how easy it would be."**
