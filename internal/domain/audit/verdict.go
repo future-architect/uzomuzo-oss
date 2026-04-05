@@ -109,6 +109,6 @@ func severityOrder(v Verdict) int {
 	case VerdictReplace:
 		return 3
 	default:
-		return 0
+		return 1
 	}
 }
