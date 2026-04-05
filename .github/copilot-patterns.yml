@@ -24,11 +24,7 @@ patterns:
     pr: 111
     file: "internal/infrastructure/actionscan/discovery.go"
     date: "2026-04-03"
-  - category: "naming-consistency"
-    summary: "Use domain constants (LicenseSource*) instead of duplicating raw string values in display/mapping logic — prevents drift when constants are renamed"
-    pr: 119
-    file: "internal/interfaces/cli/boxdraw.go"
-    date: "2026-04-04"
+  # naming-consistency: already covered by "Use Domain Constants for Domain-Defined String Values" (PR #119, boxdraw.go — domain constants vs raw strings)
   # comment-doc-drift: already covered by promoted rule (PR #121, aggregates.go — enum precedence comments used old labels)
   # comment-doc-drift: already covered by promoted rule (PR #121, types.go — struct field comment referenced old label names)
   # testing (PR #121): promoted — see testing-performance.instructions.md "Use `filepath.Join` for Temp File Paths"
@@ -60,4 +56,14 @@ patterns:
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
+    date: "2026-04-05"
+  - category: "naming-consistency"
+    summary: "CLI flag descriptions that introduce domain terms mid-sentence should capitalize the term and use natural phrasing (e.g., 'Replace means...') instead of shorthand notation ('replace = ...')"
+    pr: 144
+    file: "cmd/uzomuzo/commands.go"
+    date: "2026-04-05"
+  - category: "defensive-coding"
+    summary: "Avoid per-call map allocation for static display-name mappings — use a switch statement or package-level var instead of rebuilding the map on every invocation"
+    pr: 144
+    file: "internal/interfaces/cli/boxdraw.go"
     date: "2026-04-05"
