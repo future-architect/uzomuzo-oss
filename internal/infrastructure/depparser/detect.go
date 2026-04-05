@@ -4,6 +4,7 @@
 package depparser
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -14,24 +15,28 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/cyclonedx"
 )
 
+// goModSniffPrefixLen is the number of bytes to read for content-based go.mod detection.
+// A go.mod file typically starts with a "module" directive within the first few hundred bytes,
+// preceded only by comments and blank lines.
+const goModSniffPrefixLen = 512
+
 // DetectFileParser inspects filePath and returns the matching parser and file data.
 // Returns (nil, nil, nil) when the file is not a recognized structured format.
 //
 // Detection order:
-//  1. go.mod (by filename) → parsers["gomod"]
+//  1. go.mod — by exact filename, OR by content sniffing ("module " directive in first 512 bytes)
 //  2. .json with CycloneDX bomFormat header → parsers["sbom"]
 //  3. Unrecognized → (nil, nil, nil)
 func DetectFileParser(filePath string, parsers map[string]depparser.DependencyParser) (depparser.DependencyParser, []byte, error) {
+	// Fast path: exact filename match.
 	if filepath.Base(filePath) == "go.mod" {
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
-		}
-		parser, ok := parsers["gomod"]
-		if !ok {
-			return nil, nil, fmt.Errorf("go.mod parser not available")
-		}
-		return parser, data, nil
+		return readGoMod(filePath, parsers)
+	}
+
+	// Content-based go.mod detection: read a small prefix and look for "module " directive.
+	// This catches renamed files (e.g., "vuls-go.mod", "my-project-go.mod").
+	if looksLikeGoMod(filePath) {
+		return readGoMod(filePath, parsers)
 	}
 
 	if strings.HasSuffix(filePath, ".json") {
@@ -65,4 +70,46 @@ func DetectFileParser(filePath string, parsers map[string]depparser.DependencyPa
 	}
 
 	return nil, nil, nil
+}
+
+// readGoMod reads the file and returns the gomod parser.
+func readGoMod(filePath string, parsers map[string]depparser.DependencyParser) (depparser.DependencyParser, []byte, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
+	}
+	parser, ok := parsers["gomod"]
+	if !ok {
+		return nil, nil, fmt.Errorf("go.mod parser not available")
+	}
+	return parser, data, nil
+}
+
+// looksLikeGoMod reads a small prefix of the file and checks for a go.mod "module" directive.
+// Returns false on any I/O error (caller will fall through to other detectors).
+func looksLikeGoMod(filePath string) bool {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return false
+	}
+	defer f.Close() //nolint:errcheck // best-effort cleanup
+
+	buf := make([]byte, goModSniffPrefixLen)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && n == 0 {
+		return false
+	}
+	buf = buf[:n]
+
+	// A valid go.mod starts with optional comments/whitespace then a "module" directive.
+	// Check whether the first non-comment line starts with the "module" directive token.
+	for _, line := range bytes.Split(buf, []byte("\n")) {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 || line[0] == '/' {
+			continue // skip empty lines and comments
+		}
+		fields := bytes.Fields(line)
+		return len(fields) > 0 && bytes.Equal(fields[0], []byte("module"))
+	}
+	return false
 }

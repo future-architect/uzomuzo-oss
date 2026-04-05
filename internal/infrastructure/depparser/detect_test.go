@@ -2,6 +2,8 @@ package depparser_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
@@ -34,6 +36,11 @@ func TestDetectFileParser(t *testing.T) {
 		{
 			name:       "go.mod file",
 			filePath:   "testdata/gomod/go.mod",
+			wantParser: "go.mod",
+		},
+		{
+			name:       "renamed go.mod detected by content sniffing",
+			filePath:   "testdata/gomod/renamed-go.mod",
 			wantParser: "go.mod",
 		},
 		{
@@ -89,6 +96,75 @@ func TestDetectFileParser(t *testing.T) {
 			}
 			if len(data) == 0 {
 				t.Error("expected non-empty data")
+			}
+		})
+	}
+}
+
+func TestDetectFileParser_ContentSniffing(t *testing.T) {
+	parsers := map[string]depparser.DependencyParser{
+		"gomod": &stubParser{name: "go.mod"},
+	}
+
+	tests := []struct {
+		name       string
+		content    string
+		wantParser bool
+	}{
+		{
+			name:       "standard go.mod",
+			content:    "module example.com/foo\n\ngo 1.21\n",
+			wantParser: true,
+		},
+		{
+			name:       "go.mod with leading comment",
+			content:    "// Copyright 2024\n\nmodule example.com/foo\n",
+			wantParser: true,
+		},
+		{
+			name:       "not a go.mod - PURL list",
+			content:    "pkg:npm/express@4.18.2\npkg:npm/lodash@4.17.21\n",
+			wantParser: false,
+		},
+		{
+			name:       "not a go.mod - JSON",
+			content:    `{"name": "test"}`,
+			wantParser: false,
+		},
+		{
+			name:       "empty file",
+			content:    "",
+			wantParser: false,
+		},
+		{
+			name:       "go.mod with blank lines before module",
+			content:    "\n\n\nmodule example.com/bar\n",
+			wantParser: true,
+		},
+		{
+			name:       "go.mod with tab after module",
+			content:    "module\texample.com/foo\n\ngo 1.21\n",
+			wantParser: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpFile := filepath.Join(t.TempDir(), "test-file")
+			if err := os.WriteFile(tmpFile, []byte(tt.content), 0o644); err != nil {
+				t.Fatalf("failed to write temp file: %v", err)
+			}
+
+			parser, _, err := infradepparser.DetectFileParser(tmpFile, parsers)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tt.wantParser && parser == nil {
+				t.Error("expected go.mod parser, got nil")
+			}
+			if !tt.wantParser && parser != nil {
+				t.Errorf("expected nil parser, got %q", parser.FormatName())
 			}
 		})
 	}

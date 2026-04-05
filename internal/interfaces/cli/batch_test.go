@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -186,6 +188,47 @@ func TestDisplayFunctions_NoPanic(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) { tt.testFunc() })
+	}
+}
+
+func TestCategorizeFileLines_UnrecognizedThreshold(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		wantErr bool
+	}{
+		{
+			name:    "valid PURL list",
+			content: "pkg:npm/express@4.18.2\npkg:npm/lodash@4.17.21\n",
+			wantErr: false,
+		},
+		{
+			name:    "mostly unrecognized lines triggers error",
+			content: "module example.com/test\n\ngo 1.21\n\nrequire (\n\texample.com/foo v1.0.0\n)\n",
+			wantErr: true,
+		},
+		{
+			name:    "mixed with minority unrecognized is OK",
+			content: "pkg:npm/express@4.18.2\npkg:npm/lodash@4.17.21\npkg:npm/react@18.0.0\nbad-line\n",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpFile := filepath.Join(t.TempDir(), "test-input")
+			if err := os.WriteFile(tmpFile, []byte(tt.content), 0o644); err != nil {
+				t.Fatalf("failed to write temp file: %v", err)
+			}
+
+			_, _, err := categorizeFileLines(tmpFile, ProcessingOptions{})
+			if tt.wantErr && err == nil {
+				t.Error("expected error for mostly unrecognized lines, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
