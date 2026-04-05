@@ -419,6 +419,11 @@ func writeBoxBuildIntegrity(ctx *boxContext) error {
 			}
 		}
 	}
+	if a.ScorecardURL != "" {
+		if err := writeLine(ctx, "  → %s", a.ScorecardURL); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
