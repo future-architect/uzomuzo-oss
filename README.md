@@ -152,7 +152,7 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | Known vulnerability scanning | Yes | Partial | No | No (uses Scorecard) |
 | Single-repo health scoring | No | Yes (17 checks) | No | Yes (via Scorecard) |
 | **Dependency tree lifecycle assessment** | No | No | No | **Yes** |
-| **Long Tail EOL detection** | No | No | ~400 projects | **Heuristic + catalog** |
+| **Long Tail EOL detection** | No | No | ~400 projects | **Multi-signal heuristic** |
 | **Bot vs. human commit filtering** | No | No | N/A | **Yes** |
 | **GitHub Actions health scanning** | No | No | No | **Yes** |
 | Lifecycle classification granularity | N/A | N/A | Binary (EOL/not) | **7 actionable states** |
