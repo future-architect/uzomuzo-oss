@@ -453,6 +453,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 
 	a := e.Analysis
 	if a == nil {
+		je.BuildIntegrity = string(domain.BuildLabelUngraded)
 		return je
 	}
 
@@ -559,7 +560,9 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		buildIntegrityScore := ""
 		if a := e.Analysis; a != nil {
 			if br := a.GetBuildHealthResult(); br != nil {
-				buildIntegrity = br.Label
+				if br.Label != "" {
+					buildIntegrity = br.Label
+				}
 				if scoreStr, ok := br.Meta["score"]; ok && scoreStr != domain.ScoreUngraded {
 					buildIntegrityScore = scoreStr
 				}
