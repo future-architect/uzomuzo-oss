@@ -355,6 +355,17 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 	)
 
 	for _, yf := range yamlFiles {
+		// Pre-check: if the context is already cancelled, skip deterministically
+		// without entering the select. When both fileSem and ctx.Done() are ready,
+		// select can non-deterministically choose the semaphore path, starting
+		// unnecessary goroutines after cancellation.
+		if err := ctx.Err(); err != nil {
+			fileMu.Lock()
+			errs[fmt.Sprintf("%s/%s/%s", owner, repo, yf.Path)] = err
+			fileMu.Unlock()
+			continue
+		}
+
 		select {
 		case fileSem <- struct{}{}:
 		case <-ctx.Done():
