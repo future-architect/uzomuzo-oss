@@ -85,7 +85,7 @@ func deriveBuildVerdict(a *analysis.Analysis) Verdict {
 	case analysis.BuildLabelUngraded:
 		return VerdictOK
 	default:
-		return VerdictOK
+		return VerdictReview
 	}
 }
 

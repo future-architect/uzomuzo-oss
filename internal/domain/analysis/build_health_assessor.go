@@ -22,7 +22,7 @@ const (
 // buildSignalDef maps a signal to its Scorecard check name and weight.
 type buildSignalDef struct {
 	SignalName     string
-	ScorecardCheck string // empty for SLSA/Attestation
+	ScorecardCheck string // OpenSSF Scorecard check name for this signal
 	Weight         float64
 }
 
@@ -43,12 +43,12 @@ const minEvaluatedSignals = 3
 //
 // These can be re-added in Phase 4 as ecosystem adoption increases.
 var buildSignals = []buildSignalDef{
-	{SignalDangerousWorkflow, "Dangerous-Workflow", 10.0},   // Critical
-	{SignalBranchProtection, "Branch-Protection", 7.5},      // High
-	{SignalCodeReview, "Code-Review", 7.5},                  // High
-	{SignalTokenPermissions, "Token-Permissions", 7.5},      // High
-	{SignalBinaryArtifacts, "Binary-Artifacts", 7.5},        // High
-	{SignalPinnedDependencies, "Pinned-Dependencies", 5.0},  // Medium
+	{SignalDangerousWorkflow, "Dangerous-Workflow", 10.0},  // Critical
+	{SignalBranchProtection, "Branch-Protection", 7.5},     // High
+	{SignalCodeReview, "Code-Review", 7.5},                 // High
+	{SignalTokenPermissions, "Token-Permissions", 7.5},     // High
+	{SignalBinaryArtifacts, "Binary-Artifacts", 7.5},       // High
+	{SignalPinnedDependencies, "Pinned-Dependencies", 5.0}, // Medium
 }
 
 // BuildHealthAssessorService evaluates build pipeline tamper resistance
@@ -144,4 +144,3 @@ func (s *BuildHealthAssessorService) evaluateScorecardSignal(def buildSignalDef,
 		Role:  SignalUsed,
 	}, def.Weight, float64(val)
 }
-
