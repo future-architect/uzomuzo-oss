@@ -48,10 +48,25 @@ jobs:
       - name: Check doc example markers
         run: make check-doc-examples
 
-      - name: Update doc examples
+      - name: Update doc examples (PR — skip juice-shop, no trivy)
+        if: github.event_name == 'pull_request'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make update-doc-examples
+
+      - name: Install trivy (manual trigger only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+      - name: Update doc examples (manual — including juice-shop)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          go build -o uzomuzo ./cmd/uzomuzo
+          go run ./scripts/update-doc-examples --skip-build
 
       - name: Commit updated doc examples (PR)
         if: github.event_name == 'pull_request'
@@ -68,17 +83,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git diff --quiet README.md docs/usage.md && echo "No changes" && exit 0
+          git diff --quiet README.md docs/usage.md docs/assets/juice-shop-eol-result.txt && echo "No changes" && exit 0
           BRANCH="docs/update-examples-$(date +%Y%m%d-%H%M%S)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git add README.md docs/usage.md
+          git add README.md docs/usage.md docs/assets/juice-shop-eol-result.txt
           git commit -m "docs: update output examples"
           git push -u origin "$BRANCH"
           gh pr create \
             --title "docs: refresh output examples" \
-            --body "Automated refresh of documentation output examples via \`workflow_dispatch\`." \
+            --body "Automated refresh of documentation output examples via \`workflow_dispatch\` (including juice-shop SBOM scan)." \
             --base main
 
   lint:
