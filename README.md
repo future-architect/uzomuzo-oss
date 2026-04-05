@@ -18,7 +18,7 @@ A package with zero CVEs today may have been abandoned for years — no one is w
 ```text
 --- Summary Table ---
 STATUS     PURL                 LIFECYCLE      BUILD
-🔴 replace  pkg:npm/dicer@0.3.1  EOL-Effective  Moderate 3.5
+🔴 replace  pkg:npm/dicer@0.3.1  EOL-Effective  Moderate 3.9
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -35,12 +35,11 @@ STATUS     PURL                 LIFECYCLE      BUILD
 │ Maintained Score: 0/10
 │ Advisories: 1
 │ Max Advisory Severity: HIGH 7.5
-├─ Build Integrity: Moderate 3.5/10 (7/11) ─────────────────
+├─ Build Integrity: Moderate 3.9/10 (6/10) ─────────────────
 │   Dangerous Workflow  10  Branch Protection    0
 │   Code Review          0  Token Permissions    0
 │   Binary Artifacts    10  Signed Releases      —
-│   SLSA Provenance      —  SAST                 0
-│   Pinned Deps          0
+│   SLSA Provenance      —  Pinned Deps          0
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fmscdex%2Fdicer
 ├─ Health ──────────────────────────────────────────────────
 │ 188 stars
@@ -188,7 +187,7 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 ```text
 --- Summary Table ---
 STATUS     PURL                    LIFECYCLE  BUILD
-✅ ok       pkg:npm/express@4.18.2  Active     Hardened 9.4
+✅ ok       pkg:npm/express@4.18.2  Active     Hardened 9.3
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 0 replace | 🔍 0 review
@@ -204,12 +203,11 @@ STATUS     PURL                    LIFECYCLE  BUILD
 │ Recent Stable Release: true
 │ Last Human Commit: 2026-03-31
 │ Maintained Score: 10/10
-├─ Build Integrity: Hardened 9.4/10 (6/11) ─────────────────
+├─ Build Integrity: Hardened 9.3/10 (5/10) ─────────────────
 │   Dangerous Workflow  10  Branch Protection    —
 │   Code Review          9  Token Permissions   10
 │   Binary Artifacts    10  Signed Releases      —
-│   SLSA Provenance      —  SAST                10
-│   Pinned Deps          6
+│   SLSA Provenance      —  Pinned Deps          6
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fexpressjs%2Fexpress
 ├─ Health ──────────────────────────────────────────────────
 │ 68887 stars
@@ -236,7 +234,7 @@ STATUS     PURL                    LIFECYCLE  BUILD
 ```text
 --- Summary Table ---
 STATUS      PURL                   LIFECYCLE    BUILD
-⚠️ caution  pkg:npm/moment@2.29.4  Legacy-Safe  Moderate 4.1
+⚠️ caution  pkg:npm/moment@2.29.4  Legacy-Safe  Moderate 4.7
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 1 caution | 🔴 0 replace | 🔍 0 review
@@ -252,12 +250,11 @@ STATUS      PURL                   LIFECYCLE    BUILD
 ├─ Signals ─────────────────────────────────────────────────
 │ Last Human Commit: 2024-02-18
 │ Advisories: 0
-├─ Build Integrity: Moderate 4.1/10 (6/11) ─────────────────
+├─ Build Integrity: Moderate 4.7/10 (5/10) ─────────────────
 │   Dangerous Workflow  10  Branch Protection    —
 │   Code Review          0  Token Permissions    0
 │   Binary Artifacts    10  Signed Releases      —
-│   SLSA Provenance      —  SAST                 0
-│   Pinned Deps          0
+│   SLSA Provenance      —  Pinned Deps          0
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fmoment%2Fmoment
 ├─ Health ──────────────────────────────────────────────────
 │ 48015 stars
@@ -284,7 +281,7 @@ Scorecard says Maintained 0.0 — but zero advisories and does one thing perfect
 ```text
 --- Summary Table ---
 STATUS      PURL                                     LIFECYCLE  BUILD
-⚠️ caution  pkg:golang/github.com/gorilla/mux@1.8.1  Stalled    Moderate 5.7
+⚠️ caution  pkg:golang/github.com/gorilla/mux@1.8.1  Stalled    Moderate 6.5
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 1 caution | 🔴 0 replace | 🔍 0 review
@@ -300,12 +297,11 @@ STATUS      PURL                                     LIFECYCLE  BUILD
 ├─ Signals ─────────────────────────────────────────────────
 │ Last Human Commit: 2024-06-19
 │ Maintained Score: 0/10
-├─ Build Integrity: Moderate 5.7/10 (6/11) ─────────────────
+├─ Build Integrity: Moderate 6.5/10 (5/10) ─────────────────
 │   Dangerous Workflow  10  Branch Protection    —
 │   Code Review          9  Token Permissions    0
 │   Binary Artifacts    10  Signed Releases      —
-│   SLSA Provenance      —  SAST                 0
-│   Pinned Deps          0
+│   SLSA Provenance      —  Pinned Deps          0
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fgorilla%2Fmux
 ├─ Health ──────────────────────────────────────────────────
 │ 21813 stars
@@ -331,7 +327,7 @@ No release since 2023, Maintained 0.0. Not dead, not active — clearly declinin
 ```text
 --- Summary Table ---
 STATUS     PURL                 LIFECYCLE      BUILD
-🔴 replace  pkg:npm/dicer@0.3.1  EOL-Effective  Moderate 3.5
+🔴 replace  pkg:npm/dicer@0.3.1  EOL-Effective  Moderate 3.9
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -348,12 +344,11 @@ STATUS     PURL                 LIFECYCLE      BUILD
 │ Maintained Score: 0/10
 │ Advisories: 1
 │ Max Advisory Severity: HIGH 7.5
-├─ Build Integrity: Moderate 3.5/10 (7/11) ─────────────────
+├─ Build Integrity: Moderate 3.9/10 (6/10) ─────────────────
 │   Dangerous Workflow  10  Branch Protection    0
 │   Code Review          0  Token Permissions    0
 │   Binary Artifacts    10  Signed Releases      —
-│   SLSA Provenance      —  SAST                 0
-│   Pinned Deps          0
+│   SLSA Provenance      —  Pinned Deps          0
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fmscdex%2Fdicer
 ├─ Health ──────────────────────────────────────────────────
 │ 188 stars
@@ -381,7 +376,7 @@ No deprecation, no archive — but unpatched ReDoS + zero maintenance. **SCA bli
 ```text
 --- Summary Table ---
 STATUS     PURL                                          LIFECYCLE      BUILD
-🔴 replace  pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  Moderate 4.1
+🔴 replace  pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  Moderate 5.0
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -396,11 +391,11 @@ STATUS     PURL                                          LIFECYCLE      BUILD
 │ 🔴 EOL-Confirmed: Repository archived or disabled
 ├─ Signals ─────────────────────────────────────────────────
 │ Repo Archived: true
-├─ Build Integrity: Moderate 4.1/10 (4/11) ─────────────────
+├─ Build Integrity: Moderate 5.0/10 (3/10) ─────────────────
 │   Dangerous Workflow   —  Branch Protection    0
 │   Code Review          5  Token Permissions    —
 │   Binary Artifacts    10  Signed Releases      —
-│   SLSA Provenance      —  SAST                 0
+│   SLSA Provenance      —
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fdgrijalva%2Fjwt-go
 ├─ Health ──────────────────────────────────────────────────
 │ 📦 Archived
@@ -430,7 +425,7 @@ Successor is `golang-jwt/jwt`. **Migrate immediately.**
 ```text
 --- Summary Table ---
 STATUS     PURL                    LIFECYCLE      BUILD
-🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed  Moderate 6.4
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed  —
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -444,12 +439,6 @@ STATUS     PURL                    LIFECYCLE      BUILD
 │ 🔴 EOL-Confirmed: Deprecated in npm registry
 ├─ Signals ─────────────────────────────────────────────────
 │ EOL Source: npmjs
-├─ Build Integrity: Moderate 6.4/10 (3/11) ─────────────────
-│   Dangerous Workflow   —  Branch Protection    —
-│   Code Review          7  Token Permissions    —
-│   Binary Artifacts    10  Signed Releases      —
-│   SLSA Provenance      —  SAST                 0
-│   → https://scorecard.dev/viewer/?uri=github.com%2Frequest%2Frequest
 ├─ EOL ─────────────────────────────────────────────────────
 │ Evidence (1):
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
@@ -491,12 +480,12 @@ $ uzomuzo scan pkg:npm/express@4.18.2 pkg:npm/moment@2.29.4 \
     -f table
 
 STATUS      PURL                                          LIFECYCLE      BUILD
-✅ ok        pkg:npm/express@4.18.2                        Active         Hardened 9.4
-⚠️ caution  pkg:npm/moment@2.29.4                         Legacy-Safe    Moderate 4.1
-⚠️ caution  pkg:golang/github.com/gorilla/mux@1.8.1       Stalled        Moderate 5.7
-🔴 replace   pkg:npm/dicer@0.3.1                           EOL-Effective  Moderate 3.5
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  Moderate 4.1
-🔴 replace   pkg:npm/request@2.88.2                        EOL-Confirmed  Moderate 6.4
+✅ ok        pkg:npm/express@4.18.2                        Active         Hardened 9.3
+⚠️ caution  pkg:npm/moment@2.29.4                         Legacy-Safe    Moderate 4.7
+⚠️ caution  pkg:golang/github.com/gorilla/mux@1.8.1       Stalled        Moderate 6.5
+🔴 replace   pkg:npm/dicer@0.3.1                           EOL-Effective  Moderate 3.9
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  Moderate 5.0
+🔴 replace   pkg:npm/request@2.88.2                        EOL-Confirmed  —
 
 ── Summary ─────────────────────────────────────────────────
 │ 6 dependencies | ✅ 1 ok | ⚠️ 2 caution | 🔴 3 replace | 🔍 0 review
@@ -514,9 +503,9 @@ STATUS      PURL                                          LIFECYCLE      BUILD
 $ uzomuzo scan --file go.mod -f table
 
 STATUS      PURL                                                        RELATION  LIFECYCLE      BUILD
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  Moderate 4.1
-⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled        Moderate 5.7
-⚠️ caution  pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Moderate 5.9
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  Moderate 5.0
+⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled        Moderate 6.5
+⚠️ caution  pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Moderate 6.7
 
 ── Summary ─────────────────────────────────────────────────
 │ 3 dependencies | ✅ 0 ok | ⚠️ 2 caution | 🔴 1 replace | 🔍 0 review
