@@ -56,11 +56,11 @@ Missing or inconclusive signals are **excluded** from both numerator and denomin
 ### Table Format
 
 ```
-STATUS     BUILD           PURL                           LIFECYCLE
-✅ ok       Hardened 8.1    pkg:golang/go.uber.org/zap     Active
-⚠️ caution  Moderate 4.2   pkg:npm/lodash                 Legacy-Safe
-🔴 replace  Weak 1.3       pkg:pypi/old-lib               Stalled
-✅ ok       —               pkg:npm/some-private-pkg       Active
+STATUS     PURL                           LIFECYCLE       BUILD
+✅ ok       pkg:golang/go.uber.org/zap     Active          Hardened 8.1
+⚠️ caution  pkg:npm/lodash                 Legacy-Safe     Moderate 4.2
+🔴 replace  pkg:pypi/old-lib               Stalled         Weak 1.3
+✅ ok       pkg:npm/some-private-pkg       Active          —
 ```
 
 `—` indicates Ungraded (no Scorecard or SLSA data available).

@@ -188,11 +188,11 @@ Both convert to `string` when populating `AssessmentResult`. This avoids forced 
 **Summary table** — Add `BUILD` column:
 
 ```
-STATUS  BUILD           PURL                           LIFECYCLE
-✅      Hardened 8.1    pkg:golang/go.uber.org/zap     Active
-⚠️      Moderate 4.2   pkg:npm/lodash                 Legacy-Safe
-🔴      Weak 1.3       pkg:pypi/requests              Stalled
-✅      —               pkg:npm/some-private-pkg       Active
+STATUS  PURL                           LIFECYCLE       BUILD
+✅      pkg:golang/go.uber.org/zap     Active          Hardened 8.1
+⚠️      pkg:npm/lodash                 Legacy-Safe     Moderate 4.2
+🔴      pkg:pypi/requests              Stalled         Weak 1.3
+✅      pkg:npm/some-private-pkg       Active          —
 ```
 
 `—` indicates Ungraded (no Scorecard or SLSA data available).

@@ -290,7 +290,6 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 	writeHeader := func(tw *tabwriter.Writer) error {
 		var cols []string
 		cols = append(cols, "STATUS")
-		cols = append(cols, "BUILD")
 		if showSource {
 			cols = append(cols, "SOURCE")
 		}
@@ -299,6 +298,7 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 			cols = append(cols, "RELATION")
 		}
 		cols = append(cols, "LIFECYCLE")
+		cols = append(cols, "BUILD")
 		if _, err := fmt.Fprintln(tw, strings.Join(cols, "\t")); err != nil {
 			return fmt.Errorf("failed to write table header: %w", err)
 		}
@@ -314,7 +314,6 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		maintenance, _ := entryMaintenanceEOL(&displayEntries[i], "—")
 		var cols []string
 		cols = append(cols, tableVerdictDisplay(displayEntries[i].Verdict))
-		cols = append(cols, buildIntegrityDisplay(displayEntries[i].Analysis))
 		if showSource {
 			cols = append(cols, sourceDisplayName(displayEntries[i].Source))
 		}
@@ -323,6 +322,7 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 			cols = append(cols, formatRelation(&displayEntries[i]))
 		}
 		cols = append(cols, maintenance)
+		cols = append(cols, buildIntegrityDisplay(displayEntries[i].Analysis))
 		if _, err := fmt.Fprintln(tw, strings.Join(cols, "\t")); err != nil {
 			return fmt.Errorf("failed to write table row: %w", err)
 		}
