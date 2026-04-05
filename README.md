@@ -154,6 +154,7 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | **Dependency tree lifecycle assessment** | No | No | No | **Yes** |
 | **Long Tail EOL detection** | No | No | ~400 projects | **Heuristic + catalog** |
 | **Bot vs. human commit filtering** | No | No | N/A | **Yes** |
+| **GitHub Actions health scanning** | No | No | No | **Yes** |
 | Lifecycle classification granularity | N/A | N/A | Binary (EOL/not) | **7 actionable states** |
 | Batch processing scale | N/A | 1 repo/run | N/A | **5,000+ PURLs/run** |
 
