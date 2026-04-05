@@ -203,20 +203,17 @@ STATUS  PURL                           LIFECYCLE       BUILD
 ┌───────────────────────────────────────────────────────────────┐
 │  pkg:npm/lodash@4.17.21                                       │
 │  Lifecycle: ⚠️ Legacy-Safe    Build Integrity: Moderate 4.2  │
-├───────────────────────────────────────────────────────────────┤
-│  Build Integrity Signals:                                     │
-│    Dangerous Workflow ✅ 10/10  [Critical]                    │
-│    Branch Protection  ⚠️  3/10  [High]  (no required reviews)│
-│    Code Review        ❌  0/10  [High]                        │
-│    Token Permissions  ✅  9/10  [High]                        │
-│    Signed Releases    ❌  0/10  [High]                        │
-│    SLSA Provenance    ❌  —     [High]  (not available)       │
-│    Pinned Deps (CI)   ⚠️  3/10  [Medium]                     │
-│    Packaging          ❌  0/10  [Medium]                      │
+├─ Build Integrity: Moderate 4.2/10 (6/11) ────────────────────┤
+│   Dangerous Workflow 10  Branch Protection    —               │
+│   Code Review         9  Token Permissions    —               │
+│   Binary Artifacts    0  Signed Releases      —               │
+│   SLSA Provenance     —  Pinned Deps          3               │
+│   Packaging           0                                       │
+│   → https://scorecard.dev/viewer/?uri=github.com/lodash/lodash│
 └───────────────────────────────────────────────────────────────┘
 ```
 
-Signals are ordered by weight (Critical → High → Medium) for scanability. Missing signals (marked `—`) are excluded from the score calculation but shown for transparency.
+Signals are displayed in a compact 2-column layout ordered by weight (Critical → High → Medium). Critical/High signals are always shown (including `—` for inconclusive). Medium signals appear only when evaluated. The `(6/11)` in the header indicates how many of the 11 signals were evaluated.
 
 ### Output Schema
 

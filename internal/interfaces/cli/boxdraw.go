@@ -385,8 +385,35 @@ func signalDisplayName(name string) string {
 	}
 }
 
-// writeBoxBuildIntegrity writes the Build Integrity section with signal details.
-// Returns nil without writing if no build integrity data exists or label is Ungraded.
+// buildIntegrityMediumSignals lists medium-tier signals that are only displayed
+// when evaluated (Role == SignalUsed). All other signals are Critical/High
+// and always shown regardless of evaluation status.
+var buildIntegrityMediumSignals = map[string]bool{
+	analysispkg.SignalSAST:                true,
+	analysispkg.SignalPackaging:           true,
+	analysispkg.SignalPinnedDependencies:  true,
+	analysispkg.SignalAttestationVerified: true,
+}
+
+// buildSignalCompactScore extracts a compact score display from a Signal.
+// Returns the numeric part of "N/10", "10" for "verified", or "—" for absent.
+func buildSignalCompactScore(s analysispkg.Signal) string {
+	if s.Role == analysispkg.SignalAbsent {
+		return "—"
+	}
+	if s.Value == "verified" {
+		return "10"
+	}
+	if idx := strings.Index(s.Value, "/"); idx > 0 {
+		return s.Value[:idx]
+	}
+	return s.Value
+}
+
+// writeBoxBuildIntegrity writes the Build Integrity section in a compact
+// 2-column layout. Critical/High signals are always shown (including —).
+// Medium signals are shown only when evaluated. Returns nil without writing
+// if no build integrity data exists or label is Ungraded.
 func writeBoxBuildIntegrity(ctx *boxContext) error {
 	a := ctx.analysis
 	if a == nil {
@@ -397,28 +424,52 @@ func writeBoxBuildIntegrity(ctx *boxContext) error {
 		return nil
 	}
 
+	var evaluated int
+	for _, s := range br.Signals {
+		if s.Role == analysispkg.SignalUsed {
+			evaluated++
+		}
+	}
+	total := len(br.Signals)
+
 	scoreStr := br.Meta["score"]
 	header := br.Label
 	if scoreStr != "" && scoreStr != analysispkg.ScoreUngraded {
-		header = fmt.Sprintf("%s %s/10", br.Label, scoreStr)
+		header = fmt.Sprintf("%s %s/10 (%d/%d)", br.Label, scoreStr, evaluated, total)
 	}
 
 	if err := writeSectionBar(ctx, "Build Integrity: "+header); err != nil {
 		return err
 	}
 
+	// Filter: Critical/High always shown; Medium only when evaluated.
+	var visible []analysispkg.Signal
 	for _, s := range br.Signals {
-		label := buildSignalDisplayName(s.Name)
-		if s.Role == analysispkg.SignalAbsent {
-			if err := writeLine(ctx, "  %-20s —", label); err != nil {
+		if buildIntegrityMediumSignals[s.Name] && s.Role != analysispkg.SignalUsed {
+			continue
+		}
+		visible = append(visible, s)
+	}
+
+	// Render in 2-column layout.
+	const colW = 19
+	for i := 0; i < len(visible); i += 2 {
+		lLabel := buildSignalDisplayName(visible[i].Name)
+		lScore := buildSignalCompactScore(visible[i])
+
+		if i+1 < len(visible) {
+			rLabel := buildSignalDisplayName(visible[i+1].Name)
+			rScore := buildSignalCompactScore(visible[i+1])
+			if err := writeLine(ctx, "  %-*s %2s  %-*s %2s", colW, lLabel, lScore, colW, rLabel, rScore); err != nil {
 				return err
 			}
 		} else {
-			if err := writeLine(ctx, "  %-20s %s", label, s.Value); err != nil {
+			if err := writeLine(ctx, "  %-*s %2s", colW, lLabel, lScore); err != nil {
 				return err
 			}
 		}
 	}
+
 	if a.ScorecardURL != "" {
 		if err := writeLine(ctx, "  → %s", a.ScorecardURL); err != nil {
 			return err
@@ -427,7 +478,7 @@ func writeBoxBuildIntegrity(ctx *boxContext) error {
 	return nil
 }
 
-// buildSignalDisplayName maps build signal machine names to human-readable labels.
+// buildSignalDisplayName maps build signal machine names to compact display labels.
 func buildSignalDisplayName(name string) string {
 	switch name {
 	case analysispkg.SignalDangerousWorkflow:
@@ -449,7 +500,7 @@ func buildSignalDisplayName(name string) string {
 	case analysispkg.SignalPackaging:
 		return "Packaging"
 	case analysispkg.SignalPinnedDependencies:
-		return "Pinned Dependencies"
+		return "Pinned Deps"
 	case analysispkg.SignalAttestationVerified:
 		return "Attestation"
 	default:

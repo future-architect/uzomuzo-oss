@@ -67,18 +67,16 @@ STATUS     PURL                           LIFECYCLE       BUILD
 
 ### Detailed Format
 
-The detail view shows individual signal scores:
+The detail view shows individual signal scores in a compact 2-column layout. Critical/High signals are always shown (including `—` for inconclusive). Medium signals appear only when evaluated. The header shows `(evaluated/total)` checks.
 
 ```
-├─ Build Integrity: Moderate 4.2/10 ────────────────────────
-│   Dangerous Workflow  10/10
-│   Branch Protection    3/10
-│   Code Review          0/10
-│   Token Permissions    9/10
-│   Signed Releases      0/10
-│   SLSA Provenance      —
-│   Pinned Dependencies  3/10
-│   Packaging            0/10
+├─ Build Integrity: Moderate 4.2/10 (6/11) ────────────────
+│   Dangerous Workflow 10  Branch Protection    —
+│   Code Review         9  Token Permissions    —
+│   Binary Artifacts    0  Signed Releases      —
+│   SLSA Provenance     —  Pinned Deps          3
+│   Packaging           0
+│   → https://scorecard.dev/viewer/?uri=github.com/...
 ```
 
 ### JSON Format
