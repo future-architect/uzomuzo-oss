@@ -161,27 +161,3 @@ func (s *IntegrationService) populateReleaseInfo(analysis *domain.Analysis, batc
 		enrich(analysis.ReleaseInfo.RequestedVersion)
 	}
 }
-
-// populateSLSAData extracts SLSA provenance and attestation verification signals
-// from the StableVersion of the batch result (per ADR-0013).
-func (s *IntegrationService) populateSLSAData(analysis *domain.Analysis, batchResult *depsdev.BatchResult) {
-	if batchResult == nil || analysis == nil {
-		return
-	}
-	sv := batchResult.ReleaseInfo.StableVersion
-	if sv.VersionKey.Version == "" {
-		return
-	}
-	for _, p := range sv.SlsaProvenances {
-		if p.Verified {
-			analysis.SLSAVerified = true
-			break
-		}
-	}
-	for _, a := range sv.Attestations {
-		if a.Verified {
-			analysis.AttestationVerified = true
-			break
-		}
-	}
-}

@@ -92,7 +92,6 @@ func (s *IntegrationService) populateAnalysisFromBatchResult(analysis *domain.An
 		slog.Debug("no_project_data", "purl", batchResult.PURL)
 	}
 	s.populateReleaseInfo(analysis, batchResult)
-	s.populateSLSAData(analysis, batchResult)
 	// Populate license information after release info (needs RequestedVersion PURL)
 	s.populateLicenses(analysis, batchResult)
 }

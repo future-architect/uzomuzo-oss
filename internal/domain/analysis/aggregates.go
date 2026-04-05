@@ -89,13 +89,6 @@ type Analysis struct {
 	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
 	TransitiveDepsCount int
 
-	// SLSAVerified is true when at least one SLSA provenance entry for the
-	// StableVersion is verified. Populated from deps.dev Version API.
-	SLSAVerified bool
-	// AttestationVerified is true when at least one attestation entry for the
-	// StableVersion is verified. Populated from deps.dev Version API.
-	AttestationVerified bool
-
 	// Canonical package links (homepage, registry, docs, changelog)
 	PackageLinks *PackageLinks
 
