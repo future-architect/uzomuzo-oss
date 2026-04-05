@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/ghaworkflow"
@@ -251,8 +253,15 @@ func TestDiscoverFromRepo_ContextCancellation(t *testing.T) {
 
 	// Wait until all semaphore slots are occupied (maxFileFetchConcurrency goroutines
 	// are blocking on the gate inside the HTTP handler).
+	deadline := time.After(10 * time.Second)
 	for fetchStarted.Load() < int32(maxFileFetchConcurrency) {
-		// spin — test server handles requests on separate goroutines
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for %d fetches to start (got %d)",
+				maxFileFetchConcurrency, fetchStarted.Load())
+		default:
+			runtime.Gosched()
+		}
 	}
 
 	// Cancel the context. The remaining files (fileCount - maxFileFetchConcurrency)
