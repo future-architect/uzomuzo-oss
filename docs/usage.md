@@ -212,6 +212,20 @@ Output includes a `SOURCE` column to distinguish direct results from discovered 
 
 > **Note:** `--include-actions` is opt-in because it makes additional GitHub API calls to fetch workflow files. It requires `GITHUB_TOKEN` to be set (the Contents API is used to fetch workflow YAML). It is only supported for GitHub URL inputs (not `--sbom` or `--file go.mod`).
 
+#### Transitive Composite Action Scanning
+
+When combined with `--show-transitive`, `--include-actions` recursively resolves composite actions referenced by the discovered workflows. This includes:
+
+- **Remote composite actions**: Actions that reference other Actions via `uses:` in their `action.yml`
+- **Local composite actions**: `./` references resolved via the GitHub Contents API relative to the repository root
+
+```bash
+# Include transitive composite action dependencies
+./uzomuzo scan https://github.com/owner/repo --include-actions --show-transitive
+```
+
+Cycle detection prevents infinite recursion when composite actions reference each other.
+
 ### File Input (PURL/URL list)
 
 List one identifier per line (PURL or GitHub URL) in a text file:
@@ -478,43 +492,6 @@ Use `uzomuzo --help` for the full list, or `uzomuzo scan --help` for scan-specif
 |------------|-------------|
 | `scan` | Scan dependencies for lifecycle health (PURL, GitHub URL, SBOM, go.mod, file, pipe) |
 | `update-spdx` | Update and regenerate the embedded SPDX license list from upstream |
-
-## License CSV Column Reference (`--export-license-csv`)
-
-1 row = 1 PURL (`Analysis`). Version-side licenses are aggregated with **semicolon separators** without adding rows.
-
-| Column | Type | Source / Mapping | Purpose |
-|--------|------|------------------|---------|
-| original_purl | string | `Analysis.OriginalPURL` | Exact user input. Key for matching in reproduction tests / audit logs. |
-| effective_purl | string | `Analysis.EffectivePURL` | Final identifier after resolution. Used for re-fetching and cache keys. |
-| version_resolved | bool(string) | `IsVersionResolved()` | true = version identified. false rows are "latest dependency" with change risk. |
-| project_license_identifier | string | `ProjectLicense.Identifier` | Confirmed project SPDX / normalized identifier. Empty if undetermined. |
-| project_license_raw | string | `ProjectLicense.Raw` | Upstream raw string. Primary source for non-SPDX / notation variation investigation. |
-| project_license_source | string | `ProjectLicense.Source` | License acquisition path. For trust level / improvement priority analysis by source. |
-| project_license_is_spdx | bool | `ProjectLicense.IsSPDX` | true = official SPDX. false with raw present = normalization improvement candidate. |
-| project_license_is_zero | bool | `ProjectLicense.IsZero()` | true = project license absent. Starting point for fallback/promotion decisions. |
-| version_license_identifiers | string(list) | Version slice.Identifier | Version-side SPDX/normalized identifiers (`;` separated). Multi-license overview. |
-| version_license_raws | string(list) | Version slice.Raw | Version-side raw strings (`;`). For checking composite expressions and notation variations. |
-| version_license_sources | string(list) | Version slice.Source | Source list (`;`). For SPDX / non-SPDX ratio analysis. |
-| version_license_count | int | len(slice) | Version-side license count. Dual/multi-license detection. |
-| version_licenses_all_non_spdx | bool | derived | true = all non-SPDX. Priority extraction target for normalization. |
-| version_licenses_any_composite_expr | bool | AND/OR/() detection | true = contains composite conditions (AND/OR). Raises legal review priority. |
-| project_vs_version_mismatch | bool | derived | true = Project SPDX not found in Version set, indicating divergence. |
-| licenses_all_missing_or_nonstandard | bool | derived | true = no confirmed SPDX. Coverage KPI denominator & improvement tracking. |
-| fallback_applied | bool | version source==`project-fallback` | true = Project SPDX copied to Version. Indicates original data gap. |
-| derived_from_version | bool | project source==`derived-from-version` | true = single Version SPDX promoted. Suggests missing Project metadata. |
-| github_override_applied | bool | GitHub override sources | true = GitHub info used preferentially. Override logic triggered. |
-| license_resolution_scenario | string | classifier | License state tag. Filter/pivot starting point. Unknown values can be safely ignored. |
-| error | string | `Analysis.Error` | Analysis failure reason. Non-empty rows should not trust other columns; re-run candidates. |
-| registry_url | string | `PackageLinks.RegistryURL` | Official registry page. Shortcut to original source. |
-| repository_url | string | `RepoURL` | Source repository. Entry point for LICENSE file / update re-fetch. |
-
-Legend:
-
-- `string(list)` uses `;` separator. No in-element `;` expected (escape spec will be added if needed)
-- bool columns output as string `true` / `false`. Convert to boolean on the consumer side
-- "derived" flags (fallback_applied / derived_from_version) indicate algorithm intervention
-- `license_resolution_scenario` may have new labels added in the future. Ignore unknown values or bucket as "other"
 
 ## Analysis Precision and `GITHUB_TOKEN`
 

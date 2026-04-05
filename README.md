@@ -128,12 +128,15 @@ uzomuzo scan --format json       # JSON output for CI integration
 # CI gate: exit 1 if any EOL dependency found
 uzomuzo scan --sbom bom.json --fail-on eol-confirmed
 
-# Batch from Trivy SBOM
+# Batch from Trivy SBOM (show only packages that need replacement)
 trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
-  | uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective
+  | uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective --show-only replace
 
 # Scan a repo's GitHub Actions dependencies
 uzomuzo scan https://github.com/owner/repo --include-actions
+
+# Scan a workflow YAML directly
+uzomuzo scan --file .github/workflows/ci.yml
 
 # File input (one PURL per line)
 uzomuzo scan --file input_purls.txt --sample 500
@@ -179,6 +182,7 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | **Ecosystem-aware delivery model** | Go modules deliver via VCS-direct; npm via registry publish. The same "commits without publish" signal means different things per ecosystem. |
 | **Evidence trails** | Every label includes a reason string and decision trace, so security teams can audit *why* a package was flagged. |
 | **Graduated precision** | Works without GitHub token (deps.dev only); adding a token unlocks commit history and Scorecard for high-precision assessment. |
+| **GitHub Actions supply chain scanning** | CI/CD workflows depend on third-party Actions that are themselves OSS. uzomuzo extracts `uses:` directives, recursively resolves composite actions (including local `./` references), and evaluates each Action's lifecycle. |
 
 <details>
 <summary><strong>Sample Output — All lifecycle states (detailed format)</strong></summary>
