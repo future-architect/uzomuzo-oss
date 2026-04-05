@@ -57,8 +57,8 @@ jobs:
       - name: Install trivy (manual trigger only)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/75c4dc0f45c5d7ffd05ae26df1e0c666787bdf2a/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin v0.69.3
 
       - name: Update doc examples (manual — including juice-shop)
         if: github.event_name == 'workflow_dispatch'
