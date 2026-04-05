@@ -8,17 +8,16 @@ import (
 
 // Build integrity signal names (machine-friendly identifiers).
 const (
-	SignalDangerousWorkflow    = "dangerous_workflow"
-	SignalBranchProtection     = "branch_protection"
-	SignalCodeReview           = "code_review"
-	SignalTokenPermissions     = "token_permissions"
-	SignalBinaryArtifacts      = "binary_artifacts"
-	SignalSignedReleases       = "signed_releases"
-	SignalSAST                 = "sast"
-	SignalPackaging            = "packaging"
-	SignalPinnedDependencies   = "pinned_dependencies"
-	SignalSLSAVerified         = "slsa_verified"
-	SignalAttestationVerified  = "attestation_verified"
+	SignalDangerousWorkflow   = "dangerous_workflow"
+	SignalBranchProtection    = "branch_protection"
+	SignalCodeReview          = "code_review"
+	SignalTokenPermissions    = "token_permissions"
+	SignalBinaryArtifacts     = "binary_artifacts"
+	SignalSignedReleases      = "signed_releases"
+	SignalPackaging           = "packaging"
+	SignalPinnedDependencies  = "pinned_dependencies"
+	SignalSLSAVerified        = "slsa_verified"
+	SignalAttestationVerified = "attestation_verified"
 
 	// ScoreUngraded is the sentinel value stored in Meta["score"] for Ungraded results.
 	ScoreUngraded = "-1"
@@ -31,8 +30,16 @@ type buildSignalDef struct {
 	Weight         float64
 }
 
-// buildSignals defines all 11 signals ordered by weight (Critical > High > Medium).
+// minEvaluatedSignals is the minimum number of evaluated signals required
+// for a grade. Below this threshold, the result is Ungraded to prevent
+// inflated scores from a small number of "easy" checks.
+const minEvaluatedSignals = 3
+
+// buildSignals defines all 10 signals ordered by weight (Critical > High > Medium).
 // Weights are aligned with OpenSSF Scorecard risk-level weights (ADR-0013).
+//
+// SAST is excluded: like Fuzzing, it is a code quality tool rather than a build
+// tamper resistance measure. Attackers do not optimize malware for SAST rules.
 var buildSignals = []buildSignalDef{
 	{SignalDangerousWorkflow, "Dangerous-Workflow", 10.0},   // Critical
 	{SignalBranchProtection, "Branch-Protection", 7.5},      // High
@@ -41,7 +48,6 @@ var buildSignals = []buildSignalDef{
 	{SignalBinaryArtifacts, "Binary-Artifacts", 7.5},        // High
 	{SignalSignedReleases, "Signed-Releases", 7.5},          // High
 	{SignalSLSAVerified, "", 7.5},                           // High (editorial)
-	{SignalSAST, "SAST", 5.0},                               // Medium
 	{SignalPackaging, "Packaging", 5.0},                     // Medium
 	{SignalPinnedDependencies, "Pinned-Dependencies", 5.0},  // Medium
 	{SignalAttestationVerified, "", 5.0},                     // Medium (editorial)
@@ -105,12 +111,32 @@ func (s *BuildHealthAssessorService) Assess(ctx context.Context, in AssessmentIn
 		}
 	}
 
-	if totalWeight == 0 {
+	// Count evaluated signals for minimum threshold check.
+	var evaluatedCount int
+	for _, s := range signals {
+		if s.Role == SignalUsed {
+			evaluatedCount++
+		}
+	}
+
+	if evaluatedCount == 0 {
 		trace = append(trace, "no build signals available -> Ungraded")
 		return &AssessmentResult{
 			Axis:    BuildHealthAxis,
 			Label:   string(BuildLabelUngraded),
 			Reason:  "No build integrity data available",
+			Trace:   trace,
+			Signals: signals,
+			Meta:    map[string]string{"score": ScoreUngraded},
+		}, nil
+	}
+
+	if evaluatedCount < minEvaluatedSignals {
+		trace = append(trace, fmt.Sprintf("only %d/%d signals evaluated (min %d) -> Ungraded", evaluatedCount, len(signals), minEvaluatedSignals))
+		return &AssessmentResult{
+			Axis:    BuildHealthAxis,
+			Label:   string(BuildLabelUngraded),
+			Reason:  fmt.Sprintf("Too few signals evaluated (%d/%d, min %d)", evaluatedCount, len(signals), minEvaluatedSignals),
 			Trace:   trace,
 			Signals: signals,
 			Meta:    map[string]string{"score": ScoreUngraded},

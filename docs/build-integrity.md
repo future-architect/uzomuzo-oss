@@ -40,7 +40,6 @@ Weights are aligned with Scorecard's official risk levels (Critical=10, High=7.5
 | Binary Artifacts | Scorecard | High | 7.5 |
 | Signed Releases | Scorecard | High | 7.5 |
 | SLSA Provenance | deps.dev | High* | 7.5 |
-| SAST | Scorecard | Medium | 5.0 |
 | Packaging | Scorecard | Medium | 5.0 |
 | Pinned Dependencies | Scorecard | Medium | 5.0 |
 | Attestation | deps.dev | Medium* | 5.0 |
@@ -50,6 +49,8 @@ Weights are aligned with Scorecard's official risk levels (Critical=10, High=7.5
 ### Missing Signal Handling
 
 Missing or inconclusive signals are **excluded** from both numerator and denominator, following Scorecard's own convention. A missing signal is not penalized — it means "we don't know", not "the protection is absent".
+
+A minimum of **3 evaluated signals** is required for grading. Below this threshold, the result is `Ungraded` to prevent inflated scores from a small number of checks.
 
 ## CLI Output
 

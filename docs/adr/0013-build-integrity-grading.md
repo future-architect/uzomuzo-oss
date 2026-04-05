@@ -77,7 +77,6 @@ All Scorecard checks use their official risk-level weight. SLSA Provenance and A
 | `Binary-Artifacts` | Scorecard | High | **7.5** | Unreviewable code in repository |
 | `Signed-Releases` | Scorecard | High | **7.5** | Artifact tampering post-build |
 | SLSA Provenance `Verified` | deps.dev | High* | **7.5** | Unverifiable artifact provenance |
-| `SAST` | Scorecard | Medium | **5.0** | Automated detection of malicious patterns |
 | `Packaging` | Scorecard | Medium | **5.0** | Local (untrusted) build environment |
 | `Pinned-Dependencies` | Scorecard | Medium | **5.0** | CI dependency substitution |
 | Attestation `Verified` | deps.dev | Medium* | **5.0** | Unverifiable build attestation |
@@ -92,6 +91,7 @@ All Scorecard checks use their official risk-level weight. SLSA Provenance and A
 | `Vulnerabilities` | High | Already used by lifecycle assessment |
 | `Dependency-Update-Tool` | High | Dependency freshness, not build integrity |
 | `Webhooks` | Critical | Not available via deps.dev API |
+| `SAST` | Medium | Code quality, not build tamper resistance (same rationale as Fuzzing) |
 | `Fuzzing` | Medium | Code quality, not build integrity |
 | `Security-Policy` | Medium | Process documentation, not build integrity |
 | `SBOM` | Medium | Transparency, not tamper resistance |
@@ -114,7 +114,7 @@ Where:
 - Attestation Verified: `score_i` = 10 if any attestation is verified, 0 otherwise
 - Missing/inconclusive checks: **excluded from both numerator and denominator** (same as Scorecard behavior)
 
-If **no signals at all** are available, the label is `Ungraded`.
+If fewer than **3 signals** are evaluated, the label is `Ungraded`. This prevents inflated scores from a small number of "easy" checks (e.g., Dangerous-Workflow + Binary-Artifacts alone could yield 10.0 Hardened despite no branch protection, code review, or signing). The threshold of 3 was validated against 100 popular OSS projects: it preserves grades for Go stdlib (3 evaluated), Kubernetes (3), and Linux kernel (3) while correctly marking projects with only 1-2 evaluated signals as insufficient.
 
 **Example calculation** for a package with Branch-Protection=8, Code-Review=7, Dangerous-Workflow=10, Pinned-Dependencies=3, no SLSA:
 

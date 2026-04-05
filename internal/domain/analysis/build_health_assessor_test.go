@@ -23,7 +23,6 @@ func TestBuildHealthAssessorService_Assess(t *testing.T) {
 				"Token-Permissions":  NewScoreEntity("Token-Permissions", 9, 10, ""),
 				"Binary-Artifacts":   NewScoreEntity("Binary-Artifacts", 10, 10, ""),
 				"Signed-Releases":    NewScoreEntity("Signed-Releases", 8, 10, ""),
-				"SAST":               NewScoreEntity("SAST", 7, 10, ""),
 				"Packaging":          NewScoreEntity("Packaging", 8, 10, ""),
 				"Pinned-Dependencies": NewScoreEntity("Pinned-Dependencies", 7, 10, ""),
 			},
@@ -40,7 +39,6 @@ func TestBuildHealthAssessorService_Assess(t *testing.T) {
 				"Token-Permissions":  NewScoreEntity("Token-Permissions", 0, 10, ""),
 				"Binary-Artifacts":   NewScoreEntity("Binary-Artifacts", 0, 10, ""),
 				"Signed-Releases":    NewScoreEntity("Signed-Releases", 0, 10, ""),
-				"SAST":               NewScoreEntity("SAST", 0, 10, ""),
 				"Packaging":          NewScoreEntity("Packaging", 0, 10, ""),
 				"Pinned-Dependencies": NewScoreEntity("Pinned-Dependencies", 0, 10, ""),
 			},
@@ -62,35 +60,48 @@ func TestBuildHealthAssessorService_Assess(t *testing.T) {
 		{
 			name: "partial_signals_moderate",
 			scores: map[string]*ScoreEntity{
-				"Branch-Protection": NewScoreEntity("Branch-Protection", 5, 10, ""),
-				"Code-Review":       NewScoreEntity("Code-Review", 6, 10, ""),
+				"Branch-Protection":  NewScoreEntity("Branch-Protection", 5, 10, ""),
+				"Code-Review":        NewScoreEntity("Code-Review", 6, 10, ""),
+				"Dangerous-Workflow": NewScoreEntity("Dangerous-Workflow", 8, 10, ""),
 			},
 			wantLabel: string(BuildLabelModerate),
 		},
 		{
-			name:      "slsa_only_hardened",
+			name:      "slsa_only_ungraded",
 			scores:    map[string]*ScoreEntity{},
 			slsa:      true,
-			wantLabel: string(BuildLabelHardened),
-			wantScore: "10.0",
+			wantLabel: string(BuildLabelUngraded),
+			wantScore: "-1", // 1 signal < minEvaluatedSignals (3)
 		},
 		{
 			name: "score_zero_vs_absent",
 			scores: map[string]*ScoreEntity{
 				"Dangerous-Workflow": NewScoreEntity("Dangerous-Workflow", 0, 10, ""),
-				// Other checks absent — excluded from denominator
+				"Branch-Protection":  NewScoreEntity("Branch-Protection", 0, 10, ""),
+				"Code-Review":        NewScoreEntity("Code-Review", 0, 10, ""),
 			},
 			wantLabel: string(BuildLabelWeak),
 			wantScore: "0.0",
+		},
+		{
+			name: "below_min_signals_ungraded",
+			scores: map[string]*ScoreEntity{
+				"Dangerous-Workflow": NewScoreEntity("Dangerous-Workflow", -1, 10, "inconclusive"),
+				"Branch-Protection":  NewScoreEntity("Branch-Protection", 8, 10, ""),
+			},
+			wantLabel: string(BuildLabelUngraded),
+			wantScore: "-1", // 1 evaluated < minEvaluatedSignals (3)
 		},
 		{
 			name: "inconclusive_check_excluded",
 			scores: map[string]*ScoreEntity{
 				"Dangerous-Workflow": NewScoreEntity("Dangerous-Workflow", -1, 10, "inconclusive"),
 				"Branch-Protection":  NewScoreEntity("Branch-Protection", 8, 10, ""),
+				"Code-Review":        NewScoreEntity("Code-Review", 9, 10, ""),
+				"Token-Permissions":  NewScoreEntity("Token-Permissions", 7, 10, ""),
 			},
 			wantLabel: string(BuildLabelHardened),
-			wantScore: "8.0", // only Branch-Protection counts
+			wantScore: "8.0", // 3 evaluated, Dangerous-Workflow excluded
 		},
 		{
 			name: "example_from_adr",
@@ -143,7 +154,9 @@ func TestBuildHealthAssessorService_Assess(t *testing.T) {
 func TestBuildHealthAssessorService_SignalCount(t *testing.T) {
 	svc := NewBuildHealthAssessorService()
 	scores := map[string]*ScoreEntity{
-		"Branch-Protection": NewScoreEntity("Branch-Protection", 5, 10, ""),
+		"Branch-Protection":  NewScoreEntity("Branch-Protection", 5, 10, ""),
+		"Code-Review":        NewScoreEntity("Code-Review", 6, 10, ""),
+		"Dangerous-Workflow": NewScoreEntity("Dangerous-Workflow", 8, 10, ""),
 	}
 	res, err := svc.Assess(context.Background(), AssessmentInput{
 		Analysis: &Analysis{},
@@ -152,9 +165,9 @@ func TestBuildHealthAssessorService_SignalCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Should have 11 signals total (1 used + 10 absent)
-	if len(res.Signals) != 11 {
-		t.Errorf("signal count = %d, want 11", len(res.Signals))
+	// Should have 10 signals total (3 used + 7 absent)
+	if len(res.Signals) != 10 {
+		t.Errorf("signal count = %d, want 10", len(res.Signals))
 	}
 	usedCount := 0
 	for _, s := range res.Signals {
@@ -162,7 +175,7 @@ func TestBuildHealthAssessorService_SignalCount(t *testing.T) {
 			usedCount++
 		}
 	}
-	if usedCount != 1 {
-		t.Errorf("used signal count = %d, want 1", usedCount)
+	if usedCount != 3 {
+		t.Errorf("used signal count = %d, want 3", usedCount)
 	}
 }

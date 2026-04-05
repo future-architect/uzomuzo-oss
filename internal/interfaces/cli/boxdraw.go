@@ -389,7 +389,6 @@ func signalDisplayName(name string) string {
 // when evaluated (Role == SignalUsed). All other signals are Critical/High
 // and always shown regardless of evaluation status.
 var buildIntegrityMediumSignals = map[string]bool{
-	analysispkg.SignalSAST:                true,
 	analysispkg.SignalPackaging:           true,
 	analysispkg.SignalPinnedDependencies:  true,
 	analysispkg.SignalAttestationVerified: true,
@@ -495,8 +494,6 @@ func buildSignalDisplayName(name string) string {
 		return "Signed Releases"
 	case analysispkg.SignalSLSAVerified:
 		return "SLSA Provenance"
-	case analysispkg.SignalSAST:
-		return "SAST"
 	case analysispkg.SignalPackaging:
 		return "Packaging"
 	case analysispkg.SignalPinnedDependencies:
