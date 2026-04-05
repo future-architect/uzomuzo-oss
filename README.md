@@ -149,11 +149,12 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 
 | Capability | Trivy / Syft | OpenSSF Scorecard | endoflife.date | **uzomuzo** |
 | --- | --- | --- | --- | --- |
-| Known vulnerability scanning | Yes | Partial | No | No (uses Scorecard) |
+| Known vulnerability scanning | Yes | Partial | No | Partial (via deps.dev) |
 | Single-repo health scoring | No | Yes (17 checks) | No | Yes (via Scorecard) |
 | **Dependency tree lifecycle assessment** | No | No | No | **Yes** |
-| **Long Tail EOL detection** | No | No | ~400 projects | **Heuristic + catalog** |
+| **Long Tail EOL detection** | No | No | ~400 projects | **Multi-signal heuristic** |
 | **Bot vs. human commit filtering** | No | No | N/A | **Yes** |
+| **GitHub Actions health scanning** | No | No | No | **Yes** |
 | Lifecycle classification granularity | N/A | N/A | Binary (EOL/not) | **7 actionable states** |
 | Batch processing scale | N/A | 1 repo/run | N/A | **5,000+ PURLs/run** |
 
