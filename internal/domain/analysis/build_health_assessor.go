@@ -52,7 +52,7 @@ var buildSignals = []buildSignalDef{
 }
 
 // BuildHealthAssessorService evaluates build pipeline tamper resistance
-// using OpenSSF Scorecard checks and SLSA provenance data.
+// using OpenSSF Scorecard checks.
 //
 // DDD Layer: Domain (pure business rules)
 type BuildHealthAssessorService struct{}
@@ -84,8 +84,8 @@ func (s *BuildHealthAssessorService) Assess(ctx context.Context, in AssessmentIn
 
 	// Count evaluated signals for minimum threshold check.
 	var evaluatedCount int
-	for _, s := range signals {
-		if s.Role == SignalUsed {
+	for _, sig := range signals {
+		if sig.Role == SignalUsed {
 			evaluatedCount++
 		}
 	}
