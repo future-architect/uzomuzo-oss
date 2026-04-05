@@ -101,14 +101,15 @@ func looksLikeGoMod(filePath string) bool {
 	}
 	buf = buf[:n]
 
-	// A valid go.mod starts with optional comments/whitespace then "module <path>".
-	// Check for "module " at the start of any line.
+	// A valid go.mod starts with optional comments/whitespace then a "module" directive.
+	// Check whether the first non-comment line starts with the "module" directive token.
 	for _, line := range bytes.Split(buf, []byte("\n")) {
 		line = bytes.TrimSpace(line)
 		if len(line) == 0 || line[0] == '/' {
 			continue // skip empty lines and comments
 		}
-		return bytes.HasPrefix(line, []byte("module "))
+		fields := bytes.Fields(line)
+		return len(fields) > 0 && bytes.Equal(fields[0], []byte("module"))
 	}
 	return false
 }

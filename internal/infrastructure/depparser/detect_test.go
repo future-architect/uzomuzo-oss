@@ -141,6 +141,11 @@ func TestDetectFileParser_ContentSniffing(t *testing.T) {
 			content:    "\n\n\nmodule example.com/bar\n",
 			wantParser: true,
 		},
+		{
+			name:       "go.mod with tab after module",
+			content:    "module\texample.com/foo\n\ngo 1.21\n",
+			wantParser: true,
+		},
 	}
 
 	for _, tt := range tests {
