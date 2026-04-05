@@ -159,7 +159,7 @@ func BuildLifecycleSummary(a *Analysis) LifecycleSummary {
 		copy(ls.EOLEvidences, a.EOL.Evidences)
 	}
 	if lr := a.GetLifecycleResult(); lr != nil {
-		ls.MaintenanceStatus = lr.Label
+		ls.MaintenanceStatus = domain.MaintenanceStatus(lr.Label)
 		ls.LifecycleReason = lr.Reason
 	}
 	return ls

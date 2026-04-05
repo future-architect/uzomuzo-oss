@@ -385,6 +385,73 @@ func signalDisplayName(name string) string {
 	}
 }
 
+// writeBoxBuildIntegrity writes the Build Integrity section with signal details.
+// Returns nil without writing if no build integrity data exists or label is Ungraded.
+func writeBoxBuildIntegrity(ctx *boxContext) error {
+	a := ctx.analysis
+	if a == nil {
+		return nil
+	}
+	br := a.GetBuildHealthResult()
+	if br == nil || br.Label == string(analysispkg.BuildLabelUngraded) || br.Label == "" {
+		return nil
+	}
+
+	scoreStr := br.Meta["score"]
+	header := br.Label
+	if scoreStr != "" && scoreStr != "-1" {
+		header = fmt.Sprintf("%s %s/10", br.Label, scoreStr)
+	}
+
+	if err := writeSectionBar(ctx, "Build Integrity: "+header); err != nil {
+		return err
+	}
+
+	for _, s := range br.Signals {
+		label := buildSignalDisplayName(s.Name)
+		if s.Role == analysispkg.SignalAbsent {
+			if err := writeLine(ctx, "  %s  —", label); err != nil {
+				return err
+			}
+		} else {
+			if err := writeLine(ctx, "  %s  %s", label, s.Value); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// buildSignalDisplayName maps build signal machine names to human-readable labels.
+func buildSignalDisplayName(name string) string {
+	switch name {
+	case analysispkg.SignalDangerousWorkflow:
+		return "Dangerous Workflow"
+	case analysispkg.SignalBranchProtection:
+		return "Branch Protection "
+	case analysispkg.SignalCodeReview:
+		return "Code Review       "
+	case analysispkg.SignalTokenPermissions:
+		return "Token Permissions  "
+	case analysispkg.SignalBinaryArtifacts:
+		return "Binary Artifacts   "
+	case analysispkg.SignalSignedReleases:
+		return "Signed Releases    "
+	case analysispkg.SignalSLSAVerified:
+		return "SLSA Provenance    "
+	case analysispkg.SignalSAST:
+		return "SAST               "
+	case analysispkg.SignalPackaging:
+		return "Packaging          "
+	case analysispkg.SignalPinnedDependencies:
+		return "Pinned Dependencies"
+	case analysispkg.SignalAttestationVerified:
+		return "Attestation        "
+	default:
+		return name
+	}
+}
+
 // writeBoxOrigin writes the Origin section (source, relation, via).
 // Returns nil without writing for direct PURLs with direct/unknown relation (no provenance noise).
 // Only shown for action/transitive entries where origin context is meaningful.
@@ -427,7 +494,7 @@ func writeBoxVerdict(ctx *boxContext) error {
 	// Use lifecycle label and reason if available
 	if ctx.analysis != nil {
 		if lr := ctx.analysis.GetLifecycleResult(); lr != nil {
-			label = string(lr.Label)
+			label = lr.Label
 			reason = lr.Reason
 		}
 	}
@@ -900,6 +967,7 @@ func renderBoxEntry(w io.Writer, entry *domainaudit.AuditEntry) error {
 		func() error { return writeBoxIdentity(ctx) },
 		func() error { return writeBoxVerdict(ctx) },
 		func() error { return writeBoxSignals(ctx) },
+		func() error { return writeBoxBuildIntegrity(ctx) },
 		func() error { return writeBoxOrigin(ctx) },
 		func() error { return writeBoxEOL(ctx) },
 		func() error { return writeBoxHealth(ctx) },

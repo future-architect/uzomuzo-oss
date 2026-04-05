@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -57,13 +58,22 @@ func filterEntriesByVerdict(entries []domainaudit.AuditEntry, allowed map[domain
 	return filtered
 }
 
+// buildIntegritySummary holds build integrity label counts for JSON output.
+type buildIntegritySummary struct {
+	Hardened int `json:"hardened"`
+	Moderate int `json:"moderate"`
+	Weak     int `json:"weak"`
+	Ungraded int `json:"ungraded"`
+}
+
 // jsonSummary holds verdict counts for JSON output.
 type jsonSummary struct {
-	Total   int `json:"total"`
-	OK      int `json:"ok"`
-	Caution int `json:"caution"`
-	Replace int `json:"replace"`
-	Review  int `json:"review"`
+	Total          int                   `json:"total"`
+	OK             int                   `json:"ok"`
+	Caution        int                   `json:"caution"`
+	Replace        int                   `json:"replace"`
+	Review         int                   `json:"review"`
+	BuildIntegrity buildIntegritySummary `json:"build_integrity"`
 }
 
 // entryMaintenanceEOL extracts maintenance status and EOL state from an audit entry.
@@ -75,7 +85,7 @@ func entryMaintenanceEOL(e *domainaudit.AuditEntry, placeholder string) (mainten
 	return placeholder, placeholder
 }
 
-// computeSummary counts verdict occurrences across audit entries.
+// computeSummary counts verdict and build integrity occurrences across audit entries.
 func computeSummary(entries []domainaudit.AuditEntry) jsonSummary {
 	var s jsonSummary
 	s.Total = len(entries)
@@ -89,6 +99,24 @@ func computeSummary(entries []domainaudit.AuditEntry) jsonSummary {
 			s.Replace++
 		case domainaudit.VerdictReview:
 			s.Review++
+		}
+		if e.Analysis != nil {
+			if br := e.Analysis.GetBuildHealthResult(); br != nil {
+				switch domain.BuildIntegrityLabel(br.Label) {
+				case domain.BuildLabelHardened:
+					s.BuildIntegrity.Hardened++
+				case domain.BuildLabelModerate:
+					s.BuildIntegrity.Moderate++
+				case domain.BuildLabelWeak:
+					s.BuildIntegrity.Weak++
+				default:
+					s.BuildIntegrity.Ungraded++
+				}
+			} else {
+				s.BuildIntegrity.Ungraded++
+			}
+		} else {
+			s.BuildIntegrity.Ungraded++
 		}
 	}
 	return s
@@ -262,6 +290,7 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 	writeHeader := func(tw *tabwriter.Writer) error {
 		var cols []string
 		cols = append(cols, "STATUS")
+		cols = append(cols, "BUILD")
 		if showSource {
 			cols = append(cols, "SOURCE")
 		}
@@ -285,6 +314,7 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		maintenance, _ := entryMaintenanceEOL(&displayEntries[i], "—")
 		var cols []string
 		cols = append(cols, tableVerdictDisplay(displayEntries[i].Verdict))
+		cols = append(cols, buildIntegrityDisplay(displayEntries[i].Analysis))
 		if showSource {
 			cols = append(cols, sourceDisplayName(displayEntries[i].Source))
 		}
@@ -323,12 +353,30 @@ func renderSummaryBox(w io.Writer, allEntries []domainaudit.AuditEntry, shownCou
 	return nil
 }
 
+// buildIntegrityDisplay returns the BUILD column text for table output.
+// Format: "Label score" (e.g., "Hardened 8.1") or "—" for Ungraded/missing.
+func buildIntegrityDisplay(a *domain.Analysis) string {
+	if a == nil {
+		return "—"
+	}
+	br := a.GetBuildHealthResult()
+	if br == nil || br.Label == "" || br.Label == string(domain.BuildLabelUngraded) {
+		return "—"
+	}
+	if scoreStr, ok := br.Meta["score"]; ok && scoreStr != "-1" {
+		return fmt.Sprintf("%s %s", br.Label, scoreStr)
+	}
+	return br.Label
+}
+
 // enrichedJSONEntry is the DTO for --format json with full analysis data.
 type enrichedJSONEntry struct {
-	PURL      string `json:"purl"`
-	Verdict   string `json:"verdict"`
-	Lifecycle string `json:"lifecycle"`
-	Successor string `json:"successor,omitempty"`
+	PURL               string   `json:"purl"`
+	Verdict            string   `json:"verdict"`
+	Lifecycle          string   `json:"lifecycle"`
+	BuildIntegrity     string   `json:"build_integrity,omitempty"`
+	BuildIntegrityScore *float64 `json:"build_integrity_score,omitempty"`
+	Successor          string   `json:"successor,omitempty"`
 
 	RepoURL         string   `json:"repo_url,omitempty"`
 	Archived        bool     `json:"archived,omitempty"`
@@ -446,6 +494,14 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	if lr := a.GetLifecycleResult(); lr != nil {
 		je.Reason = lr.Reason
 	}
+	if br := a.GetBuildHealthResult(); br != nil {
+		je.BuildIntegrity = br.Label
+		if scoreStr, ok := br.Meta["score"]; ok && scoreStr != "-1" {
+			if score, err := strconv.ParseFloat(scoreStr, 64); err == nil {
+				je.BuildIntegrityScore = &score
+			}
+		}
+	}
 
 	return je
 }
@@ -458,7 +514,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	if showRelation {
 		header = append(header, "relation", "relation_via")
 	}
-	header = append(header, "lifecycle", "successor", "advisory_count", "max_advisory_severity", "max_cvss3_score",
+	header = append(header, "lifecycle", "build_integrity", "build_integrity_score", "successor", "advisory_count", "max_advisory_severity", "max_cvss3_score",
 		"direct_advisory_count", "transitive_advisory_count", "max_transitive_advisory_severity", "max_transitive_cvss3_score",
 		"repo_url", "source", "via")
 	if err := cw.Write(header); err != nil {
@@ -497,11 +553,22 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 			}
 		}
 
+		buildIntegrity := ""
+		buildIntegrityScore := ""
+		if a := e.Analysis; a != nil {
+			if br := a.GetBuildHealthResult(); br != nil {
+				buildIntegrity = br.Label
+				if scoreStr, ok := br.Meta["score"]; ok && scoreStr != "-1" {
+					buildIntegrityScore = scoreStr
+				}
+			}
+		}
+
 		row := []string{string(e.Verdict), e.PURL}
 		if showRelation {
 			row = append(row, e.Relation.String(), strings.Join(e.ViaParents, ";"))
 		}
-		row = append(row, maintenance, successor, advisoryCount, maxSeverity, maxCVSS3Score,
+		row = append(row, maintenance, buildIntegrity, buildIntegrityScore, successor, advisoryCount, maxSeverity, maxCVSS3Score,
 			directAdvisoryCount, transitiveAdvisoryCount, maxTransitiveSeverity, maxTransitiveCVSS3Score,
 			repoURL, string(e.Source), e.Via)
 		if err := cw.Write(row); err != nil {

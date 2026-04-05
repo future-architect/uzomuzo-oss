@@ -98,7 +98,7 @@ func TestAnalysis_EnsureCanonical(t *testing.T) {
 }
 
 func TestAnalysis_FinalMaintenanceStatus(t *testing.T) {
-	lr := &AssessmentResult{Axis: LifecycleAxis, Label: LabelStalled}
+	lr := &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelStalled)}
 	scheduledAt := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name string

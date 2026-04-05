@@ -13,7 +13,7 @@ func makeAnalysisWithLabel(label analysis.MaintenanceStatus) *analysis.Analysis 
 		AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
 			analysis.LifecycleAxis: {
 				Axis:  analysis.LifecycleAxis,
-				Label: label,
+				Label: string(label),
 			},
 		},
 	}
@@ -38,6 +38,74 @@ func TestDeriveVerdict(t *testing.T) {
 		{name: "eol_scheduled_label", a: makeAnalysisWithLabel(analysis.LabelEOLScheduled), want: audit.VerdictCaution},
 		{name: "review_needed", a: makeAnalysisWithLabel(analysis.LabelReviewNeeded), want: audit.VerdictReview},
 		{name: "no_lifecycle_result", a: &analysis.Analysis{}, want: audit.VerdictReview},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := audit.DeriveVerdict(tt.a)
+			if got != tt.want {
+				t.Errorf("DeriveVerdict() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func makeAnalysisWithBuild(lifecycleLabel analysis.MaintenanceStatus, buildLabel analysis.BuildIntegrityLabel) *analysis.Analysis {
+	return &analysis.Analysis{
+		AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
+			analysis.LifecycleAxis: {
+				Axis:  analysis.LifecycleAxis,
+				Label: string(lifecycleLabel),
+			},
+			analysis.BuildHealthAxis: {
+				Axis:  analysis.BuildHealthAxis,
+				Label: string(buildLabel),
+				Meta:  map[string]string{"score": "5.0"},
+			},
+		},
+	}
+}
+
+func TestDeriveVerdict_BuildIntegrity(t *testing.T) {
+	tests := []struct {
+		name string
+		a    *analysis.Analysis
+		want audit.Verdict
+	}{
+		{
+			name: "active_hardened_ok",
+			a:    makeAnalysisWithBuild(analysis.LabelActive, analysis.BuildLabelHardened),
+			want: audit.VerdictOK,
+		},
+		{
+			name: "active_moderate_caution",
+			a:    makeAnalysisWithBuild(analysis.LabelActive, analysis.BuildLabelModerate),
+			want: audit.VerdictCaution,
+		},
+		{
+			name: "active_weak_replace",
+			a:    makeAnalysisWithBuild(analysis.LabelActive, analysis.BuildLabelWeak),
+			want: audit.VerdictReplace,
+		},
+		{
+			name: "active_ungraded_ok",
+			a:    makeAnalysisWithBuild(analysis.LabelActive, analysis.BuildLabelUngraded),
+			want: audit.VerdictOK,
+		},
+		{
+			name: "stalled_hardened_caution",
+			a:    makeAnalysisWithBuild(analysis.LabelStalled, analysis.BuildLabelHardened),
+			want: audit.VerdictCaution,
+		},
+		{
+			name: "stalled_ungraded_caution",
+			a:    makeAnalysisWithBuild(analysis.LabelStalled, analysis.BuildLabelUngraded),
+			want: audit.VerdictCaution,
+		},
+		{
+			name: "eol_hardened_replace",
+			a:    makeAnalysisWithBuild(analysis.LabelEOLConfirmed, analysis.BuildLabelHardened),
+			want: audit.VerdictReplace,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

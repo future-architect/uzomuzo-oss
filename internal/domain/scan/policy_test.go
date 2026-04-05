@@ -46,7 +46,7 @@ func TestFailPolicy_Evaluate(t *testing.T) {
 			PURL: "pkg:npm/test@1.0.0",
 			Analysis: &analysis.Analysis{
 				AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
-					analysis.LifecycleAxis: {Label: label},
+					analysis.LifecycleAxis: {Label: string(label)},
 				},
 			},
 			Verdict: domainaudit.VerdictOK,

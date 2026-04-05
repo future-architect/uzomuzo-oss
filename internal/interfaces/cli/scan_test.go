@@ -38,7 +38,7 @@ func TestNewEnrichedJSONEntry_WithAnalysis(t *testing.T) {
 		EOL:            analysis.EOLStatus{State: analysis.EOLEndOfLife, Successor: "pkg:npm/fastify"},
 		ProjectLicense: analysis.ResolvedLicense{Identifier: "MIT"},
 		AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
-			analysis.LifecycleAxis: {Label: analysis.LabelEOLConfirmed, Reason: "EOL confirmed"},
+			analysis.LifecycleAxis: {Label: string(analysis.LabelEOLConfirmed), Reason: "EOL confirmed"},
 		},
 	}
 

@@ -89,6 +89,13 @@ type Analysis struct {
 	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
 	TransitiveDepsCount int
 
+	// SLSAVerified is true when at least one SLSA provenance entry for the
+	// StableVersion is verified. Populated from deps.dev Version API.
+	SLSAVerified bool
+	// AttestationVerified is true when at least one attestation entry for the
+	// StableVersion is verified. Populated from deps.dev Version API.
+	AttestationVerified bool
+
 	// Canonical package links (homepage, registry, docs, changelog)
 	PackageLinks *PackageLinks
 
@@ -376,9 +383,17 @@ func (a *Analysis) FinalMaintenanceStatus() MaintenanceStatus {
 		return LabelEOLScheduled
 	}
 	if lr := a.GetLifecycleResult(); lr != nil {
-		return lr.Label
+		return MaintenanceStatus(lr.Label)
 	}
 	return LabelReviewNeeded
+}
+
+// GetBuildHealthResult returns the build_health axis assessment if present.
+func (a *Analysis) GetBuildHealthResult() *AssessmentResult {
+	if a == nil || a.AxisResults == nil {
+		return nil
+	}
+	return a.AxisResults[BuildHealthAxis]
 }
 
 // DisplayPURL returns the most user-meaningful PURL for presentation (original if available, otherwise effective).

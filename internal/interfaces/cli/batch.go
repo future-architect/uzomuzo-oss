@@ -647,7 +647,7 @@ func printReviewNeededArgs(analyses map[string]*analysispkg.Analysis) {
 		isReviewNeeded := false
 		if a.AxisResults == nil || a.AxisResults[analysispkg.LifecycleAxis] == nil {
 			isReviewNeeded = true
-		} else if a.AxisResults[analysispkg.LifecycleAxis].Label == analysispkg.LabelReviewNeeded {
+		} else if a.AxisResults[analysispkg.LifecycleAxis].Label == string(analysispkg.LabelReviewNeeded) {
 			isReviewNeeded = true
 		}
 		if !isReviewNeeded {

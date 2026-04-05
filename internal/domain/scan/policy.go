@@ -85,7 +85,7 @@ func (p FailPolicy) Evaluate(entries []domainaudit.AuditEntry) bool {
 		if lr == nil {
 			continue
 		}
-		if p.IsTriggered(lr.Label) {
+		if p.IsTriggered(analysis.MaintenanceStatus(lr.Label)) {
 			return true
 		}
 	}

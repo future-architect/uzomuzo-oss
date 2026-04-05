@@ -19,7 +19,7 @@ func makeTestEntries() []domainaudit.AuditEntry {
 			Verdict: domainaudit.VerdictOK,
 			Analysis: &analysis.Analysis{
 				AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
-					analysis.LifecycleAxis: {Label: analysis.LabelActive},
+					analysis.LifecycleAxis: {Label: string(analysis.LabelActive)},
 				},
 			},
 		},
@@ -279,7 +279,7 @@ func makeRelationEntries() []domainaudit.AuditEntry {
 			Relation: depparser.RelationDirect,
 			Analysis: &analysis.Analysis{
 				AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
-					analysis.LifecycleAxis: {Label: analysis.LabelActive},
+					analysis.LifecycleAxis: {Label: string(analysis.LabelActive)},
 				},
 			},
 		},
@@ -290,7 +290,7 @@ func makeRelationEntries() []domainaudit.AuditEntry {
 			ViaParents: []string{"express"},
 			Analysis: &analysis.Analysis{
 				AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
-					analysis.LifecycleAxis: {Label: analysis.LabelStalled},
+					analysis.LifecycleAxis: {Label: string(analysis.LabelStalled)},
 				},
 			},
 		},
