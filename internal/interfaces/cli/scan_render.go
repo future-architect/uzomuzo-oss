@@ -126,14 +126,15 @@ func ResolveFormat(explicit string, inputCount int) (string, error) {
 
 // renderScanOutput dispatches to the correct renderer by format.
 // allEntries is used for summary counts; displayEntries is the (possibly filtered) set to render.
-func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, format string) error {
+// filterActive indicates whether --show-only was explicitly provided (even if all entries match).
+func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, format string, filterActive bool) error {
 	switch format {
 	case FormatDetailed:
-		return renderScanDetailed(w, allEntries, displayEntries)
+		return renderScanDetailed(w, allEntries, displayEntries, filterActive)
 	case FormatTable:
-		return renderScanTable(w, allEntries, displayEntries)
+		return renderScanTable(w, allEntries, displayEntries, filterActive)
 	case FormatJSON:
-		return renderScanJSON(w, allEntries, displayEntries)
+		return renderScanJSON(w, allEntries, displayEntries, filterActive)
 	case FormatCSV:
 		return renderScanCSV(w, displayEntries)
 	default:
@@ -207,12 +208,13 @@ func formatRelation(e *domainaudit.AuditEntry) string {
 // renderScanDetailed prints a summary table followed by rich per-package box output.
 // The two sections are separated by markers for machine extraction.
 // allEntries is used for summary counts; displayEntries for the table rows and detailed boxes.
-func renderScanDetailed(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry) error {
+// filterActive indicates whether --show-only was explicitly provided.
+func renderScanDetailed(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool) error {
 	// Summary table section
 	if _, err := fmt.Fprintln(w, MarkerSummaryTableBegin); err != nil {
 		return fmt.Errorf("failed to write marker: %w", err)
 	}
-	if err := renderScanTable(w, allEntries, displayEntries); err != nil {
+	if err := renderScanTable(w, allEntries, displayEntries, filterActive); err != nil {
 		return fmt.Errorf("failed to write summary table: %w", err)
 	}
 
@@ -251,8 +253,9 @@ func tableVerdictDisplay(v domainaudit.Verdict) string {
 
 // renderScanTable renders the STATUS table format.
 // allEntries is used for summary counts; displayEntries for the table rows.
+// filterActive indicates whether --show-only was explicitly provided.
 // Conditional columns: SOURCE (when multiple sources), RELATION (when relation info present).
-func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry) error {
+func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool) error {
 	showSource := hasMultipleSources(displayEntries)
 	showRelation := hasRelationInfo(displayEntries)
 
@@ -298,8 +301,7 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		return fmt.Errorf("failed to flush table output: %w", err)
 	}
 	// Summary box (always based on all entries)
-	isFiltered := len(allEntries) != len(displayEntries)
-	if err := renderSummaryBox(w, allEntries, len(displayEntries), isFiltered); err != nil {
+	if err := renderSummaryBox(w, allEntries, len(displayEntries), filterActive); err != nil {
 		return fmt.Errorf("failed to write summary box: %w", err)
 	}
 	return nil
@@ -360,15 +362,17 @@ type enrichedJSONOutput struct {
 	Summary  jsonSummary         `json:"summary"`
 	Entries  []enrichedJSONEntry `json:"packages"`
 	Filtered bool                `json:"filtered,omitempty"`
-	Shown    int                 `json:"shown,omitempty"`
+	Shown    int                 `json:"shown"`
 }
 
-func renderScanJSON(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry) error {
+// renderScanJSON renders the JSON output format.
+// filterActive indicates whether --show-only was explicitly provided.
+func renderScanJSON(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool) error {
 	out := enrichedJSONOutput{
 		Summary: computeSummary(allEntries),
 		Entries: make([]enrichedJSONEntry, 0, len(displayEntries)),
 	}
-	if len(allEntries) != len(displayEntries) {
+	if filterActive {
 		out.Filtered = true
 		out.Shown = len(displayEntries)
 	}

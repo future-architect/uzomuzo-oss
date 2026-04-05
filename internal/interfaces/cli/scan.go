@@ -311,8 +311,9 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 		return fmt.Errorf("invalid --show-only filter: %w", err)
 	}
 	displayEntries := filterEntriesByVerdict(result.Entries, showOnly)
+	filterActive := showOnly != nil
 
-	if err := renderScanOutput(os.Stdout, result.Entries, displayEntries, format); err != nil {
+	if err := renderScanOutput(os.Stdout, result.Entries, displayEntries, format, filterActive); err != nil {
 		return fmt.Errorf("failed to render output: %w", err)
 	}
 

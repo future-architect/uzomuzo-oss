@@ -41,7 +41,7 @@ func makeTestEntries() []domainaudit.AuditEntry {
 func TestRenderScanTable(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries()
-	if err := renderScanTable(&buf, entries, entries); err != nil {
+	if err := renderScanTable(&buf, entries, entries, false); err != nil {
 		t.Fatalf("renderScanTable() error = %v", err)
 	}
 
@@ -88,7 +88,7 @@ func TestRenderScanTable(t *testing.T) {
 func TestRenderScanJSON(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries()
-	if err := renderScanJSON(&buf, entries, entries); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -143,7 +143,7 @@ func TestRenderScanCSV(t *testing.T) {
 
 func TestRenderScanOutput_UnsupportedFormat(t *testing.T) {
 	var buf bytes.Buffer
-	err := renderScanOutput(&buf, nil, nil, "yaml")
+	err := renderScanOutput(&buf, nil, nil, "yaml", false)
 	if err == nil {
 		t.Error("expected error for unsupported format, got nil")
 	}
@@ -169,7 +169,7 @@ func TestRenderScanTable_WithSourceColumn(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := renderScanTable(&buf, entries, entries); err != nil {
+	if err := renderScanTable(&buf, entries, entries, false); err != nil {
 		t.Fatalf("renderScanTable() error = %v", err)
 	}
 
@@ -188,7 +188,7 @@ func TestRenderScanTable_WithSourceColumn(t *testing.T) {
 func TestRenderScanTable_NoSourceColumnForSingleSource(t *testing.T) {
 	entries := makeTestEntries() // all SourceDirect
 	var buf bytes.Buffer
-	if err := renderScanTable(&buf, entries, entries); err != nil {
+	if err := renderScanTable(&buf, entries, entries, false); err != nil {
 		t.Fatalf("renderScanTable() error = %v", err)
 	}
 	if strings.Contains(buf.String(), "SOURCE") {
@@ -216,7 +216,7 @@ func TestRenderScanJSON_WithSource(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, entries, entries); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -300,7 +300,7 @@ func makeRelationEntries() []domainaudit.AuditEntry {
 func TestRenderScanTable_WithRelationColumn(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeRelationEntries()
-	if err := renderScanTable(&buf, entries, entries); err != nil {
+	if err := renderScanTable(&buf, entries, entries, false); err != nil {
 		t.Fatalf("renderScanTable() error = %v", err)
 	}
 	output := buf.String()
@@ -318,7 +318,7 @@ func TestRenderScanTable_WithRelationColumn(t *testing.T) {
 func TestRenderScanTable_NoRelationColumnForUnknown(t *testing.T) {
 	entries := makeTestEntries() // all RelationUnknown
 	var buf bytes.Buffer
-	if err := renderScanTable(&buf, entries, entries); err != nil {
+	if err := renderScanTable(&buf, entries, entries, false); err != nil {
 		t.Fatalf("renderScanTable() error = %v", err)
 	}
 	if strings.Contains(buf.String(), "RELATION") {
@@ -329,7 +329,7 @@ func TestRenderScanTable_NoRelationColumnForUnknown(t *testing.T) {
 func TestRenderScanJSON_WithRelation(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeRelationEntries()
-	if err := renderScanJSON(&buf, entries, entries); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -351,7 +351,7 @@ func TestRenderScanJSON_WithRelation(t *testing.T) {
 func TestRenderScanJSON_OmitsRelationWhenUnknown(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries()
-	if err := renderScanJSON(&buf, entries, entries); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 	// Relation with empty string should be omitted via omitempty.
@@ -447,7 +447,7 @@ func TestRenderScanJSON_TransitiveAdvisories(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, entries, entries); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -529,13 +529,13 @@ func TestRenderScanCSV_TransitiveAdvisories(t *testing.T) {
 
 	// Verify transitive columns exist and have correct values
 	checks := map[string]string{
-		"advisory_count":                 "2",   // total: 1 direct + 1 transitive
-		"max_advisory_severity":          "CRITICAL",
-		"max_cvss3_score":               "9.8",
-		"direct_advisory_count":          "1",
-		"transitive_advisory_count":      "1",
+		"advisory_count":                   "2", // total: 1 direct + 1 transitive
+		"max_advisory_severity":            "CRITICAL",
+		"max_cvss3_score":                  "9.8",
+		"direct_advisory_count":            "1",
+		"transitive_advisory_count":        "1",
 		"max_transitive_advisory_severity": "HIGH",
-		"max_transitive_cvss3_score":     "7.2",
+		"max_transitive_cvss3_score":       "7.2",
 	}
 	for col, want := range checks {
 		idx, ok := colIdx[col]
@@ -623,7 +623,7 @@ func TestRenderScanTable_WithShowOnly(t *testing.T) {
 	displayEntries := filterEntriesByVerdict(allEntries, filter)
 
 	var buf bytes.Buffer
-	if err := renderScanTable(&buf, allEntries, displayEntries); err != nil {
+	if err := renderScanTable(&buf, allEntries, displayEntries, true); err != nil {
 		t.Fatalf("renderScanTable() error = %v", err)
 	}
 	output := buf.String()
@@ -648,7 +648,7 @@ func TestRenderScanJSON_WithShowOnly(t *testing.T) {
 	displayEntries := filterEntriesByVerdict(allEntries, filter)
 
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, allEntries, displayEntries); err != nil {
+	if err := renderScanJSON(&buf, allEntries, displayEntries, true); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
