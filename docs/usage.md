@@ -34,8 +34,8 @@
 $ uzomuzo scan pkg:npm/express@4.18.2
 
 --- Summary Table ---
-STATUS     BUILD         PURL                    LIFECYCLE
-✅ ok       Hardened 9.4  pkg:npm/express@4.18.2  Active
+STATUS     PURL                    LIFECYCLE  BUILD
+✅ ok       pkg:npm/express@4.18.2  Active     Hardened 9.4
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 0 replace | 🔍 0 review
@@ -126,10 +126,10 @@ When transitive dependencies are included, output shows a `RELATION` column indi
 ```text
 $ uzomuzo scan --file go.mod -f table
 
-STATUS      BUILD         PURL                                                        RELATION  LIFECYCLE
-🔴 replace   Moderate 4.1  pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed
-⚠️ caution  Moderate 5.7  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled
-⚠️ caution  Moderate 5.9  pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active
+STATUS      PURL                                                        RELATION  LIFECYCLE      BUILD
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  Moderate 4.1
+⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled        Moderate 5.7
+⚠️ caution  pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Moderate 5.9
 
 ── Summary ─────────────────────────────────────────────────
 │ 3 dependencies | ✅ 0 ok | ⚠️ 2 caution | 🔴 1 replace | 🔍 0 review
@@ -300,9 +300,9 @@ Rules:
 <!-- begin:output:usage-request-table -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --format table
-STATUS     BUILD         PURL                    LIFECYCLE
-🔴 replace  Moderate 6.4  pkg:npm/request@2.88.2  EOL-Confirmed
-✅ ok       Hardened 9.4  pkg:npm/express@4.18.2  Active
+STATUS     PURL                    LIFECYCLE      BUILD
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed  Moderate 6.4
+✅ ok       pkg:npm/express@4.18.2  Active         Hardened 9.4
 
 ── Summary ─────────────────────────────────────────────────
 │ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -423,8 +423,8 @@ Without `--fail-on`, exit code is always 0 regardless of scan results.
 <!-- begin:output:usage-failon-match -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-confirmed --format table
-STATUS     BUILD         PURL                    LIFECYCLE
-🔴 replace  Moderate 6.4  pkg:npm/request@2.88.2  EOL-Confirmed
+STATUS     PURL                    LIFECYCLE      BUILD
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed  Moderate 6.4
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -438,8 +438,8 @@ STATUS     BUILD         PURL                    LIFECYCLE
 <!-- begin:output:usage-failon-nomatch -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-effective --format table
-STATUS     BUILD         PURL                    LIFECYCLE
-🔴 replace  Moderate 6.4  pkg:npm/request@2.88.2  EOL-Confirmed
+STATUS     PURL                    LIFECYCLE      BUILD
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed  Moderate 6.4
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -453,9 +453,9 @@ STATUS     BUILD         PURL                    LIFECYCLE
 <!-- begin:output:usage-failon-multi -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --fail-on eol-confirmed,stalled --format table
-STATUS     BUILD         PURL                    LIFECYCLE
-🔴 replace  Moderate 6.4  pkg:npm/request@2.88.2  EOL-Confirmed
-✅ ok       Hardened 9.4  pkg:npm/express@4.18.2  Active
+STATUS     PURL                    LIFECYCLE      BUILD
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed  Moderate 6.4
+✅ ok       pkg:npm/express@4.18.2  Active         Hardened 9.4
 
 ── Summary ─────────────────────────────────────────────────
 │ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
