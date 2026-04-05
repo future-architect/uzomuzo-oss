@@ -51,11 +51,10 @@ STATUS     PURL                    LIFECYCLE  BUILD
 │ Recent Stable Release: true
 │ Last Human Commit: 2026-03-31
 │ Maintained Score: 10/10
-├─ Build Integrity: Hardened 9.3/10 (5/10) ─────────────────
+├─ Build Integrity: Hardened 9.3/10 (5/6) ──────────────────
 │   Dangerous Workflow  10  Branch Protection    —
 │   Code Review          9  Token Permissions   10
-│   Binary Artifacts    10  Signed Releases      —
-│   SLSA Provenance      —  Pinned Deps          6
+│   Binary Artifacts    10  Pinned Deps          6
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fexpressjs%2Fexpress
 ├─ Health ──────────────────────────────────────────────────
 │ 68887 stars
