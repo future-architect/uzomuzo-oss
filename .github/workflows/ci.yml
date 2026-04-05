@@ -81,12 +81,14 @@ jobs:
       - name: Create PR with updated doc examples (manual trigger)
         if: github.event_name == 'workflow_dispatch'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT required — GITHUB_TOKEN push does not trigger CI on the new branch.
+          GH_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}
         run: |
           git diff --quiet README.md docs/usage.md docs/assets/juice-shop-eol-result.txt && echo "No changes" && exit 0
           BRANCH="docs/update-examples-$(date +%Y%m%d-%H%M%S)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           git checkout -b "$BRANCH"
           git add README.md docs/usage.md docs/assets/juice-shop-eol-result.txt
           git commit -m "docs: update output examples"
