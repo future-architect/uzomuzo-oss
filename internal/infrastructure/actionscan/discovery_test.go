@@ -266,6 +266,7 @@ func TestDiscoverFromRepo_ContextCancellation(t *testing.T) {
 				maxFileFetchConcurrency, fetchStarted.Load())
 		default:
 			runtime.Gosched()
+			time.Sleep(1 * time.Millisecond)
 		}
 	}
 
