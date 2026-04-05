@@ -13,6 +13,50 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 )
 
+// ParseShowOnly parses a comma-separated --show-only string into a set of Verdict values.
+// Returns nil (show all) when raw is empty.
+func ParseShowOnly(raw string) (map[domainaudit.Verdict]struct{}, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	valid := map[string]domainaudit.Verdict{
+		"ok":      domainaudit.VerdictOK,
+		"caution": domainaudit.VerdictCaution,
+		"replace": domainaudit.VerdictReplace,
+		"review":  domainaudit.VerdictReview,
+	}
+	parts := strings.Split(raw, ",")
+	result := make(map[domainaudit.Verdict]struct{}, len(parts))
+	for _, part := range parts {
+		v := strings.TrimSpace(strings.ToLower(part))
+		if v == "" {
+			continue
+		}
+		verdict, ok := valid[v]
+		if !ok {
+			return nil, fmt.Errorf("invalid --show-only verdict %q; valid values: ok, caution, replace, review", v)
+		}
+		result[verdict] = struct{}{}
+	}
+	return result, nil
+}
+
+// filterEntriesByVerdict returns only entries whose Verdict is in the allowed set.
+// If allowed is nil, all entries are returned.
+func filterEntriesByVerdict(entries []domainaudit.AuditEntry, allowed map[domainaudit.Verdict]struct{}) []domainaudit.AuditEntry {
+	if allowed == nil {
+		return entries
+	}
+	filtered := make([]domainaudit.AuditEntry, 0, len(entries))
+	for i := range entries {
+		if _, ok := allowed[entries[i].Verdict]; ok {
+			filtered = append(filtered, entries[i])
+		}
+	}
+	return filtered
+}
+
 // jsonSummary holds verdict counts for JSON output.
 type jsonSummary struct {
 	Total   int `json:"total"`
@@ -81,16 +125,17 @@ func ResolveFormat(explicit string, inputCount int) (string, error) {
 }
 
 // renderScanOutput dispatches to the correct renderer by format.
-func renderScanOutput(w io.Writer, entries []domainaudit.AuditEntry, format string) error {
+// allEntries is used for summary counts; displayEntries is the (possibly filtered) set to render.
+func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, format string) error {
 	switch format {
 	case FormatDetailed:
-		return renderScanDetailed(w, entries)
+		return renderScanDetailed(w, allEntries, displayEntries)
 	case FormatTable:
-		return renderScanTable(w, entries)
+		return renderScanTable(w, allEntries, displayEntries)
 	case FormatJSON:
-		return renderScanJSON(w, entries)
+		return renderScanJSON(w, allEntries, displayEntries)
 	case FormatCSV:
-		return renderScanCSV(w, entries)
+		return renderScanCSV(w, displayEntries)
 	default:
 		return fmt.Errorf("unsupported format %q", format)
 	}
@@ -161,12 +206,13 @@ func formatRelation(e *domainaudit.AuditEntry) string {
 
 // renderScanDetailed prints a summary table followed by rich per-package box output.
 // The two sections are separated by markers for machine extraction.
-func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
+// allEntries is used for summary counts; displayEntries for the table rows and detailed boxes.
+func renderScanDetailed(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry) error {
 	// Summary table section
 	if _, err := fmt.Fprintln(w, MarkerSummaryTableBegin); err != nil {
 		return fmt.Errorf("failed to write marker: %w", err)
 	}
-	if err := renderScanTable(w, entries); err != nil {
+	if err := renderScanTable(w, allEntries, displayEntries); err != nil {
 		return fmt.Errorf("failed to write summary table: %w", err)
 	}
 
@@ -176,13 +222,13 @@ func renderScanDetailed(w io.Writer, entries []domainaudit.AuditEntry) error {
 	}
 
 	counter := 0
-	for i := range entries {
+	for i := range displayEntries {
 		counter++
 		// Preserve machine-parseable marker outside the box
 		if _, err := fmt.Fprintf(w, "\n--- PURL %d ---\n", counter); err != nil {
 			return fmt.Errorf("failed to write entry marker: %w", err)
 		}
-		if err := renderBoxEntry(w, &entries[i]); err != nil {
+		if err := renderBoxEntry(w, &displayEntries[i]); err != nil {
 			return fmt.Errorf("failed to write box entry: %w", err)
 		}
 	}
@@ -204,10 +250,11 @@ func tableVerdictDisplay(v domainaudit.Verdict) string {
 }
 
 // renderScanTable renders the STATUS table format.
+// allEntries is used for summary counts; displayEntries for the table rows.
 // Conditional columns: SOURCE (when multiple sources), RELATION (when relation info present).
-func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
-	showSource := hasMultipleSources(entries)
-	showRelation := hasRelationInfo(entries)
+func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry) error {
+	showSource := hasMultipleSources(displayEntries)
+	showRelation := hasRelationInfo(displayEntries)
 
 	writeHeader := func(tw *tabwriter.Writer) error {
 		var cols []string
@@ -231,16 +278,16 @@ func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 		return err
 	}
 
-	for i := range entries {
-		maintenance, _ := entryMaintenanceEOL(&entries[i], "—")
+	for i := range displayEntries {
+		maintenance, _ := entryMaintenanceEOL(&displayEntries[i], "—")
 		var cols []string
-		cols = append(cols, tableVerdictDisplay(entries[i].Verdict))
+		cols = append(cols, tableVerdictDisplay(displayEntries[i].Verdict))
 		if showSource {
-			cols = append(cols, sourceDisplayName(entries[i].Source))
+			cols = append(cols, sourceDisplayName(displayEntries[i].Source))
 		}
-		cols = append(cols, entries[i].PURL)
+		cols = append(cols, displayEntries[i].PURL)
 		if showRelation {
-			cols = append(cols, formatRelation(&entries[i]))
+			cols = append(cols, formatRelation(&displayEntries[i]))
 		}
 		cols = append(cols, maintenance)
 		if _, err := fmt.Fprintln(tw, strings.Join(cols, "\t")); err != nil {
@@ -250,18 +297,23 @@ func renderScanTable(w io.Writer, entries []domainaudit.AuditEntry) error {
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("failed to flush table output: %w", err)
 	}
-	// Summary box
-	if err := renderSummaryBox(w, entries); err != nil {
+	// Summary box (always based on all entries)
+	isFiltered := len(allEntries) != len(displayEntries)
+	if err := renderSummaryBox(w, allEntries, len(displayEntries), isFiltered); err != nil {
 		return fmt.Errorf("failed to write summary box: %w", err)
 	}
 	return nil
 }
 
 // renderSummaryBox renders the summary line in a left-border box.
-func renderSummaryBox(w io.Writer, entries []domainaudit.AuditEntry) error {
-	s := computeSummary(entries)
+// When isFiltered is true, appends "showing X of Y" to indicate filtered output.
+func renderSummaryBox(w io.Writer, allEntries []domainaudit.AuditEntry, shownCount int, isFiltered bool) error {
+	s := computeSummary(allEntries)
 	summaryLine := fmt.Sprintf("%d dependencies | ✅ %d ok | ⚠️ %d caution | 🔴 %d replace | 🔍 %d review",
 		s.Total, s.OK, s.Caution, s.Replace, s.Review)
+	if isFiltered {
+		summaryLine += fmt.Sprintf(" | showing %d of %d", shownCount, s.Total)
+	}
 	bar := buildBar("── ", "Summary ", defaultBarWidth)
 	if _, err := fmt.Fprintf(w, "\n%s\n│ %s\n└%s\n", bar, summaryLine, strings.Repeat("─", defaultBarWidth-1)); err != nil {
 		return fmt.Errorf("failed to write summary box: %w", err)
@@ -305,17 +357,23 @@ type enrichedJSONEntry struct {
 }
 
 type enrichedJSONOutput struct {
-	Summary jsonSummary         `json:"summary"`
-	Entries []enrichedJSONEntry `json:"packages"`
+	Summary  jsonSummary         `json:"summary"`
+	Entries  []enrichedJSONEntry `json:"packages"`
+	Filtered bool                `json:"filtered,omitempty"`
+	Shown    int                 `json:"shown,omitempty"`
 }
 
-func renderScanJSON(w io.Writer, entries []domainaudit.AuditEntry) error {
+func renderScanJSON(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry) error {
 	out := enrichedJSONOutput{
-		Summary: computeSummary(entries),
-		Entries: make([]enrichedJSONEntry, 0, len(entries)),
+		Summary: computeSummary(allEntries),
+		Entries: make([]enrichedJSONEntry, 0, len(displayEntries)),
 	}
-	for i := range entries {
-		out.Entries = append(out.Entries, newEnrichedJSONEntry(&entries[i]))
+	if len(allEntries) != len(displayEntries) {
+		out.Filtered = true
+		out.Shown = len(displayEntries)
+	}
+	for i := range displayEntries {
+		out.Entries = append(out.Entries, newEnrichedJSONEntry(&displayEntries[i]))
 	}
 
 	enc := json.NewEncoder(w)

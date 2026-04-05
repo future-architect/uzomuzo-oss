@@ -526,7 +526,7 @@ func TestRenderBoxEntry_NilAnalysis(t *testing.T) {
 func TestRenderScanDetailed_BoxFormat(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries()
-	if err := renderScanDetailed(&buf, entries); err != nil {
+	if err := renderScanDetailed(&buf, entries, entries); err != nil {
 		t.Fatalf("renderScanDetailed() error = %v", err)
 	}
 	output := buf.String()

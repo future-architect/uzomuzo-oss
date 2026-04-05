@@ -41,7 +41,7 @@ func makeTestEntries() []domainaudit.AuditEntry {
 func TestRenderScanTable(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries()
-	if err := renderScanTable(&buf, entries); err != nil {
+	if err := renderScanTable(&buf, entries, entries); err != nil {
 		t.Fatalf("renderScanTable() error = %v", err)
 	}
 
@@ -88,7 +88,7 @@ func TestRenderScanTable(t *testing.T) {
 func TestRenderScanJSON(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries()
-	if err := renderScanJSON(&buf, entries); err != nil {
+	if err := renderScanJSON(&buf, entries, entries); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -143,7 +143,7 @@ func TestRenderScanCSV(t *testing.T) {
 
 func TestRenderScanOutput_UnsupportedFormat(t *testing.T) {
 	var buf bytes.Buffer
-	err := renderScanOutput(&buf, nil, "yaml")
+	err := renderScanOutput(&buf, nil, nil, "yaml")
 	if err == nil {
 		t.Error("expected error for unsupported format, got nil")
 	}
@@ -169,7 +169,7 @@ func TestRenderScanTable_WithSourceColumn(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := renderScanTable(&buf, entries); err != nil {
+	if err := renderScanTable(&buf, entries, entries); err != nil {
 		t.Fatalf("renderScanTable() error = %v", err)
 	}
 
@@ -188,7 +188,7 @@ func TestRenderScanTable_WithSourceColumn(t *testing.T) {
 func TestRenderScanTable_NoSourceColumnForSingleSource(t *testing.T) {
 	entries := makeTestEntries() // all SourceDirect
 	var buf bytes.Buffer
-	if err := renderScanTable(&buf, entries); err != nil {
+	if err := renderScanTable(&buf, entries, entries); err != nil {
 		t.Fatalf("renderScanTable() error = %v", err)
 	}
 	if strings.Contains(buf.String(), "SOURCE") {
@@ -216,7 +216,7 @@ func TestRenderScanJSON_WithSource(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, entries); err != nil {
+	if err := renderScanJSON(&buf, entries, entries); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -300,7 +300,7 @@ func makeRelationEntries() []domainaudit.AuditEntry {
 func TestRenderScanTable_WithRelationColumn(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeRelationEntries()
-	if err := renderScanTable(&buf, entries); err != nil {
+	if err := renderScanTable(&buf, entries, entries); err != nil {
 		t.Fatalf("renderScanTable() error = %v", err)
 	}
 	output := buf.String()
@@ -318,7 +318,7 @@ func TestRenderScanTable_WithRelationColumn(t *testing.T) {
 func TestRenderScanTable_NoRelationColumnForUnknown(t *testing.T) {
 	entries := makeTestEntries() // all RelationUnknown
 	var buf bytes.Buffer
-	if err := renderScanTable(&buf, entries); err != nil {
+	if err := renderScanTable(&buf, entries, entries); err != nil {
 		t.Fatalf("renderScanTable() error = %v", err)
 	}
 	if strings.Contains(buf.String(), "RELATION") {
@@ -329,7 +329,7 @@ func TestRenderScanTable_NoRelationColumnForUnknown(t *testing.T) {
 func TestRenderScanJSON_WithRelation(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeRelationEntries()
-	if err := renderScanJSON(&buf, entries); err != nil {
+	if err := renderScanJSON(&buf, entries, entries); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -351,7 +351,7 @@ func TestRenderScanJSON_WithRelation(t *testing.T) {
 func TestRenderScanJSON_OmitsRelationWhenUnknown(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries()
-	if err := renderScanJSON(&buf, entries); err != nil {
+	if err := renderScanJSON(&buf, entries, entries); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 	// Relation with empty string should be omitted via omitempty.
@@ -447,7 +447,7 @@ func TestRenderScanJSON_TransitiveAdvisories(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, entries); err != nil {
+	if err := renderScanJSON(&buf, entries, entries); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -546,5 +546,129 @@ func TestRenderScanCSV_TransitiveAdvisories(t *testing.T) {
 		if got := row[idx]; got != want {
 			t.Errorf("CSV column %q = %q, want %q", col, got, want)
 		}
+	}
+}
+
+func TestParseShowOnly(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    int // expected map size, -1 for nil
+		wantErr string
+	}{
+		{name: "empty", raw: "", want: -1},
+		{name: "single", raw: "replace", want: 1},
+		{name: "multiple", raw: "ok,caution", want: 2},
+		{name: "case insensitive", raw: "REPLACE,OK", want: 2},
+		{name: "with spaces", raw: " replace , caution ", want: 2},
+		{name: "invalid", raw: "bad", wantErr: "invalid --show-only verdict"},
+		{name: "partial invalid", raw: "ok,bad", wantErr: "invalid --show-only verdict"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseShowOnly(tt.raw)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("ParseShowOnly(%q) error = %v, want containing %q", tt.raw, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseShowOnly(%q) unexpected error: %v", tt.raw, err)
+			}
+			if tt.want == -1 {
+				if got != nil {
+					t.Errorf("ParseShowOnly(%q) = %v, want nil", tt.raw, got)
+				}
+			} else if len(got) != tt.want {
+				t.Errorf("ParseShowOnly(%q) returned %d verdicts, want %d", tt.raw, len(got), tt.want)
+			}
+		})
+	}
+}
+
+func TestFilterEntriesByVerdict(t *testing.T) {
+	entries := makeTestEntries() // ok, replace, review
+
+	t.Run("nil filter returns all", func(t *testing.T) {
+		got := filterEntriesByVerdict(entries, nil)
+		if len(got) != len(entries) {
+			t.Errorf("got %d entries, want %d", len(got), len(entries))
+		}
+	})
+
+	t.Run("filter replace only", func(t *testing.T) {
+		filter := map[domainaudit.Verdict]struct{}{domainaudit.VerdictReplace: {}}
+		got := filterEntriesByVerdict(entries, filter)
+		if len(got) != 1 {
+			t.Fatalf("got %d entries, want 1", len(got))
+		}
+		if got[0].Verdict != domainaudit.VerdictReplace {
+			t.Errorf("got verdict %q, want replace", got[0].Verdict)
+		}
+	})
+
+	t.Run("filter with no matches", func(t *testing.T) {
+		filter := map[domainaudit.Verdict]struct{}{domainaudit.VerdictCaution: {}}
+		got := filterEntriesByVerdict(entries, filter)
+		if len(got) != 0 {
+			t.Errorf("got %d entries, want 0", len(got))
+		}
+	})
+}
+
+func TestRenderScanTable_WithShowOnly(t *testing.T) {
+	allEntries := makeTestEntries()
+	filter := map[domainaudit.Verdict]struct{}{domainaudit.VerdictReplace: {}}
+	displayEntries := filterEntriesByVerdict(allEntries, filter)
+
+	var buf bytes.Buffer
+	if err := renderScanTable(&buf, allEntries, displayEntries); err != nil {
+		t.Fatalf("renderScanTable() error = %v", err)
+	}
+	output := buf.String()
+
+	if !strings.Contains(output, "pkg:npm/request@2.88.2") {
+		t.Error("filtered output missing replace entry")
+	}
+	if strings.Contains(output, "pkg:npm/express@4.18.2") {
+		t.Error("filtered output should not contain ok entry")
+	}
+	if !strings.Contains(output, "3 dependencies") {
+		t.Error("summary should count all entries, not just filtered")
+	}
+	if !strings.Contains(output, "showing 1 of 3") {
+		t.Error("summary should show 'showing 1 of 3'")
+	}
+}
+
+func TestRenderScanJSON_WithShowOnly(t *testing.T) {
+	allEntries := makeTestEntries()
+	filter := map[domainaudit.Verdict]struct{}{domainaudit.VerdictReplace: {}}
+	displayEntries := filterEntriesByVerdict(allEntries, filter)
+
+	var buf bytes.Buffer
+	if err := renderScanJSON(&buf, allEntries, displayEntries); err != nil {
+		t.Fatalf("renderScanJSON() error = %v", err)
+	}
+
+	var out enrichedJSONOutput
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatalf("JSON unmarshal error: %v", err)
+	}
+	if out.Summary.Total != 3 {
+		t.Errorf("summary.total = %d, want 3", out.Summary.Total)
+	}
+	if len(out.Entries) != 1 {
+		t.Fatalf("packages count = %d, want 1", len(out.Entries))
+	}
+	if out.Entries[0].Verdict != "replace" {
+		t.Errorf("packages[0].verdict = %q, want replace", out.Entries[0].Verdict)
+	}
+	if !out.Filtered {
+		t.Error("filtered should be true")
+	}
+	if out.Shown != 1 {
+		t.Errorf("shown = %d, want 1", out.Shown)
 	}
 }
