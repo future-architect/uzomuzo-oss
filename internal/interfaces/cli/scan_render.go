@@ -371,12 +371,12 @@ func buildIntegrityDisplay(a *domain.Analysis) string {
 
 // enrichedJSONEntry is the DTO for --format json with full analysis data.
 type enrichedJSONEntry struct {
-	PURL               string   `json:"purl"`
-	Verdict            string   `json:"verdict"`
-	Lifecycle          string   `json:"lifecycle"`
-	BuildIntegrity     string   `json:"build_integrity,omitempty"`
+	PURL                string   `json:"purl"`
+	Verdict             string   `json:"verdict"`
+	Lifecycle           string   `json:"lifecycle"`
+	BuildIntegrity      string   `json:"build_integrity,omitempty"`
 	BuildIntegrityScore *float64 `json:"build_integrity_score,omitempty"`
-	Successor          string   `json:"successor,omitempty"`
+	Successor           string   `json:"successor,omitempty"`
 
 	RepoURL         string   `json:"repo_url,omitempty"`
 	Archived        bool     `json:"archived,omitempty"`
@@ -501,6 +501,8 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 				je.BuildIntegrityScore = &score
 			}
 		}
+	} else {
+		je.BuildIntegrity = string(domain.BuildLabelUngraded)
 	}
 
 	return je
@@ -553,7 +555,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 			}
 		}
 
-		buildIntegrity := ""
+		buildIntegrity := string(domain.BuildLabelUngraded)
 		buildIntegrityScore := ""
 		if a := e.Analysis; a != nil {
 			if br := a.GetBuildHealthResult(); br != nil {
