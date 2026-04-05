@@ -47,6 +47,7 @@ STATUS     PURL                 LIFECYCLE      BUILD
 │   Packaging            —
 │   Pinned Dependencies  0/10
 │   Attestation          —
+│   → https://scorecard.dev/viewer/?uri=github.com%2Fmscdex%2Fdicer
 ├─ Health ──────────────────────────────────────────────────
 │ 188 stars
 │ Used by: 1271 packages
@@ -221,6 +222,7 @@ STATUS     PURL                    LIFECYCLE  BUILD
 │   Packaging            —
 │   Pinned Dependencies  6/10
 │   Attestation          —
+│   → https://scorecard.dev/viewer/?uri=github.com%2Fexpressjs%2Fexpress
 ├─ Health ──────────────────────────────────────────────────
 │ 68887 stars
 │ Used by: 2211 packages
@@ -274,6 +276,7 @@ STATUS      PURL                   LIFECYCLE    BUILD
 │   Packaging            —
 │   Pinned Dependencies  0/10
 │   Attestation          —
+│   → https://scorecard.dev/viewer/?uri=github.com%2Fmoment%2Fmoment
 ├─ Health ──────────────────────────────────────────────────
 │ 48015 stars
 │ Used by: 2452 packages
@@ -327,6 +330,7 @@ STATUS      PURL                                     LIFECYCLE  BUILD
 │   Packaging            —
 │   Pinned Dependencies  0/10
 │   Attestation          —
+│   → https://scorecard.dev/viewer/?uri=github.com%2Fgorilla%2Fmux
 ├─ Health ──────────────────────────────────────────────────
 │ 21813 stars
 │ Score: 4.9/10  Maintained: 0.0/10
@@ -380,6 +384,7 @@ STATUS     PURL                 LIFECYCLE      BUILD
 │   Packaging            —
 │   Pinned Dependencies  0/10
 │   Attestation          —
+│   → https://scorecard.dev/viewer/?uri=github.com%2Fmscdex%2Fdicer
 ├─ Health ──────────────────────────────────────────────────
 │ 188 stars
 │ Used by: 1271 packages
@@ -433,6 +438,7 @@ STATUS     PURL                                          LIFECYCLE      BUILD
 │   Packaging            —
 │   Pinned Dependencies  —
 │   Attestation          —
+│   → https://scorecard.dev/viewer/?uri=github.com%2Fdgrijalva%2Fjwt-go
 ├─ Health ──────────────────────────────────────────────────
 │ 📦 Archived
 │ 10759 stars
@@ -487,6 +493,7 @@ STATUS     PURL                    LIFECYCLE      BUILD
 │   Packaging            —
 │   Pinned Dependencies  —
 │   Attestation          —
+│   → https://scorecard.dev/viewer/?uri=github.com%2Frequest%2Frequest
 ├─ EOL ─────────────────────────────────────────────────────
 │ Evidence (1):
 │   [npmjs] Deprecated in npm registry (confidence 0.90)

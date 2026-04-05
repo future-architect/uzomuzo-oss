@@ -63,6 +63,7 @@ STATUS     PURL                    LIFECYCLE  BUILD
 │   Packaging            —
 │   Pinned Dependencies  6/10
 │   Attestation          —
+│   → https://scorecard.dev/viewer/?uri=github.com%2Fexpressjs%2Fexpress
 ├─ Health ──────────────────────────────────────────────────
 │ 68887 stars
 │ Used by: 2211 packages
