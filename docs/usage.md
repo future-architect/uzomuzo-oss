@@ -342,7 +342,8 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
       "max_transitive_cvss3_score": 6.5,
       "reason": "Deprecated in npm registry"
     }
-  ]
+  ],
+  "shown": 0
 }
 ```
 <!-- end:output:usage-request-json -->
