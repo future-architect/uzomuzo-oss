@@ -8,16 +8,12 @@ import (
 
 // Build integrity signal names (machine-friendly identifiers).
 const (
-	SignalDangerousWorkflow   = "dangerous_workflow"
-	SignalBranchProtection    = "branch_protection"
-	SignalCodeReview          = "code_review"
-	SignalTokenPermissions    = "token_permissions"
-	SignalBinaryArtifacts     = "binary_artifacts"
-	SignalSignedReleases      = "signed_releases"
-	SignalPackaging           = "packaging"
-	SignalPinnedDependencies  = "pinned_dependencies"
-	SignalSLSAVerified        = "slsa_verified"
-	SignalAttestationVerified = "attestation_verified"
+	SignalDangerousWorkflow  = "dangerous_workflow"
+	SignalBranchProtection   = "branch_protection"
+	SignalCodeReview         = "code_review"
+	SignalTokenPermissions   = "token_permissions"
+	SignalBinaryArtifacts    = "binary_artifacts"
+	SignalPinnedDependencies = "pinned_dependencies"
 
 	// ScoreUngraded is the sentinel value stored in Meta["score"] for Ungraded results.
 	ScoreUngraded = "-1"
@@ -35,22 +31,24 @@ type buildSignalDef struct {
 // inflated scores from a small number of "easy" checks.
 const minEvaluatedSignals = 3
 
-// buildSignals defines all 10 signals ordered by weight (Critical > High > Medium).
+// buildSignals defines the 6 signals with sufficient real-world availability.
 // Weights are aligned with OpenSSF Scorecard risk-level weights (ADR-0013).
 //
-// SAST is excluded: like Fuzzing, it is a code quality tool rather than a build
-// tamper resistance measure. Attackers do not optimize malware for SAST rules.
+// Excluded due to insufficient availability (100-project survey, 2026-04):
+//   - Signed-Releases (12% available) — nearly all N/A
+//   - Packaging (26%, all 10/10 when present) — no discriminating power
+//   - SLSA Provenance (3%) — ecosystem adoption too low
+//   - Attestation (3%) — ecosystem adoption too low
+//   - SAST (code quality, not build tamper resistance)
+//
+// These can be re-added in Phase 4 as ecosystem adoption increases.
 var buildSignals = []buildSignalDef{
 	{SignalDangerousWorkflow, "Dangerous-Workflow", 10.0},   // Critical
 	{SignalBranchProtection, "Branch-Protection", 7.5},      // High
 	{SignalCodeReview, "Code-Review", 7.5},                  // High
 	{SignalTokenPermissions, "Token-Permissions", 7.5},      // High
 	{SignalBinaryArtifacts, "Binary-Artifacts", 7.5},        // High
-	{SignalSignedReleases, "Signed-Releases", 7.5},          // High
-	{SignalSLSAVerified, "", 7.5},                           // High (editorial)
-	{SignalPackaging, "Packaging", 5.0},                     // Medium
 	{SignalPinnedDependencies, "Pinned-Dependencies", 5.0},  // Medium
-	{SignalAttestationVerified, "", 5.0},                     // Medium (editorial)
 }
 
 // BuildHealthAssessorService evaluates build pipeline tamper resistance
@@ -64,50 +62,23 @@ func NewBuildHealthAssessorService() *BuildHealthAssessorService {
 	return &BuildHealthAssessorService{}
 }
 
-// Assess computes the build integrity score and label from Scorecard checks
-// and SLSA/Attestation signals available in the Analysis.
+// Assess computes the build integrity score and label from Scorecard checks.
 func (s *BuildHealthAssessorService) Assess(ctx context.Context, in AssessmentInput) (*AssessmentResult, error) {
 	scores := in.Scores
-	a := in.Analysis
 	trace := []string{"start build integrity assessment"}
 
 	var signals []Signal
 	var weightedSum, totalWeight float64
 
 	for _, def := range buildSignals {
-		switch {
-		case def.ScorecardCheck != "":
-			sig, weight, score := s.evaluateScorecardSignal(def, scores)
-			signals = append(signals, sig)
-			if sig.Role == SignalUsed {
-				weightedSum += weight * score
-				totalWeight += weight
-				trace = append(trace, fmt.Sprintf("%s: %.0f/10 (w=%.1f)", def.SignalName, score, weight))
-			} else {
-				trace = append(trace, fmt.Sprintf("%s: absent", def.SignalName))
-			}
-
-		case def.SignalName == SignalSLSAVerified:
-			sig, used := s.evaluateSLSASignal(a)
-			signals = append(signals, sig)
-			if used {
-				weightedSum += def.Weight * 10.0
-				totalWeight += def.Weight
-				trace = append(trace, fmt.Sprintf("%s: verified (w=%.1f)", def.SignalName, def.Weight))
-			} else {
-				trace = append(trace, fmt.Sprintf("%s: absent", def.SignalName))
-			}
-
-		case def.SignalName == SignalAttestationVerified:
-			sig, used := s.evaluateAttestationSignal(a)
-			signals = append(signals, sig)
-			if used {
-				weightedSum += def.Weight * 10.0
-				totalWeight += def.Weight
-				trace = append(trace, fmt.Sprintf("%s: verified (w=%.1f)", def.SignalName, def.Weight))
-			} else {
-				trace = append(trace, fmt.Sprintf("%s: absent", def.SignalName))
-			}
+		sig, weight, score := s.evaluateScorecardSignal(def, scores)
+		signals = append(signals, sig)
+		if sig.Role == SignalUsed {
+			weightedSum += weight * score
+			totalWeight += weight
+			trace = append(trace, fmt.Sprintf("%s: %.0f/10 (w=%.1f)", def.SignalName, score, weight))
+		} else {
+			trace = append(trace, fmt.Sprintf("%s: absent", def.SignalName))
 		}
 	}
 
@@ -174,18 +145,3 @@ func (s *BuildHealthAssessorService) evaluateScorecardSignal(def buildSignalDef,
 	}, def.Weight, float64(val)
 }
 
-// evaluateSLSASignal checks SLSA provenance verification.
-func (s *BuildHealthAssessorService) evaluateSLSASignal(a *Analysis) (Signal, bool) {
-	if a != nil && a.SLSAVerified {
-		return Signal{Name: SignalSLSAVerified, Value: "verified", Role: SignalUsed}, true
-	}
-	return Signal{Name: SignalSLSAVerified, Role: SignalAbsent}, false
-}
-
-// evaluateAttestationSignal checks attestation verification.
-func (s *BuildHealthAssessorService) evaluateAttestationSignal(a *Analysis) (Signal, bool) {
-	if a != nil && a.AttestationVerified {
-		return Signal{Name: SignalAttestationVerified, Value: "verified", Role: SignalUsed}, true
-	}
-	return Signal{Name: SignalAttestationVerified, Role: SignalAbsent}, false
-}

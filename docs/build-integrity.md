@@ -31,20 +31,16 @@ These signals are combined into a single **weighted average score** (0–10) usi
 
 Weights are aligned with Scorecard's official risk levels (Critical=10, High=7.5, Medium=5, Low=2.5):
 
-| Signal | Source | Risk Level | Weight |
-|--------|--------|-----------|--------|
-| Dangerous Workflow | Scorecard | Critical | 10.0 |
-| Branch Protection | Scorecard | High | 7.5 |
-| Code Review | Scorecard | High | 7.5 |
-| Token Permissions | Scorecard | High | 7.5 |
-| Binary Artifacts | Scorecard | High | 7.5 |
-| Signed Releases | Scorecard | High | 7.5 |
-| SLSA Provenance | deps.dev | High* | 7.5 |
-| Packaging | Scorecard | Medium | 5.0 |
-| Pinned Dependencies | Scorecard | Medium | 5.0 |
-| Attestation | deps.dev | Medium* | 5.0 |
+| Signal | Risk Level | Weight |
+|--------|-----------|--------|
+| Dangerous Workflow | Critical | 10.0 |
+| Branch Protection | High | 7.5 |
+| Code Review | High | 7.5 |
+| Token Permissions | High | 7.5 |
+| Binary Artifacts | High | 7.5 |
+| Pinned Dependencies | Medium | 5.0 |
 
-*SLSA/Attestation weights are assigned by analogy with comparable Scorecard checks.
+All signals are sourced from OpenSSF Scorecard via deps.dev. Signals with low real-world availability (Signed-Releases 12%, Packaging 26%, SLSA 3%, Attestation 3%) are deferred until ecosystem adoption increases.
 
 ### Missing Signal Handling
 
@@ -71,12 +67,10 @@ STATUS     PURL                           LIFECYCLE       BUILD
 The detail view shows individual signal scores in a compact 2-column layout. Critical/High signals are always shown (including `—` for inconclusive). Medium signals appear only when evaluated. The header shows `(evaluated/total)` checks.
 
 ```
-├─ Build Integrity: Moderate 4.2/10 (6/11) ────────────────
+├─ Build Integrity: Moderate 4.2/10 (4/6) ─────────────────
 │   Dangerous Workflow 10  Branch Protection    —
 │   Code Review         9  Token Permissions    —
-│   Binary Artifacts    0  Signed Releases      —
-│   SLSA Provenance     —  Pinned Deps          3
-│   Packaging           0
+│   Binary Artifacts    0  Pinned Deps          3
 │   → https://scorecard.dev/viewer/?uri=github.com/...
 ```
 

@@ -66,24 +66,27 @@ This ensures our grading is grounded in the same expert risk assessment that Sco
 
 ### Signals and Weights
 
-All Scorecard checks use their official risk-level weight. SLSA Provenance and Attestation (from deps.dev, not Scorecard) are assigned weights by analogy.
+All included Scorecard checks use their official risk-level weight. Only signals with sufficient real-world availability are included (validated against a 100-project survey, 2026-04).
 
-| Signal | Source | Risk Level | Weight | Threat Mitigated |
-|--------|--------|-----------|--------|------------------|
-| `Dangerous-Workflow` | Scorecard | Critical | **10.0** | CI exploitation via `pull_request_target` |
-| `Branch-Protection` | Scorecard | High | **7.5** | Unauthorized commits to default branch |
-| `Code-Review` | Scorecard | High | **7.5** | Unreviewed malicious code |
-| `Token-Permissions` | Scorecard | High | **7.5** | Blast radius of compromised CI token |
-| `Binary-Artifacts` | Scorecard | High | **7.5** | Unreviewable code in repository |
-| `Signed-Releases` | Scorecard | High | **7.5** | Artifact tampering post-build |
-| SLSA Provenance `Verified` | deps.dev | High* | **7.5** | Unverifiable artifact provenance |
-| `Packaging` | Scorecard | Medium | **5.0** | Local (untrusted) build environment |
-| `Pinned-Dependencies` | Scorecard | Medium | **5.0** | CI dependency substitution |
-| Attestation `Verified` | deps.dev | Medium* | **5.0** | Unverifiable build attestation |
+| Signal | Source | Risk Level | Weight | Availability | Threat Mitigated |
+|--------|--------|-----------|--------|-------------|------------------|
+| `Dangerous-Workflow` | Scorecard | Critical | **10.0** | 95% | CI exploitation via `pull_request_target` |
+| `Branch-Protection` | Scorecard | High | **7.5** | 39% | Unauthorized commits to default branch |
+| `Code-Review` | Scorecard | High | **7.5** | 100% | Unreviewed malicious code |
+| `Token-Permissions` | Scorecard | High | **7.5** | 95% | Blast radius of compromised CI token |
+| `Binary-Artifacts` | Scorecard | High | **7.5** | 100% | Unreviewable code in repository |
+| `Pinned-Dependencies` | Scorecard | Medium | **5.0** | 98% | CI dependency substitution |
 
-*SLSA/Attestation weights are assigned by analogy: SLSA provenance verification is comparable to Signed-Releases (High); attestation is a supporting signal (Medium). These are our editorial assignments, not Scorecard's.
+**Deferred signals** (insufficient real-world availability for Phase 1, re-evaluate in Phase 4):
 
-**Excluded Scorecard checks** (not directly related to build tamper resistance):
+| Signal | Availability | Reason for Deferral |
+|--------|-------------|---------------------|
+| `Signed-Releases` | 12% | Nearly all N/A; no discriminating power |
+| `Packaging` | 26% | All 10/10 when present; no discriminating power |
+| SLSA Provenance | 3% | Ecosystem adoption too low |
+| Attestation | 3% | Ecosystem adoption too low |
+
+**Excluded Scorecard checks** (not related to build tamper resistance):
 
 | Check | Risk Level | Reason for Exclusion |
 |-------|-----------|---------------------|
@@ -203,12 +206,10 @@ STATUS  PURL                           LIFECYCLE       BUILD
 ┌───────────────────────────────────────────────────────────────┐
 │  pkg:npm/lodash@4.17.21                                       │
 │  Lifecycle: ⚠️ Legacy-Safe    Build Integrity: Moderate 4.2  │
-├─ Build Integrity: Moderate 4.2/10 (6/11) ────────────────────┤
+├─ Build Integrity: Moderate 4.2/10 (4/6) ─────────────────────┤
 │   Dangerous Workflow 10  Branch Protection    —               │
 │   Code Review         9  Token Permissions    —               │
-│   Binary Artifacts    0  Signed Releases      —               │
-│   SLSA Provenance     —  Pinned Deps          3               │
-│   Packaging           0                                       │
+│   Binary Artifacts    0  Pinned Deps          3               │
 │   → https://scorecard.dev/viewer/?uri=github.com/lodash/lodash│
 └───────────────────────────────────────────────────────────────┘
 ```
