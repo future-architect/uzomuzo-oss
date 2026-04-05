@@ -36,9 +36,9 @@ STATUS     BUILD         PURL                 LIFECYCLE
 │ Advisories: 1
 │ Max Advisory Severity: HIGH 7.5
 ├─ Build Integrity: Moderate 3.5/10 ────────────────────────
-│   Dangerous Workflow  10/10
-│   Branch Protection   0/10
-│   Code Review         0/10
+│   Dangerous Workflow   10/10
+│   Branch Protection    0/10
+│   Code Review          0/10
 │   Token Permissions    0/10
 │   Binary Artifacts     10/10
 │   Signed Releases      —
@@ -206,9 +206,9 @@ STATUS     BUILD         PURL                    LIFECYCLE
 │ Last Human Commit: 2026-03-31
 │ Maintained Score: 10/10
 ├─ Build Integrity: Hardened 9.4/10 ────────────────────────
-│   Dangerous Workflow  10/10
-│   Branch Protection   —
-│   Code Review         9/10
+│   Dangerous Workflow   10/10
+│   Branch Protection    —
+│   Code Review          9/10
 │   Token Permissions    10/10
 │   Binary Artifacts     10/10
 │   Signed Releases      —
@@ -259,9 +259,9 @@ STATUS      BUILD         PURL                   LIFECYCLE
 │ Last Human Commit: 2024-02-18
 │ Advisories: 0
 ├─ Build Integrity: Moderate 4.1/10 ────────────────────────
-│   Dangerous Workflow  10/10
-│   Branch Protection   —
-│   Code Review         0/10
+│   Dangerous Workflow   10/10
+│   Branch Protection    —
+│   Code Review          0/10
 │   Token Permissions    0/10
 │   Binary Artifacts     10/10
 │   Signed Releases      —
@@ -312,9 +312,9 @@ STATUS      BUILD         PURL                                     LIFECYCLE
 │ Last Human Commit: 2024-06-19
 │ Maintained Score: 0/10
 ├─ Build Integrity: Moderate 5.7/10 ────────────────────────
-│   Dangerous Workflow  10/10
-│   Branch Protection   —
-│   Code Review         9/10
+│   Dangerous Workflow   10/10
+│   Branch Protection    —
+│   Code Review          9/10
 │   Token Permissions    0/10
 │   Binary Artifacts     10/10
 │   Signed Releases      —
@@ -365,9 +365,9 @@ STATUS     BUILD         PURL                 LIFECYCLE
 │ Advisories: 1
 │ Max Advisory Severity: HIGH 7.5
 ├─ Build Integrity: Moderate 3.5/10 ────────────────────────
-│   Dangerous Workflow  10/10
-│   Branch Protection   0/10
-│   Code Review         0/10
+│   Dangerous Workflow   10/10
+│   Branch Protection    0/10
+│   Code Review          0/10
 │   Token Permissions    0/10
 │   Binary Artifacts     10/10
 │   Signed Releases      —
@@ -418,9 +418,9 @@ STATUS     BUILD         PURL                                          LIFECYCLE
 ├─ Signals ─────────────────────────────────────────────────
 │ Repo Archived: true
 ├─ Build Integrity: Moderate 4.1/10 ────────────────────────
-│   Dangerous Workflow  —
-│   Branch Protection   0/10
-│   Code Review         5/10
+│   Dangerous Workflow   —
+│   Branch Protection    0/10
+│   Code Review          5/10
 │   Token Permissions    —
 │   Binary Artifacts     10/10
 │   Signed Releases      —
@@ -472,9 +472,9 @@ STATUS     BUILD         PURL                    LIFECYCLE
 ├─ Signals ─────────────────────────────────────────────────
 │ EOL Source: npmjs
 ├─ Build Integrity: Moderate 6.4/10 ────────────────────────
-│   Dangerous Workflow  —
-│   Branch Protection   —
-│   Code Review         7/10
+│   Dangerous Workflow   —
+│   Branch Protection    —
+│   Code Review          7/10
 │   Token Permissions    —
 │   Binary Artifacts     10/10
 │   Signed Releases      —

@@ -52,9 +52,9 @@ STATUS     BUILD         PURL                    LIFECYCLE
 │ Last Human Commit: 2026-03-31
 │ Maintained Score: 10/10
 ├─ Build Integrity: Hardened 9.4/10 ────────────────────────
-│   Dangerous Workflow  10/10
-│   Branch Protection   —
-│   Code Review         9/10
+│   Dangerous Workflow   10/10
+│   Branch Protection    —
+│   Code Review          9/10
 │   Token Permissions    10/10
 │   Binary Artifacts     10/10
 │   Signed Releases      —
