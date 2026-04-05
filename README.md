@@ -529,6 +529,7 @@ npm / PyPI / Maven / Cargo / Go modules / NuGet / RubyGems / Packagist
 ## Features
 
 - **Multi-ecosystem support**: 8 ecosystems with full PURL (Package URL) spec compliance
+- **Build integrity grading**: Supply chain build tamper resistance assessment using Scorecard checks and SLSA provenance — [details](docs/build-integrity.md)
 - **OpenSSF Scorecard integration**: Automated security maturity metrics
 - **Parallel-optimized batch processing**: 5,000+ PURLs/run with concurrent API orchestration
 - **Unified scan subcommand**: Single entry point for PURL, GitHub URL, SBOM, go.mod — with `--fail-on` CI exit code gating
@@ -556,6 +557,7 @@ See [Data Flow](docs/data-flow.md) for API integration diagram and two-path asse
 | Document | Overview |
 | --- | --- |
 | [Usage](docs/usage.md) | CLI commands, batch processing, filters, configuration, logging |
+| [Build Integrity](docs/build-integrity.md) | Supply chain build tamper resistance grading |
 | [Data Flow](docs/data-flow.md) | API integration diagram, two-path assessment architecture |
 | [Integration Examples](docs/integration-examples.md) | Trivy/SBOM integration, container scanning, dependency tracing, GitHub Actions scheduled scanning |
 | [Landscape Comparison](docs/landscape.md) | Problem space, tool comparison, complementary usage |
