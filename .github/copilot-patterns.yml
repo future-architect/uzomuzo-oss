@@ -79,3 +79,4 @@ patterns:
     file: "internal/domain/audit/verdict.go"
     date: "2026-04-05"
   # comment-doc-drift: already covered by "Comment-Code Consistency" rule (PR #144, build_health_assessor.go:25 — ScorecardCheck comment referenced SLSA/Attestation but those signals are excluded)
+  # api-consistency: already covered by "Consistent Conditional Columns Across Output Formats" (PR #144, scan_render.go:501,560 — JSON/CSV per-entry omitted "Ungraded" while summary counted it)
