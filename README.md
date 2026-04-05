@@ -254,7 +254,7 @@ STATUS      PURL                   LIFECYCLE    BUILD
 │   Binary Artifacts    10  Pinned Deps          0
 │   → https://scorecard.dev/viewer/?uri=github.com%2Fmoment%2Fmoment
 ├─ Health ──────────────────────────────────────────────────
-│ 48015 stars
+│ 48016 stars
 │ Used by: 2452 packages
 │ Score: 3.1/10  Maintained: 0.0/10
 │ Last Commit: 2024-02-18
