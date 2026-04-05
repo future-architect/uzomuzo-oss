@@ -17,11 +17,7 @@ patterns:
     pr: 87
     file: "internal/interfaces/cli/scan.go"
     date: "2026-04-02"
-  - category: "defensive-coding"
-    summary: "Validation/check functions must use the exact same format strings and delimiters as the functions they validate — mismatched formats allow silent false passes"
-    pr: 127
-    file: "scripts/update-doc-examples/main.go"
-    date: "2026-04-04"
+  # defensive-coding: promoted to coding-standards.instructions.md (PRs #127, #130 — match validation format strings, CI staging completeness, dynamic refs)
   # security: promoted to security.instructions.md (PRs #111, #127 — validate config-sourced paths, reject absolute paths, apply consistently to all config paths)
   - category: "duplicate-parsing"
     summary: "Provide a combined parser (ParseWorkflowAll) when callers need both external URLs and local paths, avoiding double YAML unmarshal"
