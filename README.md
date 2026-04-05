@@ -71,7 +71,7 @@ trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
   🛑 EOL-Effective:    3 (0.2%)
 ```
 
-**59% of dependencies have lifecycle concerns invisible to SCA tools.** See the [full scan result](docs/assets/juice-shop-eol-result.txt).
+**59% of dependencies have lifecycle concerns invisible to SCA tools.** See the [full scan result](docs/assets/juice-shop-eol-result.txt) (EOL-Confirmed and EOL-Effective packages only; filtered with `--show-only replace`).
 
 ## Installation
 
