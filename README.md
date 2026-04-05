@@ -29,8 +29,7 @@ STATUS     PURL                 LIFECYCLE
 --- PURL 1 ---
 ── pkg:npm/dicer@0.3.1 ─────────────────────────────────────
 │ A very fast streaming multipart parser for node.js
-│ 🔴 EOL-Effective: Unmaintained with unpatched
-│                  vulnerabilities
+│ 🔴 EOL-Effective: Unmaintained, unpatched vulnerabilities
 ├─ Signals ─────────────────────────────────────────────────
 │ Last Human Commit: 2023-07-15
 │ Maintained Score: 0/10
@@ -310,8 +309,7 @@ STATUS     PURL                 LIFECYCLE
 --- PURL 1 ---
 ── pkg:npm/dicer@0.3.1 ─────────────────────────────────────
 │ A very fast streaming multipart parser for node.js
-│ 🔴 EOL-Effective: Unmaintained with unpatched
-│                  vulnerabilities
+│ 🔴 EOL-Effective: Unmaintained, unpatched vulnerabilities
 ├─ Signals ─────────────────────────────────────────────────
 │ Last Human Commit: 2023-07-15
 │ Maintained Score: 0/10
@@ -397,12 +395,12 @@ STATUS     PURL                    LIFECYCLE
 --- PURL 1 ---
 ── pkg:npm/request@2.88.2 ──────────────────────────────────
 │ 🏊🏾 Simplified HTTP request client.
-│ 🔴 EOL-Confirmed: Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2
+│ 🔴 EOL-Confirmed: Deprecated in npm registry
 ├─ Signals ─────────────────────────────────────────────────
 │ EOL Source: npmjs
 ├─ EOL ─────────────────────────────────────────────────────
 │ Evidence (1):
-│   [npmjs] Stable version is deprecated in npm registry. Message: request has been deprecated, see https://github.com/request/request/issues/3142 UI: https://www.npmjs.com/package/request/v/2.88.2 (confidence 0.90)
+│   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/request
 ├─ Health ──────────────────────────────────────────────────
 │ 25578 stars
@@ -413,7 +411,6 @@ STATUS     PURL                    LIFECYCLE
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.88.2 (2020-02-11)  ⚠️ 1 advisory (+ 3 transitive) ⚠️ [DEPRECATED]
 │   MEDIUM   (6.1)  GHSA-p8p7-x288-28g6
-│   → https://deps.dev/npm/request/2.88.2
 │   Transitive (via tough-cookie@2.5.0, qs@6.5.5, form-data@2.3.3):
 │     MEDIUM   (6.5)  GHSA-72xf-g2v4-qvf3
 │     LOW      (3.7)  GHSA-6rw7-vpxm-498p

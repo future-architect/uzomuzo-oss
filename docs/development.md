@@ -145,11 +145,13 @@ This means you don't need to run `make update-doc-examples` locally — CI will 
 
 ### Manual Trigger (GitHub UI)
 
-To force-refresh all doc examples without creating a PR:
+To force-refresh all doc examples:
 
 1. Go to **Actions** tab → **CI** workflow
 2. Click **"Run workflow"** → select the target branch (e.g. `main`) → click **"Run workflow"**
-3. The `doc-examples` job builds the binary, runs all 17 commands, and auto-commits any changes
+3. The `doc-examples` job builds the binary, runs all 17 commands, and creates a PR with the changes
+
+The manual trigger creates a PR (instead of pushing directly) because branch protection rules prevent direct pushes to `main`. Review and merge the auto-generated PR to apply the updates.
 
 This is useful for periodic refresh (star counts, dependent counts drift over time) or after merging output-affecting changes.
 
