@@ -34,8 +34,8 @@
 $ uzomuzo scan pkg:npm/express@4.18.2
 
 --- Summary Table ---
-STATUS     PURL                    LIFECYCLE
-✅ ok       pkg:npm/express@4.18.2  Active
+STATUS     PURL                    LIFECYCLE  BUILD
+✅ ok       pkg:npm/express@4.18.2  Active     Hardened 9.3
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 0 replace | 🔍 0 review
@@ -51,6 +51,11 @@ STATUS     PURL                    LIFECYCLE
 │ Recent Stable Release: true
 │ Last Human Commit: 2026-03-31
 │ Maintained Score: 10/10
+├─ Build Integrity: Hardened 9.3/10 (5/6) ──────────────────
+│   Dangerous Workflow  10  Branch Protection    —
+│   Code Review          9  Token Permissions   10
+│   Binary Artifacts    10  Pinned Deps          6
+│   → https://scorecard.dev/viewer/?uri=github.com%2Fexpressjs%2Fexpress
 ├─ Health ──────────────────────────────────────────────────
 │ 68888 stars
 │ Used by: 2211 packages
@@ -114,13 +119,13 @@ When transitive dependencies are included, output shows a `RELATION` column indi
 ```text
 $ uzomuzo scan --file go.mod -f table
 
-STATUS      PURL                                                        RELATION  LIFECYCLE
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed
-⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled
-✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active
+STATUS      PURL                                                        RELATION  LIFECYCLE      BUILD
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  Moderate 5.0
+⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled        Moderate 6.5
+⚠️ caution  pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Moderate 6.7
 
 ── Summary ─────────────────────────────────────────────────
-│ 3 dependencies | ✅ 1 ok | ⚠️ 1 caution | 🔴 1 replace | 🔍 0 review
+│ 3 dependencies | ✅ 0 ok | ⚠️ 2 caution | 🔴 1 replace | 🔍 0 review
 └───────────────────────────────────────────────────────────
 ```
 <!-- end:output:usage-gomod-table -->
@@ -288,9 +293,9 @@ Rules:
 <!-- begin:output:usage-request-table -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --format table
-STATUS     PURL                    LIFECYCLE
-🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed
-✅ ok       pkg:npm/express@4.18.2  Active
+STATUS     PURL                    LIFECYCLE      BUILD
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed  —
+✅ ok       pkg:npm/express@4.18.2  Active         Hardened 9.3
 
 ── Summary ─────────────────────────────────────────────────
 │ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -332,13 +337,20 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
     "ok": 0,
     "caution": 0,
     "replace": 1,
-    "review": 0
+    "review": 0,
+    "build_integrity": {
+      "hardened": 0,
+      "moderate": 0,
+      "weak": 0,
+      "ungraded": 1
+    }
   },
   "packages": [
     {
       "purl": "pkg:npm/request@2.88.2",
       "verdict": "replace",
       "lifecycle": "EOL-Confirmed",
+      "build_integrity": "Ungraded",
       "repo_url": "https://github.com/request/request",
       "overall_score": 3.6,
       "dependent_count": 186349,
@@ -372,8 +384,8 @@ The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, 
 <!-- begin:output:usage-request-csv -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --format csv
-verdict,purl,lifecycle,successor,advisory_count,max_advisory_severity,max_cvss3_score,direct_advisory_count,transitive_advisory_count,max_transitive_advisory_severity,max_transitive_cvss3_score,repo_url,source,via
-replace,pkg:npm/request@2.88.2,EOL-Confirmed,,4,MEDIUM,6.5,1,3,MEDIUM,6.5,https://github.com/request/request,,
+verdict,purl,lifecycle,build_integrity,build_integrity_score,successor,advisory_count,max_advisory_severity,max_cvss3_score,direct_advisory_count,transitive_advisory_count,max_transitive_advisory_severity,max_transitive_cvss3_score,repo_url,source,via
+replace,pkg:npm/request@2.88.2,EOL-Confirmed,Ungraded,,,4,MEDIUM,6.5,1,3,MEDIUM,6.5,https://github.com/request/request,,
 ```
 <!-- end:output:usage-request-csv -->
 
@@ -403,8 +415,8 @@ Without `--fail-on`, exit code is always 0 regardless of scan results.
 <!-- begin:output:usage-failon-match -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-confirmed --format table
-STATUS     PURL                    LIFECYCLE
-🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed
+STATUS     PURL                    LIFECYCLE      BUILD
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed  —
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -418,8 +430,8 @@ STATUS     PURL                    LIFECYCLE
 <!-- begin:output:usage-failon-nomatch -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --fail-on eol-effective --format table
-STATUS     PURL                    LIFECYCLE
-🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed
+STATUS     PURL                    LIFECYCLE      BUILD
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed  —
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -433,9 +445,9 @@ STATUS     PURL                    LIFECYCLE
 <!-- begin:output:usage-failon-multi -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 pkg:npm/express@4.18.2 --fail-on eol-confirmed,stalled --format table
-STATUS     PURL                    LIFECYCLE
-🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed
-✅ ok       pkg:npm/express@4.18.2  Active
+STATUS     PURL                    LIFECYCLE      BUILD
+🔴 replace  pkg:npm/request@2.88.2  EOL-Confirmed  —
+✅ ok       pkg:npm/express@4.18.2  Active         Hardened 9.3
 
 ── Summary ─────────────────────────────────────────────────
 │ 2 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review

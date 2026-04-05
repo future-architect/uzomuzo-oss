@@ -113,6 +113,20 @@ const (
 )
 
 // =============================
+// Build Integrity Labels (constants)
+// =============================
+
+// BuildIntegrityLabel represents the build integrity assessment outcome.
+type BuildIntegrityLabel = domain.BuildIntegrityLabel
+
+const (
+	BuildLabelHardened BuildIntegrityLabel = domain.BuildLabelHardened
+	BuildLabelModerate BuildIntegrityLabel = domain.BuildLabelModerate
+	BuildLabelWeak     BuildIntegrityLabel = domain.BuildLabelWeak
+	BuildLabelUngraded BuildIntegrityLabel = domain.BuildLabelUngraded
+)
+
+// =============================
 // EOL States (constants)
 // =============================
 const (
@@ -159,7 +173,7 @@ func BuildLifecycleSummary(a *Analysis) LifecycleSummary {
 		copy(ls.EOLEvidences, a.EOL.Evidences)
 	}
 	if lr := a.GetLifecycleResult(); lr != nil {
-		ls.MaintenanceStatus = lr.Label
+		ls.MaintenanceStatus = domain.MaintenanceStatus(lr.Label)
 		ls.LifecycleReason = lr.Reason
 	}
 	return ls

@@ -55,10 +55,10 @@ const (
 )
 
 // AssessmentResult is the normalized output for a single axis assessment.
-// For lifecycle we project existing lifecycle assessment entity fields into this structure.
+// Label is a string to allow different axis-specific label types (MaintenanceStatus, BuildIntegrityLabel).
 type AssessmentResult struct {
 	Axis    AssessmentAxis
-	Label   MaintenanceStatus
+	Label   string
 	Reason  string
 	Trace   []string          // debug-only explanatory steps (not printed in normal CLI)
 	Meta    map[string]string // future extensibility (key/value lightweight diagnostics)

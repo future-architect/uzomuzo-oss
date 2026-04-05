@@ -385,6 +385,116 @@ func signalDisplayName(name string) string {
 	}
 }
 
+// buildIntegrityMediumSignals lists medium-tier signals that are only displayed
+// when evaluated (Role == SignalUsed). All other signals are Critical/High
+// and always shown regardless of evaluation status.
+var buildIntegrityMediumSignals = map[string]bool{
+	analysispkg.SignalPinnedDependencies: true,
+}
+
+// buildSignalCompactScore extracts a compact score display from a Signal.
+// Returns the numeric part of "N/10", "10" for "verified", or "—" for absent.
+func buildSignalCompactScore(s analysispkg.Signal) string {
+	if s.Role == analysispkg.SignalAbsent {
+		return "—"
+	}
+	if s.Value == "verified" {
+		return "10"
+	}
+	if idx := strings.Index(s.Value, "/"); idx > 0 {
+		return s.Value[:idx]
+	}
+	return s.Value
+}
+
+// writeBoxBuildIntegrity writes the Build Integrity section in a compact
+// 2-column layout. Critical/High signals are always shown (including —).
+// Medium signals are shown only when evaluated. Returns nil without writing
+// if no build integrity data exists or label is Ungraded.
+func writeBoxBuildIntegrity(ctx *boxContext) error {
+	a := ctx.analysis
+	if a == nil {
+		return nil
+	}
+	br := a.GetBuildHealthResult()
+	if br == nil || br.Label == string(analysispkg.BuildLabelUngraded) || br.Label == "" {
+		return nil
+	}
+
+	var evaluated int
+	for _, s := range br.Signals {
+		if s.Role == analysispkg.SignalUsed {
+			evaluated++
+		}
+	}
+	total := len(br.Signals)
+
+	scoreStr := br.Meta["score"]
+	header := br.Label
+	if scoreStr != "" && scoreStr != analysispkg.ScoreUngraded {
+		header = fmt.Sprintf("%s %s/10 (%d/%d)", br.Label, scoreStr, evaluated, total)
+	}
+
+	if err := writeSectionBar(ctx, "Build Integrity: "+header); err != nil {
+		return err
+	}
+
+	// Filter: Critical/High always shown; Medium only when evaluated.
+	var visible []analysispkg.Signal
+	for _, s := range br.Signals {
+		if buildIntegrityMediumSignals[s.Name] && s.Role != analysispkg.SignalUsed {
+			continue
+		}
+		visible = append(visible, s)
+	}
+
+	// Render in 2-column layout.
+	const colW = 19
+	for i := 0; i < len(visible); i += 2 {
+		lLabel := buildSignalDisplayName(visible[i].Name)
+		lScore := buildSignalCompactScore(visible[i])
+
+		if i+1 < len(visible) {
+			rLabel := buildSignalDisplayName(visible[i+1].Name)
+			rScore := buildSignalCompactScore(visible[i+1])
+			if err := writeLine(ctx, "  %-*s %2s  %-*s %2s", colW, lLabel, lScore, colW, rLabel, rScore); err != nil {
+				return err
+			}
+		} else {
+			if err := writeLine(ctx, "  %-*s %2s", colW, lLabel, lScore); err != nil {
+				return err
+			}
+		}
+	}
+
+	if a.ScorecardURL != "" {
+		if err := writeLine(ctx, "  → %s", a.ScorecardURL); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// buildSignalDisplayName maps build signal machine names to compact display labels.
+func buildSignalDisplayName(name string) string {
+	switch name {
+	case analysispkg.SignalDangerousWorkflow:
+		return "Dangerous Workflow"
+	case analysispkg.SignalBranchProtection:
+		return "Branch Protection"
+	case analysispkg.SignalCodeReview:
+		return "Code Review"
+	case analysispkg.SignalTokenPermissions:
+		return "Token Permissions"
+	case analysispkg.SignalBinaryArtifacts:
+		return "Binary Artifacts"
+	case analysispkg.SignalPinnedDependencies:
+		return "Pinned Deps"
+	default:
+		return name
+	}
+}
+
 // writeBoxOrigin writes the Origin section (source, relation, via).
 // Returns nil without writing for direct PURLs with direct/unknown relation (no provenance noise).
 // Only shown for action/transitive entries where origin context is meaningful.
@@ -427,7 +537,7 @@ func writeBoxVerdict(ctx *boxContext) error {
 	// Use lifecycle label and reason if available
 	if ctx.analysis != nil {
 		if lr := ctx.analysis.GetLifecycleResult(); lr != nil {
-			label = string(lr.Label)
+			label = lr.Label
 			reason = lr.Reason
 		}
 	}
@@ -900,6 +1010,7 @@ func renderBoxEntry(w io.Writer, entry *domainaudit.AuditEntry) error {
 		func() error { return writeBoxIdentity(ctx) },
 		func() error { return writeBoxVerdict(ctx) },
 		func() error { return writeBoxSignals(ctx) },
+		func() error { return writeBoxBuildIntegrity(ctx) },
 		func() error { return writeBoxOrigin(ctx) },
 		func() error { return writeBoxEOL(ctx) },
 		func() error { return writeBoxHealth(ctx) },

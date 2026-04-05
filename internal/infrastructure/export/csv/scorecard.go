@@ -19,7 +19,7 @@ func getLifecycleAssessmentResult(a *domain.Analysis) (string, string) {
 		return "Unknown", "No lifecycle assessment available"
 	}
 	if res := a.AxisResults[domain.LifecycleAxis]; res != nil {
-		return string(res.Label), res.Reason
+		return res.Label, res.Reason
 	}
 	return "Review Needed", "No lifecycle assessment available"
 }

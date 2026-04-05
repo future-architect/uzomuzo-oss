@@ -27,7 +27,7 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 		name     string
 		analysis *Analysis
 		scores   map[string]*ScoreEntity
-		want     MaintenanceStatus
+		want     string
 		wantErr  bool
 	}{
 		{
@@ -52,7 +52,7 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 8, 10, "Well maintained"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, "Few vulnerabilities"),
 			},
-			want:    LabelActive,
+			want:    string(LabelActive),
 			wantErr: false,
 		},
 		{
@@ -72,7 +72,7 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 				}
 			}(),
 			scores:  map[string]*ScoreEntity{},
-			want:    LabelEOLEffective,
+			want:    string(LabelEOLEffective),
 			wantErr: false,
 		},
 		{
@@ -92,7 +92,7 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 				}
 			}(),
 			scores:  map[string]*ScoreEntity{},
-			want:    LabelLegacySafe, // zero advisories + dormant > EolInactivityDays → Legacy-Safe
+			want:    string(LabelLegacySafe), // zero advisories + dormant > EolInactivityDays → Legacy-Safe
 			wantErr: false,
 		},
 		{
@@ -112,7 +112,7 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 				}
 			}(),
 			scores:  map[string]*ScoreEntity{},
-			want:    LabelEOLEffective,
+			want:    string(LabelEOLEffective),
 			wantErr: false,
 		},
 		{
@@ -130,7 +130,7 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 6, 10, "Maintained"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 8, 10, "Few vulnerabilities"),
 			},
-			want:    LabelEOLConfirmed,
+			want:    string(LabelEOLConfirmed),
 			wantErr: false,
 		},
 		{
@@ -154,7 +154,7 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 2, 10, "Poorly maintained"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 5, 10, "Some vulnerabilities"),
 			},
-			want:    LabelStalled,
+			want:    string(LabelStalled),
 			wantErr: false,
 		},
 		{
@@ -169,7 +169,7 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 				},
 			},
 			scores:  map[string]*ScoreEntity{},
-			want:    LabelActive, // recent commits + Scorecard unavailable → Active (maintenance unknown, not proven low)
+			want:    string(LabelActive), // recent commits + Scorecard unavailable → Active (maintenance unknown, not proven low)
 			wantErr: false,
 		},
 		{
@@ -186,7 +186,7 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 			scores: map[string]*ScoreEntity{
 				"Maintained": NewScoreEntity("Maintained", 6, 10, "Maintained"),
 			},
-			want:    LabelEOLConfirmed,
+			want:    string(LabelEOLConfirmed),
 			wantErr: false,
 		},
 	}
@@ -231,7 +231,7 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 		name        string
 		analysis    *Analysis
 		scores      map[string]*ScoreEntity
-		wantLabel   MaintenanceStatus
+		wantLabel   string
 		description string
 	}{
 		{
@@ -255,7 +255,7 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 2, 10, "Poorly maintained"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 8, 10, "Few vulnerabilities"),
 			},
-			wantLabel:   LabelActive,
+			wantLabel:   string(LabelActive),
 			description: "Recent stable publish is the strongest activity signal regardless of maintenance score",
 		},
 		{
@@ -279,7 +279,7 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 8, 10, "Well maintained"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, "Few vulnerabilities"),
 			},
-			wantLabel:   LabelStalled,
+			wantLabel:   string(LabelStalled),
 			description: "Should be stalled due to old activity despite good scores",
 		},
 		{
@@ -308,7 +308,7 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 5, 10, "Medium maintenance"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 7, 10, "Some vulnerabilities"),
 			},
-			wantLabel:   LabelActive,
+			wantLabel:   string(LabelActive),
 			description: "Recent prerelease publish is a strong activity signal",
 		},
 		{
@@ -328,7 +328,7 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 1, 10, "Poorly maintained"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 5, 10, "Some vulnerabilities"),
 			},
-			wantLabel:   LabelActive,
+			wantLabel:   string(LabelActive),
 			description: "Go modules: commits deliver updates via go get; low maintenance score does not downgrade to Stalled",
 		},
 		{
@@ -348,7 +348,7 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 1, 10, "Poorly maintained"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 5, 10, "Some vulnerabilities"),
 			},
-			wantLabel:   LabelStalled,
+			wantLabel:   string(LabelStalled),
 			description: "npm: commits without publish do not reach consumers; low maintenance → Stalled",
 		},
 		{
@@ -368,7 +368,7 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 1, 10, "Poorly maintained"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 5, 10, "Some vulnerabilities"),
 			},
-			wantLabel:   LabelActive,
+			wantLabel:   string(LabelActive),
 			description: "Composer/Packagist: VCS-direct delivery; commits are sufficient for Active",
 		},
 		{
@@ -385,7 +385,7 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 				},
 			},
 			scores:      map[string]*ScoreEntity{}, // no Scorecard at all
-			wantLabel:   LabelActive,
+			wantLabel:   string(LabelActive),
 			description: "npm: commits + no Scorecard → maintenance unknown → Active (not penalized for missing metrics)",
 		},
 		{
@@ -399,7 +399,7 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 				// No ReleaseInfo → HasPublishData() == false
 			},
 			scores:      map[string]*ScoreEntity{}, // no Scorecard
-			wantLabel:   LabelStalled,
+			wantLabel:   string(LabelStalled),
 			description: "GitHub-only path: inactive commits, no publish data, no scorecard → Stalled (not ReviewNeeded)",
 		},
 		{
@@ -419,7 +419,7 @@ func TestLifecycleAssessorService_Assess_Complex_Cases(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 0, 10, "Not maintained"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 5, 10, "Some vulnerabilities"),
 			},
-			wantLabel:   LabelStalled,
+			wantLabel:   string(LabelStalled),
 			description: "npm: commits + Scorecard confirms Maintained=0 → Stalled (proven low, not unknown)",
 		},
 	}
@@ -461,7 +461,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 		name     string
 		analysis *Analysis
 		scores   map[string]*ScoreEntity
-		want     MaintenanceStatus
+		want     string
 	}{
 		{
 			name:     "nil_analysis",
@@ -470,7 +470,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 8, 10, "Well maintained"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, "Few vulnerabilities"),
 			},
-			want: LabelReviewNeeded,
+			want: string(LabelReviewNeeded),
 		},
 		{
 			name: "missing_maintained_score",
@@ -486,7 +486,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 			scores: map[string]*ScoreEntity{
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, "Few vulnerabilities"),
 			},
-			want: LabelActive, // recent commits + Maintained score absent → Active (maintenance unknown, not proven low)
+			want: string(LabelActive), // recent commits + Maintained score absent → Active (maintenance unknown, not proven low)
 		},
 		{
 			name: "missing_vulnerabilities_score",
@@ -502,7 +502,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 			scores: map[string]*ScoreEntity{
 				"Maintained": NewScoreEntity("Maintained", 8, 10, "Well maintained"),
 			},
-			want: LabelStalled, // proceed to activity evaluation with partial scores; recent commits, vuln unknown -> Stalled
+			want: string(LabelStalled), // proceed to activity evaluation with partial scores; recent commits, vuln unknown -> Stalled
 		},
 		{
 			name: "commit_data_no_scorecard_recent_publish_stalled",
@@ -519,7 +519,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelStalled, // Path A: commit data + no scorecard + publish within 730 days → Stalled
+			want:   string(LabelStalled), // Path A: commit data + no scorecard + publish within 730 days → Stalled
 		},
 		{
 			name: "commit_data_partial_scorecard_maintained_ok_stalled",
@@ -539,7 +539,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				"Maintained": NewScoreEntity("Maintained", 5, 10, "Medium maintenance"),
 				// Missing "Vulnerabilities" → partial scorecard
 			},
-			want: LabelStalled, // Path A: commit data + Maintained ≥ 3 but missing Vuln → Stalled (not ReviewNeeded)
+			want: string(LabelStalled), // Path A: commit data + Maintained ≥ 3 but missing Vuln → Stalled (not ReviewNeeded)
 		},
 		{
 			name: "commit_data_no_scorecard_old_publish_old_commits_legacy_safe",
@@ -560,7 +560,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				}
 			}(),
 			scores: map[string]*ScoreEntity{},
-			want:   LabelLegacySafe, // Path A: zero advisories + dormant > EolInactivityDays → Legacy-Safe
+			want:   string(LabelLegacySafe), // Path A: zero advisories + dormant > EolInactivityDays → Legacy-Safe
 		},
 		{
 			name: "nil_repo_state",
@@ -571,7 +571,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 8, 10, "Well maintained"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, "Few vulnerabilities"),
 			},
-			want: LabelStalled, // No commit data (RepoState nil) → Path B C1: Maintained ≥ 3 → Stalled
+			want: string(LabelStalled), // No commit data (RepoState nil) → Path B C1: Maintained ≥ 3 → Stalled
 		},
 		{
 			name: "no_commit_data_good_maintained_stalled_not_review",
@@ -589,7 +589,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 5, 10, "Medium maintenance"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 6, 10, "Some vulnerabilities"),
 			},
-			want: LabelStalled, // Maintained ≥ 3 + no commit data → Stalled instead of ReviewNeeded
+			want: string(LabelStalled), // Maintained ≥ 3 + no commit data → Stalled instead of ReviewNeeded
 		},
 		{
 			name: "no_commit_data_no_scorecard_recent_publish_stalled",
@@ -603,7 +603,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelStalled, // C3d: no advisories, 366-730 days → Stalled
+			want:   string(LabelStalled), // C3d: no advisories, 366-730 days → Stalled
 		},
 		{
 			name: "no_repo_state_no_scorecard_recent_publish_with_advisories_stalled",
@@ -618,7 +618,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelStalled, // C3b: advisories + publish ≤ 730 days → Stalled
+			want:   string(LabelStalled), // C3b: advisories + publish ≤ 730 days → Stalled
 		},
 		{
 			name: "no_commit_data_with_repo_state_no_scorecard_advisories_stalled",
@@ -637,7 +637,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelStalled, // C3b: advisories + publish ≤ 730 days → Stalled (not EOL-Effective)
+			want:   string(LabelStalled), // C3b: advisories + publish ≤ 730 days → Stalled (not EOL-Effective)
 		},
 		{
 			name: "no_commit_data_no_scorecard_old_publish_legacy_safe",
@@ -651,7 +651,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelLegacySafe, // C3e: no advisories + publish > 730 days → Legacy Safe
+			want:   string(LabelLegacySafe), // C3e: no advisories + publish > 730 days → Legacy Safe
 		},
 		// ── New C1-C3 decision tree tests ──
 		{
@@ -666,7 +666,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelActive, // C3c: no advisories + publish ≤ 365 days → Active
+			want:   string(LabelActive), // C3c: no advisories + publish ≤ 365 days → Active
 		},
 		{
 			name: "no_commit_no_scorecard_no_advisory_mid_publish_stalled",
@@ -680,7 +680,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelStalled, // C3d: no advisories + 366-730 days → Stalled
+			want:   string(LabelStalled), // C3d: no advisories + 366-730 days → Stalled
 		},
 		{
 			name: "no_commit_no_scorecard_advisory_old_publish_eol_effective",
@@ -698,7 +698,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelEOLEffective, // C3a: advisories + publish > 730 days → EOL-Effective
+			want:   string(LabelEOLEffective), // C3a: advisories + publish > 730 days → EOL-Effective
 		},
 		{
 			name: "no_commit_no_scorecard_advisory_recent_publish_stalled",
@@ -716,7 +716,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelStalled, // C3b: advisories + publish ≤ 730 days → Stalled
+			want:   string(LabelStalled), // C3b: advisories + publish ≤ 730 days → Stalled
 		},
 		{
 			name: "no_commit_no_scorecard_advisory_mid_publish_stalled",
@@ -734,7 +734,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelStalled, // C3b2: advisories + 366-730 days → Stalled
+			want:   string(LabelStalled), // C3b2: advisories + 366-730 days → Stalled
 		},
 		{
 			name: "no_commit_low_scorecard_advisory_old_publish_eol_effective",
@@ -754,7 +754,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 			scores: map[string]*ScoreEntity{
 				"Maintained": NewScoreEntity("Maintained", 1, 10, "Poorly maintained"),
 			},
-			want: LabelEOLEffective, // C2a: low maintenance + advisories + old publish → EOL-Effective
+			want: string(LabelEOLEffective), // C2a: low maintenance + advisories + old publish → EOL-Effective
 		},
 		{
 			name: "no_commit_low_scorecard_no_advisory_stalled",
@@ -770,7 +770,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 			scores: map[string]*ScoreEntity{
 				"Maintained": NewScoreEntity("Maintained", 1, 10, "Poorly maintained"),
 			},
-			want: LabelStalled, // C2b: low maintenance, no advisories → Stalled
+			want: string(LabelStalled), // C2b: low maintenance, no advisories → Stalled
 		},
 		{
 			name: "no_commit_high_vuln_scorecard_sentinel_guard",
@@ -788,7 +788,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 5, 10, "Medium maintenance"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, "Few vulnerabilities"),
 			},
-			want: LabelStalled, // C1: Maintained ≥ 3 → Stalled (NOT LegacySafe from sentinel 999.0)
+			want: string(LabelStalled), // C1: Maintained ≥ 3 → Stalled (NOT LegacySafe from sentinel 999.0)
 		},
 		// ── Severity-aware lifecycle branching tests ──
 		{
@@ -807,7 +807,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelEOLEffective, // C3a: HIGH+ severity advisory + old publish → EOL-Effective
+			want:   string(LabelEOLEffective), // C3a: HIGH+ severity advisory + old publish → EOL-Effective
 		},
 		{
 			name: "C3a_low_severity_advisory_old_publish_stalled",
@@ -825,7 +825,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelStalled, // C3a: LOW severity only + old publish → Stalled (not EOL-Effective)
+			want:   string(LabelStalled), // C3a: LOW severity only + old publish → Stalled (not EOL-Effective)
 		},
 		{
 			name: "C2a_high_severity_advisory_low_maint_eol_effective",
@@ -845,7 +845,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 			scores: map[string]*ScoreEntity{
 				"Maintained": NewScoreEntity("Maintained", 1, 10, "Poorly maintained"),
 			},
-			want: LabelEOLEffective, // C2a: HIGH severity + low maintenance + old publish → EOL-Effective
+			want: string(LabelEOLEffective), // C2a: HIGH severity + low maintenance + old publish → EOL-Effective
 		},
 		{
 			name: "C2a_low_severity_advisory_low_maint_stalled",
@@ -865,7 +865,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 			scores: map[string]*ScoreEntity{
 				"Maintained": NewScoreEntity("Maintained", 1, 10, "Poorly maintained"),
 			},
-			want: LabelStalled, // C2a: LOW/MEDIUM severity only + low maintenance → Stalled (not EOL-Effective)
+			want: string(LabelStalled), // C2a: LOW/MEDIUM severity only + low maintenance → Stalled (not EOL-Effective)
 		},
 		{
 			name: "C3a_mixed_known_low_and_unknown_severity_conservative_fallback",
@@ -886,7 +886,7 @@ func TestLifecycleAssessorService_EdgeCases(t *testing.T) {
 				},
 			},
 			scores: map[string]*ScoreEntity{},
-			want:   LabelEOLEffective, // C3a: mixed known LOW + unknown → conservative fallback → EOL-Effective
+			want:   string(LabelEOLEffective), // C3a: mixed known LOW + unknown → conservative fallback → EOL-Effective
 		},
 	}
 

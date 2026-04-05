@@ -376,9 +376,17 @@ func (a *Analysis) FinalMaintenanceStatus() MaintenanceStatus {
 		return LabelEOLScheduled
 	}
 	if lr := a.GetLifecycleResult(); lr != nil {
-		return lr.Label
+		return MaintenanceStatus(lr.Label)
 	}
 	return LabelReviewNeeded
+}
+
+// GetBuildHealthResult returns the build_health axis assessment if present.
+func (a *Analysis) GetBuildHealthResult() *AssessmentResult {
+	if a == nil || a.AxisResults == nil {
+		return nil
+	}
+	return a.AxisResults[BuildHealthAxis]
 }
 
 // DisplayPURL returns the most user-meaningful PURL for presentation (original if available, otherwise effective).

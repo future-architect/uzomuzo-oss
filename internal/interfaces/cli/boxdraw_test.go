@@ -177,12 +177,12 @@ func TestWriteBoxVerdict(t *testing.T) {
 	tests := []struct {
 		name    string
 		verdict domainaudit.Verdict
-		label   analysis.MaintenanceStatus
+		label   string
 		icon    string
 	}{
-		{"ok", domainaudit.VerdictOK, analysis.LabelActive, "✅"},
-		{"caution", domainaudit.VerdictCaution, analysis.LabelStalled, "⚠️"},
-		{"replace", domainaudit.VerdictReplace, analysis.LabelEOLConfirmed, "🔴"},
+		{"ok", domainaudit.VerdictOK, string(analysis.LabelActive), "✅"},
+		{"caution", domainaudit.VerdictCaution, string(analysis.LabelStalled), "⚠️"},
+		{"replace", domainaudit.VerdictReplace, string(analysis.LabelEOLConfirmed), "🔴"},
 		{"review", domainaudit.VerdictReview, "", "🔍"},
 	}
 	for _, tt := range tests {
@@ -471,7 +471,7 @@ func TestRenderBoxEntry_FullEntry(t *testing.T) {
 			EffectivePURL: "pkg:npm/express@4.18.2",
 			RepoURL:       "github.com/expressjs/express",
 			AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
-				analysis.LifecycleAxis: {Label: analysis.LabelActive, Reason: "Regular releases"},
+				analysis.LifecycleAxis: {Label: string(analysis.LabelActive), Reason: "Regular releases"},
 			},
 		},
 	}
@@ -878,7 +878,7 @@ func TestWriteLine_WordWrap(t *testing.T) {
 	a := &analysis.Analysis{
 		AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
 			analysis.LifecycleAxis: {
-				Label:  analysis.LabelEOLEffective,
+				Label:  string(analysis.LabelEOLEffective),
 				Reason: "Scorecard data incomplete; open advisories (1, max: HIGH 7.5) and no human commits > 2 yrs",
 			},
 		},
