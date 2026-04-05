@@ -114,8 +114,9 @@ func (s *BuildHealthAssessorService) Assess(ctx context.Context, in AssessmentIn
 		}, nil
 	}
 
-	score := math.Round(weightedSum/totalWeight*10) / 10
-	label := ClassifyBuildIntegrity(score)
+	rawScore := weightedSum / totalWeight
+	label := ClassifyBuildIntegrity(rawScore)
+	score := math.Round(rawScore*10) / 10
 	trace = append(trace, fmt.Sprintf("score=%.1f -> %s", score, label))
 
 	return &AssessmentResult{
