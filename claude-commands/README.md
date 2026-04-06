@@ -4,9 +4,9 @@ Reusable [Claude Code](https://claude.ai/code) slash commands for dependency ana
 
 ## Commands
 
-### `/analyze-eol-risk` — EOL Dependency Risk Analysis
+### `/assess-eol-impact` — EOL Dependency Impact Assessment
 
-Detects EOL packages with uzomuzo, then uses the LLM to trace data flow through source code and assess security risk.
+Detects EOL packages with uzomuzo, then uses the LLM to trace data flow through source code and assess security impact.
 
 **What it does:**
 1. Runs `uzomuzo scan` to detect EOL/Archived dependencies
@@ -18,10 +18,10 @@ Detects EOL packages with uzomuzo, then uses the LLM to trace data flow through 
 
 ```bash
 # In Claude Code
-/analyze-eol-risk /path/to/your/go/project
+/assess-eol-impact /path/to/your/go/project
 ```
 
-### `/analyze-dep` — 6-Axis Dependency Removal Evaluation
+### `/evaluate-dep-removal` — 6-Axis Dependency Removal Evaluation
 
 Evaluates a single dependency for removal feasibility across six axes.
 
@@ -37,7 +37,7 @@ Evaluates a single dependency for removal feasibility across six axes.
 
 ```bash
 # In Claude Code
-/analyze-dep github.com/mitchellh/go-homedir
+/evaluate-dep-removal github.com/mitchellh/go-homedir
 ```
 
 ## Setup
