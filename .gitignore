@@ -1,11 +1,11 @@
-# Binary
-uzomuzo
+# Binary (root only, not cmd/ source)
+/uzomuzo
+/uzomuzo-*
 
 # Environment variables
 .env
 .venv/
 uzomuzo.base
-uzomuzo-*
 *.log
 *.exe
 ./uzomuzo.csv

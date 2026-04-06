@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -103,6 +104,14 @@ Examples:
 		},
 		Commands: []*urfcli.Command{
 			scanCommand(cfg),
+			{
+				Name:             "diet",
+				Usage:            "Analyze dependency removability (delegates to uzomuzo-diet)",
+				SkipFlagParsing:  true,
+				Action: func(ctx context.Context, cmd *urfcli.Command) error {
+					return delegateToDiet(ctx)
+				},
+			},
 			{
 				Name:  "update-spdx",
 				Usage: "Refresh embedded SPDX license list",
@@ -254,4 +263,22 @@ func buildScanOptions(cmd *urfcli.Command) (cli.ScanOptions, error) {
 		opts.LineEnd = le
 	}
 	return opts, nil
+}
+
+// delegateToDiet finds the uzomuzo-diet binary on PATH and delegates execution.
+func delegateToDiet(ctx context.Context) error {
+	dietBin, err := exec.LookPath("uzomuzo-diet")
+	if err != nil {
+		return fmt.Errorf("uzomuzo-diet not found on PATH.\nInstall: go install github.com/future-architect/uzomuzo-oss/cmd/uzomuzo-diet@latest")
+	}
+	// Pass all args after "uzomuzo diet" to uzomuzo-diet
+	args := []string{"uzomuzo-diet"}
+	if len(os.Args) > 2 {
+		args = append(args, os.Args[2:]...)
+	}
+	dietCmd := exec.CommandContext(ctx, dietBin, args[1:]...)
+	dietCmd.Stdin = os.Stdin
+	dietCmd.Stdout = os.Stdout
+	dietCmd.Stderr = os.Stderr
+	return dietCmd.Run()
 }

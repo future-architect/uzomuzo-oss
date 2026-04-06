@@ -1,7 +1,8 @@
 version: 2
 
 builds:
-  - binary: uzomuzo
+  - id: uzomuzo
+    binary: uzomuzo
     main: ./cmd/uzomuzo
     env:
       - CGO_ENABLED=0
@@ -15,13 +16,37 @@ builds:
       - amd64
       - arm64
 
+  - id: uzomuzo-diet
+    binary: uzomuzo-diet
+    main: ./cmd/uzomuzo-diet
+    env:
+      - CGO_ENABLED=1
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
 archives:
-  - format: tar.gz
+  - id: uzomuzo
+    builds:
+      - uzomuzo
+    format: tar.gz
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     format_overrides:
       - goos: windows
         format: zip
+
+  - id: uzomuzo-diet
+    builds:
+      - uzomuzo-diet
+    format: tar.gz
+    name_template: >-
+      uzomuzo-diet_{{ .Version }}_{{ .Os }}_{{ .Arch }}
 
 checksum:
   name_template: checksums.txt

@@ -83,6 +83,9 @@ Download the latest release from [GitHub Releases](https://github.com/future-arc
 
 ```bash
 go install github.com/future-architect/uzomuzo-oss/cmd/uzomuzo@latest
+
+# Optional: install diet command for dependency removability analysis
+go install github.com/future-architect/uzomuzo-oss/cmd/uzomuzo-diet@latest
 ```
 
 ### Build from source
@@ -91,6 +94,7 @@ go install github.com/future-architect/uzomuzo-oss/cmd/uzomuzo@latest
 git clone https://github.com/future-architect/uzomuzo-oss.git
 cd uzomuzo-oss
 go build -o uzomuzo ./cmd/uzomuzo
+CGO_ENABLED=1 go build -o uzomuzo-diet ./cmd/uzomuzo-diet  # requires C compiler
 ```
 
 ## Quick Start
@@ -129,6 +133,18 @@ uzomuzo scan --file .github/workflows/ci.yml
 # File input (one PURL per line)
 uzomuzo scan --file input_purls.txt --sample 500
 ```
+
+### Dependency Diet
+
+Prioritize which dependencies to remove first:
+
+```bash
+# Generate SBOM, then analyze removability
+trivy fs . --format cyclonedx -o bom.json
+uzomuzo diet --sbom bom.json --source .
+```
+
+See [Diet Command](docs/diet.md) for full documentation.
 
 See [Usage](docs/usage.md) for full CLI reference and [Integration Examples](docs/integration-examples.md) for Trivy, Syft, and Go module workflows.
 
