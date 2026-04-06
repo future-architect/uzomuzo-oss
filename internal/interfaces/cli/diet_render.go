@@ -119,21 +119,28 @@ func renderDietJSON(w io.Writer, plan *domaindiet.DietPlan) error {
 }
 
 func renderDietTable(w io.Writer, plan *domaindiet.DietPlan) error {
+	p := &errWriter{w: w}
+
 	// Summary header
-	fmt.Fprintf(w, "\n── Diet Plan (%d direct dependencies) ─────────────────────────\n\n", plan.Summary.TotalDirect)
+	p.printf("\n── Diet Plan (%d direct dependencies) ─────────────────────────\n\n", plan.Summary.TotalDirect)
 	if plan.Summary.UnusedDirect > 0 {
-		fmt.Fprintf(w, "  Unused direct deps:  %d\n", plan.Summary.UnusedDirect)
+		p.printf("  Unused direct deps:  %d\n", plan.Summary.UnusedDirect)
 	}
 	if plan.Summary.EasyWins > 0 {
-		fmt.Fprintf(w, "  Easy wins:           %d\n", plan.Summary.EasyWins)
+		p.printf("  Easy wins:           %d\n", plan.Summary.EasyWins)
 	}
-	fmt.Fprintf(w, "  Estimated removable: %d\n\n", plan.Summary.EstimatedRemovable)
+	p.printf("  Estimated removable: %d\n\n", plan.Summary.EstimatedRemovable)
+
+	if p.err != nil {
+		return p.err
+	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "RANK\tPRIORITY\tDIFFICULTY\tPURL\tEXCLUSIVE\tFILES\tCALLS\tLIFECYCLE\n")
-	fmt.Fprintf(tw, "────\t────────\t──────────\t────\t─────────\t─────\t─────\t─────────\n")
+	tp := &errWriter{w: tw}
+	tp.printf("RANK\tPRIORITY\tDIFFICULTY\tPURL\tEXCLUSIVE\tFILES\tCALLS\tLIFECYCLE\n")
+	tp.printf("────\t────────\t──────────\t────\t─────────\t─────\t─────\t─────────\n")
 	for _, e := range plan.Entries {
-		fmt.Fprintf(tw, "%d\t%.2f\t%s\t%s\t%d\t%d\t%d\t%s\n",
+		tp.printf("%d\t%.2f\t%s\t%s\t%d\t%d\t%d\t%s\n",
 			e.Scores.Rank,
 			e.Scores.PriorityScore,
 			e.Scores.Difficulty,
@@ -144,69 +151,90 @@ func renderDietTable(w io.Writer, plan *domaindiet.DietPlan) error {
 			e.Health.MaintenanceStatus,
 		)
 	}
-	tw.Flush()
+	if tp.err != nil {
+		return tp.err
+	}
+	if err := tw.Flush(); err != nil {
+		return err
+	}
 
-	fmt.Fprintf(w, "\n── Expected Impact ─────────────────────────────────────────────\n")
-	fmt.Fprintf(w, "  Direct deps:     %d\n", plan.Summary.TotalDirect)
-	fmt.Fprintf(w, "  Transitive deps: %d (exclusive removable: %d)\n",
+	p.printf("\n── Expected Impact ─────────────────────────────────────────────\n")
+	p.printf("  Direct deps:     %d\n", plan.Summary.TotalDirect)
+	p.printf("  Transitive deps: %d (exclusive removable: %d)\n",
 		plan.Summary.TotalTransitive, plan.Summary.TotalExclusiveTransitive)
-	fmt.Fprintln(w)
+	p.printf("\n")
 
-	return nil
+	return p.err
 }
 
 func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
+	p := &errWriter{w: w}
+
 	// Header
-	fmt.Fprintf(w, "\n══════════════════════════════════════════════════════════════\n")
-	fmt.Fprintf(w, "  Diet Plan — %d direct dependencies analyzed\n", plan.Summary.TotalDirect)
-	fmt.Fprintf(w, "  SBOM: %s\n", plan.SBOMPath)
+	p.printf("\n══════════════════════════════════════════════════════════════\n")
+	p.printf("  Diet Plan — %d direct dependencies analyzed\n", plan.Summary.TotalDirect)
+	p.printf("  SBOM: %s\n", plan.SBOMPath)
 	if plan.SourceRoot != "" {
-		fmt.Fprintf(w, "  Source: %s\n", plan.SourceRoot)
+		p.printf("  Source: %s\n", plan.SourceRoot)
 	}
-	fmt.Fprintf(w, "══════════════════════════════════════════════════════════════\n\n")
+	p.printf("══════════════════════════════════════════════════════════════\n\n")
 
 	for _, e := range plan.Entries {
-		fmt.Fprintf(w, "┌─ #%d %s (%s) ─────────────────────\n", e.Scores.Rank, e.Name, e.Version)
-		fmt.Fprintf(w, "│  PURL:       %s\n", e.PURL)
-		fmt.Fprintf(w, "│  Priority:   %.2f  Difficulty: %s\n", e.Scores.PriorityScore, e.Scores.Difficulty)
-		fmt.Fprintf(w, "│\n")
-		fmt.Fprintf(w, "│  Graph Impact\n")
-		fmt.Fprintf(w, "│    Exclusive transitive: %d\n", e.Graph.ExclusiveTransitiveCount)
-		fmt.Fprintf(w, "│    Shared transitive:    %d\n", e.Graph.SharedTransitiveCount)
-		fmt.Fprintf(w, "│    Total transitive:     %d\n", e.Graph.TotalTransitiveCount)
-		fmt.Fprintf(w, "│\n")
-		fmt.Fprintf(w, "│  Coupling\n")
+		p.printf("┌─ #%d %s (%s) ─────────────────────\n", e.Scores.Rank, e.Name, e.Version)
+		p.printf("│  PURL:       %s\n", e.PURL)
+		p.printf("│  Priority:   %.2f  Difficulty: %s\n", e.Scores.PriorityScore, e.Scores.Difficulty)
+		p.printf("│\n")
+		p.printf("│  Graph Impact\n")
+		p.printf("│    Exclusive transitive: %d\n", e.Graph.ExclusiveTransitiveCount)
+		p.printf("│    Shared transitive:    %d\n", e.Graph.SharedTransitiveCount)
+		p.printf("│    Total transitive:     %d\n", e.Graph.TotalTransitiveCount)
+		p.printf("│\n")
+		p.printf("│  Coupling\n")
 		if e.Coupling.IsUnused {
-			fmt.Fprintf(w, "│    Status: UNUSED (0 imports found)\n")
+			p.printf("│    Status: UNUSED (0 imports found)\n")
 		} else {
-			fmt.Fprintf(w, "│    Files:      %d\n", e.Coupling.ImportFileCount)
-			fmt.Fprintf(w, "│    Call sites: %d\n", e.Coupling.CallSiteCount)
-			fmt.Fprintf(w, "│    API breadth: %d distinct symbols\n", e.Coupling.APIBreadth)
+			p.printf("│    Files:      %d\n", e.Coupling.ImportFileCount)
+			p.printf("│    Call sites: %d\n", e.Coupling.CallSiteCount)
+			p.printf("│    API breadth: %d distinct symbols\n", e.Coupling.APIBreadth)
 		}
-		fmt.Fprintf(w, "│\n")
-		fmt.Fprintf(w, "│  Health\n")
-		fmt.Fprintf(w, "│    Lifecycle: %s\n", e.Health.MaintenanceStatus)
+		p.printf("│\n")
+		p.printf("│  Health\n")
+		p.printf("│    Lifecycle: %s\n", e.Health.MaintenanceStatus)
 		if e.Health.HasVulnerabilities {
-			fmt.Fprintf(w, "│    Vulnerabilities: %d (max CVSS: %.1f)\n", e.Health.VulnerabilityCount, e.Health.MaxCVSSScore)
+			p.printf("│    Vulnerabilities: %d (max CVSS: %.1f)\n", e.Health.VulnerabilityCount, e.Health.MaxCVSSScore)
 		}
 		if e.Health.OverallScore > 0 {
-			fmt.Fprintf(w, "│    Scorecard: %.1f/10\n", e.Health.OverallScore)
+			p.printf("│    Scorecard: %.1f/10\n", e.Health.OverallScore)
 		}
-		fmt.Fprintf(w, "│\n")
-		fmt.Fprintf(w, "│  Scores\n")
-		fmt.Fprintf(w, "│    Graph impact:    %.2f\n", e.Scores.GraphImpact)
-		fmt.Fprintf(w, "│    Coupling effort: %.2f\n", e.Scores.CouplingEffort)
-		fmt.Fprintf(w, "│    Health risk:     %.2f\n", e.Scores.HealthRisk)
-		fmt.Fprintf(w, "└────────────────────────────────────────────────\n\n")
+		p.printf("│\n")
+		p.printf("│  Scores\n")
+		p.printf("│    Graph impact:    %.2f\n", e.Scores.GraphImpact)
+		p.printf("│    Coupling effort: %.2f\n", e.Scores.CouplingEffort)
+		p.printf("│    Health risk:     %.2f\n", e.Scores.HealthRisk)
+		p.printf("└────────────────────────────────────────────────\n\n")
 	}
 
 	// Summary
-	fmt.Fprintf(w, "── Summary ─────────────────────────────────────────────────\n")
-	fmt.Fprintf(w, "  Direct:     %d\n", plan.Summary.TotalDirect)
-	fmt.Fprintf(w, "  Transitive: %d (exclusive: %d)\n", plan.Summary.TotalTransitive, plan.Summary.TotalExclusiveTransitive)
-	fmt.Fprintf(w, "  Unused:     %d\n", plan.Summary.UnusedDirect)
-	fmt.Fprintf(w, "  Easy wins:  %d\n", plan.Summary.EasyWins)
-	fmt.Fprintln(w)
+	p.printf("── Summary ─────────────────────────────────────────────────\n")
+	p.printf("  Direct:     %d\n", plan.Summary.TotalDirect)
+	p.printf("  Transitive: %d (exclusive: %d)\n", plan.Summary.TotalTransitive, plan.Summary.TotalExclusiveTransitive)
+	p.printf("  Unused:     %d\n", plan.Summary.UnusedDirect)
+	p.printf("  Easy wins:  %d\n", plan.Summary.EasyWins)
+	p.printf("\n")
 
-	return nil
+	return p.err
+}
+
+// errWriter wraps an io.Writer and captures the first error, allowing
+// sequential writes without checking each one individually.
+type errWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (ew *errWriter) printf(format string, args ...interface{}) {
+	if ew.err != nil {
+		return
+	}
+	_, ew.err = fmt.Fprintf(ew.w, format, args...)
 }
