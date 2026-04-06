@@ -268,3 +268,154 @@ func main() { fmt.Println("hi") }
 		t.Errorf("expected no results for unmatched imports, got %d", len(result))
 	}
 }
+
+func TestAnalyzer_JavaScript(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "index.js"), []byte(`import axios from "axios";
+import { readFile } from "fs";
+
+axios.get("https://example.com");
+axios.post("https://example.com");
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/axios@1.6.0": {"axios"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/axios@1.6.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for axios")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 2 {
+		t.Errorf("CallSiteCount = %d, want 2", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 2 {
+		t.Errorf("APIBreadth = %d, want 2", ca.APIBreadth)
+	}
+}
+
+func TestAnalyzer_TypeScript(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "index.ts"), []byte(`import axios from "axios";
+
+const res = axios.get("https://example.com");
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/axios@1.6.0": {"axios"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/axios@1.6.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for axios")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+}
+
+func TestAnalyzer_Java(t *testing.T) {
+	dir := t.TempDir()
+	// Use the class name directly as the variable to match the alias.
+	// Java call-site matching uses the last component of the import (e.g., "Gson")
+	// as the alias, so call sites must use that exact name as the receiver.
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.google.gson.Gson;
+
+public class Main {
+    public static void main(String[] args) {
+        String json = Gson.toJson("hello");
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/com.google.code.gson/gson@2.10": {"com.google.gson"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:maven/com.google.code.gson/gson@2.10"]
+	if !ok {
+		t.Fatal("expected coupling analysis for gson")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false (Gson is used)")
+	}
+}
+
+func TestAnalyzer_PythonPrefixNoFalseMatch(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "main.py"), []byte(`import requests
+import request
+
+requests.get("https://example.com")
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:pypi/requests@2.31.0": {"requests"},
+		"pkg:pypi/request@1.0.0":  {"request"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// "requests" should match pkg:pypi/requests, not pkg:pypi/request
+	caRequests, ok := result["pkg:pypi/requests@2.31.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for requests")
+	}
+	if caRequests.CallSiteCount != 1 {
+		t.Errorf("requests CallSiteCount = %d, want 1", caRequests.CallSiteCount)
+	}
+
+	// "request" should be a separate entry with no call sites
+	caRequest, ok := result["pkg:pypi/request@1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for request")
+	}
+	if !caRequest.IsUnused {
+		t.Error("request should be unused (no call sites)")
+	}
+}

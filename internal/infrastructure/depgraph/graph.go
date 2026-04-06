@@ -114,9 +114,8 @@ func bfs(start string, adj map[string][]string) map[string]struct{} {
 	visited := make(map[string]struct{})
 	queue := []string{start}
 	visited[start] = struct{}{}
-	for len(queue) > 0 {
-		curr := queue[0]
-		queue = queue[1:]
+	for i := 0; i < len(queue); i++ {
+		curr := queue[i]
 		for _, next := range adj[curr] {
 			if _, seen := visited[next]; !seen {
 				visited[next] = struct{}{}

@@ -297,7 +297,7 @@ func (a *Analyzer) extractImports(
 
 	query, err := sitter.NewQuery([]byte(cfg.importQuery), cfg.language)
 	if err != nil {
-		slog.Debug("import query failed to compile", "error", err)
+		slog.Warn("import query failed to compile", "error", err)
 		return aliasMap
 	}
 	defer query.Close()
@@ -416,7 +416,7 @@ func (a *Analyzer) handlePythonImport(
 
 	// Try prefix matching.
 	for ip, purl := range importToPURL {
-		if strings.HasPrefix(importPath, ip+".") || strings.HasPrefix(importPath, ip) {
+		if strings.HasPrefix(importPath, ip+".") || importPath == ip {
 			alias := cfg.aliasFromPkg(ip)
 			aliasMap[alias] = purl
 			return
@@ -431,7 +431,7 @@ func (a *Analyzer) handleJavaImport(
 	aliasMap map[string]string,
 ) {
 	for ip, purl := range importToPURL {
-		if strings.HasPrefix(importPath, ip) {
+		if strings.HasPrefix(importPath, ip+".") || importPath == ip {
 			// Use the last component of the import as alias.
 			parts := strings.Split(importPath, ".")
 			alias := parts[len(parts)-1]
@@ -455,7 +455,7 @@ func (a *Analyzer) countCallSites(
 
 	query, err := sitter.NewQuery([]byte(cfg.callQuery), cfg.language)
 	if err != nil {
-		slog.Debug("call query failed to compile", "error", err)
+		slog.Warn("call query failed to compile", "error", err)
 		return
 	}
 	defer query.Close()
@@ -492,7 +492,7 @@ func (a *Analyzer) countCallSites(
 	}
 }
 
-// accumulator is used internally; re-declared here for the countCallSites method receiver.
+// accumulator tracks import files, call sites, and symbols per PURL.
 type accumulator struct {
 	importFiles map[string]bool
 	callSites   int

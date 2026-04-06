@@ -44,12 +44,12 @@ type Dependency struct {
 // references regardless of whether the tool uses bom-ref or PURL as the ref key.
 func BuildRefMap(components []Component) map[string]string {
 	m := make(map[string]string)
-	BuildRefMapRecursive(components, m, 0)
+	buildRefMapRecursive(components, m, 0)
 	return m
 }
 
-// BuildRefMapRecursive populates m with bom-ref/raw-PURL → normalized-PURL mappings.
-func BuildRefMapRecursive(components []Component, m map[string]string, depth int) {
+// buildRefMapRecursive populates m with bom-ref/raw-PURL → normalized-PURL mappings.
+func buildRefMapRecursive(components []Component, m map[string]string, depth int) {
 	if depth > MaxNestingDepth {
 		slog.Warn(
 			"max CycloneDX SBOM component nesting depth exceeded; ref map construction truncated",
@@ -70,7 +70,7 @@ func BuildRefMapRecursive(components []Component, m map[string]string, depth int
 			m[c.PURL] = normalized
 		}
 		if len(c.Components) > 0 {
-			BuildRefMapRecursive(c.Components, m, depth+1)
+			buildRefMapRecursive(c.Components, m, depth+1)
 		}
 	}
 }

@@ -25,7 +25,8 @@ func ComputeImpactScore(graph GraphMetrics, coupling CouplingAnalysis, health He
 	couplingEffort := normalizeCouplingEffort(coupling)
 	healthRisk := health.HealthRisk
 
-	priority := graphImpact * healthRisk * (1.0 - couplingEffort)
+	effortFactor := math.Max(1.0-couplingEffort, 0.05)
+	priority := graphImpact * healthRisk * effortFactor
 	// Unused dependencies are always high priority regardless of health.
 	if coupling.IsUnused {
 		priority = math.Max(priority, graphImpact*0.8)
@@ -101,7 +102,7 @@ func logistic(x, midpoint float64) float64 {
 
 func classifyDifficulty(effort float64) string {
 	switch {
-	case effort == 0.0:
+	case effort < 1e-9:
 		return DifficultyTrivial
 	case effort < 0.25:
 		return DifficultyEasy
