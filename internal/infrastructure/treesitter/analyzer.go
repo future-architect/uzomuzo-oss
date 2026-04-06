@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
@@ -75,20 +76,18 @@ func newJSLikeConfig(lang *sitter.Language) *langConfig {
 	}, "\n")
 	callQ := `(member_expression object: (identifier) @obj property: (property_identifier) @prop)`
 
-	compiledImport, _ := sitter.NewQuery([]byte(importQ), lang)
-	compiledCall, _ := sitter.NewQuery([]byte(callQ), lang)
-
-	return &langConfig{
-		language:       lang,
-		importQuery:    importQ,
-		callQuery:      callQ,
-		compiledImport: compiledImport,
-		compiledCall:   compiledCall,
-		stripQuotes:    true,
+	cfg := &langConfig{
+		language:    lang,
+		importQuery: importQ,
+		callQuery:   callQ,
+		stripQuotes: true,
 		aliasFromPkg: func(importPath string) string {
 			return importPath
 		},
 	}
+	compileQueries(cfg)
+
+	return cfg
 }
 
 // compileQueries compiles import and call queries for a langConfig.
@@ -294,6 +293,7 @@ func (a *Analyzer) AnalyzeCoupling(
 		for f := range acc.importFiles {
 			files = append(files, f)
 		}
+		slices.Sort(files)
 		callSites := acc.callSites
 		isUnused := len(acc.importFiles) == 0
 
@@ -343,6 +343,10 @@ func (a *Analyzer) extractImports(
 			break
 		}
 		for _, capture := range match.Captures {
+			// Only process @import captures; skip auxiliary captures like @func.
+			if query.CaptureNameForId(capture.Index) != "import" {
+				continue
+			}
 			value := capture.Node.Content(src)
 
 			if cfg.stripQuotes {

@@ -13,7 +13,7 @@ import (
 // DietOptions contains all diet-specific options parsed from CLI flags.
 type DietOptions struct {
 	SBOMPath   string // --sbom flag (required)
-	SourceRoot string // --source flag (optional, default ".")
+	SourceRoot string // --source flag (optional; empty = skip source analysis, CLI defaults to ".")
 	Format     string // --format flag (json, table, detailed)
 }
 
