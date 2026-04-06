@@ -45,7 +45,7 @@ func main() {
 		Flags: []urfcli.Flag{
 			&urfcli.StringFlag{
 				Name:     "sbom",
-				Usage:    "Path to CycloneDX SBOM JSON (required)",
+				Usage:    "Path to CycloneDX SBOM JSON, or '-' for stdin (required)",
 				Required: true,
 			},
 			&urfcli.StringFlag{

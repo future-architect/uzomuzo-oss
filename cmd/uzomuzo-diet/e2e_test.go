@@ -283,6 +283,85 @@ func TestE2E_DietCLIFlags(t *testing.T) {
 	}
 }
 
+func TestE2E_DietStdinSBOM(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	// Read the test SBOM into memory, then feed it via stdin
+	sbomData, err := os.ReadFile(testSBOMPath)
+	if err != nil {
+		t.Fatalf("failed to read test SBOM: %v", err)
+	}
+
+	configService := config.NewConfigService()
+	cfg, err := configService.Load(context.Background())
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+	logging.Initialize(cfg.App.LogLevel)
+
+	// Replace os.Stdin with a pipe containing the SBOM data
+	oldStdin := os.Stdin
+	stdinR, stdinW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe (stdin) failed: %v", err)
+	}
+	os.Stdin = stdinR
+
+	go func() {
+		_, _ = stdinW.Write(sbomData)
+		_ = stdinW.Close()
+	}()
+
+	// Capture stdout
+	var buf bytes.Buffer
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe (stdout) failed: %v", err)
+	}
+	os.Stdout = w
+
+	done := make(chan struct{})
+	go func() {
+		_, _ = buf.ReadFrom(r)
+		close(done)
+	}()
+
+	opts := cli.DietOptions{
+		SBOMPath:   "-",
+		SourceRoot: sourceRoot,
+		Format:     "json",
+	}
+
+	graphAnalyzer := depgraph.NewAnalyzer()
+	sourceAnalyzer := treesitter.NewAnalyzer()
+	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	os.Stdin = oldStdin
+	<-done
+	_ = r.Close()
+
+	if runErr != nil {
+		t.Fatalf("RunDiet with stdin failed: %v", runErr)
+	}
+
+	// Verify JSON output is valid and has data
+	var result dietJSONOutput
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("stdin JSON output is not valid: %v", err)
+	}
+	if result.Summary.TotalDirect == 0 {
+		t.Error("stdin: summary.total_direct should be > 0")
+	}
+	if result.SBOMPath != "-" {
+		t.Errorf("stdin: sbom_path = %q, want %q", result.SBOMPath, "-")
+	}
+}
+
 func TestE2E_DietDefaultFormat(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping E2E test in short mode")

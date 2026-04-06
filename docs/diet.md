@@ -89,6 +89,9 @@ uzomuzo diet --sbom bom.json
 # With source coupling analysis
 uzomuzo diet --sbom bom.json --source .
 
+# Pipe from trivy (no intermediate file)
+trivy fs . --format cyclonedx | uzomuzo diet --sbom - --source .
+
 # JSON output (for CI/LLM consumption)
 uzomuzo diet --sbom bom.json --source . --format json
 
@@ -100,7 +103,7 @@ uzomuzo diet --sbom bom.json --source . --format detailed
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
-| `--sbom` | Yes | — | Path to CycloneDX SBOM JSON |
+| `--sbom` | Yes | — | Path to CycloneDX SBOM JSON, or `-` for stdin |
 | `--source` | No | `.` | Root directory for source coupling analysis |
 | `--format`, `-f` | No | `table` | Output format: `json`, `table`, `detailed` |
 
