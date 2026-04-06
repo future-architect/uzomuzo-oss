@@ -12,11 +12,10 @@
 #       file: "<path>"
 #       date: "YYYY-MM-DD"
 patterns:
-  - category: "error-handling"
-    summary: "Distinguish os.ErrNotExist from other I/O errors when auto-detecting files — treating all errors as 'not found' hides real causes"
-    pr: 87
-    file: "internal/interfaces/cli/scan.go"
-    date: "2026-04-02"
+  # error-handling: promoted to error-handling.instructions.md (PRs #87, #159 — surface initialization errors instead of silent degradation)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:382 — filter tree-sitter captures by name to skip non-import captures)
+  # deterministic-output: already covered by promoted rule (PR #159, analyzer.go:315 — sort ImportFiles for deterministic JSON output)
+  # comment-doc-drift: already covered by promoted rule (PR #159, diet.go:18 — comment documented CLI default but code has different semantics for programmatic callers)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #127, #130 — match validation format strings, CI staging completeness, dynamic refs)
   # security: promoted to security.instructions.md (PRs #111, #127 — validate config-sourced paths, reject absolute paths, apply consistently to all config paths)
   - category: "duplicate-parsing"
