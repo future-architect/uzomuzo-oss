@@ -267,13 +267,14 @@ func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]
 				"affected_repos", repoCount,
 			)
 		}
-		// Set default values for all analyses instead of failing
+		// Set default values for all analyses instead of failing.
+		// Preserve IsArchived if already set from Scorecard data (deps.dev fallback).
 		for _, analysis := range analyses {
 			if analysis != nil {
 				if analysis.RepoState == nil {
 					analysis.RepoState = &domain.RepoState{}
 				}
-				analysis.RepoState.IsArchived = false
+				// Don't overwrite IsArchived — it may already be true via Scorecard "Maintained" check
 				analysis.RepoState.IsDisabled = false
 			}
 		}

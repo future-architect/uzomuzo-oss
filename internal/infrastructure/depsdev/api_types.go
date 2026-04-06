@@ -190,11 +190,10 @@ type VersionKey struct {
 // ============================================================================
 
 type ReleaseInfo struct {
-	StableVersion       Version
-	PreReleaseVersion   Version
-	MaxSemverVersion    Version
-	RequestedVersion    Version
-	IsArchivedInDepsDep bool
+	StableVersion     Version
+	PreReleaseVersion Version
+	MaxSemverVersion  Version
+	RequestedVersion  Version
 
 	Endpoint string
 	Error    error
