@@ -52,14 +52,15 @@ func RankEntries(entries []DietEntry) {
 }
 
 // ComputeSummary generates aggregate statistics from ranked entries.
-func ComputeSummary(entries []DietEntry) DietSummary {
-	s := DietSummary{}
+// totalTransitive is the graph-level count of transitive dependencies (from GraphResult),
+// since diet plan entries only contain direct dependencies.
+func ComputeSummary(entries []DietEntry, totalTransitive int) DietSummary {
+	s := DietSummary{
+		TotalTransitive: totalTransitive,
+	}
 	for _, e := range entries {
-		switch e.Relation {
-		case RelationDirect:
+		if e.Relation == RelationDirect {
 			s.TotalDirect++
-		case RelationTransitive:
-			s.TotalTransitive++
 		}
 		s.TotalExclusiveTransitive += e.Graph.ExclusiveTransitiveCount
 		if e.Coupling.IsUnused && e.Relation == RelationDirect {

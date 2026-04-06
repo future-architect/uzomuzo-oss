@@ -119,8 +119,10 @@ func ResolveDirectPURLs(bom *BOMEnvelope, refMap map[string]string) map[string]s
 	return directPURLs
 }
 
-// NormalizePURL parses and rebuilds a PURL, stripping qualifiers added by tools
-// (e.g., syft's ?package-id=, ?vcs_url=). Returns an empty string on parse error.
+// NormalizePURL parses and rebuilds a PURL, stripping qualifiers and subpath.
+// Qualifiers (e.g., syft's ?package-id=, ?vcs_url=) and subpaths are removed
+// so that identity comparison uses only type/namespace/name/version.
+// Returns an empty string on parse error.
 func NormalizePURL(raw string) string {
 	parsed, err := packageurl.FromString(raw)
 	if err != nil {

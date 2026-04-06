@@ -368,11 +368,8 @@ func (a *Analyzer) extractImports(
 				continue
 			}
 
-			// For JS/TS: direct match.
-			if purl, ok := importToPURL[value]; ok {
-				alias := cfg.aliasFromPkg(value)
-				aliasMap[alias] = purl
-			}
+			// For JS/TS: exact match or subpath prefix match (e.g., "lodash/fp" → "lodash").
+			a.handleJSImport(value, importToPURL, aliasMap, cfg)
 		}
 	}
 
@@ -484,6 +481,31 @@ func (a *Analyzer) handleJavaImport(
 			return
 		}
 	}
+}
+
+// handleJSImport processes a JS/TS module specifier with subpath prefix matching.
+func (a *Analyzer) handleJSImport(
+	importPath string,
+	importToPURL map[string]string,
+	aliasMap map[string]string,
+	cfg *langConfig,
+) {
+	purl, ok := importToPURL[importPath]
+	if !ok {
+		for ip, p := range importToPURL {
+			if strings.HasPrefix(importPath, ip+"/") {
+				purl = p
+				ok = true
+				break
+			}
+		}
+	}
+	if !ok {
+		return
+	}
+
+	alias := cfg.aliasFromPkg(importPath)
+	aliasMap[alias] = purl
 }
 
 // countCallSites counts selector/member expressions matching known aliases.

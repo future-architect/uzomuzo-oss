@@ -114,7 +114,7 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 	slog.Info("Phase 4: Computing scores and ranking")
 	entries := s.buildEntries(graphResult, couplingResults, healthResults)
 	domaindiet.RankEntries(entries)
-	summary := domaindiet.ComputeSummary(entries)
+	summary := domaindiet.ComputeSummary(entries, graphResult.TotalTransitive)
 
 	plan := &domaindiet.DietPlan{
 		Entries:    entries,
