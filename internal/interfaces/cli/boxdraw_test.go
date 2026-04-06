@@ -1141,6 +1141,88 @@ func TestAdvisoryCountText(t *testing.T) {
 	}
 }
 
+func TestWriteBoxBuildIntegrity_ReplaceVerdictHidden(t *testing.T) {
+	var buf bytes.Buffer
+	entry := &domainaudit.AuditEntry{
+		PURL:    "pkg:npm/request@2.88.2",
+		Verdict: domainaudit.VerdictReplace,
+		Analysis: &analysis.Analysis{
+			AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
+				analysis.BuildHealthAxis: {
+					Axis:  analysis.BuildHealthAxis,
+					Label: string(analysis.BuildLabelHardened),
+					Meta:  map[string]string{"score": "8.5"},
+					Signals: []analysis.Signal{
+						{Name: "Dangerous-Workflow", Value: "10/10", Role: analysis.SignalUsed},
+						{Name: "Branch-Protection", Value: "7/10", Role: analysis.SignalUsed},
+					},
+				},
+			},
+		},
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxBuildIntegrity(ctx); err != nil {
+		t.Fatalf("writeBoxBuildIntegrity() error = %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("writeBoxBuildIntegrity should produce no output for replace verdict, got %q", buf.String())
+	}
+}
+
+func TestWriteBoxBuildIntegrity_HeaderAndIconFormat(t *testing.T) {
+	var buf bytes.Buffer
+	entry := &domainaudit.AuditEntry{
+		PURL:    "pkg:npm/lodash@4.17.21",
+		Verdict: domainaudit.VerdictOK,
+		Analysis: &analysis.Analysis{
+			AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
+				analysis.BuildHealthAxis: {
+					Axis:  analysis.BuildHealthAxis,
+					Label: string(analysis.BuildLabelModerate),
+					Meta:  map[string]string{"score": "6.2"},
+					Signals: []analysis.Signal{
+						{Name: "Dangerous-Workflow", Value: "10/10", Role: analysis.SignalUsed},
+						{Name: "Branch-Protection", Value: "0/10", Role: analysis.SignalAbsent},
+					},
+				},
+			},
+		},
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxBuildIntegrity(ctx); err != nil {
+		t.Fatalf("writeBoxBuildIntegrity() error = %v", err)
+	}
+	output := buf.String()
+
+	// Section header is plain "Build Integrity" (no score in header).
+	if !strings.Contains(output, "Build Integrity") {
+		t.Error("missing Build Integrity section header")
+	}
+	// Icon+status line: ⚠️ Moderate 6.2/10 (1/2)
+	if !strings.Contains(output, "⚠️") {
+		t.Error("missing ⚠️ icon for Moderate label")
+	}
+	if !strings.Contains(output, "Moderate 6.2/10") {
+		t.Error("missing score in status line")
+	}
+}
+
+func TestWriteBoxBuildIntegrity_NilAnalysis(t *testing.T) {
+	var buf bytes.Buffer
+	entry := &domainaudit.AuditEntry{
+		PURL:     "pkg:npm/unknown@1.0.0",
+		Verdict:  domainaudit.VerdictOK,
+		Analysis: nil,
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxBuildIntegrity(ctx); err != nil {
+		t.Fatalf("writeBoxBuildIntegrity() error = %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("writeBoxBuildIntegrity should produce no output for nil analysis, got %q", buf.String())
+	}
+}
+
 // NOTE: Unit tests for BuildDepsDevURL/BuildDepsDevVersionURL live in
 // internal/common/links/depsdev_test.go. The CLI tests above verify that
 // box output renders deps.dev links correctly (integration-level coverage).
