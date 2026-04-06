@@ -416,6 +416,10 @@ func writeBoxBuildIntegrity(ctx *boxContext) error {
 	if a == nil {
 		return nil
 	}
+	// Hide Build Integrity for EOL/archived packages (verdict=replace).
+	if ctx.entry.Verdict == domainaudit.VerdictReplace {
+		return nil
+	}
 	br := a.GetBuildHealthResult()
 	if br == nil || br.Label == string(analysispkg.BuildLabelUngraded) || br.Label == "" {
 		return nil
@@ -429,13 +433,18 @@ func writeBoxBuildIntegrity(ctx *boxContext) error {
 	}
 	total := len(br.Signals)
 
-	scoreStr := br.Meta["score"]
-	header := br.Label
-	if scoreStr != "" && scoreStr != analysispkg.ScoreUngraded {
-		header = fmt.Sprintf("%s %s/10 (%d/%d)", br.Label, scoreStr, evaluated, total)
+	if err := writeSectionBar(ctx, "Build Integrity"); err != nil {
+		return err
 	}
 
-	if err := writeSectionBar(ctx, "Build Integrity: "+header); err != nil {
+	// Status line with icon.
+	icon := buildIntegrityIcon(analysispkg.BuildIntegrityLabel(br.Label))
+	scoreStr := br.Meta["score"]
+	statusLine := br.Label
+	if scoreStr != "" && scoreStr != analysispkg.ScoreUngraded {
+		statusLine = fmt.Sprintf("%s %s/10 (%d/%d)", br.Label, scoreStr, evaluated, total)
+	}
+	if err := writeLine(ctx, "%s %s", icon, statusLine); err != nil {
 		return err
 	}
 
@@ -457,18 +466,18 @@ func writeBoxBuildIntegrity(ctx *boxContext) error {
 		if i+1 < len(visible) {
 			rLabel := buildSignalDisplayName(visible[i+1].Name)
 			rScore := buildSignalCompactScore(visible[i+1])
-			if err := writeLine(ctx, "  %-*s %2s  %-*s %2s", colW, lLabel, lScore, colW, rLabel, rScore); err != nil {
+			if err := writeLine(ctx, "%-*s %2s  %-*s %2s", colW, lLabel, lScore, colW, rLabel, rScore); err != nil {
 				return err
 			}
 		} else {
-			if err := writeLine(ctx, "  %-*s %2s", colW, lLabel, lScore); err != nil {
+			if err := writeLine(ctx, "%-*s %2s", colW, lLabel, lScore); err != nil {
 				return err
 			}
 		}
 	}
 
 	if a.ScorecardURL != "" {
-		if err := writeLine(ctx, "  → %s", a.ScorecardURL); err != nil {
+		if err := writeLine(ctx, "→ %s", a.ScorecardURL); err != nil {
 			return err
 		}
 	}
@@ -492,6 +501,20 @@ func buildSignalDisplayName(name string) string {
 		return "Pinned Deps"
 	default:
 		return name
+	}
+}
+
+// buildIntegrityIcon returns the status icon for a build integrity label.
+func buildIntegrityIcon(label analysispkg.BuildIntegrityLabel) string {
+	switch label {
+	case analysispkg.BuildLabelHardened:
+		return "✅"
+	case analysispkg.BuildLabelModerate:
+		return "⚠️"
+	case analysispkg.BuildLabelWeak:
+		return "🔴"
+	default:
+		return "🔍"
 	}
 }
 
@@ -665,7 +688,7 @@ func writeBoxHealth(ctx *boxContext) error {
 
 	// Scores
 	if len(a.Scores) > 0 {
-		scoreLine := fmt.Sprintf("Score: %.*f/10", scorePrecision, a.OverallScore)
+		scoreLine := fmt.Sprintf("Scorecard Overall: %.*f/10", scorePrecision, a.OverallScore)
 
 		// Sort score names for deterministic output
 		var scoreNames []string
@@ -1010,11 +1033,11 @@ func renderBoxEntry(w io.Writer, entry *domainaudit.AuditEntry) error {
 		func() error { return writeBoxIdentity(ctx) },
 		func() error { return writeBoxVerdict(ctx) },
 		func() error { return writeBoxSignals(ctx) },
-		func() error { return writeBoxBuildIntegrity(ctx) },
-		func() error { return writeBoxOrigin(ctx) },
 		func() error { return writeBoxEOL(ctx) },
+		func() error { return writeBoxOrigin(ctx) },
 		func() error { return writeBoxHealth(ctx) },
 		func() error { return writeBoxReleases(ctx) },
+		func() error { return writeBoxBuildIntegrity(ctx) },
 		func() error { return writeBoxLinks(ctx) },
 		func() error { return writeBottomBar(ctx) },
 	} {

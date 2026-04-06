@@ -322,7 +322,7 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 			cols = append(cols, formatRelation(&displayEntries[i]))
 		}
 		cols = append(cols, maintenance)
-		cols = append(cols, buildIntegrityDisplay(displayEntries[i].Analysis))
+		cols = append(cols, buildIntegrityDisplay(displayEntries[i].Analysis, displayEntries[i].Verdict))
 		if _, err := fmt.Fprintln(tw, strings.Join(cols, "\t")); err != nil {
 			return fmt.Errorf("failed to write table row: %w", err)
 		}
@@ -354,9 +354,9 @@ func renderSummaryBox(w io.Writer, allEntries []domainaudit.AuditEntry, shownCou
 }
 
 // buildIntegrityDisplay returns the BUILD column text for table output.
-// Format: "Label score" (e.g., "Hardened 8.1") or "—" for Ungraded/missing.
-func buildIntegrityDisplay(a *domain.Analysis) string {
-	if a == nil {
+// Format: "Label score" (e.g., "Hardened 8.1") or "—" for Ungraded/missing/replace.
+func buildIntegrityDisplay(a *domain.Analysis, verdict domainaudit.Verdict) string {
+	if a == nil || verdict == domainaudit.VerdictReplace {
 		return "—"
 	}
 	br := a.GetBuildHealthResult()
