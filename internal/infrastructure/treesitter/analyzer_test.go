@@ -340,14 +340,15 @@ const res = axios.get("https://example.com");
 
 func TestAnalyzer_Java(t *testing.T) {
 	dir := t.TempDir()
-	// Use the class name directly as the variable to match the alias.
-	// Java call-site matching uses the last component of the import (e.g., "Gson")
-	// as the alias, so call sites must use that exact name as the receiver.
+	// Java variable-declaration resolution: "Gson gson = new Gson()" should
+	// allow "gson.toJson()" to be counted as a call site for the Gson import.
 	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.google.gson.Gson;
 
 public class Main {
     public static void main(String[] args) {
-        String json = Gson.toJson("hello");
+        Gson gson = new Gson();
+        String json = gson.toJson("hello");
+        String json2 = gson.fromJson("{}", String.class);
     }
 }
 `), 0644)
@@ -372,11 +373,48 @@ public class Main {
 	if ca.ImportFileCount != 1 {
 		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
 	}
-	if ca.CallSiteCount != 1 {
-		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	if ca.CallSiteCount != 2 {
+		t.Errorf("CallSiteCount = %d, want 2", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 2 {
+		t.Errorf("APIBreadth = %d, want 2 (toJson, fromJson)", ca.APIBreadth)
 	}
 	if ca.IsUnused {
-		t.Error("IsUnused = true, want false (Gson is used)")
+		t.Error("IsUnused = true, want false")
+	}
+}
+
+func TestAnalyzer_JavaStaticCall(t *testing.T) {
+	dir := t.TempDir()
+	// Static calls use the class name directly (e.g., StringUtils.isBlank).
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import org.apache.commons.lang3.StringUtils;
+
+public class Main {
+    public static void main(String[] args) {
+        boolean b = StringUtils.isBlank("");
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/org.apache.commons/commons-lang3@3.14": {"org.apache.commons.lang3"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:maven/org.apache.commons/commons-lang3@3.14"]
+	if !ok {
+		t.Fatal("expected coupling analysis for commons-lang3")
+	}
+
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
 	}
 }
 

@@ -49,11 +49,12 @@ const (
 
 // langConfig holds the tree-sitter language and query patterns.
 type langConfig struct {
-	language     *sitter.Language
-	importQuery  string
-	callQuery    string
-	stripQuotes  bool
-	aliasFromPkg func(importPath string) string
+	language      *sitter.Language
+	importQuery   string
+	callQuery     string
+	varDeclQuery  string // optional: maps type names to variable names (e.g., Java)
+	stripQuotes   bool
+	aliasFromPkg  func(importPath string) string
 }
 
 // Analyzer implements SourceAnalyzer using tree-sitter for multi-language parsing.
@@ -133,10 +134,11 @@ func NewAnalyzer() *Analyzer {
 	}
 
 	a.configs[langJava] = &langConfig{
-		language:    java.GetLanguage(),
-		importQuery: `(import_declaration (scoped_identifier) @import)`,
-		callQuery:   `(method_invocation object: (identifier) @obj name: (identifier) @method)`,
-		stripQuotes: false,
+		language:     java.GetLanguage(),
+		importQuery:  `(import_declaration (scoped_identifier) @import)`,
+		callQuery:    `(method_invocation object: (identifier) @obj name: (identifier) @method)`,
+		varDeclQuery: `(local_variable_declaration type: (type_identifier) @type declarator: (variable_declarator name: (identifier) @var))`,
+		stripQuotes:  false,
 		aliasFromPkg: func(importPath string) string {
 			return importPath
 		},
@@ -256,6 +258,13 @@ func (a *Analyzer) AnalyzeCoupling(
 			if !acc.importFiles[relPath] {
 				acc.importFiles[relPath] = true
 			}
+		}
+
+		// Phase 1.5: For languages with variable declarations (Java), resolve
+		// type-name aliases to variable-name aliases so call sites like
+		// "gson.toJson()" match the import alias "Gson".
+		if cfg.varDeclQuery != "" {
+			a.resolveVarAliases(cfg, root, src, fileAliases)
 		}
 
 		// Phase 2: Count call sites using alias->PURL mapping.
@@ -446,6 +455,45 @@ func (a *Analyzer) handleJavaImport(
 			alias := parts[len(parts)-1]
 			aliasMap[alias] = purl
 			return
+		}
+	}
+}
+
+// resolveVarAliases scans variable declarations and adds variable-name aliases
+// for any type names that are already in aliasMap. For example, if aliasMap has
+// "Gson" -> purl, and the code has "Gson gson = new Gson()", this adds
+// "gson" -> purl to aliasMap so that "gson.toJson()" is counted as a call site.
+func (a *Analyzer) resolveVarAliases(
+	cfg *langConfig,
+	root *sitter.Node,
+	src []byte,
+	aliasMap map[string]string,
+) {
+	query, err := sitter.NewQuery([]byte(cfg.varDeclQuery), cfg.language)
+	if err != nil {
+		slog.Warn("var decl query failed to compile", "error", err)
+		return
+	}
+	defer query.Close()
+
+	cursor := sitter.NewQueryCursor()
+	defer cursor.Close()
+	cursor.Exec(query, root)
+
+	for {
+		match, ok := cursor.NextMatch()
+		if !ok {
+			break
+		}
+		if len(match.Captures) < 2 {
+			continue
+		}
+
+		typeName := match.Captures[0].Node.Content(src)
+		varName := match.Captures[1].Node.Content(src)
+
+		if purl, ok := aliasMap[typeName]; ok && varName != typeName {
+			aliasMap[varName] = purl
 		}
 	}
 }
