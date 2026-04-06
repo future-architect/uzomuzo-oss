@@ -129,6 +129,7 @@ The lifecycle assessor uses two distinct decision paths depending on `GITHUB_TOK
 │                                                                     │
 │ Capabilities:                                                       │
 │  • Publish recency + advisories → coarse classification            │
+│  • Archive detection via Scorecard "Maintained" check → EOL-Confirmed│
 │  • No commit signals → cannot detect active-but-unpublished        │
 │  • Packages with commits but no publish → misclassified as Stalled │
 └─────────────────────────────────────────────────────────────────────┘
