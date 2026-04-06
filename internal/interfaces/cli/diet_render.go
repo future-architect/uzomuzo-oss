@@ -137,7 +137,7 @@ func renderDietTable(w io.Writer, plan *domaindiet.DietPlan) error {
 			e.Scores.Rank,
 			e.Scores.PriorityScore,
 			e.Scores.Difficulty,
-			e.Name,
+			e.PURL,
 			e.Graph.ExclusiveTransitiveCount,
 			e.Coupling.ImportFileCount,
 			e.Coupling.CallSiteCount,

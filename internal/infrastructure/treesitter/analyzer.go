@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
@@ -273,6 +274,7 @@ func (a *Analyzer) AnalyzeCoupling(
 		for f := range acc.importFiles {
 			files = append(files, f)
 		}
+		sort.Strings(files)
 		results[purl] = &domaindiet.CouplingAnalysis{
 			ImportFileCount: len(acc.importFiles),
 			CallSiteCount:   acc.callSites,
@@ -312,6 +314,13 @@ func (a *Analyzer) extractImports(
 			break
 		}
 		for _, capture := range match.Captures {
+			// Only process @import captures; skip other captures like @func
+			// to avoid treating identifiers (e.g., "require") as import paths.
+			captureName := query.CaptureNameForId(capture.Index)
+			if captureName != "import" {
+				continue
+			}
+
 			value := capture.Node.Content(src)
 
 			if cfg.stripQuotes {
