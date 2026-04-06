@@ -65,7 +65,7 @@ func makeAnalysisWithBuild(lifecycleLabel analysis.MaintenanceStatus, buildLabel
 	}
 }
 
-func TestDeriveVerdict_BuildIntegrity(t *testing.T) {
+func TestDeriveVerdict_IgnoresBuildIntegrity(t *testing.T) {
 	tests := []struct {
 		name string
 		a    *analysis.Analysis

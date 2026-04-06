@@ -410,7 +410,8 @@ func buildSignalCompactScore(s analysispkg.Signal) string {
 // writeBoxBuildIntegrity writes the Build Integrity section in a compact
 // 2-column layout. Critical/High signals are always shown (including —).
 // Medium signals are shown only when evaluated. Returns nil without writing
-// if no build integrity data exists or label is Ungraded.
+// if no build integrity data exists, label is Ungraded, or verdict is replace
+// (EOL/archived packages).
 func writeBoxBuildIntegrity(ctx *boxContext) error {
 	a := ctx.analysis
 	if a == nil {
