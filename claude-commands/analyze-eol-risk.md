@@ -10,6 +10,12 @@ arguments:
 
 Analyze the security risk of EOL/Archived dependencies in the target project by reading the actual source code and tracing data flows.
 
+**Scope**: This command is designed for Go projects. The detection phase (uzomuzo scan) works with any ecosystem via SBOM/PURL input, but the code analysis steps below are Go-specific.
+
+## Prerequisites
+
+- **`GITHUB_TOKEN` environment variable must be set.** Without it, uzomuzo cannot detect archived repositories via GitHub API, and most EOL packages will be misclassified as "Stalled" instead of "EOL-Confirmed". See [#152](https://github.com/future-architect/uzomuzo-oss/issues/152) for details.
+
 ## Risk Models
 
 EOL/Archived packages carry two distinct risk categories. Evaluate BOTH for each package:
@@ -33,6 +39,24 @@ List all EOL packages found, distinguishing direct vs indirect dependencies. If 
 
 For **indirect dependencies**, also identify which direct dependency pulls them in — this determines the remediation path.
 
+To include transitive (indirect) dependencies in the scan:
+```
+uzomuzo scan --file go.mod --show-transitive --show-only replace --format table
+```
+This may significantly increase the number of results. For initial triage, direct-only is recommended. Add `--show-transitive` for comprehensive analysis.
+
+## Phase 1c: GitHub Actions scan (optional)
+
+If the project uses GitHub Actions, also scan for EOL/archived actions:
+
+```
+uzomuzo scan <repository-url> --include-actions --format table --show-only replace,review
+```
+
+The repository URL can be found in Phase 1's detailed output (`--format detailed` shows the Repository link). Focus on actions used in release/deploy workflows — these have the highest supply chain impact.
+
+Note: deps.dev resolution for Actions can sometimes map to wrong packages. Verify suspicious results manually.
+
 ## Phase 1.5: Reachability check (govulncheck)
 
 ```
@@ -46,6 +70,11 @@ govulncheck uses call graph analysis to identify which known CVEs are actually r
 - **EOL + Reachable (Called)**: Highest priority — reachable CVE with no upstream fix coming.
 - **EOL + Not Reachable (Not called)**: Lowers Risk A, but Risk B (supply chain) remains.
 - **EOL + No CVEs in govulncheck**: Does not mean safe — future CVEs won't be fixed either.
+
+**CVE data sources**:
+1. uzomuzo detailed output (`--format detailed`) shows advisories from deps.dev
+2. govulncheck shows reachable CVEs with call graph analysis
+3. For manual lookup: https://deps.dev/ or https://osv.dev/
 
 Skip this phase if govulncheck is not available.
 
@@ -64,6 +93,10 @@ Categorize by component:
 - **Security-critical**: auth, ACL, policy, crypto, storage, credential, secret engine
 - **Infrastructure**: config, logging, metrics, CLI
 - **Peripheral**: testing, documentation, examples
+
+**Check build constraints**: For each import file, check for `//go:build` directives. If a dependency is only imported behind enterprise/platform-specific build tags, note this — it significantly reduces risk in the default build but the dependency remains in go.mod and go.sum (supply chain risk B still applies at the binary level).
+
+**Blank imports**: If a file uses `_ "package"` (blank import), note that only the package's `init()` function executes. Skip data flow analysis (Step 2) for these — instead, check what the `init()` function does (usually driver/codec registration).
 
 ### Step 2: Read the actual code at each import site
 
@@ -101,9 +134,10 @@ For each EOL package, output:
 
 **Status**: {Archived since YYYY / EOL-Confirmed / etc.}
 **Dependency type**: {Direct / Indirect (via X)}
-**Known CVEs**: {from uzomuzo results, or "None known"}
+**Known CVEs**: {from uzomuzo detailed output or govulncheck, or "None known"}
 **Reachability (govulncheck)**: {Called / Not called / No CVEs found / N/A}
 **Import locations**: {N files, M security-critical}
+**Build constraints**: {None / enterprise-only / platform-specific}
 
 **Data flow**:
 - IN: {what data is passed to this package}
