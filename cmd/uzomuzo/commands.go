@@ -280,5 +280,12 @@ func delegateToDiet(ctx context.Context) error {
 	dietCmd.Stdin = os.Stdin
 	dietCmd.Stdout = os.Stdout
 	dietCmd.Stderr = os.Stderr
-	return dietCmd.Run()
+	if err := dietCmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			os.Exit(exitErr.ExitCode())
+		}
+		return err
+	}
+	return nil
 }

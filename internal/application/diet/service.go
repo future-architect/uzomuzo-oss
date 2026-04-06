@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/application"
@@ -66,32 +67,48 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 		"totalTransitive", graphResult.TotalTransitive,
 	)
 
-	// Phase 2: Static analysis (optional)
+	// Phase 2 & 3: run concurrently (both only depend on graphResult from Phase 1)
 	var couplingResults map[string]*domaindiet.CouplingAnalysis
-	if s.sourceAnalyzer != nil && input.SourceRoot != "" {
-		slog.Info("Phase 2: Analyzing source code coupling", "source", input.SourceRoot)
-		importPaths := buildImportPaths(graphResult.DirectDeps)
-		couplingResults, err = s.sourceAnalyzer.AnalyzeCoupling(ctx, input.SourceRoot, importPaths)
-		if err != nil {
-			slog.Warn("Source analysis failed, continuing without coupling data", "error", err)
-			couplingResults = nil
-		}
-		slog.Info("Phase 2 complete", "analyzed", len(couplingResults))
-	} else {
-		slog.Info("Phase 2: Skipped (no source root provided)")
-	}
+	var healthResults map[string]*domain.Analysis
+	var wg sync.WaitGroup
 
-	// Phase 3: Health signals
-	slog.Info("Phase 3: Fetching health signals", "count", len(graphResult.DirectDeps))
-	healthResults := make(map[string]*domain.Analysis)
-	if s.analysisService != nil && len(graphResult.DirectDeps) > 0 {
-		healthResults, err = s.analysisService.ProcessBatchPURLs(ctx, graphResult.DirectDeps)
-		if err != nil {
-			slog.Warn("Health signal fetch failed, continuing without health data", "error", err)
-			healthResults = make(map[string]*domain.Analysis)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Phase 2: Static analysis (optional)
+		if s.sourceAnalyzer != nil && input.SourceRoot != "" {
+			slog.Info("Phase 2: Analyzing source code coupling", "source", input.SourceRoot)
+			importPaths := buildImportPaths(graphResult.DirectDeps)
+			var couplingErr error
+			couplingResults, couplingErr = s.sourceAnalyzer.AnalyzeCoupling(ctx, input.SourceRoot, importPaths)
+			if couplingErr != nil {
+				slog.Warn("Source analysis failed, continuing without coupling data", "error", couplingErr)
+				couplingResults = nil
+			}
+			slog.Info("Phase 2 complete", "analyzed", len(couplingResults))
+		} else {
+			slog.Info("Phase 2: Skipped (no source root provided)")
 		}
-	}
-	slog.Info("Phase 3 complete", "fetched", len(healthResults))
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Phase 3: Health signals
+		slog.Info("Phase 3: Fetching health signals", "count", len(graphResult.DirectDeps))
+		healthResults = make(map[string]*domain.Analysis)
+		if s.analysisService != nil && len(graphResult.DirectDeps) > 0 {
+			var healthErr error
+			healthResults, healthErr = s.analysisService.ProcessBatchPURLs(ctx, graphResult.DirectDeps)
+			if healthErr != nil {
+				slog.Warn("Health signal fetch failed, continuing without health data", "error", healthErr)
+				healthResults = make(map[string]*domain.Analysis)
+			}
+		}
+		slog.Info("Phase 3 complete", "fetched", len(healthResults))
+	}()
+
+	wg.Wait()
 
 	// Phase 4: Scoring and prioritization
 	slog.Info("Phase 4: Computing scores and ranking")

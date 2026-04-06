@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
@@ -47,19 +46,65 @@ const (
 	langJava
 )
 
+// dotImportAlias is a sentinel alias for Go dot imports (import . "pkg").
+// Dot-imported symbols are called without a package prefix, so selector_expression
+// queries cannot track them. We mark them as "used but uncountable."
+const dotImportAlias = "\x00dot"
+
 // langConfig holds the tree-sitter language and query patterns.
 type langConfig struct {
-	language     *sitter.Language
-	importQuery  string
-	callQuery    string
-	varDeclQuery string // optional: maps type names to variable names (e.g., Java)
-	stripQuotes  bool
-	aliasFromPkg func(importPath string) string
+	language       *sitter.Language
+	importQuery    string
+	callQuery      string
+	compiledImport *sitter.Query // compiled once in NewAnalyzer
+	compiledCall   *sitter.Query // compiled once in NewAnalyzer
+	stripQuotes    bool
+	aliasFromPkg   func(importPath string) string
 }
 
 // Analyzer implements SourceAnalyzer using tree-sitter for multi-language parsing.
 type Analyzer struct {
 	configs map[langID]*langConfig
+}
+
+// newJSLikeConfig creates a langConfig for JS-family languages (JS, TS, TSX).
+func newJSLikeConfig(lang *sitter.Language) *langConfig {
+	importQ := strings.Join([]string{
+		`(import_statement source: (string) @import)`,
+		`(call_expression function: (identifier) @func arguments: (arguments (string) @import))`,
+	}, "\n")
+	callQ := `(member_expression object: (identifier) @obj property: (property_identifier) @prop)`
+
+	compiledImport, _ := sitter.NewQuery([]byte(importQ), lang)
+	compiledCall, _ := sitter.NewQuery([]byte(callQ), lang)
+
+	return &langConfig{
+		language:       lang,
+		importQuery:    importQ,
+		callQuery:      callQ,
+		compiledImport: compiledImport,
+		compiledCall:   compiledCall,
+		stripQuotes:    true,
+		aliasFromPkg: func(importPath string) string {
+			return importPath
+		},
+	}
+}
+
+// compileQueries compiles import and call queries for a langConfig.
+// Call this after setting importQuery and callQuery.
+func compileQueries(cfg *langConfig) {
+	q, err := sitter.NewQuery([]byte(cfg.importQuery), cfg.language)
+	if err != nil {
+		slog.Warn("failed to compile import query", "error", err)
+	}
+	cfg.compiledImport = q
+
+	q2, err := sitter.NewQuery([]byte(cfg.callQuery), cfg.language)
+	if err != nil {
+		slog.Warn("failed to compile call query", "error", err)
+	}
+	cfg.compiledCall = q2
 }
 
 // NewAnalyzer creates a new tree-sitter based Analyzer.
@@ -78,6 +123,7 @@ func NewAnalyzer() *Analyzer {
 			return parts[len(parts)-1]
 		},
 	}
+	compileQueries(a.configs[langGo])
 
 	a.configs[langPython] = &langConfig{
 		language: python.GetLanguage(),
@@ -92,57 +138,22 @@ func NewAnalyzer() *Analyzer {
 			return parts[0]
 		},
 	}
+	compileQueries(a.configs[langPython])
 
-	jsConfig := &langConfig{
-		language: javascript.GetLanguage(),
-		importQuery: strings.Join([]string{
-			`(import_statement source: (string) @import)`,
-			`(call_expression function: (identifier) @func arguments: (arguments (string) @import))`,
-		}, "\n"),
-		callQuery:   `(member_expression object: (identifier) @obj property: (property_identifier) @prop)`,
-		stripQuotes: true,
-		aliasFromPkg: func(importPath string) string {
-			return importPath
-		},
-	}
-	a.configs[langJavaScript] = jsConfig
-
-	a.configs[langTypeScript] = &langConfig{
-		language: typescript.GetLanguage(),
-		importQuery: strings.Join([]string{
-			`(import_statement source: (string) @import)`,
-			`(call_expression function: (identifier) @func arguments: (arguments (string) @import))`,
-		}, "\n"),
-		callQuery:   `(member_expression object: (identifier) @obj property: (property_identifier) @prop)`,
-		stripQuotes: true,
-		aliasFromPkg: func(importPath string) string {
-			return importPath
-		},
-	}
-
-	a.configs[langTSX] = &langConfig{
-		language: tsx.GetLanguage(),
-		importQuery: strings.Join([]string{
-			`(import_statement source: (string) @import)`,
-			`(call_expression function: (identifier) @func arguments: (arguments (string) @import))`,
-		}, "\n"),
-		callQuery:   `(member_expression object: (identifier) @obj property: (property_identifier) @prop)`,
-		stripQuotes: true,
-		aliasFromPkg: func(importPath string) string {
-			return importPath
-		},
-	}
+	a.configs[langJavaScript] = newJSLikeConfig(javascript.GetLanguage())
+	a.configs[langTypeScript] = newJSLikeConfig(typescript.GetLanguage())
+	a.configs[langTSX] = newJSLikeConfig(tsx.GetLanguage())
 
 	a.configs[langJava] = &langConfig{
-		language:     java.GetLanguage(),
-		importQuery:  `(import_declaration (scoped_identifier) @import)`,
-		callQuery:    `(method_invocation object: (identifier) @obj name: (identifier) @method)`,
-		varDeclQuery: `(local_variable_declaration type: (type_identifier) @type declarator: (variable_declarator name: (identifier) @var))`,
-		stripQuotes:  false,
+		language:    java.GetLanguage(),
+		importQuery: `(import_declaration (scoped_identifier) @import)`,
+		callQuery:   `(method_invocation object: (identifier) @obj name: (identifier) @method)`,
+		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {
 			return importPath
 		},
 	}
+	compileQueries(a.configs[langJava])
 
 	return a
 }
@@ -246,7 +257,7 @@ func (a *Analyzer) AnalyzeCoupling(
 		}
 
 		// Record import files
-		for _, purl := range fileAliases {
+		for alias, purl := range fileAliases {
 			acc, ok := accum[purl]
 			if !ok {
 				acc = &accumulator{
@@ -258,13 +269,9 @@ func (a *Analyzer) AnalyzeCoupling(
 			if !acc.importFiles[relPath] {
 				acc.importFiles[relPath] = true
 			}
-		}
-
-		// Phase 1.5: For languages with variable declarations (Java), resolve
-		// type-name aliases to variable-name aliases so call sites like
-		// "gson.toJson()" match the import alias "Gson".
-		if cfg.varDeclQuery != "" {
-			a.resolveVarAliases(cfg, root, src, fileAliases)
+			if alias == dotImportAlias {
+				acc.hasDotImport = true
+			}
 		}
 
 		// Phase 2: Count call sites using alias->PURL mapping.
@@ -283,13 +290,24 @@ func (a *Analyzer) AnalyzeCoupling(
 		for f := range acc.importFiles {
 			files = append(files, f)
 		}
-		sort.Strings(files)
+		callSites := acc.callSites
+		isUnused := len(acc.importFiles) == 0
+
+		// Dot imports are used but uncountable via selector queries.
+		// Mark as used with a baseline call site count.
+		if acc.hasDotImport {
+			isUnused = false
+			if callSites == 0 {
+				callSites = 1
+			}
+		}
+
 		results[purl] = &domaindiet.CouplingAnalysis{
 			ImportFileCount: len(acc.importFiles),
-			CallSiteCount:   acc.callSites,
+			CallSiteCount:   callSites,
 			APIBreadth:      len(acc.symbols),
 			ImportFiles:     files,
-			IsUnused:        len(acc.importFiles) == 0,
+			IsUnused:        isUnused,
 		}
 	}
 
@@ -306,12 +324,11 @@ func (a *Analyzer) extractImports(
 ) map[string]string {
 	aliasMap := make(map[string]string) // alias -> PURL
 
-	query, err := sitter.NewQuery([]byte(cfg.importQuery), cfg.language)
-	if err != nil {
-		slog.Warn("import query failed to compile", "error", err)
+	query := cfg.compiledImport
+	if query == nil {
+		slog.Debug("import query not compiled")
 		return aliasMap
 	}
-	defer query.Close()
 
 	cursor := sitter.NewQueryCursor()
 	defer cursor.Close()
@@ -323,13 +340,6 @@ func (a *Analyzer) extractImports(
 			break
 		}
 		for _, capture := range match.Captures {
-			// Only process @import captures; skip other captures like @func
-			// to avoid treating identifiers (e.g., "require") as import paths.
-			captureName := query.CaptureNameForId(capture.Index)
-			if captureName != "import" {
-				continue
-			}
-
 			value := capture.Node.Content(src)
 
 			if cfg.stripQuotes {
@@ -402,7 +412,19 @@ func (a *Analyzer) handleGoImport(
 		}
 	}
 
-	if alias == "" || alias == "." {
+	// BUG 1: Blank imports (import _ "pkg") are side-effect-only; skip entirely.
+	if alias == "_" {
+		return
+	}
+
+	// BUG 2: Dot imports (import . "pkg") make symbols callable without prefix.
+	// We can't track call sites via selector_expression, so mark as "used but uncountable."
+	if alias == "." {
+		aliasMap[dotImportAlias] = purl
+		return
+	}
+
+	if alias == "" {
 		// Default: last path component
 		parts := strings.Split(importPath, "/")
 		alias = parts[len(parts)-1]
@@ -434,7 +456,7 @@ func (a *Analyzer) handlePythonImport(
 
 	// Try prefix matching.
 	for ip, purl := range importToPURL {
-		if strings.HasPrefix(importPath, ip+".") || importPath == ip {
+		if importPath == ip || strings.HasPrefix(importPath, ip+".") {
 			alias := cfg.aliasFromPkg(ip)
 			aliasMap[alias] = purl
 			return
@@ -449,51 +471,17 @@ func (a *Analyzer) handleJavaImport(
 	aliasMap map[string]string,
 ) {
 	for ip, purl := range importToPURL {
-		if strings.HasPrefix(importPath, ip+".") || importPath == ip {
-			// Use the last component of the import as alias.
+		if importPath == ip || strings.HasPrefix(importPath, ip+".") {
+			// Use the last component of the import as alias (class name).
 			parts := strings.Split(importPath, ".")
 			alias := parts[len(parts)-1]
 			aliasMap[alias] = purl
+			// Also register lowercase for variable-style calls (e.g., Gson gson = ...; gson.toJson()).
+			lower := strings.ToLower(alias[:1]) + alias[1:]
+			if lower != alias {
+				aliasMap[lower] = purl
+			}
 			return
-		}
-	}
-}
-
-// resolveVarAliases scans variable declarations and adds variable-name aliases
-// for any type names that are already in aliasMap. For example, if aliasMap has
-// "Gson" -> purl, and the code has "Gson gson = new Gson()", this adds
-// "gson" -> purl to aliasMap so that "gson.toJson()" is counted as a call site.
-func (a *Analyzer) resolveVarAliases(
-	cfg *langConfig,
-	root *sitter.Node,
-	src []byte,
-	aliasMap map[string]string,
-) {
-	query, err := sitter.NewQuery([]byte(cfg.varDeclQuery), cfg.language)
-	if err != nil {
-		slog.Warn("var decl query failed to compile", "error", err)
-		return
-	}
-	defer query.Close()
-
-	cursor := sitter.NewQueryCursor()
-	defer cursor.Close()
-	cursor.Exec(query, root)
-
-	for {
-		match, ok := cursor.NextMatch()
-		if !ok {
-			break
-		}
-		if len(match.Captures) < 2 {
-			continue
-		}
-
-		typeName := match.Captures[0].Node.Content(src)
-		varName := match.Captures[1].Node.Content(src)
-
-		if purl, ok := aliasMap[typeName]; ok && varName != typeName {
-			aliasMap[varName] = purl
 		}
 	}
 }
@@ -510,12 +498,11 @@ func (a *Analyzer) countCallSites(
 		return
 	}
 
-	query, err := sitter.NewQuery([]byte(cfg.callQuery), cfg.language)
-	if err != nil {
-		slog.Warn("call query failed to compile", "error", err)
+	query := cfg.compiledCall
+	if query == nil {
+		slog.Debug("call query not compiled")
 		return
 	}
-	defer query.Close()
 
 	cursor := sitter.NewQueryCursor()
 	defer cursor.Close()
@@ -549,9 +536,10 @@ func (a *Analyzer) countCallSites(
 	}
 }
 
-// accumulator tracks import files, call sites, and symbols per PURL.
+// accumulator is used internally; re-declared here for the countCallSites method receiver.
 type accumulator struct {
-	importFiles map[string]bool
-	callSites   int
-	symbols     map[string]bool
+	importFiles  map[string]bool
+	callSites    int
+	symbols      map[string]bool
+	hasDotImport bool // true if any file uses dot import for this PURL
 }
