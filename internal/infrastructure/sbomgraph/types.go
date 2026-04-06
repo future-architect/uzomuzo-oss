@@ -79,6 +79,11 @@ func buildRefMapRecursive(components []Component, m map[string]string, depth int
 // of the root component by inspecting the CycloneDX dependencies section.
 // Returns nil when the SBOM lacks metadata.component or the dependencies section,
 // which causes all dependencies to be classified as RelationUnknown.
+//
+// When the root component has an entry in the dependencies array, its dependsOn
+// list is used directly. Otherwise (common with syft directory scans where the
+// root is a "file" type without a PURL), direct deps are inferred as components
+// that appear as dependency refs but are never listed in any dependsOn array.
 func ResolveDirectPURLs(bom *BOMEnvelope, refMap map[string]string) map[string]struct{} {
 	if bom.Metadata == nil || bom.Metadata.Component == nil || len(bom.Dependencies) == 0 {
 		return nil
@@ -93,24 +98,39 @@ func ResolveDirectPURLs(bom *BOMEnvelope, refMap map[string]string) map[string]s
 		return nil
 	}
 
-	var rootDeps []string
+	// Try explicit root entry first.
 	for _, d := range bom.Dependencies {
 		if d.Ref == rootRef {
-			rootDeps = d.DependsOn
-			break
+			directPURLs := make(map[string]struct{}, len(d.DependsOn))
+			for _, ref := range d.DependsOn {
+				if purl, ok := refMap[ref]; ok {
+					directPURLs[purl] = struct{}{}
+				} else {
+					slog.Debug("dependency ref not found in component map", "ref", ref)
+				}
+			}
+			if len(directPURLs) == 0 {
+				return nil
+			}
+			return directPURLs
 		}
 	}
-	if rootDeps == nil {
-		slog.Debug("root component not found in dependencies section", "ref", rootRef)
-		return nil
-	}
 
-	directPURLs := make(map[string]struct{}, len(rootDeps))
-	for _, ref := range rootDeps {
-		if purl, ok := refMap[ref]; ok {
-			directPURLs[purl] = struct{}{}
-		} else {
-			slog.Debug("dependency ref not found in component map", "ref", ref)
+	// Root not in dependencies array — infer direct deps as refs that are never
+	// listed in any dependsOn (i.e., no other component depends on them).
+	slog.Debug("root component not in dependencies array, inferring direct deps", "ref", rootRef)
+	dependedOn := make(map[string]struct{})
+	for _, d := range bom.Dependencies {
+		for _, ref := range d.DependsOn {
+			dependedOn[ref] = struct{}{}
+		}
+	}
+	directPURLs := make(map[string]struct{})
+	for _, d := range bom.Dependencies {
+		if _, isDep := dependedOn[d.Ref]; !isDep {
+			if purl, ok := refMap[d.Ref]; ok {
+				directPURLs[purl] = struct{}{}
+			}
 		}
 	}
 	return directPURLs
