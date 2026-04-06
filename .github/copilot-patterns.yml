@@ -67,11 +67,7 @@ patterns:
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
-  - category: "naming-consistency"
-    summary: "CLI flag descriptions that introduce domain terms mid-sentence should capitalize the term and use natural phrasing (e.g., 'Replace means...') instead of shorthand notation ('replace = ...')"
-    pr: 144
-    file: "cmd/uzomuzo/commands.go"
-    date: "2026-04-05"
+  # naming-consistency: promoted to coding-standards.instructions.md (PRs #144, #159 — output column header must match rendered data field)
   - category: "defensive-coding"
     summary: "Avoid per-call map allocation for static display-name mappings — use a switch statement or package-level var instead of rebuilding the map on every invocation"
     pr: 144
