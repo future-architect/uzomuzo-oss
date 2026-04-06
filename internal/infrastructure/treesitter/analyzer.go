@@ -286,6 +286,12 @@ func (a *Analyzer) AnalyzeCoupling(
 		return nil, fmt.Errorf("walking source tree: %w", err)
 	}
 
+	// No coupling data collected — return nil so callers treat coupling as unavailable
+	// rather than misclassifying every dependency as unused.
+	if len(accum) == 0 {
+		return nil, nil
+	}
+
 	// Build result map
 	results := make(map[string]*domaindiet.CouplingAnalysis, len(accum))
 	for purl, acc := range accum {
