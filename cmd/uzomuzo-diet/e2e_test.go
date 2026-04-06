@@ -79,18 +79,24 @@ func runDiet(t *testing.T, format string) string {
 
 	// Read from the pipe concurrently to avoid deadlock when output exceeds
 	// the OS pipe buffer size.
-	done := make(chan struct{})
+	readErrCh := make(chan error, 1)
 	go func() {
-		_, _ = buf.ReadFrom(r)
-		close(done)
+		_, readErr := buf.ReadFrom(r)
+		readErrCh <- readErr
 	}()
 
 	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
 
-	_ = w.Close()
+	if err := w.Close(); err != nil {
+		t.Fatalf("failed to close stdout pipe writer: %v", err)
+	}
 	os.Stdout = oldStdout
-	<-done
-	_ = r.Close()
+	if readErr := <-readErrCh; readErr != nil {
+		t.Fatalf("failed to read captured stdout: %v", readErr)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatalf("failed to close stdout pipe reader: %v", err)
+	}
 
 	if runErr != nil {
 		t.Fatalf("RunDiet(%s) failed: %v", format, runErr)

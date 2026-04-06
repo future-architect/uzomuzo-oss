@@ -30,7 +30,10 @@ func (a *Analyzer) AnalyzeGraph(_ context.Context, sbomData []byte) (*domaindiet
 	refMap := sbomgraph.BuildRefMap(bom.Components)
 	directPURLs := sbomgraph.ResolveDirectPURLs(&bom, refMap)
 	if directPURLs == nil {
-		return nil, fmt.Errorf("SBOM has no dependency graph (missing metadata.component or dependencies section)")
+		if bom.Metadata == nil || bom.Metadata.Component == nil || bom.Dependencies == nil {
+			return nil, fmt.Errorf("SBOM has no dependency graph (missing metadata.component or dependencies section)")
+		}
+		directPURLs = map[string]struct{}{}
 	}
 
 	// Build adjacency list: normalizedPURL → []normalizedPURL

@@ -29,7 +29,10 @@ func TestAnalyzeGraph_Simple(t *testing.T) {
 		},
 	}
 
-	data, _ := json.Marshal(bom)
+	data, err := json.Marshal(bom)
+	if err != nil {
+		t.Fatalf("failed to marshal BOM: %v", err)
+	}
 	analyzer := NewAnalyzer()
 	result, err := analyzer.AnalyzeGraph(context.Background(), data)
 	if err != nil {
@@ -76,7 +79,10 @@ func TestAnalyzeGraph_SharedTransitive(t *testing.T) {
 		},
 	}
 
-	data, _ := json.Marshal(bom)
+	data, err := json.Marshal(bom)
+	if err != nil {
+		t.Fatalf("failed to marshal BOM: %v", err)
+	}
 	analyzer := NewAnalyzer()
 	result, err := analyzer.AnalyzeGraph(context.Background(), data)
 	if err != nil {
@@ -113,7 +119,10 @@ func TestAnalyzeGraph_DeepChain(t *testing.T) {
 		},
 	}
 
-	data, _ := json.Marshal(bom)
+	data, err := json.Marshal(bom)
+	if err != nil {
+		t.Fatalf("failed to marshal BOM: %v", err)
+	}
 	analyzer := NewAnalyzer()
 	result, err := analyzer.AnalyzeGraph(context.Background(), data)
 	if err != nil {
@@ -135,9 +144,12 @@ func TestAnalyzeGraph_NoDependencies(t *testing.T) {
 			{BOMRef: "a", PURL: "pkg:golang/a@v1.0.0"},
 		},
 	}
-	data, _ := json.Marshal(bom)
+	data, err := json.Marshal(bom)
+	if err != nil {
+		t.Fatalf("failed to marshal BOM: %v", err)
+	}
 	analyzer := NewAnalyzer()
-	_, err := analyzer.AnalyzeGraph(context.Background(), data)
+	_, err = analyzer.AnalyzeGraph(context.Background(), data)
 	if err == nil {
 		t.Error("expected error for SBOM without dependency graph")
 	}

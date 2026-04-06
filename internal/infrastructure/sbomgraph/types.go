@@ -113,9 +113,6 @@ func ResolveDirectPURLs(bom *BOMEnvelope, refMap map[string]string) map[string]s
 			slog.Debug("dependency ref not found in component map", "ref", ref)
 		}
 	}
-	if len(directPURLs) == 0 {
-		return nil
-	}
 	return directPURLs
 }
 

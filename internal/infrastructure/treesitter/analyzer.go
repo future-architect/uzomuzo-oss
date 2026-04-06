@@ -422,13 +422,13 @@ func (a *Analyzer) handleGoImport(
 		}
 	}
 
-	// BUG 1: Blank imports (import _ "pkg") are side-effect-only; skip entirely.
+	// Note: Blank imports (import _ "pkg") are side-effect-only, so skip them entirely.
 	if alias == "_" {
 		return
 	}
 
-	// BUG 2: Dot imports (import . "pkg") make symbols callable without prefix.
-	// We can't track call sites via selector_expression, so mark as "used but uncountable."
+	// Special case: Dot imports (import . "pkg") make symbols callable without a package prefix.
+	// Selector-expression-based tracking cannot attribute those call sites, so mark them as used but uncountable.
 	if alias == "." {
 		aliasMap[dotImportAlias] = purl
 		return

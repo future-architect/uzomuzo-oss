@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/future-architect/uzomuzo-oss/internal/application"
 	dietapp "github.com/future-architect/uzomuzo-oss/internal/application/diet"
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
@@ -32,7 +31,7 @@ func RunDiet(
 	}
 
 	// Create analysis service for health signals
-	analysisService := application.NewAnalysisServiceFromConfig(cfg)
+	analysisService := createAnalysisService(cfg)
 
 	// Create diet service
 	svc := dietapp.NewService(graphAnalyzer, sourceAnalyzer, analysisService)
