@@ -95,3 +95,7 @@ patterns:
     pr: 144
     file: "internal/domain/analysis/build_health_assessor.go"
     date: "2026-04-05"
+  # comment-doc-drift: already covered by "Comment-Code Consistency" rule (PR #148, boxdraw.go:422 — function header comment didn't document VerdictReplace early return)
+  # naming-consistency: already covered by "Comment-Code Consistency" spirit (PR #148, verdict_test.go:68 — test function name implied build integrity drives verdict after semantics changed to ignore it)
+  # testing: already covered by "Cover New Control Flow Branches with Tests" (PR #148, scan_render.go:362 — missing test for buildIntegrityDisplay VerdictReplace branch)
+  # testing: already covered by "Cover New Control Flow Branches with Tests" (PR #148, boxdraw.go:449 — missing tests for writeBoxBuildIntegrity header+icon format and replace-verdict hiding)

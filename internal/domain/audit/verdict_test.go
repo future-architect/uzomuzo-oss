@@ -65,7 +65,7 @@ func makeAnalysisWithBuild(lifecycleLabel analysis.MaintenanceStatus, buildLabel
 	}
 }
 
-func TestDeriveVerdict_BuildIntegrity(t *testing.T) {
+func TestDeriveVerdict_IgnoresBuildIntegrity(t *testing.T) {
 	tests := []struct {
 		name string
 		a    *analysis.Analysis
@@ -77,14 +77,14 @@ func TestDeriveVerdict_BuildIntegrity(t *testing.T) {
 			want: audit.VerdictOK,
 		},
 		{
-			name: "active_moderate_caution",
+			name: "active_moderate_ok",
 			a:    makeAnalysisWithBuild(analysis.LabelActive, analysis.BuildLabelModerate),
-			want: audit.VerdictCaution,
+			want: audit.VerdictOK,
 		},
 		{
-			name: "active_weak_replace",
+			name: "active_weak_ok",
 			a:    makeAnalysisWithBuild(analysis.LabelActive, analysis.BuildLabelWeak),
-			want: audit.VerdictReplace,
+			want: audit.VerdictOK,
 		},
 		{
 			name: "active_ungraded_ok",

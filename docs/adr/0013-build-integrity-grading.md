@@ -40,16 +40,16 @@ This is distinct from vulnerability scanning (Trivy/Snyk) which detects **known 
 
 Introduce a **Build Integrity Label** with numeric score for each dependency. No letter grades (A/B/C/D) — label + score provides sufficient information without redundancy.
 
-| Label | Score Range | Verdict | Interpretation |
-|-------|-------------|---------|----------------|
-| `Hardened` | ≥ 7.5 | `ok` | Strong resistance — core protections in place |
-| `Moderate` | 2.5–7.4 | `caution` | Improvement needed — meaningful gaps present |
-| `Weak` | < 2.5 | `replace` | Minimal resistance — build pipeline largely unprotected |
-| `Ungraded` | No signals | *(none)* | Insufficient data to grade |
+| Label | Score Range | Interpretation |
+|-------|-------------|----------------|
+| `Hardened` | ≥ 7.5 | Strong resistance — core protections in place |
+| `Moderate` | 2.5–7.4 | Improvement needed — meaningful gaps present |
+| `Weak` | < 2.5 | Minimal resistance — build pipeline largely unprotected |
+| `Ungraded` | No signals | Insufficient data to grade |
 
 Score is on the 0–10 scale (same as Scorecard). Thresholds are aligned with Scorecard's risk-level weight boundaries (High=7.5, Low=2.5).
 
-`Ungraded` does **not** map to a verdict — see [Verdict Integration](#verdict-integration) for rationale.
+Build Integrity labels are **informational only** and do not affect the verdict. See [Verdict Integration](#verdict-integration).
 
 ### Weighting: Aligned with OpenSSF Scorecard Risk Levels
 
@@ -149,33 +149,11 @@ Rationale: Scorecard excludes inconclusive checks rather than treating them as 0
 
 ### Verdict Integration
 
-The existing `CompositeAssessor` already runs both `LifecycleAssessorService` and `BuildHealthAssessorService`. The final verdict takes the **worst** of lifecycle and build integrity verdicts:
+**Build Integrity is informational only — it does not affect the verdict.** The verdict is determined solely by the lifecycle assessment (`DeriveVerdict` = `deriveLifecycleVerdict`).
 
-```
-final_verdict = max_severity(lifecycle_verdict, build_integrity_verdict)
-```
+Rationale: Build Integrity flags structural weaknesses in the build pipeline, but users cannot fix another project's Branch Protection or Token Permissions. Since the verdict is meant to prompt actionable responses, including a non-actionable signal in the verdict creates noise (e.g., Active packages downgraded to `caution` because of Moderate build integrity — 76% of OSS scores Moderate). The BUILD column and detail box section provide the information for dependency selection decisions without polluting the verdict.
 
-**Exception: `Ungraded` does not participate in verdict composition.** When Build Integrity data is unavailable (no Scorecard, no SLSA), the verdict is determined by lifecycle alone. This prevents mass `review` verdicts for packages without Scorecard coverage (npm packages without GitHub repos, private registries, GitLab/Bitbucket-hosted projects). The BUILD column displays `—` to make the data gap visible without polluting the verdict.
-
-#### Implementation: `DeriveVerdict` Refactoring
-
-`DeriveVerdict` in `audit/verdict.go` is refactored into two private functions:
-
-```go
-func DeriveVerdict(a *analysis.Analysis) Verdict {
-    return maxSeverity(deriveLifecycleVerdict(a), deriveBuildVerdict(a))
-}
-
-func deriveLifecycleVerdict(a *analysis.Analysis) Verdict { /* existing logic */ }
-func deriveBuildVerdict(a *analysis.Analysis) Verdict {
-    // Ungraded → VerdictOK (no downgrade)
-    // Hardened → VerdictOK
-    // Moderate → VerdictCaution
-    // Weak → VerdictReplace
-}
-```
-
-This preserves `DeriveVerdict` as the single entry point (no caller changes) while enabling independent testing of each axis.
+Build Integrity is **hidden for EOL packages** (verdict `replace`). A package that should no longer be used does not benefit from build pipeline assessment — it is not a realistic attack target since no new releases are expected.
 
 ### Type Design: `AssessmentResult.Label` as `string`
 
@@ -253,7 +231,7 @@ Individual signal scores are **not** included — the existing `ExportScorecard`
 
 ### `--show-only` Filter
 
-Phase 1 uses the existing `--show-only` verdict filter only. Build Integrity contributes to the composite verdict via `max_severity`, so `--show-only caution` will include packages downgraded by build integrity.
+Phase 1 uses the existing `--show-only` verdict filter only. Build Integrity does not affect the verdict, so `--show-only` filters on lifecycle verdict exclusively.
 
 A dedicated `--show-only-build` flag is **not added** in Phase 1. If demand is confirmed through user feedback, it can be introduced later without breaking changes.
 
@@ -272,7 +250,7 @@ A dedicated `--show-only-build` flag is **not added** in Phase 1. If demand is c
 2. Define `BuildIntegrityLabel` type and constants (`Hardened`, `Moderate`, `Weak`, `Ungraded`)
 3. Implement scoring algorithm in `BuildHealthAssessorService.Assess()` (replacing current stub)
 4. Define build-integrity Signal constants and record all evaluated checks
-5. Refactor `DeriveVerdict` into `deriveLifecycleVerdict` + `deriveBuildVerdict` + `maxSeverity`
+5. `DeriveVerdict` uses lifecycle only (build is informational)
 6. Test with synthetic table-driven tests covering: all signals present, partial signals, no signals, boundary values (7.5, 2.5), SLSA verified/absent, score 0 vs absent distinction
 
 ### Phase 3: Display (low cost)
@@ -295,7 +273,7 @@ A dedicated `--show-only-build` flag is **not added** in Phase 1. If demand is c
 - **New assessment axis visible to users** — `BUILD` column in output; may initially confuse users unfamiliar with supply chain concepts.
 - **Score distribution concern** — With missing signals excluded (not penalized), packages with few evaluated checks may receive artificially high grades. Phase 4 tuning should validate the distribution against real-world data and consider a minimum signal count for Hardened.
 - **No new API calls** — All data is already fetched; implementation is pure domain logic + display.
-- **Verdict severity escalation** — A well-maintained package can now get `caution` or `replace` verdict due to build integrity. This is intentional but will need documentation explaining why a "healthy" package is flagged.
+- **No verdict escalation** — Build Integrity is informational only. A well-maintained package keeps its `ok` verdict regardless of build integrity score. Users see the BUILD column and detail section for awareness but are not forced to act on non-actionable findings.
 - **Ungraded packages are not penalized** — Verdict composition skips Ungraded to avoid mass `review` noise. Users see `—` in the BUILD column and can investigate manually.
 - **SLSA/Attestation weight is an editorial decision** — Unlike Scorecard checks, SLSA and Attestation weights (High/Medium) are our assignment, not Scorecard's. Document this clearly so future maintainers know which weights are upstream-derived and which are our own.
 

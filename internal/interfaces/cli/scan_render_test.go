@@ -642,6 +642,72 @@ func TestRenderScanTable_WithShowOnly(t *testing.T) {
 	}
 }
 
+func TestBuildIntegrityDisplay(t *testing.T) {
+	tests := []struct {
+		name    string
+		a       *analysis.Analysis
+		verdict domainaudit.Verdict
+		want    string
+	}{
+		{
+			name:    "nil analysis",
+			a:       nil,
+			verdict: domainaudit.VerdictOK,
+			want:    "—",
+		},
+		{
+			name: "replace verdict with build data",
+			a: &analysis.Analysis{
+				AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
+					analysis.BuildHealthAxis: {
+						Axis:  analysis.BuildHealthAxis,
+						Label: string(analysis.BuildLabelHardened),
+						Meta:  map[string]string{"score": "8.5"},
+					},
+				},
+			},
+			verdict: domainaudit.VerdictReplace,
+			want:    "—",
+		},
+		{
+			name: "ok verdict with hardened score",
+			a: &analysis.Analysis{
+				AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
+					analysis.BuildHealthAxis: {
+						Axis:  analysis.BuildHealthAxis,
+						Label: string(analysis.BuildLabelHardened),
+						Meta:  map[string]string{"score": "8.5"},
+					},
+				},
+			},
+			verdict: domainaudit.VerdictOK,
+			want:    "Hardened 8.5",
+		},
+		{
+			name: "ungraded label",
+			a: &analysis.Analysis{
+				AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
+					analysis.BuildHealthAxis: {
+						Axis:  analysis.BuildHealthAxis,
+						Label: string(analysis.BuildLabelUngraded),
+						Meta:  map[string]string{"score": analysis.ScoreUngraded},
+					},
+				},
+			},
+			verdict: domainaudit.VerdictOK,
+			want:    "—",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildIntegrityDisplay(tt.a, tt.verdict)
+			if got != tt.want {
+				t.Errorf("buildIntegrityDisplay() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRenderScanJSON_WithShowOnly(t *testing.T) {
 	allEntries := makeTestEntries()
 	filter := map[domainaudit.Verdict]struct{}{domainaudit.VerdictReplace: {}}

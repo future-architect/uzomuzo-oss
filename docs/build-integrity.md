@@ -18,14 +18,14 @@ These signals are combined into a single **weighted average score** (0–10) usi
 
 ## Labels
 
-| Label | Score | Verdict Impact | Meaning |
-|-------|-------|----------------|---------|
-| **Hardened** | ≥ 7.5 | None (`ok`) | Strong resistance — core protections in place |
-| **Moderate** | 2.5–7.4 | Downgrades to `caution` | Improvement needed — meaningful gaps present |
-| **Weak** | < 2.5 | Downgrades to `replace` | Minimal resistance — build pipeline largely unprotected |
-| **Ungraded** | No data | None | Insufficient data (no Scorecard, no SLSA) |
+| Label | Score | Meaning |
+|-------|-------|---------|
+| **Hardened** | ≥ 7.5 | Strong resistance — core protections in place |
+| **Moderate** | 2.5–7.4 | Improvement needed — meaningful gaps present |
+| **Weak** | < 2.5 | Minimal resistance — build pipeline largely unprotected |
+| **Ungraded** | No data | Insufficient data (no Scorecard) |
 
-`Ungraded` does **not** affect the verdict — it prevents mass noise for packages without Scorecard coverage.
+Build Integrity is **informational only** — it does not affect the verdict. The verdict is determined solely by the lifecycle assessment. Build Integrity is shown in the BUILD column and detail box so users can factor it into dependency selection decisions.
 
 ## Signals and Weights
 
@@ -67,12 +67,15 @@ STATUS     PURL                           LIFECYCLE       BUILD
 The detail view shows individual signal scores in a compact 2-column layout. Critical/High signals are always shown (including `—` for inconclusive). Medium signals appear only when evaluated. The header shows `(evaluated/total)` checks.
 
 ```
-├─ Build Integrity: Moderate 4.2/10 (4/6) ─────────────────
-│   Dangerous Workflow 10  Branch Protection    —
-│   Code Review         9  Token Permissions    —
-│   Binary Artifacts    0  Pinned Deps          3
-│   → https://scorecard.dev/viewer/?uri=github.com/...
+├─ Build Integrity ─────────────────────────────────────────
+│ ⚠️ Moderate 4.2/10 (4/6)
+│ Dangerous Workflow  10  Branch Protection    —
+│ Code Review          9  Token Permissions    —
+│ Binary Artifacts     0  Pinned Deps          3
+│ → https://scorecard.dev/viewer/?uri=github.com/...
 ```
+
+Build Integrity is hidden for EOL packages (verdict `replace`) since build pipeline assessment is irrelevant for packages that should no longer be used.
 
 ### JSON Format
 
