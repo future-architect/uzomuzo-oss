@@ -82,10 +82,11 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 			var couplingErr error
 			couplingResults, couplingErr = s.sourceAnalyzer.AnalyzeCoupling(ctx, input.SourceRoot, importPaths)
 			if couplingErr != nil {
-				slog.Warn("Source analysis failed, continuing without coupling data", "error", couplingErr)
+				slog.Warn("Phase 2 failed, continuing without coupling data", "error", couplingErr)
 				couplingResults = nil
+			} else {
+				slog.Info("Phase 2 complete", "analyzed", len(couplingResults))
 			}
-			slog.Info("Phase 2 complete", "analyzed", len(couplingResults))
 		} else {
 			slog.Info("Phase 2: Skipped (no source root provided)")
 		}

@@ -248,8 +248,11 @@ func (a *Analyzer) AnalyzeCoupling(
 
 		root := tree.RootNode()
 
+		// Reuse a single QueryCursor across extractImports and countCallSites.
+		cursor := sitter.NewQueryCursor()
+
 		// Phase 1: Extract imports and build alias->PURL map for this file.
-		fileAliases := a.extractImports(cfg, root, src, importToPURL, lid)
+		fileAliases := a.extractImports(cfg, root, src, importToPURL, lid, cursor)
 
 		relPath, _ := filepath.Rel(sourceRoot, path)
 		if relPath == "" {
@@ -275,7 +278,8 @@ func (a *Analyzer) AnalyzeCoupling(
 		}
 
 		// Phase 2: Count call sites using alias->PURL mapping.
-		a.countCallSites(cfg, root, src, fileAliases, accum)
+		a.countCallSites(cfg, root, src, fileAliases, accum, cursor)
+		cursor.Close()
 
 		return nil
 	})
@@ -321,6 +325,7 @@ func (a *Analyzer) extractImports(
 	src []byte,
 	importToPURL map[string]string,
 	lid langID,
+	cursor *sitter.QueryCursor,
 ) map[string]string {
 	aliasMap := make(map[string]string) // alias -> PURL
 
@@ -330,8 +335,6 @@ func (a *Analyzer) extractImports(
 		return aliasMap
 	}
 
-	cursor := sitter.NewQueryCursor()
-	defer cursor.Close()
 	cursor.Exec(query, root)
 
 	for {
@@ -368,6 +371,12 @@ func (a *Analyzer) extractImports(
 				continue
 			}
 
+			// Skip TypeScript `import type` statements (no runtime coupling).
+			if lid == langTypeScript || lid == langTSX {
+				if isTypeOnlyImport(capture.Node) {
+					continue
+				}
+			}
 			// For JS/TS: exact match or subpath prefix match (e.g., "lodash/fp" → "lodash").
 			a.handleJSImport(value, importToPURL, aliasMap, cfg)
 		}
@@ -508,6 +517,21 @@ func (a *Analyzer) handleJSImport(
 	aliasMap[alias] = purl
 }
 
+// isTypeOnlyImport checks if a node's parent import_statement is a TypeScript
+// `import type` (no runtime coupling).
+func isTypeOnlyImport(node *sitter.Node) bool {
+	parent := node.Parent()
+	if parent == nil || parent.Type() != "import_statement" {
+		return false
+	}
+	for i := 0; i < int(parent.ChildCount()); i++ {
+		if parent.Child(i).Type() == "type" {
+			return true
+		}
+	}
+	return false
+}
+
 // countCallSites counts selector/member expressions matching known aliases.
 func (a *Analyzer) countCallSites(
 	cfg *langConfig,
@@ -515,6 +539,7 @@ func (a *Analyzer) countCallSites(
 	src []byte,
 	aliasMap map[string]string,
 	accum map[string]*accumulator,
+	cursor *sitter.QueryCursor,
 ) {
 	if len(aliasMap) == 0 {
 		return
@@ -526,8 +551,6 @@ func (a *Analyzer) countCallSites(
 		return
 	}
 
-	cursor := sitter.NewQueryCursor()
-	defer cursor.Close()
 	cursor.Exec(query, root)
 
 	for {
