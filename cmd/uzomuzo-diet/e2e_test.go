@@ -77,11 +77,19 @@ func runDiet(t *testing.T, format string) string {
 		Format:     format,
 	}
 
+	// Read from the pipe concurrently to avoid deadlock when output exceeds
+	// the OS pipe buffer size.
+	done := make(chan struct{})
+	go func() {
+		_, _ = buf.ReadFrom(r)
+		close(done)
+	}()
+
 	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
 
 	_ = w.Close()
 	os.Stdout = oldStdout
-	_, _ = buf.ReadFrom(r)
+	<-done
 	_ = r.Close()
 
 	if runErr != nil {

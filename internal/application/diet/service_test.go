@@ -32,10 +32,10 @@ func (s *stubSourceAnalyzer) AnalyzeCoupling(_ context.Context, _ string, _ map[
 
 func TestParsePURLParts(t *testing.T) {
 	tests := []struct {
-		purl      string
-		wantName  string
-		wantEco   string
-		wantVer   string
+		purl     string
+		wantName string
+		wantEco  string
+		wantVer  string
 	}{
 		{
 			purl:     "pkg:golang/github.com/gin-gonic/gin@v1.10.0",
@@ -88,10 +88,10 @@ func TestBuildImportPaths(t *testing.T) {
 	result := buildImportPaths(purls)
 
 	expectations := map[string]string{
-		"pkg:golang/github.com/stretchr/testify@v1.9.0":    "github.com/stretchr/testify",
-		"pkg:npm/%40types/node@20.0.0":                     "@types/node",
-		"pkg:pypi/flask@3.0.0":                             "flask",
-		"pkg:maven/org.apache.commons/commons-lang3@3.14.0": "org.apache.commons.commons-lang3",
+		"pkg:golang/github.com/stretchr/testify@v1.9.0":     "github.com/stretchr/testify",
+		"pkg:npm/%40types/node@20.0.0":                      "@types/node",
+		"pkg:pypi/flask@3.0.0":                              "flask",
+		"pkg:maven/org.apache.commons/commons-lang3@3.14.0": "org.apache.commons",
 	}
 	for purl, wantImport := range expectations {
 		got, ok := result[purl]

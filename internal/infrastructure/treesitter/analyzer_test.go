@@ -235,11 +235,14 @@ func main() {}
 	if ca == nil {
 		t.Fatal("expected result for imported but unused package")
 	}
-	if !ca.IsUnused {
-		t.Error("IsUnused = false, want true")
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false (package is imported)")
 	}
 	if ca.ImportFileCount != 1 {
 		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 0 {
+		t.Errorf("CallSiteCount = %d, want 0", ca.CallSiteCount)
 	}
 }
 
@@ -432,7 +435,7 @@ requests.get("https://example.com")
 	analyzer := NewAnalyzer()
 	importPaths := map[string][]string{
 		"pkg:pypi/requests@2.31.0": {"requests"},
-		"pkg:pypi/request@1.0.0":  {"request"},
+		"pkg:pypi/request@1.0.0":   {"request"},
 	}
 	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
 	if err != nil {
@@ -448,12 +451,15 @@ requests.get("https://example.com")
 		t.Errorf("requests CallSiteCount = %d, want 1", caRequests.CallSiteCount)
 	}
 
-	// "request" should be a separate entry with no call sites
+	// "request" should be a separate entry with no call sites but still imported
 	caRequest, ok := result["pkg:pypi/request@1.0.0"]
 	if !ok {
 		t.Fatal("expected coupling analysis for request")
 	}
-	if !caRequest.IsUnused {
-		t.Error("request should be unused (no call sites)")
+	if caRequest.IsUnused {
+		t.Error("request should not be unused (it is imported)")
+	}
+	if caRequest.CallSiteCount != 0 {
+		t.Errorf("request CallSiteCount = %d, want 0", caRequest.CallSiteCount)
 	}
 }

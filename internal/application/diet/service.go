@@ -268,8 +268,10 @@ func buildImportPaths(purls []string) map[string][]string {
 		case "pypi":
 			importPath = parsed.Name
 		case "maven":
+			// Use groupId (namespace) as primary prefix — it aligns more closely
+			// with actual Java package names than groupId.artifactId would.
 			if parsed.Namespace != "" {
-				importPath = parsed.Namespace + "." + parsed.Name
+				importPath = parsed.Namespace
 			} else {
 				importPath = parsed.Name
 			}

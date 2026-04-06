@@ -49,12 +49,12 @@ const (
 
 // langConfig holds the tree-sitter language and query patterns.
 type langConfig struct {
-	language      *sitter.Language
-	importQuery   string
-	callQuery     string
-	varDeclQuery  string // optional: maps type names to variable names (e.g., Java)
-	stripQuotes   bool
-	aliasFromPkg  func(importPath string) string
+	language     *sitter.Language
+	importQuery  string
+	callQuery    string
+	varDeclQuery string // optional: maps type names to variable names (e.g., Java)
+	stripQuotes  bool
+	aliasFromPkg func(importPath string) string
 }
 
 // Analyzer implements SourceAnalyzer using tree-sitter for multi-language parsing.
@@ -289,7 +289,7 @@ func (a *Analyzer) AnalyzeCoupling(
 			CallSiteCount:   acc.callSites,
 			APIBreadth:      len(acc.symbols),
 			ImportFiles:     files,
-			IsUnused:        acc.callSites == 0,
+			IsUnused:        len(acc.importFiles) == 0,
 		}
 	}
 
