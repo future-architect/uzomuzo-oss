@@ -571,6 +571,7 @@ npm / PyPI / Maven / Cargo / Go modules / NuGet / RubyGems / Packagist
 - **CSV / CLI reports**: Comprehensive output of metrics, licenses, and lifecycle status
 - **Extensible via AnalysisEnricher hook**: Inject custom EOL catalog logic without modifying core — [details](docs/library-usage.md)
 - **Embeddable as a Go library**: `pkg/uzomuzo/` facade for SaaS integration — [details](docs/library-usage.md)
+- **Claude Code commands**: LLM-powered analysis prompts for EOL risk assessment and dependency removal prioritization — [details](claude-commands/)
 - **Automated monthly scanning**: GitHub Actions workflow with Trivy SBOM generation and GitHub Issue publication, with Slack notifications available via GitHub issue subscriptions/integrations — [details](docs/integration-examples.md#github-actions-scheduled-scanning)
 
 ## Architecture
@@ -599,6 +600,7 @@ See [Data Flow](docs/data-flow.md) for API integration diagram and two-path asse
 | [PURL Identity Model](docs/purl-identity-model.md) | OriginalPURL / EffectivePURL / CanonicalKey 3-layer design |
 | [License Resolution](docs/license-resolution.md) | ResolvedLicense / normalization / fallback / promotion |
 | [Development Guide](docs/development.md) | SPDX updates, testing, performance, troubleshooting |
+| [Claude Code Commands](claude-commands/) | LLM-powered dependency analysis: EOL risk tracing + 6-axis removal evaluation |
 
 ## Why "Uzomuzo"?
 
