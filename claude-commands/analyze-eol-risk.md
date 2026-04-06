@@ -14,7 +14,7 @@ Analyze the security risk of EOL/Archived dependencies in the target project by 
 
 ## Prerequisites
 
-- **`GITHUB_TOKEN` environment variable must be set.** Without it, uzomuzo cannot detect archived repositories via GitHub API, and most EOL packages will be misclassified as "Stalled" instead of "EOL-Confirmed". See [#152](https://github.com/future-architect/uzomuzo-oss/issues/152) for details.
+- **`GITHUB_TOKEN` environment variable is recommended but not required.** uzomuzo detects archived repositories via deps.dev Scorecard data without a token. Setting `GITHUB_TOKEN` improves accuracy and speed by also querying the GitHub GraphQL API directly.
 
 ## Risk Models
 
