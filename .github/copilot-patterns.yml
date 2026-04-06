@@ -97,3 +97,4 @@ patterns:
   # testing: already covered by promoted rules (PR #159, e2e_test.go:94 — check pipe read/close errors; graph_test.go — check json.Marshal errors)
   # defensive-coding: already covered by "Nil vs Empty Map Semantics for Sentinel-Checked Maps" (PR #159, sbomgraph/types.go:118 + depgraph/graph.go:33)
   # comment-doc-drift: already covered by promoted rule (PR #159, analyzer.go:431 — misleading "BUG" labels for intentional import handling)
+  # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, analyzer.go:336 — return nil coupling map when no source files analyzed, not empty map that misclassifies all deps as unused)
