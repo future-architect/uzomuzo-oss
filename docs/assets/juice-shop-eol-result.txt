@@ -1,118 +1,119 @@
 🔄 GitHub GraphQL processing started: 0/1030 repositories (progress every 100)
 🔄 GitHub GraphQL processing: 0/1030 repositories processed
-🔄 GitHub GraphQL progress: 100/1030 (total_cost=97 avg_cost=1.00 remaining=4849 reset=02:43 UTC)
-🔄 GitHub GraphQL progress: 200/1030 (total_cost=197 avg_cost=1.00 remaining=4754 reset=02:43 UTC)
-🔄 GitHub GraphQL progress: 300/1030 (total_cost=296 avg_cost=1.00 remaining=4653 reset=02:43 UTC)
-🔄 GitHub GraphQL progress: 400/1030 (total_cost=396 avg_cost=1.00 remaining=4547 reset=02:43 UTC)
-🔄 GitHub GraphQL progress: 500/1030 (total_cost=495 avg_cost=1.00 remaining=4451 reset=02:43 UTC)
-🔄 GitHub GraphQL progress: 600/1030 (total_cost=595 avg_cost=1.00 remaining=4356 reset=02:43 UTC)
-🔄 GitHub GraphQL progress: 700/1030 (total_cost=694 avg_cost=1.00 remaining=4252 reset=02:43 UTC)
-🔄 GitHub GraphQL progress: 800/1030 (total_cost=793 avg_cost=1.00 remaining=4153 reset=02:43 UTC)
-🔄 GitHub GraphQL progress: 900/1030 (total_cost=893 avg_cost=1.00 remaining=4049 reset=02:43 UTC)
-🔄 GitHub GraphQL progress: 1000/1030 (total_cost=991 avg_cost=1.00 remaining=3945 reset=02:43 UTC)
-🔄 GitHub GraphQL progress: 1030/1030 (total_cost=1021 avg_cost=1.00 remaining=3946 reset=02:43 UTC)
-✅ GitHub GraphQL processing completed: 1030/1030 (total_cost=1021 avg_cost=1.00 remaining=3946 reset=02:43 UTC)
+🔄 GitHub GraphQL progress: 100/1030 (total_cost=98 avg_cost=1.00 remaining=4865 reset=03:16 UTC)
+🔄 GitHub GraphQL progress: 200/1030 (total_cost=198 avg_cost=1.00 remaining=4774 reset=03:16 UTC)
+🔄 GitHub GraphQL progress: 300/1030 (total_cost=297 avg_cost=1.00 remaining=4667 reset=03:16 UTC)
+🔄 GitHub GraphQL progress: 400/1030 (total_cost=396 avg_cost=1.00 remaining=4567 reset=03:16 UTC)
+🔄 GitHub GraphQL progress: 500/1030 (total_cost=495 avg_cost=1.00 remaining=4474 reset=03:16 UTC)
+🔄 GitHub GraphQL progress: 600/1030 (total_cost=595 avg_cost=1.00 remaining=4371 reset=03:16 UTC)
+🔄 GitHub GraphQL progress: 700/1030 (total_cost=693 avg_cost=1.00 remaining=4268 reset=03:16 UTC)
+🔄 GitHub GraphQL progress: 800/1030 (total_cost=793 avg_cost=1.00 remaining=4178 reset=03:16 UTC)
+🔄 GitHub GraphQL progress: 900/1030 (total_cost=892 avg_cost=1.00 remaining=4069 reset=03:16 UTC)
+🔄 GitHub GraphQL progress: 1000/1030 (total_cost=991 avg_cost=1.00 remaining=3971 reset=03:16 UTC)
+🔄 GitHub GraphQL progress: 1030/1030 (total_cost=1021 avg_cost=1.00 remaining=3942 reset=03:16 UTC)
+✅ GitHub GraphQL processing completed: 1030/1030 (total_cost=1021 avg_cost=1.00 remaining=3942 reset=03:16 UTC)
 --- Summary Table ---
-STATUS     PURL                                                   RELATION  LIFECYCLE
-🔴 replace  pkg:npm/%40ampproject/remapping@2.2.0                  direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40humanwhocodes/config-array@0.5.0            direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40humanwhocodes/object-schema@1.2.1           direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40npmcli/move-file@1.1.2                      direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40otplib/plugin-crypto@12.0.1                 direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40otplib/plugin-thirty-two@12.0.1             direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40otplib/preset-default@12.0.1                direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40sinonjs/text-encoding@0.7.2                 direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/config@0.0.41                         direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/cookie@0.4.1                          direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/express-jwt@6.0.4                     direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/express-unless@2.0.1                  direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/glob@7.2.0                            direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/json5@0.0.29                          direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/mime@3.0.1                            direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/minimatch@5.1.2                       direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/prettier@2.7.2                        direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/sequelize@4.28.14                     direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/socket.io-client@1.4.36               direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/socket.io-parser@3.0.0                direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/socket.io@2.1.13                      direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/strip-bom@3.0.0                       direct    EOL-Confirmed
-🔴 replace  pkg:npm/%40types/strip-json-comments@0.0.30            direct    EOL-Confirmed
-🔴 replace  pkg:npm/abab@2.0.6                                     direct    EOL-Confirmed
-🔴 replace  pkg:npm/are-we-there-yet@1.1.7                         direct    EOL-Confirmed
-🔴 replace  pkg:npm/are-we-there-yet@2.0.0                         direct    EOL-Confirmed
-🔴 replace  pkg:npm/are-we-there-yet@3.0.1                         direct    EOL-Confirmed
-🔴 replace  pkg:npm/code-point-at@1.1.0                            direct    EOL-Confirmed
-🔴 replace  pkg:npm/doctrine@2.1.0                                 direct    EOL-Confirmed
-🔴 replace  pkg:npm/doctrine@3.0.0                                 direct    EOL-Confirmed
-🔴 replace  pkg:npm/domexception@2.0.1                             direct    EOL-Confirmed
-🔴 replace  pkg:npm/download@8.0.0                                 direct    EOL-Effective
-🔴 replace  pkg:npm/ecstatic@3.3.2                                 direct    EOL-Confirmed
-🔴 replace  pkg:npm/eivindfjeldstad-dot@0.0.1                      direct    EOL-Confirmed
-🔴 replace  pkg:npm/eslint-config-standard-with-typescript@21.0.1  direct    EOL-Confirmed
-🔴 replace  pkg:npm/find-cache-dir@3.3.2                           direct    EOL-Confirmed
-🔴 replace  pkg:npm/formatio@1.1.1                                 direct    EOL-Confirmed
-🔴 replace  pkg:npm/fstream@1.0.12                                 direct    EOL-Confirmed
-🔴 replace  pkg:npm/gauge@2.7.4                                    direct    EOL-Confirmed
-🔴 replace  pkg:npm/gauge@3.0.2                                    direct    EOL-Confirmed
-🔴 replace  pkg:npm/gauge@4.0.4                                    direct    EOL-Confirmed
-🔴 replace  pkg:npm/global-dirs@3.0.1                              direct    EOL-Confirmed
-🔴 replace  pkg:npm/grunt-legacy-log@3.0.0                         direct    EOL-Effective
-🔴 replace  pkg:npm/grunt-legacy-util@2.0.1                        direct    EOL-Effective
-🔴 replace  pkg:npm/grunt-replace-json@0.1.0                       direct    EOL-Effective
-🔴 replace  pkg:npm/har-validator@5.1.5                            direct    EOL-Confirmed
-🔴 replace  pkg:npm/hoek@5.0.4                                     direct    EOL-Confirmed
-🔴 replace  pkg:npm/hoek@6.1.3                                     direct    EOL-Confirmed
-🔴 replace  pkg:npm/iltorb@2.4.5                                   direct    EOL-Confirmed
-🔴 replace  pkg:npm/inflight@1.0.6                                 direct    EOL-Confirmed
-🔴 replace  pkg:npm/ip@1.1.8                                       direct    EOL-Effective
-🔴 replace  pkg:npm/ip@2.0.0                                       direct    EOL-Effective
-🔴 replace  pkg:npm/is-gitpod@2.0.9                                direct    EOL-Confirmed
-🔴 replace  pkg:npm/is-windows@1.0.2                               direct    EOL-Confirmed
-🔴 replace  pkg:npm/isemail@3.2.0                                  direct    EOL-Confirmed
-🔴 replace  pkg:npm/jest-serializer@26.6.2                         direct    EOL-Confirmed
-🔴 replace  pkg:npm/json-buffer@3.0.0                              direct    EOL-Confirmed
-🔴 replace  pkg:npm/lodash.get@4.4.2                               direct    EOL-Confirmed
-🔴 replace  pkg:npm/lolex@1.3.2                                    direct    EOL-Confirmed
-🔴 replace  pkg:npm/marsdb@0.6.11                                  direct    EOL-Confirmed
-🔴 replace  pkg:npm/mimic-fn@2.1.0                                 direct    EOL-Confirmed
-🔴 replace  pkg:npm/monorepo-symlink-test@0.0.0                    direct    EOL-Effective
-🔴 replace  pkg:npm/node-int64@0.4.0                               direct    EOL-Confirmed
-🔴 replace  pkg:npm/node-pre-gyp@0.15.0                            direct    EOL-Confirmed
-🔴 replace  pkg:npm/noop-logger@0.1.1                              direct    EOL-Confirmed
-🔴 replace  pkg:npm/notevil@1.3.3                                  direct    EOL-Confirmed
-🔴 replace  pkg:npm/npmlog@4.1.2                                   direct    EOL-Confirmed
-🔴 replace  pkg:npm/npmlog@5.0.1                                   direct    EOL-Confirmed
-🔴 replace  pkg:npm/npmlog@6.0.2                                   direct    EOL-Confirmed
-🔴 replace  pkg:npm/number-is-nan@1.0.1                            direct    EOL-Confirmed
-🔴 replace  pkg:npm/os-homedir@1.0.2                               direct    EOL-Confirmed
-🔴 replace  pkg:npm/os-tmpdir@1.0.2                                direct    EOL-Confirmed
-🔴 replace  pkg:npm/osenv@0.1.5                                    direct    EOL-Confirmed
-🔴 replace  pkg:npm/p-finally@1.0.0                                direct    EOL-Confirmed
-🔴 replace  pkg:npm/path-is-absolute@1.0.1                         direct    EOL-Confirmed
-🔴 replace  pkg:npm/peek-readable@4.1.0                            direct    EOL-Confirmed
-🔴 replace  pkg:npm/pkg-dir@4.2.0                                  direct    EOL-Confirmed
-🔴 replace  pkg:npm/prebuild-install@5.3.6                         direct    EOL-Confirmed
-🔴 replace  pkg:npm/read-pkg-up@7.0.1                              direct    EOL-Confirmed
-🔴 replace  pkg:npm/replace@1.2.2                                  direct    EOL-Effective
-🔴 replace  pkg:npm/request@2.88.2                                 direct    EOL-Confirmed
-🔴 replace  pkg:npm/require-from-string@2.0.2                      direct    EOL-Confirmed
-🔴 replace  pkg:npm/resolve-url@0.2.1                              direct    EOL-Confirmed
-🔴 replace  pkg:npm/samsam@1.1.2                                   direct    EOL-Confirmed
-🔴 replace  pkg:npm/saxes@5.0.1                                    direct    EOL-Confirmed
-🔴 replace  pkg:npm/source-map-resolve@0.5.3                       direct    EOL-Confirmed
-🔴 replace  pkg:npm/source-map-url@0.4.1                           direct    EOL-Confirmed
-🔴 replace  pkg:npm/strip-eof@1.0.0                                direct    EOL-Confirmed
-🔴 replace  pkg:npm/through@2.3.8                                  direct    EOL-Confirmed
-🔴 replace  pkg:npm/topo@3.0.3                                     direct    EOL-Confirmed
-🔴 replace  pkg:npm/ts-node-dev@1.1.8                              direct    EOL-Confirmed
-🔴 replace  pkg:npm/urix@0.1.0                                     direct    EOL-Confirmed
-🔴 replace  pkg:npm/w3c-hr-time@1.0.2                              direct    EOL-Confirmed
-🔴 replace  pkg:npm/whatwg-encoding@1.0.5                          direct    EOL-Confirmed
-🔴 replace  pkg:npm/xmlchars@2.2.0                                 direct    EOL-Confirmed
-🔴 replace  pkg:npm/xtend@4.0.2                                    direct    EOL-Confirmed
+STATUS     PURL                                                   RELATION  LIFECYCLE      BUILD
+🔴 replace  pkg:npm/%40ampproject/remapping@2.2.0                  direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40humanwhocodes/config-array@0.5.0            direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40humanwhocodes/object-schema@1.2.1           direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40npmcli/move-file@1.1.2                      direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40otplib/plugin-crypto@12.0.1                 direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40otplib/plugin-thirty-two@12.0.1             direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40otplib/preset-default@12.0.1                direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40sinonjs/text-encoding@0.7.2                 direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/config@0.0.41                         direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/cookie@0.4.1                          direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/express-jwt@6.0.4                     direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/express-unless@2.0.1                  direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/glob@7.2.0                            direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/json5@0.0.29                          direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/mime@3.0.1                            direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/minimatch@5.1.2                       direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/prettier@2.7.2                        direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/sequelize@4.28.14                     direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/socket.io-client@1.4.36               direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/socket.io-parser@3.0.0                direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/socket.io@2.1.13                      direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/strip-bom@3.0.0                       direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/%40types/strip-json-comments@0.0.30            direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/abab@2.0.6                                     direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/are-we-there-yet@1.1.7                         direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/are-we-there-yet@2.0.0                         direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/are-we-there-yet@3.0.1                         direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/code-point-at@1.1.0                            direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/doctrine@2.1.0                                 direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/doctrine@3.0.0                                 direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/domexception@2.0.1                             direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/dottie@2.0.3                                   direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/download@8.0.0                                 direct    EOL-Effective  —
+🔴 replace  pkg:npm/ecstatic@3.3.2                                 direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/eivindfjeldstad-dot@0.0.1                      direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/eslint-config-standard-with-typescript@21.0.1  direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/find-cache-dir@3.3.2                           direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/formatio@1.1.1                                 direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/fstream@1.0.12                                 direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/gauge@2.7.4                                    direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/gauge@3.0.2                                    direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/gauge@4.0.4                                    direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/global-dirs@3.0.1                              direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/grunt-legacy-log@3.0.0                         direct    EOL-Effective  —
+🔴 replace  pkg:npm/grunt-legacy-util@2.0.1                        direct    EOL-Effective  —
+🔴 replace  pkg:npm/grunt-replace-json@0.1.0                       direct    EOL-Effective  —
+🔴 replace  pkg:npm/har-validator@5.1.5                            direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/hoek@5.0.4                                     direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/hoek@6.1.3                                     direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/iltorb@2.4.5                                   direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/inflight@1.0.6                                 direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/ip@1.1.8                                       direct    EOL-Effective  —
+🔴 replace  pkg:npm/ip@2.0.0                                       direct    EOL-Effective  —
+🔴 replace  pkg:npm/is-gitpod@2.0.9                                direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/is-windows@1.0.2                               direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/isemail@3.2.0                                  direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/jest-serializer@26.6.2                         direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/json-buffer@3.0.0                              direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/lodash.get@4.4.2                               direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/lolex@1.3.2                                    direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/marsdb@0.6.11                                  direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/mimic-fn@2.1.0                                 direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/monorepo-symlink-test@0.0.0                    direct    EOL-Effective  —
+🔴 replace  pkg:npm/node-int64@0.4.0                               direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/node-pre-gyp@0.15.0                            direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/noop-logger@0.1.1                              direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/notevil@1.3.3                                  direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/npmlog@4.1.2                                   direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/npmlog@5.0.1                                   direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/npmlog@6.0.2                                   direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/number-is-nan@1.0.1                            direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/os-homedir@1.0.2                               direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/os-tmpdir@1.0.2                                direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/osenv@0.1.5                                    direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/p-finally@1.0.0                                direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/path-is-absolute@1.0.1                         direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/peek-readable@4.1.0                            direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/pkg-dir@4.2.0                                  direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/prebuild-install@5.3.6                         direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/read-pkg-up@7.0.1                              direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/replace@1.2.2                                  direct    EOL-Effective  —
+🔴 replace  pkg:npm/request@2.88.2                                 direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/require-from-string@2.0.2                      direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/resolve-url@0.2.1                              direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/samsam@1.1.2                                   direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/saxes@5.0.1                                    direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/source-map-resolve@0.5.3                       direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/source-map-url@0.4.1                           direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/strip-eof@1.0.0                                direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/through@2.3.8                                  direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/topo@3.0.3                                     direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/ts-node-dev@1.1.8                              direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/urix@0.1.0                                     direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/w3c-hr-time@1.0.2                              direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/whatwg-encoding@1.0.5                          direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/xmlchars@2.2.0                                 direct    EOL-Confirmed  —
+🔴 replace  pkg:npm/xtend@4.0.2                                    direct    EOL-Confirmed  —
 
 ── Summary ─────────────────────────────────────────────────
-│ 1555 dependencies | ✅ 1186 ok | ⚠️ 258 caution | 🔴 96 replace | 🔍 15 review | showing 96 of 1555
+│ 1555 dependencies | ✅ 1185 ok | ⚠️ 258 caution | 🔴 97 replace | 🔍 15 review | showing 97 of 1555
 └───────────────────────────────────────────────────────────
 
 --- Detailed Report ---
@@ -129,7 +130,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 133 stars
 │ Used by: 77 packages
 │ Depends on: 2 direct, 3 transitive
-│ Score: 3.1/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.1/10  Maintained: 0.0/10
 │ Last Commit: 2025-06-28
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.3.0 (2024-03-01)
@@ -156,7 +157,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 30 stars
 │ Used by: 15036 packages
 │ Depends on: 3 direct, 4 transitive
-│ Score: 3.7/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.7/10  Maintained: 0.0/10
 │ Last Commit: 2024-04-17
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.13.0 (2024-04-17) ⚠️ [DEPRECATED]
@@ -182,7 +183,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 33 stars
 │ Used by: 15941 packages
-│ Score: 3.2/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.2/10  Maintained: 0.0/10
 │ Last Commit: 2024-04-01
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.3 (2024-04-01) ⚠️ [DEPRECATED]
@@ -235,7 +236,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 2221 stars
 │ Used by: 678 packages
 │ Depends on: 1 direct, 0 transitive
-│ Score: 7.1/10  Maintained: 10.0/10
+│ Scorecard Overall: 7.1/10  Maintained: 10.0/10
 │ Last Commit: 2026-04-04
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 12.0.1 (2020-01-24) ⚠️ [DEPRECATED]
@@ -261,7 +262,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 2221 stars
 │ Used by: 678 packages
 │ Depends on: 2 direct, 0 transitive
-│ Score: 7.1/10  Maintained: 10.0/10
+│ Scorecard Overall: 7.1/10  Maintained: 10.0/10
 │ Last Commit: 2026-04-04
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 12.0.1 (2020-01-24) ⚠️ [DEPRECATED]
@@ -287,7 +288,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 2221 stars
 │ Used by: 661 packages
 │ Depends on: 3 direct, 1 transitive
-│ Score: 7.1/10  Maintained: 10.0/10
+│ Scorecard Overall: 7.1/10  Maintained: 10.0/10
 │ Last Commit: 2026-04-04
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 12.0.1 (2020-01-24) ⚠️ [DEPRECATED]
@@ -335,10 +336,10 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fconfig
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
+│ 51151 stars
 │ Used by: 22 packages
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 4.4.0 (2026-03-18) ⚠️ [DEPRECATED]
 │ Pre-release: 0.0.28-alpha (2016-07-08)
@@ -361,10 +362,10 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fcookie
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
-│ Used by: 3662 packages
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ 51151 stars
+│ Used by: 3660 packages
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 1.0.0 (2024-10-29) ⚠️ [DEPRECATED]
 │ Pre-release: 0.1.27-alpha (2016-07-08)
@@ -387,11 +388,11 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fexpress-jwt
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
+│ 51151 stars
 │ Used by: 12 packages
 │ Depends on: 2 direct, 11 transitive
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 7.4.4 (2024-10-23) ⚠️ [DEPRECATED]
 │ Pre-release: 0.0.28-alpha (2016-07-08)
@@ -414,10 +415,10 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fexpress-unless
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
+│ 51151 stars
 │ Depends on: 1 direct, 0 transitive
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.3 (2024-10-23) ⚠️ [DEPRECATED]
 │ Pre-release: 0.0.28-alpha (2016-07-08)
@@ -440,11 +441,11 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fglob
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
+│ 51151 stars
 │ Used by: 51842 packages
 │ Depends on: 2 direct, 4 transitive
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 9.0.0 (2025-07-01) ⚠️ [DEPRECATED]
 │ Pre-release: 5.0.28-alpha (2016-07-08)
@@ -467,10 +468,10 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fjson5
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
-│ Used by: 77431 packages
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ 51151 stars
+│ Used by: 77432 packages
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.2.0 (2021-02-01) ⚠️ [DEPRECATED]
 │ Pre-release: 0.0.27-alpha (2016-07-08)
@@ -493,10 +494,10 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fmime
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
+│ 51151 stars
 │ Used by: 4 packages
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 4.0.0 (2024-03-31) ⚠️ [DEPRECATED]
 │ Pre-release: 0.0.27-alpha (2016-07-08)
@@ -519,10 +520,10 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fminimatch
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
+│ 51151 stars
 │ Used by: 1470 packages
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 6.0.0 (2025-07-01) ⚠️ [DEPRECATED]
 │ Pre-release: 2.0.27-alpha (2016-07-08)
@@ -545,10 +546,10 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fprettier
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
+│ 51151 stars
 │ Used by: 20 packages
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.0 (2023-07-29) ⚠️ [DEPRECATED]
 │ Requested: 2.7.2 (2022-12-20)
@@ -570,11 +571,11 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fsequelize
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
+│ 51151 stars
 │ Used by: 1 packages
 │ Depends on: 4 direct, 2 transitive
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 6.12.0 (2025-07-10) ⚠️ [DEPRECATED]
 │ Pre-release: 3.4.26-alpha (2016-07-08)
@@ -597,10 +598,10 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fsocket.io-client
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
+│ 51151 stars
 │ Used by: 794 packages
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.0 (2021-05-14) ⚠️ [DEPRECATED]
 │ Pre-release: 1.4.25-alpha (2016-07-08)
@@ -623,11 +624,11 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fsocket.io-parser
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
+│ 51151 stars
 │ Used by: 528 packages
 │ Depends on: 1 direct, 3 transitive
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.0 (2021-05-14) ⚠️ [DEPRECATED]
 ├─ Links ───────────────────────────────────────────────────
@@ -648,11 +649,11 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/@types%2Fsocket.io
 ├─ Health ──────────────────────────────────────────────────
-│ 51140 stars
+│ 51151 stars
 │ Used by: 529 packages
 │ Depends on: 3 direct, 5 transitive
-│ Score: 6.5/10  Maintained: 10.0/10
-│ Last Commit: 2026-04-04
+│ Scorecard Overall: 6.5/10  Maintained: 10.0/10
+│ Last Commit: 2026-04-05
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.2 (2021-05-14) ⚠️ [DEPRECATED]
 │ Pre-release: 1.4.25-alpha (2016-07-08)
@@ -676,7 +677,7 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 112 stars
 │ Used by: 1851 packages
-│ Score: 3.6/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.6/10  Maintained: 0.0/10
 │ Last Commit: 2021-04-16
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 4.0.1 (2019-05-06) ⚠️ [DEPRECATED]
@@ -701,7 +702,7 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 625 stars
 │ Used by: 1863 packages
-│ Score: 3.7/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.7/10  Maintained: 0.0/10
 │ Last Commit: 2025-08-08
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.0 (2019-07-17) ⚠️ [DEPRECATED]
@@ -728,7 +729,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 91 stars
 │ Used by: 81466 packages
-│ Score: 3.1/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.1/10  Maintained: 0.0/10
 │ Last Commit: 2023-11-26
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.6 (2022-04-17) ⚠️ [DEPRECATED]
@@ -754,7 +755,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 182 stars
 │ Used by: 36503 packages
 │ Depends on: 2 direct, 4 transitive
-│ Score: 5.5/10  Maintained: 0.0/10
+│ Scorecard Overall: 5.5/10  Maintained: 0.0/10
 │ Last Commit: 2024-05-04
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 4.0.2 (2024-01-05) ⚠️ [DEPRECATED]
@@ -781,7 +782,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 182 stars
 │ Used by: 36503 packages
 │ Depends on: 2 direct, 4 transitive
-│ Score: 5.5/10  Maintained: 0.0/10
+│ Scorecard Overall: 5.5/10  Maintained: 0.0/10
 │ Last Commit: 2024-05-04
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 4.0.2 (2024-01-05) ⚠️ [DEPRECATED]
@@ -808,7 +809,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 182 stars
 │ Used by: 36503 packages
 │ Depends on: 2 direct, 4 transitive
-│ Score: 5.5/10  Maintained: 0.0/10
+│ Scorecard Overall: 5.5/10  Maintained: 0.0/10
 │ Last Commit: 2024-05-04
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 4.0.2 (2024-01-05) ⚠️ [DEPRECATED]
@@ -833,7 +834,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 23 stars
 │ Used by: 177903 packages
-│ Score: 3.4/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.4/10  Maintained: 0.0/10
 │ Last Commit: 2021-01-01
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.0 (2021-10-13) ⚠️ [DEPRECATED]
@@ -853,9 +854,9 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 📦 Archived
 │ 459 stars
-│ Used by: 95543 packages
+│ Used by: 88845 packages
 │ Depends on: 1 direct, 0 transitive
-│ Score: 4.5/10  Maintained: 0.0/10
+│ Scorecard Overall: 4.5/10  Maintained: 0.0/10
 │ Last Commit: 2018-12-03
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.0 (2018-11-10)
@@ -875,9 +876,9 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 📦 Archived
 │ 459 stars
-│ Used by: 95543 packages
+│ Used by: 88845 packages
 │ Depends on: 1 direct, 0 transitive
-│ Score: 4.5/10  Maintained: 0.0/10
+│ Scorecard Overall: 4.5/10  Maintained: 0.0/10
 │ Last Commit: 2018-12-03
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.0 (2018-11-10)
@@ -903,7 +904,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 22 stars
 │ Used by: 56686 packages
 │ Depends on: 1 direct, 0 transitive
-│ Score: 2.5/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.5/10  Maintained: 0.0/10
 │ Last Commit: 2023-11-26
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 4.0.0 (2021-10-06) ⚠️ [DEPRECATED]
@@ -915,6 +916,32 @@ STATUS     PURL                                                   RELATION  LIFE
 └───────────────────────────────────────────────────────────
 
 --- PURL 32 ---
+── pkg:npm/dottie@2.0.3 ────────────────────────────────────
+│ Fast and safe nested object access and manipulation in
+│   JavaScript
+│ 🔴 EOL-Confirmed: Repository archived or disabled
+├─ Signals ─────────────────────────────────────────────────
+│ Repo Archived: true
+├─ EOL ─────────────────────────────────────────────────────
+│ Evidence (1):
+│   [npmjs] Deprecated in npm registry (confidence 0.90)
+│     ↳ https://registry.npmjs.org/dottie
+├─ Health ──────────────────────────────────────────────────
+│ 📦 Archived
+│ 257 stars
+│ Used by: 26 packages
+│ Scorecard Overall: 3.5/10  Maintained: 2.0/10
+│ Last Commit: 2026-04-05
+├─ Releases ────────────────────────────────────────────────
+│ Stable: 2.0.7 (2026-02-24) ⚠️ [DEPRECATED]
+│ Requested: 2.0.3 (2023-02-07) ⚠️ [DEPRECATED]
+├─ Links ───────────────────────────────────────────────────
+│ Repository: https://github.com/mickhansen/dottie.js
+│ Registry: https://www.npmjs.com/package/dottie
+│ deps.dev: https://deps.dev/npm/dottie
+└───────────────────────────────────────────────────────────
+
+--- PURL 33 ---
 ── pkg:npm/download@8.0.0 ──────────────────────────────────
 │ Download and extract files
 │ 🔴 EOL-Effective: Unmaintained, unpatched vulnerabilities
@@ -927,7 +954,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 1305 stars
 │ Used by: 1561 packages
 │ Depends on: 11 direct, 128 transitive
-│ Score: 2.3/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.3/10  Maintained: 0.0/10
 │ Last Commit: 2020-04-02
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 8.0.0 (2020-04-02)  ⚠️ 2 transitive advisories
@@ -942,7 +969,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/download
 └───────────────────────────────────────────────────────────
 
---- PURL 33 ---
+--- PURL 34 ---
 ── pkg:npm/ecstatic@3.3.2 ──────────────────────────────────
 │ A static file server middleware that works with core http,
 │   express or on the CLI!
@@ -957,7 +984,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 974 stars
 │ Used by: 804 packages
 │ Depends on: 4 direct, 0 transitive
-│ Score: 2.9/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.9/10  Maintained: 0.0/10
 │ Last Commit: 2020-04-01
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 4.1.4 (2020-04-01) ⚠️ [DEPRECATED]
@@ -969,7 +996,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/ecstatic
 └───────────────────────────────────────────────────────────
 
---- PURL 34 ---
+--- PURL 35 ---
 ── pkg:npm/eivindfjeldstad-dot@0.0.1 ───────────────────────
 │ Get and set object properties with dot notation
 │ 🔴 EOL-Confirmed: Deprecated in npm registry; successor:
@@ -984,7 +1011,7 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 2 stars
 │ Used by: 116 packages
-│ Score: 1.5/10  Maintained: 0.0/10
+│ Scorecard Overall: 1.5/10  Maintained: 0.0/10
 │ Last Commit: 2020-02-22
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.0.1 (2013-12-03) ⚠️ [DEPRECATED]
@@ -994,7 +1021,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/eivindfjeldstad-dot
 └───────────────────────────────────────────────────────────
 
---- PURL 35 ---
+--- PURL 36 ---
 ── pkg:npm/eslint-config-standard-with-typescript@21.0.1 ───
 │ A TypeScript ESLint config that loves you
 │ 🔴 EOL-Confirmed: Deprecated in npm registry; successor:
@@ -1010,7 +1037,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 818 stars
 │ Used by: 90 packages
 │ Depends on: 2 direct, 34 transitive
-│ Score: 4.7/10  Maintained: 10.0/10
+│ Scorecard Overall: 4.7/10  Maintained: 10.0/10
 │ Last Commit: 2026-03-26
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 43.0.1 (2024-01-20) ⚠️ [DEPRECATED]
@@ -1021,7 +1048,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/eslint-config-standard-with-typescript
 └───────────────────────────────────────────────────────────
 
---- PURL 36 ---
+--- PURL 37 ---
 ── pkg:npm/find-cache-dir@3.3.2 ────────────────────────────
 │ Finds the common standard cache directory
 │ 🔴 EOL-Confirmed: Deprecated in npm registry
@@ -1035,7 +1062,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 162 stars
 │ Used by: 79664 packages
 │ Depends on: 3 direct, 7 transitive
-│ Score: 3.9/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.9/10  Maintained: 0.0/10
 │ Last Commit: 2025-04-08
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 6.0.0 (2025-04-08) ⚠️ [DEPRECATED]
@@ -1046,7 +1073,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/find-cache-dir
 └───────────────────────────────────────────────────────────
 
---- PURL 37 ---
+--- PURL 38 ---
 ── pkg:npm/formatio@1.1.1 ──────────────────────────────────
 │ The cheesy object formatter
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1062,7 +1089,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 36 stars
 │ Used by: 4790 packages
 │ Depends on: 1 direct, 0 transitive
-│ Score: 2.6/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.6/10  Maintained: 0.0/10
 │ Last Commit: 2021-01-06
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 1.2.0 (2016-02-17) ⚠️ [DEPRECATED]
@@ -1074,7 +1101,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/formatio
 └───────────────────────────────────────────────────────────
 
---- PURL 38 ---
+--- PURL 39 ---
 ── pkg:npm/fstream@1.0.12 ──────────────────────────────────
 │ Advanced FS Streaming for Node
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1089,7 +1116,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 209 stars
 │ Used by: 46158 packages
 │ Depends on: 4 direct, 11 transitive
-│ Score: 2.0/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.0/10  Maintained: 0.0/10
 │ Last Commit: 2021-06-01
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 1.0.12 (2019-05-15) ⚠️ [DEPRECATED]
@@ -1099,7 +1126,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/fstream
 └───────────────────────────────────────────────────────────
 
---- PURL 39 ---
+--- PURL 40 ---
 ── pkg:npm/gauge@2.7.4 ─────────────────────────────────────
 │ A terminal based horizontal guage aka, a progress bar
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1113,8 +1140,8 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 322 stars
 │ Used by: 19478 packages
-│ Depends on: 8 direct, 3 transitive
-│ Score: 5.5/10  Maintained: 0.0/10
+│ Depends on: 8 direct, 4 transitive
+│ Scorecard Overall: 5.5/10  Maintained: 0.0/10
 │ Last Commit: 2024-05-04
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 5.0.2 (2024-05-04) ⚠️ [DEPRECATED]
@@ -1125,7 +1152,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/gauge
 └───────────────────────────────────────────────────────────
 
---- PURL 40 ---
+--- PURL 41 ---
 ── pkg:npm/gauge@3.0.2 ─────────────────────────────────────
 │ A terminal based horizontal guage aka, a progress bar
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1139,8 +1166,8 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 322 stars
 │ Used by: 19478 packages
-│ Depends on: 8 direct, 3 transitive
-│ Score: 5.5/10  Maintained: 0.0/10
+│ Depends on: 8 direct, 4 transitive
+│ Scorecard Overall: 5.5/10  Maintained: 0.0/10
 │ Last Commit: 2024-05-04
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 5.0.2 (2024-05-04) ⚠️ [DEPRECATED]
@@ -1151,7 +1178,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/gauge
 └───────────────────────────────────────────────────────────
 
---- PURL 41 ---
+--- PURL 42 ---
 ── pkg:npm/gauge@4.0.4 ─────────────────────────────────────
 │ A terminal based horizontal guage aka, a progress bar
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1165,8 +1192,8 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 322 stars
 │ Used by: 19478 packages
-│ Depends on: 8 direct, 3 transitive
-│ Score: 5.5/10  Maintained: 0.0/10
+│ Depends on: 8 direct, 4 transitive
+│ Scorecard Overall: 5.5/10  Maintained: 0.0/10
 │ Last Commit: 2024-05-04
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 5.0.2 (2024-05-04) ⚠️ [DEPRECATED]
@@ -1177,7 +1204,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/gauge
 └───────────────────────────────────────────────────────────
 
---- PURL 42 ---
+--- PURL 43 ---
 ── pkg:npm/global-dirs@3.0.1 ───────────────────────────────
 │ Get the directory of globally installed packages and
 │   binaries
@@ -1192,7 +1219,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 77 stars
 │ Used by: 10366 packages
 │ Depends on: 1 direct, 0 transitive
-│ Score: 4.3/10  Maintained: 7.0/10
+│ Scorecard Overall: 4.3/10  Maintained: 7.0/10
 │ Last Commit: 2026-02-02
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 4.0.0 (2023-11-06) ⚠️ [DEPRECATED]
@@ -1203,7 +1230,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/global-dirs
 └───────────────────────────────────────────────────────────
 
---- PURL 43 ---
+--- PURL 44 ---
 ── pkg:npm/grunt-legacy-log@3.0.0 ──────────────────────────
 │ The Grunt logger.
 │ 🔴 EOL-Effective: Unmaintained, unpatched vulnerabilities
@@ -1216,7 +1243,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 6 stars
 │ Used by: 1157 packages
 │ Depends on: 4 direct, 6 transitive
-│ Score: 3.0/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.0/10  Maintained: 0.0/10
 │ Last Commit: 2020-07-27
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.0 (2020-07-27)  ⚠️ 2 transitive advisories
@@ -1231,7 +1258,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/grunt-legacy-log
 └───────────────────────────────────────────────────────────
 
---- PURL 44 ---
+--- PURL 45 ---
 ── pkg:npm/grunt-legacy-util@2.0.1 ─────────────────────────
 │ deprecated utility methods
 │ 🔴 EOL-Effective: Unmaintained, unpatched vulnerabilities
@@ -1244,7 +1271,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 5 stars
 │ Used by: 1157 packages
 │ Depends on: 7 direct, 3 transitive
-│ Score: 3.2/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.2/10  Maintained: 0.0/10
 │ Last Commit: 2021-04-22
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.1 (2021-04-22)  ⚠️ 2 transitive advisories
@@ -1259,7 +1286,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/grunt-legacy-util
 └───────────────────────────────────────────────────────────
 
---- PURL 45 ---
+--- PURL 46 ---
 ── pkg:npm/grunt-replace-json@0.1.0 ────────────────────────
 │ Updates attributes of json files
 │ 🔴 EOL-Effective: Unmaintained, unpatched vulnerabilities
@@ -1270,7 +1297,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ Max Advisory Severity: HIGH 7.4
 ├─ Health ──────────────────────────────────────────────────
 │ Depends on: 1 direct, 0 transitive
-│ Score: 2.0/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.0/10  Maintained: 0.0/10
 │ Last Commit: 2016-12-13
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.1.0 (2016-12-13)  ⚠️ 1 transitive advisory
@@ -1283,7 +1310,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/grunt-replace-json
 └───────────────────────────────────────────────────────────
 
---- PURL 46 ---
+--- PURL 47 ---
 ── pkg:npm/har-validator@5.1.5 ─────────────────────────────
 │ Extremely fast HTTP Archive (HAR) validator using JSON
 │   Schema
@@ -1298,7 +1325,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 63 stars
 │ Used by: 190515 packages
 │ Depends on: 2 direct, 5 transitive
-│ Score: 4.2/10  Maintained: 0.0/10
+│ Scorecard Overall: 4.2/10  Maintained: 0.0/10
 │ Last Commit: 2023-08-09
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 5.1.5 (2020-07-30) ⚠️ [DEPRECATED]
@@ -1308,7 +1335,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/har-validator
 └───────────────────────────────────────────────────────────
 
---- PURL 47 ---
+--- PURL 48 ---
 ── pkg:npm/hoek@5.0.4 ──────────────────────────────────────
 │ Node utilities shared among the extended hapi universe
 │ 🔴 EOL-Confirmed: Deprecated in npm registry
@@ -1319,9 +1346,9 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/hoek
 ├─ Health ──────────────────────────────────────────────────
-│ 483 stars
+│ 484 stars
 │ Used by: 5967 packages
-│ Score: 3.9/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.9/10  Maintained: 0.0/10
 │ Last Commit: 2025-03-12
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 6.1.3 (2019-03-27)  ⚠️ 1 advisory ⚠️ [DEPRECATED]
@@ -1334,7 +1361,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/hoek
 └───────────────────────────────────────────────────────────
 
---- PURL 48 ---
+--- PURL 49 ---
 ── pkg:npm/hoek@6.1.3 ──────────────────────────────────────
 │ Node utilities shared among the extended hapi universe
 │ 🔴 EOL-Confirmed: Deprecated in npm registry
@@ -1345,9 +1372,9 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/hoek
 ├─ Health ──────────────────────────────────────────────────
-│ 483 stars
+│ 484 stars
 │ Used by: 5967 packages
-│ Score: 3.9/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.9/10  Maintained: 0.0/10
 │ Last Commit: 2025-03-12
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 6.1.3 (2019-03-27)  ⚠️ 1 advisory ⚠️ [DEPRECATED]
@@ -1359,7 +1386,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/hoek
 └───────────────────────────────────────────────────────────
 
---- PURL 49 ---
+--- PURL 50 ---
 ── pkg:npm/iltorb@2.4.5 ────────────────────────────────────
 │ Node.js module for brotli compression/decompression with
 │   native bindings
@@ -1376,7 +1403,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 168 stars
 │ Used by: 519 packages
 │ Depends on: 5 direct, 55 transitive
-│ Score: 2.1/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.1/10  Maintained: 0.0/10
 │ Last Commit: 2020-02-01
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.4.5 (2020-02-01) ⚠️ [DEPRECATED]
@@ -1386,7 +1413,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/iltorb
 └───────────────────────────────────────────────────────────
 
---- PURL 50 ---
+--- PURL 51 ---
 ── pkg:npm/inflight@1.0.6 ──────────────────────────────────
 │ Add callbacks to requests in flight to avoid async
 │   duplication
@@ -1403,7 +1430,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 76 stars
 │ Used by: 556917 packages
 │ Depends on: 2 direct, 0 transitive
-│ Score: 2.9/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.9/10  Maintained: 0.0/10
 │ Last Commit: 2024-05-23
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 1.0.6 (2016-10-13) ⚠️ [DEPRECATED]
@@ -1413,7 +1440,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/inflight
 └───────────────────────────────────────────────────────────
 
---- PURL 51 ---
+--- PURL 52 ---
 ── pkg:npm/ip@1.1.8 ────────────────────────────────────────
 │ IP address tools for node.js
 │ 🔴 EOL-Effective: Unmaintained, unpatched vulnerabilities
@@ -1425,7 +1452,7 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 1545 stars
 │ Used by: 7 packages
-│ Score: 2.6/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.6/10  Maintained: 0.0/10
 │ Last Commit: 2024-02-19
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.1 (2024-02-19)  ⚠️ 1 advisory
@@ -1438,7 +1465,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/ip
 └───────────────────────────────────────────────────────────
 
---- PURL 52 ---
+--- PURL 53 ---
 ── pkg:npm/ip@2.0.0 ────────────────────────────────────────
 │ IP address tools for node.js
 │ 🔴 EOL-Effective: Unmaintained, unpatched vulnerabilities
@@ -1450,7 +1477,7 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 1545 stars
 │ Used by: 7 packages
-│ Score: 2.6/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.6/10  Maintained: 0.0/10
 │ Last Commit: 2024-02-19
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.1 (2024-02-19)  ⚠️ 1 advisory
@@ -1463,7 +1490,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/ip
 └───────────────────────────────────────────────────────────
 
---- PURL 53 ---
+--- PURL 54 ---
 ── pkg:npm/is-gitpod@2.0.9 ─────────────────────────────────
 │ Checks if we are in Gitpod.
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1476,7 +1503,7 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 📦 Archived
 │ Depends on: 1 direct, 1 transitive
-│ Score: 2.7/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.7/10  Maintained: 0.0/10
 │ Last Commit: 2025-04-13
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.5 (2023-05-02) ⚠️ [DEPRECATED]
@@ -1487,7 +1514,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/is-gitpod
 └───────────────────────────────────────────────────────────
 
---- PURL 54 ---
+--- PURL 55 ---
 ── pkg:npm/is-windows@1.0.2 ────────────────────────────────
 │ Returns true if the platform is Windows (and Cygwin or
 │   MSYS/MinGW for unit tests)
@@ -1498,7 +1525,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 48 stars
 │ Used by: 175490 packages
-│ Score: 2.1/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.1/10  Maintained: 0.0/10
 │ Last Commit: 2018-02-14
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 1.0.2 (2018-02-14)
@@ -1509,7 +1536,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/is-windows
 └───────────────────────────────────────────────────────────
 
---- PURL 55 ---
+--- PURL 56 ---
 ── pkg:npm/isemail@3.2.0 ───────────────────────────────────
 │ validate an email address according to RFCs 5321, 5322,
 │   and others
@@ -1521,7 +1548,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 258 stars
 │ Used by: 7967 packages
 │ Depends on: 1 direct, 0 transitive
-│ Score: 2.6/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.6/10  Maintained: 0.0/10
 │ Last Commit: 2024-10-02
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.2.0 (2018-10-18)
@@ -1531,7 +1558,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/isemail
 └───────────────────────────────────────────────────────────
 
---- PURL 56 ---
+--- PURL 57 ---
 ── pkg:npm/jest-serializer@26.6.2 ──────────────────────────
 │ Delightful JavaScript Testing.
 │ 🔴 EOL-Confirmed: Deprecated in npm registry; successor:
@@ -1544,10 +1571,10 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/jest-serializer
 ├─ Health ──────────────────────────────────────────────────
-│ 45335 stars
+│ 45334 stars
 │ Used by: 13989 packages
 │ Depends on: 2 direct, 1 transitive
-│ Score: 6.4/10  Maintained: 10.0/10
+│ Scorecard Overall: 6.4/10  Maintained: 10.0/10
 │ Last Commit: 2026-03-10
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 28.0.0 (2022-04-25) ⚠️ [DEPRECATED]
@@ -1560,7 +1587,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/jest-serializer
 └───────────────────────────────────────────────────────────
 
---- PURL 57 ---
+--- PURL 58 ---
 ── pkg:npm/json-buffer@3.0.0 ───────────────────────────────
 │ 🔴 EOL-Confirmed: Repository archived or disabled
 ├─ Signals ─────────────────────────────────────────────────
@@ -1569,7 +1596,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 41 stars
 │ Used by: 50418 packages
-│ Score: 2.1/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.1/10  Maintained: 0.0/10
 │ Last Commit: 2018-09-10
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.1 (2018-09-10)
@@ -1580,7 +1607,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/json-buffer
 └───────────────────────────────────────────────────────────
 
---- PURL 58 ---
+--- PURL 59 ---
 ── pkg:npm/lodash.get@4.4.2 ────────────────────────────────
 │ A modern JavaScript utility library delivering modularity,
 │   performance, & extras.
@@ -1594,9 +1621,9 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/lodash.get
 ├─ Health ──────────────────────────────────────────────────
-│ 61516 stars
+│ 61517 stars
 │ Used by: 57934 packages
-│ Score: 7.1/10  Maintained: 9.0/10
+│ Scorecard Overall: 7.1/10  Maintained: 9.0/10
 │ Last Commit: 2026-04-01
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 4.4.2 (2016-08-13) ⚠️ [DEPRECATED]
@@ -1607,7 +1634,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/lodash.get
 └───────────────────────────────────────────────────────────
 
---- PURL 59 ---
+--- PURL 60 ---
 ── pkg:npm/lolex@1.3.2 ─────────────────────────────────────
 │ Fake setTimeout and friends (collectively known as
 │   "timers"). Useful in your JavaScript tests. Extracted
@@ -1624,7 +1651,7 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 858 stars
 │ Used by: 4704 packages
-│ Score: 5.8/10  Maintained: 10.0/10
+│ Scorecard Overall: 5.8/10  Maintained: 10.0/10
 │ Last Commit: 2026-04-02
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 6.0.0 (2020-02-04) ⚠️ [DEPRECATED]
@@ -1635,7 +1662,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/lolex
 └───────────────────────────────────────────────────────────
 
---- PURL 60 ---
+--- PURL 61 ---
 ── pkg:npm/marsdb@0.6.11 ───────────────────────────────────
 │ MarsDB is a Promise based lightweight database with
 │   MongoDB query syntax, written on ES6
@@ -1647,7 +1674,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 231 stars
 │ Used by: 4 packages
 │ Depends on: 6 direct, 2 transitive
-│ Score: 1.9/10  Maintained: 0.0/10
+│ Scorecard Overall: 1.9/10  Maintained: 0.0/10
 │ Last Commit: 2016-09-07
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.6.11 (2016-09-07)  ⚠️ 1 advisory
@@ -1659,7 +1686,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/marsdb
 └───────────────────────────────────────────────────────────
 
---- PURL 61 ---
+--- PURL 62 ---
 ── pkg:npm/mimic-fn@2.1.0 ──────────────────────────────────
 │ Make a function mimic another one
 │ 🔴 EOL-Confirmed: Deprecated in npm registry
@@ -1672,7 +1699,7 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 96 stars
 │ Used by: 278632 packages
-│ Score: 4.2/10  Maintained: 0.0/10
+│ Scorecard Overall: 4.2/10  Maintained: 0.0/10
 │ Last Commit: 2024-10-28
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 5.0.0 (2023-11-05) ⚠️ [DEPRECATED]
@@ -1683,14 +1710,14 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/mimic-fn
 └───────────────────────────────────────────────────────────
 
---- PURL 62 ---
+--- PURL 63 ---
 ── pkg:npm/monorepo-symlink-test@0.0.0 ─────────────────────
 │ 🔴 EOL-Effective: Unpatched vulnerabilities, no recent
 │                  releases
 ├─ Signals ─────────────────────────────────────────────────
 │ Last Human Commit: (unavailable)
 │ Maintained Score: (unavailable)
-│ Days Since Release: 1586
+│ Days Since Release: 1587
 │ Advisories: 1
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.0.1-security (2021-11-30)  ⚠️ 1 advisory
@@ -1702,7 +1729,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/monorepo-symlink-test
 └───────────────────────────────────────────────────────────
 
---- PURL 63 ---
+--- PURL 64 ---
 ── pkg:npm/node-int64@0.4.0 ────────────────────────────────
 │ Support for representing 64-bit integers in JavaScript
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1712,7 +1739,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 205 stars
 │ Used by: 100979 packages
-│ Score: 2.3/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.3/10  Maintained: 0.0/10
 │ Last Commit: 2019-06-06
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.4.0 (2015-04-04)
@@ -1722,7 +1749,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/node-int64
 └───────────────────────────────────────────────────────────
 
---- PURL 64 ---
+--- PURL 65 ---
 ── pkg:npm/node-pre-gyp@0.15.0 ─────────────────────────────
 │ Node.js tool for easy binary deployment of C++ addons
 │ 🔴 EOL-Confirmed: Deprecated in npm registry
@@ -1736,7 +1763,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 1147 stars
 │ Used by: 318 packages
 │ Depends on: 10 direct, 56 transitive
-│ Score: 6.2/10  Maintained: 3.0/10
+│ Scorecard Overall: 6.2/10  Maintained: 3.0/10
 │ Last Commit: 2026-02-21
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.17.0 (2020-12-07) ⚠️ [DEPRECATED]
@@ -1748,7 +1775,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/node-pre-gyp
 └───────────────────────────────────────────────────────────
 
---- PURL 65 ---
+--- PURL 66 ---
 ── pkg:npm/noop-logger@0.1.1 ───────────────────────────────
 │ A logger that does exactly nothing.
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1758,7 +1785,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 4 stars
 │ Used by: 10966 packages
-│ Score: 1.6/10  Maintained: 0.0/10
+│ Scorecard Overall: 1.6/10  Maintained: 0.0/10
 │ Last Commit: 2016-02-16
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.1.1 (2016-02-16)
@@ -1768,7 +1795,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/noop-logger
 └───────────────────────────────────────────────────────────
 
---- PURL 66 ---
+--- PURL 67 ---
 ── pkg:npm/notevil@1.3.3 ───────────────────────────────────
 │ Evalulate javascript like the built-in javascript eval()
 │   method but safely.
@@ -1784,7 +1811,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 194 stars
 │ Used by: 32 packages
 │ Depends on: 2 direct, 0 transitive
-│ Score: 1.6/10  Maintained: 0.0/10
+│ Scorecard Overall: 1.6/10  Maintained: 0.0/10
 │ Last Commit: 2021-12-28
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 1.3.3 (2020-03-04)  ⚠️ 1 advisory ⚠️ [DEPRECATED]
@@ -1796,7 +1823,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/notevil
 └───────────────────────────────────────────────────────────
 
---- PURL 67 ---
+--- PURL 68 ---
 ── pkg:npm/npmlog@4.1.2 ────────────────────────────────────
 │ The logger that npm uses
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1811,7 +1838,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 440 stars
 │ Used by: 19016 packages
 │ Depends on: 4 direct, 16 transitive
-│ Score: 5.5/10  Maintained: 0.0/10
+│ Scorecard Overall: 5.5/10  Maintained: 0.0/10
 │ Last Commit: 2024-05-03
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 7.0.1 (2022-10-19) ⚠️ [DEPRECATED]
@@ -1822,7 +1849,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/npmlog
 └───────────────────────────────────────────────────────────
 
---- PURL 68 ---
+--- PURL 69 ---
 ── pkg:npm/npmlog@5.0.1 ────────────────────────────────────
 │ The logger that npm uses
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1837,7 +1864,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 440 stars
 │ Used by: 19016 packages
 │ Depends on: 4 direct, 16 transitive
-│ Score: 5.5/10  Maintained: 0.0/10
+│ Scorecard Overall: 5.5/10  Maintained: 0.0/10
 │ Last Commit: 2024-05-03
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 7.0.1 (2022-10-19) ⚠️ [DEPRECATED]
@@ -1848,7 +1875,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/npmlog
 └───────────────────────────────────────────────────────────
 
---- PURL 69 ---
+--- PURL 70 ---
 ── pkg:npm/npmlog@6.0.2 ────────────────────────────────────
 │ The logger that npm uses
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1863,7 +1890,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 440 stars
 │ Used by: 19016 packages
 │ Depends on: 4 direct, 16 transitive
-│ Score: 5.5/10  Maintained: 0.0/10
+│ Scorecard Overall: 5.5/10  Maintained: 0.0/10
 │ Last Commit: 2024-05-03
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 7.0.1 (2022-10-19) ⚠️ [DEPRECATED]
@@ -1874,7 +1901,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/npmlog
 └───────────────────────────────────────────────────────────
 
---- PURL 70 ---
+--- PURL 71 ---
 ── pkg:npm/number-is-nan@1.0.1 ─────────────────────────────
 │ ES2015 Number.isNaN() ponyfill
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1888,7 +1915,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 30 stars
 │ Used by: 187362 packages
-│ Score: 3.1/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.1/10  Maintained: 0.0/10
 │ Last Commit: 2024-05-02
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.0 (2021-04-07) ⚠️ [DEPRECATED]
@@ -1899,7 +1926,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/number-is-nan
 └───────────────────────────────────────────────────────────
 
---- PURL 71 ---
+--- PURL 72 ---
 ── pkg:npm/os-homedir@1.0.2 ────────────────────────────────
 │ [DEPRECATED] Node.js `os.homedir()` ponyfill
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1913,7 +1940,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 61 stars
 │ Used by: 158873 packages
-│ Score: 3.0/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.0/10  Maintained: 0.0/10
 │ Last Commit: 2019-05-31
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.0 (2018-11-08) ⚠️ [DEPRECATED]
@@ -1924,7 +1951,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/os-homedir
 └───────────────────────────────────────────────────────────
 
---- PURL 72 ---
+--- PURL 73 ---
 ── pkg:npm/os-tmpdir@1.0.2 ─────────────────────────────────
 │ [DEPRECATED] Node.js os.tmpdir() ponyfill
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -1938,7 +1965,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 37 stars
 │ Used by: 227827 packages
-│ Score: 3.0/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.0/10  Maintained: 0.0/10
 │ Last Commit: 2019-05-31
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.0 (2018-11-08) ⚠️ [DEPRECATED]
@@ -1949,7 +1976,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/os-tmpdir
 └───────────────────────────────────────────────────────────
 
---- PURL 73 ---
+--- PURL 74 ---
 ── pkg:npm/osenv@0.1.5 ─────────────────────────────────────
 │ Look up environment settings specific to different
 │   operating systems.
@@ -1965,7 +1992,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 138 stars
 │ Used by: 59722 packages
 │ Depends on: 2 direct, 0 transitive
-│ Score: 2.0/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.0/10  Maintained: 0.0/10
 │ Last Commit: 2019-02-08
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.1.5 (2018-02-16) ⚠️ [DEPRECATED]
@@ -1975,7 +2002,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/osenv
 └───────────────────────────────────────────────────────────
 
---- PURL 74 ---
+--- PURL 75 ---
 ── pkg:npm/p-finally@1.0.0 ─────────────────────────────────
 │ `Promise#finally()` ponyfill - Invoked when the promise is
 │   settled regardless of outcome
@@ -1990,7 +2017,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 47 stars
 │ Used by: 157676 packages
-│ Score: 3.6/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.6/10  Maintained: 0.0/10
 │ Last Commit: 2021-04-09
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.0 (2021-04-09) ⚠️ [DEPRECATED]
@@ -2001,7 +2028,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/p-finally
 └───────────────────────────────────────────────────────────
 
---- PURL 75 ---
+--- PURL 76 ---
 ── pkg:npm/path-is-absolute@1.0.1 ──────────────────────────
 │ Node.js 0.12 path.isAbsolute() ponyfill
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -2015,7 +2042,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 43 stars
 │ Used by: 553138 packages
-│ Score: 3.0/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.0/10  Maintained: 0.0/10
 │ Last Commit: 2019-05-31
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.0 (2018-11-08) ⚠️ [DEPRECATED]
@@ -2026,7 +2053,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/path-is-absolute
 └───────────────────────────────────────────────────────────
 
---- PURL 76 ---
+--- PURL 77 ---
 ── pkg:npm/peek-readable@4.1.0 ─────────────────────────────
 │ A promise based asynchronous stream reader, which makes
 │   reading from a stream easy.
@@ -2037,7 +2064,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 9 stars
 │ Used by: 18387 packages
-│ Score: 3.4/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.4/10  Maintained: 0.0/10
 │ Last Commit: 2025-07-17
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 7.0.0 (2025-03-09)
@@ -2049,7 +2076,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/peek-readable
 └───────────────────────────────────────────────────────────
 
---- PURL 77 ---
+--- PURL 78 ---
 ── pkg:npm/pkg-dir@4.2.0 ───────────────────────────────────
 │ Find the root directory of a Node.js project or npm
 │   package
@@ -2064,7 +2091,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 252 stars
 │ Used by: 107216 packages
 │ Depends on: 1 direct, 5 transitive
-│ Score: 3.8/10  Maintained: 1.0/10
+│ Scorecard Overall: 3.8/10  Maintained: 1.0/10
 │ Last Commit: 2026-02-01
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 9.0.0 (2025-06-05) ⚠️ [DEPRECATED]
@@ -2075,7 +2102,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/pkg-dir
 └───────────────────────────────────────────────────────────
 
---- PURL 78 ---
+--- PURL 79 ---
 ── pkg:npm/prebuild-install@5.3.6 ──────────────────────────
 │ Deprecated. Minimal install client for prebuilds.
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -2090,7 +2117,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 115 stars
 │ Used by: 5331 packages
 │ Depends on: 15 direct, 43 transitive
-│ Score: 3.5/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.5/10  Maintained: 0.0/10
 │ Last Commit: 2026-02-19
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 7.1.3 (2025-01-22) ⚠️ [DEPRECATED]
@@ -2101,7 +2128,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/prebuild-install
 └───────────────────────────────────────────────────────────
 
---- PURL 79 ---
+--- PURL 80 ---
 ── pkg:npm/read-pkg-up@7.0.1 ───────────────────────────────
 │ Read the closest package.json file
 │ 🔴 EOL-Confirmed: Deprecated in npm registry
@@ -2115,7 +2142,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 268 stars
 │ Used by: 40726 packages
 │ Depends on: 3 direct, 30 transitive
-│ Score: 3.6/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.6/10  Maintained: 0.0/10
 │ Last Commit: 2025-11-07
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 11.0.0 (2023-11-03) ⚠️ [DEPRECATED]
@@ -2126,7 +2153,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/read-pkg-up
 └───────────────────────────────────────────────────────────
 
---- PURL 80 ---
+--- PURL 81 ---
 ── pkg:npm/replace@1.2.2 ───────────────────────────────────
 │ Command line search and replace utility
 │ 🔴 EOL-Effective: Unmaintained, unpatched vulnerabilities
@@ -2140,7 +2167,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 62 stars
 │ Used by: 420 packages
 │ Depends on: 3 direct, 34 transitive
-│ Score: 3.2/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.2/10  Maintained: 0.0/10
 │ Last Commit: 2022-10-23
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 1.2.2 (2022-10-25)  ⚠️ 3 transitive advisories
@@ -2155,7 +2182,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/replace
 └───────────────────────────────────────────────────────────
 
---- PURL 81 ---
+--- PURL 82 ---
 ── pkg:npm/request@2.88.2 ──────────────────────────────────
 │ 🏊🏾 Simplified HTTP request client.
 │ 🔴 EOL-Confirmed: Deprecated in npm registry
@@ -2166,10 +2193,10 @@ STATUS     PURL                                                   RELATION  LIFE
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/request
 ├─ Health ──────────────────────────────────────────────────
-│ 25578 stars
+│ 25577 stars
 │ Used by: 186349 packages
 │ Depends on: 20 direct, 26 transitive
-│ Score: 3.6/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.6/10  Maintained: 0.0/10
 │ Last Commit: 2020-02-11
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.88.2 (2020-02-11)  ⚠️ 1 advisory (+ 3 transitive) ⚠️ [DEPRECATED]
@@ -2185,7 +2212,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/request
 └───────────────────────────────────────────────────────────
 
---- PURL 82 ---
+--- PURL 83 ---
 ── pkg:npm/require-from-string@2.0.2 ───────────────────────
 │ Load module from string
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -2195,7 +2222,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 298 stars
 │ Used by: 201523 packages
-│ Score: 2.3/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.3/10  Maintained: 0.0/10
 │ Last Commit: 2018-04-09
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.2 (2018-04-09)
@@ -2205,7 +2232,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/require-from-string
 └───────────────────────────────────────────────────────────
 
---- PURL 83 ---
+--- PURL 84 ---
 ── pkg:npm/resolve-url@0.2.1 ───────────────────────────────
 │ [DEPRECATED] Like Node.js’ `path.resolve`/`url.resolve`
 │   for the browser.
@@ -2220,7 +2247,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 54 stars
 │ Used by: 159528 packages
-│ Score: 2.0/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.0/10  Maintained: 0.0/10
 │ Last Commit: 2022-01-11
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.2.1 (2014-02-25) ⚠️ [DEPRECATED]
@@ -2230,7 +2257,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/resolve-url
 └───────────────────────────────────────────────────────────
 
---- PURL 84 ---
+--- PURL 85 ---
 ── pkg:npm/samsam@1.1.2 ────────────────────────────────────
 │ Value identification and comparison functions
 │ 🔴 EOL-Confirmed: Deprecated in npm registry
@@ -2243,7 +2270,7 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 27 stars
 │ Used by: 4738 packages
-│ Score: 5.8/10  Maintained: 10.0/10
+│ Scorecard Overall: 5.8/10  Maintained: 10.0/10
 │ Last Commit: 2026-03-20
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 1.3.0 (2017-10-03) ⚠️ [DEPRECATED]
@@ -2255,7 +2282,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/samsam
 └───────────────────────────────────────────────────────────
 
---- PURL 85 ---
+--- PURL 86 ---
 ── pkg:npm/saxes@5.0.1 ─────────────────────────────────────
 │ An evented streaming XML parser in JavaScript
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -2266,7 +2293,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 84 stars
 │ Used by: 62324 packages
 │ Depends on: 1 direct, 0 transitive
-│ Score: 2.9/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.9/10  Maintained: 0.0/10
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 6.0.0 (2021-11-07)
 │ Pre-release: 6.0.0-rc.1 (2021-11-07)
@@ -2277,7 +2304,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/saxes
 └───────────────────────────────────────────────────────────
 
---- PURL 86 ---
+--- PURL 87 ---
 ── pkg:npm/source-map-resolve@0.5.3 ────────────────────────
 │ [DEPRECATED] Resolve the source map and/or sources for a
 │   generated file.
@@ -2293,7 +2320,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 94 stars
 │ Used by: 158252 packages
 │ Depends on: 5 direct, 0 transitive
-│ Score: 3.0/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.0/10  Maintained: 0.0/10
 │ Last Commit: 2022-01-11
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.6.0 (2020-03-21) ⚠️ [DEPRECATED]
@@ -2304,7 +2331,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/source-map-resolve
 └───────────────────────────────────────────────────────────
 
---- PURL 87 ---
+--- PURL 88 ---
 ── pkg:npm/source-map-url@0.4.1 ────────────────────────────
 │ [DEPRECATED] Tools for working with sourceMappingURL
 │   comments.
@@ -2319,7 +2346,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 46 stars
 │ Used by: 158941 packages
-│ Score: 2.0/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.0/10  Maintained: 0.0/10
 │ Last Commit: 2022-01-11
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.4.1 (2021-02-01) ⚠️ [DEPRECATED]
@@ -2329,7 +2356,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/source-map-url
 └───────────────────────────────────────────────────────────
 
---- PURL 88 ---
+--- PURL 89 ---
 ── pkg:npm/strip-eof@1.0.0 ─────────────────────────────────
 │ Strip the final newline character from a string/buffer
 │ 🔴 EOL-Confirmed: Deprecated in npm registry
@@ -2342,7 +2369,7 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 38 stars
 │ Used by: 113429 packages
-│ Score: 3.8/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.8/10  Maintained: 0.0/10
 │ Last Commit: 2024-10-28
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.0 (2018-10-28) ⚠️ [DEPRECATED]
@@ -2353,7 +2380,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/strip-eof
 └───────────────────────────────────────────────────────────
 
---- PURL 89 ---
+--- PURL 90 ---
 ── pkg:npm/through@2.3.8 ───────────────────────────────────
 │ simple way to create a ReadableWritable stream that works
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -2363,7 +2390,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 670 stars
 │ Used by: 262445 packages
-│ Score: 2.1/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.1/10  Maintained: 0.0/10
 │ Last Commit: 2015-07-03
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.3.8 (2015-07-03)
@@ -2373,7 +2400,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/through
 └───────────────────────────────────────────────────────────
 
---- PURL 90 ---
+--- PURL 91 ---
 ── pkg:npm/topo@3.0.3 ──────────────────────────────────────
 │ Topological sorting with grouping support
 │ 🔴 EOL-Confirmed: Deprecated in npm registry
@@ -2387,7 +2414,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 108 stars
 │ Used by: 4639 packages
 │ Depends on: 1 direct, 0 transitive
-│ Score: 3.7/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.7/10  Maintained: 0.0/10
 │ Last Commit: 2024-10-23
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.0.3 (2018-11-03)  ⚠️ 1 transitive advisory ⚠️ [DEPRECATED]
@@ -2400,7 +2427,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/topo
 └───────────────────────────────────────────────────────────
 
---- PURL 91 ---
+--- PURL 92 ---
 ── pkg:npm/ts-node-dev@1.1.8 ───────────────────────────────
 │ Compiles your TS app and restarts when files are modified.
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -2411,7 +2438,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 3451 stars
 │ Used by: 483 packages
 │ Depends on: 10 direct, 42 transitive
-│ Score: 2.0/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.0/10  Maintained: 0.0/10
 │ Last Commit: 2022-05-26
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.0.0 (2022-05-26)
@@ -2423,7 +2450,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/ts-node-dev
 └───────────────────────────────────────────────────────────
 
---- PURL 92 ---
+--- PURL 93 ---
 ── pkg:npm/urix@0.1.0 ──────────────────────────────────────
 │ [DEPRECATED] Makes Windows-style paths more unix and URI
 │   friendly.
@@ -2438,7 +2465,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 62 stars
 │ Used by: 159109 packages
-│ Score: 2.1/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.1/10  Maintained: 0.0/10
 │ Last Commit: 2022-01-11
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.1.0 (2014-03-01) ⚠️ [DEPRECATED]
@@ -2448,7 +2475,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/urix
 └───────────────────────────────────────────────────────────
 
---- PURL 93 ---
+--- PURL 94 ---
 ── pkg:npm/w3c-hr-time@1.0.2 ───────────────────────────────
 │ An implementation of the W3C High Resolution Time Level 2
 │   specification.
@@ -2465,7 +2492,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 11 stars
 │ Used by: 76565 packages
 │ Depends on: 1 direct, 0 transitive
-│ Score: 2.5/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.5/10  Maintained: 0.0/10
 │ Last Commit: 2022-10-16
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 1.0.2 (2020-03-06) ⚠️ [DEPRECATED]
@@ -2475,7 +2502,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/w3c-hr-time
 └───────────────────────────────────────────────────────────
 
---- PURL 94 ---
+--- PURL 95 ---
 ── pkg:npm/whatwg-encoding@1.0.5 ───────────────────────────
 │ Decode strings according to the WHATWG Encoding Standard
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -2491,7 +2518,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 27 stars
 │ Used by: 81541 packages
 │ Depends on: 1 direct, 1 transitive
-│ Score: 2.6/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.6/10  Maintained: 0.0/10
 │ Last Commit: 2025-12-28
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 3.1.1 (2023-11-12) ⚠️ [DEPRECATED]
@@ -2502,7 +2529,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/whatwg-encoding
 └───────────────────────────────────────────────────────────
 
---- PURL 95 ---
+--- PURL 96 ---
 ── pkg:npm/xmlchars@2.2.0 ──────────────────────────────────
 │ Utilities for determining if characters belong to
 │   character classes defined by the XML specs.
@@ -2513,7 +2540,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ 📦 Archived
 │ 3 stars
 │ Used by: 83812 packages
-│ Score: 3.0/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.0/10  Maintained: 0.0/10
 │ Last Commit: 2021-11-07
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.2.0 (2019-09-06)
@@ -2523,7 +2550,7 @@ STATUS     PURL                                                   RELATION  LIFE
 │ deps.dev: https://deps.dev/npm/xmlchars
 └───────────────────────────────────────────────────────────
 
---- PURL 96 ---
+--- PURL 97 ---
 ── pkg:npm/xtend@4.0.2 ─────────────────────────────────────
 │ extend like a boss
 │ 🔴 EOL-Confirmed: Repository archived or disabled
@@ -2532,8 +2559,8 @@ STATUS     PURL                                                   RELATION  LIFE
 ├─ Health ──────────────────────────────────────────────────
 │ 📦 Archived
 │ 306 stars
-│ Used by: 329074 packages
-│ Score: 2.8/10  Maintained: 0.0/10
+│ Used by: 329276 packages
+│ Scorecard Overall: 2.8/10  Maintained: 0.0/10
 │ Last Commit: 2020-08-10
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 4.0.2 (2019-07-08)

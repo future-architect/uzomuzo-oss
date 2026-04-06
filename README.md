@@ -18,7 +18,7 @@ A package with zero CVEs today may have been abandoned for years — no one is w
 ```text
 --- Summary Table ---
 STATUS     PURL                 LIFECYCLE      BUILD
-🔴 replace  pkg:npm/dicer@0.3.1  EOL-Effective  Moderate 3.9
+🔴 replace  pkg:npm/dicer@0.3.1  EOL-Effective  —
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -35,16 +35,11 @@ STATUS     PURL                 LIFECYCLE      BUILD
 │ Maintained Score: 0/10
 │ Advisories: 1
 │ Max Advisory Severity: HIGH 7.5
-├─ Build Integrity: Moderate 3.9/10 (6/6) ──────────────────
-│   Dangerous Workflow  10  Branch Protection    0
-│   Code Review          0  Token Permissions    0
-│   Binary Artifacts    10  Pinned Deps          0
-│   → https://scorecard.dev/viewer/?uri=github.com%2Fmscdex%2Fdicer
 ├─ Health ──────────────────────────────────────────────────
 │ 188 stars
 │ Used by: 1271 packages
 │ Depends on: 1 direct, 0 transitive
-│ Score: 2.8/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.8/10  Maintained: 0.0/10
 │ Last Commit: 2023-07-15
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.3.1 (2021-12-19)  ⚠️ 1 advisory
@@ -202,21 +197,22 @@ STATUS     PURL                    LIFECYCLE  BUILD
 │ Recent Stable Release: true
 │ Last Human Commit: 2026-03-31
 │ Maintained Score: 10/10
-├─ Build Integrity: Hardened 9.3/10 (5/6) ──────────────────
-│   Dangerous Workflow  10  Branch Protection    —
-│   Code Review          9  Token Permissions   10
-│   Binary Artifacts    10  Pinned Deps          6
-│   → https://scorecard.dev/viewer/?uri=github.com%2Fexpressjs%2Fexpress
 ├─ Health ──────────────────────────────────────────────────
 │ 68888 stars
 │ Used by: 2211 packages
 │ Depends on: 31 direct, 39 transitive
-│ Score: 8.4/10  Maintained: 10.0/10
+│ Scorecard Overall: 8.4/10  Maintained: 10.0/10
 │ Last Commit: 2026-03-31
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 5.2.1 (2025-12-01)
 │ Pre-release: 5.0.0-beta.3 (2024-03-25)
 │ Requested: 4.18.2 (2022-10-08)
+├─ Build Integrity ─────────────────────────────────────────
+│ ✅ Hardened 9.3/10 (5/6)
+│ Dangerous Workflow  10  Branch Protection    —
+│ Code Review          9  Token Permissions   10
+│ Binary Artifacts    10  Pinned Deps          6
+│ → https://scorecard.dev/viewer/?uri=github.com%2Fexpressjs%2Fexpress
 ├─ Links ───────────────────────────────────────────────────
 │ Homepage: https://expressjs.com
 │ Repository: https://github.com/expressjs/express
@@ -231,11 +227,11 @@ STATUS     PURL                    LIFECYCLE  BUILD
 <!-- begin:output:moment-detailed -->
 ```text
 --- Summary Table ---
-STATUS      PURL                   LIFECYCLE    BUILD
-⚠️ caution  pkg:npm/moment@2.29.4  Legacy-Safe  Moderate 4.7
+STATUS     PURL                   LIFECYCLE    BUILD
+✅ ok       pkg:npm/moment@2.29.4  Legacy-Safe  Moderate 4.7
 
 ── Summary ─────────────────────────────────────────────────
-│ 1 dependencies | ✅ 0 ok | ⚠️ 1 caution | 🔴 0 replace | 🔍 0 review
+│ 1 dependencies | ✅ 1 ok | ⚠️ 0 caution | 🔴 0 replace | 🔍 0 review
 └───────────────────────────────────────────────────────────
 
 --- Detailed Report ---
@@ -244,23 +240,24 @@ STATUS      PURL                   LIFECYCLE    BUILD
 ── pkg:npm/moment@2.29.4 ───────────────────────────────────
 │ Parse, validate, manipulate, and display dates in
 │   javascript.
-│ ⚠️ Legacy-Safe: Dormant but no known vulnerabilities
+│ ✅ Legacy-Safe: Dormant but no known vulnerabilities
 ├─ Signals ─────────────────────────────────────────────────
 │ Last Human Commit: 2024-02-18
 │ Advisories: 0
-├─ Build Integrity: Moderate 4.7/10 (5/6) ──────────────────
-│   Dangerous Workflow  10  Branch Protection    —
-│   Code Review          0  Token Permissions    0
-│   Binary Artifacts    10  Pinned Deps          0
-│   → https://scorecard.dev/viewer/?uri=github.com%2Fmoment%2Fmoment
 ├─ Health ──────────────────────────────────────────────────
 │ 48016 stars
 │ Used by: 2452 packages
-│ Score: 3.1/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.1/10  Maintained: 0.0/10
 │ Last Commit: 2024-02-18
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.30.1 (2023-12-27)
 │ Requested: 2.29.4 (2022-07-06)
+├─ Build Integrity ─────────────────────────────────────────
+│ ⚠️ Moderate 4.7/10 (5/6)
+│ Dangerous Workflow  10  Branch Protection    —
+│ Code Review          0  Token Permissions    0
+│ Binary Artifacts    10  Pinned Deps          0
+│ → https://scorecard.dev/viewer/?uri=github.com%2Fmoment%2Fmoment
 ├─ Links ───────────────────────────────────────────────────
 │ Homepage: momentjs.com
 │ Repository: https://github.com/moment/moment
@@ -294,18 +291,19 @@ STATUS      PURL                                     LIFECYCLE  BUILD
 ├─ Signals ─────────────────────────────────────────────────
 │ Last Human Commit: 2024-06-19
 │ Maintained Score: 0/10
-├─ Build Integrity: Moderate 6.5/10 (5/6) ──────────────────
-│   Dangerous Workflow  10  Branch Protection    —
-│   Code Review          9  Token Permissions    0
-│   Binary Artifacts    10  Pinned Deps          0
-│   → https://scorecard.dev/viewer/?uri=github.com%2Fgorilla%2Fmux
 ├─ Health ──────────────────────────────────────────────────
-│ 21813 stars
-│ Score: 4.9/10  Maintained: 0.0/10
+│ 21814 stars
+│ Scorecard Overall: 4.9/10  Maintained: 0.0/10
 │ Last Commit: 2024-06-19
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: v1.8.1 (2023-10-18)
 │ Highest (SemVer): v1.8.2-0.20240619235004-fe14465e5077 (2024-06-19)
+├─ Build Integrity ─────────────────────────────────────────
+│ ⚠️ Moderate 6.5/10 (5/6)
+│ Dangerous Workflow  10  Branch Protection    —
+│ Code Review          9  Token Permissions    0
+│ Binary Artifacts    10  Pinned Deps          0
+│ → https://scorecard.dev/viewer/?uri=github.com%2Fgorilla%2Fmux
 ├─ Links ───────────────────────────────────────────────────
 │ Homepage: https://gorilla.github.io
 │ Repository: https://github.com/gorilla/mux
@@ -323,7 +321,7 @@ No release since 2023, Maintained 0.0. Not dead, not active — clearly declinin
 ```text
 --- Summary Table ---
 STATUS     PURL                 LIFECYCLE      BUILD
-🔴 replace  pkg:npm/dicer@0.3.1  EOL-Effective  Moderate 3.9
+🔴 replace  pkg:npm/dicer@0.3.1  EOL-Effective  —
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -340,16 +338,11 @@ STATUS     PURL                 LIFECYCLE      BUILD
 │ Maintained Score: 0/10
 │ Advisories: 1
 │ Max Advisory Severity: HIGH 7.5
-├─ Build Integrity: Moderate 3.9/10 (6/6) ──────────────────
-│   Dangerous Workflow  10  Branch Protection    0
-│   Code Review          0  Token Permissions    0
-│   Binary Artifacts    10  Pinned Deps          0
-│   → https://scorecard.dev/viewer/?uri=github.com%2Fmscdex%2Fdicer
 ├─ Health ──────────────────────────────────────────────────
 │ 188 stars
 │ Used by: 1271 packages
 │ Depends on: 1 direct, 0 transitive
-│ Score: 2.8/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.8/10  Maintained: 0.0/10
 │ Last Commit: 2023-07-15
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 0.3.1 (2021-12-19)  ⚠️ 1 advisory
@@ -371,7 +364,7 @@ No deprecation, no archive — but unpatched ReDoS + zero maintenance. **SCA bli
 ```text
 --- Summary Table ---
 STATUS     PURL                                          LIFECYCLE      BUILD
-🔴 replace  pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  Moderate 5.0
+🔴 replace  pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  —
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -386,15 +379,10 @@ STATUS     PURL                                          LIFECYCLE      BUILD
 │ 🔴 EOL-Confirmed: Repository archived or disabled
 ├─ Signals ─────────────────────────────────────────────────
 │ Repo Archived: true
-├─ Build Integrity: Moderate 5.0/10 (3/6) ──────────────────
-│   Dangerous Workflow   —  Branch Protection    0
-│   Code Review          5  Token Permissions    —
-│   Binary Artifacts    10
-│   → https://scorecard.dev/viewer/?uri=github.com%2Fdgrijalva%2Fjwt-go
 ├─ Health ──────────────────────────────────────────────────
 │ 📦 Archived
 │ 10759 stars
-│ Score: 2.8/10  Maintained: 0.0/10
+│ Scorecard Overall: 2.8/10  Maintained: 0.0/10
 │ Last Commit: 2021-08-02
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: v3.2.0+incompatible (2018-03-08)  ⚠️ 2 advisories
@@ -438,10 +426,10 @@ STATUS     PURL                    LIFECYCLE      BUILD
 │   [npmjs] Deprecated in npm registry (confidence 0.90)
 │     ↳ https://registry.npmjs.org/request
 ├─ Health ──────────────────────────────────────────────────
-│ 25578 stars
+│ 25577 stars
 │ Used by: 186349 packages
 │ Depends on: 20 direct, 26 transitive
-│ Score: 3.6/10  Maintained: 0.0/10
+│ Scorecard Overall: 3.6/10  Maintained: 0.0/10
 │ Last Commit: 2020-02-11
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 2.88.2 (2020-02-11)  ⚠️ 1 advisory (+ 3 transitive) ⚠️ [DEPRECATED]
@@ -475,14 +463,14 @@ $ uzomuzo scan pkg:npm/express@4.18.2 pkg:npm/moment@2.29.4 \
 
 STATUS      PURL                                          LIFECYCLE      BUILD
 ✅ ok        pkg:npm/express@4.18.2                        Active         Hardened 9.3
-⚠️ caution  pkg:npm/moment@2.29.4                         Legacy-Safe    Moderate 4.7
+✅ ok        pkg:npm/moment@2.29.4                         Legacy-Safe    Moderate 4.7
 ⚠️ caution  pkg:golang/github.com/gorilla/mux@1.8.1       Stalled        Moderate 6.5
-🔴 replace   pkg:npm/dicer@0.3.1                           EOL-Effective  Moderate 3.9
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  Moderate 5.0
+🔴 replace   pkg:npm/dicer@0.3.1                           EOL-Effective  —
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  —
 🔴 replace   pkg:npm/request@2.88.2                        EOL-Confirmed  —
 
 ── Summary ─────────────────────────────────────────────────
-│ 6 dependencies | ✅ 1 ok | ⚠️ 2 caution | 🔴 3 replace | 🔍 0 review
+│ 6 dependencies | ✅ 2 ok | ⚠️ 1 caution | 🔴 3 replace | 🔍 0 review
 └───────────────────────────────────────────────────────────
 ```
 <!-- end:output:all-states-table -->
@@ -497,12 +485,12 @@ STATUS      PURL                                          LIFECYCLE      BUILD
 $ uzomuzo scan --file go.mod -f table
 
 STATUS      PURL                                                        RELATION  LIFECYCLE      BUILD
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  Moderate 5.0
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  —
 ⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled        Moderate 6.5
-⚠️ caution  pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Moderate 6.7
+✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Moderate 6.7
 
 ── Summary ─────────────────────────────────────────────────
-│ 3 dependencies | ✅ 0 ok | ⚠️ 2 caution | 🔴 1 replace | 🔍 0 review
+│ 3 dependencies | ✅ 1 ok | ⚠️ 1 caution | 🔴 1 replace | 🔍 0 review
 └───────────────────────────────────────────────────────────
 ```
 <!-- end:output:gomod-table -->

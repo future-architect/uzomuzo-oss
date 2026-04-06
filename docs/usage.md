@@ -51,21 +51,22 @@ STATUS     PURL                    LIFECYCLE  BUILD
 │ Recent Stable Release: true
 │ Last Human Commit: 2026-03-31
 │ Maintained Score: 10/10
-├─ Build Integrity: Hardened 9.3/10 (5/6) ──────────────────
-│   Dangerous Workflow  10  Branch Protection    —
-│   Code Review          9  Token Permissions   10
-│   Binary Artifacts    10  Pinned Deps          6
-│   → https://scorecard.dev/viewer/?uri=github.com%2Fexpressjs%2Fexpress
 ├─ Health ──────────────────────────────────────────────────
 │ 68888 stars
 │ Used by: 2211 packages
 │ Depends on: 31 direct, 39 transitive
-│ Score: 8.4/10  Maintained: 10.0/10
+│ Scorecard Overall: 8.4/10  Maintained: 10.0/10
 │ Last Commit: 2026-03-31
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: 5.2.1 (2025-12-01)
 │ Pre-release: 5.0.0-beta.3 (2024-03-25)
 │ Requested: 4.18.2 (2022-10-08)
+├─ Build Integrity ─────────────────────────────────────────
+│ ✅ Hardened 9.3/10 (5/6)
+│ Dangerous Workflow  10  Branch Protection    —
+│ Code Review          9  Token Permissions   10
+│ Binary Artifacts    10  Pinned Deps          6
+│ → https://scorecard.dev/viewer/?uri=github.com%2Fexpressjs%2Fexpress
 ├─ Links ───────────────────────────────────────────────────
 │ Homepage: https://expressjs.com
 │ Repository: https://github.com/expressjs/express
@@ -120,12 +121,12 @@ When transitive dependencies are included, output shows a `RELATION` column indi
 $ uzomuzo scan --file go.mod -f table
 
 STATUS      PURL                                                        RELATION  LIFECYCLE      BUILD
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  Moderate 5.0
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  —
 ⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled        Moderate 6.5
-⚠️ caution  pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Moderate 6.7
+✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Moderate 6.7
 
 ── Summary ─────────────────────────────────────────────────
-│ 3 dependencies | ✅ 0 ok | ⚠️ 2 caution | 🔴 1 replace | 🔍 0 review
+│ 3 dependencies | ✅ 1 ok | ⚠️ 1 caution | 🔴 1 replace | 🔍 0 review
 └───────────────────────────────────────────────────────────
 ```
 <!-- end:output:usage-gomod-table -->
