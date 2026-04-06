@@ -428,7 +428,7 @@ func configureAuthentication(inputs *ProcessingInputs, cfg *domaincfg.Config, op
 	}
 
 	fmt.Fprintf(os.Stderr, "\nNOTE: GITHUB_TOKEN is not set — analysis uses deps.dev and scorecard data only.\n")
-	fmt.Fprintf(os.Stderr, "  For higher precision (commit history, archive detection): set GITHUB_TOKEN in .env or run 'gh auth login'\n\n")
+	fmt.Fprintf(os.Stderr, "  Archive detection works via Scorecard. For higher precision (commit history, fork detection): set GITHUB_TOKEN in .env or run 'gh auth login'\n\n")
 
 	return nil
 }

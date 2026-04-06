@@ -494,14 +494,14 @@ uzomuzo combines data from **deps.dev** (package registry) and **GitHub API** (r
 
 | Data Source | Available Without Token | Requires `GITHUB_TOKEN` |
 |-------------|------------------------|------------------------|
-| **deps.dev** | Package versions & publish dates, Scorecard metrics, Advisory/CVE counts, Dependent counts, License info | — |
-| **GitHub API** | — | Last human commit date, Bot vs. human commit ratio, Archive/disabled status, Fork detection |
+| **deps.dev** | Package versions & publish dates, Scorecard metrics (including archive detection via "Maintained" check), Advisory/CVE counts, Dependent counts, License info | — |
+| **GitHub API** | — | Last human commit date, Bot vs. human commit ratio, Fork detection |
 
 ### How missing data affects lifecycle classification
 
 | Actual State | With Token | Without Token | Risk |
 |--------------|-----------|---------------|------|
-| Archived repository | **EOL-Confirmed** | Stalled | False negative — clear EOL signal missed |
+| Archived repository | **EOL-Confirmed** | **EOL-Confirmed** | Detected via Scorecard "Maintained" check — no token needed |
 | Unpatched CVEs + no commits for 2+ years | **EOL-Effective** | Stalled | False negative — supply chain risk missed |
 | Active Go/Composer package (commits but no registry publish) | **Active** | Stalled | False positive — healthy package flagged |
 | Frozen utility with zero advisories | **Legacy-Safe** | Stalled | False positive — safe package flagged |
