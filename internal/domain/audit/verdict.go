@@ -20,7 +20,7 @@ const (
 )
 
 // DeriveVerdict computes a Verdict from an Analysis result.
-// It takes the worst (most severe) of lifecycle and build integrity verdicts.
+// Build integrity is informational and does not affect the verdict.
 // This is a pure function with no I/O.
 func DeriveVerdict(a *analysis.Analysis) Verdict {
 	if a == nil {
@@ -29,7 +29,7 @@ func DeriveVerdict(a *analysis.Analysis) Verdict {
 	if a.Error != nil {
 		return VerdictReview
 	}
-	return maxSeverity(deriveLifecycleVerdict(a), deriveBuildVerdict(a))
+	return deriveLifecycleVerdict(a)
 }
 
 // deriveLifecycleVerdict computes verdict from lifecycle signals only.
@@ -64,51 +64,5 @@ func deriveLifecycleVerdict(a *analysis.Analysis) Verdict {
 		return VerdictCaution
 	default:
 		return VerdictReview
-	}
-}
-
-// deriveBuildVerdict computes verdict from build integrity signals.
-// Ungraded does not participate in verdict composition (returns VerdictOK)
-// to prevent mass noise for packages without Scorecard coverage.
-func deriveBuildVerdict(a *analysis.Analysis) Verdict {
-	br := a.GetBuildHealthResult()
-	if br == nil {
-		return VerdictOK
-	}
-	switch analysis.BuildIntegrityLabel(br.Label) {
-	case analysis.BuildLabelHardened:
-		return VerdictOK
-	case analysis.BuildLabelModerate:
-		return VerdictCaution
-	case analysis.BuildLabelWeak:
-		return VerdictReplace
-	case analysis.BuildLabelUngraded:
-		return VerdictOK
-	default:
-		return VerdictReview
-	}
-}
-
-// maxSeverity returns the more severe of two verdicts.
-// Severity order: ok < review < caution < replace.
-func maxSeverity(a, b Verdict) Verdict {
-	if severityOrder(a) >= severityOrder(b) {
-		return a
-	}
-	return b
-}
-
-func severityOrder(v Verdict) int {
-	switch v {
-	case VerdictOK:
-		return 0
-	case VerdictReview:
-		return 1
-	case VerdictCaution:
-		return 2
-	case VerdictReplace:
-		return 3
-	default:
-		return 1
 	}
 }
