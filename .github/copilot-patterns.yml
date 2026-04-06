@@ -87,3 +87,13 @@ patterns:
   # testing: already covered by "Cover New Control Flow Branches with Tests" (PR #148, boxdraw.go:449 — missing tests for writeBoxBuildIntegrity header+icon format and replace-verdict hiding)
   # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:284 — IsUnused boolean flag defined on wrong field; diet_render.go:181 — display message inconsistent with flag semantics)
   # defensive-coding: already covered by promoted rules (PR #159, service.go:275 — Maven import path heuristic used groupId.artifactId instead of groupId alone)
+  - category: "defensive-coding"
+    summary: "Use framework-provided parsed args (e.g., cmd.Args()) instead of process-global os.Args for subcommand delegation"
+    pr: 159
+    file: "cmd/uzomuzo/commands.go"
+    date: "2026-04-06"
+  # error-handling: already covered by promoted rules (PR #159, commands.go:272 — wrap underlying LookPath error with %w)
+  # defensive-coding: already covered by "Consolidate Detection Heuristics" (PR #159, diet.go:36 — use centralized createAnalysisService instead of direct constructor)
+  # testing: already covered by promoted rules (PR #159, e2e_test.go:94 — check pipe read/close errors; graph_test.go — check json.Marshal errors)
+  # defensive-coding: already covered by "Nil vs Empty Map Semantics for Sentinel-Checked Maps" (PR #159, sbomgraph/types.go:118 + depgraph/graph.go:33)
+  # comment-doc-drift: already covered by promoted rule (PR #159, analyzer.go:431 — misleading "BUG" labels for intentional import handling)
