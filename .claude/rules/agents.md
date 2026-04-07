@@ -19,6 +19,7 @@
 |-------|---------|-------------|
 | deadcode | `/deadcode [fix] [path]` | Quick dead code audit or interactive cleanup |
 | review | `/review [PR#] [--copilot-only] [--dry-run]` | Unified review: Claude + Copilot resolution + rule learning |
+| batch-issues | `/batch-issues [issue#s] [--dry-run] [--max-parallel N]` | Parallel issue processing with conflict-aware agent dispatch |
 
 ## Immediate Agent Usage
 
