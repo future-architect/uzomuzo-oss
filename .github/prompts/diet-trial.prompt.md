@@ -340,10 +340,29 @@ After analysis, display a structured report to the user. The report MUST include
 Save the report as a Markdown file. Default location logic:
 
 1. If `--save-to <path>` is specified, use that path
-2. If `/workspace/vuls-saas/vuls-diet/case-studies/uzomuzo-diet/` exists, save there
+2. If `/workspace/vuls-saas/vuls-diet/case-studies/uzomuzo-diet/` exists, save there under a language subdirectory
 3. Otherwise save to the current project's `docs/case-studies/` (create if needed)
 
-Filename format: `<repo>-diet-trial-<tool>-<YYYY-MM-DD>.md`
+#### Language subdirectory
+
+Determine the **primary language** from the SBOM ecosystem breakdown (the ecosystem with the most components) and save under that language's subdirectory:
+
+| Primary ecosystem | Subdirectory |
+|-------------------|-------------|
+| golang | `go/` |
+| npm | `typescript/` |
+| pypi | `python/` |
+| maven | `java/` |
+| mixed (no clear majority) | `multi/` |
+
+Create the subdirectory if it doesn't exist.
+
+Filename format: `<repo>-<tool>-<YYYY-MM-DD>.md`
+
+Example paths:
+- `case-studies/uzomuzo-diet/go/grafana-trivy-2026-04-07.md`
+- `case-studies/uzomuzo-diet/python/flask-trivy-2026-04-07.md`
+- `case-studies/uzomuzo-diet/typescript/vuejs-core-trivy-2026-04-07.md`
 
 The saved report must be in the same format as existing case studies in `case-studies/`. Use Japanese for section headers and commentary (matching existing case study style). Include:
 

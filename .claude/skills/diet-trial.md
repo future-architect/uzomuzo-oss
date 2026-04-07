@@ -29,7 +29,7 @@ argument-hint: |
 ## Key Points
 
 - No GITHUB_TOKEN needed (diet accuracy is local-only: Graph + Coupling)
-- Reports saved to `case-studies/uzomuzo-diet/` by default
+- Reports saved to `case-studies/uzomuzo-diet/<language>/` by default (go/python/typescript/java)
 - Anomaly detection flags potential uzomuzo bugs and **auto-files GitHub issues** with reproduction data
 - `--compare` mode produces SBOM tool comparison tables for conference materials
 - Groups related anomalies into single issues; adds comments to existing issues for duplicates
