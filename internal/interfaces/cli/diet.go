@@ -24,6 +24,11 @@ func RunDiet(
 	graphAnalyzer dietapp.GraphAnalyzer,
 	sourceAnalyzer dietapp.SourceAnalyzer,
 ) error {
+	// Validate required options
+	if opts.SBOMPath == "" {
+		return fmt.Errorf("--sbom is required")
+	}
+
 	// Read SBOM data
 	sbomData, err := os.ReadFile(opts.SBOMPath)
 	if err != nil {

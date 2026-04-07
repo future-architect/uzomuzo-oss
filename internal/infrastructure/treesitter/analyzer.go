@@ -413,11 +413,14 @@ func (a *Analyzer) handleGoImport(
 	purl, ok := importToPURL[importPath]
 	if !ok {
 		// Also try prefix matching for subpackages.
+		// Pick the longest matching prefix to handle nested modules
+		// (e.g., prefer "example.com/foo/bar" over "example.com/foo").
+		bestLen := 0
 		for ip, p := range importToPURL {
-			if strings.HasPrefix(importPath, ip+"/") || importPath == ip {
+			if (strings.HasPrefix(importPath, ip+"/") || importPath == ip) && len(ip) > bestLen {
 				purl = p
 				ok = true
-				break
+				bestLen = len(ip)
 			}
 		}
 	}
@@ -497,18 +500,25 @@ func (a *Analyzer) handleJavaImport(
 	importToPURL map[string]string,
 	aliasMap map[string]string,
 ) {
+	// Pick the longest matching prefix to handle overlapping groupIds
+	// (e.g., prefer "org.apache.commons" over "org.apache").
+	bestIP := ""
+	bestPURL := ""
 	for ip, purl := range importToPURL {
-		if importPath == ip || strings.HasPrefix(importPath, ip+".") {
-			// Use the last component of the import as alias (class name).
-			parts := strings.Split(importPath, ".")
-			alias := parts[len(parts)-1]
-			aliasMap[alias] = purl
-			// Also register lowercase for variable-style calls (e.g., Gson gson = ...; gson.toJson()).
-			lower := strings.ToLower(alias[:1]) + alias[1:]
-			if lower != alias {
-				aliasMap[lower] = purl
-			}
-			return
+		if (importPath == ip || strings.HasPrefix(importPath, ip+".")) && len(ip) > len(bestIP) {
+			bestIP = ip
+			bestPURL = purl
+		}
+	}
+	if bestIP != "" {
+		// Use the last component of the import as alias (class name).
+		parts := strings.Split(importPath, ".")
+		alias := parts[len(parts)-1]
+		aliasMap[alias] = bestPURL
+		// Also register lowercase for variable-style calls (e.g., Gson gson = ...; gson.toJson()).
+		lower := strings.ToLower(alias[:1]) + alias[1:]
+		if lower != alias {
+			aliasMap[lower] = bestPURL
 		}
 	}
 }
@@ -522,11 +532,14 @@ func (a *Analyzer) handleJSImport(
 ) {
 	purl, ok := importToPURL[importPath]
 	if !ok {
+		// Pick the longest matching prefix to handle scoped packages
+		// (e.g., prefer "@scope/pkg/sub" over "@scope/pkg").
+		bestLen := 0
 		for ip, p := range importToPURL {
-			if strings.HasPrefix(importPath, ip+"/") {
+			if strings.HasPrefix(importPath, ip+"/") && len(ip) > bestLen {
 				purl = p
 				ok = true
-				break
+				bestLen = len(ip)
 			}
 		}
 	}

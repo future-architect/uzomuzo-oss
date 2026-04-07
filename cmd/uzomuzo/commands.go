@@ -280,9 +280,9 @@ func delegateToDiet(ctx context.Context, cmd *urfcli.Command) error {
 	if err := dietCmd.Run(); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			os.Exit(exitErr.ExitCode())
+			return urfcli.Exit("", exitErr.ExitCode())
 		}
-		return err
+		return fmt.Errorf("failed to run uzomuzo-diet: %w", err)
 	}
 	return nil
 }
