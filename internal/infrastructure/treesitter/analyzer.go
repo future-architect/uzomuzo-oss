@@ -163,7 +163,10 @@ func NewAnalyzer() *Analyzer {
 	a.configs[langJava] = &langConfig{
 		language:    java.GetLanguage(),
 		importQuery: `(import_declaration (scoped_identifier) @import)`,
-		callQuery:   `(method_invocation object: (identifier) @obj name: (identifier) @method)`,
+		callQuery: strings.Join([]string{
+			`(method_invocation object: (identifier) @obj name: (identifier) @method)`,
+			`(method_invocation !object name: (identifier) @func)`,
+		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {
 			return importPath
@@ -400,7 +403,7 @@ func (a *Analyzer) extractImports(
 
 			// For Java: match as prefix of the full import path.
 			if lid == langJava {
-				a.handleJavaImport(value, importToPURL, aliasMap)
+				a.handleJavaImport(capture.Node, value, importToPURL, aliasMap)
 				continue
 			}
 
@@ -612,8 +615,12 @@ func (a *Analyzer) registerFromImportNames(
 	}
 }
 
-// handleJavaImport handles matching Java fully-qualified imports.
+// handleJavaImport handles matching Java fully-qualified imports, including static imports.
+// For static imports (import static org.junit.Assert.assertEquals), the method/field name
+// is registered as the alias so bare calls like assertEquals() are matched.
+// For regular imports, the class name (and its lowercase variant) are registered.
 func (a *Analyzer) handleJavaImport(
+	node *sitter.Node,
 	importPath string,
 	importToPURL map[string]string,
 	aliasMap map[string]string,
@@ -632,17 +639,54 @@ func (a *Analyzer) handleJavaImport(
 			bestPURL = purl
 		}
 	}
-	if bestIP != "" {
-		// Use the last component of the import as alias (class name).
-		parts := strings.Split(importPath, ".")
-		alias := parts[len(parts)-1]
+	if bestIP == "" {
+		return
+	}
+
+	// Check if this is a static import by looking for a "static" child
+	// in the parent import_declaration node.
+	isStatic := isJavaStaticImport(node)
+
+	parts := strings.Split(importPath, ".")
+	alias := parts[len(parts)-1]
+
+	if isStatic {
+		if alias == "*" {
+			// Wildcard static import (import static org.junit.Assert.*) — cannot
+			// track individual names. Register a sentinel so ImportFileCount is
+			// correct, but bare calls will be undercounted.
+			aliasMap[wildcardImportAlias+bestPURL] = bestPURL
+			return
+		}
+		// Static import: the last component is a method/field name (e.g., assertEquals).
+		// Register it directly so bare calls like assertEquals() are matched
+		// via the single-capture call query pattern.
 		aliasMap[alias] = bestPURL
-		// Also register lowercase for variable-style calls (e.g., Gson gson = ...; gson.toJson()).
-		lower := strings.ToLower(alias[:1]) + alias[1:]
-		if lower != alias {
-			aliasMap[lower] = bestPURL
+		return
+	}
+
+	// Regular import: last component is a class name (e.g., Gson, StringUtils).
+	aliasMap[alias] = bestPURL
+	// Also register lowercase for variable-style calls (e.g., Gson gson = ...; gson.toJson()).
+	lower := strings.ToLower(alias[:1]) + alias[1:]
+	if lower != alias {
+		aliasMap[lower] = bestPURL
+	}
+}
+
+// isJavaStaticImport checks whether a scoped_identifier node is part of a static import.
+// The AST structure is: import_declaration -> ["import", "static", scoped_identifier, ";"]
+func isJavaStaticImport(node *sitter.Node) bool {
+	parent := node.Parent()
+	if parent == nil || parent.Type() != "import_declaration" {
+		return false
+	}
+	for i := 0; i < int(parent.ChildCount()); i++ {
+		if parent.Child(i).Type() == "static" {
+			return true
 		}
 	}
+	return false
 }
 
 // handleJSImport processes a JS/TS module specifier with subpath prefix matching.
