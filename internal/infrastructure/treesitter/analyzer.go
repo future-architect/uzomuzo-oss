@@ -248,13 +248,9 @@ func (a *Analyzer) AnalyzeCoupling(
 			slog.Debug("failed to parse file", "path", path, "error", err)
 			return nil
 		}
-		defer tree.Close()
 
 		root := tree.RootNode()
-
-		// Reuse a single QueryCursor across extractImports and countCallSites.
 		cursor := sitter.NewQueryCursor()
-		defer cursor.Close()
 
 		// Phase 1: Extract imports and build alias->PURL map for this file.
 		fileAliases := a.extractImports(cfg, root, src, importToPURL, lid, cursor)
@@ -284,6 +280,10 @@ func (a *Analyzer) AnalyzeCoupling(
 
 		// Phase 2: Count call sites using alias->PURL mapping.
 		a.countCallSites(cfg, root, src, fileAliases, accum, cursor)
+
+		// Close immediately — defer in WalkDir callback accumulates across all files.
+		cursor.Close()
+		tree.Close()
 
 		return nil
 	})

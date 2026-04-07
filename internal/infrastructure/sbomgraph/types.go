@@ -155,20 +155,21 @@ func ResolveDirectPURLs(bom *BOMEnvelope, refMap map[string]string) map[string]s
 //	root (UUID) → go.mod (no PURL) → module-self (own PURL, has children) → actual deps
 func resolveDirectRefs(refs []string, refMap map[string]string, depIndex map[string][]string, selfPURLs map[string]struct{}) map[string]struct{} {
 	result := make(map[string]struct{})
-	visited := make(map[string]struct{})
+	// Track refs walked as transparent to prevent infinite loops on cycles,
+	// but don't block refs that appear directly in the input list.
+	walkedAsTransparent := make(map[string]struct{})
+
 	var walk func(ref string, soleChildOfTransparent bool)
 	walk = func(ref string, soleChildOfTransparent bool) {
-		if _, seen := visited[ref]; seen {
-			return
-		}
-		visited[ref] = struct{}{}
-
 		purl, hasPURL := refMap[ref]
 		children := depIndex[ref]
 
 		if hasPURL {
 			if _, isSelf := selfPURLs[purl]; isSelf {
-				// Explicitly known self module — walk through.
+				if _, seen := walkedAsTransparent[ref]; seen {
+					return
+				}
+				walkedAsTransparent[ref] = struct{}{}
 				for _, child := range children {
 					walk(child, false)
 				}
@@ -176,9 +177,11 @@ func resolveDirectRefs(refs []string, refMap map[string]string, depIndex map[str
 			}
 			// Heuristic for Trivy's module-self pattern:
 			// go.mod (no PURL, 1 child) → module (PURL, has children) → actual deps
-			// Only treat as module-self if this was the SOLE child of a
-			// transparent parent AND it has its own children.
 			if soleChildOfTransparent && len(children) > 0 {
+				if _, seen := walkedAsTransparent[ref]; seen {
+					return
+				}
+				walkedAsTransparent[ref] = struct{}{}
 				slog.Debug("treating as module-self (sole child of transparent parent with own children)", "purl", purl)
 				for _, child := range children {
 					walk(child, false)
@@ -190,7 +193,10 @@ func resolveDirectRefs(refs []string, refMap map[string]string, depIndex map[str
 			return
 		}
 		// No PURL — transparent node, walk children.
-		// Mark sole-child status for the heuristic.
+		if _, seen := walkedAsTransparent[ref]; seen {
+			return
+		}
+		walkedAsTransparent[ref] = struct{}{}
 		isSole := len(children) == 1
 		for _, child := range children {
 			walk(child, isSole)
