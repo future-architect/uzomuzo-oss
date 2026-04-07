@@ -170,9 +170,10 @@ func TestNormalizeCouplingEffort_ZeroCounts(t *testing.T) {
 	// IsUnused is false (no source analysis), effort should be 0 so that
 	// difficulty is "trivial" — consistent with the IsUnused=true path.
 	tests := []struct {
-		name string
-		c    CouplingAnalysis
-		want float64
+		name        string
+		c           CouplingAnalysis
+		want        float64
+		wantNonZero bool // when true, assert got > 0 instead of exact match
 	}{
 		{
 			name: "no source data (all zeros, not unused)",
@@ -185,17 +186,16 @@ func TestNormalizeCouplingEffort_ZeroCounts(t *testing.T) {
 			want: 0.0,
 		},
 		{
-			name: "has imports but no calls",
-			c:    CouplingAnalysis{ImportFileCount: 1},
-			want: 0.0, // not exactly 0.0, but let's check
+			name:        "has imports but no calls",
+			c:           CouplingAnalysis{ImportFileCount: 1},
+			wantNonZero: true, // logistic(1, 5) > 0
 		},
 	}
 	const tolerance = 0.001
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := normalizeCouplingEffort(tt.c)
-			if tt.name == "has imports but no calls" {
-				// Should be non-zero: logistic(1, 5) > 0
+			if tt.wantNonZero {
 				if got < 0.01 {
 					t.Errorf("normalizeCouplingEffort() = %f, expected > 0 for non-zero imports", got)
 				}
