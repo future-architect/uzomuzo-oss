@@ -21,13 +21,13 @@ type dietJSONOutput struct {
 }
 
 type dietJSONSummary struct {
-	TotalDirect          int `json:"total_direct"`
-	TotalTransitive      int `json:"total_transitive"`
-	TransitiveOnlyByOne  int `json:"transitive_only_by_one"`
-	UnusedDirect         int `json:"unused_direct"`
-	EasyWins             int `json:"easy_wins"`
-	ActionableDirect     int `json:"actionable_direct"`
-	StaysAsIndirect      int `json:"stays_as_indirect"`
+	TotalDirect         int `json:"total_direct"`
+	TotalTransitive     int `json:"total_transitive"`
+	TransitiveOnlyByOne int `json:"transitive_only_by_one"`
+	UnusedDirect        int `json:"unused_direct"`
+	EasyWins            int `json:"easy_wins"`
+	ActionableDirect    int `json:"actionable_direct"`
+	StaysAsIndirect     int `json:"stays_as_indirect"`
 }
 
 type dietJSONEntry struct {
@@ -51,12 +51,12 @@ type dietJSONEntry struct {
 	ImportFileCount   int      `json:"import_file_count"`
 	CallSiteCount     int      `json:"call_site_count"`
 	APIBreadth        int      `json:"api_breadth"`
-	Symbols           []string `json:"symbols,omitempty"`
+	Symbols           []string `json:"symbols"`
 	IsUnused          bool     `json:"is_unused"`
 	ImportFiles       []string `json:"import_files,omitempty"`
-	HasBlankImport    bool     `json:"has_blank_import,omitempty"`
-	HasDotImport      bool     `json:"has_dot_import,omitempty"`
-	HasWildcardImport bool     `json:"has_wildcard_import,omitempty"`
+	HasBlankImport    bool     `json:"has_blank_import"`
+	HasDotImport      bool     `json:"has_dot_import"`
+	HasWildcardImport bool     `json:"has_wildcard_import"`
 
 	Lifecycle          string  `json:"lifecycle"`
 	HasVulnerabilities bool    `json:"has_vulnerabilities,omitempty"`
@@ -223,6 +223,9 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 			p.printf("│    Imports:    %d\n", e.Coupling.ImportFileCount)
 			p.printf("│    Call sites: %d\n", e.Coupling.CallSiteCount)
 			p.printf("│    API breadth: %d distinct symbols\n", e.Coupling.APIBreadth)
+			if len(e.Coupling.Symbols) > 0 {
+				p.printf("│    Symbols: %s\n", formatSymbolList(e.Coupling.Symbols))
+			}
 			if e.Coupling.HasBlankImport || e.Coupling.HasDotImport || e.Coupling.HasWildcardImport {
 				var flags []string
 				if e.Coupling.HasBlankImport {
@@ -268,6 +271,15 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 	p.printf("\n")
 
 	return p.err
+}
+
+// formatSymbolList formats a list of symbol names for display, truncating if too many.
+func formatSymbolList(symbols []string) string {
+	const maxDisplay = 10
+	if len(symbols) <= maxDisplay {
+		return strings.Join(symbols, ", ")
+	}
+	return strings.Join(symbols[:maxDisplay], ", ") + fmt.Sprintf(" +%d more", len(symbols)-maxDisplay)
 }
 
 // formatViaList formats a list of PURLs for display, truncating if too many.
