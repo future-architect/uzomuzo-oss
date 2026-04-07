@@ -1207,3 +1207,128 @@ func main() {
 		}
 	}
 }
+
+func TestAnalyzer_JSRequireCompoundPatterns(t *testing.T) {
+	tests := []struct {
+		name        string
+		filename    string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			name:     "ES default import with property access",
+			filename: "index.js",
+			code: `import followRedirects from 'follow-redirects';
+
+followRedirects.http;
+followRedirects.https;
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/follow-redirects@1.15.0": {"follow-redirects"},
+			},
+			purl:        "pkg:npm/follow-redirects@1.15.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
+		},
+		{
+			// new FormData() is a new_expression, which the call query does not match;
+			// only FormData.prototype (member_expression) is counted as a call site.
+			name:     "ES default import with member access (new_expression ignored)",
+			filename: "index.js",
+			code: `import FormData from 'form-data';
+
+new FormData();
+FormData.prototype;
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/form-data@4.0.0": {"form-data"},
+			},
+			purl:        "pkg:npm/form-data@4.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name:     "require with property access",
+			filename: "index.js",
+			code: `const globals = require('lodash-doc-globals');
+
+globals.use();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/lodash-doc-globals@1.0.0": {"lodash-doc-globals"},
+			},
+			purl:        "pkg:npm/lodash-doc-globals@1.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name:     "require in logical OR expression",
+			filename: "index.js",
+			code: `var QUnit = root.QUnit || require('qunit-extras');
+
+QUnit.test();
+QUnit.module();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/qunit-extras@1.0.0": {"qunit-extras"},
+			},
+			purl:        "pkg:npm/qunit-extras@1.0.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
+		},
+		{
+			name:     "require in ternary expression",
+			filename: "index.js",
+			code: `var lib = typeof window !== 'undefined' ? window.lib : require('my-lib');
+
+lib.init();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/my-lib@1.0.0": {"my-lib"},
+			},
+			purl:        "pkg:npm/my-lib@1.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+		})
+	}
+}
