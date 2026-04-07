@@ -89,6 +89,7 @@ patterns:
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #160, #176 — validate generated strings against target-language syntax rules before emitting)
   # defensive-coding (PR #160): error hints must be language/ecosystem-agnostic when the tool supports multiple languages
   # defensive-coding (PR #176): skip Maven groupId.artifactId candidates when artifactId contains chars invalid in Java package names
+  # defensive-coding (PR #176 round 2): reject identifier-first-digit (e.g. "3scale") and validate dot-separated namespace segments independently
   # testing: already covered by promoted rules (PR #160, e2e_test.go:366 — close pipe fds in t.Cleanup; e2e_test.go:387 — check Close() errors for consistency)
   # testing: already covered by promoted rules (PR #160, e2e_test.go:100 — surface pipe close/read errors in shared test helpers for diagnosability)
   # testing: already covered by "Use `t.Cleanup` When Replacing Process-Global State" (PR #160, e2e_test.go:353 — close stdinW in t.Cleanup to prevent FD leak on early abort)
