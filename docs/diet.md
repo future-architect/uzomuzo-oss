@@ -164,15 +164,14 @@ Difficulty labels:
 ```
 ── Diet Plan (8 direct dependencies) ─────────────────────────
 
-  Unused direct deps:  4
-  Easy wins:           2
-  Estimated removable: 6
+  Unused (0 imports):  4
+  Quick wins:          2  (trivial/easy + high impact)
 
-RANK  PRIORITY  DIFFICULTY  PURL                              EXCLUSIVE  FILES  CALLS  LIFECYCLE
-────  ────────  ──────────  ────                              ─────────  ─────  ─────  ─────────
-1     0.48      easy        github.com/joho/godotenv          0          1      1      Active
-2     0.40      trivial     github.com/smacker/go-tree-sitter 0          0      0      Active
-3     0.08      trivial     gopkg.in/yaml.v3                  0          0      0      Active
+RANK  PRIORITY  DIFFICULTY  PURL                              ONLY-VIA-THIS  FILES  CALLS  LIFECYCLE
+────  ────────  ──────────  ────                              ─────────────  ─────  ─────  ─────────
+1     0.48      easy        github.com/joho/godotenv          0              1      1      Active
+2     0.40      trivial     github.com/smacker/go-tree-sitter 0              0      0      Active
+3     0.08      trivial     gopkg.in/yaml.v3                  0              0      0      Active
 ...
 ```
 
@@ -185,7 +184,8 @@ RANK  PRIORITY  DIFFICULTY  PURL                              EXCLUSIVE  FILES  
     "total_transitive": 0,
     "unused_direct": 4,
     "easy_wins": 2,
-    "estimated_removable": 6
+    "actionable_direct": 6,
+    "transitive_only_by_one": 0
   },
   "dependencies": [
     {
@@ -194,7 +194,7 @@ RANK  PRIORITY  DIFFICULTY  PURL                              EXCLUSIVE  FILES  
       "name": "github.com/joho/godotenv",
       "priority_score": 0.48,
       "difficulty": "easy",
-      "exclusive_transitive": 0,
+      "transitive_only_by_one": 0,
       "import_file_count": 1,
       "call_site_count": 1,
       "lifecycle": "Active"
