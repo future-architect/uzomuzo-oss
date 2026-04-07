@@ -88,6 +88,7 @@ patterns:
   # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, depgraph/graph.go:37 — AnalyzeGraph used == nil instead of len == 0, misaligned with ResolveDirectPURLs empty-slice semantics)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #160, #173 — ecosystem-neutral error hints; consistent map key normalization across insert and lookup)
   # defensive-coding: already covered by "Delete Unused Code" rule (PR #173, analyzer.go:516 — unused cfg parameter in resolvePythonPURL)
+  # defensive-coding: already covered by "Collect All Matches in Collector Functions" spirit (PR #173, analyzer.go:518 — import x as y alias not registered; must handle all AST node variants)
   # testing: already covered by promoted rules (PR #160, e2e_test.go:366 — close pipe fds in t.Cleanup; e2e_test.go:387 — check Close() errors for consistency)
   # testing: already covered by promoted rules (PR #160, e2e_test.go:100 — surface pipe close/read errors in shared test helpers for diagnosability)
   # testing: already covered by "Use `t.Cleanup` When Replacing Process-Global State" (PR #160, e2e_test.go:353 — close stdinW in t.Cleanup to prevent FD leak on early abort)
