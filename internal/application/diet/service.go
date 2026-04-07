@@ -387,9 +387,10 @@ func buildMavenImportPaths(parsed packageurl.PackageURL) []string {
 	}
 
 	// 3. groupId.artifactId — covers cases where the package mirrors the full coordinate.
-	// Skip when namespace == name (e.g. cglib/cglib → "cglib.cglib" is not a real package),
+	// Skip when namespace == name ignoring case (e.g. cglib/cglib or Cglib/cglib →
+	// "cglib.cglib" is not a real package),
 	// and skip when artifactId contains characters invalid in Java package names (e.g. hyphens).
-	if parsed.Namespace != "" && parsed.Name != "" && parsed.Namespace != parsed.Name && isJavaPackageSafe(parsed.Name) {
+	if parsed.Namespace != "" && parsed.Name != "" && !strings.EqualFold(parsed.Namespace, parsed.Name) && isJavaPackageSafe(parsed.Name) {
 		add(parsed.Namespace + "." + parsed.Name)
 	}
 

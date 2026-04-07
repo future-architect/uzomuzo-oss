@@ -166,6 +166,11 @@ func TestBuildMavenImportPaths(t *testing.T) {
 			want: []string{"net.sf.cglib", "Cglib"},
 		},
 		{
+			name: "mixed-case namespace/name equality skips groupId.artifactId",
+			purl: "pkg:maven/Cglib/cglib@3.3.0",
+			want: []string{"net.sf.cglib", "Cglib"},
+		},
+		{
 			name: "invalid fallback artifactId is skipped",
 			purl: "pkg:maven/3scale-client@1.0.0",
 			want: nil,
