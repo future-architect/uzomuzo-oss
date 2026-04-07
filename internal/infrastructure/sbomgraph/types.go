@@ -78,8 +78,11 @@ func buildRefMapRecursive(components []Component, m map[string]string, depth int
 
 // ResolveDirectPURLs identifies which normalized PURLs are direct dependencies
 // of the root component by inspecting the CycloneDX dependencies section.
-// Returns nil when the SBOM lacks metadata.component or the dependencies section,
-// which causes all dependencies to be classified as RelationUnknown.
+// Returns nil when the SBOM lacks metadata.component, the dependencies section,
+// or a resolvable root ref — callers treat nil as "no graph info available"
+// and classify all dependencies as RelationUnknown.
+// Returns a non-nil (possibly empty) map when the graph is present but the root
+// has zero direct dependencies.
 //
 // When the root component has an entry in the dependencies array, its dependsOn
 // list is used directly. Otherwise (common with syft directory scans where the
@@ -115,11 +118,7 @@ func ResolveDirectPURLs(bom *BOMEnvelope, refMap map[string]string) map[string]s
 
 	// Try explicit root entry first.
 	if rootDeps, ok := depIndex[rootRef]; ok {
-		directPURLs := resolveDirectRefs(rootDeps, refMap, depIndex, selfPURLs)
-		if len(directPURLs) == 0 {
-			return nil
-		}
-		return directPURLs
+		return resolveDirectRefs(rootDeps, refMap, depIndex, selfPURLs)
 	}
 
 	// Root not in dependencies array — infer direct deps as refs that are never
