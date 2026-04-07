@@ -85,3 +85,6 @@ patterns:
     pr: 159
     file: "cmd/uzomuzo-diet/e2e_test.go"
     date: "2026-04-07"
+  # defensive-coding: already covered by "Deterministic Output from Non-Deterministic Sources" (PR #159, analyzer.go:494 — Python prefix matching used first-match instead of longest-match)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:461 — Go alias derivation needs vN suffix and gopkg.in heuristics for accurate call-site counting)
+  # defensive-coding: already covered by "Normalize User-Provided Enum Values" spirit (PR #159, service.go:288 — PyPI distribution names need hyphen→underscore and lowercase normalization for import matching)
