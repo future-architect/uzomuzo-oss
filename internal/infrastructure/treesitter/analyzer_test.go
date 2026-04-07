@@ -697,6 +697,21 @@ outsource("data")
 			wantBreadth: 2,
 		},
 		{
+			name: "aliased import statement",
+			code: `import requests as r
+
+r.get("https://example.com")
+r.post("https://example.com")
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/requests@2.31.0": {"requests"},
+			},
+			purl:        "pkg:pypi/requests@2.31.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
+		},
+		{
 			name: "wildcard from-import records import file",
 			code: `from flask import *
 

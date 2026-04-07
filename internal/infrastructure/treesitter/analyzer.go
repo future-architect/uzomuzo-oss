@@ -138,6 +138,7 @@ func NewAnalyzer() *Analyzer {
 		language: python.GetLanguage(),
 		importQuery: strings.Join([]string{
 			`(import_statement name: (dotted_name) @import)`,
+			`(import_statement name: (aliased_import name: (dotted_name) @import))`,
 			`(import_from_statement module_name: (dotted_name) @import)`,
 		}, "\n"),
 		callQuery: strings.Join([]string{
@@ -512,10 +513,23 @@ func (a *Analyzer) handlePythonImport(
 
 	switch parent.Type() {
 	case "import_statement":
-		// Register module-level alias (e.g., "requests" -> PURL) only when the
-		// import statement binds the module name in scope.
+		// Regular import (e.g., "import requests") — register module name as alias.
 		alias := cfg.aliasFromPkg(importPath)
 		aliasMap[alias] = purl
+	case "aliased_import":
+		// Aliased import (e.g., "import requests as r") — the captured dotted_name's
+		// parent is aliased_import. Register the explicit alias, not the module name.
+		grandparent := parent.Parent()
+		if grandparent != nil && grandparent.Type() == "import_statement" {
+			aliasNode := parent.ChildByFieldName("alias")
+			if aliasNode != nil {
+				aliasMap[aliasNode.Content(src)] = purl
+			} else {
+				// Fallback: no alias found, use module name.
+				alias := cfg.aliasFromPkg(importPath)
+				aliasMap[alias] = purl
+			}
+		}
 	case "import_from_statement":
 		// For from-imports, register each imported name as an alias.
 		// "from requests import get" does NOT bind "requests" in scope,
