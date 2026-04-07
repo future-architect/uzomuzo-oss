@@ -509,11 +509,11 @@ func (a *Analyzer) handlePythonImport(
 }
 
 // resolvePythonPURL resolves a Python import path to its PURL.
+// Matching is case-insensitive because importToPURL keys are already lowercased.
 func (a *Analyzer) resolvePythonPURL(
 	importPath string,
 	importToPURL map[string]string,
 ) string {
-	// Lowercase the import path for matching — importToPURL keys are already lowercased.
 	lowerPath := strings.ToLower(importPath)
 
 	// Try exact match first.
@@ -569,6 +569,10 @@ func (a *Analyzer) registerFromImportNames(
 			if aliasNode != nil {
 				aliasMap[aliasNode.Content(src)] = purl
 			}
+		case "wildcard_import":
+			// from x import * — cannot track individual names; the module-level
+			// alias is already registered by the caller, so x.y() still works.
+			// Bare calls to wildcard-imported names will be undercounted.
 		}
 	}
 }
