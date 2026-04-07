@@ -329,7 +329,9 @@ func TestParser_Parse_WithDependencies_BrokenRef(t *testing.T) {
 
 func TestParser_Parse_WithDependencies_NoRootInDeps(t *testing.T) {
 	// metadata.component exists but root ref is not in dependencies section.
-	// All dependencies should fall back to RelationUnknown.
+	// Direct deps are inferred as refs not listed in any dependsOn array:
+	//   express → not in any dependsOn → direct
+	//   lodash  → in express's dependsOn → transitive
 	p := &cyclonedx.Parser{}
 	deps, err := p.Parse(context.Background(), readTestData(t, "with_dependencies_no_root.json"))
 	if err != nil {
@@ -339,9 +341,15 @@ func TestParser_Parse_WithDependencies_NoRootInDeps(t *testing.T) {
 		t.Fatalf("got %d deps, want 2", len(deps))
 	}
 
+	want := map[string]depparser.DependencyRelation{
+		"pkg:npm/express@4.18.2": depparser.RelationDirect,
+		"pkg:npm/lodash@4.17.21": depparser.RelationTransitive,
+	}
 	for _, d := range deps {
-		if d.Relation != depparser.RelationUnknown {
-			t.Errorf("%s relation = %v, want RelationUnknown", d.PURL, d.Relation)
+		if expected, ok := want[d.PURL]; ok {
+			if d.Relation != expected {
+				t.Errorf("%s relation = %v, want %v", d.PURL, d.Relation, expected)
+			}
 		}
 	}
 }
