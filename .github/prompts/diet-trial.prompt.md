@@ -58,12 +58,12 @@ If the clone already exists, skip. If clone fails (private repo, not found), rep
 
 **Trivy** (default):
 ```bash
-trivy fs /tmp/diet-trial-<repo> --format cyclonedx -o /tmp/diet-trial-<repo>-sbom.json 2>/tmp/diet-trial-<repo>-sbom.log
+trivy fs /tmp/diet-trial-<repo> --format cyclonedx -o /tmp/diet-trial-<repo>-trivy-sbom.json 2>/tmp/diet-trial-<repo>-trivy-sbom.log
 ```
 
 **Syft**:
 ```bash
-syft scan /tmp/diet-trial-<repo> --source-name <repo> -o cyclonedx-json > /tmp/diet-trial-<repo>-sbom.json 2>/tmp/diet-trial-<repo>-sbom.log
+syft scan /tmp/diet-trial-<repo> --source-name <repo> -o cyclonedx-json > /tmp/diet-trial-<repo>-syft-sbom.json 2>/tmp/diet-trial-<repo>-syft-sbom.log
 ```
 
 After SBOM generation, extract and display summary:
@@ -71,7 +71,7 @@ After SBOM generation, extract and display summary:
 ```python
 python3 -c "
 import json
-with open('/tmp/diet-trial-<repo>-sbom.json') as f:
+with open('/tmp/diet-trial-<repo>-<tool>-sbom.json') as f:
     d = json.load(f)
 comps = d.get('components', [])
 ecosystems = {}
@@ -93,18 +93,18 @@ If components = 0, the SBOM generation failed. Check the log and report the erro
 
 ```bash
 unset GITHUB_TOKEN
-uzomuzo-diet --sbom /tmp/diet-trial-<repo>-sbom.json --source /tmp/diet-trial-<repo> --format json 2>/tmp/diet-trial-<repo>-diet.log > /tmp/diet-trial-<repo>-diet-raw.json
+uzomuzo-diet --sbom /tmp/diet-trial-<repo>-<tool>-sbom.json --source /tmp/diet-trial-<repo> --format json 2>/tmp/diet-trial-<repo>-<tool>-diet.log > /tmp/diet-trial-<repo>-<tool>-diet-raw.json
 ```
 
 The JSON output may have log lines mixed into stdout (emoji progress lines). Extract clean JSON:
 
 ```bash
 # Find the line where JSON starts and extract
-START=$(grep -n '^{' /tmp/diet-trial-<repo>-diet-raw.json | head -1 | cut -d: -f1)
+START=$(grep -n '^{' /tmp/diet-trial-<repo>-<tool>-diet-raw.json | head -1 | cut -d: -f1)
 if [ -n "$START" ]; then
-  tail -n +$START /tmp/diet-trial-<repo>-diet-raw.json > /tmp/diet-trial-<repo>-diet.json
+  tail -n +$START /tmp/diet-trial-<repo>-<tool>-diet-raw.json > /tmp/diet-trial-<repo>-<tool>-diet.json
 else
-  cp /tmp/diet-trial-<repo>-diet-raw.json /tmp/diet-trial-<repo>-diet.json
+  cp /tmp/diet-trial-<repo>-<tool>-diet-raw.json /tmp/diet-trial-<repo>-<tool>-diet.json
 fi
 ```
 
@@ -118,7 +118,7 @@ Parse the diet JSON and produce the analysis. Use Python for reliable JSON parsi
 python3 << 'PYEOF'
 import json, sys
 
-with open("/tmp/diet-trial-<repo>-diet.json") as f:
+with open("/tmp/diet-trial-<repo>-<tool>-diet.json") as f:
     d = json.load(f)
 
 summary = d["summary"]
@@ -198,7 +198,7 @@ For each anomaly, collect the evidence needed to reproduce it:
 # 1. Extract the SBOM entry for this dependency
 python3 -c "
 import json
-with open('/tmp/diet-trial-<repo>-sbom.json') as f:
+with open('/tmp/diet-trial-<repo>-<tool>-sbom.json') as f:
     d = json.load(f)
 for c in d['components']:
     if '<dep-name>' in c.get('purl', '') or '<dep-name>' in c.get('name', ''):
@@ -215,7 +215,7 @@ grep -rn '<dep-module>\.' /tmp/diet-trial-<repo>/ --include='*.py' --include='*.
 # 4. Extract diet JSON entry
 python3 -c "
 import json
-with open('/tmp/diet-trial-<repo>-diet.json') as f:
+with open('/tmp/diet-trial-<repo>-<tool>-diet.json') as f:
     d = json.load(f)
 for dep in d['dependencies']:
     if '<dep-name>' in dep.get('name', ''):
@@ -229,7 +229,7 @@ for dep in d['dependencies']:
 # Extract the full diet entry including all score components
 python3 -c "
 import json
-with open('/tmp/diet-trial-<repo>-diet.json') as f:
+with open('/tmp/diet-trial-<repo>-<tool>-diet.json') as f:
     d = json.load(f)
 for dep in d['dependencies']:
     if '<dep-name>' in dep.get('name', ''):
@@ -395,12 +395,30 @@ Determine the **primary language** from the SBOM ecosystem breakdown (the ecosys
 
 Create the subdirectory if it doesn't exist.
 
-Filename format: `<repo>-<tool>-<YYYY-MM-DD>.md`
+Filename format: `<repo>-<tool>-<YYYY-MM-DD>.<ext>`
 
-Example paths:
-- `case-studies/uzomuzo-diet/go/grafana-trivy-2026-04-07.md`
+All output types share the same base name, differentiated only by extension:
+
+| Type | Extension | Description |
+|------|-----------|-------------|
+| Report | `.md` | Markdown analysis report |
+| Diet result | `.json` | uzomuzo diet analysis result |
+| SBOM | `.sbom.json` | SBOM data (CycloneDX JSON) |
+
+Example paths (for `flask` with `trivy` on `2026-04-07`):
 - `case-studies/uzomuzo-diet/python/flask-trivy-2026-04-07.md`
-- `case-studies/uzomuzo-diet/typescript/vuejs-core-trivy-2026-04-07.md`
+- `case-studies/uzomuzo-diet/python/flask-trivy-2026-04-07.json`
+- `case-studies/uzomuzo-diet/python/flask-trivy-2026-04-07.sbom.json`
+
+Save all three files together. Copy the SBOM and diet JSON from their `/tmp/` locations:
+
+```bash
+DEST="<case-studies-dir>/<language-subdir>"
+BASE="<repo>-<tool>-<YYYY-MM-DD>"
+cp /tmp/diet-trial-<repo>-<tool>-diet.json "${DEST}/${BASE}.json"
+cp /tmp/diet-trial-<repo>-<tool>-sbom.json "${DEST}/${BASE}.sbom.json"
+# Report (.md) is written directly by the agent
+```
 
 The saved report must be in the same format as existing case studies in `case-studies/`. Use Japanese for section headers and commentary (matching existing case study style). Include:
 
@@ -409,7 +427,7 @@ The saved report must be in the same format as existing case studies in `case-st
 - Raw data file paths
 - Anomaly findings (important for bug tracking)
 
-After saving, display the file path to the user.
+After saving, display all saved file paths to the user.
 
 ## --compare Mode
 
