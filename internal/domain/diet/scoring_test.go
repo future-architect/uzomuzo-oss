@@ -117,6 +117,10 @@ func TestGraphResult_MaxExclusiveTransitiveCount(t *testing.T) {
 			"a": {ExclusiveTransitiveCount: 0},
 			"b": {ExclusiveTransitiveCount: 0},
 		}, 0},
+		{"nil value in map", map[string]*GraphMetrics{
+			"a": nil,
+			"b": {ExclusiveTransitiveCount: 7},
+		}, 7},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -134,22 +138,22 @@ func TestNormalizeGraphImpact(t *testing.T) {
 		name         string
 		exclusive    int
 		maxExclusive int
-		wantMin      float64
-		wantMax      float64
+		want         float64
 	}{
-		{"zero exclusive, max=50", 0, 50, 0.1, 0.1},
-		{"max exclusive, max=50", 50, 50, 1.0, 1.0},
-		{"half exclusive, max=50", 25, 50, 0.55, 0.55},
-		{"small exclusive, max=50", 1, 50, 0.118, 0.118},
-		{"zero maxExclusive", 5, 0, 0.1, 0.1},
+		{"zero exclusive, max=50", 0, 50, 0.1},
+		{"max exclusive, max=50", 50, 50, 1.0},
+		{"half exclusive, max=50", 25, 50, 0.55},
+		{"small exclusive, max=50", 1, 50, 0.118},
+		{"zero maxExclusive", 5, 0, 0.1},
 	}
+	const tolerance = 0.001
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := GraphMetrics{ExclusiveTransitiveCount: tt.exclusive}
 			got := normalizeGraphImpact(g, tt.maxExclusive)
-			if got < tt.wantMin-0.001 || got > tt.wantMax+0.001 {
-				t.Errorf("normalizeGraphImpact(exclusive=%d, max=%d) = %f, want [%f, %f]",
-					tt.exclusive, tt.maxExclusive, got, tt.wantMin, tt.wantMax)
+			if got < tt.want-tolerance || got > tt.want+tolerance {
+				t.Errorf("normalizeGraphImpact(exclusive=%d, max=%d) = %f, want %f (±%f)",
+					tt.exclusive, tt.maxExclusive, got, tt.want, tolerance)
 			}
 		})
 	}
@@ -169,9 +173,6 @@ func TestComputeImpactScore_LargeProject(t *testing.T) {
 	// unused boost: max(1.0*0.5*1.0, 1.0*0.8) = 0.8
 	if score.PriorityScore < 0.3 {
 		t.Errorf("large project top dep should exceed easy_wins threshold (0.3), got %f", score.PriorityScore)
-	}
-	if score.PriorityScore < 0.2 {
-		t.Errorf("large project top dep should exceed actionable threshold (0.2), got %f", score.PriorityScore)
 	}
 }
 

@@ -27,7 +27,7 @@ type GraphResult struct {
 func (r *GraphResult) MaxExclusiveTransitiveCount() int {
 	m := 0
 	for _, gm := range r.Metrics {
-		if gm.ExclusiveTransitiveCount > m {
+		if gm != nil && gm.ExclusiveTransitiveCount > m {
 			m = gm.ExclusiveTransitiveCount
 		}
 	}
