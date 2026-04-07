@@ -215,7 +215,7 @@ uzomuzo diet           "この順番で消せ"         四半期の棚卸し
 /diet-assess-risk      "残すリスクはこう"       EOL + hard な依存に
 /diet-evaluate-removal "消すコスパはこう"       moderate で迷ったとき
         ↓
-LLM (Claude Code)      "置換コードはこれ"       実装
+/diet-remove           "安全に消す"             実際の除去作業
 ```
 
 | Tool | Role | Scope | When |
@@ -224,6 +224,7 @@ LLM (Claude Code)      "置換コードはこれ"       実装
 | `uzomuzo diet` | **Prioritize** — rank by removability | All deps, automated | Quarterly review |
 | `/diet-assess-risk` | **Assess risk** — trace data flows, attack scenarios | One dep, LLM-powered | EOL deps with non-trivial coupling |
 | `/diet-evaluate-removal` | **Plan removal** — 6-axis evaluation, replacement options | One dep, LLM-powered | When unsure if removal is worth the effort |
+| `/diet-remove` | **Execute** — safe removal with verification | One dep, LLM-powered | Actual removal work |
 
 ### Typical workflow
 
@@ -241,8 +242,8 @@ uzomuzo diet --sbom bom.json --source . --format json > diet.json
 # Step 4: Moderate deps you're unsure about — evaluate removal cost
 /diet-evaluate-removal github.com/foo/bar
 
-# Step 5: Generate replacement code
-claude "Remove github.com/foo/bar from this project, replacing with stdlib os.UserHomeDir"
+# Step 5: Execute the removal with safety checks
+/diet-remove github.com/foo/bar
 ```
 
 ### JSON output for LLM consumption
