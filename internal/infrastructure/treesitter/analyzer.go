@@ -791,11 +791,13 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 
 	// CJS: node is `(string)` inside `(arguments)` inside `(call_expression)`
 	// Pattern: const pkg = require('@scope/pkg')
+	// Also handles compound patterns like: var X = root.X || require('pkg')
+	// where binary_expression sits between call_expression and variable_declarator.
 	if parent.Type() == "arguments" {
 		callExpr := parent.Parent()
 		if callExpr != nil && callExpr.Type() == "call_expression" {
-			declarator := callExpr.Parent()
-			if declarator != nil && declarator.Type() == "variable_declarator" {
+			declarator := findAncestorVariableDeclarator(callExpr)
+			if declarator != nil {
 				nameNode := declarator.ChildByFieldName("name")
 				if nameNode != nil && nameNode.Type() == "identifier" {
 					return []string{nameNode.Content(src)}
@@ -804,6 +806,34 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 		}
 	}
 
+	return nil
+}
+
+// jsExpressionTypes contains AST node types that can sit between a call_expression
+// and a variable_declarator in compound require() patterns.
+var jsExpressionTypes = map[string]bool{
+	"binary_expression":        true,
+	"ternary_expression":       true,
+	"parenthesized_expression": true,
+	"assignment_expression":    true,
+}
+
+// findAncestorVariableDeclarator walks up from node looking for a variable_declarator,
+// traversing intermediate expression nodes (e.g., binary_expression for patterns like
+// `var X = root.X || require('pkg')`). Stops at statement-level nodes to avoid
+// false matches across unrelated declarations.
+func findAncestorVariableDeclarator(node *sitter.Node) *sitter.Node {
+	current := node.Parent()
+	for current != nil {
+		if current.Type() == "variable_declarator" {
+			return current
+		}
+		if !jsExpressionTypes[current.Type()] {
+			// Reached a non-expression node without finding a variable_declarator.
+			return nil
+		}
+		current = current.Parent()
+	}
 	return nil
 }
 
