@@ -1,0 +1,506 @@
+//go:build cgo
+
+package treesitter
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"sort"
+	"testing"
+)
+
+func TestAnalyzer_Go(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
+
+import (
+	"fmt"
+	"github.com/foo/bar"
+)
+
+func main() {
+	bar.DoSomething()
+	bar.DoOther()
+	fmt.Println("hello")
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:golang/github.com/foo/bar@v1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for pkg:golang/github.com/foo/bar@v1.0.0")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 2 {
+		t.Errorf("CallSiteCount = %d, want 2", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 2 {
+		t.Errorf("APIBreadth = %d, want 2", ca.APIBreadth)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false")
+	}
+}
+
+func TestAnalyzer_GoAliasedImport(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
+
+import (
+	baz "github.com/foo/bar"
+)
+
+func main() {
+	baz.DoSomething()
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:golang/github.com/foo/bar@v1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for aliased import")
+	}
+
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+}
+
+func TestAnalyzer_GoMultipleFiles(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []struct {
+		name, content string
+	}{
+		{"a.go", `package main
+
+import "github.com/foo/bar"
+
+func a() { bar.A() }
+`},
+		{"b.go", `package main
+
+import "github.com/foo/bar"
+
+func b() { bar.B(); bar.C() }
+`},
+	} {
+		if err := os.WriteFile(filepath.Join(dir, f.name), []byte(f.content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca := result["pkg:golang/github.com/foo/bar@v1.0.0"]
+	if ca == nil {
+		t.Fatal("expected result")
+	}
+
+	if ca.ImportFileCount != 2 {
+		t.Errorf("ImportFileCount = %d, want 2", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 3 {
+		t.Errorf("CallSiteCount = %d, want 3", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 3 {
+		t.Errorf("APIBreadth = %d, want 3", ca.APIBreadth)
+	}
+
+	sort.Strings(ca.ImportFiles)
+	if len(ca.ImportFiles) != 2 {
+		t.Errorf("ImportFiles len = %d, want 2", len(ca.ImportFiles))
+	}
+}
+
+func TestAnalyzer_Python(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "main.py"), []byte(`import requests
+from os import path
+
+requests.get("https://example.com")
+requests.post("https://example.com")
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:pypi/requests@2.31.0": {"requests"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:pypi/requests@2.31.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for requests")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 2 {
+		t.Errorf("CallSiteCount = %d, want 2", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 2 {
+		t.Errorf("APIBreadth = %d, want 2", ca.APIBreadth)
+	}
+}
+
+func TestAnalyzer_SkipsDirs(t *testing.T) {
+	dir := t.TempDir()
+	vendorDir := filepath.Join(dir, "vendor")
+	if err := os.MkdirAll(vendorDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// File in vendor should be skipped
+	if err := os.WriteFile(filepath.Join(vendorDir, "main.go"), []byte(`package main
+import "github.com/foo/bar"
+func main() { bar.Do() }
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) != 0 {
+		t.Errorf("expected no results when all files are in vendor, got %d", len(result))
+	}
+}
+
+func TestAnalyzer_UnusedImport(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
+
+import "github.com/foo/bar"
+
+func main() {}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca := result["pkg:golang/github.com/foo/bar@v1.0.0"]
+	if ca == nil {
+		t.Fatal("expected result for imported but unused package")
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false (package is imported)")
+	}
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 0 {
+		t.Errorf("CallSiteCount = %d, want 0", ca.CallSiteCount)
+	}
+}
+
+func TestAnalyzer_NoMatchingImports(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
+
+import "fmt"
+
+func main() { fmt.Println("hi") }
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) != 0 {
+		t.Errorf("expected no results for unmatched imports, got %d", len(result))
+	}
+}
+
+func TestAnalyzer_JavaScript(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "index.js"), []byte(`import axios from "axios";
+import { readFile } from "fs";
+
+axios.get("https://example.com");
+axios.post("https://example.com");
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/axios@1.6.0": {"axios"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/axios@1.6.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for axios")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 2 {
+		t.Errorf("CallSiteCount = %d, want 2", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 2 {
+		t.Errorf("APIBreadth = %d, want 2", ca.APIBreadth)
+	}
+}
+
+func TestAnalyzer_TypeScript(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "index.ts"), []byte(`import axios from "axios";
+
+const res = axios.get("https://example.com");
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/axios@1.6.0": {"axios"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/axios@1.6.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for axios")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+}
+
+func TestAnalyzer_Java(t *testing.T) {
+	dir := t.TempDir()
+	// Java variable-declaration resolution: "Gson gson = new Gson()" should
+	// allow "gson.toJson()" to be counted as a call site for the Gson import.
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.google.gson.Gson;
+
+public class Main {
+    public static void main(String[] args) {
+        Gson gson = new Gson();
+        String json = gson.toJson("hello");
+        String json2 = gson.fromJson("{}", String.class);
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/com.google.code.gson/gson@2.10": {"com.google.gson"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:maven/com.google.code.gson/gson@2.10"]
+	if !ok {
+		t.Fatal("expected coupling analysis for gson")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 2 {
+		t.Errorf("CallSiteCount = %d, want 2", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 2 {
+		t.Errorf("APIBreadth = %d, want 2 (toJson, fromJson)", ca.APIBreadth)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false")
+	}
+}
+
+func TestAnalyzer_JavaStaticCall(t *testing.T) {
+	dir := t.TempDir()
+	// Static calls use the class name directly (e.g., StringUtils.isBlank).
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import org.apache.commons.lang3.StringUtils;
+
+public class Main {
+    public static void main(String[] args) {
+        boolean b = StringUtils.isBlank("");
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/org.apache.commons/commons-lang3@3.14": {"org.apache.commons.lang3"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:maven/org.apache.commons/commons-lang3@3.14"]
+	if !ok {
+		t.Fatal("expected coupling analysis for commons-lang3")
+	}
+
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+}
+
+func TestAnalyzer_GoCaseInsensitivePURL(t *testing.T) {
+	dir := t.TempDir()
+	// Source code uses mixed-case import path (as authored by the module owner).
+	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
+
+import "github.com/Masterminds/semver/v3"
+
+func main() {
+	semver.NewVersion("1.0.0")
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	// SBOM/PURL uses lowercased namespace (PURL spec normalizes to lowercase).
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/masterminds/semver/v3@v3.4.0": {"github.com/masterminds/semver/v3"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:golang/github.com/masterminds/semver/v3@v3.4.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for case-mismatched PURL")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false")
+	}
+}
+
+func TestAnalyzer_PythonPrefixNoFalseMatch(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "main.py"), []byte(`import requests
+import request
+
+requests.get("https://example.com")
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:pypi/requests@2.31.0": {"requests"},
+		"pkg:pypi/request@1.0.0":   {"request"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// "requests" should match pkg:pypi/requests, not pkg:pypi/request
+	caRequests, ok := result["pkg:pypi/requests@2.31.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for requests")
+	}
+	if caRequests.CallSiteCount != 1 {
+		t.Errorf("requests CallSiteCount = %d, want 1", caRequests.CallSiteCount)
+	}
+
+	// "request" should be a separate entry with no call sites but still imported
+	caRequest, ok := result["pkg:pypi/request@1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for request")
+	}
+	if caRequest.IsUnused {
+		t.Error("request should not be unused (it is imported)")
+	}
+	if caRequest.CallSiteCount != 0 {
+		t.Errorf("request CallSiteCount = %d, want 0", caRequest.CallSiteCount)
+	}
+}

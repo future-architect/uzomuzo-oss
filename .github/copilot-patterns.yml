@@ -12,13 +12,11 @@
 #       file: "<path>"
 #       date: "YYYY-MM-DD"
 patterns:
-  - category: "error-handling"
-    summary: "Distinguish os.ErrNotExist from other I/O errors when auto-detecting files — treating all errors as 'not found' hides real causes"
-    pr: 87
-    file: "internal/interfaces/cli/scan.go"
-    date: "2026-04-02"
+  # error-handling: promoted to error-handling.instructions.md (PRs #87, #159 — surface initialization errors instead of silent degradation)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:382 — filter tree-sitter captures by name to skip non-import captures)
+  # deterministic-output: already covered by promoted rule (PR #159, analyzer.go:315 — sort ImportFiles for deterministic JSON output)
+  # comment-doc-drift: already covered by promoted rule (PR #159, diet.go:18 — comment documented CLI default but code has different semantics for programmatic callers)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #127, #130 — match validation format strings, CI staging completeness, dynamic refs)
-  # security: promoted to security.instructions.md (PRs #111, #127 — validate config-sourced paths, reject absolute paths, apply consistently to all config paths)
   - category: "duplicate-parsing"
     summary: "Provide a combined parser (ParseWorkflowAll) when callers need both external URLs and local paths, avoiding double YAML unmarshal"
     pr: 111
@@ -52,50 +50,43 @@ patterns:
   # comment-doc-drift: already covered by promoted rule (PR #130, ci.yml:40 — checkout comment said "default ref" but workflow_dispatch uses user-selected ref)
   # comment-doc-drift: already covered by promoted rule (PR #140, detect.go:21 — comment claimed "always" for sniff window but long headers can push directive past 512 bytes)
   # testing: promoted to testing-performance.instructions.md (PRs #121, #140 — use filepath.Join for portable temp file paths in tests)
-  - category: "testing"
-    summary: "Use bounded waits with backoff (time.After + time.Sleep) in test poll loops instead of tight spin-loops — avoids CI hangs and CPU burn"
-    pr: 143
-    file: "internal/infrastructure/actionscan/discovery_test.go"
-    date: "2026-04-05"
-  - category: "testing"
-    summary: "Never call t.Fatal/t.Fatalf from non-test goroutines (e.g., httptest handlers) — precompute test data outside the handler"
-    pr: 143
-    file: "internal/infrastructure/actionscan/discovery_test.go"
-    date: "2026-04-05"
+  # testing: promoted to testing-performance.instructions.md (PRs #143, #159 — bounded waits, no t.Fatal from goroutines, concurrent pipe reads)
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
-  - category: "naming-consistency"
-    summary: "CLI flag descriptions that introduce domain terms mid-sentence should capitalize the term and use natural phrasing (e.g., 'Replace means...') instead of shorthand notation ('replace = ...')"
-    pr: 144
-    file: "cmd/uzomuzo/commands.go"
-    date: "2026-04-05"
-  - category: "defensive-coding"
-    summary: "Avoid per-call map allocation for static display-name mappings — use a switch statement or package-level var instead of rebuilding the map on every invocation"
-    pr: 144
-    file: "internal/interfaces/cli/boxdraw.go"
-    date: "2026-04-05"
+  # naming-consistency: promoted to coding-standards.instructions.md (PRs #144, #159 — output column header must match rendered data field)
+  # defensive-coding: promoted to coding-standards.instructions.md (PRs #144, #159 — unique map keys for sentinels, framework-provided parsed args, classify before rounding)
   # comment-doc-drift: already covered by "Comment-Code Consistency" rule (PR #144, build_health_assessor.go:56 — comment claimed SLSA provenance but implementation excludes SLSA signals)
-  - category: "defensive-coding"
-    summary: "Rename loop variables that shadow method receivers to avoid accidental use of the wrong binding in future edits"
-    pr: 144
-    file: "internal/domain/analysis/build_health_assessor.go"
-    date: "2026-04-05"
-  - category: "defensive-coding"
-    summary: "Return VerdictReview (not VerdictOK) for unknown/unexpected enum values in switch statements to surface data corruption or unhandled additions"
-    pr: 144
-    file: "internal/domain/audit/verdict.go"
-    date: "2026-04-05"
-  # comment-doc-drift: already covered by "Comment-Code Consistency" rule (PR #144, build_health_assessor.go:25 — ScorecardCheck comment referenced SLSA/Attestation but those signals are excluded)
+  # comment-doc-drift: already covered by promoted rule (PR #144, build_health_assessor.go:25 — ScorecardCheck comment referenced SLSA/Attestation but those signals are excluded)
   # api-consistency: already covered by "Consistent Conditional Columns Across Output Formats" (PR #144, scan_render.go:501,560 — JSON/CSV per-entry omitted "Ungraded" while summary counted it)
-  - category: "defensive-coding"
-    summary: "Classify enum/label from raw computed value before rounding — rounding first can push boundary values into the wrong bucket"
-    pr: 144
-    file: "internal/domain/analysis/build_health_assessor.go"
-    date: "2026-04-05"
   # comment-doc-drift: already covered by "Comment-Code Consistency" rule (PR #148, boxdraw.go:422 — function header comment didn't document VerdictReplace early return)
   # naming-consistency: already covered by "Comment-Code Consistency" spirit (PR #148, verdict_test.go:68 — test function name implied build integrity drives verdict after semantics changed to ignore it)
   # testing: already covered by "Cover New Control Flow Branches with Tests" (PR #148, scan_render.go:362 — missing test for buildIntegrityDisplay VerdictReplace branch)
   # testing: already covered by "Cover New Control Flow Branches with Tests" (PR #148, boxdraw.go:449 — missing tests for writeBoxBuildIntegrity header+icon format and replace-verdict hiding)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:284 — IsUnused boolean flag defined on wrong field; diet_render.go:181 — display message inconsistent with flag semantics)
+  # defensive-coding: already covered by promoted rules (PR #159, service.go:275 — Maven import path heuristic used groupId.artifactId instead of groupId alone)
+  # defensive-coding: already covered by promoted rules (PR #159, commands.go:279 — use framework-provided parsed args instead of os.Args)
+  # error-handling: already covered by promoted rules (PR #159, commands.go:272 — wrap underlying LookPath error with %w)
+  # defensive-coding: already covered by "Consolidate Detection Heuristics" (PR #159, diet.go:36 — use centralized createAnalysisService instead of direct constructor)
+  # testing: already covered by promoted rules (PR #159, e2e_test.go:94 — check pipe read/close errors; graph_test.go — check json.Marshal errors)
+  # defensive-coding: already covered by "Nil vs Empty Map Semantics for Sentinel-Checked Maps" (PR #159, sbomgraph/types.go:118 + depgraph/graph.go:33)
+  # comment-doc-drift: already covered by promoted rule (PR #159, analyzer.go:431 — misleading "BUG" labels for intentional import handling)
+  # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, analyzer.go:336 — return nil coupling map when no source files analyzed, not empty map that misclassifies all deps as unused)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:434 — blank imports are side-effect usage; skipping them misclassifies deps as unused)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:447 — shared sentinel key for blank/dot imports overwrites earlier entries)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:82 — use tree-sitter #eq? predicates to constrain overly broad query patterns)
+  # defensive-coding: already covered by "Deterministic Output from Non-Deterministic Sources" (PR #159, analyzer.go:420,513 — nondeterministic map iteration for prefix matching; use longest-match selection)
+  # defensive-coding: already covered by promoted rules (PR #159, commands.go:285 — use urfcli.Exit instead of os.Exit for testability and cleanup)
+  # defensive-coding: already covered by "Defensive Coding — Validate Early, Fail Clearly" (PR #159, diet.go:31 — validate required --sbom flag before file I/O)
+  - category: "testing"
+    summary: "Test validation structs/tags must mirror production output schema — mismatched JSON tags silently leave fields at zero, masking regressions"
+    pr: 159
+    file: "cmd/uzomuzo-diet/e2e_test.go"
+    date: "2026-04-07"
+  # defensive-coding: already covered by "Deterministic Output from Non-Deterministic Sources" (PR #159, analyzer.go:494 — Python prefix matching used first-match instead of longest-match)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:461 — Go alias derivation needs vN suffix and gopkg.in heuristics for accurate call-site counting)
+  # defensive-coding: already covered by "Normalize User-Provided Enum Values" spirit (PR #159, service.go:288 — PyPI distribution names need hyphen→underscore and lowercase normalization for import matching)
+  # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, sbomgraph/types.go:122 — ResolveDirectPURLs returned nil for 0 direct deps, conflating with "no graph info")
+  # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, depgraph/graph.go:37 — AnalyzeGraph used == nil instead of len == 0, misaligned with ResolveDirectPURLs empty-slice semantics)
