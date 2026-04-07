@@ -25,6 +25,9 @@ type GraphResult struct {
 // MaxExclusiveTransitiveCount returns the largest ExclusiveTransitiveCount
 // across all metrics in the result. Returns 0 if there are no metrics.
 func (r *GraphResult) MaxExclusiveTransitiveCount() int {
+	if r == nil {
+		return 0
+	}
 	m := 0
 	for _, gm := range r.Metrics {
 		if gm != nil && gm.ExclusiveTransitiveCount > m {

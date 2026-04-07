@@ -160,10 +160,10 @@ func TestNormalizeGraphImpact(t *testing.T) {
 }
 
 func TestComputeImpactScore_LargeProject(t *testing.T) {
-	// Simulates the trivy scenario: 635 transitive deps, maxExclusive=47.
-	// With the old normalization (totalTransitive=635), max score was 0.14.
-	// With new normalization (maxExclusive=47), scores should exceed thresholds.
-	graph := GraphMetrics{ExclusiveTransitiveCount: 47, TotalTransitiveCount: 55}
+	// Verify that a dependency with the highest exclusive transitive count
+	// gets the maximum graph impact when normalized by maxExclusive.
+	// This should keep the score above the easy_wins threshold.
+	graph := GraphMetrics{ExclusiveTransitiveCount: 47}
 	coupling := CouplingAnalysis{IsUnused: true}
 	health := HealthSignals{HealthRisk: 0.5}
 
@@ -171,8 +171,8 @@ func TestComputeImpactScore_LargeProject(t *testing.T) {
 
 	// graphImpact = 0.1 + 0.9*(47/47) = 1.0
 	// unused boost: max(1.0*0.5*1.0, 1.0*0.8) = 0.8
-	if score.PriorityScore < 0.3 {
-		t.Errorf("large project top dep should exceed easy_wins threshold (0.3), got %f", score.PriorityScore)
+	if score.PriorityScore < easyWinScoreThreshold {
+		t.Errorf("large project top dep should exceed easy_wins threshold (%0.2f), got %f", easyWinScoreThreshold, score.PriorityScore)
 	}
 }
 
