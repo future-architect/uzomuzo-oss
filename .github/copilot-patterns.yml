@@ -107,6 +107,9 @@ patterns:
     pr: 198
     file: "internal/domain/diet/scoring_test.go"
     date: "2026-04-07"
+  # defensive-coding (PR #199): already covered by "use tree-sitter predicates to constrain overly broad query patterns" — add !object negation to bare-call query to prevent double-counting
+  # defensive-coding (PR #199): already covered by "Consolidate Detection Heuristics — Single Source of Truth" — handle wildcard static imports with sentinel alias consistent with Python
+  # comment-doc-drift (PR #199): already covered by "Comment-Code Consistency" — clarify ImportFileCount vs import-statement count in test comment
   - category: "testing"
     summary: "Omit unused struct fields in test fixtures to avoid nondeterminism and unnecessary imports"
     pr: 197

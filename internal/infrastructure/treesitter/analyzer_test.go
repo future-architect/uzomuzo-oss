@@ -421,6 +421,59 @@ public class Main {
 	}
 }
 
+func TestAnalyzer_JavaStaticImport(t *testing.T) {
+	dir := t.TempDir()
+	// Static imports bring individual methods/fields into scope without qualification.
+	// "import static org.junit.Assert.assertEquals" allows bare "assertEquals()" calls.
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import org.junit.Test;
+
+public class Main {
+    @Test
+    public void testSomething() {
+        assertEquals("hello", "hello");
+        assertEquals(42, 42);
+        assertTrue(true);
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/junit/junit@4.13.2": {"org.junit"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:maven/junit/junit@4.13.2"]
+	if !ok {
+		t.Fatal("expected coupling analysis for junit")
+	}
+
+	// The fixture has 3 relevant imported symbols: 2 static (assertEquals, assertTrue)
+	// and 1 regular (Test), all declared in the same file, so ImportFileCount = 1.
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	// 3 call sites: assertEquals() x2 + assertTrue() x1
+	if ca.CallSiteCount != 3 {
+		t.Errorf("CallSiteCount = %d, want 3", ca.CallSiteCount)
+	}
+	// 2 distinct symbols: assertEquals, assertTrue
+	if ca.APIBreadth != 2 {
+		t.Errorf("APIBreadth = %d, want 2 (assertEquals, assertTrue)", ca.APIBreadth)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false")
+	}
+}
+
 func TestAnalyzer_GoCaseInsensitivePURL(t *testing.T) {
 	dir := t.TempDir()
 	// Source code uses mixed-case import path (as authored by the module owner).
@@ -459,6 +512,80 @@ func main() {
 	}
 	if ca.IsUnused {
 		t.Error("IsUnused = true, want false")
+	}
+}
+
+func TestAnalyzer_JSCaseInsensitivePURL(t *testing.T) {
+	dir := t.TempDir()
+	// Source code uses mixed-case import path, but PURL (and hence importToPURL key)
+	// is lowercased. The lookup must be case-insensitive.
+	err := os.WriteFile(filepath.Join(dir, "index.ts"), []byte(`import MyLib from "MyLib";
+
+MyLib.doSomething();
+MyLib.doOther();
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/mylib@1.0.0": {"mylib"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/mylib@1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for case-mismatched JS import")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 2 {
+		t.Errorf("CallSiteCount = %d, want 2", ca.CallSiteCount)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false")
+	}
+}
+
+func TestAnalyzer_JavaCaseInsensitivePURL(t *testing.T) {
+	dir := t.TempDir()
+	// Java import paths are case-sensitive, but the PURL-derived importToPURL
+	// keys are lowercased. Lookup must be case-insensitive.
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.Google.Gson.Gson;
+
+public class Main {
+    public static void main(String[] args) {
+        Gson g = new Gson();
+        g.toJson("test");
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/com.google.code.gson/gson@2.10": {"com.google.gson"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:maven/com.google.code.gson/gson@2.10"]
+	if !ok {
+		t.Fatal("expected coupling analysis for case-mismatched Java import")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
 	}
 }
 
@@ -574,6 +701,88 @@ func TestAnalyzer_TypeScriptTypeOnlyImport(t *testing.T) {
 
 	if len(result) != 0 {
 		t.Errorf("expected no coupling for type-only import, got %d results", len(result))
+	}
+}
+
+func TestAnalyzer_JavaScriptNamedImport(t *testing.T) {
+	dir := t.TempDir()
+	// Named imports bring individual bindings into scope.
+	// "import { useState, useEffect } from 'react'" allows bare calls like useState().
+	err := os.WriteFile(filepath.Join(dir, "app.js"), []byte(`import { useState, useEffect, useCallback } from "react";
+import axios from "axios";
+
+const [count, setCount] = useState(0);
+useEffect(() => { console.log("mounted"); });
+useCallback(() => {}, []);
+
+axios.get("https://api.example.com");
+axios.post("https://api.example.com");
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/react@18.2.0": {"react"},
+		"pkg:npm/axios@1.6.0":  {"axios"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// React: 3 named import calls (useState, useEffect, useCallback)
+	reactCA, ok := result["pkg:npm/react@18.2.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for react")
+	}
+	if reactCA.ImportFileCount != 1 {
+		t.Errorf("react ImportFileCount = %d, want 1", reactCA.ImportFileCount)
+	}
+	if reactCA.CallSiteCount != 3 {
+		t.Errorf("react CallSiteCount = %d, want 3", reactCA.CallSiteCount)
+	}
+	if reactCA.APIBreadth != 3 {
+		t.Errorf("react APIBreadth = %d, want 3 (useState, useEffect, useCallback)", reactCA.APIBreadth)
+	}
+
+	// Axios: 2 member calls (axios.get, axios.post) — regression check for default imports
+	axiosCA, ok := result["pkg:npm/axios@1.6.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for axios")
+	}
+	if axiosCA.CallSiteCount != 2 {
+		t.Errorf("axios CallSiteCount = %d, want 2", axiosCA.CallSiteCount)
+	}
+}
+
+func TestAnalyzer_JavaScriptAliasedNamedImport(t *testing.T) {
+	dir := t.TempDir()
+	// Aliased named import: import { x as y } should register "y", not "x".
+	err := os.WriteFile(filepath.Join(dir, "app.js"), []byte(`import { useEffect as ue } from "react";
+
+ue(() => {});
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/react@18.2.0": {"react"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/react@18.2.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for react")
+	}
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
 	}
 }
 

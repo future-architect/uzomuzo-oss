@@ -84,7 +84,10 @@ func newJSLikeConfig(lang *sitter.Language) *langConfig {
 		`(import_statement source: (string) @import)`,
 		`(call_expression function: (identifier) @func (#eq? @func "require") arguments: (arguments (string) @import))`,
 	}, "\n")
-	callQ := `(member_expression object: (identifier) @obj property: (property_identifier) @prop)`
+	callQ := strings.Join([]string{
+		`(member_expression object: (identifier) @obj property: (property_identifier) @prop)`,
+		`(call_expression function: (identifier) @func)`,
+	}, "\n")
 
 	cfg := &langConfig{
 		language:    lang,
@@ -160,7 +163,10 @@ func NewAnalyzer() *Analyzer {
 	a.configs[langJava] = &langConfig{
 		language:    java.GetLanguage(),
 		importQuery: `(import_declaration (scoped_identifier) @import)`,
-		callQuery:   `(method_invocation object: (identifier) @obj name: (identifier) @method)`,
+		callQuery: strings.Join([]string{
+			`(method_invocation object: (identifier) @obj name: (identifier) @method)`,
+			`(method_invocation !object name: (identifier) @func)`,
+		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {
 			return importPath
@@ -397,7 +403,7 @@ func (a *Analyzer) extractImports(
 
 			// For Java: match as prefix of the full import path.
 			if lid == langJava {
-				a.handleJavaImport(value, importToPURL, aliasMap)
+				a.handleJavaImport(capture.Node, value, importToPURL, aliasMap)
 				continue
 			}
 
@@ -609,33 +615,78 @@ func (a *Analyzer) registerFromImportNames(
 	}
 }
 
-// handleJavaImport handles matching Java fully-qualified imports.
+// handleJavaImport handles matching Java fully-qualified imports, including static imports.
+// For static imports (import static org.junit.Assert.assertEquals), the method/field name
+// is registered as the alias so bare calls like assertEquals() are matched.
+// For regular imports, the class name (and its lowercase variant) are registered.
 func (a *Analyzer) handleJavaImport(
+	node *sitter.Node,
 	importPath string,
 	importToPURL map[string]string,
 	aliasMap map[string]string,
 ) {
+	// Lowercase the import path for matching — importToPURL keys are already lowercased
+	// to handle PURL case-insensitivity (see AnalyzeCoupling).
+	lowerPath := strings.ToLower(importPath)
+
 	// Pick the longest matching prefix to handle overlapping groupIds
 	// (e.g., prefer "org.apache.commons" over "org.apache").
 	bestIP := ""
 	bestPURL := ""
 	for ip, purl := range importToPURL {
-		if (importPath == ip || strings.HasPrefix(importPath, ip+".")) && len(ip) > len(bestIP) {
+		if (lowerPath == ip || strings.HasPrefix(lowerPath, ip+".")) && len(ip) > len(bestIP) {
 			bestIP = ip
 			bestPURL = purl
 		}
 	}
-	if bestIP != "" {
-		// Use the last component of the import as alias (class name).
-		parts := strings.Split(importPath, ".")
-		alias := parts[len(parts)-1]
+	if bestIP == "" {
+		return
+	}
+
+	// Check if this is a static import by looking for a "static" child
+	// in the parent import_declaration node.
+	isStatic := isJavaStaticImport(node)
+
+	parts := strings.Split(importPath, ".")
+	alias := parts[len(parts)-1]
+
+	if isStatic {
+		if alias == "*" {
+			// Wildcard static import (import static org.junit.Assert.*) — cannot
+			// track individual names. Register a sentinel so ImportFileCount is
+			// correct, but bare calls will be undercounted.
+			aliasMap[wildcardImportAlias+bestPURL] = bestPURL
+			return
+		}
+		// Static import: the last component is a method/field name (e.g., assertEquals).
+		// Register it directly so bare calls like assertEquals() are matched
+		// via the single-capture call query pattern.
 		aliasMap[alias] = bestPURL
-		// Also register lowercase for variable-style calls (e.g., Gson gson = ...; gson.toJson()).
-		lower := strings.ToLower(alias[:1]) + alias[1:]
-		if lower != alias {
-			aliasMap[lower] = bestPURL
+		return
+	}
+
+	// Regular import: last component is a class name (e.g., Gson, StringUtils).
+	aliasMap[alias] = bestPURL
+	// Also register lowercase for variable-style calls (e.g., Gson gson = ...; gson.toJson()).
+	lower := strings.ToLower(alias[:1]) + alias[1:]
+	if lower != alias {
+		aliasMap[lower] = bestPURL
+	}
+}
+
+// isJavaStaticImport checks whether a scoped_identifier node is part of a static import.
+// The AST structure is: import_declaration -> ["import", "static", scoped_identifier, ";"]
+func isJavaStaticImport(node *sitter.Node) bool {
+	parent := node.Parent()
+	if parent == nil || parent.Type() != "import_declaration" {
+		return false
+	}
+	for i := 0; i < int(parent.ChildCount()); i++ {
+		if parent.Child(i).Type() == "static" {
+			return true
 		}
 	}
+	return false
 }
 
 // handleJSImport processes a JS/TS module specifier with subpath prefix matching.
@@ -648,13 +699,16 @@ func (a *Analyzer) handleJSImport(
 	aliasMap map[string]string,
 	cfg *langConfig,
 ) {
-	purl, ok := importToPURL[importPath]
+	// Lowercase the import path for matching — importToPURL keys are already lowercased
+	// to handle PURL case-insensitivity (see AnalyzeCoupling).
+	lowerPath := strings.ToLower(importPath)
+	purl, ok := importToPURL[lowerPath]
 	if !ok {
 		// Pick the longest matching prefix to handle scoped packages
 		// (e.g., prefer "@scope/pkg/sub" over "@scope/pkg").
 		bestLen := 0
 		for ip, p := range importToPURL {
-			if strings.HasPrefix(importPath, ip+"/") && len(ip) > bestLen {
+			if strings.HasPrefix(lowerPath, ip+"/") && len(ip) > bestLen {
 				purl = p
 				ok = true
 				bestLen = len(ip)
@@ -743,9 +797,35 @@ func extractESMBindings(importStmt *sitter.Node, src []byte) []string {
 						bindings = append(bindings, n.Content(src))
 					}
 				}
+			case "named_imports":
+				// import { foo, bar as baz } from "pkg" → ["foo", "baz"]
+				// Each import_specifier has a "name" field and optional "alias" field.
+				bindings = append(bindings, extractNamedImportBindings(gc, src)...)
 			}
-			// named_imports ({ foo, bar }) don't produce a single package-level binding
-			// used as `pkg.method()`, so we skip them intentionally.
+		}
+	}
+	return bindings
+}
+
+// extractNamedImportBindings extracts binding names from a named_imports node.
+// For `import { foo, bar as baz } from "pkg"`, it returns ["foo", "baz"].
+// If an alias is present, the alias is used (that is the local binding name).
+func extractNamedImportBindings(namedImports *sitter.Node, src []byte) []string {
+	var bindings []string
+	for k := 0; k < int(namedImports.ChildCount()); k++ {
+		spec := namedImports.Child(k)
+		if spec == nil || spec.Type() != "import_specifier" {
+			continue
+		}
+		// Use alias if present (import { x as y } → "y"), otherwise name.
+		aliasNode := spec.ChildByFieldName("alias")
+		if aliasNode != nil {
+			bindings = append(bindings, aliasNode.Content(src))
+			continue
+		}
+		nameNode := spec.ChildByFieldName("name")
+		if nameNode != nil {
+			bindings = append(bindings, nameNode.Content(src))
 		}
 	}
 	return bindings
