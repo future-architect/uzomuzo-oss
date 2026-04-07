@@ -146,6 +146,16 @@ func TestBuildMavenImportPaths(t *testing.T) {
 			want: []string{"junit", "org.junit"},
 		},
 		{
+			name: "digit-starting artifactId is not Java-safe",
+			purl: "pkg:maven/com.example/3scale@1.0.0",
+			want: []string{"com.example"},
+		},
+		{
+			name: "hyphenated namespace skipped, override used",
+			purl: "pkg:maven/commons-io/commons-io@2.15.0",
+			want: []string{"org.apache.commons.io"},
+		},
+		{
 			name: "no namespace falls back to artifactId",
 			purl: "pkg:maven/somelib@1.0.0",
 			want: []string{"somelib"},

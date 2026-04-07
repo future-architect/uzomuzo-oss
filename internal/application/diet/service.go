@@ -345,7 +345,11 @@ func buildMavenImportPaths(parsed packageurl.PackageURL) []string {
 	}
 
 	// 2. groupId (namespace) — the most common convention.
-	add(parsed.Namespace)
+	// Skip when the namespace contains characters invalid in Java package names
+	// (e.g. "commons-io"), since such candidates can never match real imports.
+	if isJavaDottedPackageSafe(parsed.Namespace) {
+		add(parsed.Namespace)
+	}
 
 	// 3. groupId.artifactId — covers cases where the package mirrors the full coordinate.
 	// Skip when namespace == name (e.g. cglib/cglib → "cglib.cglib" is not a real package),
@@ -362,16 +366,36 @@ func buildMavenImportPaths(parsed packageurl.PackageURL) []string {
 	return paths
 }
 
-// isJavaPackageSafe reports whether s contains only characters valid in a Java
-// package name segment (letters, digits, underscores, and dollar signs).
-// Maven artifactIds often contain hyphens (e.g. "commons-lang3") which are not
+// isJavaPackageSafe reports whether s is a valid Java package name segment.
+// The first character must be a letter, underscore, or dollar sign; subsequent
+// characters may also include digits.  Maven artifactIds often contain hyphens
+// (e.g. "commons-lang3") or start with digits (e.g. "3scale") which are not
 // valid in Java identifiers and would never match a real import statement.
 func isJavaPackageSafe(s string) bool {
 	if s == "" {
 		return false
 	}
-	for _, r := range s {
-		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' && r != '$' {
+	for i, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_' || r == '$' {
+			continue
+		}
+		if i > 0 && r >= '0' && r <= '9' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// isJavaDottedPackageSafe reports whether s is a valid dot-separated Java
+// package prefix (e.g. "org.apache.commons").  Each segment between dots must
+// satisfy isJavaPackageSafe.
+func isJavaDottedPackageSafe(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, seg := range strings.Split(s, ".") {
+		if !isJavaPackageSafe(seg) {
 			return false
 		}
 	}
