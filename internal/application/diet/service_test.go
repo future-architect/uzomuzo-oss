@@ -2,6 +2,7 @@ package diet
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
@@ -87,13 +88,13 @@ func TestBuildImportPaths(t *testing.T) {
 	}
 	result := buildImportPaths(purls)
 
-	expectations := map[string]string{
-		"pkg:golang/github.com/stretchr/testify@v1.9.0":     "github.com/stretchr/testify",
-		"pkg:npm/%40types/node@20.0.0":                      "@types/node",
-		"pkg:pypi/flask@3.0.0":                              "flask",
-		"pkg:maven/org.apache.commons/commons-lang3@3.14.0": "org.apache.commons",
+	// Non-Maven ecosystems still return a single import path.
+	singleExpectations := map[string]string{
+		"pkg:golang/github.com/stretchr/testify@v1.9.0": "github.com/stretchr/testify",
+		"pkg:npm/%40types/node@20.0.0":                  "@types/node",
+		"pkg:pypi/flask@3.0.0":                          "flask",
 	}
-	for purl, wantImport := range expectations {
+	for purl, wantImport := range singleExpectations {
 		got, ok := result[purl]
 		if !ok {
 			t.Errorf("missing import path for %s", purl)
@@ -102,6 +103,60 @@ func TestBuildImportPaths(t *testing.T) {
 		if len(got) != 1 || got[0] != wantImport {
 			t.Errorf("import path for %s = %v, want [%s]", purl, got, wantImport)
 		}
+	}
+
+	// Maven returns multiple candidates: groupId, then groupId.artifactId.
+	mavenPURL := "pkg:maven/org.apache.commons/commons-lang3@3.14.0"
+	got := result[mavenPURL]
+	want := []string{"org.apache.commons", "org.apache.commons.commons-lang3"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("import paths for %s = %v, want %v", mavenPURL, got, want)
+	}
+}
+
+func TestBuildMavenImportPaths(t *testing.T) {
+	tests := []struct {
+		name string
+		purl string
+		want []string
+	}{
+		{
+			name: "standard groupId matches package",
+			purl: "pkg:maven/org.apache.commons/commons-lang3@3.14.0",
+			want: []string{"org.apache.commons", "org.apache.commons.commons-lang3"},
+		},
+		{
+			name: "override: cglib groupId differs from package",
+			purl: "pkg:maven/cglib/cglib@3.3.0",
+			want: []string{"net.sf.cglib", "cglib"},
+		},
+		{
+			name: "override: gson groupId differs from package",
+			purl: "pkg:maven/com.google.code.gson/gson@2.10",
+			want: []string{"com.google.gson", "com.google.code.gson", "com.google.code.gson.gson"},
+		},
+		{
+			name: "override: junit has two package prefixes",
+			purl: "pkg:maven/junit/junit@4.13.2",
+			want: []string{"junit", "org.junit"},
+		},
+		{
+			name: "no namespace falls back to artifactId",
+			purl: "pkg:maven//somelib@1.0.0",
+			want: []string{"somelib"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := buildImportPaths([]string{tt.purl})
+			got, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("missing import paths for %s", tt.purl)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("buildImportPaths(%s) = %v, want %v", tt.purl, got, tt.want)
+			}
+		})
 	}
 }
 
