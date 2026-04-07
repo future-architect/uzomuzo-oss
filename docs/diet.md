@@ -215,6 +215,62 @@ uzomuzo diet --sbom bom.json --source . --format json > diet.json
 claude "Based on this diet plan, suggest code changes to remove the top 3 dependencies: $(cat diet.json)"
 ```
 
+## Understanding "Unused" Dependencies
+
+Diet reports dependencies as "unused" when no `import` statement is found in source code. However, **not all "unused" dependencies are removable**. There are three common patterns:
+
+### 1. Dev/build dependencies included in SBOM
+
+SBOM tools may include `devDependencies`, test dependencies, and build tools alongside production dependencies. These are genuinely unused in production source code:
+
+- Linters and formatters (`eslint`, `mypy`, `black`)
+- Test frameworks (`jest`, `pytest`, `vitest`)
+- Documentation tools (`sphinx`, `mkdocs`)
+- Build tools (`webpack`, `rollup`, `conventional-changelog-cli`)
+
+**These are often the best candidates for removal from production SBOMs**, as they inflate the dependency tree without contributing to runtime. See [SBOM Tool Comparison](#sbom-tool-comparison) for how different tools handle this.
+
+### 2. Config-driven / runtime-loaded dependencies
+
+Some dependencies are used via configuration files, annotations, or runtime class loading rather than explicit `import` statements:
+
+- **Spring Boot starters** — auto-configured via `spring.factories`, not imported directly
+- **JDBC drivers** (`postgresql`, `mysql-connector-j`) — loaded by URL string
+- **Cache providers** (`caffeine`) — specified in `application.properties`
+- **Template engines** (`thymeleaf`) — resolved by Spring MVC at runtime
+
+These show 0 files / 0 calls in the coupling analysis, which is **expected behavior, not a false positive**. Diet still ranks them correctly: config-driven deps are easy to swap (low coupling) but may bring many transitive deps (high graph impact).
+
+### 3. Leftover dependencies (genuine waste)
+
+Dependencies that were once used but whose `import` was removed without cleaning up `package.json` / `go.mod` / `pom.xml`. **These are the most valuable findings** — they can be removed immediately with zero code changes.
+
+## SBOM Tool Comparison
+
+The quality of diet analysis depends heavily on what the SBOM tool includes. Different tools handle development dependencies very differently:
+
+| Tool | Dev deps included? | Scope metadata? | Notes |
+|------|-------------------|-----------------|-------|
+| **syft** | **Yes (all)** | No | Includes everything — devDependencies, test deps, build tools. No way to filter. |
+| **Trivy** | **No (default)** | No | Excludes dev deps by default. Use `--include-dev-deps` to include them. |
+| **cdxgen** | **Yes (all)** | **Yes** (`scope` field) | Includes all deps but marks them as `required`, `optional`, or `excluded`. |
+| **CycloneDX Maven Plugin** | Configurable | Yes (`scope` field) | Respects Maven scopes (compile/test/provided/runtime). |
+
+### Real-world impact (Vue.js core)
+
+| Tool | Components | Notes |
+|------|-----------|-------|
+| syft | 723 | All deps, no scope info |
+| Trivy (default) | 34 | Dev deps excluded |
+| Trivy (`--include-dev-deps`) | 684 | All deps included |
+| cdxgen | 698 | All deps, with `scope` (required: 38, optional: 645) |
+
+### Recommendations
+
+- **For accurate production dependency analysis**: Use Trivy (default mode) or configure CycloneDX Maven/Gradle plugins to exclude test scope
+- **For comprehensive diet analysis** (including dev dep cleanup): Use syft or cdxgen to capture everything, then use diet's coupling analysis to distinguish genuinely unused deps from dev tools
+- **For the most actionable results**: Run diet twice — once with production-only SBOM (Trivy default) and once with full SBOM (syft) — to see both perspectives
+
 ## Supported Languages
 
 | Language | Import Detection | Call Site Counting | Status |
