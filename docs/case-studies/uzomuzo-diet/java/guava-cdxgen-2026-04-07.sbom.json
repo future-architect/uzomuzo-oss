@@ -1,0 +1,79 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "group": "com.google.guava",
+      "name": "guava-parent",
+      "version": "HEAD",
+      "purl": "pkg:maven/com.google.guava/guava-parent@HEAD",
+      "bom-ref": "pkg:maven/com.google.guava/guava-parent@HEAD"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "group": "com.google.errorprone",
+      "name": "error_prone_annotations",
+      "version": "2.47.0",
+      "purl": "pkg:maven/com.google.errorprone/error_prone_annotations@2.47.0",
+      "bom-ref": "pkg:maven/com.google.errorprone/error_prone_annotations@2.47.0"
+    },
+    {
+      "type": "library",
+      "group": "com.google.j2objc",
+      "name": "j2objc-annotations",
+      "version": "3.1",
+      "purl": "pkg:maven/com.google.j2objc/j2objc-annotations@3.1",
+      "bom-ref": "pkg:maven/com.google.j2objc/j2objc-annotations@3.1"
+    },
+    {
+      "type": "library",
+      "group": "org.codehaus.plexus",
+      "name": "plexus-io",
+      "version": "3.6.0",
+      "purl": "pkg:maven/org.codehaus.plexus/plexus-io@3.6.0",
+      "bom-ref": "pkg:maven/org.codehaus.plexus/plexus-io@3.6.0"
+    },
+    {
+      "type": "library",
+      "group": "org.jspecify",
+      "name": "jspecify",
+      "version": "1.0.0",
+      "purl": "pkg:maven/org.jspecify/jspecify@1.0.0",
+      "bom-ref": "pkg:maven/org.jspecify/jspecify@1.0.0"
+    },
+    {
+      "type": "library",
+      "group": "org.ow2.asm",
+      "name": "asm",
+      "version": "9.9.1",
+      "purl": "pkg:maven/org.ow2.asm/asm@9.9.1",
+      "bom-ref": "pkg:maven/org.ow2.asm/asm@9.9.1"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:maven/com.google.errorprone/error_prone_annotations@2.47.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.google.j2objc/j2objc-annotations@3.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.codehaus.plexus/plexus-io@3.6.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.jspecify/jspecify@1.0.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.ow2.asm/asm@9.9.1",
+      "dependsOn": []
+    }
+  ]
+}

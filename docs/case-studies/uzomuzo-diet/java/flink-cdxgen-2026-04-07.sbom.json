@@ -1,0 +1,2611 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "components": [
+    {
+      "type": "library",
+      "group": "at.yawk.lz4",
+      "name": "lz4-java",
+      "version": "",
+      "purl": "pkg:maven/at.yawk.lz4/lz4-java",
+      "bom-ref": "pkg:maven/at.yawk.lz4/lz4-java"
+    },
+    {
+      "type": "library",
+      "group": "at.yawk.lz4",
+      "name": "lz4-java",
+      "version": "1.10.3",
+      "purl": "pkg:maven/at.yawk.lz4/lz4-java@1.10.3",
+      "bom-ref": "pkg:maven/at.yawk.lz4/lz4-java@1.10.3"
+    },
+    {
+      "type": "library",
+      "group": "com.alibaba",
+      "name": "pemja",
+      "version": "0.5.6",
+      "purl": "pkg:maven/com.alibaba/pemja@0.5.6",
+      "bom-ref": "pkg:maven/com.alibaba/pemja@0.5.6"
+    },
+    {
+      "type": "library",
+      "group": "com.aliyun.oss",
+      "name": "aliyun-sdk-oss",
+      "version": "3.17.4",
+      "purl": "pkg:maven/com.aliyun.oss/aliyun-sdk-oss@3.17.4",
+      "bom-ref": "pkg:maven/com.aliyun.oss/aliyun-sdk-oss@3.17.4"
+    },
+    {
+      "type": "library",
+      "group": "com.amazonaws",
+      "name": "aws-java-sdk-core",
+      "version": "1.12.779",
+      "purl": "pkg:maven/com.amazonaws/aws-java-sdk-core@1.12.779",
+      "bom-ref": "pkg:maven/com.amazonaws/aws-java-sdk-core@1.12.779"
+    },
+    {
+      "type": "library",
+      "group": "com.amazonaws",
+      "name": "aws-java-sdk-dynamodb",
+      "version": "1.12.779",
+      "purl": "pkg:maven/com.amazonaws/aws-java-sdk-dynamodb@1.12.779",
+      "bom-ref": "pkg:maven/com.amazonaws/aws-java-sdk-dynamodb@1.12.779"
+    },
+    {
+      "type": "library",
+      "group": "com.amazonaws",
+      "name": "aws-java-sdk-kms",
+      "version": "1.12.779",
+      "purl": "pkg:maven/com.amazonaws/aws-java-sdk-kms@1.12.779",
+      "bom-ref": "pkg:maven/com.amazonaws/aws-java-sdk-kms@1.12.779"
+    },
+    {
+      "type": "library",
+      "group": "com.amazonaws",
+      "name": "aws-java-sdk-s3",
+      "version": "1.12.779",
+      "purl": "pkg:maven/com.amazonaws/aws-java-sdk-s3@1.12.779",
+      "bom-ref": "pkg:maven/com.amazonaws/aws-java-sdk-s3@1.12.779"
+    },
+    {
+      "type": "library",
+      "group": "com.amazonaws",
+      "name": "aws-java-sdk-sts",
+      "version": "1.12.779",
+      "purl": "pkg:maven/com.amazonaws/aws-java-sdk-sts@1.12.779",
+      "bom-ref": "pkg:maven/com.amazonaws/aws-java-sdk-sts@1.12.779"
+    },
+    {
+      "type": "library",
+      "group": "com.esotericsoftware",
+      "name": "kryo",
+      "version": "",
+      "purl": "pkg:maven/com.esotericsoftware/kryo",
+      "bom-ref": "pkg:maven/com.esotericsoftware/kryo"
+    },
+    {
+      "type": "library",
+      "group": "com.esotericsoftware",
+      "name": "kryo",
+      "version": "5.6.2",
+      "purl": "pkg:maven/com.esotericsoftware/kryo@5.6.2",
+      "bom-ref": "pkg:maven/com.esotericsoftware/kryo@5.6.2"
+    },
+    {
+      "type": "library",
+      "group": "com.facebook.presto",
+      "name": "presto-hive",
+      "version": "0.272",
+      "purl": "pkg:maven/com.facebook.presto/presto-hive@0.272",
+      "bom-ref": "pkg:maven/com.facebook.presto/presto-hive@0.272"
+    },
+    {
+      "type": "library",
+      "group": "com.facebook.presto.hadoop",
+      "name": "hadoop-apache2",
+      "version": "2.7.4-9",
+      "purl": "pkg:maven/com.facebook.presto.hadoop/hadoop-apache2@2.7.4-9",
+      "bom-ref": "pkg:maven/com.facebook.presto.hadoop/hadoop-apache2@2.7.4-9"
+    },
+    {
+      "type": "library",
+      "group": "com.fasterxml.jackson",
+      "name": "jackson-bom",
+      "version": "2.20.1",
+      "purl": "pkg:maven/com.fasterxml.jackson/jackson-bom@2.20.1",
+      "bom-ref": "pkg:maven/com.fasterxml.jackson/jackson-bom@2.20.1"
+    },
+    {
+      "type": "library",
+      "group": "com.fasterxml.jackson.core",
+      "name": "jackson-annotations",
+      "version": "2.15.2",
+      "purl": "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.15.2",
+      "bom-ref": "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.15.2"
+    },
+    {
+      "type": "library",
+      "group": "com.fasterxml.jackson.core",
+      "name": "jackson-core",
+      "version": "2.15.2",
+      "purl": "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.15.2",
+      "bom-ref": "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.15.2"
+    },
+    {
+      "type": "library",
+      "group": "com.fasterxml.jackson.core",
+      "name": "jackson-databind",
+      "version": "2.15.2",
+      "purl": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.15.2",
+      "bom-ref": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.15.2"
+    },
+    {
+      "type": "library",
+      "group": "com.fasterxml.jackson.datatype",
+      "name": "jackson-datatype-jdk8",
+      "version": "2.20.1",
+      "purl": "pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jdk8@2.20.1",
+      "bom-ref": "pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jdk8@2.20.1"
+    },
+    {
+      "type": "library",
+      "group": "com.github.hazendaz.spotbugs",
+      "name": "spotbugs-maven-plugin",
+      "version": "3.0.6",
+      "purl": "pkg:maven/com.github.hazendaz.spotbugs/spotbugs-maven-plugin@3.0.6",
+      "bom-ref": "pkg:maven/com.github.hazendaz.spotbugs/spotbugs-maven-plugin@3.0.6"
+    },
+    {
+      "type": "library",
+      "group": "com.github.oshi",
+      "name": "oshi-core",
+      "version": "",
+      "purl": "pkg:maven/com.github.oshi/oshi-core",
+      "bom-ref": "pkg:maven/com.github.oshi/oshi-core"
+    },
+    {
+      "type": "library",
+      "group": "com.github.oshi",
+      "name": "oshi-core",
+      "version": "6.1.5",
+      "purl": "pkg:maven/com.github.oshi/oshi-core@6.1.5",
+      "bom-ref": "pkg:maven/com.github.oshi/oshi-core@6.1.5"
+    },
+    {
+      "type": "library",
+      "group": "com.google.cloud",
+      "name": "google-cloud-storage",
+      "version": "2.29.1",
+      "purl": "pkg:maven/com.google.cloud/google-cloud-storage@2.29.1",
+      "bom-ref": "pkg:maven/com.google.cloud/google-cloud-storage@2.29.1"
+    },
+    {
+      "type": "library",
+      "group": "com.google.cloud.bigdataoss",
+      "name": "gcs-connector",
+      "version": "hadoop3-2.2.18",
+      "purl": "pkg:maven/com.google.cloud.bigdataoss/gcs-connector@hadoop3-2.2.18",
+      "bom-ref": "pkg:maven/com.google.cloud.bigdataoss/gcs-connector@hadoop3-2.2.18"
+    },
+    {
+      "type": "library",
+      "group": "com.google.code.findbugs",
+      "name": "jsr305",
+      "version": "",
+      "purl": "pkg:maven/com.google.code.findbugs/jsr305",
+      "bom-ref": "pkg:maven/com.google.code.findbugs/jsr305"
+    },
+    {
+      "type": "library",
+      "group": "com.google.code.findbugs",
+      "name": "jsr305",
+      "version": "1.3.9",
+      "purl": "pkg:maven/com.google.code.findbugs/jsr305@1.3.9",
+      "bom-ref": "pkg:maven/com.google.code.findbugs/jsr305@1.3.9"
+    },
+    {
+      "type": "library",
+      "group": "com.google.guava",
+      "name": "guava",
+      "version": "",
+      "purl": "pkg:maven/com.google.guava/guava",
+      "bom-ref": "pkg:maven/com.google.guava/guava"
+    },
+    {
+      "type": "library",
+      "group": "com.google.guava",
+      "name": "guava",
+      "version": "30.0-jre",
+      "purl": "pkg:maven/com.google.guava/guava@30.0-jre",
+      "bom-ref": "pkg:maven/com.google.guava/guava@30.0-jre"
+    },
+    {
+      "type": "library",
+      "group": "com.google.guava",
+      "name": "guava",
+      "version": "32.0.0-jre",
+      "purl": "pkg:maven/com.google.guava/guava@32.0.0-jre",
+      "bom-ref": "pkg:maven/com.google.guava/guava@32.0.0-jre"
+    },
+    {
+      "type": "library",
+      "group": "com.google.guava",
+      "name": "guava",
+      "version": "33.4.0-jre",
+      "purl": "pkg:maven/com.google.guava/guava@33.4.0-jre",
+      "bom-ref": "pkg:maven/com.google.guava/guava@33.4.0-jre"
+    },
+    {
+      "type": "library",
+      "group": "com.google.protobuf",
+      "name": "protobuf-java",
+      "version": "",
+      "purl": "pkg:maven/com.google.protobuf/protobuf-java",
+      "bom-ref": "pkg:maven/com.google.protobuf/protobuf-java"
+    },
+    {
+      "type": "library",
+      "group": "com.google.protobuf",
+      "name": "protobuf-java",
+      "version": "4.32.1",
+      "purl": "pkg:maven/com.google.protobuf/protobuf-java@4.32.1",
+      "bom-ref": "pkg:maven/com.google.protobuf/protobuf-java@4.32.1"
+    },
+    {
+      "type": "library",
+      "group": "com.ibm.icu",
+      "name": "icu4j",
+      "version": "67.1",
+      "purl": "pkg:maven/com.ibm.icu/icu4j@67.1",
+      "bom-ref": "pkg:maven/com.ibm.icu/icu4j@67.1"
+    },
+    {
+      "type": "library",
+      "group": "com.jayway.jsonpath",
+      "name": "json-path",
+      "version": "2.9.0",
+      "purl": "pkg:maven/com.jayway.jsonpath/json-path@2.9.0",
+      "bom-ref": "pkg:maven/com.jayway.jsonpath/json-path@2.9.0"
+    },
+    {
+      "type": "library",
+      "group": "com.knuddels",
+      "name": "jtokkit",
+      "version": "1.1.0",
+      "purl": "pkg:maven/com.knuddels/jtokkit@1.1.0",
+      "bom-ref": "pkg:maven/com.knuddels/jtokkit@1.1.0"
+    },
+    {
+      "type": "library",
+      "group": "com.lmax",
+      "name": "disruptor",
+      "version": "3.4.2",
+      "purl": "pkg:maven/com.lmax/disruptor@3.4.2",
+      "bom-ref": "pkg:maven/com.lmax/disruptor@3.4.2"
+    },
+    {
+      "type": "library",
+      "group": "com.nimbusds",
+      "name": "nimbus-jose-jwt",
+      "version": "4.41.1",
+      "purl": "pkg:maven/com.nimbusds/nimbus-jose-jwt@4.41.1",
+      "bom-ref": "pkg:maven/com.nimbusds/nimbus-jose-jwt@4.41.1"
+    },
+    {
+      "type": "library",
+      "group": "com.openai",
+      "name": "openai-java",
+      "version": "1.6.1",
+      "purl": "pkg:maven/com.openai/openai-java@1.6.1",
+      "bom-ref": "pkg:maven/com.openai/openai-java@1.6.1"
+    },
+    {
+      "type": "library",
+      "group": "com.puppycrawl.tools",
+      "name": "checkstyle",
+      "version": "10.18.2",
+      "purl": "pkg:maven/com.puppycrawl.tools/checkstyle@10.18.2",
+      "bom-ref": "pkg:maven/com.puppycrawl.tools/checkstyle@10.18.2"
+    },
+    {
+      "type": "library",
+      "group": "com.squareup.okhttp3",
+      "name": "logging-interceptor",
+      "version": "4.12.0",
+      "purl": "pkg:maven/com.squareup.okhttp3/logging-interceptor@4.12.0",
+      "bom-ref": "pkg:maven/com.squareup.okhttp3/logging-interceptor@4.12.0"
+    },
+    {
+      "type": "library",
+      "group": "com.squareup.okhttp3",
+      "name": "okhttp",
+      "version": "",
+      "purl": "pkg:maven/com.squareup.okhttp3/okhttp",
+      "bom-ref": "pkg:maven/com.squareup.okhttp3/okhttp"
+    },
+    {
+      "type": "library",
+      "group": "com.squareup.okhttp3",
+      "name": "okhttp",
+      "version": "4.12.0",
+      "purl": "pkg:maven/com.squareup.okhttp3/okhttp@4.12.0",
+      "bom-ref": "pkg:maven/com.squareup.okhttp3/okhttp@4.12.0"
+    },
+    {
+      "type": "library",
+      "group": "com.squareup.okio",
+      "name": "okio",
+      "version": "1.17.2",
+      "purl": "pkg:maven/com.squareup.okio/okio@1.17.2",
+      "bom-ref": "pkg:maven/com.squareup.okio/okio@1.17.2"
+    },
+    {
+      "type": "library",
+      "group": "com.tngtech.archunit",
+      "name": "archunit",
+      "version": "",
+      "purl": "pkg:maven/com.tngtech.archunit/archunit",
+      "bom-ref": "pkg:maven/com.tngtech.archunit/archunit"
+    },
+    {
+      "type": "library",
+      "group": "com.tngtech.archunit",
+      "name": "archunit-junit5",
+      "version": "",
+      "purl": "pkg:maven/com.tngtech.archunit/archunit-junit5",
+      "bom-ref": "pkg:maven/com.tngtech.archunit/archunit-junit5"
+    },
+    {
+      "type": "library",
+      "group": "com.typesafe",
+      "name": "config",
+      "version": "1.4.2",
+      "purl": "pkg:maven/com.typesafe/config@1.4.2",
+      "bom-ref": "pkg:maven/com.typesafe/config@1.4.2"
+    },
+    {
+      "type": "library",
+      "group": "com.ververica",
+      "name": "forstjni",
+      "version": "0.1.8",
+      "purl": "pkg:maven/com.ververica/forstjni@0.1.8",
+      "bom-ref": "pkg:maven/com.ververica/forstjni@0.1.8"
+    },
+    {
+      "type": "library",
+      "group": "com.ververica",
+      "name": "frocksdbjni",
+      "version": "8.10.0-ververica-1.0",
+      "purl": "pkg:maven/com.ververica/frocksdbjni@8.10.0-ververica-1.0",
+      "bom-ref": "pkg:maven/com.ververica/frocksdbjni@8.10.0-ververica-1.0"
+    },
+    {
+      "type": "library",
+      "group": "commons-beanutils",
+      "name": "commons-beanutils",
+      "version": "1.9.4",
+      "purl": "pkg:maven/commons-beanutils/commons-beanutils@1.9.4",
+      "bom-ref": "pkg:maven/commons-beanutils/commons-beanutils@1.9.4"
+    },
+    {
+      "type": "library",
+      "group": "commons-cli",
+      "name": "commons-cli",
+      "version": "",
+      "purl": "pkg:maven/commons-cli/commons-cli",
+      "bom-ref": "pkg:maven/commons-cli/commons-cli"
+    },
+    {
+      "type": "library",
+      "group": "commons-cli",
+      "name": "commons-cli",
+      "version": "1.5.0",
+      "purl": "pkg:maven/commons-cli/commons-cli@1.5.0",
+      "bom-ref": "pkg:maven/commons-cli/commons-cli@1.5.0"
+    },
+    {
+      "type": "library",
+      "group": "commons-codec",
+      "name": "commons-codec",
+      "version": "1.15",
+      "purl": "pkg:maven/commons-codec/commons-codec@1.15",
+      "bom-ref": "pkg:maven/commons-codec/commons-codec@1.15"
+    },
+    {
+      "type": "library",
+      "group": "commons-collections",
+      "name": "commons-collections",
+      "version": "",
+      "purl": "pkg:maven/commons-collections/commons-collections",
+      "bom-ref": "pkg:maven/commons-collections/commons-collections"
+    },
+    {
+      "type": "library",
+      "group": "commons-collections",
+      "name": "commons-collections",
+      "version": "3.2.2",
+      "purl": "pkg:maven/commons-collections/commons-collections@3.2.2",
+      "bom-ref": "pkg:maven/commons-collections/commons-collections@3.2.2"
+    },
+    {
+      "type": "library",
+      "group": "commons-configuration",
+      "name": "commons-configuration",
+      "version": "1.7",
+      "purl": "pkg:maven/commons-configuration/commons-configuration@1.7",
+      "bom-ref": "pkg:maven/commons-configuration/commons-configuration@1.7"
+    },
+    {
+      "type": "library",
+      "group": "commons-io",
+      "name": "commons-io",
+      "version": "",
+      "purl": "pkg:maven/commons-io/commons-io",
+      "bom-ref": "pkg:maven/commons-io/commons-io"
+    },
+    {
+      "type": "library",
+      "group": "commons-io",
+      "name": "commons-io",
+      "version": "2.15.1",
+      "purl": "pkg:maven/commons-io/commons-io@2.15.1",
+      "bom-ref": "pkg:maven/commons-io/commons-io@2.15.1"
+    },
+    {
+      "type": "library",
+      "group": "commons-logging",
+      "name": "commons-logging",
+      "version": "1.1.3",
+      "purl": "pkg:maven/commons-logging/commons-logging@1.1.3",
+      "bom-ref": "pkg:maven/commons-logging/commons-logging@1.1.3"
+    },
+    {
+      "type": "library",
+      "group": "io.airlift",
+      "name": "aircompressor",
+      "version": "0.27",
+      "purl": "pkg:maven/io.airlift/aircompressor@0.27",
+      "bom-ref": "pkg:maven/io.airlift/aircompressor@0.27"
+    },
+    {
+      "type": "library",
+      "group": "io.airlift.tpch",
+      "name": "tpch",
+      "version": "0.10",
+      "purl": "pkg:maven/io.airlift.tpch/tpch@0.10",
+      "bom-ref": "pkg:maven/io.airlift.tpch/tpch@0.10"
+    },
+    {
+      "type": "library",
+      "group": "io.confluent",
+      "name": "kafka-schema-registry-client",
+      "version": "7.5.3",
+      "purl": "pkg:maven/io.confluent/kafka-schema-registry-client@7.5.3",
+      "bom-ref": "pkg:maven/io.confluent/kafka-schema-registry-client@7.5.3"
+    },
+    {
+      "type": "library",
+      "group": "io.dropwizard.metrics",
+      "name": "metrics-core",
+      "version": "3.2.6",
+      "purl": "pkg:maven/io.dropwizard.metrics/metrics-core@3.2.6",
+      "bom-ref": "pkg:maven/io.dropwizard.metrics/metrics-core@3.2.6"
+    },
+    {
+      "type": "library",
+      "group": "io.dropwizard.metrics",
+      "name": "metrics-graphite",
+      "version": "3.2.6",
+      "purl": "pkg:maven/io.dropwizard.metrics/metrics-graphite@3.2.6",
+      "bom-ref": "pkg:maven/io.dropwizard.metrics/metrics-graphite@3.2.6"
+    },
+    {
+      "type": "library",
+      "group": "io.fabric8",
+      "name": "kubernetes-client",
+      "version": "7.3.1",
+      "purl": "pkg:maven/io.fabric8/kubernetes-client@7.3.1",
+      "bom-ref": "pkg:maven/io.fabric8/kubernetes-client@7.3.1"
+    },
+    {
+      "type": "library",
+      "group": "io.fabric8",
+      "name": "kubernetes-httpclient-okhttp",
+      "version": "7.3.1",
+      "purl": "pkg:maven/io.fabric8/kubernetes-httpclient-okhttp@7.3.1",
+      "bom-ref": "pkg:maven/io.fabric8/kubernetes-httpclient-okhttp@7.3.1"
+    },
+    {
+      "type": "library",
+      "group": "io.grpc",
+      "name": "grpc-bom",
+      "version": "1.59.1",
+      "purl": "pkg:maven/io.grpc/grpc-bom@1.59.1",
+      "bom-ref": "pkg:maven/io.grpc/grpc-bom@1.59.1"
+    },
+    {
+      "type": "library",
+      "group": "io.netty",
+      "name": "netty-bom",
+      "version": "4.1.100.Final",
+      "purl": "pkg:maven/io.netty/netty-bom@4.1.100.Final",
+      "bom-ref": "pkg:maven/io.netty/netty-bom@4.1.100.Final"
+    },
+    {
+      "type": "library",
+      "group": "io.netty",
+      "name": "netty-bom",
+      "version": "4.2.6.Final",
+      "purl": "pkg:maven/io.netty/netty-bom@4.2.6.Final",
+      "bom-ref": "pkg:maven/io.netty/netty-bom@4.2.6.Final"
+    },
+    {
+      "type": "library",
+      "group": "io.netty",
+      "name": "netty-handler",
+      "version": "",
+      "purl": "pkg:maven/io.netty/netty-handler",
+      "bom-ref": "pkg:maven/io.netty/netty-handler"
+    },
+    {
+      "type": "library",
+      "group": "io.netty",
+      "name": "netty-transport",
+      "version": "",
+      "purl": "pkg:maven/io.netty/netty-transport",
+      "bom-ref": "pkg:maven/io.netty/netty-transport"
+    },
+    {
+      "type": "library",
+      "group": "io.opentelemetry",
+      "name": "opentelemetry-exporter-logging",
+      "version": "1.30.1",
+      "purl": "pkg:maven/io.opentelemetry/opentelemetry-exporter-logging@1.30.1",
+      "bom-ref": "pkg:maven/io.opentelemetry/opentelemetry-exporter-logging@1.30.1"
+    },
+    {
+      "type": "library",
+      "group": "io.opentelemetry",
+      "name": "opentelemetry-exporter-otlp",
+      "version": "1.30.1",
+      "purl": "pkg:maven/io.opentelemetry/opentelemetry-exporter-otlp@1.30.1",
+      "bom-ref": "pkg:maven/io.opentelemetry/opentelemetry-exporter-otlp@1.30.1"
+    },
+    {
+      "type": "library",
+      "group": "io.opentelemetry",
+      "name": "opentelemetry-sdk",
+      "version": "1.30.1",
+      "purl": "pkg:maven/io.opentelemetry/opentelemetry-sdk@1.30.1",
+      "bom-ref": "pkg:maven/io.opentelemetry/opentelemetry-sdk@1.30.1"
+    },
+    {
+      "type": "library",
+      "group": "io.opentelemetry",
+      "name": "opentelemetry-sdk-common",
+      "version": "1.30.1",
+      "purl": "pkg:maven/io.opentelemetry/opentelemetry-sdk-common@1.30.1",
+      "bom-ref": "pkg:maven/io.opentelemetry/opentelemetry-sdk-common@1.30.1"
+    },
+    {
+      "type": "library",
+      "group": "io.opentelemetry",
+      "name": "opentelemetry-semconv",
+      "version": "1.30.1-alpha",
+      "purl": "pkg:maven/io.opentelemetry/opentelemetry-semconv@1.30.1-alpha",
+      "bom-ref": "pkg:maven/io.opentelemetry/opentelemetry-semconv@1.30.1-alpha"
+    },
+    {
+      "type": "library",
+      "group": "io.prometheus",
+      "name": "simpleclient",
+      "version": "0.8.1",
+      "purl": "pkg:maven/io.prometheus/simpleclient@0.8.1",
+      "bom-ref": "pkg:maven/io.prometheus/simpleclient@0.8.1"
+    },
+    {
+      "type": "library",
+      "group": "io.prometheus",
+      "name": "simpleclient_httpserver",
+      "version": "0.8.1",
+      "purl": "pkg:maven/io.prometheus/simpleclient_httpserver@0.8.1",
+      "bom-ref": "pkg:maven/io.prometheus/simpleclient_httpserver@0.8.1"
+    },
+    {
+      "type": "library",
+      "group": "io.prometheus",
+      "name": "simpleclient_pushgateway",
+      "version": "0.8.1",
+      "purl": "pkg:maven/io.prometheus/simpleclient_pushgateway@0.8.1",
+      "bom-ref": "pkg:maven/io.prometheus/simpleclient_pushgateway@0.8.1"
+    },
+    {
+      "type": "library",
+      "group": "it.unimi.dsi",
+      "name": "fastutil",
+      "version": "8.2.1",
+      "purl": "pkg:maven/it.unimi.dsi/fastutil@8.2.1",
+      "bom-ref": "pkg:maven/it.unimi.dsi/fastutil@8.2.1"
+    },
+    {
+      "type": "library",
+      "group": "jakarta.activation",
+      "name": "jakarta.activation-api",
+      "version": "1.2.1",
+      "purl": "pkg:maven/jakarta.activation/jakarta.activation-api@1.2.1",
+      "bom-ref": "pkg:maven/jakarta.activation/jakarta.activation-api@1.2.1"
+    },
+    {
+      "type": "library",
+      "group": "jakarta.xml.bind",
+      "name": "jakarta.xml.bind-api",
+      "version": "2.3.2",
+      "purl": "pkg:maven/jakarta.xml.bind/jakarta.xml.bind-api@2.3.2",
+      "bom-ref": "pkg:maven/jakarta.xml.bind/jakarta.xml.bind-api@2.3.2"
+    },
+    {
+      "type": "library",
+      "group": "javax.activation",
+      "name": "javax.activation-api",
+      "version": "1.2.0",
+      "purl": "pkg:maven/javax.activation/javax.activation-api@1.2.0",
+      "bom-ref": "pkg:maven/javax.activation/javax.activation-api@1.2.0"
+    },
+    {
+      "type": "library",
+      "group": "javax.xml.bind",
+      "name": "jaxb-api",
+      "version": "",
+      "purl": "pkg:maven/javax.xml.bind/jaxb-api",
+      "bom-ref": "pkg:maven/javax.xml.bind/jaxb-api"
+    },
+    {
+      "type": "library",
+      "group": "javax.xml.bind",
+      "name": "jaxb-api",
+      "version": "2.3.1",
+      "purl": "pkg:maven/javax.xml.bind/jaxb-api@2.3.1",
+      "bom-ref": "pkg:maven/javax.xml.bind/jaxb-api@2.3.1"
+    },
+    {
+      "type": "library",
+      "group": "joda-time",
+      "name": "joda-time",
+      "version": "",
+      "purl": "pkg:maven/joda-time/joda-time",
+      "bom-ref": "pkg:maven/joda-time/joda-time"
+    },
+    {
+      "type": "library",
+      "group": "joda-time",
+      "name": "joda-time",
+      "version": "2.5",
+      "purl": "pkg:maven/joda-time/joda-time@2.5",
+      "bom-ref": "pkg:maven/joda-time/joda-time@2.5"
+    },
+    {
+      "type": "library",
+      "group": "junit",
+      "name": "junit",
+      "version": "4.13.2",
+      "purl": "pkg:maven/junit/junit@4.13.2",
+      "bom-ref": "pkg:maven/junit/junit@4.13.2"
+    },
+    {
+      "type": "library",
+      "group": "net.bytebuddy",
+      "name": "byte-buddy",
+      "version": "1.17.6",
+      "purl": "pkg:maven/net.bytebuddy/byte-buddy@1.17.6",
+      "bom-ref": "pkg:maven/net.bytebuddy/byte-buddy@1.17.6"
+    },
+    {
+      "type": "library",
+      "group": "net.bytebuddy",
+      "name": "byte-buddy-agent",
+      "version": "1.17.6",
+      "purl": "pkg:maven/net.bytebuddy/byte-buddy-agent@1.17.6",
+      "bom-ref": "pkg:maven/net.bytebuddy/byte-buddy-agent@1.17.6"
+    },
+    {
+      "type": "library",
+      "group": "net.java.dev.jna",
+      "name": "jna",
+      "version": "5.12.1",
+      "purl": "pkg:maven/net.java.dev.jna/jna@5.12.1",
+      "bom-ref": "pkg:maven/net.java.dev.jna/jna@5.12.1"
+    },
+    {
+      "type": "library",
+      "group": "net.razorvine",
+      "name": "pyrolite",
+      "version": "4.13",
+      "purl": "pkg:maven/net.razorvine/pyrolite@4.13",
+      "bom-ref": "pkg:maven/net.razorvine/pyrolite@4.13"
+    },
+    {
+      "type": "library",
+      "group": "net.sf.py4j",
+      "name": "py4j",
+      "version": "",
+      "purl": "pkg:maven/net.sf.py4j/py4j",
+      "bom-ref": "pkg:maven/net.sf.py4j/py4j"
+    },
+    {
+      "type": "library",
+      "group": "net.sf.py4j",
+      "name": "py4j",
+      "version": "0.10.9.7",
+      "purl": "pkg:maven/net.sf.py4j/py4j@0.10.9.7",
+      "bom-ref": "pkg:maven/net.sf.py4j/py4j@0.10.9.7"
+    },
+    {
+      "type": "library",
+      "group": "org.antlr",
+      "name": "antlr4-runtime",
+      "version": "4.7",
+      "purl": "pkg:maven/org.antlr/antlr4-runtime@4.7",
+      "bom-ref": "pkg:maven/org.antlr/antlr4-runtime@4.7"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.arrow",
+      "name": "arrow-memory-netty",
+      "version": "13.0.0",
+      "purl": "pkg:maven/org.apache.arrow/arrow-memory-netty@13.0.0",
+      "bom-ref": "pkg:maven/org.apache.arrow/arrow-memory-netty@13.0.0"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.arrow",
+      "name": "arrow-vector",
+      "version": "13.0.0",
+      "purl": "pkg:maven/org.apache.arrow/arrow-vector@13.0.0",
+      "bom-ref": "pkg:maven/org.apache.arrow/arrow-vector@13.0.0"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.avro",
+      "name": "avro",
+      "version": "",
+      "purl": "pkg:maven/org.apache.avro/avro",
+      "bom-ref": "pkg:maven/org.apache.avro/avro"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.avro",
+      "name": "avro",
+      "version": "1.11.4",
+      "purl": "pkg:maven/org.apache.avro/avro@1.11.4",
+      "bom-ref": "pkg:maven/org.apache.avro/avro@1.11.4"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.beam",
+      "name": "beam-runners-core-java",
+      "version": "",
+      "purl": "pkg:maven/org.apache.beam/beam-runners-core-java",
+      "bom-ref": "pkg:maven/org.apache.beam/beam-runners-core-java"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.beam",
+      "name": "beam-runners-core-java",
+      "version": "2.54.0",
+      "purl": "pkg:maven/org.apache.beam/beam-runners-core-java@2.54.0",
+      "bom-ref": "pkg:maven/org.apache.beam/beam-runners-core-java@2.54.0"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.beam",
+      "name": "beam-runners-java-fn-execution",
+      "version": "",
+      "purl": "pkg:maven/org.apache.beam/beam-runners-java-fn-execution",
+      "bom-ref": "pkg:maven/org.apache.beam/beam-runners-java-fn-execution"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.beam",
+      "name": "beam-runners-java-fn-execution",
+      "version": "2.54.0",
+      "purl": "pkg:maven/org.apache.beam/beam-runners-java-fn-execution@2.54.0",
+      "bom-ref": "pkg:maven/org.apache.beam/beam-runners-java-fn-execution@2.54.0"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.calcite",
+      "name": "calcite-core",
+      "version": "1.36.0",
+      "purl": "pkg:maven/org.apache.calcite/calcite-core@1.36.0",
+      "bom-ref": "pkg:maven/org.apache.calcite/calcite-core@1.36.0"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.commons",
+      "name": "commons-compress",
+      "version": "",
+      "purl": "pkg:maven/org.apache.commons/commons-compress",
+      "bom-ref": "pkg:maven/org.apache.commons/commons-compress"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.commons",
+      "name": "commons-compress",
+      "version": "1.26.0",
+      "purl": "pkg:maven/org.apache.commons/commons-compress@1.26.0",
+      "bom-ref": "pkg:maven/org.apache.commons/commons-compress@1.26.0"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.commons",
+      "name": "commons-lang3",
+      "version": "",
+      "purl": "pkg:maven/org.apache.commons/commons-lang3",
+      "bom-ref": "pkg:maven/org.apache.commons/commons-lang3"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.commons",
+      "name": "commons-lang3",
+      "version": "3.18.0",
+      "purl": "pkg:maven/org.apache.commons/commons-lang3@3.18.0",
+      "bom-ref": "pkg:maven/org.apache.commons/commons-lang3@3.18.0"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.commons",
+      "name": "commons-math3",
+      "version": "3.6.1",
+      "purl": "pkg:maven/org.apache.commons/commons-math3@3.6.1",
+      "bom-ref": "pkg:maven/org.apache.commons/commons-math3@3.6.1"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.commons",
+      "name": "commons-text",
+      "version": "",
+      "purl": "pkg:maven/org.apache.commons/commons-text",
+      "bom-ref": "pkg:maven/org.apache.commons/commons-text"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.commons",
+      "name": "commons-text",
+      "version": "1.10.0",
+      "purl": "pkg:maven/org.apache.commons/commons-text@1.10.0",
+      "bom-ref": "pkg:maven/org.apache.commons/commons-text@1.10.0"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.curator",
+      "name": "curator-test",
+      "version": "5.4.0",
+      "purl": "pkg:maven/org.apache.curator/curator-test@5.4.0",
+      "bom-ref": "pkg:maven/org.apache.curator/curator-test@5.4.0"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-aliyun",
+      "version": "3.3.4",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-aliyun@3.3.4",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-aliyun@3.3.4"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-aws",
+      "version": "3.3.4",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-aws@3.3.4",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-aws@3.3.4"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-azure",
+      "version": "3.3.4",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-azure@3.3.4",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-azure@3.3.4"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-common",
+      "version": "",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-common",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-common"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-common",
+      "version": "2.10.2",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-common@2.10.2",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-common@2.10.2"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-common",
+      "version": "3.3.4",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-common@3.3.4",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-common@3.3.4"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-hdfs",
+      "version": "",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-hdfs",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-hdfs"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-hdfs",
+      "version": "2.10.2",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-hdfs@2.10.2",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-hdfs@2.10.2"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-hdfs",
+      "version": "3.3.4",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-hdfs@3.3.4",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-hdfs@3.3.4"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-mapreduce-client-core",
+      "version": "",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-mapreduce-client-core",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-mapreduce-client-core"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-mapreduce-client-core",
+      "version": "2.10.2",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-mapreduce-client-core@2.10.2",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-mapreduce-client-core@2.10.2"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-minikdc",
+      "version": "3.2.4",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-minikdc@3.2.4",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-minikdc@3.2.4"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-yarn-client",
+      "version": "",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-yarn-client",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-yarn-client"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-yarn-client",
+      "version": "2.10.2",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-yarn-client@2.10.2",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-yarn-client@2.10.2"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-yarn-common",
+      "version": "",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-yarn-common",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-yarn-common"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.hadoop",
+      "name": "hadoop-yarn-common",
+      "version": "2.10.2",
+      "purl": "pkg:maven/org.apache.hadoop/hadoop-yarn-common@2.10.2",
+      "bom-ref": "pkg:maven/org.apache.hadoop/hadoop-yarn-common@2.10.2"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.httpcomponents",
+      "name": "httpclient",
+      "version": "4.5.13",
+      "purl": "pkg:maven/org.apache.httpcomponents/httpclient@4.5.13",
+      "bom-ref": "pkg:maven/org.apache.httpcomponents/httpclient@4.5.13"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.httpcomponents",
+      "name": "httpcore",
+      "version": "4.4.14",
+      "purl": "pkg:maven/org.apache.httpcomponents/httpcore@4.4.14",
+      "bom-ref": "pkg:maven/org.apache.httpcomponents/httpcore@4.4.14"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.kafka",
+      "name": "kafka-clients",
+      "version": "2.2.2",
+      "purl": "pkg:maven/org.apache.kafka/kafka-clients@2.2.2",
+      "bom-ref": "pkg:maven/org.apache.kafka/kafka-clients@2.2.2"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.logging.log4j",
+      "name": "log4j-1.2-api",
+      "version": "",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-1.2-api",
+      "bom-ref": "pkg:maven/org.apache.logging.log4j/log4j-1.2-api"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.logging.log4j",
+      "name": "log4j-1.2-api",
+      "version": "2.25.3",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-1.2-api@2.25.3",
+      "bom-ref": "pkg:maven/org.apache.logging.log4j/log4j-1.2-api@2.25.3"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.logging.log4j",
+      "name": "log4j-api",
+      "version": "",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-api",
+      "bom-ref": "pkg:maven/org.apache.logging.log4j/log4j-api"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.logging.log4j",
+      "name": "log4j-api",
+      "version": "2.25.3",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-api@2.25.3",
+      "bom-ref": "pkg:maven/org.apache.logging.log4j/log4j-api@2.25.3"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.logging.log4j",
+      "name": "log4j-core",
+      "version": "",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-core",
+      "bom-ref": "pkg:maven/org.apache.logging.log4j/log4j-core"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.logging.log4j",
+      "name": "log4j-core",
+      "version": "2.25.3",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-core@2.25.3",
+      "bom-ref": "pkg:maven/org.apache.logging.log4j/log4j-core@2.25.3"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.logging.log4j",
+      "name": "log4j-layout-template-json",
+      "version": "",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-layout-template-json",
+      "bom-ref": "pkg:maven/org.apache.logging.log4j/log4j-layout-template-json"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.logging.log4j",
+      "name": "log4j-layout-template-json",
+      "version": "2.25.3",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-layout-template-json@2.25.3",
+      "bom-ref": "pkg:maven/org.apache.logging.log4j/log4j-layout-template-json@2.25.3"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.logging.log4j",
+      "name": "log4j-slf4j-impl",
+      "version": "",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-slf4j-impl",
+      "bom-ref": "pkg:maven/org.apache.logging.log4j/log4j-slf4j-impl"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.logging.log4j",
+      "name": "log4j-slf4j-impl",
+      "version": "2.25.3",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-slf4j-impl@2.25.3",
+      "bom-ref": "pkg:maven/org.apache.logging.log4j/log4j-slf4j-impl@2.25.3"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.orc",
+      "name": "orc-core",
+      "version": "1.5.6",
+      "purl": "pkg:maven/org.apache.orc/orc-core@1.5.6",
+      "bom-ref": "pkg:maven/org.apache.orc/orc-core@1.5.6"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.parquet",
+      "name": "parquet-avro",
+      "version": "1.15.2",
+      "purl": "pkg:maven/org.apache.parquet/parquet-avro@1.15.2",
+      "bom-ref": "pkg:maven/org.apache.parquet/parquet-avro@1.15.2"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.parquet",
+      "name": "parquet-hadoop",
+      "version": "1.15.2",
+      "purl": "pkg:maven/org.apache.parquet/parquet-hadoop@1.15.2",
+      "bom-ref": "pkg:maven/org.apache.parquet/parquet-hadoop@1.15.2"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.parquet",
+      "name": "parquet-protobuf",
+      "version": "1.15.2",
+      "purl": "pkg:maven/org.apache.parquet/parquet-protobuf@1.15.2",
+      "bom-ref": "pkg:maven/org.apache.parquet/parquet-protobuf@1.15.2"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.pekko",
+      "name": "pekko-actor_2.12",
+      "version": "1.4.0",
+      "purl": "pkg:maven/org.apache.pekko/pekko-actor_2.12@1.4.0",
+      "bom-ref": "pkg:maven/org.apache.pekko/pekko-actor_2.12@1.4.0"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.pekko",
+      "name": "pekko-remote_2.12",
+      "version": "1.4.0",
+      "purl": "pkg:maven/org.apache.pekko/pekko-remote_2.12@1.4.0",
+      "bom-ref": "pkg:maven/org.apache.pekko/pekko-remote_2.12@1.4.0"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.pekko",
+      "name": "pekko-slf4j_2.12",
+      "version": "1.4.0",
+      "purl": "pkg:maven/org.apache.pekko/pekko-slf4j_2.12@1.4.0",
+      "bom-ref": "pkg:maven/org.apache.pekko/pekko-slf4j_2.12@1.4.0"
+    },
+    {
+      "type": "library",
+      "group": "org.apache.zookeeper",
+      "name": "zookeeper",
+      "version": "3.7.2",
+      "purl": "pkg:maven/org.apache.zookeeper/zookeeper@3.7.2",
+      "bom-ref": "pkg:maven/org.apache.zookeeper/zookeeper@3.7.2"
+    },
+    {
+      "type": "library",
+      "group": "org.assertj",
+      "name": "assertj-core",
+      "version": "",
+      "purl": "pkg:maven/org.assertj/assertj-core",
+      "bom-ref": "pkg:maven/org.assertj/assertj-core"
+    },
+    {
+      "type": "library",
+      "group": "org.checkerframework",
+      "name": "checker-qual",
+      "version": "3.12.0",
+      "purl": "pkg:maven/org.checkerframework/checker-qual@3.12.0",
+      "bom-ref": "pkg:maven/org.checkerframework/checker-qual@3.12.0"
+    },
+    {
+      "type": "library",
+      "group": "org.codehaus.jackson",
+      "name": "jackson-mapper-asl",
+      "version": "",
+      "purl": "pkg:maven/org.codehaus.jackson/jackson-mapper-asl",
+      "bom-ref": "pkg:maven/org.codehaus.jackson/jackson-mapper-asl"
+    },
+    {
+      "type": "library",
+      "group": "org.codehaus.jackson",
+      "name": "jackson-mapper-asl",
+      "version": "1.9.14.jdk17-redhat-00001",
+      "purl": "pkg:maven/org.codehaus.jackson/jackson-mapper-asl@1.9.14.jdk17-redhat-00001",
+      "bom-ref": "pkg:maven/org.codehaus.jackson/jackson-mapper-asl@1.9.14.jdk17-redhat-00001"
+    },
+    {
+      "type": "library",
+      "group": "org.codehaus.janino",
+      "name": "commons-compiler",
+      "version": "",
+      "purl": "pkg:maven/org.codehaus.janino/commons-compiler",
+      "bom-ref": "pkg:maven/org.codehaus.janino/commons-compiler"
+    },
+    {
+      "type": "library",
+      "group": "org.codehaus.janino",
+      "name": "commons-compiler",
+      "version": "3.1.10",
+      "purl": "pkg:maven/org.codehaus.janino/commons-compiler@3.1.10",
+      "bom-ref": "pkg:maven/org.codehaus.janino/commons-compiler@3.1.10"
+    },
+    {
+      "type": "library",
+      "group": "org.codehaus.janino",
+      "name": "janino",
+      "version": "",
+      "purl": "pkg:maven/org.codehaus.janino/janino",
+      "bom-ref": "pkg:maven/org.codehaus.janino/janino"
+    },
+    {
+      "type": "library",
+      "group": "org.codehaus.janino",
+      "name": "janino",
+      "version": "3.1.10",
+      "purl": "pkg:maven/org.codehaus.janino/janino@3.1.10",
+      "bom-ref": "pkg:maven/org.codehaus.janino/janino@3.1.10"
+    },
+    {
+      "type": "library",
+      "group": "org.conscrypt",
+      "name": "conscrypt-openjdk-uber",
+      "version": "2.5.1",
+      "purl": "pkg:maven/org.conscrypt/conscrypt-openjdk-uber@2.5.1",
+      "bom-ref": "pkg:maven/org.conscrypt/conscrypt-openjdk-uber@2.5.1"
+    },
+    {
+      "type": "library",
+      "group": "org.eclipse.jetty",
+      "name": "jetty-util-ajax",
+      "version": "9.3.24.v20180605",
+      "purl": "pkg:maven/org.eclipse.jetty/jetty-util-ajax@9.3.24.v20180605",
+      "bom-ref": "pkg:maven/org.eclipse.jetty/jetty-util-ajax@9.3.24.v20180605"
+    },
+    {
+      "type": "library",
+      "group": "org.hamcrest",
+      "name": "hamcrest-core",
+      "version": "1.3",
+      "purl": "pkg:maven/org.hamcrest/hamcrest-core@1.3",
+      "bom-ref": "pkg:maven/org.hamcrest/hamcrest-core@1.3"
+    },
+    {
+      "type": "library",
+      "group": "org.immutables",
+      "name": "value",
+      "version": "2.11.3",
+      "purl": "pkg:maven/org.immutables/value@2.11.3",
+      "bom-ref": "pkg:maven/org.immutables/value@2.11.3"
+    },
+    {
+      "type": "library",
+      "group": "org.immutables",
+      "name": "value-annotations",
+      "version": "2.11.3",
+      "purl": "pkg:maven/org.immutables/value-annotations@2.11.3",
+      "bom-ref": "pkg:maven/org.immutables/value-annotations@2.11.3"
+    },
+    {
+      "type": "library",
+      "group": "org.influxdb",
+      "name": "influxdb-java",
+      "version": "2.17",
+      "purl": "pkg:maven/org.influxdb/influxdb-java@2.17",
+      "bom-ref": "pkg:maven/org.influxdb/influxdb-java@2.17"
+    },
+    {
+      "type": "library",
+      "group": "org.javassist",
+      "name": "javassist",
+      "version": "",
+      "purl": "pkg:maven/org.javassist/javassist",
+      "bom-ref": "pkg:maven/org.javassist/javassist"
+    },
+    {
+      "type": "library",
+      "group": "org.javassist",
+      "name": "javassist",
+      "version": "3.24.0-GA",
+      "purl": "pkg:maven/org.javassist/javassist@3.24.0-GA",
+      "bom-ref": "pkg:maven/org.javassist/javassist@3.24.0-GA"
+    },
+    {
+      "type": "library",
+      "group": "org.jcuda",
+      "name": "jcublas",
+      "version": "10.0.0",
+      "purl": "pkg:maven/org.jcuda/jcublas@10.0.0",
+      "bom-ref": "pkg:maven/org.jcuda/jcublas@10.0.0"
+    },
+    {
+      "type": "library",
+      "group": "org.jcuda",
+      "name": "jcuda",
+      "version": "10.0.0",
+      "purl": "pkg:maven/org.jcuda/jcuda@10.0.0",
+      "bom-ref": "pkg:maven/org.jcuda/jcuda@10.0.0"
+    },
+    {
+      "type": "library",
+      "group": "org.jetbrains.kotlin",
+      "name": "kotlin-reflect",
+      "version": "1.9.10",
+      "purl": "pkg:maven/org.jetbrains.kotlin/kotlin-reflect@1.9.10",
+      "bom-ref": "pkg:maven/org.jetbrains.kotlin/kotlin-reflect@1.9.10"
+    },
+    {
+      "type": "library",
+      "group": "org.jetbrains.kotlin",
+      "name": "kotlin-stdlib",
+      "version": "1.9.10",
+      "purl": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@1.9.10",
+      "bom-ref": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@1.9.10"
+    },
+    {
+      "type": "library",
+      "group": "org.jetbrains.kotlin",
+      "name": "kotlin-stdlib-jdk7",
+      "version": "1.9.10",
+      "purl": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk7@1.9.10",
+      "bom-ref": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk7@1.9.10"
+    },
+    {
+      "type": "library",
+      "group": "org.jetbrains.kotlin",
+      "name": "kotlin-stdlib-jdk8",
+      "version": "1.9.10",
+      "purl": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk8@1.9.10",
+      "bom-ref": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk8@1.9.10"
+    },
+    {
+      "type": "library",
+      "group": "org.jline",
+      "name": "jline-reader",
+      "version": "3.21.0",
+      "purl": "pkg:maven/org.jline/jline-reader@3.21.0",
+      "bom-ref": "pkg:maven/org.jline/jline-reader@3.21.0"
+    },
+    {
+      "type": "library",
+      "group": "org.jline",
+      "name": "jline-terminal",
+      "version": "3.21.0",
+      "purl": "pkg:maven/org.jline/jline-terminal@3.21.0",
+      "bom-ref": "pkg:maven/org.jline/jline-terminal@3.21.0"
+    },
+    {
+      "type": "library",
+      "group": "org.joda",
+      "name": "joda-convert",
+      "version": "1.7",
+      "purl": "pkg:maven/org.joda/joda-convert@1.7",
+      "bom-ref": "pkg:maven/org.joda/joda-convert@1.7"
+    },
+    {
+      "type": "library",
+      "group": "org.junit",
+      "name": "junit-bom",
+      "version": "5.11.4",
+      "purl": "pkg:maven/org.junit/junit-bom@5.11.4",
+      "bom-ref": "pkg:maven/org.junit/junit-bom@5.11.4"
+    },
+    {
+      "type": "library",
+      "group": "org.junit.jupiter",
+      "name": "junit-jupiter",
+      "version": "",
+      "purl": "pkg:maven/org.junit.jupiter/junit-jupiter",
+      "bom-ref": "pkg:maven/org.junit.jupiter/junit-jupiter"
+    },
+    {
+      "type": "library",
+      "group": "org.junit.vintage",
+      "name": "junit-vintage-engine",
+      "version": "",
+      "purl": "pkg:maven/org.junit.vintage/junit-vintage-engine",
+      "bom-ref": "pkg:maven/org.junit.vintage/junit-vintage-engine"
+    },
+    {
+      "type": "library",
+      "group": "org.objenesis",
+      "name": "objenesis",
+      "version": "3.4",
+      "purl": "pkg:maven/org.objenesis/objenesis@3.4",
+      "bom-ref": "pkg:maven/org.objenesis/objenesis@3.4"
+    },
+    {
+      "type": "library",
+      "group": "org.quartz-scheduler",
+      "name": "quartz",
+      "version": "2.3.2",
+      "purl": "pkg:maven/org.quartz-scheduler/quartz@2.3.2",
+      "bom-ref": "pkg:maven/org.quartz-scheduler/quartz@2.3.2"
+    },
+    {
+      "type": "library",
+      "group": "org.reflections",
+      "name": "reflections",
+      "version": "",
+      "purl": "pkg:maven/org.reflections/reflections",
+      "bom-ref": "pkg:maven/org.reflections/reflections"
+    },
+    {
+      "type": "library",
+      "group": "org.roaringbitmap",
+      "name": "RoaringBitmap",
+      "version": "1.3.0",
+      "purl": "pkg:maven/org.roaringbitmap/RoaringBitmap@1.3.0",
+      "bom-ref": "pkg:maven/org.roaringbitmap/RoaringBitmap@1.3.0"
+    },
+    {
+      "type": "library",
+      "group": "org.scala-lang",
+      "name": "scala-compiler",
+      "version": "",
+      "purl": "pkg:maven/org.scala-lang/scala-compiler",
+      "bom-ref": "pkg:maven/org.scala-lang/scala-compiler"
+    },
+    {
+      "type": "library",
+      "group": "org.scala-lang",
+      "name": "scala-compiler",
+      "version": "2.11.12",
+      "purl": "pkg:maven/org.scala-lang/scala-compiler@2.11.12",
+      "bom-ref": "pkg:maven/org.scala-lang/scala-compiler@2.11.12"
+    },
+    {
+      "type": "library",
+      "group": "org.scala-lang",
+      "name": "scala-library",
+      "version": "",
+      "purl": "pkg:maven/org.scala-lang/scala-library",
+      "bom-ref": "pkg:maven/org.scala-lang/scala-library"
+    },
+    {
+      "type": "library",
+      "group": "org.scala-lang",
+      "name": "scala-library",
+      "version": "2.11.12",
+      "purl": "pkg:maven/org.scala-lang/scala-library@2.11.12",
+      "bom-ref": "pkg:maven/org.scala-lang/scala-library@2.11.12"
+    },
+    {
+      "type": "library",
+      "group": "org.scala-lang",
+      "name": "scala-reflect",
+      "version": "",
+      "purl": "pkg:maven/org.scala-lang/scala-reflect",
+      "bom-ref": "pkg:maven/org.scala-lang/scala-reflect"
+    },
+    {
+      "type": "library",
+      "group": "org.scala-lang",
+      "name": "scala-reflect",
+      "version": "2.11.12",
+      "purl": "pkg:maven/org.scala-lang/scala-reflect@2.11.12",
+      "bom-ref": "pkg:maven/org.scala-lang/scala-reflect@2.11.12"
+    },
+    {
+      "type": "library",
+      "group": "org.slf4j",
+      "name": "slf4j-api",
+      "version": "",
+      "purl": "pkg:maven/org.slf4j/slf4j-api",
+      "bom-ref": "pkg:maven/org.slf4j/slf4j-api"
+    },
+    {
+      "type": "library",
+      "group": "org.slf4j",
+      "name": "slf4j-api",
+      "version": "1.7.36",
+      "purl": "pkg:maven/org.slf4j/slf4j-api@1.7.36",
+      "bom-ref": "pkg:maven/org.slf4j/slf4j-api@1.7.36"
+    },
+    {
+      "type": "library",
+      "group": "org.snakeyaml",
+      "name": "snakeyaml-engine",
+      "version": "2.6",
+      "purl": "pkg:maven/org.snakeyaml/snakeyaml-engine@2.6",
+      "bom-ref": "pkg:maven/org.snakeyaml/snakeyaml-engine@2.6"
+    },
+    {
+      "type": "library",
+      "group": "org.testcontainers",
+      "name": "testcontainers",
+      "version": "",
+      "purl": "pkg:maven/org.testcontainers/testcontainers",
+      "bom-ref": "pkg:maven/org.testcontainers/testcontainers"
+    },
+    {
+      "type": "library",
+      "group": "org.testcontainers",
+      "name": "testcontainers-bom",
+      "version": "1.21.4",
+      "purl": "pkg:maven/org.testcontainers/testcontainers-bom@1.21.4",
+      "bom-ref": "pkg:maven/org.testcontainers/testcontainers-bom@1.21.4"
+    },
+    {
+      "type": "library",
+      "group": "org.xerial.snappy",
+      "name": "snappy-java",
+      "version": "",
+      "purl": "pkg:maven/org.xerial.snappy/snappy-java",
+      "bom-ref": "pkg:maven/org.xerial.snappy/snappy-java"
+    },
+    {
+      "type": "library",
+      "group": "org.xerial.snappy",
+      "name": "snappy-java",
+      "version": "1.1.10.7",
+      "purl": "pkg:maven/org.xerial.snappy/snappy-java@1.1.10.7",
+      "bom-ref": "pkg:maven/org.xerial.snappy/snappy-java@1.1.10.7"
+    },
+    {
+      "type": "library",
+      "group": "org.yaml",
+      "name": "snakeyaml",
+      "version": "2.3",
+      "purl": "pkg:maven/org.yaml/snakeyaml@2.3",
+      "bom-ref": "pkg:maven/org.yaml/snakeyaml@2.3"
+    },
+    {
+      "type": "library",
+      "group": "software.amazon.awssdk",
+      "name": "apache-client",
+      "version": "2.41.34",
+      "purl": "pkg:maven/software.amazon.awssdk/apache-client@2.41.34",
+      "bom-ref": "pkg:maven/software.amazon.awssdk/apache-client@2.41.34"
+    },
+    {
+      "type": "library",
+      "group": "software.amazon.awssdk",
+      "name": "netty-nio-client",
+      "version": "2.41.34",
+      "purl": "pkg:maven/software.amazon.awssdk/netty-nio-client@2.41.34",
+      "bom-ref": "pkg:maven/software.amazon.awssdk/netty-nio-client@2.41.34"
+    },
+    {
+      "type": "library",
+      "group": "software.amazon.awssdk",
+      "name": "s3",
+      "version": "2.41.34",
+      "purl": "pkg:maven/software.amazon.awssdk/s3@2.41.34",
+      "bom-ref": "pkg:maven/software.amazon.awssdk/s3@2.41.34"
+    },
+    {
+      "type": "library",
+      "group": "software.amazon.awssdk",
+      "name": "s3-transfer-manager",
+      "version": "2.41.34",
+      "purl": "pkg:maven/software.amazon.awssdk/s3-transfer-manager@2.41.34",
+      "bom-ref": "pkg:maven/software.amazon.awssdk/s3-transfer-manager@2.41.34"
+    },
+    {
+      "type": "library",
+      "group": "software.amazon.awssdk",
+      "name": "sts",
+      "version": "2.41.34",
+      "purl": "pkg:maven/software.amazon.awssdk/sts@2.41.34",
+      "bom-ref": "pkg:maven/software.amazon.awssdk/sts@2.41.34"
+    },
+    {
+      "type": "library",
+      "group": "tools.profiler",
+      "name": "async-profiler",
+      "version": "2.9",
+      "purl": "pkg:maven/tools.profiler/async-profiler@2.9",
+      "bom-ref": "pkg:maven/tools.profiler/async-profiler@2.9"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "type": "application",
+      "group": "org.apache.flink",
+      "name": "flink-parent",
+      "version": "2.1-SNAPSHOT",
+      "purl": "pkg:maven/org.apache.flink/flink-parent@2.1-SNAPSHOT",
+      "bom-ref": "pkg:maven/org.apache.flink/flink-parent@2.1-SNAPSHOT"
+    }
+  },
+  "dependencies": [
+    {
+      "ref": "pkg:maven/org.apache.flink/flink-parent@2.1-SNAPSHOT",
+      "dependsOn": [
+        "pkg:maven/at.yawk.lz4/lz4-java",
+        "pkg:maven/at.yawk.lz4/lz4-java@1.10.3",
+        "pkg:maven/com.alibaba/pemja@0.5.6",
+        "pkg:maven/com.aliyun.oss/aliyun-sdk-oss@3.17.4",
+        "pkg:maven/com.amazonaws/aws-java-sdk-core@1.12.779",
+        "pkg:maven/com.amazonaws/aws-java-sdk-dynamodb@1.12.779",
+        "pkg:maven/com.amazonaws/aws-java-sdk-kms@1.12.779",
+        "pkg:maven/com.amazonaws/aws-java-sdk-s3@1.12.779",
+        "pkg:maven/com.amazonaws/aws-java-sdk-sts@1.12.779",
+        "pkg:maven/com.esotericsoftware/kryo",
+        "pkg:maven/com.esotericsoftware/kryo@5.6.2",
+        "pkg:maven/com.facebook.presto/presto-hive@0.272",
+        "pkg:maven/com.facebook.presto.hadoop/hadoop-apache2@2.7.4-9",
+        "pkg:maven/com.fasterxml.jackson/jackson-bom@2.20.1",
+        "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.15.2",
+        "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.15.2",
+        "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.15.2",
+        "pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jdk8@2.20.1",
+        "pkg:maven/com.github.hazendaz.spotbugs/spotbugs-maven-plugin@3.0.6",
+        "pkg:maven/com.github.oshi/oshi-core",
+        "pkg:maven/com.github.oshi/oshi-core@6.1.5",
+        "pkg:maven/com.google.cloud/google-cloud-storage@2.29.1",
+        "pkg:maven/com.google.cloud.bigdataoss/gcs-connector@hadoop3-2.2.18",
+        "pkg:maven/com.google.code.findbugs/jsr305",
+        "pkg:maven/com.google.code.findbugs/jsr305@1.3.9",
+        "pkg:maven/com.google.guava/guava",
+        "pkg:maven/com.google.guava/guava@30.0-jre",
+        "pkg:maven/com.google.guava/guava@32.0.0-jre",
+        "pkg:maven/com.google.guava/guava@33.4.0-jre",
+        "pkg:maven/com.google.protobuf/protobuf-java",
+        "pkg:maven/com.google.protobuf/protobuf-java@4.32.1",
+        "pkg:maven/com.ibm.icu/icu4j@67.1",
+        "pkg:maven/com.jayway.jsonpath/json-path@2.9.0",
+        "pkg:maven/com.knuddels/jtokkit@1.1.0",
+        "pkg:maven/com.lmax/disruptor@3.4.2",
+        "pkg:maven/com.nimbusds/nimbus-jose-jwt@4.41.1",
+        "pkg:maven/com.openai/openai-java@1.6.1",
+        "pkg:maven/com.puppycrawl.tools/checkstyle@10.18.2",
+        "pkg:maven/com.squareup.okhttp3/logging-interceptor@4.12.0",
+        "pkg:maven/com.squareup.okhttp3/okhttp",
+        "pkg:maven/com.squareup.okhttp3/okhttp@4.12.0",
+        "pkg:maven/com.squareup.okio/okio@1.17.2",
+        "pkg:maven/com.tngtech.archunit/archunit",
+        "pkg:maven/com.tngtech.archunit/archunit-junit5",
+        "pkg:maven/com.typesafe/config@1.4.2",
+        "pkg:maven/com.ververica/forstjni@0.1.8",
+        "pkg:maven/com.ververica/frocksdbjni@8.10.0-ververica-1.0",
+        "pkg:maven/commons-beanutils/commons-beanutils@1.9.4",
+        "pkg:maven/commons-cli/commons-cli",
+        "pkg:maven/commons-cli/commons-cli@1.5.0",
+        "pkg:maven/commons-codec/commons-codec@1.15",
+        "pkg:maven/commons-collections/commons-collections",
+        "pkg:maven/commons-collections/commons-collections@3.2.2",
+        "pkg:maven/commons-configuration/commons-configuration@1.7",
+        "pkg:maven/commons-io/commons-io",
+        "pkg:maven/commons-io/commons-io@2.15.1",
+        "pkg:maven/commons-logging/commons-logging@1.1.3",
+        "pkg:maven/io.airlift/aircompressor@0.27",
+        "pkg:maven/io.airlift.tpch/tpch@0.10",
+        "pkg:maven/io.confluent/kafka-schema-registry-client@7.5.3",
+        "pkg:maven/io.dropwizard.metrics/metrics-core@3.2.6",
+        "pkg:maven/io.dropwizard.metrics/metrics-graphite@3.2.6",
+        "pkg:maven/io.fabric8/kubernetes-client@7.3.1",
+        "pkg:maven/io.fabric8/kubernetes-httpclient-okhttp@7.3.1",
+        "pkg:maven/io.grpc/grpc-bom@1.59.1",
+        "pkg:maven/io.netty/netty-bom@4.1.100.Final",
+        "pkg:maven/io.netty/netty-bom@4.2.6.Final",
+        "pkg:maven/io.netty/netty-handler",
+        "pkg:maven/io.netty/netty-transport",
+        "pkg:maven/io.opentelemetry/opentelemetry-exporter-logging@1.30.1",
+        "pkg:maven/io.opentelemetry/opentelemetry-exporter-otlp@1.30.1",
+        "pkg:maven/io.opentelemetry/opentelemetry-sdk@1.30.1",
+        "pkg:maven/io.opentelemetry/opentelemetry-sdk-common@1.30.1",
+        "pkg:maven/io.opentelemetry/opentelemetry-semconv@1.30.1-alpha",
+        "pkg:maven/io.prometheus/simpleclient@0.8.1",
+        "pkg:maven/io.prometheus/simpleclient_httpserver@0.8.1",
+        "pkg:maven/io.prometheus/simpleclient_pushgateway@0.8.1",
+        "pkg:maven/it.unimi.dsi/fastutil@8.2.1",
+        "pkg:maven/jakarta.activation/jakarta.activation-api@1.2.1",
+        "pkg:maven/jakarta.xml.bind/jakarta.xml.bind-api@2.3.2",
+        "pkg:maven/javax.activation/javax.activation-api@1.2.0",
+        "pkg:maven/javax.xml.bind/jaxb-api",
+        "pkg:maven/javax.xml.bind/jaxb-api@2.3.1",
+        "pkg:maven/joda-time/joda-time",
+        "pkg:maven/joda-time/joda-time@2.5",
+        "pkg:maven/junit/junit@4.13.2",
+        "pkg:maven/net.bytebuddy/byte-buddy@1.17.6",
+        "pkg:maven/net.bytebuddy/byte-buddy-agent@1.17.6",
+        "pkg:maven/net.java.dev.jna/jna@5.12.1",
+        "pkg:maven/net.razorvine/pyrolite@4.13",
+        "pkg:maven/net.sf.py4j/py4j",
+        "pkg:maven/net.sf.py4j/py4j@0.10.9.7",
+        "pkg:maven/org.antlr/antlr4-runtime@4.7",
+        "pkg:maven/org.apache.arrow/arrow-memory-netty@13.0.0",
+        "pkg:maven/org.apache.arrow/arrow-vector@13.0.0",
+        "pkg:maven/org.apache.avro/avro",
+        "pkg:maven/org.apache.avro/avro@1.11.4",
+        "pkg:maven/org.apache.beam/beam-runners-core-java",
+        "pkg:maven/org.apache.beam/beam-runners-core-java@2.54.0",
+        "pkg:maven/org.apache.beam/beam-runners-java-fn-execution",
+        "pkg:maven/org.apache.beam/beam-runners-java-fn-execution@2.54.0",
+        "pkg:maven/org.apache.calcite/calcite-core@1.36.0",
+        "pkg:maven/org.apache.commons/commons-compress",
+        "pkg:maven/org.apache.commons/commons-compress@1.26.0",
+        "pkg:maven/org.apache.commons/commons-lang3",
+        "pkg:maven/org.apache.commons/commons-lang3@3.18.0",
+        "pkg:maven/org.apache.commons/commons-math3@3.6.1",
+        "pkg:maven/org.apache.commons/commons-text",
+        "pkg:maven/org.apache.commons/commons-text@1.10.0",
+        "pkg:maven/org.apache.curator/curator-test@5.4.0",
+        "pkg:maven/org.apache.hadoop/hadoop-aliyun@3.3.4",
+        "pkg:maven/org.apache.hadoop/hadoop-aws@3.3.4",
+        "pkg:maven/org.apache.hadoop/hadoop-azure@3.3.4",
+        "pkg:maven/org.apache.hadoop/hadoop-common",
+        "pkg:maven/org.apache.hadoop/hadoop-common@2.10.2",
+        "pkg:maven/org.apache.hadoop/hadoop-common@3.3.4",
+        "pkg:maven/org.apache.hadoop/hadoop-hdfs",
+        "pkg:maven/org.apache.hadoop/hadoop-hdfs@2.10.2",
+        "pkg:maven/org.apache.hadoop/hadoop-hdfs@3.3.4",
+        "pkg:maven/org.apache.hadoop/hadoop-mapreduce-client-core",
+        "pkg:maven/org.apache.hadoop/hadoop-mapreduce-client-core@2.10.2",
+        "pkg:maven/org.apache.hadoop/hadoop-minikdc@3.2.4",
+        "pkg:maven/org.apache.hadoop/hadoop-yarn-client",
+        "pkg:maven/org.apache.hadoop/hadoop-yarn-client@2.10.2",
+        "pkg:maven/org.apache.hadoop/hadoop-yarn-common",
+        "pkg:maven/org.apache.hadoop/hadoop-yarn-common@2.10.2",
+        "pkg:maven/org.apache.httpcomponents/httpclient@4.5.13",
+        "pkg:maven/org.apache.httpcomponents/httpcore@4.4.14",
+        "pkg:maven/org.apache.kafka/kafka-clients@2.2.2",
+        "pkg:maven/org.apache.logging.log4j/log4j-1.2-api",
+        "pkg:maven/org.apache.logging.log4j/log4j-1.2-api@2.25.3",
+        "pkg:maven/org.apache.logging.log4j/log4j-api",
+        "pkg:maven/org.apache.logging.log4j/log4j-api@2.25.3",
+        "pkg:maven/org.apache.logging.log4j/log4j-core",
+        "pkg:maven/org.apache.logging.log4j/log4j-core@2.25.3",
+        "pkg:maven/org.apache.logging.log4j/log4j-layout-template-json",
+        "pkg:maven/org.apache.logging.log4j/log4j-layout-template-json@2.25.3",
+        "pkg:maven/org.apache.logging.log4j/log4j-slf4j-impl",
+        "pkg:maven/org.apache.logging.log4j/log4j-slf4j-impl@2.25.3",
+        "pkg:maven/org.apache.orc/orc-core@1.5.6",
+        "pkg:maven/org.apache.parquet/parquet-avro@1.15.2",
+        "pkg:maven/org.apache.parquet/parquet-hadoop@1.15.2",
+        "pkg:maven/org.apache.parquet/parquet-protobuf@1.15.2",
+        "pkg:maven/org.apache.pekko/pekko-actor_2.12@1.4.0",
+        "pkg:maven/org.apache.pekko/pekko-remote_2.12@1.4.0",
+        "pkg:maven/org.apache.pekko/pekko-slf4j_2.12@1.4.0",
+        "pkg:maven/org.apache.zookeeper/zookeeper@3.7.2",
+        "pkg:maven/org.assertj/assertj-core",
+        "pkg:maven/org.checkerframework/checker-qual@3.12.0",
+        "pkg:maven/org.codehaus.jackson/jackson-mapper-asl",
+        "pkg:maven/org.codehaus.jackson/jackson-mapper-asl@1.9.14.jdk17-redhat-00001",
+        "pkg:maven/org.codehaus.janino/commons-compiler",
+        "pkg:maven/org.codehaus.janino/commons-compiler@3.1.10",
+        "pkg:maven/org.codehaus.janino/janino",
+        "pkg:maven/org.codehaus.janino/janino@3.1.10",
+        "pkg:maven/org.conscrypt/conscrypt-openjdk-uber@2.5.1",
+        "pkg:maven/org.eclipse.jetty/jetty-util-ajax@9.3.24.v20180605",
+        "pkg:maven/org.hamcrest/hamcrest-core@1.3",
+        "pkg:maven/org.immutables/value@2.11.3",
+        "pkg:maven/org.immutables/value-annotations@2.11.3",
+        "pkg:maven/org.influxdb/influxdb-java@2.17",
+        "pkg:maven/org.javassist/javassist",
+        "pkg:maven/org.javassist/javassist@3.24.0-GA",
+        "pkg:maven/org.jcuda/jcublas@10.0.0",
+        "pkg:maven/org.jcuda/jcuda@10.0.0",
+        "pkg:maven/org.jetbrains.kotlin/kotlin-reflect@1.9.10",
+        "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@1.9.10",
+        "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk7@1.9.10",
+        "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk8@1.9.10",
+        "pkg:maven/org.jline/jline-reader@3.21.0",
+        "pkg:maven/org.jline/jline-terminal@3.21.0",
+        "pkg:maven/org.joda/joda-convert@1.7",
+        "pkg:maven/org.junit/junit-bom@5.11.4",
+        "pkg:maven/org.junit.jupiter/junit-jupiter",
+        "pkg:maven/org.junit.vintage/junit-vintage-engine",
+        "pkg:maven/org.objenesis/objenesis@3.4",
+        "pkg:maven/org.quartz-scheduler/quartz@2.3.2",
+        "pkg:maven/org.reflections/reflections",
+        "pkg:maven/org.roaringbitmap/RoaringBitmap@1.3.0",
+        "pkg:maven/org.scala-lang/scala-compiler",
+        "pkg:maven/org.scala-lang/scala-compiler@2.11.12",
+        "pkg:maven/org.scala-lang/scala-library",
+        "pkg:maven/org.scala-lang/scala-library@2.11.12",
+        "pkg:maven/org.scala-lang/scala-reflect",
+        "pkg:maven/org.scala-lang/scala-reflect@2.11.12",
+        "pkg:maven/org.slf4j/slf4j-api",
+        "pkg:maven/org.slf4j/slf4j-api@1.7.36",
+        "pkg:maven/org.snakeyaml/snakeyaml-engine@2.6",
+        "pkg:maven/org.testcontainers/testcontainers",
+        "pkg:maven/org.testcontainers/testcontainers-bom@1.21.4",
+        "pkg:maven/org.xerial.snappy/snappy-java",
+        "pkg:maven/org.xerial.snappy/snappy-java@1.1.10.7",
+        "pkg:maven/org.yaml/snakeyaml@2.3",
+        "pkg:maven/software.amazon.awssdk/apache-client@2.41.34",
+        "pkg:maven/software.amazon.awssdk/netty-nio-client@2.41.34",
+        "pkg:maven/software.amazon.awssdk/s3@2.41.34",
+        "pkg:maven/software.amazon.awssdk/s3-transfer-manager@2.41.34",
+        "pkg:maven/software.amazon.awssdk/sts@2.41.34",
+        "pkg:maven/tools.profiler/async-profiler@2.9"
+      ]
+    },
+    {
+      "ref": "pkg:maven/at.yawk.lz4/lz4-java",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/at.yawk.lz4/lz4-java@1.10.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.alibaba/pemja@0.5.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.aliyun.oss/aliyun-sdk-oss@3.17.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.amazonaws/aws-java-sdk-core@1.12.779",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.amazonaws/aws-java-sdk-dynamodb@1.12.779",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.amazonaws/aws-java-sdk-kms@1.12.779",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.amazonaws/aws-java-sdk-s3@1.12.779",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.amazonaws/aws-java-sdk-sts@1.12.779",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.esotericsoftware/kryo",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.esotericsoftware/kryo@5.6.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.facebook.presto/presto-hive@0.272",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.facebook.presto.hadoop/hadoop-apache2@2.7.4-9",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.fasterxml.jackson/jackson-bom@2.20.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.15.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.15.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.15.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jdk8@2.20.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.github.hazendaz.spotbugs/spotbugs-maven-plugin@3.0.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.github.oshi/oshi-core",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.github.oshi/oshi-core@6.1.5",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.google.cloud/google-cloud-storage@2.29.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.google.cloud.bigdataoss/gcs-connector@hadoop3-2.2.18",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.google.code.findbugs/jsr305",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.google.code.findbugs/jsr305@1.3.9",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.google.guava/guava",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.google.guava/guava@30.0-jre",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.google.guava/guava@32.0.0-jre",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.google.guava/guava@33.4.0-jre",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.google.protobuf/protobuf-java",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.google.protobuf/protobuf-java@4.32.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.ibm.icu/icu4j@67.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.jayway.jsonpath/json-path@2.9.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.knuddels/jtokkit@1.1.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.lmax/disruptor@3.4.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.nimbusds/nimbus-jose-jwt@4.41.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.openai/openai-java@1.6.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.puppycrawl.tools/checkstyle@10.18.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.squareup.okhttp3/logging-interceptor@4.12.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.squareup.okhttp3/okhttp",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.squareup.okhttp3/okhttp@4.12.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.squareup.okio/okio@1.17.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.tngtech.archunit/archunit",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.tngtech.archunit/archunit-junit5",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.typesafe/config@1.4.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.ververica/forstjni@0.1.8",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/com.ververica/frocksdbjni@8.10.0-ververica-1.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/commons-beanutils/commons-beanutils@1.9.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/commons-cli/commons-cli",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/commons-cli/commons-cli@1.5.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/commons-codec/commons-codec@1.15",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/commons-collections/commons-collections",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/commons-collections/commons-collections@3.2.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/commons-configuration/commons-configuration@1.7",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/commons-io/commons-io",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/commons-io/commons-io@2.15.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/commons-logging/commons-logging@1.1.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.airlift/aircompressor@0.27",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.airlift.tpch/tpch@0.10",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.confluent/kafka-schema-registry-client@7.5.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.dropwizard.metrics/metrics-core@3.2.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.dropwizard.metrics/metrics-graphite@3.2.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.fabric8/kubernetes-client@7.3.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.fabric8/kubernetes-httpclient-okhttp@7.3.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.grpc/grpc-bom@1.59.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.netty/netty-bom@4.1.100.Final",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.netty/netty-bom@4.2.6.Final",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.netty/netty-handler",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.netty/netty-transport",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.opentelemetry/opentelemetry-exporter-logging@1.30.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.opentelemetry/opentelemetry-exporter-otlp@1.30.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.opentelemetry/opentelemetry-sdk@1.30.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.opentelemetry/opentelemetry-sdk-common@1.30.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.opentelemetry/opentelemetry-semconv@1.30.1-alpha",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.prometheus/simpleclient@0.8.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.prometheus/simpleclient_httpserver@0.8.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/io.prometheus/simpleclient_pushgateway@0.8.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/it.unimi.dsi/fastutil@8.2.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/jakarta.activation/jakarta.activation-api@1.2.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/jakarta.xml.bind/jakarta.xml.bind-api@2.3.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/javax.activation/javax.activation-api@1.2.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/javax.xml.bind/jaxb-api",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/javax.xml.bind/jaxb-api@2.3.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/joda-time/joda-time",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/joda-time/joda-time@2.5",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/junit/junit@4.13.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/net.bytebuddy/byte-buddy@1.17.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/net.bytebuddy/byte-buddy-agent@1.17.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/net.java.dev.jna/jna@5.12.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/net.razorvine/pyrolite@4.13",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/net.sf.py4j/py4j",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/net.sf.py4j/py4j@0.10.9.7",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.antlr/antlr4-runtime@4.7",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.arrow/arrow-memory-netty@13.0.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.arrow/arrow-vector@13.0.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.avro/avro",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.avro/avro@1.11.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.beam/beam-runners-core-java",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.beam/beam-runners-core-java@2.54.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.beam/beam-runners-java-fn-execution",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.beam/beam-runners-java-fn-execution@2.54.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.calcite/calcite-core@1.36.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.commons/commons-compress",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.commons/commons-compress@1.26.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.commons/commons-lang3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.commons/commons-lang3@3.18.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.commons/commons-math3@3.6.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.commons/commons-text",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.commons/commons-text@1.10.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.curator/curator-test@5.4.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-aliyun@3.3.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-aws@3.3.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-azure@3.3.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-common",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-common@2.10.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-common@3.3.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-hdfs",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-hdfs@2.10.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-hdfs@3.3.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-mapreduce-client-core",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-mapreduce-client-core@2.10.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-minikdc@3.2.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-yarn-client",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-yarn-client@2.10.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-yarn-common",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.hadoop/hadoop-yarn-common@2.10.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.httpcomponents/httpclient@4.5.13",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.httpcomponents/httpcore@4.4.14",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.kafka/kafka-clients@2.2.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.logging.log4j/log4j-1.2-api",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.logging.log4j/log4j-1.2-api@2.25.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.logging.log4j/log4j-api",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.logging.log4j/log4j-api@2.25.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.logging.log4j/log4j-core",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.logging.log4j/log4j-core@2.25.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.logging.log4j/log4j-layout-template-json",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.logging.log4j/log4j-layout-template-json@2.25.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.logging.log4j/log4j-slf4j-impl",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.logging.log4j/log4j-slf4j-impl@2.25.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.orc/orc-core@1.5.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.parquet/parquet-avro@1.15.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.parquet/parquet-hadoop@1.15.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.parquet/parquet-protobuf@1.15.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.pekko/pekko-actor_2.12@1.4.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.pekko/pekko-remote_2.12@1.4.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.pekko/pekko-slf4j_2.12@1.4.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.apache.zookeeper/zookeeper@3.7.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.assertj/assertj-core",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.checkerframework/checker-qual@3.12.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.codehaus.jackson/jackson-mapper-asl",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.codehaus.jackson/jackson-mapper-asl@1.9.14.jdk17-redhat-00001",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.codehaus.janino/commons-compiler",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.codehaus.janino/commons-compiler@3.1.10",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.codehaus.janino/janino",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.codehaus.janino/janino@3.1.10",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.conscrypt/conscrypt-openjdk-uber@2.5.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.eclipse.jetty/jetty-util-ajax@9.3.24.v20180605",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.hamcrest/hamcrest-core@1.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.immutables/value@2.11.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.immutables/value-annotations@2.11.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.influxdb/influxdb-java@2.17",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.javassist/javassist",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.javassist/javassist@3.24.0-GA",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.jcuda/jcublas@10.0.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.jcuda/jcuda@10.0.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.jetbrains.kotlin/kotlin-reflect@1.9.10",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@1.9.10",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk7@1.9.10",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk8@1.9.10",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.jline/jline-reader@3.21.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.jline/jline-terminal@3.21.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.joda/joda-convert@1.7",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.junit/junit-bom@5.11.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.junit.jupiter/junit-jupiter",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.junit.vintage/junit-vintage-engine",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.objenesis/objenesis@3.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.quartz-scheduler/quartz@2.3.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.reflections/reflections",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.roaringbitmap/RoaringBitmap@1.3.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.scala-lang/scala-compiler",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.scala-lang/scala-compiler@2.11.12",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.scala-lang/scala-library",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.scala-lang/scala-library@2.11.12",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.scala-lang/scala-reflect",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.scala-lang/scala-reflect@2.11.12",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.slf4j/slf4j-api",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.slf4j/slf4j-api@1.7.36",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.snakeyaml/snakeyaml-engine@2.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.testcontainers/testcontainers",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.testcontainers/testcontainers-bom@1.21.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.xerial.snappy/snappy-java",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.xerial.snappy/snappy-java@1.1.10.7",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/org.yaml/snakeyaml@2.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/software.amazon.awssdk/apache-client@2.41.34",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/software.amazon.awssdk/netty-nio-client@2.41.34",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/software.amazon.awssdk/s3@2.41.34",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/software.amazon.awssdk/s3-transfer-manager@2.41.34",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/software.amazon.awssdk/sts@2.41.34",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:maven/tools.profiler/async-profiler@2.9",
+      "dependsOn": []
+    }
+  ]
+}
