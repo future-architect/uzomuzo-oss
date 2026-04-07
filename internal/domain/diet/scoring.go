@@ -19,6 +19,16 @@ const (
 	DifficultyHard     = "hard"
 )
 
+// Summary classification thresholds for ComputeSummary.
+const (
+	// easyWinScoreThreshold is the minimum PriorityScore for a trivial/easy dep
+	// to be counted as an "easy win" — high impact and low effort.
+	easyWinScoreThreshold = 0.3
+	// actionableScoreThreshold is the minimum PriorityScore for a dep
+	// to be counted as "estimated removable" in the summary.
+	actionableScoreThreshold = 0.2
+)
+
 // ComputeImpactScore calculates the removability priority for a single dependency.
 // maxExclusive is the largest ExclusiveTransitiveCount across all entries in the dataset,
 // used to normalize GraphImpact relative to the most impactful dependency.
@@ -69,11 +79,11 @@ func ComputeSummary(entries []DietEntry, totalTransitive int) DietSummary {
 			s.UnusedDirect++
 		}
 		if e.Scores.Difficulty == DifficultyTrivial || e.Scores.Difficulty == DifficultyEasy {
-			if e.Scores.PriorityScore > 0.3 {
+			if e.Scores.PriorityScore > easyWinScoreThreshold {
 				s.EasyWins++
 			}
 		}
-		if e.Scores.PriorityScore > 0.2 {
+		if e.Scores.PriorityScore > actionableScoreThreshold {
 			s.EstimatedRemovable++
 		}
 		if e.Graph.StaysAsIndirect() {

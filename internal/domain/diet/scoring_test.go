@@ -3,7 +3,7 @@ package diet
 import "testing"
 
 func TestComputeImpactScore_UnusedDep(t *testing.T) {
-	graph := GraphMetrics{ExclusiveTransitiveCount: 100, TotalTransitiveCount: 100}
+	graph := GraphMetrics{ExclusiveTransitiveCount: 100}
 	coupling := CouplingAnalysis{IsUnused: true}
 	health := HealthSignals{HealthRisk: 0.5}
 
@@ -26,7 +26,7 @@ func TestComputeImpactScore_UnusedDep(t *testing.T) {
 }
 
 func TestComputeImpactScore_HeavilyCoupled(t *testing.T) {
-	graph := GraphMetrics{ExclusiveTransitiveCount: 5, TotalTransitiveCount: 5}
+	graph := GraphMetrics{ExclusiveTransitiveCount: 5}
 	coupling := CouplingAnalysis{ImportFileCount: 50, CallSiteCount: 200, APIBreadth: 30}
 	health := HealthSignals{HealthRisk: 0.8}
 
@@ -42,7 +42,7 @@ func TestComputeImpactScore_HeavilyCoupled(t *testing.T) {
 }
 
 func TestComputeImpactScore_EasyWin(t *testing.T) {
-	graph := GraphMetrics{ExclusiveTransitiveCount: 50, TotalTransitiveCount: 50}
+	graph := GraphMetrics{ExclusiveTransitiveCount: 50}
 	coupling := CouplingAnalysis{ImportFileCount: 1, CallSiteCount: 2, APIBreadth: 1}
 	health := HealthSignals{HealthRisk: 0.9, IsEOL: true}
 
