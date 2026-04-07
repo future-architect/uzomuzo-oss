@@ -37,7 +37,7 @@ func RunDiet(
 			return fmt.Errorf("--source path %q: %w", opts.SourceRoot, err)
 		}
 		if !info.IsDir() {
-			return fmt.Errorf("--source %q is a file, not a directory — point it to the project root (e.g. the directory containing go.mod)", opts.SourceRoot)
+			return fmt.Errorf("--source %q is a file, not a directory — point it to the project root used to generate the SBOM", opts.SourceRoot)
 		}
 	}
 

@@ -364,6 +364,8 @@ func TestE2E_DietStdinSBOM(t *testing.T) {
 	os.Stdout = w
 	t.Cleanup(func() {
 		os.Stdout = oldStdout
+		_ = w.Close() // best-effort cleanup
+		_ = r.Close() // best-effort cleanup
 	})
 
 	done := make(chan struct{})
@@ -382,9 +384,13 @@ func TestE2E_DietStdinSBOM(t *testing.T) {
 	sourceAnalyzer := treesitter.NewAnalyzer()
 	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
 
-	_ = w.Close()
+	if err := w.Close(); err != nil {
+		t.Errorf("stdout write-end close: %v", err)
+	}
 	<-done
-	_ = r.Close()
+	if err := r.Close(); err != nil {
+		t.Errorf("stdout read-end close: %v", err)
+	}
 
 	if runErr != nil {
 		t.Fatalf("RunDiet with stdin failed: %v", runErr)
