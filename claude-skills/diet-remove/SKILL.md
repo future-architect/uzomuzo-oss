@@ -134,7 +134,19 @@ Body:
 - {API leakage? build tags? generated code?}
 ```
 
-After filing the issue, **stop**. Do not proceed to implementation.
+### Choosing the right channel
+
+Before filing, check the target repository's issue templates:
+
+1. Run `ls <repo>/.github/ISSUE_TEMPLATE/` or check `config.yml` for `blank_issues_enabled`
+2. If `blank_issues_enabled: false` and only bug/docs templates exist, the project likely uses **Discussions** for proposals. File in the `Ideas` category instead:
+   ```bash
+   # Use GitHub Discussions when issues require a specific template
+   gh api graphql -f query='mutation { createDiscussion(input: { repositoryId: "...", categoryId: "...", title: "...", body: "..." }) { discussion { url } } }'
+   ```
+3. If blank issues are enabled or a "feature request" template exists, use `gh issue create`
+
+**After filing, stop.** Do not proceed to implementation.
 
 If `--pr` was specified, skip this section and continue to Phase 1.5 below.
 
