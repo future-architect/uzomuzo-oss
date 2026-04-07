@@ -128,9 +128,9 @@ func TestE2E_DietTable(t *testing.T) {
 		t.Error("table output missing known dependency 'packageurl-go'")
 	}
 
-	// Should contain impact summary
-	if !strings.Contains(out, "Expected Impact") || !strings.Contains(out, "Direct deps") {
-		t.Error("table output missing Expected Impact section")
+	// Should contain dependency tree summary
+	if !strings.Contains(out, "Dependency Tree") || !strings.Contains(out, "Direct deps") {
+		t.Error("table output missing Dependency Tree section")
 	}
 }
 
