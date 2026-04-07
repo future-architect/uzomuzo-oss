@@ -500,12 +500,23 @@ func (a *Analyzer) handlePythonImport(
 		return
 	}
 
-	// Register module-level alias (e.g., "requests" -> PURL) for attribute-access calls.
-	alias := cfg.aliasFromPkg(importPath)
-	aliasMap[alias] = purl
+	parent := node.Parent()
+	if parent == nil {
+		return
+	}
 
-	// For from-imports, also register each imported name as an alias.
-	a.registerFromImportNames(node, src, purl, aliasMap)
+	switch parent.Type() {
+	case "import_statement":
+		// Register module-level alias (e.g., "requests" -> PURL) only when the
+		// import statement binds the module name in scope.
+		alias := cfg.aliasFromPkg(importPath)
+		aliasMap[alias] = purl
+	case "import_from_statement":
+		// For from-imports, register each imported name as an alias.
+		// "from requests import get" does NOT bind "requests" in scope,
+		// so we only register the individual imported names.
+		a.registerFromImportNames(node, src, purl, aliasMap)
+	}
 }
 
 // resolvePythonPURL resolves a Python import path to its PURL.
@@ -570,9 +581,8 @@ func (a *Analyzer) registerFromImportNames(
 				aliasMap[aliasNode.Content(src)] = purl
 			}
 		case "wildcard_import":
-			// from x import * — cannot track individual names; the module-level
-			// alias is already registered by the caller, so x.y() still works.
-			// Bare calls to wildcard-imported names will be undercounted.
+			// from x import * — cannot track individual names.
+			// Wildcard-imported bare calls will be undercounted.
 		}
 	}
 }
