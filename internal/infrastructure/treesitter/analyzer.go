@@ -203,16 +203,26 @@ func (a *Analyzer) AnalyzeCoupling(
 	sourceRoot string,
 	importPaths map[string][]string,
 ) (map[string]*domaindiet.CouplingAnalysis, error) {
-	// Build reverse map: importPath -> PURL.
+	// Build reverse map: importPath -> []PURL.
 	// Keys are lowercased because PURL namespace is case-insensitive (PURL spec)
 	// while Go import paths are case-sensitive. SBOM generators may produce
 	// lowercased PURLs (e.g., "github.com/masterminds/semver") for imports that
 	// use mixed case (e.g., "github.com/Masterminds/semver").
-	importToPURL := make(map[string]string, len(importPaths))
+	//
+	// Multiple PURLs can map to the same import path (e.g., two versions of gson).
+	// We store all of them so coupling data is attributed to every matching PURL
+	// rather than silently dropping all but the last-written entry.
+	importToPURL := make(map[string][]string, len(importPaths))
 	for purl, paths := range importPaths {
 		for _, p := range paths {
-			importToPURL[strings.ToLower(p)] = purl
+			key := strings.ToLower(p)
+			importToPURL[key] = append(importToPURL[key], purl)
 		}
+	}
+	// Sort and deduplicate each PURL slice for deterministic behavior when iterating.
+	for key, purls := range importToPURL {
+		slices.Sort(purls)
+		importToPURL[key] = slices.Compact(purls)
 	}
 
 	accum := make(map[string]*accumulator)
@@ -280,20 +290,22 @@ func (a *Analyzer) AnalyzeCoupling(
 		}
 
 		// Record import files
-		for alias, purl := range fileAliases {
-			acc, ok := accum[purl]
-			if !ok {
-				acc = &accumulator{
-					importFiles: make(map[string]bool),
-					symbols:     make(map[string]bool),
+		for alias, purls := range fileAliases {
+			for _, purl := range purls {
+				acc, ok := accum[purl]
+				if !ok {
+					acc = &accumulator{
+						importFiles: make(map[string]bool),
+						symbols:     make(map[string]bool),
+					}
+					accum[purl] = acc
 				}
-				accum[purl] = acc
-			}
-			if !acc.importFiles[relPath] {
-				acc.importFiles[relPath] = true
-			}
-			if strings.HasPrefix(alias, dotImportAlias) {
-				acc.hasDotImport = true
+				if !acc.importFiles[relPath] {
+					acc.importFiles[relPath] = true
+				}
+				if strings.HasPrefix(alias, dotImportAlias) {
+					acc.hasDotImport = true
+				}
 			}
 		}
 
@@ -348,16 +360,17 @@ func (a *Analyzer) AnalyzeCoupling(
 	return results, nil
 }
 
-// extractImports finds import statements in the AST and returns alias->PURL mapping.
+// extractImports finds import statements in the AST and returns alias->[]PURL mapping.
+// Multiple PURLs per alias can occur when two versions of the same library are present.
 func (a *Analyzer) extractImports(
 	cfg *langConfig,
 	root *sitter.Node,
 	src []byte,
-	importToPURL map[string]string,
+	importToPURL map[string][]string,
 	lid langID,
 	cursor *sitter.QueryCursor,
-) map[string]string {
-	aliasMap := make(map[string]string) // alias -> PURL
+) map[string][]string {
+	aliasMap := make(map[string][]string) // alias -> []PURL
 
 	query := cfg.compiledImport
 	if query == nil {
@@ -426,13 +439,13 @@ func (a *Analyzer) handleGoImport(
 	node *sitter.Node,
 	src []byte,
 	importPath string,
-	importToPURL map[string]string,
-	aliasMap map[string]string,
+	importToPURL map[string][]string,
+	aliasMap map[string][]string,
 ) {
 	// Lowercase the import path for matching — importToPURL keys are already lowercased
 	// to handle PURL case-insensitivity (see AnalyzeCoupling).
 	lowerPath := strings.ToLower(importPath)
-	purl, ok := importToPURL[lowerPath]
+	purls, ok := importToPURL[lowerPath]
 	if !ok {
 		// Also try prefix matching for subpackages.
 		// Pick the longest matching prefix to handle nested modules
@@ -440,7 +453,7 @@ func (a *Analyzer) handleGoImport(
 		bestLen := 0
 		for ip, p := range importToPURL {
 			if (strings.HasPrefix(lowerPath, ip+"/") || lowerPath == ip) && len(ip) > bestLen {
-				purl = p
+				purls = p
 				ok = true
 				bestLen = len(ip)
 			}
@@ -462,9 +475,10 @@ func (a *Analyzer) handleGoImport(
 
 	// Note: Blank imports (import _ "pkg") are side-effect-only (init registration).
 	// Record the import file so the dep is not misclassified as "unused", but skip call-site counting.
-	// Use a unique key per import path so multiple blank imports in one file are all preserved.
+	// Use a unique key per import path so blank imports of different packages in one file are preserved.
 	if alias == "_" {
-		aliasMap[blankImportAlias+importPath] = purl
+		key := blankImportAlias + importPath
+		aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
 		return
 	}
 
@@ -472,7 +486,8 @@ func (a *Analyzer) handleGoImport(
 	// Selector-expression-based tracking cannot attribute those call sites, so mark them as used but uncountable.
 	// Use a unique key per import path so multiple dot imports in one file are all preserved.
 	if alias == "." {
-		aliasMap[dotImportAlias+importPath] = purl
+		key := dotImportAlias + importPath
+		aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
 		return
 	}
 
@@ -492,7 +507,7 @@ func (a *Analyzer) handleGoImport(
 		}
 	}
 
-	aliasMap[alias] = purl
+	aliasMap[alias] = appendUniquePURLs(aliasMap[alias], purls)
 }
 
 // handlePythonImport handles matching Python imports.
@@ -502,13 +517,13 @@ func (a *Analyzer) handlePythonImport(
 	node *sitter.Node,
 	src []byte,
 	importPath string,
-	importToPURL map[string]string,
-	aliasMap map[string]string,
+	importToPURL map[string][]string,
+	aliasMap map[string][]string,
 	cfg *langConfig,
 ) {
-	// Resolve the module's PURL via exact match, top-level name, or prefix matching.
-	purl := a.resolvePythonPURL(importPath, importToPURL)
-	if purl == "" {
+	// Resolve the module's PURLs via exact match, top-level name, or prefix matching.
+	purls := a.resolvePythonPURLs(importPath, importToPURL)
+	if len(purls) == 0 {
 		return
 	}
 
@@ -521,7 +536,7 @@ func (a *Analyzer) handlePythonImport(
 	case "import_statement":
 		// Regular import (e.g., "import requests") — register module name as alias.
 		alias := cfg.aliasFromPkg(importPath)
-		aliasMap[alias] = purl
+		aliasMap[alias] = appendUniquePURLs(aliasMap[alias], purls)
 	case "aliased_import":
 		// Aliased import (e.g., "import requests as r") — the captured dotted_name's
 		// parent is aliased_import. Register the explicit alias, not the module name.
@@ -529,51 +544,53 @@ func (a *Analyzer) handlePythonImport(
 		if grandparent != nil && grandparent.Type() == "import_statement" {
 			aliasNode := parent.ChildByFieldName("alias")
 			if aliasNode != nil {
-				aliasMap[aliasNode.Content(src)] = purl
+				key := aliasNode.Content(src)
+				aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
 			} else {
 				// Fallback: no alias found, use module name.
 				alias := cfg.aliasFromPkg(importPath)
-				aliasMap[alias] = purl
+				aliasMap[alias] = appendUniquePURLs(aliasMap[alias], purls)
 			}
 		}
 	case "import_from_statement":
 		// For from-imports, register each imported name as an alias.
 		// "from requests import get" does NOT bind "requests" in scope,
 		// so we only register the individual imported names.
-		a.registerFromImportNames(node, src, purl, aliasMap)
+		a.registerFromImportNames(node, src, purls, aliasMap)
 	}
 }
 
-// resolvePythonPURL resolves a Python import path to its PURL.
+// resolvePythonPURLs resolves a Python import path to its PURLs.
 // Matching is case-insensitive because importToPURL keys are already lowercased.
-func (a *Analyzer) resolvePythonPURL(
+// Multiple PURLs can be returned when different versions of the same library are present.
+func (a *Analyzer) resolvePythonPURLs(
 	importPath string,
-	importToPURL map[string]string,
-) string {
+	importToPURL map[string][]string,
+) []string {
 	lowerPath := strings.ToLower(importPath)
 
 	// Try exact match first.
-	if purl, ok := importToPURL[lowerPath]; ok {
-		return purl
+	if purls, ok := importToPURL[lowerPath]; ok {
+		return purls
 	}
 
 	// Try top-level module name.
 	topLevel := strings.Split(lowerPath, ".")[0]
-	if purl, ok := importToPURL[topLevel]; ok {
-		return purl
+	if purls, ok := importToPURL[topLevel]; ok {
+		return purls
 	}
 
 	// Try prefix matching — pick the longest matching prefix to handle
 	// overlapping package names (e.g., prefer "google.cloud" over "google").
 	bestIP := ""
-	bestPURL := ""
-	for ip, purl := range importToPURL {
+	var bestPURLs []string
+	for ip, purls := range importToPURL {
 		if (lowerPath == ip || strings.HasPrefix(lowerPath, ip+".")) && len(ip) > len(bestIP) {
 			bestIP = ip
-			bestPURL = purl
+			bestPURLs = purls
 		}
 	}
-	return bestPURL
+	return bestPURLs
 }
 
 // registerFromImportNames registers imported names from "from x import y, z" statements.
@@ -581,8 +598,8 @@ func (a *Analyzer) resolvePythonPURL(
 func (a *Analyzer) registerFromImportNames(
 	node *sitter.Node,
 	src []byte,
-	purl string,
-	aliasMap map[string]string,
+	purls []string,
+	aliasMap map[string][]string,
 ) {
 	parent := node.Parent()
 	if parent == nil || parent.Type() != "import_from_statement" {
@@ -597,20 +614,24 @@ func (a *Analyzer) registerFromImportNames(
 			if parent.FieldNameForChild(i) != "name" {
 				continue
 			}
-			// from x import y → register "y" -> purl
+			// from x import y → register "y" -> purls
 			name := child.Content(src)
-			aliasMap[name] = purl
+			aliasMap[name] = appendUniquePURLs(aliasMap[name], purls)
 		case "aliased_import":
-			// from x import y as z → register "z" -> purl
+			// from x import y as z → register "z" -> purls
 			aliasNode := child.ChildByFieldName("alias")
 			if aliasNode != nil {
-				aliasMap[aliasNode.Content(src)] = purl
+				key := aliasNode.Content(src)
+				aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
 			}
 		case "wildcard_import":
 			// from x import * — cannot track individual names.
-			// Register a unique sentinel so ImportFileCount is correct,
+			// Register a unique sentinel per PURL so ImportFileCount is correct,
 			// but bare calls will be undercounted.
-			aliasMap[wildcardImportAlias+purl] = purl
+			for _, purl := range purls {
+				key := wildcardImportAlias + purl
+				aliasMap[key] = appendUniquePURLs(aliasMap[key], []string{purl})
+			}
 		}
 	}
 }
@@ -622,8 +643,8 @@ func (a *Analyzer) registerFromImportNames(
 func (a *Analyzer) handleJavaImport(
 	node *sitter.Node,
 	importPath string,
-	importToPURL map[string]string,
-	aliasMap map[string]string,
+	importToPURL map[string][]string,
+	aliasMap map[string][]string,
 ) {
 	// Lowercase the import path for matching — importToPURL keys are already lowercased
 	// to handle PURL case-insensitivity (see AnalyzeCoupling).
@@ -632,11 +653,11 @@ func (a *Analyzer) handleJavaImport(
 	// Pick the longest matching prefix to handle overlapping groupIds
 	// (e.g., prefer "org.apache.commons" over "org.apache").
 	bestIP := ""
-	bestPURL := ""
-	for ip, purl := range importToPURL {
+	var bestPURLs []string
+	for ip, purls := range importToPURL {
 		if (lowerPath == ip || strings.HasPrefix(lowerPath, ip+".")) && len(ip) > len(bestIP) {
 			bestIP = ip
-			bestPURL = purl
+			bestPURLs = purls
 		}
 	}
 	if bestIP == "" {
@@ -655,22 +676,23 @@ func (a *Analyzer) handleJavaImport(
 			// Wildcard static import (import static org.junit.Assert.*) — cannot
 			// track individual names. Register a sentinel so ImportFileCount is
 			// correct, but bare calls will be undercounted.
-			aliasMap[wildcardImportAlias+bestPURL] = bestPURL
+			key := wildcardImportAlias + importPath
+			aliasMap[key] = appendUniquePURLs(aliasMap[key], bestPURLs)
 			return
 		}
 		// Static import: the last component is a method/field name (e.g., assertEquals).
 		// Register it directly so bare calls like assertEquals() are matched
 		// via the single-capture call query pattern.
-		aliasMap[alias] = bestPURL
+		aliasMap[alias] = appendUniquePURLs(aliasMap[alias], bestPURLs)
 		return
 	}
 
 	// Regular import: last component is a class name (e.g., Gson, StringUtils).
-	aliasMap[alias] = bestPURL
+	aliasMap[alias] = appendUniquePURLs(aliasMap[alias], bestPURLs)
 	// Also register lowercase for variable-style calls (e.g., Gson gson = ...; gson.toJson()).
 	lower := strings.ToLower(alias[:1]) + alias[1:]
 	if lower != alias {
-		aliasMap[lower] = bestPURL
+		aliasMap[lower] = appendUniquePURLs(aliasMap[lower], bestPURLs)
 	}
 }
 
@@ -695,21 +717,21 @@ func (a *Analyzer) handleJSImport(
 	node *sitter.Node,
 	src []byte,
 	importPath string,
-	importToPURL map[string]string,
-	aliasMap map[string]string,
+	importToPURL map[string][]string,
+	aliasMap map[string][]string,
 	cfg *langConfig,
 ) {
 	// Lowercase the import path for matching — importToPURL keys are already lowercased
 	// to handle PURL case-insensitivity (see AnalyzeCoupling).
 	lowerPath := strings.ToLower(importPath)
-	purl, ok := importToPURL[lowerPath]
+	purls, ok := importToPURL[lowerPath]
 	if !ok {
 		// Pick the longest matching prefix to handle scoped packages
 		// (e.g., prefer "@scope/pkg/sub" over "@scope/pkg").
 		bestLen := 0
 		for ip, p := range importToPURL {
 			if strings.HasPrefix(lowerPath, ip+"/") && len(ip) > bestLen {
-				purl = p
+				purls = p
 				ok = true
 				bestLen = len(ip)
 			}
@@ -727,7 +749,7 @@ func (a *Analyzer) handleJSImport(
 		aliases = []string{cfg.aliasFromPkg(importPath)}
 	}
 	for _, alias := range aliases {
-		aliasMap[alias] = purl
+		aliasMap[alias] = appendUniquePURLs(aliasMap[alias], purls)
 	}
 }
 
@@ -851,7 +873,7 @@ func (a *Analyzer) countCallSites(
 	cfg *langConfig,
 	root *sitter.Node,
 	src []byte,
-	aliasMap map[string]string,
+	aliasMap map[string][]string,
 	accum map[string]*accumulator,
 	cursor *sitter.QueryCursor,
 ) {
@@ -878,32 +900,46 @@ func (a *Analyzer) countCallSites(
 			pkg := match.Captures[0].Node.Content(src)
 			field := match.Captures[1].Node.Content(src)
 
-			purl, ok := aliasMap[pkg]
+			purls, ok := aliasMap[pkg]
 			if !ok {
 				continue
 			}
-			acc := accum[purl]
-			if acc == nil {
-				continue
+			for _, purl := range purls {
+				acc := accum[purl]
+				if acc == nil {
+					continue
+				}
+				acc.callSites++
+				acc.symbols[field] = true
 			}
-			acc.callSites++
-			acc.symbols[field] = true
 		} else if len(match.Captures) == 1 {
 			// Single-capture match: bare identifier call (e.g., get() from "from x import get")
 			funcName := match.Captures[0].Node.Content(src)
 
-			purl, ok := aliasMap[funcName]
+			purls, ok := aliasMap[funcName]
 			if !ok {
 				continue
 			}
-			acc := accum[purl]
-			if acc == nil {
-				continue
+			for _, purl := range purls {
+				acc := accum[purl]
+				if acc == nil {
+					continue
+				}
+				acc.callSites++
+				acc.symbols[funcName] = true
 			}
-			acc.callSites++
-			acc.symbols[funcName] = true
 		}
 	}
+}
+
+// appendUniquePURLs appends PURLs to existing, skipping duplicates.
+func appendUniquePURLs(existing, newPURLs []string) []string {
+	for _, p := range newPURLs {
+		if !slices.Contains(existing, p) {
+			existing = append(existing, p)
+		}
+	}
+	return existing
 }
 
 // accumulator is used internally; re-declared here for the countCallSites method receiver.

@@ -1010,3 +1010,90 @@ requests.get("https://example.com")
 		t.Errorf("request CallSiteCount = %d, want 0", caRequest.CallSiteCount)
 	}
 }
+
+func TestAnalyzer_ImportToPURLCollision(t *testing.T) {
+	// When two PURLs (different versions of the same library) generate identical
+	// import path candidates, both PURLs must receive coupling data.
+	// This is the bug described in issue #180: last-write-wins causes
+	// non-deterministic PURL assignment.
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.google.gson.Gson;
+
+public class Main {
+    public static void main(String[] args) {
+        Gson gson = new Gson();
+        String json = gson.toJson("hello");
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	// Two versions of gson generating the same import path candidates.
+	importPaths := map[string][]string{
+		"pkg:maven/com.google.code.gson/gson@2.10.1": {"com.google.gson"},
+		"pkg:maven/com.google.code.gson/gson@2.8.9":  {"com.google.gson"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Both PURLs must have coupling data — neither should be silently dropped.
+	for purl := range importPaths {
+		ca, ok := result[purl]
+		if !ok {
+			t.Errorf("missing coupling analysis for %s (collision dropped it)", purl)
+			continue
+		}
+		if ca.ImportFileCount != 1 {
+			t.Errorf("%s: ImportFileCount = %d, want 1", purl, ca.ImportFileCount)
+		}
+		if ca.CallSiteCount != 1 {
+			t.Errorf("%s: CallSiteCount = %d, want 1", purl, ca.CallSiteCount)
+		}
+	}
+}
+
+func TestAnalyzer_ImportToPURLCollision_DuplicateImportPath(t *testing.T) {
+	// Tests that duplicate import-path candidates from different PURLs are handled correctly.
+	// Uses Go syntax, but the scenario is ecosystem-agnostic: two PURLs map to the same path.
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
+
+import "github.com/foo/bar"
+
+func main() {
+	bar.DoSomething()
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
+		"pkg:golang/github.com/foo/bar@v2.0.0": {"github.com/foo/bar"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for purl := range importPaths {
+		ca, ok := result[purl]
+		if !ok {
+			t.Errorf("missing coupling analysis for %s (collision dropped it)", purl)
+			continue
+		}
+		if ca.ImportFileCount != 1 {
+			t.Errorf("%s: ImportFileCount = %d, want 1", purl, ca.ImportFileCount)
+		}
+		if ca.CallSiteCount != 1 {
+			t.Errorf("%s: CallSiteCount = %d, want 1", purl, ca.CallSiteCount)
+		}
+	}
+}
