@@ -283,6 +283,42 @@ func TestE2E_DietCLIFlags(t *testing.T) {
 	}
 }
 
+func TestE2E_DietSourceValidation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	configService := config.NewConfigService()
+	cfg, err := configService.Load(context.Background())
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	graphAnalyzer := depgraph.NewAnalyzer()
+	sourceAnalyzer := treesitter.NewAnalyzer()
+
+	// --source pointing to a file should fail
+	opts := cli.DietOptions{
+		SBOMPath:   testSBOMPath,
+		SourceRoot: testSBOMPath, // a file, not a directory
+		Format:     "json",
+	}
+	err = cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
+	if err == nil {
+		t.Fatal("expected error when --source is a file, got nil")
+	}
+	if !strings.Contains(err.Error(), "not a directory") {
+		t.Errorf("error should mention 'not a directory', got: %v", err)
+	}
+
+	// --source pointing to nonexistent path should fail
+	opts.SourceRoot = "/nonexistent/path/that/does/not/exist"
+	err = cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
+	if err == nil {
+		t.Fatal("expected error when --source does not exist, got nil")
+	}
+}
+
 func TestE2E_DietStdinSBOM(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping E2E test in short mode")

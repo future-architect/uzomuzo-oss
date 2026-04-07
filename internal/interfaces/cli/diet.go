@@ -30,6 +30,17 @@ func RunDiet(
 		return fmt.Errorf("--sbom is required")
 	}
 
+	// Validate --source is a directory, not a file
+	if opts.SourceRoot != "" {
+		info, err := os.Stat(opts.SourceRoot)
+		if err != nil {
+			return fmt.Errorf("--source path %q: %w", opts.SourceRoot, err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("--source %q is a file, not a directory — point it to the project root (e.g. the directory containing go.mod)", opts.SourceRoot)
+		}
+	}
+
 	// Read SBOM data
 	var sbomData []byte
 	var err error
