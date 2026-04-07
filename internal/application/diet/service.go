@@ -392,9 +392,10 @@ func buildPyPIImportPaths(name string) []string {
 }
 
 // isPythonIdentifierSafe reports whether s is a valid Python identifier.
-// The first character must be a letter or underscore; subsequent characters
-// may also include digits.  This filters out candidates that can never match
-// a real Python import statement (e.g., names starting with a digit).
+// The first character must be an ASCII letter or underscore; subsequent
+// characters may also include ASCII digits.  This filters out candidates that
+// can never match a real Python import statement (e.g., names starting with a
+// digit).
 func isPythonIdentifierSafe(s string) bool {
 	if s == "" {
 		return false
