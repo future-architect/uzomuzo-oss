@@ -64,6 +64,55 @@ Check these before starting:
 - **Blank imports**: `import _ "pkg"` only runs `init()`. Check what `init()` does
   (usually driver/codec registration) before removing.
 
+## Phase 1.5: Test coverage check — before you touch anything
+
+**Before writing any replacement code, check if the code that uses this dependency has tests.**
+
+```bash
+# Find all files importing the dependency (production code only)
+grep -rn "$ARGUMENTS" --include="*.go" -l | grep -v _test.go
+
+# For each file, check if a corresponding test file exists
+# e.g., reporter/email.go → reporter/email_test.go
+```
+
+### If tests exist: You're safe to proceed
+
+The existing tests define the expected behavior. After replacement, run them — if they pass, the replacement is correct.
+
+### If tests DON'T exist: Write tests FIRST, before changing anything
+
+This is the most important step in the entire process. **Write tests against the current (working) implementation before replacing it.** This gives you a safety net that catches behavior differences in the replacement.
+
+1. **Identify the contract**: What does the code do with this dependency? What are the inputs and outputs?
+2. **Write tests that capture current behavior**:
+   - Normal cases (happy path)
+   - Edge cases specific to the dependency's behavior (e.g., how does it handle nil? empty input? unicode?)
+   - Error cases (what happens when the dependency returns an error?)
+3. **Run the tests against the current code** — they must pass before you change anything
+4. **Then** proceed to Phase 2
+
+**Why before, not after?** If you write tests after replacing the code, you're only testing that your new code does what you *think* it should do — not what the old code *actually* did. Behavior differences slip through.
+
+Real example: `c-robinson/iplib` handled IPv4 `/31` and `/32` CIDR prefixes differently from `net/netip`. If tests had been written after the replacement, the edge case would have been missed because the test would match the new (wrong) behavior.
+
+### For framework peels: Build a regression harness
+
+For high-impact removals (framework replacement, parser rewrite), unit tests aren't enough. Build a comparison harness:
+
+```bash
+# Build before and after binaries
+git stash && go build -o /tmp/before ./cmd/... && git stash pop
+go build -o /tmp/after ./cmd/...
+
+# Run both against real-world inputs and diff the output
+/tmp/before < input.json > /tmp/out-before.json
+/tmp/after  < input.json > /tmp/out-after.json
+diff /tmp/out-before.json /tmp/out-after.json
+```
+
+The vuls fanal framework removal used this approach: 17 real OSS lockfiles, 7,198 libraries compared — found 1 legitimate difference (a pnpm bug fix).
+
 ## Phase 2: Implementation
 
 ### Step 1: Create the replacement
