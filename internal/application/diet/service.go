@@ -325,9 +325,10 @@ func buildImportPaths(purls []string) map[string][]string {
 				importPath = parsed.Name
 			}
 		case "pypi":
-			// Normalize PyPI distribution name to Python import convention:
-			// replace hyphens with underscores and lowercase (e.g., "PyYAML" → "pyyaml").
-			importPath = strings.ToLower(strings.ReplaceAll(parsed.Name, "-", "_"))
+			if paths := buildPyPIImportPaths(parsed.Name); len(paths) > 0 {
+				result[p] = paths
+			}
+			continue
 		case "maven":
 			if paths := buildMavenImportPaths(parsed); len(paths) > 0 {
 				result[p] = paths
@@ -341,6 +342,58 @@ func buildImportPaths(purls []string) map[string][]string {
 		}
 	}
 	return result
+}
+
+// pypiPrefixes lists common PyPI distribution name prefixes that are not part
+// of the actual Python import module name (e.g., "python-multipart" is imported
+// as "multipart").
+var pypiPrefixes = []string{
+	"python-",
+	"py-",
+}
+
+// buildPyPIImportPaths generates candidate Python import module names for a
+// PyPI distribution name. The canonical candidate (hyphen→underscore, lowered)
+// is always first. Additional candidates are produced by stripping common
+// prefixes and by taking the segment after the last hyphen, which covers cases
+// where the distribution name differs from the import module name.
+func buildPyPIImportPaths(name string) []string {
+	seen := make(map[string]struct{})
+	var paths []string
+
+	add := func(p string) {
+		if p == "" {
+			return
+		}
+		if _, ok := seen[p]; ok {
+			return
+		}
+		seen[p] = struct{}{}
+		paths = append(paths, p)
+	}
+
+	// 1. Canonical: replace hyphens with underscores and lowercase.
+	canonical := strings.ToLower(strings.ReplaceAll(name, "-", "_"))
+	add(canonical)
+
+	lower := strings.ToLower(name)
+
+	// 2. Strip well-known prefixes (e.g., "python-multipart" → "multipart").
+	for _, prefix := range pypiPrefixes {
+		if after, ok := strings.CutPrefix(lower, prefix); ok && after != "" {
+			add(strings.ReplaceAll(after, "-", "_"))
+		}
+	}
+
+	// 3. Segment after the last hyphen (e.g., "python-multipart" → "multipart").
+	// Only added when the name contains at least one hyphen and the result
+	// differs from candidates already generated.
+	if idx := strings.LastIndex(lower, "-"); idx >= 0 {
+		tail := lower[idx+1:]
+		add(tail)
+	}
+
+	return paths
 }
 
 // mavenPackageOverrides maps "groupId/artifactId" to known Java package

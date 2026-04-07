@@ -88,11 +88,10 @@ func TestBuildImportPaths(t *testing.T) {
 	}
 	result := buildImportPaths(purls)
 
-	// Non-Maven ecosystems still return a single import path.
+	// Non-Maven, non-PyPI ecosystems still return a single import path.
 	singleExpectations := map[string]string{
 		"pkg:golang/github.com/stretchr/testify@v1.9.0": "github.com/stretchr/testify",
 		"pkg:npm/%40types/node@20.0.0":                  "@types/node",
-		"pkg:pypi/flask@3.0.0":                          "flask",
 	}
 	for purl, wantImport := range singleExpectations {
 		got, ok := result[purl]
@@ -103,6 +102,13 @@ func TestBuildImportPaths(t *testing.T) {
 		if len(got) != 1 || got[0] != wantImport {
 			t.Errorf("import path for %s = %v, want [%s]", purl, got, wantImport)
 		}
+	}
+
+	// PyPI without hyphens returns a single import path.
+	pypiPURL := "pkg:pypi/flask@3.0.0"
+	gotPyPI := result[pypiPURL]
+	if len(gotPyPI) != 1 || gotPyPI[0] != "flask" {
+		t.Errorf("import path for %s = %v, want [flask]", pypiPURL, gotPyPI)
 	}
 
 	// Maven returns groupId only when artifactId contains hyphens (invalid in Java package names).
@@ -179,6 +185,68 @@ func TestBuildMavenImportPaths(t *testing.T) {
 			name: "hyphenated namespace without override skips groupId.artifactId",
 			purl: "pkg:maven/my-company/mylib@1.0.0",
 			want: []string{"mylib"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := buildImportPaths([]string{tt.purl})
+			got := result[tt.purl]
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("buildImportPaths(%s) = %v, want no entry", tt.purl, got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("missing import paths for %s", tt.purl)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("buildImportPaths(%s) = %v, want %v", tt.purl, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildPyPIImportPaths(t *testing.T) {
+	tests := []struct {
+		name string
+		purl string
+		want []string
+	}{
+		{
+			name: "python-prefix stripped: python-multipart",
+			purl: "pkg:pypi/python-multipart@0.0.6",
+			want: []string{"python_multipart", "multipart"},
+		},
+		{
+			name: "simple hyphenated name: email-validator",
+			purl: "pkg:pypi/email-validator@2.0.0",
+			want: []string{"email_validator", "validator"},
+		},
+		{
+			name: "case normalization: PyYAML",
+			purl: "pkg:pypi/PyYAML@6.0.1",
+			want: []string{"pyyaml"},
+		},
+		{
+			name: "no hyphens: requests",
+			purl: "pkg:pypi/requests@2.31.0",
+			want: []string{"requests"},
+		},
+		{
+			name: "py-prefix stripped: py-cpuinfo",
+			purl: "pkg:pypi/py-cpuinfo@9.0.0",
+			want: []string{"py_cpuinfo", "cpuinfo"},
+		},
+		{
+			name: "multiple hyphens: python-jose-cryptodome",
+			purl: "pkg:pypi/python-jose-cryptodome@1.3.2",
+			want: []string{"python_jose_cryptodome", "jose_cryptodome", "cryptodome"},
+		},
+		{
+			name: "simple name: flask",
+			purl: "pkg:pypi/flask@3.0.0",
+			want: []string{"flask"},
 		},
 	}
 	for _, tt := range tests {
