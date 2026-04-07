@@ -155,8 +155,14 @@ func ResolveDirectPURLs(bom *BOMEnvelope, refMap map[string]string) map[string]s
 //	root (UUID) → go.mod (no PURL) → module-self (own PURL, has children) → actual deps
 func resolveDirectRefs(refs []string, refMap map[string]string, depIndex map[string][]string, selfPURLs map[string]struct{}) map[string]struct{} {
 	result := make(map[string]struct{})
-	var walk func(ref string, parentWasTransparent bool)
-	walk = func(ref string, parentWasTransparent bool) {
+	visited := make(map[string]struct{})
+	var walk func(ref string, soleChildOfTransparent bool)
+	walk = func(ref string, soleChildOfTransparent bool) {
+		if _, seen := visited[ref]; seen {
+			return
+		}
+		visited[ref] = struct{}{}
+
 		purl, hasPURL := refMap[ref]
 		children := depIndex[ref]
 
@@ -164,14 +170,15 @@ func resolveDirectRefs(refs []string, refMap map[string]string, depIndex map[str
 			if _, isSelf := selfPURLs[purl]; isSelf {
 				// Explicitly known self module — walk through.
 				for _, child := range children {
-					walk(child, true)
+					walk(child, false)
 				}
 				return
 			}
-			// If parent was a transparent node (no PURL) and this node is the
-			// sole child with its own children, it's likely the module-self
-			// (e.g., Trivy: go.mod → github.com/foo/bar → actual deps).
-			if parentWasTransparent && len(children) > 0 {
+			// Heuristic for Trivy's module-self pattern:
+			// go.mod (no PURL, 1 child) → module (PURL, has children) → actual deps
+			// Only treat as module-self if this was the SOLE child of a
+			// transparent parent AND it has its own children.
+			if soleChildOfTransparent && len(children) > 0 {
 				slog.Debug("treating as module-self (sole child of transparent parent with own children)", "purl", purl)
 				for _, child := range children {
 					walk(child, false)
@@ -183,8 +190,10 @@ func resolveDirectRefs(refs []string, refMap map[string]string, depIndex map[str
 			return
 		}
 		// No PURL — transparent node, walk children.
+		// Mark sole-child status for the heuristic.
+		isSole := len(children) == 1
 		for _, child := range children {
-			walk(child, true)
+			walk(child, isSole)
 		}
 	}
 	for _, ref := range refs {

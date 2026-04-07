@@ -254,6 +254,7 @@ func (a *Analyzer) AnalyzeCoupling(
 
 		// Reuse a single QueryCursor across extractImports and countCallSites.
 		cursor := sitter.NewQueryCursor()
+		defer cursor.Close()
 
 		// Phase 1: Extract imports and build alias->PURL map for this file.
 		fileAliases := a.extractImports(cfg, root, src, importToPURL, lid, cursor)
@@ -283,7 +284,6 @@ func (a *Analyzer) AnalyzeCoupling(
 
 		// Phase 2: Count call sites using alias->PURL mapping.
 		a.countCallSites(cfg, root, src, fileAliases, accum, cursor)
-		cursor.Close()
 
 		return nil
 	})

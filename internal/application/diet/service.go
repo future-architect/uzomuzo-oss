@@ -85,6 +85,8 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 			if couplingErr != nil {
 				slog.Warn("Phase 2 failed, continuing without coupling data", "error", couplingErr)
 				couplingResults = nil
+			} else if len(couplingResults) == 0 {
+				slog.Warn("Phase 2: no imports matched any dependency — verify --source points to the correct directory", "source", input.SourceRoot)
 			} else {
 				slog.Info("Phase 2 complete", "analyzed", len(couplingResults))
 			}
@@ -197,10 +199,11 @@ func computeHealthSignals(a *domain.Analysis) domaindiet.HealthSignals {
 		h.MaintenanceStatus = domain.LabelEOLScheduled.String()
 		h.HealthRisk = 0.7
 	default:
-		h.MaintenanceStatus = a.FinalMaintenanceStatus().String()
+		ms := a.FinalMaintenanceStatus()
+		h.MaintenanceStatus = ms.String()
 		h.HealthRisk = 0.2
 		// Elevate risk for non-active statuses
-		switch a.FinalMaintenanceStatus() {
+		switch ms {
 		case domain.LabelStalled:
 			h.IsStalled = true
 			h.HealthRisk = 0.6
