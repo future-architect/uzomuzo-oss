@@ -1,9 +1,7 @@
 ---
+name: diet-evaluate-removal
 description: "6-axis deep evaluation of whether a dependency is worth removing"
-arguments:
-  - name: module
-    description: "Module path to analyze (e.g. github.com/pkg/errors)"
-    required: true
+argument-hint: "<module path, e.g. github.com/pkg/errors>"
 ---
 
 # Diet Removal Evaluation: $ARGUMENTS

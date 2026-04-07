@@ -1,14 +1,22 @@
 ---
-description: "Remove a dependency identified by uzomuzo diet — with safety checks and verification"
-arguments:
-  - name: target
-    description: "Module path or PURL to remove (e.g. github.com/pkg/errors, pkg:golang/github.com/foo/bar@v1.0.0)"
-    required: true
+name: diet-remove
+description: "Remove a dependency identified by uzomuzo diet — analysis + issue (default) or direct PR"
+argument-hint: "<module path or PURL> [--pr] [--repo owner/repo]"
 ---
 
 # Diet Remove: $ARGUMENTS
 
-Remove the dependency `$ARGUMENTS` from this project. This command handles the full removal lifecycle: analysis → replacement → verification → cleanup.
+Analyze and plan the removal of dependency `$ARGUMENTS`, then take action.
+
+## Mode selection
+
+- **Default (Issue mode)**: Run Phase 1 analysis, then file a GitHub Issue with the findings and proposed migration plan. Appropriate for external OSS contributions and large projects where you don't own the build environment.
+- **`--pr` (PR mode)**: Run the full removal lifecycle locally: analysis → replacement → verification → commit. Use this only when you own the project and can run build/test locally.
+
+Parse `$ARGUMENTS` for flags:
+- If `--pr` is present → PR mode (direct implementation)
+- If `--repo owner/repo` is present → target that repository for the issue
+- Otherwise → Issue mode (default)
 
 **When to use**: After `/diet-evaluate-removal` confirms the dependency is worth removing, or when `uzomuzo diet` ranks it as trivial/easy.
 
@@ -71,6 +79,110 @@ Check these before starting:
 
 - **Blank imports**: `import _ "pkg"` only runs `init()`. Check what `init()` does
   (usually driver/codec registration) before removing.
+
+## Issue mode (default): File a GitHub Issue
+
+### Step 0: Duplicate check (MANDATORY)
+
+Before filing anything, search for existing issues and discussions. GitHub search is word-level tokenized — not semantic — so **run multiple queries** with different phrasings to reduce false negatives:
+
+```bash
+# Search by package name (exact)
+gh search issues "{dependency}" --repo {owner/repo} --limit 10
+# Search by replacement package name
+gh search issues "{replacement}" --repo {owner/repo} --limit 10
+# Search by keywords describing the change
+gh search issues "replace deprecated {short-name}" --repo {owner/repo} --limit 10
+# Search discussions (same queries)
+gh api graphql -f query='{ search(query: "repo:{owner/repo} {dependency} type:discussion", type: DISCUSSION, first: 10) { nodes { ... on Discussion { title url } } } }'
+```
+
+Example for `@vercel/kv`:
+```bash
+gh search issues "@vercel/kv" --repo vercel/next.js --limit 10
+gh search issues "@upstash/redis" --repo vercel/next.js --limit 10
+gh search issues "replace deprecated kv" --repo vercel/next.js --limit 10
+```
+
+**Post-filter**: GitHub fuzzy search can return false positives. Verify that each hit is actually about the same dependency removal — not just a mention in passing.
+
+If a matching issue/discussion already exists, **do not file a duplicate**. Instead, add a comment with any new analysis (e.g., impact data from diet) and stop.
+
+### Step 1: File the issue or discussion
+
+After completing Phase 1, **stop and file an issue** instead of implementing. This is the default because:
+- External contributors cannot run CI or regenerate lockfiles
+- Maintainers need context to evaluate the change
+- Large monorepos have project-specific build/test requirements
+
+### Issue template
+
+Use `gh issue create` with the following structure:
+
+```
+Title: dep: replace EOL {dependency} with {replacement}
+
+Body:
+## Problem
+
+`{dependency}` is {lifecycle status} (detected by [uzomuzo diet](https://github.com/future-architect/uzomuzo-oss)).
+{1-2 sentences on why this matters — security risk, no more patches, etc.}
+
+## Impact analysis
+
+- **Files**: {N} files import this dependency
+- **Call sites**: {N} calls across {N} APIs
+- **Exclusive transitive deps**: {N} (removed together)
+- **Stays as indirect**: {yes/no}
+- **Difficulty**: {trivial/easy/moderate/hard}
+
+### Usage breakdown
+
+| File | Usage | Category |
+|------|-------|----------|
+{table of files and how they use the dependency}
+
+## Proposed replacement
+
+{replacement} — {why this is the right alternative}
+
+### API mapping
+
+| Current | Replacement |
+|---------|-------------|
+{API-level migration table}
+
+### Environment variable changes
+
+{any env var renames needed, or "None"}
+
+## Notes
+
+- {any hidden complications from Phase 1 step 3}
+- {API leakage? build tags? generated code?}
+```
+
+### Choosing the right channel
+
+Before filing, check the target repository's issue templates:
+
+1. Run `ls <repo>/.github/ISSUE_TEMPLATE/` or check `config.yml` for `blank_issues_enabled`
+2. If `blank_issues_enabled: false` and only bug/docs templates exist, the project likely uses **Discussions** for proposals. File in the `Ideas` category instead:
+   ```bash
+   # Use GitHub Discussions when issues require a specific template
+   gh api graphql -f query='mutation { createDiscussion(input: { repositoryId: "...", categoryId: "...", title: "...", body: "..." }) { discussion { url } } }'
+   ```
+3. If blank issues are enabled or a "feature request" template exists, use `gh issue create`
+
+**After filing, stop.** Do not proceed to implementation.
+
+If `--pr` was specified, skip this section and continue to Phase 1.5 below.
+
+---
+
+## PR mode (`--pr`): Direct implementation
+
+The following phases apply only in PR mode. Use this when you own the project.
 
 ## Phase 1.5: Test coverage check — before you touch anything
 
