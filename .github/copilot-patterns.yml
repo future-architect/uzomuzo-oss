@@ -100,3 +100,8 @@ patterns:
   # defensive-coding (PR #176 round 3): already covered by "Validate Generated Strings Against Target-Language Syntax" — gate fallback artifactId candidate behind isJavaPackageSafe
   # defensive-coding (PR #176 round 4): already covered by "Use Case-Insensitive Comparison for URL Components" spirit — use strings.EqualFold for namespace/name equality in Maven candidate filtering
   # defensive-coding (PR #176 round 5): already covered by "Validate Generated Strings Against Target-Language Syntax" — validate namespace with isJavaDottedPackageSafe before emitting groupId.artifactId candidate
+  - category: "testing"
+    summary: "Omit unused struct fields in test fixtures to avoid nondeterminism and unnecessary imports"
+    pr: 197
+    file: "internal/interfaces/cli/diet_render_test.go"
+    date: "2026-04-07"
