@@ -308,6 +308,10 @@ func TestE2E_DietStdinSBOM(t *testing.T) {
 		t.Fatalf("os.Pipe (stdin) failed: %v", err)
 	}
 	os.Stdin = stdinR
+	t.Cleanup(func() {
+		os.Stdin = oldStdin
+		_ = stdinR.Close() // best-effort cleanup
+	})
 
 	go func() {
 		_, _ = stdinW.Write(sbomData)
@@ -322,6 +326,9 @@ func TestE2E_DietStdinSBOM(t *testing.T) {
 		t.Fatalf("os.Pipe (stdout) failed: %v", err)
 	}
 	os.Stdout = w
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+	})
 
 	done := make(chan struct{})
 	go func() {
@@ -340,8 +347,6 @@ func TestE2E_DietStdinSBOM(t *testing.T) {
 	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
 
 	_ = w.Close()
-	os.Stdout = oldStdout
-	os.Stdin = oldStdin
 	<-done
 	_ = r.Close()
 
