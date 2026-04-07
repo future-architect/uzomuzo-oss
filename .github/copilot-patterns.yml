@@ -96,3 +96,4 @@ patterns:
   # testing: already covered by promoted rules (PR #160, e2e_test.go:380 — capture ReadFrom error via channel for consistency with runDiet)
   # defensive-coding (PR #176 round 3): already covered by "Normalize User-Provided Enum Values" spirit — case-insensitive override lookup key for Maven package overrides
   # defensive-coding (PR #176 round 3): already covered by "Validate Generated Strings Against Target-Language Syntax" — gate fallback artifactId candidate behind isJavaPackageSafe
+  # defensive-coding (PR #176 round 4): already covered by "Use Case-Insensitive Comparison for URL Components" spirit — use strings.EqualFold for namespace/name equality in Maven candidate filtering
