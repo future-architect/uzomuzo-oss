@@ -26,4 +26,5 @@ argument-hint: |
 - Phase 4: Dispatch plan (present to user)
 - Phase 5: Agent dispatch (worktree-isolated, parallel across groups, sequential within)
 - Phase 6: Summary report with PR links
-- Each agent: reproduce -> architect -> implement -> review-until-clean -> before/after PR
+- Phase 7: Evidence verification — check/fix Before/After test output in every PR body
+- Each agent: reproduce (MANDATORY) -> architect -> implement -> review-until-clean -> verify after (MANDATORY) -> before/after PR (template enforced)

@@ -71,10 +71,19 @@ Each agent receives this workflow instruction:
 #### Per-Issue Agent Workflow
 
 ```
-1. REPRODUCE: Build the project, set up test fixtures from the issue body,
-   run the reproduction steps. Capture exact "Before" output.
+1. REPRODUCE (MANDATORY — never skip):
+   Write a Go test that reproduces the bug described in the issue.
+   Run it and capture the exact terminal output as "Before".
    - Use `GOWORK=off` for all go commands in worktrees.
-   - If reproduction fails, report back instead of guessing.
+   - The test MUST fail (or produce wrong output) before the fix and
+     pass (or produce correct output) after the fix.
+   - If the issue describes behavior on an external OSS project
+     (e.g., "run diet on elasticsearch"), do NOT clone the external
+     repo. Instead, create a minimal unit test with synthetic fixtures
+     (test SBOM, test source files in t.TempDir()) that triggers the
+     same bug condition.
+   - If you cannot reproduce the bug at all, report back with evidence
+     instead of guessing. Do NOT proceed to IMPLEMENT.
 
 2. ARCHITECT: Launch an architect agent (subagent_type="architect") to
    review the planned approach. Incorporate feedback.
@@ -94,19 +103,42 @@ Each agent receives this workflow instruction:
    and fixes issues until the review passes clean. Only after
    review-until-clean completes with zero issues should you proceed.
 
-6. VERIFY AFTER: Re-run the reproduction from Step 1. Capture "After"
-   output showing the fix works.
+6. VERIFY AFTER (MANDATORY — never skip):
+   Re-run the reproduction test from Step 1. Capture the exact
+   terminal output as "After". The test must now pass / show correct
+   output. If it still fails, go back to Step 3.
 
 7. COMMIT & PUSH: Commit with conventional commit format.
    Include `Closes #<number>` in the body. Push the branch.
 
-8. CREATE PR: Use `gh pr create` with:
-   - Descriptive title
-   - Body containing:
-     - Summary of changes
-     - Before/After output (exact terminal output from Steps 1 and 6)
-     - `Closes #<number>`
-     - Test plan checklist
+8. CREATE PR: Use `gh pr create` with the EXACT template below.
+   Replace placeholders with real content. The Before/After sections
+   are MANDATORY — paste actual terminal output, not hand-written
+   tables or expected values.
+
+   ```
+   ## Summary
+   <1-3 bullet points describing what changed and why>
+
+   ## Before (reproduction test output)
+   ```
+   <paste exact terminal output from Step 1 — the failing/wrong test>
+   ```
+
+   ## After (verification test output)
+   ```
+   <paste exact terminal output from Step 6 — the passing test>
+   ```
+
+   Closes #<number>
+
+   ## Test plan
+   - [x] <test case 1>
+   - [x] <test case 2>
+   - [ ] CI green
+
+   🤖 Generated with [Claude Code](https://claude.com/claude-code)
+   ```
 
 9. NEXT ISSUE: If there are successor issues in the same conflict group,
    fetch the next issue with `gh issue view <N> --json body` and repeat
@@ -130,6 +162,39 @@ After all agents complete:
 
 3. If any agent failed, report the failure reason
 4. List remaining unprocessed issues for next batch
+
+### Phase 7: Evidence Verification (MANDATORY)
+
+After Phase 6, verify every PR has proper test evidence. Agents often
+produce hand-written tables or skip Before/After — this phase catches
+and fixes that.
+
+For each PR created in this batch:
+
+1. **Check**: Run `gh pr view <N> --json body -q .body` and verify it
+   contains BOTH a `## Before` and `## After` section, each with a
+   fenced code block (` ``` `) containing real terminal output (lines
+   starting with `=== RUN`, `--- PASS`, `--- FAIL`, `PASS`, `ok`, or
+   similar Go test output patterns).
+
+2. **Remediate** if either section is missing or contains only a table:
+   a. Fetch the PR branch: `gh pr view <N> --json headRefName`
+   b. Create a temporary detached worktree:
+      `git worktree add /tmp/pr<N> origin/<branch> --detach`
+   c. Identify the new test functions from the diff:
+      `git diff origin/main...origin/<branch> -- '*.go' | grep '+func Test'`
+   d. Run them with verbose output:
+      `cd /tmp/pr<N> && GOWORK=off go test -run '<TestName>' -v ./<package>/...`
+   e. Capture the output and update the PR body with `gh pr edit`.
+   f. Clean up: `git worktree remove /tmp/pr<N>`
+
+3. **Case-study enrichment** (optional): If you have access to prior
+   diet output data (e.g., from memory or local files) that shows the
+   bug in a real-world project, add it to the `## Before` section as
+   additional evidence. Label it clearly:
+   `## Before (case-study evidence: <source>)`
+
+4. Report which PRs were remediated in the summary table.
 
 ## Safety Rules
 
