@@ -495,7 +495,7 @@ func (a *Analyzer) handlePythonImport(
 	cfg *langConfig,
 ) {
 	// Resolve the module's PURL via exact match, top-level name, or prefix matching.
-	purl := a.resolvePythonPURL(importPath, importToPURL, cfg)
+	purl := a.resolvePythonPURL(importPath, importToPURL)
 	if purl == "" {
 		return
 	}
@@ -512,15 +512,17 @@ func (a *Analyzer) handlePythonImport(
 func (a *Analyzer) resolvePythonPURL(
 	importPath string,
 	importToPURL map[string]string,
-	cfg *langConfig,
 ) string {
+	// Lowercase the import path for matching — importToPURL keys are already lowercased.
+	lowerPath := strings.ToLower(importPath)
+
 	// Try exact match first.
-	if purl, ok := importToPURL[importPath]; ok {
+	if purl, ok := importToPURL[lowerPath]; ok {
 		return purl
 	}
 
 	// Try top-level module name.
-	topLevel := strings.Split(importPath, ".")[0]
+	topLevel := strings.Split(lowerPath, ".")[0]
 	if purl, ok := importToPURL[topLevel]; ok {
 		return purl
 	}
@@ -530,7 +532,7 @@ func (a *Analyzer) resolvePythonPURL(
 	bestIP := ""
 	bestPURL := ""
 	for ip, purl := range importToPURL {
-		if (importPath == ip || strings.HasPrefix(importPath, ip+".")) && len(ip) > len(bestIP) {
+		if (lowerPath == ip || strings.HasPrefix(lowerPath, ip+".")) && len(ip) > len(bestIP) {
 			bestIP = ip
 			bestPURL = purl
 		}
