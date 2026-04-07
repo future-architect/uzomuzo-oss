@@ -462,6 +462,155 @@ func main() {
 	}
 }
 
+func TestAnalyzer_JavaScriptScopedDefaultImport(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "index.js"), []byte(`import cloud from "@strapi/plugin-cloud";
+
+cloud.deploy();
+cloud.status();
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/%40strapi/plugin-cloud@1.0.0": {"@strapi/plugin-cloud"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/%40strapi/plugin-cloud@1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for @strapi/plugin-cloud")
+	}
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 2 {
+		t.Errorf("CallSiteCount = %d, want 2", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 2 {
+		t.Errorf("APIBreadth = %d, want 2", ca.APIBreadth)
+	}
+}
+
+func TestAnalyzer_TypeScriptScopedNamespaceImport(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "index.ts"), []byte(`import * as S3 from "@aws-sdk/client-s3";
+
+S3.GetObjectCommand();
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/%40aws-sdk/client-s3@3.0.0": {"@aws-sdk/client-s3"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/%40aws-sdk/client-s3@3.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for @aws-sdk/client-s3")
+	}
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+}
+
+func TestAnalyzer_JavaScriptScopedRequire(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "index.js"), []byte(`const cloud = require("@strapi/plugin-cloud");
+
+cloud.deploy();
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/%40strapi/plugin-cloud@1.0.0": {"@strapi/plugin-cloud"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/%40strapi/plugin-cloud@1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for @strapi/plugin-cloud (CJS)")
+	}
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+}
+
+func TestAnalyzer_TypeScriptTypeOnlyImport(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "index.ts"), []byte(`import type { Foo } from "@scope/pkg";
+
+// No runtime usage — should not count
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/%40scope/pkg@1.0.0": {"@scope/pkg"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) != 0 {
+		t.Errorf("expected no coupling for type-only import, got %d results", len(result))
+	}
+}
+
+func TestAnalyzer_JavaScriptCombinedDefaultAndNamespaceImport(t *testing.T) {
+	dir := t.TempDir()
+	// Combined import: both default and namespace bindings should be registered.
+	err := os.WriteFile(filepath.Join(dir, "index.js"), []byte(`import cloud, * as cloudNS from "@strapi/plugin-cloud";
+
+cloud.deploy();
+cloudNS.status();
+cloudNS.teardown();
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/%40strapi/plugin-cloud@1.0.0": {"@strapi/plugin-cloud"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/%40strapi/plugin-cloud@1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for @strapi/plugin-cloud")
+	}
+	if ca.CallSiteCount != 3 {
+		t.Errorf("CallSiteCount = %d, want 3 (1 via default + 2 via namespace)", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 3 {
+		t.Errorf("APIBreadth = %d, want 3", ca.APIBreadth)
+	}
+}
+
 func TestAnalyzer_PythonPrefixNoFalseMatch(t *testing.T) {
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "main.py"), []byte(`import requests

@@ -267,6 +267,49 @@ func TestRun_BasicPipeline(t *testing.T) {
 	}
 }
 
+func TestIsWorkspaceDep(t *testing.T) {
+	tests := []struct {
+		purl string
+		want bool
+	}{
+		{"pkg:npm/express@4.18.0", false},
+		{"pkg:npm/%40scope/pkg@0.0.0-use.local", true},
+		{"pkg:npm/my-lib@workspace:*", true},
+		{"pkg:npm/my-lib@workspace:^1.0.0", true},
+		{"pkg:npm/my-lib@link:../packages/lib", true},
+		{"pkg:npm/my-lib@file:../packages/lib", true},
+		{"pkg:npm/%40types/node@20.0.0", false},
+		{"pkg:golang/github.com/foo/bar@v0.0.0-use.local", false}, // only npm
+		{"invalid-purl", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.purl, func(t *testing.T) {
+			got := isWorkspaceDep(tt.purl)
+			if got != tt.want {
+				t.Errorf("isWorkspaceDep(%q) = %v, want %v", tt.purl, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFilterWorkspaceDeps(t *testing.T) {
+	purls := []string{
+		"pkg:npm/express@4.18.0",
+		"pkg:npm/%40scope/local-pkg@0.0.0-use.local",
+		"pkg:npm/docs@0.0.0-use.local",
+		"pkg:npm/%40types/node@20.0.0",
+	}
+	filtered := filterWorkspaceDeps(purls)
+	if len(filtered) != 2 {
+		t.Fatalf("expected 2 deps after filtering, got %d: %v", len(filtered), filtered)
+	}
+	for _, p := range filtered {
+		if isWorkspaceDep(p) {
+			t.Errorf("workspace dep %q should have been filtered out", p)
+		}
+	}
+}
+
 func TestRun_NoSourceAnalyzer(t *testing.T) {
 	graphResult := &domaindiet.GraphResult{
 		DirectDeps: []string{"pkg:golang/github.com/foo/bar@v1.0.0"},
