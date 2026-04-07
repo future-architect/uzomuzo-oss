@@ -352,9 +352,9 @@ func TestComputeImpactScore_EOLScoreFloor(t *testing.T) {
 			graph:    GraphMetrics{ExclusiveTransitiveCount: 50},
 			coupling: CouplingAnalysis{ImportFileCount: 1, CallSiteCount: 2, APIBreadth: 1},
 			health:   HealthSignals{HealthRisk: 0.9, IsEOL: true},
-			// Easy coupling: score should be well above 0.10 without clamping.
-			wantMin:  0.3,
-			wantMax:  1.0,
+			// Easy coupling: deterministic score ≈ 0.4793, well above 0.10 floor.
+			wantMin:  0.479,
+			wantMax:  0.480,
 			wantHard: false,
 		},
 		{
@@ -362,16 +362,16 @@ func TestComputeImpactScore_EOLScoreFloor(t *testing.T) {
 			graph:    GraphMetrics{ExclusiveTransitiveCount: 5},
 			coupling: CouplingAnalysis{ImportFileCount: 80, CallSiteCount: 523, APIBreadth: 115},
 			health:   HealthSignals{HealthRisk: 0.8, IsEOL: false},
-			// Non-EOL hard deps should NOT get the floor — score stays near zero.
-			wantMin:  0.0,
-			wantMax:  eolScoreFloor,
+			// Non-EOL hard deps should NOT get the floor — deterministic score ≈ 0.0058.
+			wantMin:  0.005,
+			wantMax:  0.006,
 			wantHard: true,
 		},
 		{
 			name:     "Archived + hard difficulty gets floor",
 			graph:    GraphMetrics{ExclusiveTransitiveCount: 5},
 			coupling: CouplingAnalysis{ImportFileCount: 80, CallSiteCount: 523, APIBreadth: 115},
-			health:   HealthSignals{HealthRisk: 0.8, MaintenanceStatus: "Archived"},
+			health:   HealthSignals{HealthRisk: 0.8, MaintenanceStatus: maintenanceStatusArchived},
 			// Archived (not IsEOL) with hard difficulty should also get the floor.
 			wantMin:   eolScoreFloor,
 			wantMax:   eolScoreFloor + 0.001,
@@ -383,8 +383,9 @@ func TestComputeImpactScore_EOLScoreFloor(t *testing.T) {
 			graph:    GraphMetrics{ExclusiveTransitiveCount: 30},
 			coupling: CouplingAnalysis{ImportFileCount: 5, CallSiteCount: 20, APIBreadth: 10},
 			health:   HealthSignals{HealthRisk: 0.7, IsEOL: true},
-			wantMin:  eolScoreFloor,
-			wantMax:  1.0,
+			// Deterministic score ≈ 0.1295, strictly above the 0.10 floor.
+			wantMin:  0.129,
+			wantMax:  0.130,
 			wantHard: false,
 		},
 	}
