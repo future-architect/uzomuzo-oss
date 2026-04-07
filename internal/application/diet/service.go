@@ -63,13 +63,15 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 	if err != nil {
 		return nil, fmt.Errorf("graph analysis failed: %w", err)
 	}
+	// Filter workspace-local packages (npm monorepo internals) before analysis.
+	preFilterCount := len(graphResult.DirectDeps)
+	graphResult.DirectDeps = filterWorkspaceDeps(graphResult.DirectDeps)
+
 	slog.Info("Phase 1 complete",
 		"direct", len(graphResult.DirectDeps),
 		"totalTransitive", graphResult.TotalTransitive,
+		"workspaceDepsFiltered", preFilterCount-len(graphResult.DirectDeps),
 	)
-
-	// Filter workspace-local packages (npm monorepo internals) before analysis.
-	graphResult.DirectDeps = filterWorkspaceDeps(graphResult.DirectDeps)
 
 	// Phase 2 & 3: run concurrently (both only depend on graphResult from Phase 1)
 	var couplingResults map[string]*domaindiet.CouplingAnalysis
