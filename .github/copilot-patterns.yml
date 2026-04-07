@@ -56,11 +56,18 @@ patterns:
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
+  - category: "naming-consistency"
+    summary: "CLI flag descriptions that introduce domain terms mid-sentence should capitalize the term and use natural phrasing (e.g., 'Replace means...') instead of shorthand notation ('replace = ...')"
+    pr: 144
+    file: "cmd/uzomuzo/commands.go"
+    date: "2026-04-05"
   # naming-consistency: promoted to coding-standards.instructions.md (PRs #144, #159 — output column header must match rendered data field)
-  # defensive-coding: promoted to coding-standards.instructions.md (PRs #144, #159 — unique map keys for sentinels, framework-provided parsed args, classify before rounding)
+  # defensive-coding: promoted to coding-standards.instructions.md (PRs #144, #159, #162 — unique map keys for sentinels, framework-provided parsed args, classify before rounding, bounded worker pools, clone shared references)
   # comment-doc-drift: already covered by "Comment-Code Consistency" rule (PR #144, build_health_assessor.go:56 — comment claimed SLSA provenance but implementation excludes SLSA signals)
   # comment-doc-drift: already covered by promoted rule (PR #144, build_health_assessor.go:25 — ScorecardCheck comment referenced SLSA/Attestation but those signals are excluded)
   # api-consistency: already covered by "Consistent Conditional Columns Across Output Formats" (PR #144, scan_render.go:501,560 — JSON/CSV per-entry omitted "Ungraded" while summary counted it)
+  # defensive-coding: promoted (PR #144 — rename shadowing loop vars, VerdictReview for unknown enums)
+  # defensive-coding: promoted (PR #144 — classify from raw value before rounding)
   # comment-doc-drift: already covered by "Comment-Code Consistency" rule (PR #148, boxdraw.go:422 — function header comment didn't document VerdictReplace early return)
   # naming-consistency: already covered by "Comment-Code Consistency" spirit (PR #148, verdict_test.go:68 — test function name implied build integrity drives verdict after semantics changed to ignore it)
   # testing: already covered by "Cover New Control Flow Branches with Tests" (PR #148, scan_render.go:362 — missing test for buildIntegrityDisplay VerdictReplace branch)
