@@ -421,6 +421,49 @@ Structural reform approaches:
 | `c-robinson/iplib` | `net/netip` CIDR enumeration | 1 hr | IPv4 network/broadcast edge cases |
 | Trivy fanal framework | Direct parser calls | 2 days | -68% binary size, found pnpm bug |
 
+## Primary Source Links
+
+All generated content (commit messages, issues, PRs, discussions) MUST include primary source links so reviewers can verify claims independently.
+
+### Required links
+
+| Claim | Required link |
+|-------|--------------|
+| "Dependency X is Archived/Deprecated" | Registry page (npm/pkg.go.dev/PyPI/Maven Central) showing the status |
+| "Replace with Y" | Registry page for the replacement package |
+| "Official migration guide available" | Direct URL to the migration doc |
+| "Has known vulnerability" | CVE/Advisory URL (NVD, GitHub Advisory, or OSV) |
+
+### PURL → Registry URL
+
+| Ecosystem | URL pattern |
+|-----------|-------------|
+| `pkg:npm` | `https://www.npmjs.com/package/<name>` |
+| `pkg:golang` | `https://pkg.go.dev/<namespace/name>` |
+| `pkg:pypi` | `https://pypi.org/project/<name>` |
+| `pkg:maven` | `https://central.sonatype.com/artifact/<namespace>/<name>` |
+
+### Example commit message with sources
+
+```
+fix: remove @vercel/kv — deprecated, replace with @upstash/redis
+
+@vercel/kv is officially deprecated (https://www.npmjs.com/package/@vercel/kv).
+Source removed from vercel/storage repo on 2026-01-23.
+Replacement: @upstash/redis (https://www.npmjs.com/package/@upstash/redis)
+
+Before: 321 direct deps
+After:  320 direct deps
+```
+
+### Example issue body with sources
+
+When filing an issue (default mode) or PR, include:
+- Link to the registry page showing deprecation/archived status
+- Link to the replacement package's registry page
+- Link to migration guide if one exists
+- Link to the GitHub repo showing archived banner (if applicable)
+
 ## Important rules
 
 - **One dependency per commit.** Don't bundle multiple removals — if one breaks, you can revert cleanly.
@@ -429,3 +472,4 @@ Structural reform approaches:
 - **If `go mod tidy` re-adds the dependency**, something still imports it. Use `go mod why -m` to find out what.
 - **Measure before AND after.** go.sum line count, binary size, build time. Put the numbers in the commit message.
 - **If it's harder than expected, stop and reassess.** The removal may not be worth the effort — that's a valid conclusion.
+- **Always include primary source links.** Never claim "deprecated" or "archived" without evidence URLs.

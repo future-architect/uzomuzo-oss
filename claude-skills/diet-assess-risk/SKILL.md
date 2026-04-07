@@ -96,6 +96,30 @@ If analyzing multiple dependencies ("top N"), output a summary table:
 | Package | Diet Priority | Difficulty | Risk A | Risk B | Overall | Action |
 |---------|--------------|------------|--------|--------|---------|--------|
 
+## Primary Source Links
+
+The risk verdict MUST include verifiable primary source links. Never claim "EOL", "Archived", or "has CVEs" without evidence.
+
+### Required links in the verdict
+
+| Claim | Required link |
+|-------|--------------|
+| Lifecycle status | Package registry page: npm → `npmjs.com/package/<name>`, Go → `pkg.go.dev/<path>`, PyPI → `pypi.org/project/<name>`, Maven → `central.sonatype.com/artifact/<group>/<name>` |
+| Known CVEs | NVD (`nvd.nist.gov/vuln/detail/<CVE>`), GitHub Advisory (`github.com/advisories/<GHSA>`), or OSV (`osv.dev/vulnerability/<ID>`) |
+| Scorecard | `https://scorecard.dev/viewer/?uri=github.com/<org>/<repo>` |
+| Repository archived | GitHub repo URL (shows archived banner) |
+| Last commit date | `https://github.com/<org>/<repo>/commits/<branch>` |
+
+### Example verdict with links
+
+```
+### go-homedir — Risk: LOW
+
+**Lifecycle**: Archived ([pkg.go.dev](https://pkg.go.dev/github.com/mitchellh/go-homedir), [GitHub — archived](https://github.com/mitchellh/go-homedir))
+**Known CVEs**: None ([OSV](https://osv.dev/list?ecosystem=Go&q=go-homedir))
+**Scorecard**: N/A (archived repos are not scored)
+```
+
 ## Important rules
 
 - **Start from diet's output.** Don't re-discover what diet already computed.
@@ -104,3 +128,4 @@ If analyzing multiple dependencies ("top N"), output a summary table:
 - **Do not overstate risk.** If data is encrypted before reaching the package, say so.
 - **Focus on silent attacks.** Crashes are detectable. Subtle behavior changes are the real threat.
 - **This is for non-Go projects too.** The data flow tracing approach works for any language — adapt the grep/search patterns accordingly.
+- **Always include primary source links.** Every lifecycle claim, CVE reference, and scorecard score must have a clickable URL.
