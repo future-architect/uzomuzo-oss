@@ -145,6 +145,7 @@ func TestNormalizeGraphImpact(t *testing.T) {
 		{"half exclusive, max=50", 25, 50, 0.55},
 		{"small exclusive, max=50", 1, 50, 0.118},
 		{"zero maxExclusive", 5, 0, 0.1},
+		{"exclusive exceeds max (defensive clamp)", 100, 47, 1.0},
 	}
 	const tolerance = 0.001
 	for _, tt := range tests {
