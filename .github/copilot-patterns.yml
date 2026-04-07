@@ -98,3 +98,9 @@ patterns:
   # defensive-coding: already covered by "Nil vs Empty Map Semantics for Sentinel-Checked Maps" (PR #159, sbomgraph/types.go:118 + depgraph/graph.go:33)
   # comment-doc-drift: already covered by promoted rule (PR #159, analyzer.go:431 — misleading "BUG" labels for intentional import handling)
   # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, analyzer.go:336 — return nil coupling map when no source files analyzed, not empty map that misclassifies all deps as unused)
+  # defensive-coding: already covered by IsUnused flag semantics (PR #159, analyzer.go:434 — blank imports are side-effect usage; skipping them misclassifies deps as unused)
+  - category: "testing"
+    summary: "Test validation structs/tags must mirror production output schema — mismatched JSON tags silently leave fields at zero, masking regressions"
+    pr: 159
+    file: "cmd/uzomuzo-diet/e2e_test.go"
+    date: "2026-04-07"
