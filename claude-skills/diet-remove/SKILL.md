@@ -84,14 +84,27 @@ Check these before starting:
 
 ### Step 0: Duplicate check (MANDATORY)
 
-Before filing anything, search for existing issues and discussions:
+Before filing anything, search for existing issues and discussions. GitHub search is word-level tokenized — not semantic — so **run multiple queries** with different phrasings to reduce false negatives:
 
 ```bash
-# Search issues
+# Search by package name (exact)
 gh search issues "{dependency}" --repo {owner/repo} --limit 10
-# Search discussions
+# Search by replacement package name
+gh search issues "{replacement}" --repo {owner/repo} --limit 10
+# Search by keywords describing the change
+gh search issues "replace deprecated {short-name}" --repo {owner/repo} --limit 10
+# Search discussions (same queries)
 gh api graphql -f query='{ search(query: "repo:{owner/repo} {dependency} type:discussion", type: DISCUSSION, first: 10) { nodes { ... on Discussion { title url } } } }'
 ```
+
+Example for `@vercel/kv`:
+```bash
+gh search issues "@vercel/kv" --repo vercel/next.js --limit 10
+gh search issues "@upstash/redis" --repo vercel/next.js --limit 10
+gh search issues "replace deprecated kv" --repo vercel/next.js --limit 10
+```
+
+**Post-filter**: GitHub fuzzy search can return false positives. Verify that each hit is actually about the same dependency removal — not just a mention in passing.
 
 If a matching issue/discussion already exists, **do not file a duplicate**. Instead, add a comment with any new analysis (e.g., impact data from diet) and stop.
 
