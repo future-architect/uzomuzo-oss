@@ -306,14 +306,52 @@ ISSUE_EOF
 )"
 ```
 
+#### Duplicate Check (MANDATORY before filing)
+
+Before creating any issue, you MUST check for existing issues that cover the same bug:
+
+```bash
+# Step 1: Search by anomaly type + language (broad match)
+gh issue list --repo future-architect/uzomuzo-oss --label "diet-trial" \
+  --search "<anomaly-type> <language>" --state open --json number,title,body --limit 20
+
+# Step 2: If Step 1 returns results, check if any cover the same root cause.
+# Same root cause = same anomaly type + same language + same detection phase.
+# Examples of "same root cause":
+#   - "IMPORTS-BUT-NO-CALLS for Python deps" in flask AND django → same bug (Python call site detection)
+#   - "IMPORTS-BUT-NO-CALLS for Go deps" in grafana AND terraform → same bug (Go call site detection)
+#   - "IMPORTS-BUT-NO-CALLS for Go dep X" AND "IMPORTS-BUT-NO-CALLS for Python dep Y" → DIFFERENT bugs
+```
+
+**If a matching issue exists** → add a comment with new evidence:
+```bash
+gh issue comment <issue-number> --repo future-architect/uzomuzo-oss --body "$(cat <<'COMMENT_EOF'
+## Additional evidence from <org/repo>
+
+**Affected deps**: <list>
+**SBOM tool**: <trivy|syft> v<version>
+
+### Diet entry
+```json
+<diet-entry-json>
+```
+
+### Source references
+```
+<grep output>
+```
+
+---
+*Added by `/diet-trial`*
+COMMENT_EOF
+)"
+```
+
+**If no matching issue exists** → create a new one (see Issue Filing above).
+
 #### Guidelines
 
 - **Group related anomalies**: If 5 Python deps all show IMPORTS-BUT-NO-CALLS, that's likely one bug (e.g., Python call site detection). File one issue, list all affected deps.
-- **Check for duplicates first**: Before filing, search existing issues:
-  ```bash
-  gh issue list --repo future-architect/uzomuzo-oss --label "diet-trial" --search "<anomaly-type>" --state open
-  ```
-  If a matching open issue exists, add a comment with the new evidence instead of filing a duplicate.
 - **Severity hints**: Include in the issue body:
   - How many deps are affected in this project
   - Whether the same anomaly appeared in other trial runs
