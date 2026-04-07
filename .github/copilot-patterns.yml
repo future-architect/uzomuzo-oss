@@ -117,3 +117,4 @@ patterns:
   # comment-doc-drift (PR #223): already covered by "ADR and Documentation Must Describe Actual Behavior" — detailed output now renders a truncated symbols list (fixed in cf5ca6e)
   # testing (PR #223): promoted — assert all new output fields when extending structs (see testing-performance.instructions.md)
   # testing (PR #223 round 4): already covered by promoted rule — add IsUnused/HasWildcardImport assertions for blank-import case to lock in intended behavior
+  # testing (PR #223 round 5): already covered by promoted rule — assert CallSiteCount baseline for dot-import case that documents "has baseline call sites"
