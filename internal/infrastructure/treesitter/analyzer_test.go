@@ -1057,8 +1057,9 @@ public class Main {
 	}
 }
 
-func TestAnalyzer_ImportToPURLCollision_Go(t *testing.T) {
-	// Go version of collision test: two versions of the same module.
+func TestAnalyzer_ImportToPURLCollision_DuplicateImportPath(t *testing.T) {
+	// Tests that duplicate import-path candidates from different PURLs are handled correctly.
+	// Uses Go syntax, but the scenario is ecosystem-agnostic: two PURLs map to the same path.
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
 

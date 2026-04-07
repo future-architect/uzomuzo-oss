@@ -219,9 +219,10 @@ func (a *Analyzer) AnalyzeCoupling(
 			importToPURL[key] = append(importToPURL[key], purl)
 		}
 	}
-	// Sort each PURL slice for deterministic behavior when iterating.
-	for _, purls := range importToPURL {
+	// Sort and deduplicate each PURL slice for deterministic behavior when iterating.
+	for key, purls := range importToPURL {
 		slices.Sort(purls)
+		importToPURL[key] = slices.Compact(purls)
 	}
 
 	accum := make(map[string]*accumulator)
@@ -474,7 +475,7 @@ func (a *Analyzer) handleGoImport(
 
 	// Note: Blank imports (import _ "pkg") are side-effect-only (init registration).
 	// Record the import file so the dep is not misclassified as "unused", but skip call-site counting.
-	// Use a unique key per import path so multiple blank imports in one file are all preserved.
+	// Use a unique key per import path so blank imports of different packages in one file are preserved.
 	if alias == "_" {
 		key := blankImportAlias + importPath
 		aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
