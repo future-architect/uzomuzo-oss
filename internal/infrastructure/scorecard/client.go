@@ -81,7 +81,11 @@ func NewClient(cfg *config.ScorecardConfig) *Client {
 }
 
 // NewClientWith creates a client with explicit HTTP client and base URL (for tests).
+// If httpClient is nil, a default client with no retries is created.
 func NewClientWith(httpClient *httpclient.Client, baseURL string) *Client {
+	if httpClient == nil {
+		httpClient = httpclient.NewClient(nil, httpclient.RetryConfig{})
+	}
 	if baseURL == "" {
 		baseURL = "https://api.scorecard.dev"
 	}
@@ -140,6 +144,7 @@ func (c *Client) FetchScorecard(ctx context.Context, repoKey string) (*Scorecard
 
 // FetchScorecardBatch fetches scorecard data for multiple repository keys concurrently.
 // Returns results keyed by the input repoKey. Missing or failed entries are omitted.
+// Uses a bounded worker pool (size = maxConcurrency) to cap goroutine count.
 func (c *Client) FetchScorecardBatch(ctx context.Context, repoKeys []string) map[string]*ScorecardResult {
 	if c == nil || len(repoKeys) == 0 {
 		return nil
@@ -148,32 +153,48 @@ func (c *Client) FetchScorecardBatch(ctx context.Context, repoKeys []string) map
 	results := make(map[string]*ScorecardResult, len(repoKeys))
 	var mu sync.Mutex
 
-	sem := make(chan struct{}, c.maxConcurrency)
-	var wg sync.WaitGroup
-	for _, key := range repoKeys {
-		wg.Add(1)
-		go func(rk string) {
-			defer wg.Done()
-			select {
-			case <-ctx.Done():
-				return
-			case sem <- struct{}{}:
-				defer func() { <-sem }()
-			}
-			result, err := c.FetchScorecard(ctx, rk)
-			if err != nil {
-				slog.Debug("scorecard_fetch_failed", "repo_key", rk, "error", err)
-				return
-			}
-			if result == nil {
-				return
-			}
-			mu.Lock()
-			results[rk] = result
-			mu.Unlock()
-		}(key)
+	workerCount := c.maxConcurrency
+	if workerCount <= 0 {
+		workerCount = defaultMaxConcurrency
 	}
+	if workerCount > len(repoKeys) {
+		workerCount = len(repoKeys)
+	}
+
+	jobs := make(chan string)
+	var wg sync.WaitGroup
+
+	for range workerCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for rk := range jobs {
+				result, err := c.FetchScorecard(ctx, rk)
+				if err != nil {
+					slog.Debug("scorecard_fetch_failed", "repo_key", rk, "error", err)
+					continue
+				}
+				if result == nil {
+					continue
+				}
+				mu.Lock()
+				results[rk] = result
+				mu.Unlock()
+			}
+		}()
+	}
+
+	for _, key := range repoKeys {
+		select {
+		case <-ctx.Done():
+			goto done
+		case jobs <- key:
+		}
+	}
+done:
+	close(jobs)
 	wg.Wait()
+
 	if len(results) == 0 {
 		return nil
 	}

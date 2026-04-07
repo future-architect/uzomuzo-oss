@@ -76,7 +76,13 @@ func (s *IntegrationService) enrichScorecardFromAPI(ctx context.Context, analyse
 			"new_checks", len(result.Scores),
 		)
 		a.OverallScore = result.OverallScore
-		a.Scores = result.Scores
+		// Clone the map to prevent cross-analysis coupling when multiple
+		// analyses share the same repoKey (same underlying map instance).
+		cloned := make(map[string]*domain.ScoreEntity, len(result.Scores))
+		for k, v := range result.Scores {
+			cloned[k] = v
+		}
+		a.Scores = cloned
 
 		// Re-run archived detection from the "Maintained" check reason.
 		// scorecard.dev may have a different or updated reason string.
