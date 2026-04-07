@@ -108,3 +108,6 @@ patterns:
     pr: 197
     file: "internal/interfaces/cli/diet_render_test.go"
     date: "2026-04-07"
+  # defensive-coding (PR #200): already covered by "Deduplicate Inputs Before Batch API Calls" spirit — compact map[K][]V slices after append to prevent double-counting
+  # comment-doc-drift (PR #200): already covered by promoted rule — blank-import comment said "multiple blank imports in one file" but key is per import path
+  # testing (PR #200): already covered by promoted rules — Go collision test name implied unrealistic multi-version scenario; renamed to reflect actual behavior
