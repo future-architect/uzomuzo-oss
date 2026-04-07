@@ -1236,7 +1236,9 @@ followRedirects.https;
 			wantBreadth: 2,
 		},
 		{
-			name:     "ES default import with constructor and prototype",
+			// new FormData() is a new_expression, which the call query does not match;
+			// only FormData.prototype (member_expression) is counted as a call site.
+			name:     "ES default import with member access (new_expression ignored)",
 			filename: "index.js",
 			code: `import FormData from 'form-data';
 
