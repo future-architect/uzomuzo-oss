@@ -362,16 +362,38 @@ COMMENT_EOF
 
 After analysis, display a structured report to the user. The report MUST include:
 
-1. **Header**: Project name, date, SBOM tool, component count, ecosystem breakdown
-2. **Summary table**: total_direct, total_transitive, unused_direct, easy_wins
-3. **Difficulty distribution**: trivial / easy / moderate / hard
-4. **EOL/Archived dependencies actually used in code** (the key finding):
+1. **Header**: Project name, date, SBOM tool
+2. **Executive Summary** (blockquote at top, immediately after header): A quick-scan verdict so readers can assess the project in 3 seconds. Format:
+
+```markdown
+> **判定: <良好|注意|要改善>** — 直接依存 N 件、未使用 X% (M件)、EOL/Archived K 件
+>
+> | 指標 | 値 |
+> |------|-----|
+> | 直接依存 | N |
+> | 推移的依存 | N |
+> | 未使用率 | X% (M件) |
+> | EOL/Archived | K |
+> | Easy Wins | J |
+>
+> **最優先**: <most impactful immediate action>
+```
+
+Verdict rules:
+- **良好**: No EOL deps AND unused < 20%
+- **注意**: 1-4 EOL deps OR unused 20-39%
+- **要改善**: 5+ EOL deps OR unused >= 40%
+
+3. **Execution conditions**: Tool versions, flags, SBOM component count, ecosystem breakdown
+4. **Summary table**: total_direct, total_transitive, unused_direct, easy_wins
+5. **Difficulty distribution**: trivial / easy / moderate / hard
+6. **EOL/Archived dependencies actually used in code** (the key finding):
    - Grouped by difficulty (hard → moderate → easy)
    - Include: name, files, calls, APIs, lifecycle status
    - Include migration target suggestions where obvious (e.g., `golang/mock` → `uber-go/mock`)
-5. **Recommended action phases**: Phase 1 (trivial), Phase 2 (easy EOL), Phase 3 (moderate EOL), Phase 4 (hard EOL)
-6. **Anomaly check results**: Any potential bugs or accuracy issues found
-7. **Top 20 by priority score**
+7. **Recommended action phases**: Phase 1 (trivial), Phase 2 (easy EOL), Phase 3 (moderate EOL), Phase 4 (hard EOL)
+8. **Anomaly check results**: Any potential bugs or accuracy issues found
+9. **Top 20 by priority score**
 
 ### Step 6: Save Report (unless --no-save)
 
@@ -422,6 +444,7 @@ cp /tmp/diet-trial-<repo>-<tool>-sbom.json "${DEST}/${BASE}.sbom.json"
 
 The saved report must be in the same format as existing case studies in `case-studies/`. Use Japanese for section headers and commentary (matching existing case study style). Include:
 
+- **Executive Summary** (blockquote, immediately after title and description) — this is the most important section
 - Execution conditions (tool versions, flags used)
 - All tables from Step 5
 - Raw data file paths
