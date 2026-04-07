@@ -114,7 +114,7 @@ func renderDietJSON(w io.Writer, plan *domaindiet.DietPlan) error {
 			ImportFileCount:     e.Coupling.ImportFileCount,
 			CallSiteCount:       e.Coupling.CallSiteCount,
 			APIBreadth:          e.Coupling.APIBreadth,
-			Symbols:             e.Coupling.Symbols,
+			Symbols:             normalizeSymbols(e.Coupling.Symbols),
 			IsUnused:            e.Coupling.IsUnused,
 			ImportFiles:         e.Coupling.ImportFiles,
 			HasBlankImport:      e.Coupling.HasBlankImport,
@@ -271,6 +271,15 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 	p.printf("\n")
 
 	return p.err
+}
+
+// normalizeSymbols returns an empty slice when symbols is nil, ensuring JSON
+// output emits [] instead of null for consistent schema.
+func normalizeSymbols(symbols []string) []string {
+	if symbols == nil {
+		return []string{}
+	}
+	return symbols
 }
 
 // formatSymbolList formats a list of symbol names for display, truncating if too many.
