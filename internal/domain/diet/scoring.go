@@ -111,6 +111,15 @@ func normalizeCouplingEffort(c CouplingAnalysis) float64 {
 	if c.IsUnused {
 		return 0.0
 	}
+	// When all coupling counts are zero and IsUnused is false, no source
+	// analysis was performed (or the dep truly has zero usage but the
+	// analyzer did not set IsUnused). Treat as zero effort so that the
+	// difficulty label ("trivial") is consistent regardless of whether
+	// --source was provided. Without this guard, logistic(0, midpoint)
+	// returns ~0.018, which classifies as "easy" instead of "trivial".
+	if c.ImportFileCount == 0 && c.CallSiteCount == 0 && c.APIBreadth == 0 {
+		return 0.0
+	}
 	fileScore := logistic(float64(c.ImportFileCount), 5.0)
 	callScore := logistic(float64(c.CallSiteCount), 20.0)
 	apiScore := logistic(float64(c.APIBreadth), 10.0)

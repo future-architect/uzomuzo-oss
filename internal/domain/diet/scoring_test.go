@@ -163,6 +163,70 @@ func TestNormalizeGraphImpact(t *testing.T) {
 	}
 }
 
+func TestNormalizeCouplingEffort_ZeroCounts(t *testing.T) {
+	// Regression test for #181: when all coupling counts are zero and
+	// IsUnused is false (no source analysis), effort should be 0 so that
+	// difficulty is "trivial" — consistent with the IsUnused=true path.
+	tests := []struct {
+		name   string
+		c      CouplingAnalysis
+		want   float64
+	}{
+		{
+			name: "no source data (all zeros, not unused)",
+			c:    CouplingAnalysis{IsUnused: false},
+			want: 0.0,
+		},
+		{
+			name: "unused dep",
+			c:    CouplingAnalysis{IsUnused: true},
+			want: 0.0,
+		},
+		{
+			name: "has imports but no calls",
+			c:    CouplingAnalysis{ImportFileCount: 1},
+			want: 0.0, // not exactly 0.0, but let's check
+		},
+	}
+	const tolerance = 0.001
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeCouplingEffort(tt.c)
+			if tt.name == "has imports but no calls" {
+				// Should be non-zero: logistic(1, 5) > 0
+				if got < 0.01 {
+					t.Errorf("normalizeCouplingEffort() = %f, expected > 0 for non-zero imports", got)
+				}
+				return
+			}
+			if got < tt.want-tolerance || got > tt.want+tolerance {
+				t.Errorf("normalizeCouplingEffort() = %f, want %f (±%f)", got, tt.want, tolerance)
+			}
+		})
+	}
+}
+
+func TestClassifyDifficulty_ConsistentWithoutSource(t *testing.T) {
+	// Verify that deps with 0 coupling get "trivial" difficulty regardless
+	// of whether --source was provided (IsUnused true vs false with zero counts).
+	withSource := CouplingAnalysis{IsUnused: true}
+	withoutSource := CouplingAnalysis{IsUnused: false} // zero value, no source analysis
+
+	effortWith := normalizeCouplingEffort(withSource)
+	effortWithout := normalizeCouplingEffort(withoutSource)
+
+	diffWith := classifyDifficulty(effortWith)
+	diffWithout := classifyDifficulty(effortWithout)
+
+	if diffWith != diffWithout {
+		t.Errorf("difficulty mismatch: --source=%q vs no-source=%q (efforts: %f vs %f)",
+			diffWith, diffWithout, effortWith, effortWithout)
+	}
+	if diffWith != DifficultyTrivial {
+		t.Errorf("expected trivial difficulty for zero coupling, got %q", diffWith)
+	}
+}
+
 func TestComputeImpactScore_UnusedZeroExclusive(t *testing.T) {
 	// Regression test for #171: typical unused dep with 0 exclusive transitives
 	// should produce a PriorityScore that can realistically exceed the
