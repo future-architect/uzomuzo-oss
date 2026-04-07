@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 
 	dietapp "github.com/future-architect/uzomuzo-oss/internal/application/diet"
@@ -42,15 +41,9 @@ func RunDiet(
 	}
 
 	// Read SBOM data
-	var sbomData []byte
-	var err error
-	if opts.SBOMPath == "-" {
-		sbomData, err = io.ReadAll(os.Stdin)
-	} else {
-		sbomData, err = os.ReadFile(opts.SBOMPath)
-	}
+	sbomData, err := readSBOMData(opts.SBOMPath)
 	if err != nil {
-		return fmt.Errorf("failed to read SBOM from '%s': %w", opts.SBOMPath, err)
+		return err
 	}
 
 	// Create analysis service for health signals

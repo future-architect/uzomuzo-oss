@@ -68,6 +68,11 @@ func runDiet(t *testing.T, format string) string {
 		t.Fatalf("os.Pipe failed: %v", err)
 	}
 	os.Stdout = w
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		_ = r.Close()
+		_ = w.Close()
+	})
 
 	graphAnalyzer := depgraph.NewAnalyzer()
 	sourceAnalyzer := treesitter.NewAnalyzer()
@@ -88,15 +93,10 @@ func runDiet(t *testing.T, format string) string {
 
 	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
 
-	if err := w.Close(); err != nil {
-		t.Fatalf("failed to close stdout pipe writer: %v", err)
-	}
+	_ = w.Close()
 	os.Stdout = oldStdout
 	if readErr := <-readErrCh; readErr != nil {
 		t.Fatalf("failed to read captured stdout: %v", readErr)
-	}
-	if err := r.Close(); err != nil {
-		t.Fatalf("failed to close stdout pipe reader: %v", err)
 	}
 
 	if runErr != nil {
