@@ -203,15 +203,53 @@ RANK  PRIORITY  DIFFICULTY  PURL                              ONLY-VIA-THIS  FIL
 }
 ```
 
-## Integration with LLMs
+## Diet Workflow: scan → diet → LLM → remove
 
-The JSON output is designed for LLM consumption. Feed it to Claude Code or similar tools to get replacement code suggestions:
+The diet family of tools forms a pipeline from detection to removal:
+
+```
+uzomuzo scan           "この依存ヤバい"         CI/CD で常時
+        ↓
+uzomuzo diet           "この順番で消せ"         四半期の棚卸し
+        ↓
+/diet-assess-risk      "残すリスクはこう"       EOL + hard な依存に
+/diet-evaluate-removal "消すコスパはこう"       moderate で迷ったとき
+        ↓
+LLM (Claude Code)      "置換コードはこれ"       実装
+```
+
+| Tool | Role | Scope | When |
+|------|------|-------|------|
+| `uzomuzo scan` | **Detect** — find EOL/Stalled deps | All deps, automated | Every CI build |
+| `uzomuzo diet` | **Prioritize** — rank by removability | All deps, automated | Quarterly review |
+| `/diet-assess-risk` | **Assess risk** — trace data flows, attack scenarios | One dep, LLM-powered | EOL deps with non-trivial coupling |
+| `/diet-evaluate-removal` | **Plan removal** — 6-axis evaluation, replacement options | One dep, LLM-powered | When unsure if removal is worth the effort |
+
+### Typical workflow
 
 ```bash
-# Generate diet plan
+# Step 1: Generate the priority ranking
+syft . --source-name myapp -o cyclonedx-json > bom.json
 uzomuzo diet --sbom bom.json --source . --format json > diet.json
 
-# Feed to Claude Code for replacement suggestions
+# Step 2: Trivial dependencies (0 imports) — just remove them
+# No LLM needed. Delete from go.mod/package.json and run `go mod tidy`.
+
+# Step 3: EOL/Stalled deps with source coupling — assess risk first
+/diet-assess-risk pkg:golang/github.com/foo/bar@v1.0.0
+
+# Step 4: Moderate deps you're unsure about — evaluate removal cost
+/diet-evaluate-removal github.com/foo/bar
+
+# Step 5: Generate replacement code
+claude "Remove github.com/foo/bar from this project, replacing with stdlib os.UserHomeDir"
+```
+
+### JSON output for LLM consumption
+
+```bash
+# Feed diet plan to Claude Code for batch replacement suggestions
+uzomuzo diet --sbom bom.json --source . --format json > diet.json
 claude "Based on this diet plan, suggest code changes to remove the top 3 dependencies: $(cat diet.json)"
 ```
 
