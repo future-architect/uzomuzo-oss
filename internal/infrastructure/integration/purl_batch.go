@@ -79,9 +79,9 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 		slog.Debug("github_enhancement_failed", "error", err)
 	}
 
-	// Dependent count + dependency count enrichment (best-effort, parallel).
-	// These are independent enrichment steps hitting different deps.dev endpoints,
-	// so running them concurrently halves wall-clock time for large batches (30k+ PURLs).
+	// Parallel enrichment: dependent counts, dependency counts, and scorecard.dev (all best-effort).
+	// These are independent enrichment steps hitting different API endpoints,
+	// so running them concurrently reduces wall-clock time for large batches (30k+ PURLs).
 	// depsGraphResults is written inside a goroutine; enrichWg.Wait() establishes
 	// a happens-before guarantee so the read after Wait is safe.
 	var depsGraphResults map[string]*depsdev.DependenciesResponse
