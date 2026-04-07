@@ -41,10 +41,13 @@ Multiple Claude Code sessions or terminals may run concurrently in the same repo
 
 Stale worktrees accumulate disk clutter, but **deleting an active worktree breaks another session**. Use `git worktree lock` to guard active worktrees.
 
-#### Creating a worktree (ALWAYS lock immediately)
+#### Creating a worktree (ALWAYS fetch + lock immediately)
+
+**Always base new worktrees on `origin/main`**, not the local `main` branch. A stale local `main` causes all worktrees to diverge from the remote, increasing conflict probability on push — especially when multiple sessions run in parallel.
 
 ```bash
-git worktree add .claude/worktrees/<name> -b <branch-name>
+git fetch origin main
+git worktree add .claude/worktrees/<name> -b <branch-name> origin/main
 git worktree lock .claude/worktrees/<name> --reason "session active: $(date -Iseconds)"
 ```
 
