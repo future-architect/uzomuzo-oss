@@ -20,8 +20,10 @@ const (
 )
 
 // ComputeImpactScore calculates the removability priority for a single dependency.
-func ComputeImpactScore(graph GraphMetrics, coupling CouplingAnalysis, health HealthSignals, totalTransitive int) ImpactScore {
-	graphImpact := normalizeGraphImpact(graph, totalTransitive)
+// maxExclusive is the largest ExclusiveTransitiveCount across all entries in the dataset,
+// used to normalize GraphImpact relative to the most impactful dependency.
+func ComputeImpactScore(graph GraphMetrics, coupling CouplingAnalysis, health HealthSignals, maxExclusive int) ImpactScore {
+	graphImpact := normalizeGraphImpact(graph, maxExclusive)
 	couplingEffort := normalizeCouplingEffort(coupling)
 	healthRisk := health.HealthRisk
 
@@ -81,12 +83,13 @@ func ComputeSummary(entries []DietEntry, totalTransitive int) DietSummary {
 	return s
 }
 
-func normalizeGraphImpact(g GraphMetrics, totalTransitive int) float64 {
-	if totalTransitive == 0 {
+func normalizeGraphImpact(g GraphMetrics, maxExclusive int) float64 {
+	if maxExclusive == 0 {
 		return 0.1
 	}
-	raw := float64(g.ExclusiveTransitiveCount) / float64(totalTransitive)
-	return math.Min(raw+0.1, 1.0)
+	raw := float64(g.ExclusiveTransitiveCount) / float64(maxExclusive)
+	// Scale to [0.1, 1.0] so even zero-exclusive deps retain a small base score.
+	return 0.1 + 0.9*raw
 }
 
 func normalizeCouplingEffort(c CouplingAnalysis) float64 {

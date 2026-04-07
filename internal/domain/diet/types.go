@@ -22,6 +22,18 @@ type GraphResult struct {
 	TotalTransitive int
 }
 
+// MaxExclusiveTransitiveCount returns the largest ExclusiveTransitiveCount
+// across all metrics in the result. Returns 0 if there are no metrics.
+func (r *GraphResult) MaxExclusiveTransitiveCount() int {
+	m := 0
+	for _, gm := range r.Metrics {
+		if gm.ExclusiveTransitiveCount > m {
+			m = gm.ExclusiveTransitiveCount
+		}
+	}
+	return m
+}
+
 // GraphMetrics captures dependency graph impact for a single direct dependency.
 type GraphMetrics struct {
 	ExclusiveTransitiveCount int

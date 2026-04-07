@@ -121,7 +121,8 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 
 	// Phase 4: Scoring and prioritization
 	slog.Info("Phase 4: Computing scores and ranking")
-	entries := s.buildEntries(graphResult, couplingResults, healthResults)
+	maxExclusive := graphResult.MaxExclusiveTransitiveCount()
+	entries := s.buildEntries(graphResult, couplingResults, healthResults, maxExclusive)
 	domaindiet.RankEntries(entries)
 	summary := domaindiet.ComputeSummary(entries, graphResult.TotalTransitive)
 
@@ -146,6 +147,7 @@ func (s *Service) buildEntries(
 	graph *domaindiet.GraphResult,
 	coupling map[string]*domaindiet.CouplingAnalysis,
 	health map[string]*domain.Analysis,
+	maxExclusive int,
 ) []domaindiet.DietEntry {
 	entries := make([]domaindiet.DietEntry, 0, len(graph.DirectDeps))
 	for _, purl := range graph.DirectDeps {
@@ -175,7 +177,7 @@ func (s *Service) buildEntries(
 		}
 
 		entry.Scores = domaindiet.ComputeImpactScore(
-			entry.Graph, entry.Coupling, entry.Health, graph.TotalTransitive,
+			entry.Graph, entry.Coupling, entry.Health, maxExclusive,
 		)
 
 		entries = append(entries, entry)
