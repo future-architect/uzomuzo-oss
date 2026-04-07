@@ -7,12 +7,14 @@
     {
       "matchManagers": ["gomod"],
       "groupName": "Go modules",
-      "groupSlug": "gomod"
+      "groupSlug": "gomod",
+      "minimumReleaseAge": "21 days"
     },
     {
       "matchManagers": ["github-actions"],
       "groupName": "GitHub Actions",
-      "groupSlug": "github-actions"
+      "groupSlug": "github-actions",
+      "minimumReleaseAge": "21 days"
     },
     {
       "matchUpdateTypes": ["minor", "patch", "digest", "pin"],
