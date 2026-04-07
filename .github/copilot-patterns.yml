@@ -86,11 +86,13 @@ patterns:
   # defensive-coding: already covered by "Normalize User-Provided Enum Values" spirit (PR #159, service.go:288 — PyPI distribution names need hyphen→underscore and lowercase normalization for import matching)
   # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, sbomgraph/types.go:122 — ResolveDirectPURLs returned nil for 0 direct deps, conflating with "no graph info")
   # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, depgraph/graph.go:37 — AnalyzeGraph used == nil instead of len == 0, misaligned with ResolveDirectPURLs empty-slice semantics)
-  # defensive-coding: promoted to coding-standards.instructions.md (PRs #160, #176 — validate generated strings against target-language syntax rules before emitting)
-  # defensive-coding (PR #160): error hints must be language/ecosystem-agnostic when the tool supports multiple languages
+  # defensive-coding: promoted to coding-standards.instructions.md (PRs #160, #175, #176 — validate generated strings against target-language syntax; ecosystem-agnostic error hints; collect all AST matches)
   # defensive-coding (PR #176): skip Maven groupId.artifactId candidates when artifactId contains chars invalid in Java package names
   # defensive-coding (PR #176 round 2): reject identifier-first-digit (e.g. "3scale") and validate dot-separated namespace segments independently
+  # logging-consistency: already covered by promoted rule (PR #175, service.go:72 — log must report post-filter count when subsequent phases use filtered data)
   # testing: already covered by promoted rules (PR #160, e2e_test.go:366 — close pipe fds in t.Cleanup; e2e_test.go:387 — check Close() errors for consistency)
   # testing: already covered by promoted rules (PR #160, e2e_test.go:100 — surface pipe close/read errors in shared test helpers for diagnosability)
   # testing: already covered by "Use `t.Cleanup` When Replacing Process-Global State" (PR #160, e2e_test.go:353 — close stdinW in t.Cleanup to prevent FD leak on early abort)
   # testing: already covered by promoted rules (PR #160, e2e_test.go:380 — capture ReadFrom error via channel for consistency with runDiet)
+  # defensive-coding (PR #176 round 3): already covered by "Normalize User-Provided Enum Values" spirit — case-insensitive override lookup key for Maven package overrides
+  # defensive-coding (PR #176 round 3): already covered by "Validate Generated Strings Against Target-Language Syntax" — gate fallback artifactId candidate behind isJavaPackageSafe
