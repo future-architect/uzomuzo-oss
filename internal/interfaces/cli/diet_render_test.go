@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"strings"
 	"testing"
-	"time"
 
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
 )
@@ -35,7 +34,6 @@ func TestRenderDietTable_QuickWinsAlwaysShown(t *testing.T) {
 					UnusedDirect: 3,
 					EasyWins:     tt.easyWins,
 				},
-				AnalyzedAt: time.Now(),
 			}
 
 			var buf bytes.Buffer
