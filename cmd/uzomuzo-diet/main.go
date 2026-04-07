@@ -50,7 +50,7 @@ func main() {
 			},
 			&urfcli.StringFlag{
 				Name:  "source",
-				Usage: "Root directory for source code coupling analysis",
+				Usage: "Project root for source coupling analysis (must match the SBOM target)",
 				Value: ".",
 			},
 			&urfcli.StringFlag{
