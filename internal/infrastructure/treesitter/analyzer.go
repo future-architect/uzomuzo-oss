@@ -77,7 +77,7 @@ type Analyzer struct {
 func newJSLikeConfig(lang *sitter.Language) *langConfig {
 	importQ := strings.Join([]string{
 		`(import_statement source: (string) @import)`,
-		`(call_expression function: (identifier) @func arguments: (arguments (string) @import))`,
+		`(call_expression function: (identifier) @func (#eq? @func "require") arguments: (arguments (string) @import))`,
 	}, "\n")
 	callQ := `(member_expression object: (identifier) @obj property: (property_identifier) @prop)`
 
@@ -353,6 +353,8 @@ func (a *Analyzer) extractImports(
 		if !ok {
 			break
 		}
+		// Apply tree-sitter predicates (e.g., #eq? @func "require") to filter matches.
+		match = cursor.FilterPredicates(match, src)
 		for _, capture := range match.Captures {
 			// Only process @import captures; skip auxiliary captures like @func.
 			if query.CaptureNameForId(capture.Index) != "import" {
