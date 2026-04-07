@@ -128,7 +128,10 @@ func NewAnalyzer() *Analyzer {
 	a.configs[langGo] = &langConfig{
 		language:    golang.GetLanguage(),
 		importQuery: `(import_spec path: (interpreted_string_literal) @import)`,
-		callQuery:   `(selector_expression operand: (identifier) @pkg field: (field_identifier) @field)`,
+		callQuery: strings.Join([]string{
+			`(selector_expression operand: (identifier) @pkg field: (field_identifier) @field)`,
+			`(qualified_type package: (package_identifier) @pkg name: (type_identifier) @field)`,
+		}, "\n"),
 		stripQuotes: true,
 		aliasFromPkg: func(importPath string) string {
 			parts := strings.Split(importPath, "/")
@@ -521,9 +524,48 @@ func (a *Analyzer) handleGoImport(
 		if idx := strings.LastIndex(alias, ".v"); idx > 0 && idx+2 < len(alias) && alias[idx+2] >= '0' && alias[idx+2] <= '9' {
 			alias = alias[:idx]
 		}
+
+		// Handle hyphenated package names. Go identifiers cannot contain hyphens,
+		// so the actual package name differs from the directory name.
+		// Common conventions: "opentracing-go" → "opentracing", "go-loser" → "loser",
+		// "go-spew" → "spew", "mmap-go" → "mmap".
+		alias = goPackageFromHyphenated(alias)
 	}
 
 	aliasMap[alias] = appendUniquePURLs(aliasMap[alias], purls)
+}
+
+// goPackageFromHyphenated derives the Go package name from a hyphenated directory name.
+// Go identifiers cannot contain hyphens, so directory names like "opentracing-go",
+// "go-loser", or "mmap-go" map to package names "opentracing", "loser", "mmap".
+//
+// Heuristics (applied in order):
+//  1. Strip "-go" suffix (e.g., "opentracing-go" → "opentracing", "mmap-go" → "mmap")
+//  2. Strip "go-" prefix (e.g., "go-loser" → "loser", "go-spew" → "spew")
+//  3. Remove remaining hyphens (e.g., "some-pkg" → "somepkg")
+//
+// If the input contains no hyphens, it is returned unchanged.
+func goPackageFromHyphenated(name string) string {
+	if !strings.Contains(name, "-") {
+		return name
+	}
+
+	// Strip "-go" suffix first (more specific).
+	result := strings.TrimSuffix(name, "-go")
+	if result != name && !strings.Contains(result, "-") {
+		return result
+	}
+
+	// Strip "go-" prefix.
+	if result == name {
+		result = strings.TrimPrefix(name, "go-")
+	}
+	if !strings.Contains(result, "-") {
+		return result
+	}
+
+	// Remove remaining hyphens as a fallback.
+	return strings.ReplaceAll(result, "-", "")
 }
 
 // handlePythonImport handles matching Python imports.

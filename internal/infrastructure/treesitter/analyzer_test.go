@@ -1332,3 +1332,396 @@ lib.init();
 		})
 	}
 }
+func TestAnalyzer_GoHyphenatedPackageName(t *testing.T) {
+	tests := []struct {
+		name        string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			name: "suffix -go stripped (opentracing-go)",
+			code: `package main
+
+import "github.com/opentracing/opentracing-go"
+
+func main() {
+	opentracing.StartSpanFromContext(nil, "test")
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/opentracing/opentracing-go@v1.2.0": {"github.com/opentracing/opentracing-go"},
+			},
+			purl:        "pkg:golang/github.com/opentracing/opentracing-go@v1.2.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "prefix go- stripped (go-loser)",
+			code: `package main
+
+import "github.com/bboreham/go-loser"
+
+func main() {
+	loser.New(nil, nil)
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/bboreham/go-loser@v0.0.4": {"github.com/bboreham/go-loser"},
+			},
+			purl:        "pkg:golang/github.com/bboreham/go-loser@v0.0.4",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "suffix -go stripped (mmap-go)",
+			code: `package main
+
+import "github.com/edsrzf/mmap-go"
+
+func main() {
+	mmap.Map(nil, 0, 0)
+	_ = mmap.RDWR
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/edsrzf/mmap-go@v1.1.0": {"github.com/edsrzf/mmap-go"},
+			},
+			purl:        "pkg:golang/github.com/edsrzf/mmap-go@v1.1.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
+		},
+		{
+			name: "prefix go- stripped (go-spew) via sub-package",
+			code: `package main
+
+import "github.com/davecgh/go-spew/spew"
+
+func main() {
+	spew.Dump("test")
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/davecgh/go-spew@v1.1.2": {"github.com/davecgh/go-spew"},
+			},
+			purl:        "pkg:golang/github.com/davecgh/go-spew@v1.1.2",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "explicit alias overrides hyphen heuristic",
+			code: `package main
+
+import ot "github.com/opentracing/opentracing-go"
+
+func main() {
+	ot.StartSpanFromContext(nil, "test")
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/opentracing/opentracing-go@v1.2.0": {"github.com/opentracing/opentracing-go"},
+			},
+			purl:        "pkg:golang/github.com/opentracing/opentracing-go@v1.2.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(tt.code), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+		})
+	}
+}
+
+func TestAnalyzer_GoSubPackageImport(t *testing.T) {
+	tests := []struct {
+		name        string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			name: "sub-package import uses last segment alias",
+			code: `package main
+
+import "github.com/prometheus/alertmanager/api/v2/models"
+
+func main() {
+	models.LabelSetToAPI(nil)
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/prometheus/alertmanager@v0.27.0": {"github.com/prometheus/alertmanager"},
+			},
+			purl:        "pkg:golang/github.com/prometheus/alertmanager@v0.27.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "sub-package with type references",
+			code: `package main
+
+import "github.com/prometheus/alertmanager/api/v2/models"
+
+func main() {
+	var _ models.Alert
+	_ = models.Alert{}
+	models.LabelSetToAPI(nil)
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/prometheus/alertmanager@v0.27.0": {"github.com/prometheus/alertmanager"},
+			},
+			purl:        "pkg:golang/github.com/prometheus/alertmanager@v0.27.0",
+			wantImports: 1,
+			wantCalls:   3,
+			wantBreadth: 2,
+		},
+		{
+			name: "multiple sub-package imports from same PURL",
+			code: `package main
+
+import (
+	"github.com/prometheus/alertmanager/api/v2/models"
+	"github.com/prometheus/alertmanager/types"
+)
+
+func main() {
+	models.LabelSetToAPI(nil)
+	types.ParseLabels("foo")
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/prometheus/alertmanager@v0.27.0": {"github.com/prometheus/alertmanager"},
+			},
+			purl:        "pkg:golang/github.com/prometheus/alertmanager@v0.27.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(tt.code), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+		})
+	}
+}
+
+func TestAnalyzer_GoTypeReferences(t *testing.T) {
+	tests := []struct {
+		name        string
+		code        string
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			name: "function call only",
+			code: `package main
+
+import "github.com/foo/bar"
+
+func main() {
+	bar.DoSomething()
+}
+`,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "type in variable declaration",
+			code: `package main
+
+import "github.com/foo/bar"
+
+func main() {
+	var _ bar.MyType
+}
+`,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "type in composite literal",
+			code: `package main
+
+import "github.com/foo/bar"
+
+func main() {
+	_ = bar.MyType{}
+}
+`,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "constant reference",
+			code: `package main
+
+import "github.com/foo/bar"
+
+func main() {
+	_ = bar.RDWR
+}
+`,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "mixed type refs and function calls",
+			code: `package main
+
+import "github.com/foo/bar"
+
+func main() {
+	var _ bar.MyType
+	_ = bar.MyType{}
+	bar.DoSomething()
+	_ = bar.RDWR
+}
+`,
+			wantCalls:   4,
+			wantBreadth: 3,
+		},
+		{
+			name: "type in function parameter",
+			code: `package main
+
+import "github.com/foo/bar"
+
+func process(t bar.MyType) {}
+`,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "type in return value",
+			code: `package main
+
+import "github.com/foo/bar"
+
+func create() bar.MyType { return bar.MyType{} }
+`,
+			wantCalls:   2,
+			wantBreadth: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(tt.code), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			importPaths := map[string][]string{
+				"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
+			}
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result["pkg:golang/github.com/foo/bar@v1.0.0"]
+			if !ok {
+				t.Fatal("expected coupling analysis for pkg:golang/github.com/foo/bar@v1.0.0")
+			}
+
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+		})
+	}
+}
+
+func TestGoPackageFromHyphenated(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"bar", "bar"},
+		{"opentracing-go", "opentracing"},
+		{"mmap-go", "mmap"},
+		{"go-loser", "loser"},
+		{"go-spew", "spew"},
+		{"go-difflib", "difflib"},
+		{"color", "color"},
+		{"proto-go-sql", "protogosql"},
+		{"testify", "testify"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := goPackageFromHyphenated(tt.input)
+			if got != tt.want {
+				t.Errorf("goPackageFromHyphenated(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
