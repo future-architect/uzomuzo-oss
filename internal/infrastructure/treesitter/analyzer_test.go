@@ -152,6 +152,12 @@ func main() {
 	if caPQ.HasDotImport {
 		t.Error("pq: HasDotImport = true, want false")
 	}
+	if caPQ.HasWildcardImport {
+		t.Error("pq: HasWildcardImport = true, want false")
+	}
+	if caPQ.IsUnused {
+		t.Error("pq: IsUnused = true, want false (blank import is intentional)")
+	}
 
 	// Dot import: has_dot_import=true, is not unused, has baseline call sites
 	caGomega, ok := result["pkg:golang/github.com/onsi/gomega@v1.0.0"]
