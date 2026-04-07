@@ -221,14 +221,14 @@ RANK  SCORE  EFFORT    PURL                              REMOVES  IMPORTS  CALLS
 The diet family of tools forms a pipeline from detection to removal:
 
 ```
-uzomuzo scan           "この依存ヤバい"         CI/CD で常時
+uzomuzo scan           "This dep is risky"           Always in CI/CD
         ↓
-uzomuzo diet           "この順番で消せ"         四半期の棚卸し
+uzomuzo diet           "Remove in this order"        Quarterly review
         ↓
-/diet-assess-risk      "残すリスクはこう"       EOL + hard な依存に
-/diet-evaluate-removal "消すコスパはこう"       moderate で迷ったとき
+/diet-assess-risk      "Risk of keeping it"          For EOL + hard deps
+/diet-evaluate-removal "Cost-benefit of removal"     When unsure about moderate deps
         ↓
-/diet-remove           "安全に消す"             実際の除去作業
+/diet-remove           "Remove it safely"            Actual removal work
 ```
 
 | Tool | Role | Scope | When |
