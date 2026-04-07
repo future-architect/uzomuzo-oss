@@ -696,6 +696,20 @@ outsource("data")
 			wantCalls:   3,
 			wantBreadth: 2,
 		},
+		{
+			name: "wildcard from-import records import file",
+			code: `from flask import *
+
+app = Flask(__name__)
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/flask@3.0.0": {"flask"},
+			},
+			purl:        "pkg:pypi/flask@3.0.0",
+			wantImports: 1,
+			wantCalls:   0,
+			wantBreadth: 0,
+		},
 	}
 
 	for _, tt := range tests {

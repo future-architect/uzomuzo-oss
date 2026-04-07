@@ -57,6 +57,11 @@ const dotImportAlias = "\x00dot"
 // so we record the import file but skip call-site counting.
 const blankImportAlias = "\x00blank"
 
+// wildcardImportAlias is a sentinel alias for Python wildcard imports (from x import *).
+// Wildcard-imported symbols are called without a package prefix, so bare identifier
+// queries cannot attribute them. We mark them as "used but uncountable."
+const wildcardImportAlias = "\x00wildcard"
+
 // langConfig holds the tree-sitter language and query patterns.
 type langConfig struct {
 	language       *sitter.Language
@@ -565,12 +570,13 @@ func (a *Analyzer) registerFromImportNames(
 	}
 
 	for i := 0; i < int(parent.ChildCount()); i++ {
-		if parent.FieldNameForChild(i) != "name" {
-			continue
-		}
 		child := parent.Child(i)
 		switch child.Type() {
 		case "dotted_name":
+			// Only process named imports (field "name"), not the module_name field.
+			if parent.FieldNameForChild(i) != "name" {
+				continue
+			}
 			// from x import y → register "y" -> purl
 			name := child.Content(src)
 			aliasMap[name] = purl
@@ -582,7 +588,9 @@ func (a *Analyzer) registerFromImportNames(
 			}
 		case "wildcard_import":
 			// from x import * — cannot track individual names.
-			// Wildcard-imported bare calls will be undercounted.
+			// Register a unique sentinel so ImportFileCount is correct,
+			// but bare calls will be undercounted.
+			aliasMap[wildcardImportAlias+purl] = purl
 		}
 	}
 }
