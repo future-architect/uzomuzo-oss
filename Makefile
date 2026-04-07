@@ -1,4 +1,27 @@
-.PHONY: sync-instructions update-doc-examples check-doc-examples
+.PHONY: build build-diet build-all test lint clean sync-instructions update-doc-examples check-doc-examples
+
+# ── Build ──────────────────────────────────────────────────
+
+build:
+	go build -o uzomuzo ./cmd/uzomuzo
+
+build-diet:
+	CGO_ENABLED=1 go build -o uzomuzo-diet ./cmd/uzomuzo-diet
+
+build-all: build build-diet
+
+# ── Test & Lint ────────────────────────────────────────────
+
+test:
+	go test ./... -short -count=1
+
+lint:
+	go vet ./...
+
+# ── Clean ──────────────────────────────────────────────────
+
+clean:
+	rm -f uzomuzo uzomuzo-diet
 
 # sync-instructions: .github/instructions/ → .claude/rules/ generated copy
 sync-instructions:
