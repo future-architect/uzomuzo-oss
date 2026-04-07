@@ -573,32 +573,36 @@ func (a *Analyzer) handleJSImport(
 		return
 	}
 
-	// Extract the JS/TS binding name from the AST (e.g., "cloud" from
+	// Extract the JS/TS binding names from the AST (e.g., "cloud" from
 	// `import cloud from '@strapi/plugin-cloud'`). Falls back to aliasFromPkg
 	// for side-effect imports or patterns we cannot resolve.
-	alias := extractJSBinding(node, src)
-	if alias == "" {
-		alias = cfg.aliasFromPkg(importPath)
+	aliases := extractJSBindings(node, src)
+	if len(aliases) == 0 {
+		aliases = []string{cfg.aliasFromPkg(importPath)}
 	}
-	aliasMap[alias] = purl
+	for _, alias := range aliases {
+		aliasMap[alias] = purl
+	}
 }
 
-// extractJSBinding walks the AST from an import source node to find the JS binding name.
+// extractJSBindings walks the AST from an import source node to find all JS binding names.
 //
 // ESM: import_statement → import_clause → identifier / namespace_import
 // CJS: string → arguments → call_expression → variable_declarator → name
-func extractJSBinding(node *sitter.Node, src []byte) string {
+//
+// Combined imports (e.g., `import def, * as ns from "pkg"`) produce multiple bindings.
+func extractJSBindings(node *sitter.Node, src []byte) []string {
 	if node == nil {
-		return ""
+		return nil
 	}
 	parent := node.Parent()
 	if parent == nil {
-		return ""
+		return nil
 	}
 
 	// ESM: node is `source: (string)` inside `import_statement`
 	if parent.Type() == "import_statement" {
-		return extractESMBinding(parent, src)
+		return extractESMBindings(parent, src)
 	}
 
 	// CJS: node is `(string)` inside `(arguments)` inside `(call_expression)`
@@ -610,17 +614,20 @@ func extractJSBinding(node *sitter.Node, src []byte) string {
 			if declarator != nil && declarator.Type() == "variable_declarator" {
 				nameNode := declarator.ChildByFieldName("name")
 				if nameNode != nil && nameNode.Type() == "identifier" {
-					return nameNode.Content(src)
+					return []string{nameNode.Content(src)}
 				}
 			}
 		}
 	}
 
-	return ""
+	return nil
 }
 
-// extractESMBinding extracts the binding identifier from an ESM import_statement.
-func extractESMBinding(importStmt *sitter.Node, src []byte) string {
+// extractESMBindings extracts all binding identifiers from an ESM import_statement.
+// Combined imports (e.g., `import def, * as ns from "pkg"`) return both bindings
+// so that call sites via either identifier are counted.
+func extractESMBindings(importStmt *sitter.Node, src []byte) []string {
+	var bindings []string
 	for i := 0; i < int(importStmt.ChildCount()); i++ {
 		child := importStmt.Child(i)
 		if child == nil || child.Type() != "import_clause" {
@@ -635,13 +642,13 @@ func extractESMBinding(importStmt *sitter.Node, src []byte) string {
 			switch gc.Type() {
 			case "identifier":
 				// Default import: import foo from "pkg" → "foo"
-				return gc.Content(src)
+				bindings = append(bindings, gc.Content(src))
 			case "namespace_import":
 				// import * as foo from "pkg" → "foo"
 				for k := 0; k < int(gc.ChildCount()); k++ {
 					n := gc.Child(k)
 					if n != nil && n.Type() == "identifier" {
-						return n.Content(src)
+						bindings = append(bindings, n.Content(src))
 					}
 				}
 			}
@@ -649,7 +656,7 @@ func extractESMBinding(importStmt *sitter.Node, src []byte) string {
 			// used as `pkg.method()`, so we skip them intentionally.
 		}
 	}
-	return ""
+	return bindings
 }
 
 // isTypeOnlyImport checks if a node's parent import_statement is a TypeScript

@@ -577,6 +577,40 @@ func TestAnalyzer_TypeScriptTypeOnlyImport(t *testing.T) {
 	}
 }
 
+func TestAnalyzer_JavaScriptCombinedDefaultAndNamespaceImport(t *testing.T) {
+	dir := t.TempDir()
+	// Combined import: both default and namespace bindings should be registered.
+	err := os.WriteFile(filepath.Join(dir, "index.js"), []byte(`import cloud, * as cloudNS from "@strapi/plugin-cloud";
+
+cloud.deploy();
+cloudNS.status();
+cloudNS.teardown();
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/%40strapi/plugin-cloud@1.0.0": {"@strapi/plugin-cloud"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/%40strapi/plugin-cloud@1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for @strapi/plugin-cloud")
+	}
+	if ca.CallSiteCount != 3 {
+		t.Errorf("CallSiteCount = %d, want 3 (1 via default + 2 via namespace)", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 3 {
+		t.Errorf("APIBreadth = %d, want 3", ca.APIBreadth)
+	}
+}
+
 func TestAnalyzer_PythonPrefixNoFalseMatch(t *testing.T) {
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "main.py"), []byte(`import requests
