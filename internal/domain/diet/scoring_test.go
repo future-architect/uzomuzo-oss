@@ -325,6 +325,81 @@ func TestComputeSummary_EasyWinsWithNewScoring(t *testing.T) {
 	}
 }
 
+func TestComputeImpactScore_EOLScoreFloor(t *testing.T) {
+	tests := []struct {
+		name      string
+		graph     GraphMetrics
+		coupling  CouplingAnalysis
+		health    HealthSignals
+		wantMin   float64
+		wantMax   float64
+		wantHard  bool // expect "hard" difficulty
+		wantFloor bool // expect score was clamped to eolScoreFloor
+	}{
+		{
+			name:     "EOL + hard difficulty gets floor",
+			graph:    GraphMetrics{ExclusiveTransitiveCount: 5},
+			coupling: CouplingAnalysis{ImportFileCount: 80, CallSiteCount: 523, APIBreadth: 115},
+			health:   HealthSignals{HealthRisk: 0.8, IsEOL: true},
+			// Without the floor this would be near-zero; with it, exactly 0.10.
+			wantMin:   eolScoreFloor,
+			wantMax:   eolScoreFloor + 0.001,
+			wantHard:  true,
+			wantFloor: true,
+		},
+		{
+			name:     "EOL + easy difficulty stays above floor naturally",
+			graph:    GraphMetrics{ExclusiveTransitiveCount: 50},
+			coupling: CouplingAnalysis{ImportFileCount: 1, CallSiteCount: 2, APIBreadth: 1},
+			health:   HealthSignals{HealthRisk: 0.9, IsEOL: true},
+			// Easy coupling: score should be well above 0.10 without clamping.
+			wantMin:  0.3,
+			wantMax:  1.0,
+			wantHard: false,
+		},
+		{
+			name:     "non-EOL + hard difficulty stays low (no floor)",
+			graph:    GraphMetrics{ExclusiveTransitiveCount: 5},
+			coupling: CouplingAnalysis{ImportFileCount: 80, CallSiteCount: 523, APIBreadth: 115},
+			health:   HealthSignals{HealthRisk: 0.8, IsEOL: false},
+			// Non-EOL hard deps should NOT get the floor — score stays near zero.
+			wantMin:  0.0,
+			wantMax:  eolScoreFloor,
+			wantHard: true,
+		},
+		{
+			name:     "EOL + moderate difficulty above floor naturally",
+			graph:    GraphMetrics{ExclusiveTransitiveCount: 30},
+			coupling: CouplingAnalysis{ImportFileCount: 5, CallSiteCount: 20, APIBreadth: 10},
+			health:   HealthSignals{HealthRisk: 0.7, IsEOL: true},
+			wantMin:  eolScoreFloor,
+			wantMax:  1.0,
+			wantHard: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score := ComputeImpactScore(tt.graph, tt.coupling, tt.health, 100)
+
+			if score.PriorityScore < tt.wantMin {
+				t.Errorf("PriorityScore = %f, want >= %f", score.PriorityScore, tt.wantMin)
+			}
+			if score.PriorityScore > tt.wantMax {
+				t.Errorf("PriorityScore = %f, want <= %f", score.PriorityScore, tt.wantMax)
+			}
+			if tt.wantHard && score.Difficulty != DifficultyHard {
+				t.Errorf("Difficulty = %s, want %s", score.Difficulty, DifficultyHard)
+			}
+			if tt.wantFloor {
+				const tolerance = 0.001
+				if score.PriorityScore < eolScoreFloor-tolerance || score.PriorityScore > eolScoreFloor+tolerance {
+					t.Errorf("PriorityScore = %f, want exactly %f (floor)", score.PriorityScore, eolScoreFloor)
+				}
+			}
+		})
+	}
+}
+
 func TestComputeSummary_StaysAsIndirectCount(t *testing.T) {
 	entries := []DietEntry{
 		{

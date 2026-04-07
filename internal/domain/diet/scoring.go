@@ -37,6 +37,13 @@ const (
 	unusedBaseOffset   = 0.2
 )
 
+// eolScoreFloor is the minimum PriorityScore for dependencies with EOL or
+// Archived lifecycle status. The multiplicative formula can produce near-zero
+// scores for EOL deps with hard difficulty (high coupling effort), burying
+// strategically important items at the bottom of the ranking. This floor
+// ensures they remain visible and actionable. See #214.
+const eolScoreFloor = 0.10
+
 // ComputeImpactScore calculates the removability priority for a single dependency.
 // maxExclusive is the largest ExclusiveTransitiveCount across all entries in the dataset,
 // used to normalize GraphImpact relative to the most impactful dependency.
@@ -55,6 +62,14 @@ func ComputeImpactScore(graph GraphMetrics, coupling CouplingAnalysis, health He
 	if coupling.IsUnused {
 		unusedBase := unusedGraphWeight*graphImpact + unusedHealthWeight*healthRisk + unusedBaseOffset
 		priority = math.Max(priority, unusedBase)
+	}
+
+	// EOL/Archived dependencies must never score below the floor. The
+	// multiplicative formula heavily penalizes hard difficulty, which can
+	// zero out the score for deeply coupled EOL deps — exactly the items
+	// that most need strategic attention.
+	if health.IsEOL && priority < eolScoreFloor {
+		priority = eolScoreFloor
 	}
 
 	return ImpactScore{
