@@ -23,6 +23,18 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
+const (
+	// scorecardCheckMaxValue is the maximum score value for all OpenSSF Scorecard checks (0-10 scale).
+	scorecardCheckMaxValue = 10
+
+	// maxErrorBodyBytes limits how many bytes we read from error response bodies
+	// to prevent OOM from misbehaving servers.
+	maxErrorBodyBytes = 4096
+
+	// defaultMaxConcurrency is the default number of concurrent scorecard.dev requests.
+	defaultMaxConcurrency = 10
+)
+
 // Client communicates with the scorecard.dev REST API.
 type Client struct {
 	http           *httpclient.Client
@@ -49,7 +61,7 @@ func NewClient(cfg *config.ScorecardConfig) *Client {
 	}
 	maxConc := cfg.MaxConcurrency
 	if maxConc <= 0 {
-		maxConc = 10
+		maxConc = defaultMaxConcurrency
 	}
 	httpClient := httpclient.NewClient(
 		&http.Client{Timeout: timeout},
@@ -76,7 +88,7 @@ func NewClientWith(httpClient *httpclient.Client, baseURL string) *Client {
 	return &Client{
 		http:           httpClient,
 		baseURL:        strings.TrimRight(baseURL, "/"),
-		maxConcurrency: 10,
+		maxConcurrency: defaultMaxConcurrency,
 	}
 }
 
@@ -116,7 +128,7 @@ func (c *Client) FetchScorecard(ctx context.Context, repoKey string) (*Scorecard
 		return nil, nil // project not scanned by OpenSSF — no data
 	}
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 		return nil, fmt.Errorf("scorecard API returned %d for %s: %s", resp.StatusCode, repoKey, string(body))
 	}
 	var apiResp apiResponse
@@ -175,7 +187,7 @@ func convertToResult(resp *apiResponse) *ScorecardResult {
 	}
 	scores := make(map[string]*domain.ScoreEntity, len(resp.Checks))
 	for _, check := range resp.Checks {
-		scores[check.Name] = domain.NewScoreEntity(check.Name, check.Score, 10, check.Reason)
+		scores[check.Name] = domain.NewScoreEntity(check.Name, check.Score, scorecardCheckMaxValue, check.Reason)
 	}
 	return &ScorecardResult{
 		OverallScore: resp.Score,
