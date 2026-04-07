@@ -160,12 +160,28 @@ func TestBuildMavenImportPaths(t *testing.T) {
 			purl: "pkg:maven/somelib@1.0.0",
 			want: []string{"somelib"},
 		},
+		{
+			name: "case-insensitive override lookup",
+			purl: "pkg:maven/Cglib/Cglib@3.3.0",
+			want: []string{"net.sf.cglib", "Cglib"},
+		},
+		{
+			name: "invalid fallback artifactId is skipped",
+			purl: "pkg:maven/3scale-client@1.0.0",
+			want: nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := buildImportPaths([]string{tt.purl})
-			got, ok := result[tt.purl]
-			if !ok {
+			got := result[tt.purl]
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("buildImportPaths(%s) = %v, want no entry", tt.purl, got)
+				}
+				return
+			}
+			if got == nil {
 				t.Fatalf("missing import paths for %s", tt.purl)
 			}
 			if !reflect.DeepEqual(got, tt.want) {

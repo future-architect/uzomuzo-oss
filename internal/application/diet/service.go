@@ -324,7 +324,7 @@ var mavenPackageOverrides = map[string][]string{
 // buildMavenImportPaths generates candidate import path prefixes for a Maven PURL.
 // It combines well-known overrides with heuristic candidates (groupId, groupId.artifactId).
 func buildMavenImportPaths(parsed packageurl.PackageURL) []string {
-	key := parsed.Namespace + "/" + parsed.Name
+	key := strings.ToLower(parsed.Namespace + "/" + parsed.Name)
 	seen := make(map[string]struct{})
 	var paths []string
 
@@ -359,8 +359,11 @@ func buildMavenImportPaths(parsed packageurl.PackageURL) []string {
 	}
 
 	if len(paths) == 0 {
-		// Fallback to artifactId only when nothing else is available.
-		add(parsed.Name)
+		// Fallback to artifactId only when nothing else is available,
+		// but only if it is a valid Java package segment.
+		if isJavaPackageSafe(parsed.Name) {
+			add(parsed.Name)
+		}
 	}
 
 	return paths
