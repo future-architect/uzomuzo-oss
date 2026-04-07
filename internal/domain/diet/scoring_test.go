@@ -19,8 +19,11 @@ func TestComputeImpactScore_UnusedDep(t *testing.T) {
 	if score.PriorityScore <= 0 {
 		t.Errorf("unused dep should have positive priority, got %f", score.PriorityScore)
 	}
-	// With graphImpact=1.0, unused boost = max(0.5*1.0, 1.0*0.8) = 0.8
-	if score.PriorityScore < 0.8 {
+	// With graphImpact=1.0, healthRisk=0.5:
+	// unusedBase = 0.3*1.0 + 0.3*0.5 + 0.2 = 0.65
+	// multiplicative = 1.0 * 0.5 * 1.0 = 0.5
+	// priority = max(0.5, 0.65) = 0.65
+	if score.PriorityScore < 0.6 {
 		t.Errorf("unused dep with max exclusive should have high priority, got %f", score.PriorityScore)
 	}
 }
@@ -160,6 +163,49 @@ func TestNormalizeGraphImpact(t *testing.T) {
 	}
 }
 
+func TestComputeImpactScore_UnusedZeroExclusive(t *testing.T) {
+	// Regression test for #171: typical unused dep with 0 exclusive transitives
+	// should produce a PriorityScore that can realistically exceed the
+	// easy_wins threshold when health risk is non-trivial.
+	tests := []struct {
+		name       string
+		healthRisk float64
+		wantMin    float64
+	}{
+		{
+			name:       "active project (low health risk)",
+			healthRisk: 0.2,
+			// 0.3*0.1 + 0.3*0.2 + 0.2 = 0.29 — just under threshold, appropriate
+			wantMin: 0.25,
+		},
+		{
+			name:       "stalled project (moderate health risk)",
+			healthRisk: 0.5,
+			// 0.3*0.1 + 0.3*0.5 + 0.2 = 0.38 — above easy_wins threshold
+			wantMin: easyWinScoreThreshold,
+		},
+		{
+			name:       "EOL project (high health risk)",
+			healthRisk: 0.9,
+			// 0.3*0.1 + 0.3*0.9 + 0.2 = 0.50 — well above threshold
+			wantMin: 0.45,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			graph := GraphMetrics{ExclusiveTransitiveCount: 0}
+			coupling := CouplingAnalysis{IsUnused: true}
+			health := HealthSignals{HealthRisk: tt.healthRisk}
+
+			score := ComputeImpactScore(graph, coupling, health, 50)
+
+			if score.PriorityScore < tt.wantMin {
+				t.Errorf("PriorityScore = %f, want >= %f", score.PriorityScore, tt.wantMin)
+			}
+		})
+	}
+}
+
 func TestComputeImpactScore_LargeProject(t *testing.T) {
 	// Verify that a dependency with the highest exclusive transitive count
 	// gets the maximum graph impact when normalized by maxExclusive.
@@ -171,7 +217,7 @@ func TestComputeImpactScore_LargeProject(t *testing.T) {
 	score := ComputeImpactScore(graph, coupling, health, 47)
 
 	// graphImpact = 0.1 + 0.9*(47/47) = 1.0
-	// unused boost: max(1.0*0.5*1.0, 1.0*0.8) = 0.8
+	// unusedBase = 0.3*1.0 + 0.3*0.5 + 0.2 = 0.65
 	if score.PriorityScore < easyWinScoreThreshold {
 		t.Errorf("large project top dep should exceed easy_wins threshold (%0.2f), got %f", easyWinScoreThreshold, score.PriorityScore)
 	}

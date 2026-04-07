@@ -39,9 +39,14 @@ func ComputeImpactScore(graph GraphMetrics, coupling CouplingAnalysis, health He
 
 	effortFactor := math.Max(1.0-couplingEffort, 0.05)
 	priority := graphImpact * healthRisk * effortFactor
-	// Unused dependencies are always high priority regardless of health.
+	// Unused dependencies get an additive score: effort is zero so priority
+	// should reflect the removal value (graph cleanup + health risk reduction).
+	// The additive formula ensures even zero-exclusive unused deps can exceed
+	// the easy_wins threshold (0.3), whereas the multiplicative formula
+	// systematically suppresses scores when any sub-score is small.
 	if coupling.IsUnused {
-		priority = math.Max(priority, graphImpact*0.8)
+		unusedBase := 0.3*graphImpact + 0.3*healthRisk + 0.2
+		priority = math.Max(priority, unusedBase)
 	}
 
 	return ImpactScore{
