@@ -630,6 +630,88 @@ func TestAnalyzer_TypeScriptTypeOnlyImport(t *testing.T) {
 	}
 }
 
+func TestAnalyzer_JavaScriptNamedImport(t *testing.T) {
+	dir := t.TempDir()
+	// Named imports bring individual bindings into scope.
+	// "import { useState, useEffect } from 'react'" allows bare calls like useState().
+	err := os.WriteFile(filepath.Join(dir, "app.js"), []byte(`import { useState, useEffect, useCallback } from "react";
+import axios from "axios";
+
+const [count, setCount] = useState(0);
+useEffect(() => { console.log("mounted"); });
+useCallback(() => {}, []);
+
+axios.get("https://api.example.com");
+axios.post("https://api.example.com");
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/react@18.2.0": {"react"},
+		"pkg:npm/axios@1.6.0":  {"axios"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// React: 3 named import calls (useState, useEffect, useCallback)
+	reactCA, ok := result["pkg:npm/react@18.2.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for react")
+	}
+	if reactCA.ImportFileCount != 1 {
+		t.Errorf("react ImportFileCount = %d, want 1", reactCA.ImportFileCount)
+	}
+	if reactCA.CallSiteCount != 3 {
+		t.Errorf("react CallSiteCount = %d, want 3", reactCA.CallSiteCount)
+	}
+	if reactCA.APIBreadth != 3 {
+		t.Errorf("react APIBreadth = %d, want 3 (useState, useEffect, useCallback)", reactCA.APIBreadth)
+	}
+
+	// Axios: 2 member calls (axios.get, axios.post) — regression check for default imports
+	axiosCA, ok := result["pkg:npm/axios@1.6.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for axios")
+	}
+	if axiosCA.CallSiteCount != 2 {
+		t.Errorf("axios CallSiteCount = %d, want 2", axiosCA.CallSiteCount)
+	}
+}
+
+func TestAnalyzer_JavaScriptAliasedNamedImport(t *testing.T) {
+	dir := t.TempDir()
+	// Aliased named import: import { x as y } should register "y", not "x".
+	err := os.WriteFile(filepath.Join(dir, "app.js"), []byte(`import { useEffect as ue } from "react";
+
+ue(() => {});
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/react@18.2.0": {"react"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/react@18.2.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for react")
+	}
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+}
+
 func TestAnalyzer_JavaScriptCombinedDefaultAndNamespaceImport(t *testing.T) {
 	dir := t.TempDir()
 	// Combined import: both default and namespace bindings should be registered.

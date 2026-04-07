@@ -84,7 +84,10 @@ func newJSLikeConfig(lang *sitter.Language) *langConfig {
 		`(import_statement source: (string) @import)`,
 		`(call_expression function: (identifier) @func (#eq? @func "require") arguments: (arguments (string) @import))`,
 	}, "\n")
-	callQ := `(member_expression object: (identifier) @obj property: (property_identifier) @prop)`
+	callQ := strings.Join([]string{
+		`(member_expression object: (identifier) @obj property: (property_identifier) @prop)`,
+		`(call_expression function: (identifier) @func)`,
+	}, "\n")
 
 	cfg := &langConfig{
 		language:    lang,
@@ -780,9 +783,35 @@ func extractESMBindings(importStmt *sitter.Node, src []byte) []string {
 						bindings = append(bindings, n.Content(src))
 					}
 				}
+			case "named_imports":
+				// import { foo, bar as baz } from "pkg" → ["foo", "baz"]
+				// Each import_specifier has a "name" field and optional "alias" field.
+				bindings = append(bindings, extractNamedImportBindings(gc, src)...)
 			}
-			// named_imports ({ foo, bar }) don't produce a single package-level binding
-			// used as `pkg.method()`, so we skip them intentionally.
+		}
+	}
+	return bindings
+}
+
+// extractNamedImportBindings extracts binding names from a named_imports node.
+// For `import { foo, bar as baz } from "pkg"`, it returns ["foo", "baz"].
+// If an alias is present, the alias is used (that is the local binding name).
+func extractNamedImportBindings(namedImports *sitter.Node, src []byte) []string {
+	var bindings []string
+	for k := 0; k < int(namedImports.ChildCount()); k++ {
+		spec := namedImports.Child(k)
+		if spec == nil || spec.Type() != "import_specifier" {
+			continue
+		}
+		// Use alias if present (import { x as y } → "y"), otherwise name.
+		aliasNode := spec.ChildByFieldName("alias")
+		if aliasNode != nil {
+			bindings = append(bindings, aliasNode.Content(src))
+			continue
+		}
+		nameNode := spec.ChildByFieldName("name")
+		if nameNode != nil {
+			bindings = append(bindings, nameNode.Content(src))
 		}
 	}
 	return bindings
