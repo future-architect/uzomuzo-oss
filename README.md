@@ -2,7 +2,12 @@
 
 [![CI](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml) [![Dependency Scan](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/future-architect/uzomuzo-oss)](https://goreportcard.com/report/github.com/future-architect/uzomuzo-oss) [![Go Reference](https://pkg.go.dev/badge/github.com/future-architect/uzomuzo-oss.svg)](https://pkg.go.dev/github.com/future-architect/uzomuzo-oss) [![Release](https://img.shields.io/github/v/release/future-architect/uzomuzo-oss)](https://github.com/future-architect/uzomuzo-oss/releases/latest) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-**Find abandoned dependencies before they become vulnerabilities.** SCA tools report "0 CVEs — safe." uzomuzo detects the packages no one is maintaining anymore.
+**Find abandoned dependencies before they become vulnerabilities. Then remove them — in the right order.**
+
+uzomuzo does two things SCA tools can't:
+
+1. **`uzomuzo scan`** — Detects unmaintained packages that SCA tools miss (no CVE, but no one is watching either)
+2. **`uzomuzo diet`** — Ranks every dependency by *removability*: graph impact, source coupling, and health risk — so you know which to cut first
 
 > `./uzomuzo scan pkg:npm/inflight@1.0.6` — inflight has 556K dependents, yet its repository is archived and npm has deprecated it. uzomuzo detects this as **EOL-Confirmed** in seconds.
 
@@ -134,24 +139,57 @@ uzomuzo scan --file .github/workflows/ci.yml
 uzomuzo scan --file input_purls.txt --sample 500
 ```
 
-### Dependency Diet
+### Dependency Diet — *Which dependency should I remove first?*
 
-Prioritize which dependencies to remove first:
+Most projects have dependencies they don't really need, but knowing **which ones to remove** and **how hard it will be** is the real problem. `uzomuzo diet` answers both:
 
 ```bash
-# Go / Python / JS / TS — generate SBOM with syft or trivy
 syft . --source-name myproject -o cyclonedx-json > bom.json
 uzomuzo diet --sbom bom.json --source .
+```
 
-# Java (Maven) — use CycloneDX Maven Plugin for full dependency resolution
+**Real output — FastAPI (29 direct deps, 239 transitive):**
+
+```
+── Diet Plan (29 direct dependencies) ─────────────────────────
+
+  Unused (0 imports):  24
+  Quick wins:          1  (trivial/easy + high impact)
+
+RANK  PRIORITY  DIFFICULTY  PURL                                  ONLY-VIA-THIS  FILES  CALLS  LIFECYCLE
+────  ────────  ──────────  ────                                  ─────────────  ─────  ─────  ─────────
+1     0.43      trivial     pkg:pypi/pydantic-ai@1.63.0           104            0      0      Active
+2     0.10      trivial     pkg:pypi/cairosvg@2.9.0               6              0      0      Active
+3     0.10      trivial     pkg:pypi/fastapi-cli@0.0.20           5              0      0      Active
+...
+28    0.01      moderate    pkg:pypi/playwright@1.58.0             1              12     14     Active
+29    0.01      moderate    pkg:pypi/sqlmodel@0.0.32               1              8      0      Active
+
+── Dependency Tree ─────────────────────────────────────────────
+  Direct deps:          29
+  Transitive deps:      239
+  └ only-via-one-dep:   143  (removable if that direct dep is removed)
+```
+
+`pydantic-ai` alone drags in **104 transitive deps** with zero source coupling — removing it eliminates 43% of the entire dependency tree.
+
+| Column | Meaning |
+|--------|---------|
+| PRIORITY | Overall removal priority (higher = remove first) |
+| DIFFICULTY | trivial (0 imports) / easy / moderate / hard |
+| ONLY-VIA-THIS | Transitive deps that disappear when this dep is removed |
+| FILES / CALLS | Source files and call sites — measures how hard to untangle |
+
+Supports **Go, Python, JavaScript/TypeScript, Java**. Uses [tree-sitter](https://tree-sitter.github.io/) for multi-language source analysis.
+
+```bash
+# Java (Maven) — requires CycloneDX Maven Plugin for dependency resolution
 mvn org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom \
   -DoutputFormat=json -DoutputName=bom -Dcyclonedx.skipNotDeployed=false
 uzomuzo diet --sbom target/bom.json --source .
 ```
 
-> **Note:** For Java projects, static SBOM tools (syft, Trivy) cannot resolve Maven/Gradle transitive dependencies. Use the ecosystem's native CycloneDX plugin instead. See [Diet Command](docs/diet.md) for details.
-
-See [Diet Command](docs/diet.md) for full documentation.
+See [Diet Command](docs/diet.md) for full documentation, scoring algorithm, and SBOM tool comparison.
 
 See [Usage](docs/usage.md) for full CLI reference and [Integration Examples](docs/integration-examples.md) for Trivy, Syft, and Go module workflows.
 
