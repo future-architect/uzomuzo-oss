@@ -402,21 +402,21 @@ All output types share the same base name, differentiated only by extension:
 | Type | Extension | Description |
 |------|-----------|-------------|
 | Report | `.md` | Markdown analysis report |
+| Diet result | `.json` | uzomuzo diet analysis result |
 | SBOM | `.sbom.json` | SBOM data (CycloneDX JSON) |
-| Diet result | `.diet.json` | uzomuzo diet analysis result |
 
 Example paths (for `flask` with `trivy` on `2026-04-07`):
 - `case-studies/uzomuzo-diet/python/flask-trivy-2026-04-07.md`
+- `case-studies/uzomuzo-diet/python/flask-trivy-2026-04-07.json`
 - `case-studies/uzomuzo-diet/python/flask-trivy-2026-04-07.sbom.json`
-- `case-studies/uzomuzo-diet/python/flask-trivy-2026-04-07.diet.json`
 
 Save all three files together. Copy the SBOM and diet JSON from their `/tmp/` locations:
 
 ```bash
 DEST="<case-studies-dir>/<language-subdir>"
 BASE="<repo>-<tool>-<YYYY-MM-DD>"
+cp /tmp/diet-trial-<repo>-<tool>-diet.json "${DEST}/${BASE}.json"
 cp /tmp/diet-trial-<repo>-<tool>-sbom.json "${DEST}/${BASE}.sbom.json"
-cp /tmp/diet-trial-<repo>-<tool>-diet.json "${DEST}/${BASE}.diet.json"
 # Report (.md) is written directly by the agent
 ```
 
