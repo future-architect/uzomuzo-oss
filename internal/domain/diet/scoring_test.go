@@ -368,6 +368,17 @@ func TestComputeImpactScore_EOLScoreFloor(t *testing.T) {
 			wantHard: true,
 		},
 		{
+			name:     "Archived + hard difficulty gets floor",
+			graph:    GraphMetrics{ExclusiveTransitiveCount: 5},
+			coupling: CouplingAnalysis{ImportFileCount: 80, CallSiteCount: 523, APIBreadth: 115},
+			health:   HealthSignals{HealthRisk: 0.8, MaintenanceStatus: "Archived"},
+			// Archived (not IsEOL) with hard difficulty should also get the floor.
+			wantMin:   eolScoreFloor,
+			wantMax:   eolScoreFloor + 0.001,
+			wantHard:  true,
+			wantFloor: true,
+		},
+		{
 			name:     "EOL + moderate difficulty above floor naturally",
 			graph:    GraphMetrics{ExclusiveTransitiveCount: 30},
 			coupling: CouplingAnalysis{ImportFileCount: 5, CallSiteCount: 20, APIBreadth: 10},

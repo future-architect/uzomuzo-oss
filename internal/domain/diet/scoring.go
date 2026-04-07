@@ -68,7 +68,7 @@ func ComputeImpactScore(graph GraphMetrics, coupling CouplingAnalysis, health He
 	// multiplicative formula heavily penalizes hard difficulty, which can
 	// zero out the score for deeply coupled EOL deps — exactly the items
 	// that most need strategic attention.
-	if health.IsEOL && priority < eolScoreFloor {
+	if (health.IsEOL || health.MaintenanceStatus == "Archived") && priority < eolScoreFloor {
 		priority = eolScoreFloor
 	}
 
