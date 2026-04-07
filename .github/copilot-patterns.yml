@@ -128,4 +128,5 @@ patterns:
     file: "internal/application/diet/service.go"
     date: "2026-04-07"
   # defensive-coding (PR #227): already covered by "Validate Generated Strings Against Target-Language Syntax" — add isPythonIdentifierSafe validation for PyPI import path candidates
-  # testing (PR #200): already covered by promoted rules — Go collision test name implied unrealistic multi-version scenario; renamed to reflect actual behavior
+  # defensive-coding (PR #227 round 2): already covered by "Validate Generated Strings Against Target-Language Syntax" — validate dotted module paths (e.g., zope.interface) by splitting on "." and checking each segment independently
+  # comment-doc-drift (PR #227 round 2): WONT_FIX — PR description reflects initial implementation; code and tests were updated in prior commit
