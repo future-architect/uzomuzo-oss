@@ -27,6 +27,13 @@ type GraphMetrics struct {
 	ExclusiveTransitiveCount int
 	TotalTransitiveCount     int
 	SharedTransitiveCount    int
+	IndirectVia              []string // PURLs of direct deps that transitively depend on this one
+}
+
+// StaysAsIndirect returns true if removing this direct dep leaves it reachable
+// via another direct dep (i.e., it would remain as an indirect dependency).
+func (g GraphMetrics) StaysAsIndirect() bool {
+	return len(g.IndirectVia) > 0
 }
 
 // CouplingAnalysis captures how deeply a dependency is wired into the codebase.

@@ -82,6 +82,24 @@ func (a *Analyzer) AnalyzeGraph(_ context.Context, sbomData []byte) (*domaindiet
 		metrics[dp] = m
 	}
 
+	// Compute stays-as-indirect: for each direct dep D, check if any other
+	// direct dep E can reach D transitively. If so, removing D from direct
+	// deps would still leave it in the dependency tree as an indirect dep of E.
+	for _, dp := range directList {
+		var via []string
+		for _, other := range directList {
+			if other == dp {
+				continue
+			}
+			if _, found := reachable[other][dp]; found {
+				via = append(via, other)
+			}
+		}
+		if len(via) > 0 {
+			metrics[dp].IndirectVia = via
+		}
+	}
+
 	// Collect all dependency PURLs
 	allDepList := make([]string, 0, len(allPURLs))
 	for p := range allPURLs {

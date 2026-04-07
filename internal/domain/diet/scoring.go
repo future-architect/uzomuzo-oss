@@ -74,6 +74,9 @@ func ComputeSummary(entries []DietEntry, totalTransitive int) DietSummary {
 		if e.Scores.PriorityScore > 0.2 {
 			s.EstimatedRemovable++
 		}
+		if e.Graph.StaysAsIndirect() {
+			s.StaysAsIndirectCount++
+		}
 	}
 	return s
 }

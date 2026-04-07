@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"text/tabwriter"
 
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
@@ -26,6 +27,7 @@ type dietJSONSummary struct {
 	UnusedDirect         int `json:"unused_direct"`
 	EasyWins             int `json:"easy_wins"`
 	ActionableDirect     int `json:"actionable_direct"`
+	StaysAsIndirect      int `json:"stays_as_indirect"`
 }
 
 type dietJSONEntry struct {
@@ -41,8 +43,10 @@ type dietJSONEntry struct {
 	HealthRisk     float64 `json:"health_risk"`
 	Difficulty     string  `json:"difficulty"`
 
-	ExclusiveTransitive int `json:"exclusive_transitive"`
-	TotalTransitive     int `json:"total_transitive"`
+	ExclusiveTransitive int      `json:"exclusive_transitive"`
+	TotalTransitive     int      `json:"total_transitive"`
+	StaysAsIndirect     bool     `json:"stays_as_indirect"`
+	IndirectVia         []string `json:"indirect_via,omitempty"`
 
 	ImportFileCount int      `json:"import_file_count"`
 	CallSiteCount   int      `json:"call_site_count"`
@@ -79,6 +83,7 @@ func renderDietJSON(w io.Writer, plan *domaindiet.DietPlan) error {
 			UnusedDirect:        plan.Summary.UnusedDirect,
 			EasyWins:            plan.Summary.EasyWins,
 			ActionableDirect:    plan.Summary.EstimatedRemovable,
+			StaysAsIndirect:     plan.Summary.StaysAsIndirectCount,
 		},
 		SBOMPath:   plan.SBOMPath,
 		SourceRoot: plan.SourceRoot,
@@ -100,6 +105,8 @@ func renderDietJSON(w io.Writer, plan *domaindiet.DietPlan) error {
 			Difficulty:          e.Scores.Difficulty,
 			ExclusiveTransitive: e.Graph.ExclusiveTransitiveCount,
 			TotalTransitive:     e.Graph.TotalTransitiveCount,
+			StaysAsIndirect:     e.Graph.StaysAsIndirect(),
+			IndirectVia:         e.Graph.IndirectVia,
 			ImportFileCount:     e.Coupling.ImportFileCount,
 			CallSiteCount:       e.Coupling.CallSiteCount,
 			APIBreadth:          e.Coupling.APIBreadth,
@@ -136,15 +143,20 @@ func renderDietTable(w io.Writer, plan *domaindiet.DietPlan) error {
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	tp := &errWriter{w: tw}
-	tp.printf("RANK\tPRIORITY\tDIFFICULTY\tPURL\tONLY-VIA-THIS\tFILES\tCALLS\tLIFECYCLE\n")
-	tp.printf("────\t────────\t──────────\t────\t─────────────\t─────\t─────\t─────────\n")
+	tp.printf("RANK\tPRIORITY\tDIFFICULTY\tPURL\tONLY-VIA-THIS\tSTAYS\tFILES\tCALLS\tLIFECYCLE\n")
+	tp.printf("────\t────────\t──────────\t────\t─────────────\t─────\t─────\t─────\t─────────\n")
 	for _, e := range plan.Entries {
-		tp.printf("%d\t%.2f\t%s\t%s\t%d\t%d\t%d\t%s\n",
+		stays := "-"
+		if e.Graph.StaysAsIndirect() {
+			stays = "yes"
+		}
+		tp.printf("%d\t%.2f\t%s\t%s\t%d\t%s\t%d\t%d\t%s\n",
 			e.Scores.Rank,
 			e.Scores.PriorityScore,
 			e.Scores.Difficulty,
 			e.PURL,
 			e.Graph.ExclusiveTransitiveCount,
+			stays,
 			e.Coupling.ImportFileCount,
 			e.Coupling.CallSiteCount,
 			e.Health.MaintenanceStatus,
@@ -162,6 +174,10 @@ func renderDietTable(w io.Writer, plan *domaindiet.DietPlan) error {
 	p.printf("  Transitive deps:      %d\n", plan.Summary.TotalTransitive)
 	p.printf("  └ only-via-one-dep:   %d  (removable if that direct dep is removed)\n",
 		plan.Summary.TotalExclusiveTransitive)
+	if plan.Summary.StaysAsIndirectCount > 0 {
+		p.printf("  ⚠ stays-as-indirect:  %d  (remain in tree via another direct dep)\n",
+			plan.Summary.StaysAsIndirectCount)
+	}
 	p.printf("\n")
 
 	return p.err
@@ -188,6 +204,11 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 		p.printf("│    Only-via-this dep:    %d  (removed together)\n", e.Graph.ExclusiveTransitiveCount)
 		p.printf("│    Shared with others:   %d\n", e.Graph.SharedTransitiveCount)
 		p.printf("│    Total transitive:     %d\n", e.Graph.TotalTransitiveCount)
+		if e.Graph.StaysAsIndirect() {
+			p.printf("│    ⚠ Stays as indirect:  yes  (via: %s)\n", formatViaList(e.Graph.IndirectVia))
+		} else {
+			p.printf("│    Stays as indirect:    no   (fully removed from tree)\n")
+		}
 		p.printf("│\n")
 		p.printf("│  Coupling\n")
 		if e.Coupling.IsUnused {
@@ -219,11 +240,26 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 	p.printf("  Direct deps:          %d\n", plan.Summary.TotalDirect)
 	p.printf("  Transitive deps:      %d\n", plan.Summary.TotalTransitive)
 	p.printf("  └ only-via-one-dep:   %d  (removable if that direct dep is removed)\n", plan.Summary.TotalExclusiveTransitive)
+	if plan.Summary.StaysAsIndirectCount > 0 {
+		p.printf("  ⚠ stays-as-indirect:  %d  (remain in tree via another direct dep)\n",
+			plan.Summary.StaysAsIndirectCount)
+	}
 	p.printf("  Unused (0 imports):   %d\n", plan.Summary.UnusedDirect)
 	p.printf("  Quick wins:           %d\n", plan.Summary.EasyWins)
 	p.printf("\n")
 
 	return p.err
+}
+
+// formatViaList formats a list of PURLs for display, truncating if too many.
+func formatViaList(via []string) string {
+	if len(via) == 0 {
+		return ""
+	}
+	if len(via) <= 3 {
+		return strings.Join(via, ", ")
+	}
+	return strings.Join(via[:3], ", ") + fmt.Sprintf(" +%d more", len(via)-3)
 }
 
 // errWriter wraps an io.Writer and captures the first error, allowing

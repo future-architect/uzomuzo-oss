@@ -89,3 +89,32 @@ func TestClassifyDifficulty(t *testing.T) {
 		}
 	}
 }
+
+func TestComputeSummary_StaysAsIndirectCount(t *testing.T) {
+	entries := []DietEntry{
+		{
+			Relation: RelationDirect,
+			Graph:    GraphMetrics{IndirectVia: []string{"pkg:golang/other@v1.0.0"}},
+			Scores:   ImpactScore{Difficulty: DifficultyEasy},
+		},
+		{
+			Relation: RelationDirect,
+			Graph:    GraphMetrics{}, // no IndirectVia → StaysAsIndirect() = false
+			Scores:   ImpactScore{Difficulty: DifficultyTrivial},
+		},
+		{
+			Relation: RelationDirect,
+			Graph:    GraphMetrics{IndirectVia: []string{"pkg:golang/a@v1.0.0", "pkg:golang/b@v1.0.0"}},
+			Scores:   ImpactScore{Difficulty: DifficultyHard},
+		},
+	}
+
+	summary := ComputeSummary(entries, 50)
+
+	if summary.StaysAsIndirectCount != 2 {
+		t.Errorf("StaysAsIndirectCount = %d, want 2", summary.StaysAsIndirectCount)
+	}
+	if summary.TotalDirect != 3 {
+		t.Errorf("TotalDirect = %d, want 3", summary.TotalDirect)
+	}
+}

@@ -57,6 +57,14 @@ func TestAnalyzeGraph_Simple(t *testing.T) {
 	} else if m.ExclusiveTransitiveCount != 1 {
 		t.Errorf("expected 1 exclusive transitive for B, got %d", m.ExclusiveTransitiveCount)
 	}
+
+	// Neither A nor B appears in the other's transitive tree
+	if result.Metrics[aPURL].StaysAsIndirect() {
+		t.Error("A should not stay as indirect (B doesn't depend on A)")
+	}
+	if result.Metrics[bPURL].StaysAsIndirect() {
+		t.Error("B should not stay as indirect (A doesn't depend on B)")
+	}
 }
 
 func TestAnalyzeGraph_SharedTransitive(t *testing.T) {
@@ -135,6 +143,54 @@ func TestAnalyzeGraph_DeepChain(t *testing.T) {
 	}
 	if result.TotalTransitive != 3 {
 		t.Errorf("expected 3 total transitive, got %d", result.TotalTransitive)
+	}
+}
+
+func TestAnalyzeGraph_StaysAsIndirect(t *testing.T) {
+	// Root -> A -> B
+	// Root -> C -> A
+	// A is direct AND reachable via C, so A.StaysAsIndirect() = true
+	// C is direct but NOT reachable via A, so C.StaysAsIndirect() = false
+	bom := sbomgraph.BOMEnvelope{
+		Metadata: &sbomgraph.BOMMetadata{
+			Component: &sbomgraph.Component{BOMRef: "root", PURL: "pkg:golang/myapp@v1.0.0"},
+		},
+		Components: []sbomgraph.Component{
+			{BOMRef: "a", PURL: "pkg:golang/a@v1.0.0"},
+			{BOMRef: "b", PURL: "pkg:golang/b@v1.0.0"},
+			{BOMRef: "c", PURL: "pkg:golang/c@v1.0.0"},
+		},
+		Dependencies: []sbomgraph.Dependency{
+			{Ref: "root", DependsOn: []string{"a", "c"}},
+			{Ref: "a", DependsOn: []string{"b"}},
+			{Ref: "c", DependsOn: []string{"a"}},
+		},
+	}
+
+	data, err := json.Marshal(bom)
+	if err != nil {
+		t.Fatalf("failed to marshal BOM: %v", err)
+	}
+	analyzer := NewAnalyzer()
+	result, err := analyzer.AnalyzeGraph(context.Background(), data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	aPURL := "pkg:golang/a@v1.0.0"
+	cPURL := "pkg:golang/c@v1.0.0"
+
+	mA := result.Metrics[aPURL]
+	if !mA.StaysAsIndirect() {
+		t.Error("A should stay as indirect (C depends on A)")
+	}
+	if len(mA.IndirectVia) != 1 || mA.IndirectVia[0] != cPURL {
+		t.Errorf("A.IndirectVia = %v, want [%s]", mA.IndirectVia, cPURL)
+	}
+
+	mC := result.Metrics[cPURL]
+	if mC.StaysAsIndirect() {
+		t.Error("C should NOT stay as indirect (A doesn't depend on C)")
 	}
 }
 

@@ -19,4 +19,5 @@ type DietSummary struct {
 	UnusedDirect             int
 	EasyWins                 int
 	EstimatedRemovable       int
+	StaysAsIndirectCount     int
 }
