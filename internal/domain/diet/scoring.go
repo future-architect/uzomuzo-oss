@@ -29,6 +29,14 @@ const (
 	actionableScoreThreshold = 0.2
 )
 
+// Unused-dependency additive scoring coefficients.
+// unusedBase = unusedGraphWeight*graphImpact + unusedHealthWeight*healthRisk + unusedBaseOffset
+const (
+	unusedGraphWeight  = 0.3
+	unusedHealthWeight = 0.3
+	unusedBaseOffset   = 0.2
+)
+
 // ComputeImpactScore calculates the removability priority for a single dependency.
 // maxExclusive is the largest ExclusiveTransitiveCount across all entries in the dataset,
 // used to normalize GraphImpact relative to the most impactful dependency.
@@ -39,9 +47,14 @@ func ComputeImpactScore(graph GraphMetrics, coupling CouplingAnalysis, health He
 
 	effortFactor := math.Max(1.0-couplingEffort, 0.05)
 	priority := graphImpact * healthRisk * effortFactor
-	// Unused dependencies are always high priority regardless of health.
+	// Unused dependencies get an additive score: effort is zero so priority
+	// should reflect the removal value (graph cleanup + health risk reduction).
+	// The additive formula ensures even zero-exclusive unused deps can exceed
+	// the easy_wins threshold (0.3), whereas the multiplicative formula
+	// systematically suppresses scores when any sub-score is small.
 	if coupling.IsUnused {
-		priority = math.Max(priority, graphImpact*0.8)
+		unusedBase := unusedGraphWeight*graphImpact + unusedHealthWeight*healthRisk + unusedBaseOffset
+		priority = math.Max(priority, unusedBase)
 	}
 
 	return ImpactScore{
@@ -104,6 +117,15 @@ func normalizeGraphImpact(g GraphMetrics, maxExclusive int) float64 {
 
 func normalizeCouplingEffort(c CouplingAnalysis) float64 {
 	if c.IsUnused {
+		return 0.0
+	}
+	// When all coupling counts are zero and IsUnused is false, no coupling
+	// data is available, typically because source analysis was not performed.
+	// Treat this as zero effort so that the difficulty label ("trivial") is
+	// consistent regardless of whether --source was provided. Without this
+	// guard, logistic(0, midpoint) returns ~0.018, which classifies as
+	// "easy" instead of "trivial".
+	if c.ImportFileCount == 0 && c.CallSiteCount == 0 && c.APIBreadth == 0 {
 		return 0.0
 	}
 	fileScore := logistic(float64(c.ImportFileCount), 5.0)
