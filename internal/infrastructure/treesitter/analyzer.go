@@ -165,7 +165,7 @@ func NewAnalyzer() *Analyzer {
 		importQuery: `(import_declaration (scoped_identifier) @import)`,
 		callQuery: strings.Join([]string{
 			`(method_invocation object: (identifier) @obj name: (identifier) @method)`,
-			`(method_invocation name: (identifier) @func)`,
+			`(method_invocation !object name: (identifier) @func)`,
 		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {
@@ -647,6 +647,13 @@ func (a *Analyzer) handleJavaImport(
 	alias := parts[len(parts)-1]
 
 	if isStatic {
+		if alias == "*" {
+			// Wildcard static import (import static org.junit.Assert.*) — cannot
+			// track individual names. Register a sentinel so ImportFileCount is
+			// correct, but bare calls will be undercounted.
+			aliasMap[wildcardImportAlias+bestPURL] = bestPURL
+			return
+		}
 		// Static import: the last component is a method/field name (e.g., assertEquals).
 		// Register it directly so bare calls like assertEquals() are matched
 		// via the single-capture call query pattern.

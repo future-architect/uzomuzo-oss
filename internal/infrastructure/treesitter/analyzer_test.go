@@ -456,8 +456,8 @@ public class Main {
 		t.Fatal("expected coupling analysis for junit")
 	}
 
-	// 3 imports: 2 static (assertEquals, assertTrue) + 1 regular (Test)
-	// All from the same file, so ImportFileCount = 1.
+	// The fixture has 3 relevant imported symbols: 2 static (assertEquals, assertTrue)
+	// and 1 regular (Test), all declared in the same file, so ImportFileCount = 1.
 	if ca.ImportFileCount != 1 {
 		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
 	}
