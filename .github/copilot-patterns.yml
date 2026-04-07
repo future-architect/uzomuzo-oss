@@ -86,3 +86,9 @@ patterns:
   # defensive-coding: already covered by "Normalize User-Provided Enum Values" spirit (PR #159, service.go:288 — PyPI distribution names need hyphen→underscore and lowercase normalization for import matching)
   # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, sbomgraph/types.go:122 — ResolveDirectPURLs returned nil for 0 direct deps, conflating with "no graph info")
   # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, depgraph/graph.go:37 — AnalyzeGraph used == nil instead of len == 0, misaligned with ResolveDirectPURLs empty-slice semantics)
+  - category: "defensive-coding"
+    summary: "Error hints must be language/ecosystem-agnostic when the tool supports multiple languages — do not reference go.mod in a universal context"
+    pr: 160
+    file: "internal/interfaces/cli/diet.go"
+    date: "2026-04-07"
+  # testing: already covered by promoted rules (PR #160, e2e_test.go:366 — close pipe fds in t.Cleanup; e2e_test.go:387 — check Close() errors for consistency)
