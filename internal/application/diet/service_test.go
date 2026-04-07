@@ -2,6 +2,7 @@ package diet
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
@@ -87,13 +88,13 @@ func TestBuildImportPaths(t *testing.T) {
 	}
 	result := buildImportPaths(purls)
 
-	expectations := map[string]string{
-		"pkg:golang/github.com/stretchr/testify@v1.9.0":     "github.com/stretchr/testify",
-		"pkg:npm/%40types/node@20.0.0":                      "@types/node",
-		"pkg:pypi/flask@3.0.0":                              "flask",
-		"pkg:maven/org.apache.commons/commons-lang3@3.14.0": "org.apache.commons",
+	// Non-Maven ecosystems still return a single import path.
+	singleExpectations := map[string]string{
+		"pkg:golang/github.com/stretchr/testify@v1.9.0": "github.com/stretchr/testify",
+		"pkg:npm/%40types/node@20.0.0":                  "@types/node",
+		"pkg:pypi/flask@3.0.0":                          "flask",
 	}
-	for purl, wantImport := range expectations {
+	for purl, wantImport := range singleExpectations {
 		got, ok := result[purl]
 		if !ok {
 			t.Errorf("missing import path for %s", purl)
@@ -102,6 +103,101 @@ func TestBuildImportPaths(t *testing.T) {
 		if len(got) != 1 || got[0] != wantImport {
 			t.Errorf("import path for %s = %v, want [%s]", purl, got, wantImport)
 		}
+	}
+
+	// Maven returns groupId only when artifactId contains hyphens (invalid in Java package names).
+	mavenPURL := "pkg:maven/org.apache.commons/commons-lang3@3.14.0"
+	got := result[mavenPURL]
+	want := []string{"org.apache.commons"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("import paths for %s = %v, want %v", mavenPURL, got, want)
+	}
+}
+
+func TestBuildMavenImportPaths(t *testing.T) {
+	tests := []struct {
+		name string
+		purl string
+		want []string
+	}{
+		{
+			name: "standard groupId matches package",
+			purl: "pkg:maven/org.apache.commons/commons-lang3@3.14.0",
+			want: []string{"org.apache.commons"},
+		},
+		{
+			name: "override: cglib groupId differs from package",
+			purl: "pkg:maven/cglib/cglib@3.3.0",
+			want: []string{"net.sf.cglib", "cglib"},
+		},
+		{
+			name: "override: gson groupId differs from package",
+			purl: "pkg:maven/com.google.code.gson/gson@2.10",
+			want: []string{"com.google.gson", "com.google.code.gson", "com.google.code.gson.gson"},
+		},
+		{
+			name: "groupId.artifactId emitted when artifactId is Java-safe",
+			purl: "pkg:maven/com.example/utils@1.0.0",
+			want: []string{"com.example", "com.example.utils"},
+		},
+		{
+			name: "override: junit has two package prefixes",
+			purl: "pkg:maven/junit/junit@4.13.2",
+			want: []string{"junit", "org.junit"},
+		},
+		{
+			name: "digit-starting artifactId is not Java-safe",
+			purl: "pkg:maven/com.example/3scale@1.0.0",
+			want: []string{"com.example"},
+		},
+		{
+			name: "hyphenated namespace skipped, override used",
+			purl: "pkg:maven/commons-io/commons-io@2.15.0",
+			want: []string{"org.apache.commons.io"},
+		},
+		{
+			name: "no namespace falls back to artifactId",
+			purl: "pkg:maven/somelib@1.0.0",
+			want: []string{"somelib"},
+		},
+		{
+			name: "case-insensitive override lookup",
+			purl: "pkg:maven/Cglib/Cglib@3.3.0",
+			want: []string{"net.sf.cglib", "Cglib"},
+		},
+		{
+			name: "mixed-case namespace/name equality skips groupId.artifactId",
+			purl: "pkg:maven/Cglib/cglib@3.3.0",
+			want: []string{"net.sf.cglib", "Cglib"},
+		},
+		{
+			name: "invalid fallback artifactId is skipped",
+			purl: "pkg:maven/3scale-client@1.0.0",
+			want: nil,
+		},
+		{
+			name: "hyphenated namespace without override skips groupId.artifactId",
+			purl: "pkg:maven/my-company/mylib@1.0.0",
+			want: []string{"mylib"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := buildImportPaths([]string{tt.purl})
+			got := result[tt.purl]
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("buildImportPaths(%s) = %v, want no entry", tt.purl, got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("missing import paths for %s", tt.purl)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("buildImportPaths(%s) = %v, want %v", tt.purl, got, tt.want)
+			}
+		})
 	}
 }
 

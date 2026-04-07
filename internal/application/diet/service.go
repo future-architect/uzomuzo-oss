@@ -327,13 +327,10 @@ func buildImportPaths(purls []string) map[string][]string {
 			// replace hyphens with underscores and lowercase (e.g., "PyYAML" → "pyyaml").
 			importPath = strings.ToLower(strings.ReplaceAll(parsed.Name, "-", "_"))
 		case "maven":
-			// Use groupId (namespace) as primary prefix — it aligns more closely
-			// with actual Java package names than groupId.artifactId would.
-			if parsed.Namespace != "" {
-				importPath = parsed.Namespace
-			} else {
-				importPath = parsed.Name
+			if paths := buildMavenImportPaths(parsed); len(paths) > 0 {
+				result[p] = paths
 			}
+			continue
 		default:
 			importPath = parsed.Name
 		}
@@ -342,4 +339,108 @@ func buildImportPaths(purls []string) map[string][]string {
 		}
 	}
 	return result
+}
+
+// mavenPackageOverrides maps "groupId/artifactId" to known Java package
+// prefixes for libraries where the Maven groupId does not match the actual
+// Java package name.  Add entries as real-world mismatches are discovered.
+var mavenPackageOverrides = map[string][]string{
+	"cglib/cglib":                             {"net.sf.cglib"},
+	"com.google.code.gson/gson":               {"com.google.gson"},
+	"commons-beanutils/commons-beanutils":     {"org.apache.commons.beanutils"},
+	"commons-codec/commons-codec":             {"org.apache.commons.codec"},
+	"commons-collections/commons-collections": {"org.apache.commons.collections"},
+	"commons-io/commons-io":                   {"org.apache.commons.io"},
+	"commons-logging/commons-logging":         {"org.apache.commons.logging"},
+	"junit/junit":                             {"junit", "org.junit"},
+	"log4j/log4j":                             {"org.apache.log4j"},
+}
+
+// buildMavenImportPaths generates candidate import path prefixes for a Maven PURL.
+// It combines well-known overrides with heuristic candidates (groupId, groupId.artifactId).
+func buildMavenImportPaths(parsed packageurl.PackageURL) []string {
+	key := strings.ToLower(parsed.Namespace + "/" + parsed.Name)
+	seen := make(map[string]struct{})
+	var paths []string
+
+	add := func(p string) {
+		if p == "" {
+			return
+		}
+		if _, ok := seen[p]; ok {
+			return
+		}
+		seen[p] = struct{}{}
+		paths = append(paths, p)
+	}
+
+	// 1. Well-known overrides take priority.
+	for _, p := range mavenPackageOverrides[key] {
+		add(p)
+	}
+
+	// 2. groupId (namespace) — the most common convention.
+	// Skip when the namespace contains characters invalid in Java package names
+	// (e.g. "commons-io"), since such candidates can never match real imports.
+	if isJavaDottedPackageSafe(parsed.Namespace) {
+		add(parsed.Namespace)
+	}
+
+	// 3. groupId.artifactId — covers cases where the package mirrors the full coordinate.
+	// Skip when namespace == name ignoring case (e.g. cglib/cglib or Cglib/cglib →
+	// "cglib.cglib" is not a real package),
+	// and skip when namespace or artifactId contains characters invalid in Java package names
+	// (e.g. hyphens).
+	if parsed.Namespace != "" && parsed.Name != "" &&
+		!strings.EqualFold(parsed.Namespace, parsed.Name) &&
+		isJavaDottedPackageSafe(parsed.Namespace) &&
+		isJavaPackageSafe(parsed.Name) {
+		add(parsed.Namespace + "." + parsed.Name)
+	}
+
+	if len(paths) == 0 {
+		// Fallback to artifactId only when nothing else is available,
+		// but only if it is a valid Java package segment.
+		if isJavaPackageSafe(parsed.Name) {
+			add(parsed.Name)
+		}
+	}
+
+	return paths
+}
+
+// isJavaPackageSafe reports whether s is a valid Java package name segment.
+// The first character must be a letter, underscore, or dollar sign; subsequent
+// characters may also include digits.  Maven artifactIds often contain hyphens
+// (e.g. "commons-lang3") or start with digits (e.g. "3scale") which are not
+// valid in Java identifiers and would never match a real import statement.
+func isJavaPackageSafe(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_' || r == '$' {
+			continue
+		}
+		if i > 0 && r >= '0' && r <= '9' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// isJavaDottedPackageSafe reports whether s is a valid dot-separated Java
+// package prefix (e.g. "org.apache.commons").  Each segment between dots must
+// satisfy isJavaPackageSafe.
+func isJavaDottedPackageSafe(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, seg := range strings.Split(s, ".") {
+		if !isJavaPackageSafe(seg) {
+			return false
+		}
+	}
+	return true
 }
