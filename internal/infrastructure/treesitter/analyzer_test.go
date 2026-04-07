@@ -173,6 +173,9 @@ func main() {
 	if caGomega.IsUnused {
 		t.Error("gomega: IsUnused = true, want false (dot import is used)")
 	}
+	if caGomega.CallSiteCount < 1 {
+		t.Errorf("gomega: CallSiteCount = %d, want >= 1 (dot import baseline)", caGomega.CallSiteCount)
+	}
 
 	// Regular import: no special flags
 	caBar, ok := result["pkg:golang/github.com/foo/bar@v1.0.0"]
