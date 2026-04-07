@@ -106,4 +106,8 @@ patterns:
     summary: "Assert exact computed values with tolerance instead of loose threshold checks — threshold-only assertions miss formula regressions"
     pr: 198
     file: "internal/domain/diet/scoring_test.go"
+  - category: "testing"
+    summary: "Omit unused struct fields in test fixtures to avoid nondeterminism and unnecessary imports"
+    pr: 197
+    file: "internal/interfaces/cli/diet_render_test.go"
     date: "2026-04-07"
