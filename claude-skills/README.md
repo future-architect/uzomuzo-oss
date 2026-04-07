@@ -43,20 +43,18 @@ Evaluates a single dependency for removal feasibility across six axes.
 
 ### `/diet-remove` — Guided Dependency Removal
 
-Handles the full removal lifecycle: analysis → replacement → verification → cleanup.
+Analyzes a dependency for removal, then either files an issue (default) or implements the change directly.
 
-**What it does:**
-1. Pre-flight checks (will it disappear? what's the replacement? hidden complications?)
-2. Test coverage check (writes tests first if none exist)
-3. Implementation (stdlib replacement, self-implement, submodule isolation, or framework peel)
-4. Verification (build + vet + test)
-5. Upstream diet (when the dep stays as indirect)
-6. Structural reform assessment (when individual removals aren't enough)
+**Two modes:**
+- **Issue mode (default)**: Runs pre-flight analysis, then files a GitHub Issue with findings and migration plan. Best for external OSS contributions.
+- **PR mode (`--pr`)**: Full removal lifecycle — analysis → replacement → verification → commit. Use when you own the project.
 
 ```bash
-# In Claude Code
-/diet-remove github.com/pkg/errors
-/diet-remove pkg:golang/github.com/foo/bar@v1.0.0
+# File an issue (default) — safe for external OSS
+/diet-remove @vercel/kv --repo vercel/next.js
+
+# Direct implementation — for your own project
+/diet-remove github.com/pkg/errors --pr
 ```
 
 ## Setup

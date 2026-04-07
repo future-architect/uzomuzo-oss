@@ -1,12 +1,22 @@
 ---
 name: diet-remove
-description: "Remove a dependency identified by uzomuzo diet — with safety checks and verification"
-argument-hint: "<module path or PURL to remove>"
+description: "Remove a dependency identified by uzomuzo diet — analysis + issue (default) or direct PR"
+argument-hint: "<module path or PURL> [--pr] [--repo owner/repo]"
 ---
 
 # Diet Remove: $ARGUMENTS
 
-Remove the dependency `$ARGUMENTS` from this project. This command handles the full removal lifecycle: analysis → replacement → verification → cleanup.
+Analyze and plan the removal of dependency `$ARGUMENTS`, then take action.
+
+## Mode selection
+
+- **Default (Issue mode)**: Run Phase 1 analysis, then file a GitHub Issue with the findings and proposed migration plan. Appropriate for external OSS contributions and large projects where you don't own the build environment.
+- **`--pr` (PR mode)**: Run the full removal lifecycle locally: analysis → replacement → verification → commit. Use this only when you own the project and can run build/test locally.
+
+Parse `$ARGUMENTS` for flags:
+- If `--pr` is present → PR mode (direct implementation)
+- If `--repo owner/repo` is present → target that repository for the issue
+- Otherwise → Issue mode (default)
 
 **When to use**: After `/diet-evaluate-removal` confirms the dependency is worth removing, or when `uzomuzo diet` ranks it as trivial/easy.
 
@@ -69,6 +79,70 @@ Check these before starting:
 
 - **Blank imports**: `import _ "pkg"` only runs `init()`. Check what `init()` does
   (usually driver/codec registration) before removing.
+
+## Issue mode (default): File a GitHub Issue
+
+After completing Phase 1, **stop and file an issue** instead of implementing. This is the default because:
+- External contributors cannot run CI or regenerate lockfiles
+- Maintainers need context to evaluate the change
+- Large monorepos have project-specific build/test requirements
+
+### Issue template
+
+Use `gh issue create` with the following structure:
+
+```
+Title: dep: replace EOL {dependency} with {replacement}
+
+Body:
+## Problem
+
+`{dependency}` is {lifecycle status} (detected by [uzomuzo diet](https://github.com/future-architect/uzomuzo-oss)).
+{1-2 sentences on why this matters — security risk, no more patches, etc.}
+
+## Impact analysis
+
+- **Files**: {N} files import this dependency
+- **Call sites**: {N} calls across {N} APIs
+- **Exclusive transitive deps**: {N} (removed together)
+- **Stays as indirect**: {yes/no}
+- **Difficulty**: {trivial/easy/moderate/hard}
+
+### Usage breakdown
+
+| File | Usage | Category |
+|------|-------|----------|
+{table of files and how they use the dependency}
+
+## Proposed replacement
+
+{replacement} — {why this is the right alternative}
+
+### API mapping
+
+| Current | Replacement |
+|---------|-------------|
+{API-level migration table}
+
+### Environment variable changes
+
+{any env var renames needed, or "None"}
+
+## Notes
+
+- {any hidden complications from Phase 1 step 3}
+- {API leakage? build tags? generated code?}
+```
+
+After filing the issue, **stop**. Do not proceed to implementation.
+
+If `--pr` was specified, skip this section and continue to Phase 1.5 below.
+
+---
+
+## PR mode (`--pr`): Direct implementation
+
+The following phases apply only in PR mode. Use this when you own the project.
 
 ## Phase 1.5: Test coverage check — before you touch anything
 
