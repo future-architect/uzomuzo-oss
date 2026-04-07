@@ -185,6 +185,141 @@ else:
 PYEOF
 ```
 
+### Step 4b: Auto-File Issues for Anomalies
+
+When anomalies are found, **automatically collect reproduction data and file a GitHub issue** for each distinct anomaly type. This is critical — the whole point of `/diet-trial` is to find and track bugs.
+
+#### Anomaly Types and Evidence Collection
+
+For each anomaly, collect the evidence needed to reproduce it:
+
+**IMPORTS-BUT-NO-CALLS** (call site detection miss):
+```bash
+# 1. Extract the SBOM entry for this dependency
+python3 -c "
+import json
+with open('/tmp/diet-trial-<repo>-sbom.json') as f:
+    d = json.load(f)
+for c in d['components']:
+    if '<dep-name>' in c.get('purl', '') or '<dep-name>' in c.get('name', ''):
+        print(json.dumps(c, indent=2))
+        break
+"
+
+# 2. Find actual import statements in source
+grep -rn 'import.*<dep-import-pattern>' /tmp/diet-trial-<repo>/ --include='*.py' --include='*.go' --include='*.ts' --include='*.js' --include='*.java' | head -20
+
+# 3. Find actual call sites (what diet missed)
+grep -rn '<dep-module>\.' /tmp/diet-trial-<repo>/ --include='*.py' --include='*.go' --include='*.ts' --include='*.js' --include='*.java' | head -20
+
+# 4. Extract diet JSON entry
+python3 -c "
+import json
+with open('/tmp/diet-trial-<repo>-diet.json') as f:
+    d = json.load(f)
+for dep in d['dependencies']:
+    if '<dep-name>' in dep.get('name', ''):
+        print(json.dumps(dep, indent=2))
+        break
+"
+```
+
+**EOL-ZERO-SCORE** (scoring anomaly):
+```bash
+# Extract the full diet entry including all score components
+python3 -c "
+import json
+with open('/tmp/diet-trial-<repo>-diet.json') as f:
+    d = json.load(f)
+for dep in d['dependencies']:
+    if '<dep-name>' in dep.get('name', ''):
+        print(json.dumps(dep, indent=2))
+        break
+"
+```
+
+**HIGH-SCORE-BUT-HARD** (unusual ranking):
+```bash
+# Same as above — full diet entry with all axes
+```
+
+#### Issue Filing
+
+For each anomaly (or group of related anomalies from the same root cause), file an issue:
+
+```bash
+gh issue create \
+  --repo future-architect/uzomuzo-oss \
+  --label "bug,diet-trial" \
+  --title "<anomaly-type>: <dep-name> in <org/repo> (<language>)" \
+  --body "$(cat <<'ISSUE_EOF'
+## Anomaly
+
+**Type**: <IMPORTS-BUT-NO-CALLS | EOL-ZERO-SCORE | HIGH-SCORE-BUT-HARD>
+**Project**: <org/repo>
+**Language**: <Go | Python | JavaScript | TypeScript | Java>
+**SBOM tool**: <trivy | syft> v<version>
+**Date**: <YYYY-MM-DD>
+
+## Description
+
+<One sentence describing what looks wrong>
+
+## Expected vs Actual
+
+- **Expected**: <what the correct result should be>
+- **Actual**: <what diet reported>
+
+## Reproduction
+
+```bash
+git clone --depth 1 https://github.com/<org>/<repo>.git /tmp/diet-trial-<repo>
+<sbom-tool> fs /tmp/diet-trial-<repo> --format cyclonedx -o /tmp/sbom.json
+uzomuzo-diet --sbom /tmp/sbom.json --source /tmp/diet-trial-<repo> --format json
+# Then check the entry for <dep-name>
+```
+
+## Evidence
+
+### SBOM entry
+```json
+<sbom-component-json>
+```
+
+### Diet result entry
+```json
+<diet-entry-json>
+```
+
+### Source code references
+```
+<grep output showing actual imports/calls>
+```
+
+## Analysis
+
+<Your assessment: why this might be happening, which phase (1-4) likely has the bug>
+
+---
+*Filed automatically by `/diet-trial` — [case study](<link-to-saved-report-if-available>)*
+ISSUE_EOF
+)"
+```
+
+#### Guidelines
+
+- **Group related anomalies**: If 5 Python deps all show IMPORTS-BUT-NO-CALLS, that's likely one bug (e.g., Python call site detection). File one issue, list all affected deps.
+- **Check for duplicates first**: Before filing, search existing issues:
+  ```bash
+  gh issue list --repo future-architect/uzomuzo-oss --label "diet-trial" --search "<anomaly-type>" --state open
+  ```
+  If a matching open issue exists, add a comment with the new evidence instead of filing a duplicate.
+- **Severity hints**: Include in the issue body:
+  - How many deps are affected in this project
+  - Whether the same anomaly appeared in other trial runs
+  - Whether it affects the priority ranking (high-rank deps with bugs = higher severity)
+- **Do NOT file issues for expected behavior**: The anomaly check includes known false positives (e.g., config-driven deps like Spring Boot starters showing 0 calls is expected, not a bug). Use judgment.
+
 ### Step 5: Display Report
 
 After analysis, display a structured report to the user. The report MUST include:

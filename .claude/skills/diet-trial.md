@@ -24,11 +24,12 @@ argument-hint: |
 
 ## Pipeline
 
-1. Clone (shallow) → 2. SBOM (Trivy/syft) → 3. `uzomuzo diet` → 4. Analysis → 5. Save report
+1. Clone (shallow) → 2. SBOM (Trivy/syft) → 3. `uzomuzo diet` → 4. Analysis + anomaly detection → 5. Auto-file issues for bugs → 6. Save report
 
 ## Key Points
 
 - No GITHUB_TOKEN needed (diet accuracy is local-only: Graph + Coupling)
-- Reports saved to `case-studies/` by default (matching existing case study format)
-- Anomaly detection flags potential uzomuzo bugs/accuracy issues
+- Reports saved to `case-studies/uzomuzo-diet/` by default
+- Anomaly detection flags potential uzomuzo bugs and **auto-files GitHub issues** with reproduction data
 - `--compare` mode produces SBOM tool comparison tables for conference materials
+- Groups related anomalies into single issues; adds comments to existing issues for duplicates
