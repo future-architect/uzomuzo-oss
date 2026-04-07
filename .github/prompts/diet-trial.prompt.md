@@ -205,7 +205,7 @@ After analysis, display a structured report to the user. The report MUST include
 Save the report as a Markdown file. Default location logic:
 
 1. If `--save-to <path>` is specified, use that path
-2. If `/workspace/vuls-saas/vuls-diet/case-studies/` exists, save there
+2. If `/workspace/vuls-saas/vuls-diet/case-studies/uzomuzo-diet/` exists, save there
 3. Otherwise save to the current project's `docs/case-studies/` (create if needed)
 
 Filename format: `<repo>-diet-trial-<tool>-<YYYY-MM-DD>.md`
