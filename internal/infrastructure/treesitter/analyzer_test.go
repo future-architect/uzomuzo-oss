@@ -462,6 +462,80 @@ func main() {
 	}
 }
 
+func TestAnalyzer_JSCaseInsensitivePURL(t *testing.T) {
+	dir := t.TempDir()
+	// Source code uses mixed-case import path, but PURL (and hence importToPURL key)
+	// is lowercased. The lookup must be case-insensitive.
+	err := os.WriteFile(filepath.Join(dir, "index.ts"), []byte(`import MyLib from "MyLib";
+
+MyLib.doSomething();
+MyLib.doOther();
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/mylib@1.0.0": {"mylib"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/mylib@1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for case-mismatched JS import")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 2 {
+		t.Errorf("CallSiteCount = %d, want 2", ca.CallSiteCount)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false")
+	}
+}
+
+func TestAnalyzer_JavaCaseInsensitivePURL(t *testing.T) {
+	dir := t.TempDir()
+	// Java import paths are case-sensitive, but the PURL-derived importToPURL
+	// keys are lowercased. Lookup must be case-insensitive.
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.Google.Gson.Gson;
+
+public class Main {
+    public static void main(String[] args) {
+        Gson g = new Gson();
+        g.toJson("test");
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/com.google.code.gson/gson@2.10": {"com.google.gson"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:maven/com.google.code.gson/gson@2.10"]
+	if !ok {
+		t.Fatal("expected coupling analysis for case-mismatched Java import")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+}
+
 func TestAnalyzer_JavaScriptScopedDefaultImport(t *testing.T) {
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "index.js"), []byte(`import cloud from "@strapi/plugin-cloud";
