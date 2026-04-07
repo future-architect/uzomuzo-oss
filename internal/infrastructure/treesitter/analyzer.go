@@ -552,14 +552,12 @@ func goPackageFromHyphenated(name string) string {
 
 	// Strip "-go" suffix first (more specific).
 	result := strings.TrimSuffix(name, "-go")
-	if result != name && !strings.Contains(result, "-") {
+	if !strings.Contains(result, "-") {
 		return result
 	}
 
-	// Strip "go-" prefix.
-	if result == name {
-		result = strings.TrimPrefix(name, "go-")
-	}
+	// Strip "go-" prefix from the current result to preserve heuristic order.
+	result = strings.TrimPrefix(result, "go-")
 	if !strings.Contains(result, "-") {
 		return result
 	}

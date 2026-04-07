@@ -1712,6 +1712,7 @@ func TestGoPackageFromHyphenated(t *testing.T) {
 		{"go-difflib", "difflib"},
 		{"color", "color"},
 		{"proto-go-sql", "protogosql"},
+		{"go-foo-go", "foo"},
 		{"testify", "testify"},
 	}
 
