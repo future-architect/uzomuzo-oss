@@ -615,12 +615,16 @@ func (a *Analyzer) handleJavaImport(
 	importToPURL map[string]string,
 	aliasMap map[string]string,
 ) {
+	// Lowercase the import path for matching — importToPURL keys are already lowercased
+	// to handle PURL case-insensitivity (see AnalyzeCoupling).
+	lowerPath := strings.ToLower(importPath)
+
 	// Pick the longest matching prefix to handle overlapping groupIds
 	// (e.g., prefer "org.apache.commons" over "org.apache").
 	bestIP := ""
 	bestPURL := ""
 	for ip, purl := range importToPURL {
-		if (importPath == ip || strings.HasPrefix(importPath, ip+".")) && len(ip) > len(bestIP) {
+		if (lowerPath == ip || strings.HasPrefix(lowerPath, ip+".")) && len(ip) > len(bestIP) {
 			bestIP = ip
 			bestPURL = purl
 		}
@@ -648,13 +652,16 @@ func (a *Analyzer) handleJSImport(
 	aliasMap map[string]string,
 	cfg *langConfig,
 ) {
-	purl, ok := importToPURL[importPath]
+	// Lowercase the import path for matching — importToPURL keys are already lowercased
+	// to handle PURL case-insensitivity (see AnalyzeCoupling).
+	lowerPath := strings.ToLower(importPath)
+	purl, ok := importToPURL[lowerPath]
 	if !ok {
 		// Pick the longest matching prefix to handle scoped packages
 		// (e.g., prefer "@scope/pkg/sub" over "@scope/pkg").
 		bestLen := 0
 		for ip, p := range importToPURL {
-			if strings.HasPrefix(importPath, ip+"/") && len(ip) > bestLen {
+			if strings.HasPrefix(lowerPath, ip+"/") && len(ip) > bestLen {
 				purl = p
 				ok = true
 				bestLen = len(ip)
