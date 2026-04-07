@@ -354,15 +354,18 @@ var pypiPrefixes = []string{
 
 // buildPyPIImportPaths generates candidate Python import module names for a
 // PyPI distribution name. The canonical candidate (hyphen→underscore, lowered)
-// is always first. Additional candidates are produced by stripping common
-// prefixes and by taking the segment after the last hyphen, which covers cases
-// where the distribution name differs from the import module name.
+// is always first. Additional candidates are produced by stripping well-known
+// prefixes (e.g., "python-", "py-"). Each candidate is validated against
+// Python identifier rules before inclusion.
 func buildPyPIImportPaths(name string) []string {
 	seen := make(map[string]struct{})
 	var paths []string
 
 	add := func(p string) {
 		if p == "" {
+			return
+		}
+		if !isPythonIdentifierSafe(p) {
 			return
 		}
 		if _, ok := seen[p]; ok {
@@ -385,15 +388,27 @@ func buildPyPIImportPaths(name string) []string {
 		}
 	}
 
-	// 3. Segment after the last hyphen (e.g., "python-multipart" → "multipart").
-	// Only added when the name contains at least one hyphen and the result
-	// differs from candidates already generated.
-	if idx := strings.LastIndex(lower, "-"); idx >= 0 {
-		tail := lower[idx+1:]
-		add(tail)
-	}
-
 	return paths
+}
+
+// isPythonIdentifierSafe reports whether s is a valid Python identifier.
+// The first character must be a letter or underscore; subsequent characters
+// may also include digits.  This filters out candidates that can never match
+// a real Python import statement (e.g., names starting with a digit).
+func isPythonIdentifierSafe(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_' {
+			continue
+		}
+		if i > 0 && r >= '0' && r <= '9' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // mavenPackageOverrides maps "groupId/artifactId" to known Java package

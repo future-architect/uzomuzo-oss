@@ -221,7 +221,7 @@ func TestBuildPyPIImportPaths(t *testing.T) {
 		{
 			name: "simple hyphenated name: email-validator",
 			purl: "pkg:pypi/email-validator@2.0.0",
-			want: []string{"email_validator", "validator"},
+			want: []string{"email_validator"},
 		},
 		{
 			name: "case normalization: PyYAML",
@@ -241,7 +241,7 @@ func TestBuildPyPIImportPaths(t *testing.T) {
 		{
 			name: "multiple hyphens: python-jose-cryptodome",
 			purl: "pkg:pypi/python-jose-cryptodome@1.3.2",
-			want: []string{"python_jose_cryptodome", "jose_cryptodome", "cryptodome"},
+			want: []string{"python_jose_cryptodome", "jose_cryptodome"},
 		},
 		{
 			name: "simple name: flask",
