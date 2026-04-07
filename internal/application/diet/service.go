@@ -292,7 +292,9 @@ func buildImportPaths(purls []string) map[string][]string {
 			// replace hyphens with underscores and lowercase (e.g., "PyYAML" → "pyyaml").
 			importPath = strings.ToLower(strings.ReplaceAll(parsed.Name, "-", "_"))
 		case "maven":
-			result[p] = buildMavenImportPaths(parsed)
+			if paths := buildMavenImportPaths(parsed); len(paths) > 0 {
+				result[p] = paths
+			}
 			continue
 		default:
 			importPath = parsed.Name
