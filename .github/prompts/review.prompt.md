@@ -298,17 +298,17 @@ Each recurring pattern maps to an existing rule file:
 
 | Pattern Category | Target Rule File |
 |-----------------|------------------|
-| naming-consistency | `.github/instructions/coding-standards.instructions.md` |
-| comment-doc-drift | `.github/instructions/coding-standards.instructions.md` |
+| naming-consistency | `.github/instructions/copilot-learned-coding.instructions.md` |
+| comment-doc-drift | `.github/instructions/copilot-learned-coding.instructions.md` |
 | error-handling | `.github/instructions/error-handling.instructions.md` |
-| defensive-coding | `.github/instructions/coding-standards.instructions.md` |
-| api-consistency | `.github/instructions/coding-standards.instructions.md` |
+| defensive-coding | `.github/instructions/copilot-learned-coding.instructions.md` |
+| api-consistency | `.github/instructions/copilot-learned-coding.instructions.md` |
 | security | `.github/instructions/security.instructions.md` |
 | testing | `.github/instructions/testing-performance.instructions.md` |
 | ddd-violations | `.github/instructions/ddd-architecture.instructions.md` |
-| dependency-pinning | `.github/instructions/coding-standards.instructions.md` |
+| dependency-pinning | `.github/instructions/copilot-learned-coding.instructions.md` |
 
-If no existing file fits, add to `coding-standards.instructions.md` as a new section.
+If no existing file fits, add to `copilot-learned-coding.instructions.md`.
 
 #### Step 3.4: Propose and Apply Rules
 

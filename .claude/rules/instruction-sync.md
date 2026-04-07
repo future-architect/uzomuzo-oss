@@ -23,6 +23,7 @@ Rename mapping:
 | `.github/instructions/` | `.claude/rules/` |
 |--------------------------|------------------|
 | `agent-orchestration.instructions.md` | `agents.md` |
+| `copilot-learned-coding.instructions.md` | `copilot-learned-coding.md` |
 | All others | Same base name (strip `.instructions` suffix) |
 
 ## Agents: Delegation Pattern
