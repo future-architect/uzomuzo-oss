@@ -52,6 +52,11 @@ const (
 // queries cannot track them. We mark them as "used but uncountable."
 const dotImportAlias = "\x00dot"
 
+// blankImportAlias is a sentinel alias for Go blank imports (import _ "pkg").
+// Blank imports are side-effect-only (init registration) with no callable API,
+// so we record the import file but skip call-site counting.
+const blankImportAlias = "\x00blank"
+
 // langConfig holds the tree-sitter language and query patterns.
 type langConfig struct {
 	language       *sitter.Language
@@ -428,8 +433,10 @@ func (a *Analyzer) handleGoImport(
 		}
 	}
 
-	// Note: Blank imports (import _ "pkg") are side-effect-only, so skip them entirely.
+	// Note: Blank imports (import _ "pkg") are side-effect-only (init registration).
+	// Record the import file so the dep is not misclassified as "unused", but skip call-site counting.
 	if alias == "_" {
+		aliasMap[blankImportAlias] = purl
 		return
 	}
 

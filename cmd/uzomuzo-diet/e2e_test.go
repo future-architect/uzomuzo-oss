@@ -20,12 +20,13 @@ import (
 // dietJSONOutput mirrors the top-level JSON output structure for validation.
 type dietJSONOutput struct {
 	Summary struct {
-		TotalDirect              int `json:"total_direct"`
-		TotalTransitive          int `json:"total_transitive"`
-		TotalExclusiveTransitive int `json:"total_exclusive_transitive"`
-		UnusedDirect             int `json:"unused_direct"`
-		EasyWins                 int `json:"easy_wins"`
-		EstimatedRemovable       int `json:"estimated_removable"`
+		TotalDirect         int `json:"total_direct"`
+		TotalTransitive     int `json:"total_transitive"`
+		TransitiveOnlyByOne int `json:"transitive_only_by_one"`
+		UnusedDirect        int `json:"unused_direct"`
+		EasyWins            int `json:"easy_wins"`
+		ActionableDirect    int `json:"actionable_direct"`
+		StaysAsIndirect     int `json:"stays_as_indirect"`
 	} `json:"summary"`
 	Dependencies []struct {
 		Rank            int     `json:"rank"`
