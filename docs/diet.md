@@ -32,17 +32,52 @@ go install github.com/future-architect/uzomuzo-oss/cmd/uzomuzo-diet@latest
 
 ### Prerequisites
 
-Generate a CycloneDX SBOM for your project:
+Generate a CycloneDX SBOM for your project. The recommended tool depends on your ecosystem:
+
+#### Go / Python / JavaScript / TypeScript
 
 ```bash
-# Using syft
-syft . -o cyclonedx-json > bom.json
+# Using syft (recommended)
+syft . --source-name myproject -o cyclonedx-json > bom.json
 
 # Using trivy
 trivy fs . --format cyclonedx -o bom.json
 
 # Using cdxgen
 cdxgen -o bom.json
+```
+
+> **Note:** For JavaScript/TypeScript projects, a lockfile (`package-lock.json` or `yarn.lock`) is required for dependency graph resolution.
+
+#### Java (Maven)
+
+Static SBOM tools (syft, Trivy) **cannot resolve Maven's transitive dependency graph** without running Maven. Use the [CycloneDX Maven Plugin](https://github.com/CycloneDX/cyclonedx-maven-plugin) instead:
+
+```bash
+# Generate SBOM with full dependency resolution
+mvn org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom \
+  -DoutputFormat=json \
+  -DoutputName=bom \
+  -Dcyclonedx.skipNotDeployed=false
+
+# The SBOM is generated at target/bom.json
+uzomuzo diet --sbom target/bom.json --source .
+```
+
+#### Java (Gradle)
+
+Similarly, use the [CycloneDX Gradle Plugin](https://github.com/CycloneDX/cyclonedx-gradle-plugin):
+
+```groovy
+// build.gradle
+plugins {
+    id 'org.cyclonedx.bom' version '2.2.0'
+}
+```
+
+```bash
+gradle cyclonedxBom
+uzomuzo diet --sbom build/reports/bom.json --source .
 ```
 
 ### Basic Usage

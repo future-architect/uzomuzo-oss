@@ -139,10 +139,17 @@ uzomuzo scan --file input_purls.txt --sample 500
 Prioritize which dependencies to remove first:
 
 ```bash
-# Generate SBOM, then analyze removability
-trivy fs . --format cyclonedx -o bom.json
+# Go / Python / JS / TS — generate SBOM with syft or trivy
+syft . --source-name myproject -o cyclonedx-json > bom.json
 uzomuzo diet --sbom bom.json --source .
+
+# Java (Maven) — use CycloneDX Maven Plugin for full dependency resolution
+mvn org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom \
+  -DoutputFormat=json -DoutputName=bom -Dcyclonedx.skipNotDeployed=false
+uzomuzo diet --sbom target/bom.json --source .
 ```
+
+> **Note:** For Java projects, static SBOM tools (syft, Trivy) cannot resolve Maven/Gradle transitive dependencies. Use the ecosystem's native CycloneDX plugin instead. See [Diet Command](docs/diet.md) for details.
 
 See [Diet Command](docs/diet.md) for full documentation.
 
