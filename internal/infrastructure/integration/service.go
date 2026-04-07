@@ -21,12 +21,14 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/links"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/scorecard"
 )
 
 // IntegrationService handles repository data fetching and analysis from external APIs
 type IntegrationService struct {
 	githubClient    *github.Client
 	depsdevClient   depsdev.Client
+	scorecardClient *scorecard.Client
 	config          *config.Config
 	goProxy         *goproxy.Client
 	rubygemsClient  *rubygems.Client
@@ -49,6 +51,11 @@ func WithRubyGemsClient(c *rubygems.Client) IntegrationOption {
 // WithPackagistClient injects a Packagist client for dependent count lookups.
 func WithPackagistClient(c *packagist.Client) IntegrationOption {
 	return func(s *IntegrationService) { s.packagistClient = c }
+}
+
+// WithScorecardClient injects a scorecard.dev client for full Scorecard data (18 checks).
+func WithScorecardClient(c *scorecard.Client) IntegrationOption {
+	return func(s *IntegrationService) { s.scorecardClient = c }
 }
 
 // NewIntegrationService creates a new integration service with optional configuration.

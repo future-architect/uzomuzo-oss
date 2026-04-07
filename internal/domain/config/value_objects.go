@@ -12,6 +12,7 @@ type DefaultConfigValues struct {
 	App       AppConfig
 	GitHub    GitHubConfig
 	DepsDev   DepsDevConfig
+	Scorecard ScorecardConfig
 	Lifecycle LifecycleAssessmentConfig
 	Maven     MavenConfig
 }
@@ -38,6 +39,12 @@ var DefaultValues = DefaultConfigValues{
 		MaxRetries:        3,
 		BatchSize:         1000,
 		RequestIntervalMS: 500,
+	},
+	Scorecard: ScorecardConfig{
+		BaseURL:        "https://api.scorecard.dev",
+		Timeout:        15 * time.Second,
+		MaxRetries:     2,
+		MaxConcurrency: 10,
 	},
 	Lifecycle: LifecycleAssessmentConfig{
 		Type:                       "lifecycle",
@@ -67,6 +74,7 @@ func NewConfigWithDefaults() *Config {
 		App:       DefaultValues.App,
 		GitHub:    DefaultValues.GitHub,
 		DepsDev:   DefaultValues.DepsDev,
+		Scorecard: DefaultValues.Scorecard,
 		Lifecycle: DefaultValues.Lifecycle,
 		Maven:     DefaultValues.Maven,
 	}
@@ -87,6 +95,11 @@ func GetDefaultDepsDev() DepsDevConfig {
 	return DefaultValues.DepsDev
 }
 
+// GetDefaultScorecard returns a copy of the default ScorecardConfig
+func GetDefaultScorecard() ScorecardConfig {
+	return DefaultValues.Scorecard
+}
+
 // GetDefaultLifecycle returns lifecycle assessment defaults
 func GetDefaultLifecycle() LifecycleAssessmentConfig { return DefaultValues.Lifecycle }
 
@@ -95,6 +108,7 @@ type Config struct {
 	App       AppConfig                 `yaml:"app" json:"app"`
 	GitHub    GitHubConfig              `yaml:"github" json:"github"`
 	DepsDev   DepsDevConfig             `yaml:"depsdev" json:"depsdev"`
+	Scorecard ScorecardConfig           `yaml:"scorecard" json:"scorecard"`
 	Lifecycle LifecycleAssessmentConfig `yaml:"lifecycle" json:"lifecycle"`
 	Maven     MavenConfig               `yaml:"maven" json:"maven"`
 }
@@ -124,6 +138,17 @@ type DepsDevConfig struct {
 	MaxRetries        int           `yaml:"max_retries" json:"max_retries"`
 	BatchSize         int           `yaml:"batch_size" json:"batch_size"`
 	RequestIntervalMS int           `yaml:"request_interval_ms" json:"request_interval_ms"`
+}
+
+// ScorecardConfig represents scorecard.dev API configuration.
+//
+// Rationale: scorecard.dev returns all 18 OpenSSF Scorecard checks (deps.dev returns only 14).
+// Needs to vary per deployment: base URL differs for self-hosted instances.
+type ScorecardConfig struct {
+	BaseURL        string        `yaml:"base_url" json:"base_url"`
+	Timeout        time.Duration `yaml:"timeout" json:"timeout"`
+	MaxRetries     int           `yaml:"max_retries" json:"max_retries"`
+	MaxConcurrency int           `yaml:"max_concurrency" json:"max_concurrency"`
 }
 
 // MavenConfig represents Maven repository access configuration

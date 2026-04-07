@@ -64,6 +64,9 @@ func (s *IntegrationService) AnalyzeFromGitHubURLs(ctx context.Context, githubUR
 		analyses[r.githubURL] = r.analysis
 	}
 
+	// Scorecard enrichment (best-effort, scorecard.dev returns all 18 checks).
+	s.enrichScorecardFromAPI(ctx, analyses)
+
 	// Advisory severity enrichment (best-effort, after all analyses are populated).
 	s.enrichAdvisorySeverity(ctx, analyses)
 

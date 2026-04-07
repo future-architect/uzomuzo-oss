@@ -14,6 +14,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/scorecard"
 )
 
 // FetchService provides fetch-only operations for analyses without lifecycle assessment.
@@ -46,10 +47,12 @@ func NewFetchServiceFromConfig(cfg *config.Config) *FetchService {
 			}
 			return mv
 		}())
+	scorecardClient := scorecard.NewClient(&cfg.Scorecard)
 	integrationService := integration.NewIntegrationService(githubClient, depsdevClient,
 		integration.WithConfig(cfg),
 		integration.WithRubyGemsClient(rgClient),
 		integration.WithPackagistClient(pkgClient),
+		integration.WithScorecardClient(scorecardClient),
 	)
 	return &FetchService{integrationService: integrationService}
 }

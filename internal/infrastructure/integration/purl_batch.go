@@ -86,7 +86,7 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// a happens-before guarantee so the read after Wait is safe.
 	var depsGraphResults map[string]*depsdev.DependenciesResponse
 	var enrichWg sync.WaitGroup
-	enrichWg.Add(2)
+	enrichWg.Add(3)
 	go func() {
 		defer enrichWg.Done()
 		s.enrichDependentCounts(ctx, purls, analyses)
@@ -97,6 +97,12 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 		// because catalog DB stores version-agnostic package data; the latest release
 		// best represents the current dependency surface for OSS selection.
 		depsGraphResults = s.enrichDependencyCounts(ctx, purls, analyses)
+	}()
+	go func() {
+		defer enrichWg.Done()
+		// scorecard.dev returns all 18 checks (deps.dev returns 14).
+		// Overwrites deps.dev scorecard data when available; falls back gracefully.
+		s.enrichScorecardFromAPI(ctx, analyses)
 	}()
 	enrichWg.Wait()
 

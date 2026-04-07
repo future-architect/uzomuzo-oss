@@ -20,6 +20,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/scorecard"
 	// TODO: rename directory successor -> eolevaluator; after physical move adjust import
 )
 
@@ -99,10 +100,12 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 		WithRubyGems(rgClient).
 		WithPackagist(pkgClient).
 		WithPyPI(pypi.NewClient())
+	scorecardClient := scorecard.NewClient(&cfg.Scorecard)
 	integrationService := integration.NewIntegrationService(githubClient, depsdevClient,
 		integration.WithConfig(cfg),
 		integration.WithRubyGemsClient(rgClient),
 		integration.WithPackagistClient(pkgClient),
+		integration.WithScorecardClient(scorecardClient),
 	)
 
 	s := &AnalysisService{

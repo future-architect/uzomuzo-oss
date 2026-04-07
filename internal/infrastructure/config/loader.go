@@ -143,6 +143,26 @@ func (s *ConfigService) loadFromEnvironment(config *domainConfig.Config) {
 		}
 	}
 
+	// Scorecard configuration
+	if val := os.Getenv("SCORECARD_BASE_URL"); val != "" {
+		config.Scorecard.BaseURL = val
+	}
+	if val := os.Getenv("SCORECARD_TIMEOUT"); val != "" {
+		if timeout, err := time.ParseDuration(val); err == nil {
+			config.Scorecard.Timeout = timeout
+		}
+	}
+	if val := os.Getenv("SCORECARD_MAX_RETRIES"); val != "" {
+		if retries, err := strconv.Atoi(val); err == nil {
+			config.Scorecard.MaxRetries = retries
+		}
+	}
+	if val := os.Getenv("SCORECARD_MAX_CONCURRENCY"); val != "" {
+		if concurrency, err := strconv.Atoi(val); err == nil {
+			config.Scorecard.MaxConcurrency = concurrency
+		}
+	}
+
 	// Lifecycle assessment configuration
 	if val := os.Getenv("LIFECYCLE_ASSESS_TYPE"); val != "" {
 		config.Lifecycle.Type = val
