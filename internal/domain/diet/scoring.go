@@ -99,7 +99,8 @@ func normalizeGraphImpact(g GraphMetrics, maxExclusive int) float64 {
 	}
 	raw := float64(g.ExclusiveTransitiveCount) / float64(maxExclusive)
 	// Scale to [0.1, 1.0] so even zero-exclusive deps retain a small base score.
-	return 0.1 + 0.9*raw
+	// Clamp to 1.0 defensively in case exclusive > maxExclusive.
+	return math.Min(0.1+0.9*raw, 1.0)
 }
 
 func normalizeCouplingEffort(c CouplingAnalysis) float64 {
