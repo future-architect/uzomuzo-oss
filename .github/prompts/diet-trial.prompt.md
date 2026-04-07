@@ -366,23 +366,23 @@ After analysis, display a structured report to the user. The report MUST include
 2. **Executive Summary** (blockquote at top, immediately after header): A quick-scan verdict so readers can assess the project in 3 seconds. Format:
 
 ```markdown
-> **判定: <良好|注意|要改善>** — 直接依存 N 件、未使用 X% (M件)、EOL/Archived K 件
+> **Verdict: <Healthy|Warning|Action Needed>** — N direct deps, X% unused (M), K EOL/Archived
 >
-> | 指標 | 値 |
-> |------|-----|
-> | 直接依存 | N |
-> | 推移的依存 | N |
-> | 未使用率 | X% (M件) |
+> | Metric | Value |
+> |--------|-------|
+> | Direct deps | N |
+> | Transitive deps | N |
+> | Unused rate | X% (M) |
 > | EOL/Archived | K |
 > | Easy Wins | J |
 >
-> **最優先**: <most impactful immediate action>
+> **Top priority**: <most impactful immediate action>
 ```
 
 Verdict rules:
-- **良好**: No EOL deps AND unused < 20%
-- **注意**: 1-4 EOL deps OR unused 20-39%
-- **要改善**: 5+ EOL deps OR unused >= 40%
+- **Healthy**: No EOL deps AND unused < 20%
+- **Warning**: 1-4 EOL deps OR unused 20-39%
+- **Action Needed**: 5+ EOL deps OR unused >= 40%
 
 3. **Execution conditions**: Tool versions, flags, SBOM component count, ecosystem breakdown
 4. **Summary table**: total_direct, total_transitive, unused_direct, easy_wins
