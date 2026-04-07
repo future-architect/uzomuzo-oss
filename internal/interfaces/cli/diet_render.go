@@ -133,9 +133,7 @@ func renderDietTable(w io.Writer, plan *domaindiet.DietPlan) error {
 	if plan.Summary.UnusedDirect > 0 {
 		p.printf("  Unused (0 imports):  %d\n", plan.Summary.UnusedDirect)
 	}
-	if plan.Summary.EasyWins > 0 {
-		p.printf("  Quick wins:          %d  (trivial/easy + high impact)\n", plan.Summary.EasyWins)
-	}
+	p.printf("  Quick wins:          %d  (trivial/easy + high impact)\n", plan.Summary.EasyWins)
 
 	if p.err != nil {
 		return p.err
