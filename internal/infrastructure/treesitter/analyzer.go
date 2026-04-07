@@ -588,6 +588,9 @@ func (a *Analyzer) handleJSImport(
 // ESM: import_statement → import_clause → identifier / namespace_import
 // CJS: string → arguments → call_expression → variable_declarator → name
 func extractJSBinding(node *sitter.Node, src []byte) string {
+	if node == nil {
+		return ""
+	}
 	parent := node.Parent()
 	if parent == nil {
 		return ""
@@ -620,12 +623,15 @@ func extractJSBinding(node *sitter.Node, src []byte) string {
 func extractESMBinding(importStmt *sitter.Node, src []byte) string {
 	for i := 0; i < int(importStmt.ChildCount()); i++ {
 		child := importStmt.Child(i)
-		if child.Type() != "import_clause" {
+		if child == nil || child.Type() != "import_clause" {
 			continue
 		}
 		// import_clause children: identifier (default), namespace_import (* as foo), named_imports ({ foo })
 		for j := 0; j < int(child.ChildCount()); j++ {
 			gc := child.Child(j)
+			if gc == nil {
+				continue
+			}
 			switch gc.Type() {
 			case "identifier":
 				// Default import: import foo from "pkg" → "foo"
@@ -633,8 +639,9 @@ func extractESMBinding(importStmt *sitter.Node, src []byte) string {
 			case "namespace_import":
 				// import * as foo from "pkg" → "foo"
 				for k := 0; k < int(gc.ChildCount()); k++ {
-					if gc.Child(k).Type() == "identifier" {
-						return gc.Child(k).Content(src)
+					n := gc.Child(k)
+					if n != nil && n.Type() == "identifier" {
+						return n.Content(src)
 					}
 				}
 			}
