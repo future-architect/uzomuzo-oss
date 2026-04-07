@@ -82,6 +82,21 @@ Check these before starting:
 
 ## Issue mode (default): File a GitHub Issue
 
+### Step 0: Duplicate check (MANDATORY)
+
+Before filing anything, search for existing issues and discussions:
+
+```bash
+# Search issues
+gh search issues "{dependency}" --repo {owner/repo} --limit 10
+# Search discussions
+gh api graphql -f query='{ search(query: "repo:{owner/repo} {dependency} type:discussion", type: DISCUSSION, first: 10) { nodes { ... on Discussion { title url } } } }'
+```
+
+If a matching issue/discussion already exists, **do not file a duplicate**. Instead, add a comment with any new analysis (e.g., impact data from diet) and stop.
+
+### Step 1: File the issue or discussion
+
 After completing Phase 1, **stop and file an issue** instead of implementing. This is the default because:
 - External contributors cannot run CI or regenerate lockfiles
 - Maintainers need context to evaluate the change
