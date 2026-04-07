@@ -220,6 +220,84 @@ After:  {N} direct deps, go.sum {N} lines
 Binary: {size before} → {size after} ({reduction}%)
 ```
 
+## Phase 5: Upstream Diet — when go.sum doesn't shrink
+
+After `go mod tidy`, check if the dependency actually disappeared from `go.sum`:
+
+```bash
+grep "$ARGUMENTS" go.sum
+```
+
+If it's still there, it remains as an **indirect dependency** — some other module in your `go.mod` still pulls it in. This is the single most common "surprise" in dependency removal.
+
+### Is the upstream under your control?
+
+```bash
+# Find what still depends on it
+go mod why -m $ARGUMENTS
+# or
+go mod graph | grep " $ARGUMENTS@"
+```
+
+**If the upstream is your organization's repo** (e.g., your company's other OSS projects):
+
+1. Submit the same removal PR to that upstream repo
+2. Wait for it to be merged and tagged
+3. Update your `go.mod` to the new version: `go get -u <upstream>@latest`
+4. Run `go mod tidy` — now it should disappear from `go.sum`
+
+Real example: Removing `go-homedir` from vuls required PRs to 6 upstream repos (`go-exploitdb`, `go-kev`, `gost`, `go-cti`, `go-msfdb`, `go-cve-dictionary`). All used the identical `os.UserHomeDir()` replacement. Only after all 6 were merged and tagged did `go-homedir` finally leave vuls's `go.sum`.
+
+**If the upstream is a third-party project you don't control:**
+
+- You can submit a PR, but you can't control the timeline
+- In the meantime, the removal from your direct deps still has value:
+  - Version management is delegated to the upstream
+  - Your code no longer calls the dependency directly
+  - You're ready for instant cleanup when the upstream removes it
+- Note this in the commit message: "Direct usage removed. Remains as indirect via X."
+
+### Don't stop at one repo
+
+If you manage multiple repos that share the same dependency, plan the removal across all of them:
+
+```
+Week 1: Remove from leaf repos (no downstream dependents)
+Week 2: Tag releases of leaf repos
+Week 3: Update parent repos to new versions, remove there too
+Week 4: Tag releases, final go mod tidy in the top-level repo
+```
+
+## Phase 6: Step back — individual removal vs structural reform
+
+After removing a few dependencies individually, check the cumulative effect:
+
+```bash
+# Compare with the original baseline
+wc -l go.sum          # did it actually shrink meaningfully?
+go build -o /tmp/bin . && ls -la /tmp/bin   # did binary size change?
+```
+
+### The "9 deps removed, binary unchanged" lesson
+
+In the vuls Code Diet project, removing 9 individual dependencies barely changed the binary size. The dependencies were gone from `go.mod`, but their code was still pulled in transitively through a framework layer (Trivy's fanal).
+
+The breakthrough came from **removing the framework itself** — replacing the fanal analyzer registration with direct parser calls. That single change dropped the scanner binary from 106.6 MB to 34.1 MB (-68%).
+
+### When to shift from individual removal to structural reform
+
+| Signal | Action |
+|--------|--------|
+| go.sum keeps getting longer despite removals | Check for a framework pulling everything back in |
+| Binary size doesn't change after 3+ removals | Look for a shared layer that imports the deps transitively |
+| Multiple deps serve the same framework | Remove the framework, not the individual deps |
+| `diet` shows many deps with 0 ONLY-VIA-THIS | They're all shared through a common layer — peel the layer |
+
+Structural reform approaches:
+- **Framework peel**: Call specific functions directly instead of going through a plugin/registration layer
+- **Reporter/plugin extraction**: Move optional integrations to submodules with their own `go.mod`
+- **Binary split**: Separate CLI subcommands into separate binaries (git-style delegation — like `uzomuzo-diet` itself)
+
 ## Common patterns (from real removals)
 
 | Dependency | Replacement | Effort | Surprise |
