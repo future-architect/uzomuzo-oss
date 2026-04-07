@@ -143,8 +143,8 @@ func renderDietTable(w io.Writer, plan *domaindiet.DietPlan) error {
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	tp := &errWriter{w: tw}
-	tp.printf("RANK\tPRIORITY\tDIFFICULTY\tPURL\tONLY-VIA-THIS\tSTAYS\tFILES\tCALLS\tLIFECYCLE\n")
-	tp.printf("────\t────────\t──────────\t────\t─────────────\t─────\t─────\t─────\t─────────\n")
+	tp.printf("RANK\tSCORE\tEFFORT\tPURL\tREMOVES\tREMAINS\tIMPORTS\tCALLS\tSTATUS\n")
+	tp.printf("────\t─────\t──────\t────\t───────\t───────\t───────\t─────\t──────\n")
 	for _, e := range plan.Entries {
 		stays := "-"
 		if e.Graph.StaysAsIndirect() {
@@ -172,10 +172,10 @@ func renderDietTable(w io.Writer, plan *domaindiet.DietPlan) error {
 	p.printf("\n── Dependency Tree ─────────────────────────────────────────────\n")
 	p.printf("  Direct deps:          %d\n", plan.Summary.TotalDirect)
 	p.printf("  Transitive deps:      %d\n", plan.Summary.TotalTransitive)
-	p.printf("  └ only-via-one-dep:   %d  (removable if that direct dep is removed)\n",
+	p.printf("  └ removes-with-dep:   %d  (removable if that direct dep is removed)\n",
 		plan.Summary.TotalExclusiveTransitive)
 	if plan.Summary.StaysAsIndirectCount > 0 {
-		p.printf("  ⚠ stays-as-indirect:  %d  (remain in tree via another direct dep)\n",
+		p.printf("  ⚠ remains-indirect:   %d  (remain in tree via another direct dep)\n",
 			plan.Summary.StaysAsIndirectCount)
 	}
 	p.printf("\n")
@@ -198,29 +198,29 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 	for _, e := range plan.Entries {
 		p.printf("┌─ #%d %s (%s) ─────────────────────\n", e.Scores.Rank, e.Name, e.Version)
 		p.printf("│  PURL:       %s\n", e.PURL)
-		p.printf("│  Priority:   %.2f  Difficulty: %s\n", e.Scores.PriorityScore, e.Scores.Difficulty)
+		p.printf("│  Score:       %.2f  Effort: %s\n", e.Scores.PriorityScore, e.Scores.Difficulty)
 		p.printf("│\n")
 		p.printf("│  Graph Impact\n")
-		p.printf("│    Only-via-this dep:    %d  (removed together)\n", e.Graph.ExclusiveTransitiveCount)
-		p.printf("│    Shared with others:   %d\n", e.Graph.SharedTransitiveCount)
-		p.printf("│    Total transitive:     %d\n", e.Graph.TotalTransitiveCount)
+		p.printf("│    Removes:             %d  (removed together)\n", e.Graph.ExclusiveTransitiveCount)
+		p.printf("│    Shared with others:  %d\n", e.Graph.SharedTransitiveCount)
+		p.printf("│    Total transitive:    %d\n", e.Graph.TotalTransitiveCount)
 		if e.Graph.StaysAsIndirect() {
-			p.printf("│    ⚠ Stays as indirect:  yes  (via: %s)\n", formatViaList(e.Graph.IndirectVia))
+			p.printf("│    ⚠ Remains indirect:  yes  (via: %s)\n", formatViaList(e.Graph.IndirectVia))
 		} else {
-			p.printf("│    Stays as indirect:    no   (fully removed from tree)\n")
+			p.printf("│    Remains indirect:    no   (fully removed from tree)\n")
 		}
 		p.printf("│\n")
 		p.printf("│  Coupling\n")
 		if e.Coupling.IsUnused {
 			p.printf("│    Status: UNUSED (0 imports found)\n")
 		} else {
-			p.printf("│    Files:      %d\n", e.Coupling.ImportFileCount)
+			p.printf("│    Imports:    %d\n", e.Coupling.ImportFileCount)
 			p.printf("│    Call sites: %d\n", e.Coupling.CallSiteCount)
 			p.printf("│    API breadth: %d distinct symbols\n", e.Coupling.APIBreadth)
 		}
 		p.printf("│\n")
 		p.printf("│  Health\n")
-		p.printf("│    Lifecycle: %s\n", e.Health.MaintenanceStatus)
+		p.printf("│    Status: %s\n", e.Health.MaintenanceStatus)
 		if e.Health.HasVulnerabilities {
 			p.printf("│    Vulnerabilities: %d (max CVSS: %.1f)\n", e.Health.VulnerabilityCount, e.Health.MaxCVSSScore)
 		}
@@ -239,9 +239,9 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 	p.printf("── Summary ─────────────────────────────────────────────────\n")
 	p.printf("  Direct deps:          %d\n", plan.Summary.TotalDirect)
 	p.printf("  Transitive deps:      %d\n", plan.Summary.TotalTransitive)
-	p.printf("  └ only-via-one-dep:   %d  (removable if that direct dep is removed)\n", plan.Summary.TotalExclusiveTransitive)
+	p.printf("  └ removes-with-dep:   %d  (removable if that direct dep is removed)\n", plan.Summary.TotalExclusiveTransitive)
 	if plan.Summary.StaysAsIndirectCount > 0 {
-		p.printf("  ⚠ stays-as-indirect:  %d  (remain in tree via another direct dep)\n",
+		p.printf("  ⚠ remains-indirect:   %d  (remain in tree via another direct dep)\n",
 			plan.Summary.StaysAsIndirectCount)
 	}
 	p.printf("  Unused (0 imports):   %d\n", plan.Summary.UnusedDirect)

@@ -167,11 +167,11 @@ Difficulty labels:
   Unused (0 imports):  4
   Quick wins:          2  (trivial/easy + high impact)
 
-RANK  PRIORITY  DIFFICULTY  PURL                              ONLY-VIA-THIS  FILES  CALLS  LIFECYCLE
-────  ────────  ──────────  ────                              ─────────────  ─────  ─────  ─────────
-1     0.48      easy        github.com/joho/godotenv          0              1      1      Active
-2     0.40      trivial     github.com/smacker/go-tree-sitter 0              0      0      Active
-3     0.08      trivial     gopkg.in/yaml.v3                  0              0      0      Active
+RANK  SCORE  EFFORT    PURL                              REMOVES  IMPORTS  CALLS  STATUS
+────  ─────  ──────    ────                              ───────  ───────  ─────  ──────
+1     0.48   easy      github.com/joho/godotenv          0        1        1      Active
+2     0.40   trivial   github.com/smacker/go-tree-sitter 0        0        0      Active
+3     0.08   trivial   gopkg.in/yaml.v3                  0        0        0      Active
 ...
 ```
 

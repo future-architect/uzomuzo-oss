@@ -156,29 +156,29 @@ uzomuzo diet --sbom bom.json --source .
   Unused (0 imports):  24
   Quick wins:          1  (trivial/easy + high impact)
 
-RANK  PRIORITY  DIFFICULTY  PURL                                  ONLY-VIA-THIS  FILES  CALLS  LIFECYCLE
-────  ────────  ──────────  ────                                  ─────────────  ─────  ─────  ─────────
-1     0.43      trivial     pkg:pypi/pydantic-ai@1.63.0           104            0      0      Active
-2     0.10      trivial     pkg:pypi/cairosvg@2.9.0               6              0      0      Active
-3     0.10      trivial     pkg:pypi/fastapi-cli@0.0.20           5              0      0      Active
+RANK  SCORE  EFFORT    PURL                                  REMOVES  IMPORTS  CALLS  STATUS
+────  ─────  ──────    ────                                  ───────  ───────  ─────  ──────
+1     0.43   trivial   pkg:pypi/pydantic-ai@1.63.0           104      0        0      Active
+2     0.10   trivial   pkg:pypi/cairosvg@2.9.0               6        0        0      Active
+3     0.10   trivial   pkg:pypi/fastapi-cli@0.0.20           5        0        0      Active
 ...
-28    0.01      moderate    pkg:pypi/playwright@1.58.0             1              12     14     Active
-29    0.01      moderate    pkg:pypi/sqlmodel@0.0.32               1              8      0      Active
+28    0.01   moderate  pkg:pypi/playwright@1.58.0             1        12       14     Active
+29    0.01   moderate  pkg:pypi/sqlmodel@0.0.32               1        8        0      Active
 
 ── Dependency Tree ─────────────────────────────────────────────
   Direct deps:          29
   Transitive deps:      239
-  └ only-via-one-dep:   143  (removable if that direct dep is removed)
+  └ removes-with-dep:   143  (removable if that direct dep is removed)
 ```
 
 `pydantic-ai` alone drags in **104 transitive deps** with zero source coupling — removing it eliminates 43% of the entire dependency tree.
 
 | Column | Meaning |
 |--------|---------|
-| PRIORITY | Overall removal priority (higher = remove first) |
-| DIFFICULTY | trivial (0 imports) / easy / moderate / hard |
-| ONLY-VIA-THIS | Transitive deps that disappear when this dep is removed |
-| FILES / CALLS | Source files and call sites — measures how hard to untangle |
+| SCORE | Overall removal priority (higher = remove first) |
+| EFFORT | trivial (0 imports) / easy / moderate / hard |
+| REMOVES | Transitive deps that disappear when this dep is removed |
+| IMPORTS / CALLS | Source files and call sites — measures how hard to untangle |
 
 Supports **Go, Python, JavaScript/TypeScript, Java**. Uses [tree-sitter](https://tree-sitter.github.io/) for multi-language source analysis.
 

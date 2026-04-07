@@ -118,7 +118,7 @@ func TestE2E_DietTable(t *testing.T) {
 	}
 
 	// Should contain column headers
-	for _, col := range []string{"RANK", "PRIORITY", "DIFFICULTY", "PURL"} {
+	for _, col := range []string{"RANK", "SCORE", "EFFORT", "PURL"} {
 		if !strings.Contains(out, col) {
 			t.Errorf("table output missing column header %q", col)
 		}
