@@ -352,6 +352,7 @@ func TestE2E_DietStdinSBOM(t *testing.T) {
 	t.Cleanup(func() {
 		os.Stdin = oldStdin
 		_ = stdinR.Close() // best-effort cleanup
+		_ = stdinW.Close() // best-effort cleanup; may already be closed by goroutine
 	})
 
 	go func() {
@@ -373,10 +374,10 @@ func TestE2E_DietStdinSBOM(t *testing.T) {
 		_ = r.Close() // best-effort cleanup
 	})
 
-	done := make(chan struct{})
+	readErrCh := make(chan error, 1)
 	go func() {
-		_, _ = buf.ReadFrom(r)
-		close(done)
+		_, readErr := buf.ReadFrom(r)
+		readErrCh <- readErr
 	}()
 
 	opts := cli.DietOptions{
@@ -389,12 +390,15 @@ func TestE2E_DietStdinSBOM(t *testing.T) {
 	sourceAnalyzer := treesitter.NewAnalyzer()
 	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
 
+	os.Stdout = oldStdout
 	if err := w.Close(); err != nil {
-		t.Errorf("stdout write-end close: %v", err)
+		t.Fatalf("failed to close captured stdout writer: %v", err)
 	}
-	<-done
+	if readErr := <-readErrCh; readErr != nil {
+		t.Fatalf("failed to read captured stdout: %v", readErr)
+	}
 	if err := r.Close(); err != nil {
-		t.Errorf("stdout read-end close: %v", err)
+		t.Fatalf("failed to close captured stdout reader: %v", err)
 	}
 
 	if runErr != nil {
