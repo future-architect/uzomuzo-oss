@@ -71,10 +71,19 @@ Each agent receives this workflow instruction:
 #### Per-Issue Agent Workflow
 
 ```
-1. REPRODUCE: Build the project, set up test fixtures from the issue body,
-   run the reproduction steps. Capture exact "Before" output.
+1. REPRODUCE (MANDATORY — never skip):
+   Write a Go test that reproduces the bug described in the issue.
+   Run it and capture the exact terminal output as "Before".
    - Use `GOWORK=off` for all go commands in worktrees.
-   - If reproduction fails, report back instead of guessing.
+   - The test MUST fail (or produce wrong output) before the fix and
+     pass (or produce correct output) after the fix.
+   - If the issue describes behavior on an external OSS project
+     (e.g., "run diet on elasticsearch"), do NOT clone the external
+     repo. Instead, create a minimal unit test with synthetic fixtures
+     (test SBOM, test source files in t.TempDir()) that triggers the
+     same bug condition.
+   - If you cannot reproduce the bug at all, report back with evidence
+     instead of guessing. Do NOT proceed to IMPLEMENT.
 
 2. ARCHITECT: Launch an architect agent (subagent_type="architect") to
    review the planned approach. Incorporate feedback.
@@ -89,24 +98,52 @@ Each agent receives this workflow instruction:
 
 4. TEST: Run `GOWORK=off go test ./...` to verify all tests pass.
 
-5. REVIEW: Use the Skill tool to invoke `review-until-clean`.
-   This is MANDATORY -- do not skip. The skill runs iterative review
-   and fixes issues until the review passes clean. Only after
-   review-until-clean completes with zero issues should you proceed.
+5. SELF-CHECK: Before proceeding, verify your own changes:
+   - `GOWORK=off go vet ./...` passes
+   - `GOWORK=off golangci-lint run` passes (or only pre-existing warnings)
+   - All exported identifiers have godoc comments
+   - Error returns are wrapped with context (`fmt.Errorf("...: %w", err)`)
+   - No unused code left behind
+   Fix any issues found. Do NOT skip this step, but do NOT launch
+   review agents — the orchestrator will run independent review later
+   in Phase 6.5.
 
-6. VERIFY AFTER: Re-run the reproduction from Step 1. Capture "After"
-   output showing the fix works.
+6. VERIFY AFTER (MANDATORY — never skip):
+   Re-run the reproduction test from Step 1. Capture the exact
+   terminal output as "After". The test must now pass / show correct
+   output. If it still fails, go back to Step 3.
 
 7. COMMIT & PUSH: Commit with conventional commit format.
    Include `Closes #<number>` in the body. Push the branch.
 
-8. CREATE PR: Use `gh pr create` with:
-   - Descriptive title
-   - Body containing:
-     - Summary of changes
-     - Before/After output (exact terminal output from Steps 1 and 6)
-     - `Closes #<number>`
-     - Test plan checklist
+8. CREATE PR: Use `gh pr create` with the EXACT template below.
+   Replace placeholders with real content. The Before/After sections
+   are MANDATORY — paste actual terminal output, not hand-written
+   tables or expected values.
+
+   ```
+   ## Summary
+   <1-3 bullet points describing what changed and why>
+
+   ## Before (reproduction test output)
+   ```
+   <paste exact terminal output from Step 1 — the failing/wrong test>
+   ```
+
+   ## After (verification test output)
+   ```
+   <paste exact terminal output from Step 6 — the passing test>
+   ```
+
+   Closes #<number>
+
+   ## Test plan
+   - [x] <test case 1>
+   - [x] <test case 2>
+   - [ ] CI green
+
+   🤖 Generated with [Claude Code](https://claude.com/claude-code)
+   ```
 
 9. NEXT ISSUE: If there are successor issues in the same conflict group,
    fetch the next issue with `gh issue view <N> --json body` and repeat
@@ -131,12 +168,85 @@ After all agents complete:
 3. If any agent failed, report the failure reason
 4. List remaining unprocessed issues for next batch
 
+### Phase 6.5: Orchestrator Review (MANDATORY)
+
+Subagents cannot launch independent review agents (nested Agent tool
+limitation). The orchestrator (main session) MUST run `/review-until-clean`
+on each PR branch to ensure independent code review with iterative fixing.
+
+**Why this is here, not in the agent workflow**: When a subagent invokes
+`review-until-clean`, it falls back to self-reviewing its own diff — the
+same author reviewing their own code. This produces a "clean" result
+100% of the time with zero real findings. Independent reviewers (launched
+by the orchestrator) catch issues the author missed.
+
+For each PR created in this batch:
+
+1. Check out the PR branch in a temporary worktree:
+   ```bash
+   git worktree add /tmp/review-pr<N> origin/<branch> --detach
+   ```
+
+2. Run `/review-until-clean` from the worktree directory. This launches
+   5 independent review agents (code-reviewer, architect, code-reuse,
+   code-quality, PR-hygiene), fixes findings, and repeats until clean.
+
+3. If the review produced fixes, they are committed and pushed to the
+   PR branch automatically by the skill.
+
+4. Clean up: `git worktree remove /tmp/review-pr<N>`
+
+5. Report the review results per PR:
+   ```
+   | PR  | Rounds | Findings Fixed | Status |
+   |-----|--------|----------------|--------|
+   | #197 | 2      | 3              | Clean  |
+   | #198 | 1      | 0              | Clean (first pass) |
+   ```
+
+Run reviews **sequentially within conflict groups** (same files may be
+touched by fixes) but **in parallel across independent groups**.
+
+### Phase 7: Evidence Verification (MANDATORY)
+
+After Phase 6, verify every PR has proper test evidence. Agents often
+produce hand-written tables or skip Before/After — this phase catches
+and fixes that.
+
+For each PR created in this batch:
+
+1. **Check**: Run `gh pr view <N> --json body -q .body` and verify it
+   contains BOTH a `## Before` and `## After` section, each with a
+   fenced code block (` ``` `) containing real terminal output (lines
+   starting with `=== RUN`, `--- PASS`, `--- FAIL`, `PASS`, `ok`, or
+   similar Go test output patterns).
+
+2. **Remediate** if either section is missing or contains only a table:
+   a. Fetch the PR branch: `gh pr view <N> --json headRefName`
+   b. Create a temporary detached worktree:
+      `git worktree add /tmp/pr<N> origin/<branch> --detach`
+   c. Identify the new test functions from the diff:
+      `git diff origin/main...origin/<branch> -- '*.go' | grep '+func Test'`
+   d. Run them with verbose output:
+      `cd /tmp/pr<N> && GOWORK=off go test -run '<TestName>' -v ./<package>/...`
+   e. Capture the output and update the PR body with `gh pr edit`.
+   f. Clean up: `git worktree remove /tmp/pr<N>`
+
+3. **Case-study enrichment** (optional): If you have access to prior
+   diet output data (e.g., from memory or local files) that shows the
+   bug in a real-world project, add it to the `## Before` section as
+   additional evidence. Label it clearly:
+   `## Before (case-study evidence: <source>)`
+
+4. Report which PRs were remediated in the summary table.
+
 ## Safety Rules
 
 - **Never dispatch agents for issues requiring user design decisions** without
   confirming the approach first
 - **Never run more than `--max-parallel` agents simultaneously**
-- **Each agent MUST run `review-until-clean`** before creating a PR
+- **Orchestrator MUST run `review-until-clean`** on every PR in Phase 6.5
+  (agents do self-checks only — independent review happens at orchestrator level)
 - **Conflict groups are strict** -- never run two issues from the same group
   in parallel
 - **If an agent's issue turns out to be already fixed**, close the issue and
