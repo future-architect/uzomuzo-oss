@@ -98,10 +98,15 @@ Each agent receives this workflow instruction:
 
 4. TEST: Run `GOWORK=off go test ./...` to verify all tests pass.
 
-5. REVIEW: Use the Skill tool to invoke `review-until-clean`.
-   This is MANDATORY -- do not skip. The skill runs iterative review
-   and fixes issues until the review passes clean. Only after
-   review-until-clean completes with zero issues should you proceed.
+5. SELF-CHECK: Before proceeding, verify your own changes:
+   - `GOWORK=off go vet ./...` passes
+   - `GOWORK=off golangci-lint run` passes (or only pre-existing warnings)
+   - All exported identifiers have godoc comments
+   - Error returns are wrapped with context (`fmt.Errorf("...: %w", err)`)
+   - No unused code left behind
+   Fix any issues found. Do NOT skip this step, but do NOT launch
+   review agents — the orchestrator will run independent review later
+   in Phase 6.5.
 
 6. VERIFY AFTER (MANDATORY — never skip):
    Re-run the reproduction test from Step 1. Capture the exact
@@ -163,6 +168,45 @@ After all agents complete:
 3. If any agent failed, report the failure reason
 4. List remaining unprocessed issues for next batch
 
+### Phase 6.5: Orchestrator Review (MANDATORY)
+
+Subagents cannot launch independent review agents (nested Agent tool
+limitation). The orchestrator (main session) MUST run `/review-until-clean`
+on each PR branch to ensure independent code review with iterative fixing.
+
+**Why this is here, not in the agent workflow**: When a subagent invokes
+`review-until-clean`, it falls back to self-reviewing its own diff — the
+same author reviewing their own code. This produces a "clean" result
+100% of the time with zero real findings. Independent reviewers (launched
+by the orchestrator) catch issues the author missed.
+
+For each PR created in this batch:
+
+1. Check out the PR branch in a temporary worktree:
+   ```bash
+   git worktree add /tmp/review-pr<N> origin/<branch> --detach
+   ```
+
+2. Run `/review-until-clean` from the worktree directory. This launches
+   5 independent review agents (code-reviewer, architect, code-reuse,
+   code-quality, PR-hygiene), fixes findings, and repeats until clean.
+
+3. If the review produced fixes, they are committed and pushed to the
+   PR branch automatically by the skill.
+
+4. Clean up: `git worktree remove /tmp/review-pr<N>`
+
+5. Report the review results per PR:
+   ```
+   | PR  | Rounds | Findings Fixed | Status |
+   |-----|--------|----------------|--------|
+   | #197 | 2      | 3              | Clean  |
+   | #198 | 1      | 0              | Clean (first pass) |
+   ```
+
+Run reviews **sequentially within conflict groups** (same files may be
+touched by fixes) but **in parallel across independent groups**.
+
 ### Phase 7: Evidence Verification (MANDATORY)
 
 After Phase 6, verify every PR has proper test evidence. Agents often
@@ -201,7 +245,8 @@ For each PR created in this batch:
 - **Never dispatch agents for issues requiring user design decisions** without
   confirming the approach first
 - **Never run more than `--max-parallel` agents simultaneously**
-- **Each agent MUST run `review-until-clean`** before creating a PR
+- **Orchestrator MUST run `review-until-clean`** on every PR in Phase 6.5
+  (agents do self-checks only — independent review happens at orchestrator level)
 - **Conflict groups are strict** -- never run two issues from the same group
   in parallel
 - **If an agent's issue turns out to be already fixed**, close the issue and

@@ -26,5 +26,7 @@ argument-hint: |
 - Phase 4: Dispatch plan (present to user)
 - Phase 5: Agent dispatch (worktree-isolated, parallel across groups, sequential within)
 - Phase 6: Summary report with PR links
+- Phase 6.5: Orchestrator review — run `/review-until-clean` on each PR (agents can't launch independent reviewers)
 - Phase 7: Evidence verification — check/fix Before/After test output in every PR body
-- Each agent: reproduce (MANDATORY) -> architect -> implement -> review-until-clean -> verify after (MANDATORY) -> before/after PR (template enforced)
+- Each agent: reproduce (MANDATORY) -> architect -> implement -> self-check -> verify after (MANDATORY) -> before/after PR (template enforced)
+- Independent review runs at orchestrator level (Phase 6.5), NOT inside agents
