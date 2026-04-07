@@ -20,11 +20,13 @@ func TestComputeImpactScore_UnusedDep(t *testing.T) {
 		t.Errorf("unused dep should have positive priority, got %f", score.PriorityScore)
 	}
 	// With graphImpact=1.0, healthRisk=0.5:
-	// unusedBase = 0.3*1.0 + 0.3*0.5 + 0.2 = 0.65
+	// unusedBase = unusedGraphWeight*1.0 + unusedHealthWeight*0.5 + unusedBaseOffset = 0.65
 	// multiplicative = 1.0 * 0.5 * 1.0 = 0.5
 	// priority = max(0.5, 0.65) = 0.65
-	if score.PriorityScore < 0.6 {
-		t.Errorf("unused dep with max exclusive should have high priority, got %f", score.PriorityScore)
+	const wantPriority = 0.65
+	const tolerance = 0.001
+	if score.PriorityScore < wantPriority-tolerance || score.PriorityScore > wantPriority+tolerance {
+		t.Errorf("unused dep with max exclusive: PriorityScore = %f, want %f (±%f)", score.PriorityScore, wantPriority, tolerance)
 	}
 }
 
@@ -168,9 +170,9 @@ func TestNormalizeCouplingEffort_ZeroCounts(t *testing.T) {
 	// IsUnused is false (no source analysis), effort should be 0 so that
 	// difficulty is "trivial" — consistent with the IsUnused=true path.
 	tests := []struct {
-		name   string
-		c      CouplingAnalysis
-		want   float64
+		name string
+		c    CouplingAnalysis
+		want float64
 	}{
 		{
 			name: "no source data (all zeros, not unused)",
@@ -234,27 +236,28 @@ func TestComputeImpactScore_UnusedZeroExclusive(t *testing.T) {
 	tests := []struct {
 		name       string
 		healthRisk float64
-		wantMin    float64
+		wantScore  float64
 	}{
 		{
 			name:       "active project (low health risk)",
 			healthRisk: 0.2,
-			// 0.3*0.1 + 0.3*0.2 + 0.2 = 0.29 — just under threshold, appropriate
-			wantMin: 0.25,
+			// unusedGraphWeight*0.1 + unusedHealthWeight*0.2 + unusedBaseOffset = 0.29
+			wantScore: 0.29,
 		},
 		{
-			name:       "stalled project (moderate health risk)",
+			name:       "review needed (moderate health risk)",
 			healthRisk: 0.5,
-			// 0.3*0.1 + 0.3*0.5 + 0.2 = 0.38 — above easy_wins threshold
-			wantMin: easyWinScoreThreshold,
+			// unusedGraphWeight*0.1 + unusedHealthWeight*0.5 + unusedBaseOffset = 0.38
+			wantScore: 0.38,
 		},
 		{
 			name:       "EOL project (high health risk)",
 			healthRisk: 0.9,
-			// 0.3*0.1 + 0.3*0.9 + 0.2 = 0.50 — well above threshold
-			wantMin: 0.45,
+			// unusedGraphWeight*0.1 + unusedHealthWeight*0.9 + unusedBaseOffset = 0.50
+			wantScore: 0.50,
 		},
 	}
+	const tolerance = 0.001
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			graph := GraphMetrics{ExclusiveTransitiveCount: 0}
@@ -263,8 +266,8 @@ func TestComputeImpactScore_UnusedZeroExclusive(t *testing.T) {
 
 			score := ComputeImpactScore(graph, coupling, health, 50)
 
-			if score.PriorityScore < tt.wantMin {
-				t.Errorf("PriorityScore = %f, want >= %f", score.PriorityScore, tt.wantMin)
+			if score.PriorityScore < tt.wantScore-tolerance || score.PriorityScore > tt.wantScore+tolerance {
+				t.Errorf("PriorityScore = %f, want %f (±%f)", score.PriorityScore, tt.wantScore, tolerance)
 			}
 		})
 	}
@@ -281,7 +284,7 @@ func TestComputeImpactScore_LargeProject(t *testing.T) {
 	score := ComputeImpactScore(graph, coupling, health, 47)
 
 	// graphImpact = 0.1 + 0.9*(47/47) = 1.0
-	// unusedBase = 0.3*1.0 + 0.3*0.5 + 0.2 = 0.65
+	// unusedBase = unusedGraphWeight*1.0 + unusedHealthWeight*0.5 + unusedBaseOffset = 0.65
 	if score.PriorityScore < easyWinScoreThreshold {
 		t.Errorf("large project top dep should exceed easy_wins threshold (%0.2f), got %f", easyWinScoreThreshold, score.PriorityScore)
 	}

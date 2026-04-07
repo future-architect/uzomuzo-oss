@@ -29,6 +29,14 @@ const (
 	actionableScoreThreshold = 0.2
 )
 
+// Unused-dependency additive scoring coefficients.
+// unusedBase = unusedGraphWeight*graphImpact + unusedHealthWeight*healthRisk + unusedBaseOffset
+const (
+	unusedGraphWeight  = 0.3
+	unusedHealthWeight = 0.3
+	unusedBaseOffset   = 0.2
+)
+
 // ComputeImpactScore calculates the removability priority for a single dependency.
 // maxExclusive is the largest ExclusiveTransitiveCount across all entries in the dataset,
 // used to normalize GraphImpact relative to the most impactful dependency.
@@ -45,7 +53,7 @@ func ComputeImpactScore(graph GraphMetrics, coupling CouplingAnalysis, health He
 	// the easy_wins threshold (0.3), whereas the multiplicative formula
 	// systematically suppresses scores when any sub-score is small.
 	if coupling.IsUnused {
-		unusedBase := 0.3*graphImpact + 0.3*healthRisk + 0.2
+		unusedBase := unusedGraphWeight*graphImpact + unusedHealthWeight*healthRisk + unusedBaseOffset
 		priority = math.Max(priority, unusedBase)
 	}
 
