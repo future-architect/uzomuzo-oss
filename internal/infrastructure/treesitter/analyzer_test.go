@@ -421,6 +421,59 @@ public class Main {
 	}
 }
 
+func TestAnalyzer_JavaStaticImport(t *testing.T) {
+	dir := t.TempDir()
+	// Static imports bring individual methods/fields into scope without qualification.
+	// "import static org.junit.Assert.assertEquals" allows bare "assertEquals()" calls.
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import org.junit.Test;
+
+public class Main {
+    @Test
+    public void testSomething() {
+        assertEquals("hello", "hello");
+        assertEquals(42, 42);
+        assertTrue(true);
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/junit/junit@4.13.2": {"org.junit"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:maven/junit/junit@4.13.2"]
+	if !ok {
+		t.Fatal("expected coupling analysis for junit")
+	}
+
+	// 3 imports: 2 static (assertEquals, assertTrue) + 1 regular (Test)
+	// All from the same file, so ImportFileCount = 1.
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	// 3 call sites: assertEquals() x2 + assertTrue() x1
+	if ca.CallSiteCount != 3 {
+		t.Errorf("CallSiteCount = %d, want 3", ca.CallSiteCount)
+	}
+	// 2 distinct symbols: assertEquals, assertTrue
+	if ca.APIBreadth != 2 {
+		t.Errorf("APIBreadth = %d, want 2 (assertEquals, assertTrue)", ca.APIBreadth)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false")
+	}
+}
+
 func TestAnalyzer_GoCaseInsensitivePURL(t *testing.T) {
 	dir := t.TempDir()
 	// Source code uses mixed-case import path (as authored by the module owner).
