@@ -123,4 +123,4 @@ patterns:
     pr: 223
     file: "internal/interfaces/cli/diet_render.go"
     date: "2026-04-07"
-  # comment-doc-drift (PR #223): already covered by "ADR and Documentation Must Describe Actual Behavior" — PR description claimed symbols in detailed text but code only showed count
+  # comment-doc-drift (PR #223): already covered by "ADR and Documentation Must Describe Actual Behavior" — detailed output now renders a truncated symbols list (fixed in cf5ca6e)
