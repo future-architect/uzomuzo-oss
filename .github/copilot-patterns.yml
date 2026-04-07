@@ -103,6 +103,7 @@ patterns:
   # naming-consistency (PR #198): already covered by "Use Domain Constants for Domain-Defined String Values" spirit — extract magic coefficients to named constants
   # comment-doc-drift (PR #198): already covered by "Comment-Code Consistency" rule — test case name didn't match domain mapping for healthRisk values
   # testing: promoted to testing-performance.instructions.md (PRs #197, #198, #223 — assert exact values not thresholds, omit unused test fixture fields, assert all new output fields)
+  # testing: promoted to testing-performance.instructions.md (PRs #197, #198 — assert exact computed values; omit unused struct fields in test fixtures)
   # defensive-coding (PR #199): already covered by "use tree-sitter predicates to constrain overly broad query patterns" — add !object negation to bare-call query to prevent double-counting
   # defensive-coding (PR #199): already covered by "Consolidate Detection Heuristics — Single Source of Truth" — handle wildcard static imports with sentinel alias consistent with Python
   # comment-doc-drift (PR #199): already covered by "Comment-Code Consistency" — clarify ImportFileCount vs import-statement count in test comment
@@ -119,3 +120,4 @@ patterns:
   # testing (PR #223 round 4): already covered by promoted rule — add IsUnused/HasWildcardImport assertions for blank-import case to lock in intended behavior
   # testing (PR #223 round 5): already covered by promoted rule — assert CallSiteCount baseline for dot-import case that documents "has baseline call sites"
   # comment-doc-drift (PR #230): already covered by "Comment-Code Consistency" rule — test name claimed constructor detection ("new FormData()") but call query only matches member_expression/call_expression, not new_expression
+  # comment-doc-drift (PR #229): already covered by "Comment-Code Consistency" rule — goPackageFromHyphenated conditional logic skipped go- prefix stripping after -go suffix stripping, diverging from documented sequential heuristic
