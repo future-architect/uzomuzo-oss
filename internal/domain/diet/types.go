@@ -57,7 +57,13 @@ type CouplingAnalysis struct {
 	CallSiteCount   int
 	APIBreadth      int
 	ImportFiles     []string
+	Symbols         []string
 	IsUnused        bool
+
+	// Import style flags — affect call-site tracking accuracy.
+	HasBlankImport    bool // Go: import _ "pkg" (side-effect only, no callable API)
+	HasDotImport      bool // Go: import . "pkg" (symbols callable without prefix — undercounted)
+	HasWildcardImport bool // Python: from x import * / Java: import static x.* (undercounted)
 }
 
 // HealthSignals captures upstream health factors relevant to removability priority.

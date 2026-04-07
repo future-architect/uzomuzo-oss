@@ -48,11 +48,15 @@ type dietJSONEntry struct {
 	StaysAsIndirect     bool     `json:"stays_as_indirect"`
 	IndirectVia         []string `json:"indirect_via,omitempty"`
 
-	ImportFileCount int      `json:"import_file_count"`
-	CallSiteCount   int      `json:"call_site_count"`
-	APIBreadth      int      `json:"api_breadth"`
-	IsUnused        bool     `json:"is_unused"`
-	ImportFiles     []string `json:"import_files,omitempty"`
+	ImportFileCount   int      `json:"import_file_count"`
+	CallSiteCount     int      `json:"call_site_count"`
+	APIBreadth        int      `json:"api_breadth"`
+	Symbols           []string `json:"symbols,omitempty"`
+	IsUnused          bool     `json:"is_unused"`
+	ImportFiles       []string `json:"import_files,omitempty"`
+	HasBlankImport    bool     `json:"has_blank_import,omitempty"`
+	HasDotImport      bool     `json:"has_dot_import,omitempty"`
+	HasWildcardImport bool     `json:"has_wildcard_import,omitempty"`
 
 	Lifecycle          string  `json:"lifecycle"`
 	HasVulnerabilities bool    `json:"has_vulnerabilities,omitempty"`
@@ -110,8 +114,12 @@ func renderDietJSON(w io.Writer, plan *domaindiet.DietPlan) error {
 			ImportFileCount:     e.Coupling.ImportFileCount,
 			CallSiteCount:       e.Coupling.CallSiteCount,
 			APIBreadth:          e.Coupling.APIBreadth,
+			Symbols:             e.Coupling.Symbols,
 			IsUnused:            e.Coupling.IsUnused,
 			ImportFiles:         e.Coupling.ImportFiles,
+			HasBlankImport:      e.Coupling.HasBlankImport,
+			HasDotImport:        e.Coupling.HasDotImport,
+			HasWildcardImport:   e.Coupling.HasWildcardImport,
 			Lifecycle:           e.Health.MaintenanceStatus,
 			HasVulnerabilities:  e.Health.HasVulnerabilities,
 			VulnerabilityCount:  e.Health.VulnerabilityCount,
@@ -215,6 +223,19 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 			p.printf("│    Imports:    %d\n", e.Coupling.ImportFileCount)
 			p.printf("│    Call sites: %d\n", e.Coupling.CallSiteCount)
 			p.printf("│    API breadth: %d distinct symbols\n", e.Coupling.APIBreadth)
+			if e.Coupling.HasBlankImport || e.Coupling.HasDotImport || e.Coupling.HasWildcardImport {
+				var flags []string
+				if e.Coupling.HasBlankImport {
+					flags = append(flags, "blank-import")
+				}
+				if e.Coupling.HasDotImport {
+					flags = append(flags, "dot-import")
+				}
+				if e.Coupling.HasWildcardImport {
+					flags = append(flags, "wildcard-import")
+				}
+				p.printf("│    ⚠ Import flags: %s\n", strings.Join(flags, ", "))
+			}
 		}
 		p.printf("│\n")
 		p.printf("│  Health\n")
