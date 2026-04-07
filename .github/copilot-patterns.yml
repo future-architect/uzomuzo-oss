@@ -93,3 +93,5 @@ patterns:
     date: "2026-04-07"
   # testing: already covered by promoted rules (PR #160, e2e_test.go:366 — close pipe fds in t.Cleanup; e2e_test.go:387 — check Close() errors for consistency)
   # testing: already covered by promoted rules (PR #160, e2e_test.go:100 — surface pipe close/read errors in shared test helpers for diagnosability)
+  # testing: already covered by "Use `t.Cleanup` When Replacing Process-Global State" (PR #160, e2e_test.go:353 — close stdinW in t.Cleanup to prevent FD leak on early abort)
+  # testing: already covered by promoted rules (PR #160, e2e_test.go:380 — capture ReadFrom error via channel for consistency with runDiet)
