@@ -175,6 +175,11 @@ func TestBuildMavenImportPaths(t *testing.T) {
 			purl: "pkg:maven/3scale-client@1.0.0",
 			want: nil,
 		},
+		{
+			name: "hyphenated namespace without override skips groupId.artifactId",
+			purl: "pkg:maven/my-company/mylib@1.0.0",
+			want: []string{"mylib"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
