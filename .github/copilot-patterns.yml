@@ -80,11 +80,7 @@ patterns:
   # defensive-coding: already covered by "Deterministic Output from Non-Deterministic Sources" (PR #159, analyzer.go:420,513 — nondeterministic map iteration for prefix matching; use longest-match selection)
   # defensive-coding: already covered by promoted rules (PR #159, commands.go:285 — use urfcli.Exit instead of os.Exit for testability and cleanup)
   # defensive-coding: already covered by "Defensive Coding — Validate Early, Fail Clearly" (PR #159, diet.go:31 — validate required --sbom flag before file I/O)
-  - category: "testing"
-    summary: "Test validation structs/tags must mirror production output schema — mismatched JSON tags silently leave fields at zero, masking regressions"
-    pr: 159
-    file: "cmd/uzomuzo-diet/e2e_test.go"
-    date: "2026-04-07"
+  # testing: promoted to testing-performance.instructions.md (PRs #159, #160 — mirror production JSON tags in test structs; use t.Cleanup for global restoration)
   # defensive-coding: already covered by "Deterministic Output from Non-Deterministic Sources" (PR #159, analyzer.go:494 — Python prefix matching used first-match instead of longest-match)
   # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:461 — Go alias derivation needs vN suffix and gopkg.in heuristics for accurate call-site counting)
   # defensive-coding: already covered by "Normalize User-Provided Enum Values" spirit (PR #159, service.go:288 — PyPI distribution names need hyphen→underscore and lowercase normalization for import matching)
