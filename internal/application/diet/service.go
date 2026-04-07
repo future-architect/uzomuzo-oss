@@ -68,6 +68,9 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 		"totalTransitive", graphResult.TotalTransitive,
 	)
 
+	// Filter workspace-local packages (npm monorepo internals) before analysis.
+	graphResult.DirectDeps = filterWorkspaceDeps(graphResult.DirectDeps)
+
 	// Phase 2 & 3: run concurrently (both only depend on graphResult from Phase 1)
 	var couplingResults map[string]*domaindiet.CouplingAnalysis
 	var healthResults map[string]*domain.Analysis
@@ -261,6 +264,36 @@ func parsePURLParts(purlStr string) (name, ecosystem, version string) {
 		n = parsed.Namespace + "/" + parsed.Name
 	}
 	return n, parsed.Type, parsed.Version
+}
+
+// isWorkspaceDep returns true if the PURL represents a local workspace package
+// (npm/yarn/pnpm monorepo internal) that should be excluded from diet analysis.
+func isWorkspaceDep(purlStr string) bool {
+	parsed, err := packageurl.FromString(purlStr)
+	if err != nil {
+		return false
+	}
+	if parsed.Type != "npm" {
+		return false
+	}
+	v := parsed.Version
+	return v == "0.0.0-use.local" ||
+		strings.HasPrefix(v, "workspace:") ||
+		strings.HasPrefix(v, "link:") ||
+		strings.HasPrefix(v, "file:")
+}
+
+// filterWorkspaceDeps removes local workspace packages from the direct deps list.
+func filterWorkspaceDeps(purls []string) []string {
+	filtered := make([]string, 0, len(purls))
+	for _, p := range purls {
+		if isWorkspaceDep(p) {
+			slog.Debug("skipping workspace dependency", "purl", p)
+			continue
+		}
+		filtered = append(filtered, p)
+	}
+	return filtered
 }
 
 // buildImportPaths creates a mapping from PURL to probable import paths.
