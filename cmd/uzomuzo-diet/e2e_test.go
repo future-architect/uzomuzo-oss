@@ -93,10 +93,15 @@ func runDiet(t *testing.T, format string) string {
 
 	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
 
-	_ = w.Close()
 	os.Stdout = oldStdout
+	if err := w.Close(); err != nil {
+		t.Fatalf("failed to close captured stdout writer: %v", err)
+	}
 	if readErr := <-readErrCh; readErr != nil {
 		t.Fatalf("failed to read captured stdout: %v", readErr)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatalf("failed to close captured stdout reader: %v", err)
 	}
 
 	if runErr != nil {
