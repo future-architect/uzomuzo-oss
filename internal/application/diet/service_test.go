@@ -248,6 +248,11 @@ func TestBuildPyPIImportPaths(t *testing.T) {
 			purl: "pkg:pypi/flask@3.0.0",
 			want: []string{"flask"},
 		},
+		{
+			name: "dotted name: zope.interface",
+			purl: "pkg:pypi/zope.interface@6.0",
+			want: []string{"zope.interface"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

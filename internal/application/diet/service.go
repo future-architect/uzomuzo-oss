@@ -365,7 +365,7 @@ func buildPyPIImportPaths(name string) []string {
 		if p == "" {
 			return
 		}
-		if !isPythonIdentifierSafe(p) {
+		if !isPythonDottedIdentifierSafe(p) {
 			return
 		}
 		if _, ok := seen[p]; ok {
@@ -407,6 +407,21 @@ func isPythonIdentifierSafe(s string) bool {
 			continue
 		}
 		return false
+	}
+	return true
+}
+
+// isPythonDottedIdentifierSafe reports whether s is a valid dot-separated
+// Python module path (e.g. "zope.interface").  Each segment between dots must
+// satisfy isPythonIdentifierSafe.
+func isPythonDottedIdentifierSafe(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, seg := range strings.Split(s, ".") {
+		if !isPythonIdentifierSafe(seg) {
+			return false
+		}
 	}
 	return true
 }
