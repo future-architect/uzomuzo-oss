@@ -455,9 +455,19 @@ func (a *Analyzer) handleGoImport(
 	}
 
 	if alias == "" {
-		// Default: last path component
+		// Default: last path component, with heuristics for Go conventions.
 		parts := strings.Split(importPath, "/")
 		alias = parts[len(parts)-1]
+
+		// Handle major-version suffixes (e.g., "example.com/foo/v2" → "foo").
+		if len(parts) >= 2 && len(alias) >= 2 && alias[0] == 'v' && alias[1] >= '0' && alias[1] <= '9' {
+			alias = parts[len(parts)-2]
+		}
+
+		// Handle gopkg.in version suffixes (e.g., "yaml.v3" → "yaml").
+		if idx := strings.LastIndex(alias, ".v"); idx > 0 && idx+2 < len(alias) && alias[idx+2] >= '0' && alias[idx+2] <= '9' {
+			alias = alias[:idx]
+		}
 	}
 
 	aliasMap[alias] = purl
@@ -484,13 +494,19 @@ func (a *Analyzer) handlePythonImport(
 		return
 	}
 
-	// Try prefix matching.
+	// Try prefix matching — pick the longest matching prefix to handle
+	// overlapping package names (e.g., prefer "google.cloud" over "google").
+	bestIP := ""
+	bestPURL := ""
 	for ip, purl := range importToPURL {
-		if importPath == ip || strings.HasPrefix(importPath, ip+".") {
-			alias := cfg.aliasFromPkg(ip)
-			aliasMap[alias] = purl
-			return
+		if (importPath == ip || strings.HasPrefix(importPath, ip+".")) && len(ip) > len(bestIP) {
+			bestIP = ip
+			bestPURL = purl
 		}
+	}
+	if bestIP != "" {
+		alias := cfg.aliasFromPkg(bestIP)
+		aliasMap[alias] = bestPURL
 	}
 }
 

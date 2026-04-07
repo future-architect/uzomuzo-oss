@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -284,7 +285,9 @@ func buildImportPaths(purls []string) map[string][]string {
 				importPath = parsed.Name
 			}
 		case "pypi":
-			importPath = parsed.Name
+			// Normalize PyPI distribution name to Python import convention:
+			// replace hyphens with underscores and lowercase (e.g., "PyYAML" → "pyyaml").
+			importPath = strings.ToLower(strings.ReplaceAll(parsed.Name, "-", "_"))
 		case "maven":
 			// Use groupId (namespace) as primary prefix — it aligns more closely
 			// with actual Java package names than groupId.artifactId would.
