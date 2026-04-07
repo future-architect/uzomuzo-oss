@@ -98,22 +98,30 @@ func ResolveDirectPURLs(bom *BOMEnvelope, refMap map[string]string) map[string]s
 		return nil
 	}
 
-	// Try explicit root entry first.
+	// Build a dependency lookup for traversal.
+	depIndex := make(map[string][]string, len(bom.Dependencies))
 	for _, d := range bom.Dependencies {
-		if d.Ref == rootRef {
-			directPURLs := make(map[string]struct{}, len(d.DependsOn))
-			for _, ref := range d.DependsOn {
-				if purl, ok := refMap[ref]; ok {
-					directPURLs[purl] = struct{}{}
-				} else {
-					slog.Debug("dependency ref not found in component map", "ref", ref)
+		depIndex[d.Ref] = d.DependsOn
+	}
+
+	// Try explicit root entry first.
+	if rootDeps, ok := depIndex[rootRef]; ok {
+		directPURLs := make(map[string]struct{}, len(rootDeps))
+		for _, ref := range rootDeps {
+			if purl, ok := refMap[ref]; ok {
+				directPURLs[purl] = struct{}{}
+			} else {
+				// Ref has no PURL (e.g., Trivy uses UUID refs for go.mod files).
+				// Walk dependsOn chains to find PURL-bearing descendants.
+				for _, resolved := range resolveTransparentRefs(ref, refMap, depIndex) {
+					directPURLs[resolved] = struct{}{}
 				}
 			}
-			if len(directPURLs) == 0 {
-				return nil
-			}
-			return directPURLs
 		}
+		if len(directPURLs) == 0 {
+			return nil
+		}
+		return directPURLs
 	}
 
 	// Root not in dependencies array — infer direct deps as refs that are never
@@ -134,6 +142,27 @@ func ResolveDirectPURLs(bom *BOMEnvelope, refMap map[string]string) map[string]s
 		}
 	}
 	return directPURLs
+}
+
+// resolveTransparentRefs walks dependsOn chains from a ref that has no PURL,
+// collecting the first PURL-bearing refs found. This handles SBOM tools like
+// Trivy that insert intermediate "transparent" nodes (e.g., go.mod files as
+// application components without PURLs) between the root and actual packages.
+func resolveTransparentRefs(ref string, refMap map[string]string, depIndex map[string][]string) []string {
+	children, ok := depIndex[ref]
+	if !ok {
+		return nil
+	}
+	var result []string
+	for _, child := range children {
+		if purl, ok := refMap[child]; ok {
+			result = append(result, purl)
+		} else {
+			// Continue walking (bounded by dep graph depth, no cycles expected)
+			result = append(result, resolveTransparentRefs(child, refMap, depIndex)...)
+		}
+	}
+	return result
 }
 
 // NormalizePURL parses and rebuilds a PURL, stripping qualifiers and subpath.
