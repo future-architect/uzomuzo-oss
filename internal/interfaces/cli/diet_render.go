@@ -20,12 +20,12 @@ type dietJSONOutput struct {
 }
 
 type dietJSONSummary struct {
-	TotalDirect              int `json:"total_direct"`
-	TotalTransitive          int `json:"total_transitive"`
-	TotalExclusiveTransitive int `json:"total_exclusive_transitive"`
-	UnusedDirect             int `json:"unused_direct"`
-	EasyWins                 int `json:"easy_wins"`
-	EstimatedRemovable       int `json:"estimated_removable"`
+	TotalDirect          int `json:"total_direct"`
+	TotalTransitive      int `json:"total_transitive"`
+	TransitiveOnlyByOne  int `json:"transitive_only_by_one"`
+	UnusedDirect         int `json:"unused_direct"`
+	EasyWins             int `json:"easy_wins"`
+	ActionableDirect     int `json:"actionable_direct"`
 }
 
 type dietJSONEntry struct {
@@ -73,12 +73,12 @@ func renderDietOutput(w io.Writer, plan *domaindiet.DietPlan, format string) err
 func renderDietJSON(w io.Writer, plan *domaindiet.DietPlan) error {
 	output := dietJSONOutput{
 		Summary: dietJSONSummary{
-			TotalDirect:              plan.Summary.TotalDirect,
-			TotalTransitive:          plan.Summary.TotalTransitive,
-			TotalExclusiveTransitive: plan.Summary.TotalExclusiveTransitive,
-			UnusedDirect:             plan.Summary.UnusedDirect,
-			EasyWins:                 plan.Summary.EasyWins,
-			EstimatedRemovable:       plan.Summary.EstimatedRemovable,
+			TotalDirect:         plan.Summary.TotalDirect,
+			TotalTransitive:     plan.Summary.TotalTransitive,
+			TransitiveOnlyByOne: plan.Summary.TotalExclusiveTransitive,
+			UnusedDirect:        plan.Summary.UnusedDirect,
+			EasyWins:            plan.Summary.EasyWins,
+			ActionableDirect:    plan.Summary.EstimatedRemovable,
 		},
 		SBOMPath:   plan.SBOMPath,
 		SourceRoot: plan.SourceRoot,
@@ -124,12 +124,11 @@ func renderDietTable(w io.Writer, plan *domaindiet.DietPlan) error {
 	// Summary header
 	p.printf("\n── Diet Plan (%d direct dependencies) ─────────────────────────\n\n", plan.Summary.TotalDirect)
 	if plan.Summary.UnusedDirect > 0 {
-		p.printf("  Unused direct deps:  %d\n", plan.Summary.UnusedDirect)
+		p.printf("  Unused (0 imports):  %d\n", plan.Summary.UnusedDirect)
 	}
 	if plan.Summary.EasyWins > 0 {
-		p.printf("  Easy wins:           %d\n", plan.Summary.EasyWins)
+		p.printf("  Quick wins:          %d  (trivial/easy + high impact)\n", plan.Summary.EasyWins)
 	}
-	p.printf("  Estimated removable: %d\n\n", plan.Summary.EstimatedRemovable)
 
 	if p.err != nil {
 		return p.err
@@ -137,8 +136,8 @@ func renderDietTable(w io.Writer, plan *domaindiet.DietPlan) error {
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	tp := &errWriter{w: tw}
-	tp.printf("RANK\tPRIORITY\tDIFFICULTY\tPURL\tEXCLUSIVE\tFILES\tCALLS\tLIFECYCLE\n")
-	tp.printf("────\t────────\t──────────\t────\t─────────\t─────\t─────\t─────────\n")
+	tp.printf("RANK\tPRIORITY\tDIFFICULTY\tPURL\tONLY-VIA-THIS\tFILES\tCALLS\tLIFECYCLE\n")
+	tp.printf("────\t────────\t──────────\t────\t─────────────\t─────\t─────\t─────────\n")
 	for _, e := range plan.Entries {
 		tp.printf("%d\t%.2f\t%s\t%s\t%d\t%d\t%d\t%s\n",
 			e.Scores.Rank,
@@ -158,10 +157,11 @@ func renderDietTable(w io.Writer, plan *domaindiet.DietPlan) error {
 		return err
 	}
 
-	p.printf("\n── Expected Impact ─────────────────────────────────────────────\n")
-	p.printf("  Direct deps:     %d\n", plan.Summary.TotalDirect)
-	p.printf("  Transitive deps: %d (exclusive removable: %d)\n",
-		plan.Summary.TotalTransitive, plan.Summary.TotalExclusiveTransitive)
+	p.printf("\n── Dependency Tree ─────────────────────────────────────────────\n")
+	p.printf("  Direct deps:          %d\n", plan.Summary.TotalDirect)
+	p.printf("  Transitive deps:      %d\n", plan.Summary.TotalTransitive)
+	p.printf("  └ only-via-one-dep:   %d  (removable if that direct dep is removed)\n",
+		plan.Summary.TotalExclusiveTransitive)
 	p.printf("\n")
 
 	return p.err
@@ -185,8 +185,8 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 		p.printf("│  Priority:   %.2f  Difficulty: %s\n", e.Scores.PriorityScore, e.Scores.Difficulty)
 		p.printf("│\n")
 		p.printf("│  Graph Impact\n")
-		p.printf("│    Exclusive transitive: %d\n", e.Graph.ExclusiveTransitiveCount)
-		p.printf("│    Shared transitive:    %d\n", e.Graph.SharedTransitiveCount)
+		p.printf("│    Only-via-this dep:    %d  (removed together)\n", e.Graph.ExclusiveTransitiveCount)
+		p.printf("│    Shared with others:   %d\n", e.Graph.SharedTransitiveCount)
 		p.printf("│    Total transitive:     %d\n", e.Graph.TotalTransitiveCount)
 		p.printf("│\n")
 		p.printf("│  Coupling\n")
@@ -216,10 +216,11 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 
 	// Summary
 	p.printf("── Summary ─────────────────────────────────────────────────\n")
-	p.printf("  Direct:     %d\n", plan.Summary.TotalDirect)
-	p.printf("  Transitive: %d (exclusive: %d)\n", plan.Summary.TotalTransitive, plan.Summary.TotalExclusiveTransitive)
-	p.printf("  Unused:     %d\n", plan.Summary.UnusedDirect)
-	p.printf("  Easy wins:  %d\n", plan.Summary.EasyWins)
+	p.printf("  Direct deps:          %d\n", plan.Summary.TotalDirect)
+	p.printf("  Transitive deps:      %d\n", plan.Summary.TotalTransitive)
+	p.printf("  └ only-via-one-dep:   %d  (removable if that direct dep is removed)\n", plan.Summary.TotalExclusiveTransitive)
+	p.printf("  Unused (0 imports):   %d\n", plan.Summary.UnusedDirect)
+	p.printf("  Quick wins:           %d\n", plan.Summary.EasyWins)
 	p.printf("\n")
 
 	return p.err
