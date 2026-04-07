@@ -47,15 +47,7 @@ func (s *IntegrationService) populateProjectScorecard(analysis *domain.Analysis,
 
 	// Detect archived status from Scorecard "Maintained" check reason.
 	// When GITHUB_TOKEN is unavailable, this is the only source of archive detection.
-	for _, check := range checks {
-		if check.Name == "Maintained" && strings.Contains(strings.ToLower(check.Reason), "project is archived") {
-			if analysis.RepoState == nil {
-				analysis.RepoState = &domain.RepoState{}
-			}
-			analysis.RepoState.IsArchived = true
-			break
-		}
-	}
+	detectArchivedFromScorecard(analysis)
 }
 
 // populateReleaseInfo builds domain.ReleaseInfo & related links.
