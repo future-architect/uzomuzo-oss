@@ -80,13 +80,18 @@ patterns:
   # defensive-coding: already covered by "Deterministic Output from Non-Deterministic Sources" (PR #159, analyzer.go:420,513 — nondeterministic map iteration for prefix matching; use longest-match selection)
   # defensive-coding: already covered by promoted rules (PR #159, commands.go:285 — use urfcli.Exit instead of os.Exit for testability and cleanup)
   # defensive-coding: already covered by "Defensive Coding — Validate Early, Fail Clearly" (PR #159, diet.go:31 — validate required --sbom flag before file I/O)
-  - category: "testing"
-    summary: "Test validation structs/tags must mirror production output schema — mismatched JSON tags silently leave fields at zero, masking regressions"
-    pr: 159
-    file: "cmd/uzomuzo-diet/e2e_test.go"
-    date: "2026-04-07"
+  # testing: promoted to testing-performance.instructions.md (PRs #159, #160 — mirror production JSON tags in test structs; use t.Cleanup for global restoration)
   # defensive-coding: already covered by "Deterministic Output from Non-Deterministic Sources" (PR #159, analyzer.go:494 — Python prefix matching used first-match instead of longest-match)
   # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:461 — Go alias derivation needs vN suffix and gopkg.in heuristics for accurate call-site counting)
   # defensive-coding: already covered by "Normalize User-Provided Enum Values" spirit (PR #159, service.go:288 — PyPI distribution names need hyphen→underscore and lowercase normalization for import matching)
   # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, sbomgraph/types.go:122 — ResolveDirectPURLs returned nil for 0 direct deps, conflating with "no graph info")
   # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, depgraph/graph.go:37 — AnalyzeGraph used == nil instead of len == 0, misaligned with ResolveDirectPURLs empty-slice semantics)
+  - category: "defensive-coding"
+    summary: "Error hints must be language/ecosystem-agnostic when the tool supports multiple languages — do not reference go.mod in a universal context"
+    pr: 160
+    file: "internal/interfaces/cli/diet.go"
+    date: "2026-04-07"
+  # testing: already covered by promoted rules (PR #160, e2e_test.go:366 — close pipe fds in t.Cleanup; e2e_test.go:387 — check Close() errors for consistency)
+  # testing: already covered by promoted rules (PR #160, e2e_test.go:100 — surface pipe close/read errors in shared test helpers for diagnosability)
+  # testing: already covered by "Use `t.Cleanup` When Replacing Process-Global State" (PR #160, e2e_test.go:353 — close stdinW in t.Cleanup to prevent FD leak on early abort)
+  # testing: already covered by promoted rules (PR #160, e2e_test.go:380 — capture ReadFrom error via channel for consistency with runDiet)

@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -118,15 +117,9 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 
 // runScanSBOM handles --sbom input.
 func runScanSBOM(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy) error {
-	var data []byte
-	var err error
-	if opts.SBOMPath == "-" {
-		data, err = io.ReadAll(os.Stdin)
-	} else {
-		data, err = os.ReadFile(opts.SBOMPath)
-	}
+	data, err := readSBOMData(opts.SBOMPath)
 	if err != nil {
-		return fmt.Errorf("failed to read SBOM from '%s': %w", opts.SBOMPath, err)
+		return err
 	}
 
 	parser, ok := parsers["sbom"]

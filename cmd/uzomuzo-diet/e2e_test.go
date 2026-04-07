@@ -68,6 +68,11 @@ func runDiet(t *testing.T, format string) string {
 		t.Fatalf("os.Pipe failed: %v", err)
 	}
 	os.Stdout = w
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		_ = r.Close()
+		_ = w.Close()
+	})
 
 	graphAnalyzer := depgraph.NewAnalyzer()
 	sourceAnalyzer := treesitter.NewAnalyzer()
@@ -88,15 +93,15 @@ func runDiet(t *testing.T, format string) string {
 
 	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
 
-	if err := w.Close(); err != nil {
-		t.Fatalf("failed to close stdout pipe writer: %v", err)
-	}
 	os.Stdout = oldStdout
+	if err := w.Close(); err != nil {
+		t.Fatalf("failed to close captured stdout writer: %v", err)
+	}
 	if readErr := <-readErrCh; readErr != nil {
 		t.Fatalf("failed to read captured stdout: %v", readErr)
 	}
 	if err := r.Close(); err != nil {
-		t.Fatalf("failed to close stdout pipe reader: %v", err)
+		t.Fatalf("failed to close captured stdout reader: %v", err)
 	}
 
 	if runErr != nil {
@@ -280,6 +285,136 @@ func TestE2E_DietCLIFlags(t *testing.T) {
 	err = app.Run(context.Background(), []string{"uzomuzo-diet"})
 	if err == nil {
 		t.Error("expected error when --sbom is missing, got nil")
+	}
+}
+
+func TestE2E_DietSourceValidation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	configService := config.NewConfigService()
+	cfg, err := configService.Load(context.Background())
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	graphAnalyzer := depgraph.NewAnalyzer()
+	sourceAnalyzer := treesitter.NewAnalyzer()
+
+	// --source pointing to a file should fail
+	opts := cli.DietOptions{
+		SBOMPath:   testSBOMPath,
+		SourceRoot: testSBOMPath, // a file, not a directory
+		Format:     "json",
+	}
+	err = cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
+	if err == nil {
+		t.Fatal("expected error when --source is a file, got nil")
+	}
+	if !strings.Contains(err.Error(), "not a directory") {
+		t.Errorf("error should mention 'not a directory', got: %v", err)
+	}
+
+	// --source pointing to nonexistent path should fail
+	opts.SourceRoot = "/nonexistent/path/that/does/not/exist"
+	err = cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
+	if err == nil {
+		t.Fatal("expected error when --source does not exist, got nil")
+	}
+}
+
+func TestE2E_DietStdinSBOM(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	// Read the test SBOM into memory, then feed it via stdin
+	sbomData, err := os.ReadFile(testSBOMPath)
+	if err != nil {
+		t.Fatalf("failed to read test SBOM: %v", err)
+	}
+
+	configService := config.NewConfigService()
+	cfg, err := configService.Load(context.Background())
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+	logging.Initialize(cfg.App.LogLevel)
+
+	// Replace os.Stdin with a pipe containing the SBOM data
+	oldStdin := os.Stdin
+	stdinR, stdinW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe (stdin) failed: %v", err)
+	}
+	os.Stdin = stdinR
+	t.Cleanup(func() {
+		os.Stdin = oldStdin
+		_ = stdinR.Close() // best-effort cleanup
+		_ = stdinW.Close() // best-effort cleanup; may already be closed by goroutine
+	})
+
+	go func() {
+		_, _ = stdinW.Write(sbomData)
+		_ = stdinW.Close()
+	}()
+
+	// Capture stdout
+	var buf bytes.Buffer
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe (stdout) failed: %v", err)
+	}
+	os.Stdout = w
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		_ = w.Close() // best-effort cleanup
+		_ = r.Close() // best-effort cleanup
+	})
+
+	readErrCh := make(chan error, 1)
+	go func() {
+		_, readErr := buf.ReadFrom(r)
+		readErrCh <- readErr
+	}()
+
+	opts := cli.DietOptions{
+		SBOMPath:   "-",
+		SourceRoot: sourceRoot,
+		Format:     "json",
+	}
+
+	graphAnalyzer := depgraph.NewAnalyzer()
+	sourceAnalyzer := treesitter.NewAnalyzer()
+	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
+
+	os.Stdout = oldStdout
+	if err := w.Close(); err != nil {
+		t.Fatalf("failed to close captured stdout writer: %v", err)
+	}
+	if readErr := <-readErrCh; readErr != nil {
+		t.Fatalf("failed to read captured stdout: %v", readErr)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatalf("failed to close captured stdout reader: %v", err)
+	}
+
+	if runErr != nil {
+		t.Fatalf("RunDiet with stdin failed: %v", runErr)
+	}
+
+	// Verify JSON output is valid and has data
+	var result dietJSONOutput
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("stdin JSON output is not valid: %v", err)
+	}
+	if result.Summary.TotalDirect == 0 {
+		t.Error("stdin: summary.total_direct should be > 0")
+	}
+	if result.SBOMPath != "-" {
+		t.Errorf("stdin: sbom_path = %q, want %q", result.SBOMPath, "-")
 	}
 }
 

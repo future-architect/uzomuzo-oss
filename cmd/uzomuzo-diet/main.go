@@ -45,12 +45,12 @@ func main() {
 		Flags: []urfcli.Flag{
 			&urfcli.StringFlag{
 				Name:     "sbom",
-				Usage:    "Path to CycloneDX SBOM JSON (required)",
+				Usage:    "Path to CycloneDX SBOM JSON, or '-' for stdin (required)",
 				Required: true,
 			},
 			&urfcli.StringFlag{
 				Name:  "source",
-				Usage: "Root directory for source code coupling analysis",
+				Usage: "Project root for source coupling analysis (must match the SBOM target)",
 				Value: ".",
 			},
 			&urfcli.StringFlag{

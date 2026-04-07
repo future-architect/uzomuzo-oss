@@ -29,10 +29,21 @@ func RunDiet(
 		return fmt.Errorf("--sbom is required")
 	}
 
+	// Validate --source is a directory, not a file
+	if opts.SourceRoot != "" {
+		info, err := os.Stat(opts.SourceRoot)
+		if err != nil {
+			return fmt.Errorf("--source path %q: %w", opts.SourceRoot, err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("--source %q is a file, not a directory — point it to the project root used to generate the SBOM", opts.SourceRoot)
+		}
+	}
+
 	// Read SBOM data
-	sbomData, err := os.ReadFile(opts.SBOMPath)
+	sbomData, err := readSBOMData(opts.SBOMPath)
 	if err != nil {
-		return fmt.Errorf("failed to read SBOM file: %w", err)
+		return err
 	}
 
 	// Create analysis service for health signals

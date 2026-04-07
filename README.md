@@ -144,6 +144,10 @@ uzomuzo scan --file input_purls.txt --sample 500
 Most projects have dependencies they don't really need, but knowing **which ones to remove** and **how hard it will be** is the real problem. `uzomuzo diet` answers both:
 
 ```bash
+# Pipe from trivy (no intermediate file)
+trivy fs . --format cyclonedx | uzomuzo diet --sbom - --source .
+
+# Or two-step with a file
 syft . --source-name myproject -o cyclonedx-json > bom.json
 uzomuzo diet --sbom bom.json --source .
 ```

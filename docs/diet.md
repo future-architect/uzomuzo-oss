@@ -89,6 +89,9 @@ uzomuzo diet --sbom bom.json
 # With source coupling analysis
 uzomuzo diet --sbom bom.json --source .
 
+# Pipe from trivy (no intermediate file)
+trivy fs . --format cyclonedx | uzomuzo diet --sbom - --source .
+
 # JSON output (for CI/LLM consumption)
 uzomuzo diet --sbom bom.json --source . --format json
 
@@ -100,9 +103,19 @@ uzomuzo diet --sbom bom.json --source . --format detailed
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
-| `--sbom` | Yes | — | Path to CycloneDX SBOM JSON |
+| `--sbom` | Yes | — | Path to CycloneDX SBOM JSON, or `-` for stdin |
 | `--source` | No | `.` | Root directory for source coupling analysis |
 | `--format`, `-f` | No | `table` | Output format: `json`, `table`, `detailed` |
+
+> **⚠️ `--source` must point to the same project root that was used to generate the SBOM.**
+> If it points to the wrong directory, dependencies will appear "unused" even when they are actually used — because the scanner cannot find the import statements.
+>
+> Common mistakes:
+> - **Subdirectory**: `--source ./src` misses files outside `src/`, causing false "unused" results.
+> - **Wrong project**: Using an SBOM from project A with `--source` pointing to project B produces meaningless output.
+> - **Monorepo**: Point `--source` to the specific subproject root that matches the SBOM, not the repo root.
+>
+> If Phase 2 reports `no imports matched any dependency`, double-check your `--source` path.
 
 ## Analysis Pipeline
 
