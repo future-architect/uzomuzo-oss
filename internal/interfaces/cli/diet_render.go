@@ -21,13 +21,13 @@ type dietJSONOutput struct {
 }
 
 type dietJSONSummary struct {
-	TotalDirect          int `json:"total_direct"`
-	TotalTransitive      int `json:"total_transitive"`
-	TransitiveOnlyByOne  int `json:"transitive_only_by_one"`
-	UnusedDirect         int `json:"unused_direct"`
-	EasyWins             int `json:"easy_wins"`
-	ActionableDirect     int `json:"actionable_direct"`
-	StaysAsIndirect      int `json:"stays_as_indirect"`
+	TotalDirect         int `json:"total_direct"`
+	TotalTransitive     int `json:"total_transitive"`
+	TransitiveOnlyByOne int `json:"transitive_only_by_one"`
+	UnusedDirect        int `json:"unused_direct"`
+	EasyWins            int `json:"easy_wins"`
+	ActionableDirect    int `json:"actionable_direct"`
+	StaysAsIndirect     int `json:"stays_as_indirect"`
 }
 
 type dietJSONEntry struct {
@@ -48,11 +48,15 @@ type dietJSONEntry struct {
 	StaysAsIndirect     bool     `json:"stays_as_indirect"`
 	IndirectVia         []string `json:"indirect_via,omitempty"`
 
-	ImportFileCount int      `json:"import_file_count"`
-	CallSiteCount   int      `json:"call_site_count"`
-	APIBreadth      int      `json:"api_breadth"`
-	IsUnused        bool     `json:"is_unused"`
-	ImportFiles     []string `json:"import_files,omitempty"`
+	ImportFileCount   int      `json:"import_file_count"`
+	CallSiteCount     int      `json:"call_site_count"`
+	APIBreadth        int      `json:"api_breadth"`
+	Symbols           []string `json:"symbols"`
+	IsUnused          bool     `json:"is_unused"`
+	ImportFiles       []string `json:"import_files,omitempty"`
+	HasBlankImport    bool     `json:"has_blank_import"`
+	HasDotImport      bool     `json:"has_dot_import"`
+	HasWildcardImport bool     `json:"has_wildcard_import"`
 
 	Lifecycle          string  `json:"lifecycle"`
 	HasVulnerabilities bool    `json:"has_vulnerabilities,omitempty"`
@@ -110,8 +114,12 @@ func renderDietJSON(w io.Writer, plan *domaindiet.DietPlan) error {
 			ImportFileCount:     e.Coupling.ImportFileCount,
 			CallSiteCount:       e.Coupling.CallSiteCount,
 			APIBreadth:          e.Coupling.APIBreadth,
+			Symbols:             normalizeSymbols(e.Coupling.Symbols),
 			IsUnused:            e.Coupling.IsUnused,
 			ImportFiles:         e.Coupling.ImportFiles,
+			HasBlankImport:      e.Coupling.HasBlankImport,
+			HasDotImport:        e.Coupling.HasDotImport,
+			HasWildcardImport:   e.Coupling.HasWildcardImport,
 			Lifecycle:           e.Health.MaintenanceStatus,
 			HasVulnerabilities:  e.Health.HasVulnerabilities,
 			VulnerabilityCount:  e.Health.VulnerabilityCount,
@@ -215,6 +223,22 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 			p.printf("│    Imports:    %d\n", e.Coupling.ImportFileCount)
 			p.printf("│    Call sites: %d\n", e.Coupling.CallSiteCount)
 			p.printf("│    API breadth: %d distinct symbols\n", e.Coupling.APIBreadth)
+			if len(e.Coupling.Symbols) > 0 {
+				p.printf("│    Symbols: %s\n", formatSymbolList(e.Coupling.Symbols))
+			}
+			if e.Coupling.HasBlankImport || e.Coupling.HasDotImport || e.Coupling.HasWildcardImport {
+				var flags []string
+				if e.Coupling.HasBlankImport {
+					flags = append(flags, "blank-import")
+				}
+				if e.Coupling.HasDotImport {
+					flags = append(flags, "dot-import")
+				}
+				if e.Coupling.HasWildcardImport {
+					flags = append(flags, "wildcard-import")
+				}
+				p.printf("│    ⚠ Import flags: %s\n", strings.Join(flags, ", "))
+			}
 		}
 		p.printf("│\n")
 		p.printf("│  Health\n")
@@ -247,6 +271,24 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 	p.printf("\n")
 
 	return p.err
+}
+
+// normalizeSymbols returns an empty slice when symbols is nil, ensuring JSON
+// output emits [] instead of null for consistent schema.
+func normalizeSymbols(symbols []string) []string {
+	if symbols == nil {
+		return []string{}
+	}
+	return symbols
+}
+
+// formatSymbolList formats a list of symbol names for display, truncating if too many.
+func formatSymbolList(symbols []string) string {
+	const maxDisplay = 10
+	if len(symbols) <= maxDisplay {
+		return strings.Join(symbols, ", ")
+	}
+	return strings.Join(symbols[:maxDisplay], ", ") + fmt.Sprintf(" +%d more", len(symbols)-maxDisplay)
 }
 
 // formatViaList formats a list of PURLs for display, truncating if too many.

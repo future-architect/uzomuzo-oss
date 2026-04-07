@@ -362,16 +362,39 @@ COMMENT_EOF
 
 After analysis, display a structured report to the user. The report MUST include:
 
-1. **Header**: Project name, date, SBOM tool, component count, ecosystem breakdown
-2. **Summary table**: total_direct, total_transitive, unused_direct, easy_wins
-3. **Difficulty distribution**: trivial / easy / moderate / hard
-4. **EOL/Archived dependencies actually used in code** (the key finding):
+1. **Header**: Project name, date, SBOM tool
+2. **Executive Summary** (blockquote at top, immediately after header): A quick-scan verdict so readers can assess the project in 3 seconds. Format:
+
+```markdown
+> **Verdict: <Healthy|Warning|Action Needed>** — N direct deps, X% unused (M), K EOL/Archived
+>
+> | Metric | Value |
+> |--------|-------|
+> | Direct deps | N |
+> | Transitive deps | N |
+> | Unused rate | X% (M) |
+> | EOL/Archived | K |
+> | Easy Wins | J |
+>
+> **Top priority**: <most impactful immediate action>
+```
+
+Verdict rules:
+- **Healthy**: No EOL deps AND unused < 20%
+- **Warning**: 1-4 EOL deps OR unused 20-39%
+- **Action Needed**: 5+ EOL deps OR unused >= 40%
+
+3. **Execution conditions**: Tool versions, flags, SBOM component count, ecosystem breakdown
+4. **Summary table**: total_direct, total_transitive, unused_direct, easy_wins
+5. **Difficulty distribution**: trivial / easy / moderate / hard
+6. **EOL/Archived dependencies actually used in code** (the key finding):
    - Grouped by difficulty (hard → moderate → easy)
    - Include: name, files, calls, APIs, lifecycle status
-   - Include migration target suggestions where obvious (e.g., `golang/mock` → `uber-go/mock`)
-5. **Recommended action phases**: Phase 1 (trivial), Phase 2 (easy EOL), Phase 3 (moderate EOL), Phase 4 (hard EOL)
-6. **Anomaly check results**: Any potential bugs or accuracy issues found
-7. **Top 20 by priority score**
+   - **Include registry link for each EOL/Archived dep** (see [Primary Source Links](#primary-source-links))
+   - Include migration target suggestions where obvious, **with registry link to the replacement** (e.g., `golang/mock` → [`uber-go/mock`](https://pkg.go.dev/go.uber.org/mock))
+7. **Recommended action phases**: Phase 1 (trivial), Phase 2 (easy EOL), Phase 3 (moderate EOL), Phase 4 (hard EOL)
+8. **Anomaly check results**: Any potential bugs or accuracy issues found
+9. **Top 20 by priority score**
 
 ### Step 6: Save Report (unless --no-save)
 
@@ -422,6 +445,7 @@ cp /tmp/diet-trial-<repo>-<tool>-sbom.json "${DEST}/${BASE}.sbom.json"
 
 The saved report must be in the same format as existing case studies in `case-studies/`. Use Japanese for section headers and commentary (matching existing case study style). Include:
 
+- **Executive Summary** (blockquote, immediately after title and description) — this is the most important section
 - Execution conditions (tool versions, flags used)
 - All tables from Step 5
 - Raw data file paths
@@ -459,6 +483,49 @@ This comparison is valuable for the SBOM Tool Comparison section in docs/diet.md
   - SBOM format issues (check `bomFormat` field)
 - **JSON parse failure**: Log lines mixed into stdout. Apply the cleanup step and retry.
 - **Zero dependencies in diet output**: SBOM may be empty or malformed. Check component count.
+
+## Primary Source Links
+
+All generated content (reports, issues, anomaly filings) MUST include primary source links so readers can verify claims independently. Never write "Deprecated" or "Archived" without a link to the evidence.
+
+### PURL → Registry URL Mapping
+
+Generate registry URLs from the PURL ecosystem type:
+
+| Ecosystem | URL pattern | Example |
+|-----------|-------------|---------|
+| `pkg:npm` | `https://www.npmjs.com/package/<namespace/name>` | `https://www.npmjs.com/package/@vercel/kv` |
+| `pkg:golang` | `https://pkg.go.dev/<namespace/name>` | `https://pkg.go.dev/github.com/pkg/errors` |
+| `pkg:pypi` | `https://pypi.org/project/<name>` | `https://pypi.org/project/requests` |
+| `pkg:maven` | `https://central.sonatype.com/artifact/<namespace>/<name>` | `https://central.sonatype.com/artifact/com.google.code.gson/gson` |
+
+### Where to Include Links
+
+**In EOL/Archived dependency tables:**
+```markdown
+| `@opentelemetry/exporter-collector` | 0.25.0 | Deprecated ([npm](https://www.npmjs.com/package/@opentelemetry/exporter-collector)) |
+```
+
+**In migration target suggestions:**
+```markdown
+Replace with [`@opentelemetry/exporter-trace-otlp-http`](https://www.npmjs.com/package/@opentelemetry/exporter-trace-otlp-http)
+```
+
+**In GitHub repo status references:**
+```markdown
+Repository [archived on 2023-11-08](https://github.com/nicolo-ribaudo/chokidar-2/commit/abc123)
+```
+
+**In anomaly issue filings** (Step 4b):
+Include the registry URL for the affected dependency in the Evidence section.
+
+### Additional Evidence Links (When Available)
+
+- **Deprecation notice**: Link to the npm deprecation message, PyPI yanked release, or GitHub archived banner
+- **Migration guide**: Link to official migration documentation if the maintainer published one
+- **CVE/Advisory**: Link to NVD, GitHub Advisory, or OSV entry
+- **Scorecard**: `https://scorecard.dev/viewer/?uri=github.com/<org>/<repo>`
+- **Last commit**: `https://github.com/<org>/<repo>/commits/<default-branch>`
 
 ## Notes
 

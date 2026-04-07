@@ -306,6 +306,12 @@ func (a *Analyzer) AnalyzeCoupling(
 				if strings.HasPrefix(alias, dotImportAlias) {
 					acc.hasDotImport = true
 				}
+				if strings.HasPrefix(alias, blankImportAlias) {
+					acc.hasBlankImport = true
+				}
+				if strings.HasPrefix(alias, wildcardImportAlias) {
+					acc.hasWildcardImport = true
+				}
 			}
 		}
 
@@ -348,12 +354,22 @@ func (a *Analyzer) AnalyzeCoupling(
 			}
 		}
 
+		symbols := make([]string, 0, len(acc.symbols))
+		for s := range acc.symbols {
+			symbols = append(symbols, s)
+		}
+		slices.Sort(symbols)
+
 		results[purl] = &domaindiet.CouplingAnalysis{
-			ImportFileCount: len(acc.importFiles),
-			CallSiteCount:   callSites,
-			APIBreadth:      len(acc.symbols),
-			ImportFiles:     files,
-			IsUnused:        isUnused,
+			ImportFileCount:   len(acc.importFiles),
+			CallSiteCount:     callSites,
+			APIBreadth:        len(acc.symbols),
+			ImportFiles:       files,
+			Symbols:           symbols,
+			IsUnused:          isUnused,
+			HasBlankImport:    acc.hasBlankImport,
+			HasDotImport:      acc.hasDotImport,
+			HasWildcardImport: acc.hasWildcardImport,
 		}
 	}
 
@@ -944,8 +960,10 @@ func appendUniquePURLs(existing, newPURLs []string) []string {
 
 // accumulator is used internally; re-declared here for the countCallSites method receiver.
 type accumulator struct {
-	importFiles  map[string]bool
-	callSites    int
-	symbols      map[string]bool
-	hasDotImport bool // true if any file uses dot import for this PURL
+	importFiles       map[string]bool
+	callSites         int
+	symbols           map[string]bool
+	hasDotImport      bool // true if any file uses dot import for this PURL
+	hasBlankImport    bool // true if any file uses blank import for this PURL
+	hasWildcardImport bool // true if any file uses wildcard import for this PURL
 }

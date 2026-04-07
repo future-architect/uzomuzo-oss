@@ -55,6 +55,25 @@ func main() {
 	if ca.IsUnused {
 		t.Error("IsUnused = true, want false")
 	}
+	wantSymbols := []string{"DoOther", "DoSomething"}
+	if len(ca.Symbols) != len(wantSymbols) {
+		t.Errorf("Symbols = %v, want %v", ca.Symbols, wantSymbols)
+	} else {
+		for i, s := range ca.Symbols {
+			if s != wantSymbols[i] {
+				t.Errorf("Symbols[%d] = %q, want %q", i, s, wantSymbols[i])
+			}
+		}
+	}
+	if ca.HasBlankImport {
+		t.Error("HasBlankImport = true, want false")
+	}
+	if ca.HasDotImport {
+		t.Error("HasDotImport = true, want false")
+	}
+	if ca.HasWildcardImport {
+		t.Error("HasWildcardImport = true, want false")
+	}
 }
 
 func TestAnalyzer_GoAliasedImport(t *testing.T) {
@@ -89,6 +108,92 @@ func main() {
 
 	if ca.CallSiteCount != 1 {
 		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+}
+
+func TestAnalyzer_GoBlankAndDotImport(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
+
+import (
+	_ "github.com/lib/pq"
+	. "github.com/onsi/gomega"
+	"github.com/foo/bar"
+)
+
+func main() {
+	Expect(true).To(BeTrue())
+	bar.Do()
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/lib/pq@v1.10.0":     {"github.com/lib/pq"},
+		"pkg:golang/github.com/onsi/gomega@v1.0.0": {"github.com/onsi/gomega"},
+		"pkg:golang/github.com/foo/bar@v1.0.0":     {"github.com/foo/bar"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Blank import: has_blank_import=true, is not unused
+	caPQ, ok := result["pkg:golang/github.com/lib/pq@v1.10.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for blank import pq")
+	}
+	if !caPQ.HasBlankImport {
+		t.Error("pq: HasBlankImport = false, want true")
+	}
+	if caPQ.HasDotImport {
+		t.Error("pq: HasDotImport = true, want false")
+	}
+	if caPQ.HasWildcardImport {
+		t.Error("pq: HasWildcardImport = true, want false")
+	}
+	if caPQ.IsUnused {
+		t.Error("pq: IsUnused = true, want false (blank import is intentional)")
+	}
+
+	// Dot import: has_dot_import=true, is not unused, has baseline call sites
+	caGomega, ok := result["pkg:golang/github.com/onsi/gomega@v1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for dot import gomega")
+	}
+	if !caGomega.HasDotImport {
+		t.Error("gomega: HasDotImport = false, want true")
+	}
+	if caGomega.HasBlankImport {
+		t.Error("gomega: HasBlankImport = true, want false")
+	}
+	if caGomega.IsUnused {
+		t.Error("gomega: IsUnused = true, want false (dot import is used)")
+	}
+	if caGomega.CallSiteCount < 1 {
+		t.Errorf("gomega: CallSiteCount = %d, want >= 1 (dot import baseline)", caGomega.CallSiteCount)
+	}
+
+	// Regular import: no special flags
+	caBar, ok := result["pkg:golang/github.com/foo/bar@v1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for regular import bar")
+	}
+	if caBar.HasBlankImport {
+		t.Error("bar: HasBlankImport = true, want false")
+	}
+	if caBar.HasDotImport {
+		t.Error("bar: HasDotImport = true, want false")
+	}
+	if caBar.HasWildcardImport {
+		t.Error("bar: HasWildcardImport = true, want false")
+	}
+	wantSymbols := []string{"Do"}
+	if len(caBar.Symbols) != 1 || caBar.Symbols[0] != "Do" {
+		t.Errorf("bar: Symbols = %v, want %v", caBar.Symbols, wantSymbols)
 	}
 }
 
@@ -822,13 +927,14 @@ cloudNS.teardown();
 
 func TestAnalyzer_PythonFromImport(t *testing.T) {
 	tests := []struct {
-		name        string
-		code        string
-		importPaths map[string][]string
-		purl        string
-		wantImports int
-		wantCalls   int
-		wantBreadth int
+		name         string
+		code         string
+		importPaths  map[string][]string
+		purl         string
+		wantImports  int
+		wantCalls    int
+		wantBreadth  int
+		wantWildcard bool
 	}{
 		{
 			name: "basic from-import with bare calls",
@@ -929,10 +1035,11 @@ app = Flask(__name__)
 			importPaths: map[string][]string{
 				"pkg:pypi/flask@3.0.0": {"flask"},
 			},
-			purl:        "pkg:pypi/flask@3.0.0",
-			wantImports: 1,
-			wantCalls:   0,
-			wantBreadth: 0,
+			purl:         "pkg:pypi/flask@3.0.0",
+			wantImports:  1,
+			wantCalls:    0,
+			wantBreadth:  0,
+			wantWildcard: true,
 		},
 	}
 
@@ -963,6 +1070,9 @@ app = Flask(__name__)
 			}
 			if ca.APIBreadth != tt.wantBreadth {
 				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+			if ca.HasWildcardImport != tt.wantWildcard {
+				t.Errorf("HasWildcardImport = %v, want %v", ca.HasWildcardImport, tt.wantWildcard)
 			}
 		})
 	}

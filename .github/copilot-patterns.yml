@@ -102,19 +102,19 @@ patterns:
   # defensive-coding (PR #176 round 5): already covered by "Validate Generated Strings Against Target-Language Syntax" — validate namespace with isJavaDottedPackageSafe before emitting groupId.artifactId candidate
   # naming-consistency (PR #198): already covered by "Use Domain Constants for Domain-Defined String Values" spirit — extract magic coefficients to named constants
   # comment-doc-drift (PR #198): already covered by "Comment-Code Consistency" rule — test case name didn't match domain mapping for healthRisk values
-  - category: "testing"
-    summary: "Assert exact computed values with tolerance instead of loose threshold checks — threshold-only assertions miss formula regressions"
-    pr: 198
-    file: "internal/domain/diet/scoring_test.go"
-    date: "2026-04-07"
+  # testing: promoted to testing-performance.instructions.md (PRs #197, #198, #223 — assert exact values not thresholds, omit unused test fixture fields, assert all new output fields)
   # defensive-coding (PR #199): already covered by "use tree-sitter predicates to constrain overly broad query patterns" — add !object negation to bare-call query to prevent double-counting
   # defensive-coding (PR #199): already covered by "Consolidate Detection Heuristics — Single Source of Truth" — handle wildcard static imports with sentinel alias consistent with Python
   # comment-doc-drift (PR #199): already covered by "Comment-Code Consistency" — clarify ImportFileCount vs import-statement count in test comment
-  - category: "testing"
-    summary: "Omit unused struct fields in test fixtures to avoid nondeterminism and unnecessary imports"
-    pr: 197
-    file: "internal/interfaces/cli/diet_render_test.go"
-    date: "2026-04-07"
   # defensive-coding (PR #200): already covered by "Deduplicate Inputs Before Batch API Calls" spirit — compact map[K][]V slices after append to prevent double-counting
   # comment-doc-drift (PR #200): already covered by promoted rule — blank-import comment said "multiple blank imports in one file" but key is per import path
   # testing (PR #200): already covered by promoted rules — Go collision test name implied unrealistic multi-version scenario; renamed to reflect actual behavior
+  - category: "api-consistency"
+    summary: "Remove omitempty from boolean and always-present slice JSON tags — omitempty makes absent-vs-false/empty ambiguous for downstream schema consumers"
+    pr: 223
+    file: "internal/interfaces/cli/diet_render.go"
+    date: "2026-04-07"
+  # comment-doc-drift (PR #223): already covered by "ADR and Documentation Must Describe Actual Behavior" — detailed output now renders a truncated symbols list (fixed in cf5ca6e)
+  # testing (PR #223): promoted — assert all new output fields when extending structs (see testing-performance.instructions.md)
+  # testing (PR #223 round 4): already covered by promoted rule — add IsUnused/HasWildcardImport assertions for blank-import case to lock in intended behavior
+  # testing (PR #223 round 5): already covered by promoted rule — assert CallSiteCount baseline for dot-import case that documents "has baseline call sites"
