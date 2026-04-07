@@ -818,13 +818,18 @@ var jsExpressionTypes = map[string]bool{
 	"assignment_expression":    true,
 }
 
+// maxAncestorWalkDepth limits how far findAncestorVariableDeclarator walks up
+// the AST. Prevents false matches against distant, unrelated variable_declarators
+// in pathological nesting (e.g., deeply nested ternary chains).
+const maxAncestorWalkDepth = 5
+
 // findAncestorVariableDeclarator walks up from node looking for a variable_declarator,
 // traversing intermediate expression nodes (e.g., binary_expression for patterns like
-// `var X = root.X || require('pkg')`). Stops at statement-level nodes to avoid
-// false matches across unrelated declarations.
+// `var X = root.X || require('pkg')`). Stops at statement-level nodes or after
+// maxAncestorWalkDepth hops to avoid false matches.
 func findAncestorVariableDeclarator(node *sitter.Node) *sitter.Node {
 	current := node.Parent()
-	for current != nil {
+	for depth := 0; current != nil && depth < maxAncestorWalkDepth; depth++ {
 		if current.Type() == "variable_declarator" {
 			return current
 		}
