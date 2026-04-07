@@ -20,14 +20,22 @@ Before writing any code, answer these three questions:
 
 ### 1. Will it actually disappear?
 
-For Go projects:
+Check the **STAYS** column in the `uzomuzo diet` output (or `stays_as_indirect` in JSON):
+
+- **STAYS = `-`** → Removing this dep fully removes it from the dependency tree. Go ahead.
+- **STAYS = `yes`** → Another direct dep depends on this transitively. It will remain as an indirect dependency after removal. Still worth doing (version management delegation, future removal readiness), but set expectations: it won't leave go.sum / lockfile.
+
+In detailed output, the `IndirectVia` field shows exactly which direct deps pull it in transitively. These are the upstream targets for Phase 5 (Upstream Diet).
+
+If diet output is not available, you can verify manually:
 ```bash
+# Go
 go mod why -m $ARGUMENTS
+# npm
+npm ls $ARGUMENTS
+# pip
+pip show $ARGUMENTS | grep "Required-by"
 ```
-
-If the output shows multiple import paths, removing your direct usage may leave it as an indirect dependency. This is still worth doing (version management delegation, future removal readiness), but set expectations correctly.
-
-For other ecosystems: check if other dependencies pull this in transitively.
 
 ### 2. What's the replacement?
 
@@ -220,24 +228,13 @@ After:  {N} direct deps, go.sum {N} lines
 Binary: {size before} → {size after} ({reduction}%)
 ```
 
-## Phase 5: Upstream Diet — when go.sum doesn't shrink
+## Phase 5: Upstream Diet — when the dep stays as indirect
 
-After `go mod tidy`, check if the dependency actually disappeared from `go.sum`:
+If `uzomuzo diet` showed **STAYS = `yes`** for this dependency (or you see it still in go.sum / lockfile after removal), it remains as an indirect dependency.
 
-```bash
-grep "$ARGUMENTS" go.sum
-```
-
-If it's still there, it remains as an **indirect dependency** — some other module in your `go.mod` still pulls it in. This is the single most common "surprise" in dependency removal.
+The diet detailed output's `IndirectVia` field already tells you exactly which direct deps pull it in. Use this to plan upstream removals.
 
 ### Is the upstream under your control?
-
-```bash
-# Find what still depends on it
-go mod why -m $ARGUMENTS
-# or
-go mod graph | grep " $ARGUMENTS@"
-```
 
 **If the upstream is your organization's repo** (e.g., your company's other OSS projects):
 
