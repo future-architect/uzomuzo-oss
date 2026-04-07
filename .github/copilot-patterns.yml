@@ -77,6 +77,9 @@ patterns:
   # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:434 — blank imports are side-effect usage; skipping them misclassifies deps as unused)
   # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:447 — shared sentinel key for blank/dot imports overwrites earlier entries)
   # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:82 — use tree-sitter #eq? predicates to constrain overly broad query patterns)
+  # defensive-coding: already covered by "Deterministic Output from Non-Deterministic Sources" (PR #159, analyzer.go:420,513 — nondeterministic map iteration for prefix matching; use longest-match selection)
+  # defensive-coding: already covered by promoted rules (PR #159, commands.go:285 — use urfcli.Exit instead of os.Exit for testability and cleanup)
+  # defensive-coding: already covered by "Defensive Coding — Validate Early, Fail Clearly" (PR #159, diet.go:31 — validate required --sbom flag before file I/O)
   - category: "testing"
     summary: "Test validation structs/tags must mirror production output schema — mismatched JSON tags silently leave fields at zero, masking regressions"
     pr: 159
