@@ -188,11 +188,15 @@ func (a *Analyzer) AnalyzeCoupling(
 	sourceRoot string,
 	importPaths map[string][]string,
 ) (map[string]*domaindiet.CouplingAnalysis, error) {
-	// Build reverse map: importPath -> PURL
+	// Build reverse map: importPath -> PURL.
+	// Keys are lowercased because PURL namespace is case-insensitive (PURL spec)
+	// while Go import paths are case-sensitive. SBOM generators may produce
+	// lowercased PURLs (e.g., "github.com/masterminds/semver") for imports that
+	// use mixed case (e.g., "github.com/Masterminds/semver").
 	importToPURL := make(map[string]string, len(importPaths))
 	for purl, paths := range importPaths {
 		for _, p := range paths {
-			importToPURL[p] = purl
+			importToPURL[strings.ToLower(p)] = purl
 		}
 	}
 
@@ -410,14 +414,17 @@ func (a *Analyzer) handleGoImport(
 	importToPURL map[string]string,
 	aliasMap map[string]string,
 ) {
-	purl, ok := importToPURL[importPath]
+	// Lowercase the import path for matching — importToPURL keys are already lowercased
+	// to handle PURL case-insensitivity (see AnalyzeCoupling).
+	lowerPath := strings.ToLower(importPath)
+	purl, ok := importToPURL[lowerPath]
 	if !ok {
 		// Also try prefix matching for subpackages.
 		// Pick the longest matching prefix to handle nested modules
 		// (e.g., prefer "example.com/foo/bar" over "example.com/foo").
 		bestLen := 0
 		for ip, p := range importToPURL {
-			if (strings.HasPrefix(importPath, ip+"/") || importPath == ip) && len(ip) > bestLen {
+			if (strings.HasPrefix(lowerPath, ip+"/") || lowerPath == ip) && len(ip) > bestLen {
 				purl = p
 				ok = true
 				bestLen = len(ip)

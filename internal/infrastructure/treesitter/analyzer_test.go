@@ -421,6 +421,47 @@ public class Main {
 	}
 }
 
+func TestAnalyzer_GoCaseInsensitivePURL(t *testing.T) {
+	dir := t.TempDir()
+	// Source code uses mixed-case import path (as authored by the module owner).
+	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
+
+import "github.com/Masterminds/semver/v3"
+
+func main() {
+	semver.NewVersion("1.0.0")
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	// SBOM/PURL uses lowercased namespace (PURL spec normalizes to lowercase).
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/masterminds/semver/v3@v3.4.0": {"github.com/masterminds/semver/v3"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:golang/github.com/masterminds/semver/v3@v3.4.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for case-mismatched PURL")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false")
+	}
+}
+
 func TestAnalyzer_PythonPrefixNoFalseMatch(t *testing.T) {
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "main.py"), []byte(`import requests
