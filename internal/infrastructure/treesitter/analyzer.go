@@ -539,12 +539,16 @@ func (a *Analyzer) handleGoImport(
 // Go identifiers cannot contain hyphens, so directory names like "opentracing-go",
 // "go-loser", or "mmap-go" map to package names "opentracing", "loser", "mmap".
 //
-// Heuristics (applied in order):
+// Heuristics (applied in order, short-circuiting when no hyphens remain):
 //  1. Strip "-go" suffix (e.g., "opentracing-go" → "opentracing", "mmap-go" → "mmap")
 //  2. Strip "go-" prefix (e.g., "go-loser" → "loser", "go-spew" → "spew")
+//     Only reached if hyphens remain after step 1.
 //  3. Remove remaining hyphens (e.g., "some-pkg" → "somepkg")
+//     Only reached if hyphens remain after steps 1-2.
 //
 // If the input contains no hyphens, it is returned unchanged.
+// If a step produces an empty string (e.g., input is "-go"), the original name
+// is returned to avoid creating an invalid alias.
 func goPackageFromHyphenated(name string) string {
 	if !strings.Contains(name, "-") {
 		return name
@@ -552,12 +556,19 @@ func goPackageFromHyphenated(name string) string {
 
 	// Strip "-go" suffix first (more specific).
 	result := strings.TrimSuffix(name, "-go")
+	if result == "" {
+		return name
+	}
 	if !strings.Contains(result, "-") {
 		return result
 	}
 
-	// Strip "go-" prefix from the current result to preserve heuristic order.
-	result = strings.TrimPrefix(result, "go-")
+	// Strip "go-" prefix (only reached if hyphens remain after step 1).
+	trimmed := strings.TrimPrefix(result, "go-")
+	if trimmed == "" {
+		return result
+	}
+	result = trimmed
 	if !strings.Contains(result, "-") {
 		return result
 	}
