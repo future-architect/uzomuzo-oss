@@ -1,9 +1,7 @@
 ---
+name: diet-assess-risk
 description: "Deep-dive security risk analysis for a dependency flagged by uzomuzo diet"
-arguments:
-  - name: target
-    description: "PURL or module path to analyze (e.g. pkg:golang/github.com/foo/bar@v1.0.0), or 'top N' to analyze the top N entries from a diet plan"
-    required: true
+argument-hint: "<PURL or module path, or 'top N'>"
 ---
 
 # Diet Risk Assessment: $ARGUMENTS

@@ -1,9 +1,7 @@
 ---
+name: diet-remove
 description: "Remove a dependency identified by uzomuzo diet — with safety checks and verification"
-arguments:
-  - name: target
-    description: "Module path or PURL to remove (e.g. github.com/pkg/errors, pkg:golang/github.com/foo/bar@v1.0.0)"
-    required: true
+argument-hint: "<module path or PURL to remove>"
 ---
 
 # Diet Remove: $ARGUMENTS
