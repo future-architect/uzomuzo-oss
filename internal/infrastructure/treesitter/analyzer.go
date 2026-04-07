@@ -276,7 +276,7 @@ func (a *Analyzer) AnalyzeCoupling(
 			if !acc.importFiles[relPath] {
 				acc.importFiles[relPath] = true
 			}
-			if alias == dotImportAlias {
+			if strings.HasPrefix(alias, dotImportAlias) {
 				acc.hasDotImport = true
 			}
 		}
@@ -435,15 +435,17 @@ func (a *Analyzer) handleGoImport(
 
 	// Note: Blank imports (import _ "pkg") are side-effect-only (init registration).
 	// Record the import file so the dep is not misclassified as "unused", but skip call-site counting.
+	// Use a unique key per import path so multiple blank imports in one file are all preserved.
 	if alias == "_" {
-		aliasMap[blankImportAlias] = purl
+		aliasMap[blankImportAlias+importPath] = purl
 		return
 	}
 
 	// Special case: Dot imports (import . "pkg") make symbols callable without a package prefix.
 	// Selector-expression-based tracking cannot attribute those call sites, so mark them as used but uncountable.
+	// Use a unique key per import path so multiple dot imports in one file are all preserved.
 	if alias == "." {
-		aliasMap[dotImportAlias] = purl
+		aliasMap[dotImportAlias+importPath] = purl
 		return
 	}
 
