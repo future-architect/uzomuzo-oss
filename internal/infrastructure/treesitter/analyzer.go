@@ -135,7 +135,10 @@ func NewAnalyzer() *Analyzer {
 			`(import_statement name: (dotted_name) @import)`,
 			`(import_from_statement module_name: (dotted_name) @import)`,
 		}, "\n"),
-		callQuery:   `(attribute object: (identifier) @pkg attribute: (identifier) @attr)`,
+		callQuery: strings.Join([]string{
+			`(attribute object: (identifier) @pkg attribute: (identifier) @attr)`,
+			`(call function: (identifier) @func)`,
+		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {
 			parts := strings.Split(importPath, ".")
@@ -382,7 +385,7 @@ func (a *Analyzer) extractImports(
 
 			// For Python: match against top-level module or full dotted name.
 			if lid == langPython {
-				a.handlePythonImport(value, importToPURL, aliasMap, cfg)
+				a.handlePythonImport(capture.Node, src, value, importToPURL, aliasMap, cfg)
 				continue
 			}
 
@@ -481,24 +484,45 @@ func (a *Analyzer) handleGoImport(
 }
 
 // handlePythonImport handles matching Python imports.
+// For from-imports (e.g., "from requests import get, post"), it also registers
+// each imported name as an alias so that bare calls like get() are counted.
 func (a *Analyzer) handlePythonImport(
+	node *sitter.Node,
+	src []byte,
 	importPath string,
 	importToPURL map[string]string,
 	aliasMap map[string]string,
 	cfg *langConfig,
 ) {
+	// Resolve the module's PURL via exact match, top-level name, or prefix matching.
+	purl := a.resolvePythonPURL(importPath, importToPURL, cfg)
+	if purl == "" {
+		return
+	}
+
+	// Register module-level alias (e.g., "requests" -> PURL) for attribute-access calls.
+	alias := cfg.aliasFromPkg(importPath)
+	aliasMap[alias] = purl
+
+	// For from-imports, also register each imported name as an alias.
+	a.registerFromImportNames(node, src, purl, aliasMap)
+}
+
+// resolvePythonPURL resolves a Python import path to its PURL.
+func (a *Analyzer) resolvePythonPURL(
+	importPath string,
+	importToPURL map[string]string,
+	cfg *langConfig,
+) string {
 	// Try exact match first.
 	if purl, ok := importToPURL[importPath]; ok {
-		alias := cfg.aliasFromPkg(importPath)
-		aliasMap[alias] = purl
-		return
+		return purl
 	}
 
 	// Try top-level module name.
 	topLevel := strings.Split(importPath, ".")[0]
 	if purl, ok := importToPURL[topLevel]; ok {
-		aliasMap[topLevel] = purl
-		return
+		return purl
 	}
 
 	// Try prefix matching — pick the longest matching prefix to handle
@@ -511,9 +535,39 @@ func (a *Analyzer) handlePythonImport(
 			bestPURL = purl
 		}
 	}
-	if bestIP != "" {
-		alias := cfg.aliasFromPkg(bestIP)
-		aliasMap[alias] = bestPURL
+	return bestPURL
+}
+
+// registerFromImportNames registers imported names from "from x import y, z" statements.
+// The node must be a dotted_name captured from the module_name field of an import_from_statement.
+func (a *Analyzer) registerFromImportNames(
+	node *sitter.Node,
+	src []byte,
+	purl string,
+	aliasMap map[string]string,
+) {
+	parent := node.Parent()
+	if parent == nil || parent.Type() != "import_from_statement" {
+		return
+	}
+
+	for i := 0; i < int(parent.ChildCount()); i++ {
+		if parent.FieldNameForChild(i) != "name" {
+			continue
+		}
+		child := parent.Child(i)
+		switch child.Type() {
+		case "dotted_name":
+			// from x import y → register "y" -> purl
+			name := child.Content(src)
+			aliasMap[name] = purl
+		case "aliased_import":
+			// from x import y as z → register "z" -> purl
+			aliasNode := child.ChildByFieldName("alias")
+			if aliasNode != nil {
+				aliasMap[aliasNode.Content(src)] = purl
+			}
+		}
 	}
 }
 
@@ -701,25 +755,36 @@ func (a *Analyzer) countCallSites(
 			break
 		}
 
-		if len(match.Captures) < 2 {
-			continue
+		if len(match.Captures) >= 2 {
+			// Two-capture match: pkg.field pattern (e.g., requests.get)
+			pkg := match.Captures[0].Node.Content(src)
+			field := match.Captures[1].Node.Content(src)
+
+			purl, ok := aliasMap[pkg]
+			if !ok {
+				continue
+			}
+			acc := accum[purl]
+			if acc == nil {
+				continue
+			}
+			acc.callSites++
+			acc.symbols[field] = true
+		} else if len(match.Captures) == 1 {
+			// Single-capture match: bare identifier call (e.g., get() from "from x import get")
+			funcName := match.Captures[0].Node.Content(src)
+
+			purl, ok := aliasMap[funcName]
+			if !ok {
+				continue
+			}
+			acc := accum[purl]
+			if acc == nil {
+				continue
+			}
+			acc.callSites++
+			acc.symbols[funcName] = true
 		}
-
-		pkg := match.Captures[0].Node.Content(src)
-		field := match.Captures[1].Node.Content(src)
-
-		purl, ok := aliasMap[pkg]
-		if !ok {
-			continue
-		}
-
-		acc := accum[purl]
-		if acc == nil {
-			continue
-		}
-
-		acc.callSites++
-		acc.symbols[field] = true
 	}
 }
 

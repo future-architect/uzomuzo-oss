@@ -611,6 +611,125 @@ cloudNS.teardown();
 	}
 }
 
+func TestAnalyzer_PythonFromImport(t *testing.T) {
+	tests := []struct {
+		name        string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			name: "basic from-import with bare calls",
+			code: `from requests import get, post
+
+get("https://example.com")
+post("https://example.com")
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/requests@2.31.0": {"requests"},
+			},
+			purl:        "pkg:pypi/requests@2.31.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
+		},
+		{
+			name: "mixed import and from-import styles",
+			code: `import requests
+from requests import get
+
+requests.post("https://example.com")
+get("https://example.com")
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/requests@2.31.0": {"requests"},
+			},
+			purl:        "pkg:pypi/requests@2.31.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
+		},
+		{
+			name: "aliased from-import",
+			code: `from os.path import join as pjoin
+
+pjoin("a", "b")
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/os-path@1.0.0": {"os.path"},
+			},
+			purl:        "pkg:pypi/os-path@1.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "from-import without calls is not unused",
+			code: `from sqlmodel import Session
+
+x = Session
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/sqlmodel@0.0.8": {"sqlmodel"},
+			},
+			purl:        "pkg:pypi/sqlmodel@0.0.8",
+			wantImports: 1,
+			wantCalls:   0,
+			wantBreadth: 0,
+		},
+		{
+			name: "from-import with multiple calls",
+			code: `from inline_snapshot import snapshot, outsource
+
+snapshot([1, 2, 3])
+snapshot("hello")
+outsource("data")
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/inline-snapshot@0.8.0": {"inline_snapshot"},
+			},
+			purl:        "pkg:pypi/inline-snapshot@0.8.0",
+			wantImports: 1,
+			wantCalls:   3,
+			wantBreadth: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, "main.py"), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+		})
+	}
+}
+
 func TestAnalyzer_PythonPrefixNoFalseMatch(t *testing.T) {
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "main.py"), []byte(`import requests
