@@ -105,10 +105,10 @@ func TestBuildImportPaths(t *testing.T) {
 		}
 	}
 
-	// Maven returns multiple candidates: groupId, then groupId.artifactId.
+	// Maven returns groupId only when artifactId contains hyphens (invalid in Java package names).
 	mavenPURL := "pkg:maven/org.apache.commons/commons-lang3@3.14.0"
 	got := result[mavenPURL]
-	want := []string{"org.apache.commons", "org.apache.commons.commons-lang3"}
+	want := []string{"org.apache.commons"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("import paths for %s = %v, want %v", mavenPURL, got, want)
 	}
@@ -123,7 +123,7 @@ func TestBuildMavenImportPaths(t *testing.T) {
 		{
 			name: "standard groupId matches package",
 			purl: "pkg:maven/org.apache.commons/commons-lang3@3.14.0",
-			want: []string{"org.apache.commons", "org.apache.commons.commons-lang3"},
+			want: []string{"org.apache.commons"},
 		},
 		{
 			name: "override: cglib groupId differs from package",
@@ -136,13 +136,18 @@ func TestBuildMavenImportPaths(t *testing.T) {
 			want: []string{"com.google.gson", "com.google.code.gson", "com.google.code.gson.gson"},
 		},
 		{
+			name: "groupId.artifactId emitted when artifactId is Java-safe",
+			purl: "pkg:maven/com.example/utils@1.0.0",
+			want: []string{"com.example", "com.example.utils"},
+		},
+		{
 			name: "override: junit has two package prefixes",
 			purl: "pkg:maven/junit/junit@4.13.2",
 			want: []string{"junit", "org.junit"},
 		},
 		{
 			name: "no namespace falls back to artifactId",
-			purl: "pkg:maven//somelib@1.0.0",
+			purl: "pkg:maven/somelib@1.0.0",
 			want: []string{"somelib"},
 		},
 	}

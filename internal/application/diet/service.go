@@ -308,15 +308,15 @@ func buildImportPaths(purls []string) map[string][]string {
 // prefixes for libraries where the Maven groupId does not match the actual
 // Java package name.  Add entries as real-world mismatches are discovered.
 var mavenPackageOverrides = map[string][]string{
-	"cglib/cglib":                        {"net.sf.cglib"},
-	"com.google.code.gson/gson":          {"com.google.gson"},
-	"commons-beanutils/commons-beanutils": {"org.apache.commons.beanutils"},
-	"commons-codec/commons-codec":        {"org.apache.commons.codec"},
+	"cglib/cglib":                             {"net.sf.cglib"},
+	"com.google.code.gson/gson":               {"com.google.gson"},
+	"commons-beanutils/commons-beanutils":     {"org.apache.commons.beanutils"},
+	"commons-codec/commons-codec":             {"org.apache.commons.codec"},
 	"commons-collections/commons-collections": {"org.apache.commons.collections"},
-	"commons-io/commons-io":              {"org.apache.commons.io"},
-	"commons-logging/commons-logging":    {"org.apache.commons.logging"},
-	"junit/junit":                        {"junit", "org.junit"},
-	"log4j/log4j":                        {"org.apache.log4j"},
+	"commons-io/commons-io":                   {"org.apache.commons.io"},
+	"commons-logging/commons-logging":         {"org.apache.commons.logging"},
+	"junit/junit":                             {"junit", "org.junit"},
+	"log4j/log4j":                             {"org.apache.log4j"},
 }
 
 // buildMavenImportPaths generates candidate import path prefixes for a Maven PURL.
@@ -345,9 +345,10 @@ func buildMavenImportPaths(parsed packageurl.PackageURL) []string {
 	// 2. groupId (namespace) — the most common convention.
 	add(parsed.Namespace)
 
-	// 3. groupId.artifactId — covers cases like org.apache.commons.commons-lang3.
-	// Skip when namespace == name (e.g. cglib/cglib → "cglib.cglib" is not a real package).
-	if parsed.Namespace != "" && parsed.Name != "" && parsed.Namespace != parsed.Name {
+	// 3. groupId.artifactId — covers cases where the package mirrors the full coordinate.
+	// Skip when namespace == name (e.g. cglib/cglib → "cglib.cglib" is not a real package),
+	// and skip when artifactId contains characters invalid in Java package names (e.g. hyphens).
+	if parsed.Namespace != "" && parsed.Name != "" && parsed.Namespace != parsed.Name && isJavaPackageSafe(parsed.Name) {
 		add(parsed.Namespace + "." + parsed.Name)
 	}
 
@@ -357,4 +358,20 @@ func buildMavenImportPaths(parsed packageurl.PackageURL) []string {
 	}
 
 	return paths
+}
+
+// isJavaPackageSafe reports whether s contains only characters valid in a Java
+// package name segment (letters, digits, underscores, and dollar signs).
+// Maven artifactIds often contain hyphens (e.g. "commons-lang3") which are not
+// valid in Java identifiers and would never match a real import statement.
+func isJavaPackageSafe(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' && r != '$' {
+			return false
+		}
+	}
+	return true
 }
