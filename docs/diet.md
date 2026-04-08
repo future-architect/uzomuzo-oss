@@ -8,6 +8,8 @@
 
 It answers: **which dependencies should I remove first, and how hard will it be?**
 
+Diet is the automated stage of the `scan → diet → LLM → remove` pipeline. After diet ranks your dependencies, [Claude Code skills](../claude-skills/) use an LLM to assess risk, plan removal, and execute the change. See [Diet Workflow](#diet-workflow-scan--diet--llm--remove) below for the full pipeline.
+
 ## Architecture
 
 `uzomuzo diet` is distributed as a separate binary (`uzomuzo-diet`) because it uses tree-sitter (CGo) for multi-language source analysis. The main `uzomuzo` binary stays Pure Go and delegates to `uzomuzo-diet` transparently.

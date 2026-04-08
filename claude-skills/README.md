@@ -85,6 +85,23 @@ Then open your project in Claude Code and use the `/diet-*` slash commands.
     └── SKILL.md          # /diet-remove
 ```
 
+## How it fits together
+
+These skills are the LLM-powered stages of the `scan → diet → LLM → remove` pipeline:
+
+```
+uzomuzo diet              Rank all deps by removability        (automated, CLI)
+       ↓
+/diet-assess-risk         "How dangerous is it to keep?"       (LLM reads source)
+/diet-evaluate-removal    "Is removal worth the effort?"       (LLM evaluates 6 axes)
+       ↓
+/diet-remove              "Remove it safely"                   (LLM implements change)
+```
+
+`uzomuzo diet` provides the structured data (graph impact, coupling metrics, health signals). These skills read the actual source code to make decisions that automated scoring cannot — data flow tracing, replacement feasibility, API leakage detection.
+
+See [Diet Command](../docs/diet.md) for the automated analysis, and [Diet Workflow](../docs/diet.md#diet-workflow-scan--diet--llm--remove) for the full pipeline documentation.
+
 ## Background
 
 These skills were developed as part of the [Code Diet](https://github.com/future-architect/vuls) project — a systematic approach to reducing unnecessary dependencies in OSS projects. Presented at VulnCon 2026.

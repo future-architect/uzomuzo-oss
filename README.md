@@ -198,7 +198,23 @@ mvn org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom \
 uzomuzo diet --sbom target/bom.json --source .
 ```
 
-See [Diet Command](docs/diet.md) for full documentation, scoring algorithm, and SBOM tool comparison.
+#### From ranking to removal — the full pipeline
+
+Diet doesn't just rank — it feeds into [Claude Code skills](claude-skills/) that use an LLM to analyze, plan, and execute the removal:
+
+```
+uzomuzo diet              Rank all deps by removability        (automated)
+       ↓
+/diet-assess-risk         Trace data flows, build attack       (LLM-powered)
+/diet-evaluate-removal    scenarios, evaluate cost-benefit
+       ↓
+/diet-remove              Safe removal: analysis → replace     (LLM-powered)
+                          → verify → commit/issue
+```
+
+The key insight: **detection is a tool's job, but deciding how to remove is an LLM's job.** Diet provides the structured data (graph impact, coupling metrics, health signals), and the LLM skills read the actual source code to plan the migration. See [Diet Workflow](docs/diet.md#diet-workflow-scan--diet--llm--remove) for the full pipeline.
+
+See [Diet Command](docs/diet.md) for scoring algorithm and SBOM tool comparison, and [Claude Code Skills](claude-skills/) for the LLM-powered removal workflow.
 
 See [Usage](docs/usage.md) for full CLI reference and [Integration Examples](docs/integration-examples.md) for Trivy, Syft, and Go module workflows.
 
