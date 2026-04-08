@@ -58,6 +58,7 @@ patterns:
     pr: 236
     file: "internal/infrastructure/eolevaluator/evaluator.go"
     date: "2026-04-08"
+  # defensive-coding (PR #236): already covered by "Guard Nil Structs Consistently Across Output Formats" and "Defensive Coding — Validate Early, Fail Clearly" — nil-check client dependency in all caller paths before delegating to shared helper that unconditionally dereferences it
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
