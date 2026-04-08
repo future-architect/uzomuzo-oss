@@ -3,6 +3,7 @@ package eolevaluator
 import (
 	"context"
 	"log/slog"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -71,7 +72,7 @@ func (e *Evaluator) SetNuGetClient(ng *nuget.Client) { e.ng = ng }
 func (e *Evaluator) SetMavenClient(mv *maven.Client) { e.mvn = mv }
 
 // SetNpmClient overrides the default npmjs client (useful for tests).
-func (e *Evaluator) SetNpmClient(npm *npmjs.Client) { e.npm = npm }
+func (e *Evaluator) SetNpmClient(npm npmDeprecationClient) { e.npm = npm }
 
 // SetPyPIClient overrides the default PyPI client (useful for tests).
 func (e *Evaluator) SetPyPIClient(pc *pypi.Client) { e.pypi = pc }
@@ -91,6 +92,9 @@ func (e *Evaluator) ensureRuleChain() {
 		},
 		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool {
 			return e.applyNpmStableDeprecation(ctx, a, st)
+		},
+		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool {
+			return e.applyNpmPURLDeprecation(ctx, a, st)
 		},
 		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool { // PyPI classifier explicit inactivity
 			return e.applyPyPIClassifier(ctx, a, st)
@@ -183,7 +187,7 @@ func (e *Evaluator) applyNuGetDeprecation(ctx context.Context, a *domain.Analysi
 // applyNpmStableDeprecation checks if the stable requested version is deprecated.
 
 func (e *Evaluator) applyNpmStableDeprecation(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
-	if status.State == domain.EOLEndOfLife || a == nil || a.EffectivePURL == "" || a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || a.ReleaseInfo.StableVersion.Version == "" {
+	if status.State == domain.EOLEndOfLife || a == nil || a.EffectivePURL == "" || e.npm == nil || a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || a.ReleaseInfo.StableVersion.Version == "" {
 		return false
 	}
 	purlParser := purl.NewParser()
@@ -191,13 +195,45 @@ func (e *Evaluator) applyNpmStableDeprecation(ctx context.Context, a *domain.Ana
 	if err != nil || parsed.GetEcosystem() != "npm" {
 		return false
 	}
-	ns := parsed.Namespace()
-	name := parsed.Name()
-	stableVer := a.ReleaseInfo.StableVersion.Version
-	info, found, err := e.npm.GetDeprecation(ctx, ns, name, stableVer)
+	return e.checkNpmDeprecation(ctx, parsed.Namespace(), parsed.Name(), a.ReleaseInfo.StableVersion.Version, "npmjs_stable_version_is_eol", status)
+}
+
+// applyNpmPURLDeprecation is a fallback npm deprecation check that uses the version
+// from EffectivePURL when ReleaseInfo.StableVersion is unavailable (e.g., deps.dev data lag).
+// This addresses issue #218 where packages like vm2 are deprecated on npm but miss
+// detection because the stable version data is absent.
+func (e *Evaluator) applyNpmPURLDeprecation(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
+	if status.State == domain.EOLEndOfLife || a == nil || a.EffectivePURL == "" || e.npm == nil {
+		return false
+	}
+	// Skip if applyNpmStableDeprecation already had a chance to run (StableVersion present).
+	if a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil && a.ReleaseInfo.StableVersion.Version != "" {
+		return false
+	}
+	purlParser := purl.NewParser()
+	parsed, err := purlParser.Parse(a.EffectivePURL)
+	if err != nil || parsed.GetEcosystem() != "npm" {
+		return false
+	}
+	ver := parsed.Version()
+	if ver == "" {
+		return false
+	}
+	return e.checkNpmDeprecation(ctx, parsed.Namespace(), parsed.Name(), ver, "npmjs_purl_version_is_eol", status)
+}
+
+// checkNpmDeprecation is the shared core for npm deprecation detection.
+// It queries the npm registry for the given namespace/name/version and populates
+// status on confirmed EOL. logEvent identifies the caller in structured log output.
+func (e *Evaluator) checkNpmDeprecation(ctx context.Context, ns, name, ver, logEvent string, status *domain.EOLStatus) (done bool) {
+	// Guard against typed-nil interface (e.g., var c *npmjs.Client = nil passed to SetNpmClient).
+	if isNilInterface(e.npm) {
+		return false
+	}
+	info, found, err := e.npm.GetDeprecation(ctx, ns, name, ver)
 	if err != nil || !found || info == nil {
 		if err != nil {
-			slog.Error("npmjs stable deprecation check failed", "error", err, "namespace", ns, "name", name, "version", stableVer)
+			slog.Error("eol: npmjs deprecation check failed", "event", logEvent, "error", err, "namespace", ns, "name", name, "version", ver)
 		}
 		return false
 	}
@@ -205,18 +241,34 @@ func (e *Evaluator) applyNpmStableDeprecation(ctx context.Context, a *domain.Ana
 	if ns != "" {
 		pkgID = ns + "/" + name
 	}
-	state, successor, evidences := decideNpmEOL(pkgID, stableVer, info)
+	state, successor, evidences := decideNpmEOL(pkgID, ver, info)
 	if state == domain.EOLEndOfLife {
 		status.State = state
 		status.Successor = successor
 		if len(evidences) > 0 {
 			status.Evidences = append(status.Evidences, evidences...)
 		}
-		// Downgraded to Debug: terminal state already captured in status; avoid spamming Info level for batch operations.
-		slog.Debug("npmjs stable version is EOL", "pkg", pkgID, "version", stableVer, "successor", successor)
+		slog.Debug("eol: npmjs package is eol", "event", logEvent, "pkg", pkgID, "version", ver, "successor", successor)
 		return true
 	}
 	return false
+}
+
+// isNilInterface reports whether v is nil or a typed-nil interface (e.g., a nil
+// pointer wrapped in an interface). It safely handles non-nilable dynamic types
+// (struct values with value receivers) by checking the reflected Kind before
+// calling IsNil.
+func isNilInterface(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return rv.IsNil()
+	default:
+		return false
+	}
 }
 
 // applyMavenRelocation detects Maven relocation metadata.
@@ -346,4 +398,3 @@ func (e *Evaluator) EvaluateBatch(ctx context.Context, analyses map[string]*doma
 	wg.Wait()
 	return out, nil
 }
-
