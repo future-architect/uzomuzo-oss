@@ -92,6 +92,9 @@ func (e *Evaluator) ensureRuleChain() {
 		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool {
 			return e.applyNpmStableDeprecation(ctx, a, st)
 		},
+		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool {
+			return e.applyNpmPURLDeprecation(ctx, a, st)
+		},
 		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool { // PyPI classifier explicit inactivity
 			return e.applyPyPIClassifier(ctx, a, st)
 		},
@@ -214,6 +217,53 @@ func (e *Evaluator) applyNpmStableDeprecation(ctx context.Context, a *domain.Ana
 		}
 		// Downgraded to Debug: terminal state already captured in status; avoid spamming Info level for batch operations.
 		slog.Debug("npmjs stable version is EOL", "pkg", pkgID, "version", stableVer, "successor", successor)
+		return true
+	}
+	return false
+}
+
+// applyNpmPURLDeprecation is a fallback npm deprecation check that uses the version
+// from EffectivePURL when ReleaseInfo.StableVersion is unavailable (e.g., deps.dev data lag).
+// This addresses issue #218 where packages like vm2 are deprecated on npm but miss
+// detection because the stable version data is absent.
+func (e *Evaluator) applyNpmPURLDeprecation(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
+	if status.State == domain.EOLEndOfLife || a == nil || a.EffectivePURL == "" || e.npm == nil {
+		return false
+	}
+	// Skip if applyNpmStableDeprecation already had a chance to run (StableVersion present).
+	if a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil && a.ReleaseInfo.StableVersion.Version != "" {
+		return false
+	}
+	purlParser := purl.NewParser()
+	parsed, err := purlParser.Parse(a.EffectivePURL)
+	if err != nil || parsed.GetEcosystem() != "npm" {
+		return false
+	}
+	ver := parsed.Version()
+	if ver == "" {
+		return false
+	}
+	ns := parsed.Namespace()
+	name := parsed.Name()
+	info, found, err := e.npm.GetDeprecation(ctx, ns, name, ver)
+	if err != nil || !found || info == nil {
+		if err != nil {
+			slog.Error("npmjs purl deprecation check failed", "error", err, "namespace", ns, "name", name, "version", ver)
+		}
+		return false
+	}
+	pkgID := name
+	if ns != "" {
+		pkgID = ns + "/" + name
+	}
+	state, successor, evidences := decideNpmEOL(pkgID, ver, info)
+	if state == domain.EOLEndOfLife {
+		status.State = state
+		status.Successor = successor
+		if len(evidences) > 0 {
+			status.Evidences = append(status.Evidences, evidences...)
+		}
+		slog.Debug("npmjs_purl_version_is_eol", "pkg", pkgID, "version", ver, "successor", successor)
 		return true
 	}
 	return false
@@ -346,4 +396,3 @@ func (e *Evaluator) EvaluateBatch(ctx context.Context, analyses map[string]*doma
 	wg.Wait()
 	return out, nil
 }
-
