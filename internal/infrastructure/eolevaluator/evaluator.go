@@ -186,7 +186,7 @@ func (e *Evaluator) applyNuGetDeprecation(ctx context.Context, a *domain.Analysi
 // applyNpmStableDeprecation checks if the stable requested version is deprecated.
 
 func (e *Evaluator) applyNpmStableDeprecation(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
-	if status.State == domain.EOLEndOfLife || a == nil || a.EffectivePURL == "" || a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || a.ReleaseInfo.StableVersion.Version == "" {
+	if status.State == domain.EOLEndOfLife || a == nil || a.EffectivePURL == "" || e.npm == nil || a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || a.ReleaseInfo.StableVersion.Version == "" {
 		return false
 	}
 	return e.checkNpmDeprecation(ctx, a.EffectivePURL, a.ReleaseInfo.StableVersion.Version, "npmjs_stable_version_is_eol", status)
