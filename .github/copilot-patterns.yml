@@ -59,6 +59,8 @@ patterns:
     file: "internal/infrastructure/eolevaluator/evaluator.go"
     date: "2026-04-08"
   # defensive-coding (PR #236): already covered by "Guard Nil Structs Consistently Across Output Formats" and "Defensive Coding — Validate Early, Fail Clearly" — nil-check client dependency in all caller paths before delegating to shared helper that unconditionally dereferences it
+  # defensive-coding (PR #236 round 4): typed-nil interface bypasses != nil guard — already covered by "Guard Nil Structs Consistently" and reflect-based nil check added in 7fd4564
+  # logging-consistency (PR #236 round 4): already covered by promoted "Structured Logging Conventions" rule — align error log prefix with file-local convention ("eol: ..." prefix) instead of event-id style
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
