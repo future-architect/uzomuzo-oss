@@ -8,14 +8,21 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
 )
 
-// fakeNpmClient is a test double for npmDeprecationClient.
+// fakeNpmClient is a test double for npmDeprecationClient that captures call arguments.
 type fakeNpmClient struct {
 	info  *npmjs.DeprecationInfo
 	found bool
 	err   error
+	// captured arguments from the last call
+	calledNamespace string
+	calledName      string
+	calledVersion   string
 }
 
-func (f *fakeNpmClient) GetDeprecation(_ context.Context, _, _, _ string) (*npmjs.DeprecationInfo, bool, error) {
+func (f *fakeNpmClient) GetDeprecation(_ context.Context, namespace, name, version string) (*npmjs.DeprecationInfo, bool, error) {
+	f.calledNamespace = namespace
+	f.calledName = name
+	f.calledVersion = version
 	return f.info, f.found, f.err
 }
 
@@ -28,7 +35,7 @@ func TestEvaluator_NpmDeprecation_StableVersionPresent(t *testing.T) {
 	}
 	ev := NewEvaluator(nil)
 	ev.SetMaxWorkers(1)
-	ev.npm = npm
+	ev.SetNpmClient(npm)
 
 	a := &domain.Analysis{
 		Package:       &domain.Package{PURL: "pkg:npm/vm2@3.9.19"},
@@ -45,6 +52,15 @@ func TestEvaluator_NpmDeprecation_StableVersionPresent(t *testing.T) {
 	if st.State != domain.EOLEndOfLife {
 		t.Fatalf("expected EOL for deprecated npm pkg with StableVersion, got %v", st.State)
 	}
+	if npm.calledNamespace != "" {
+		t.Errorf("expected empty namespace, got %q", npm.calledNamespace)
+	}
+	if npm.calledName != "vm2" {
+		t.Errorf("expected name %q, got %q", "vm2", npm.calledName)
+	}
+	if npm.calledVersion != "3.9.19" {
+		t.Errorf("expected version %q, got %q", "3.9.19", npm.calledVersion)
+	}
 }
 
 // TestEvaluator_NpmDeprecation_NoStableVersion_Bug218 reproduces issue #218:
@@ -57,7 +73,7 @@ func TestEvaluator_NpmDeprecation_NoStableVersion_Bug218(t *testing.T) {
 	}
 	ev := NewEvaluator(nil)
 	ev.SetMaxWorkers(1)
-	ev.npm = npm
+	ev.SetNpmClient(npm)
 
 	// Simulate vm2 with PURL containing version but no ReleaseInfo.StableVersion.
 	// This is the scenario from issue #218 where deps.dev data lags.
@@ -74,6 +90,15 @@ func TestEvaluator_NpmDeprecation_NoStableVersion_Bug218(t *testing.T) {
 	if st.State != domain.EOLEndOfLife {
 		t.Fatalf("issue #218: expected EOL for deprecated npm pkg even without StableVersion, got %v", st.State)
 	}
+	if npm.calledNamespace != "" {
+		t.Errorf("expected empty namespace, got %q", npm.calledNamespace)
+	}
+	if npm.calledName != "vm2" {
+		t.Errorf("expected name %q, got %q", "vm2", npm.calledName)
+	}
+	if npm.calledVersion != "3.9.19" {
+		t.Errorf("expected version %q, got %q", "3.9.19", npm.calledVersion)
+	}
 }
 
 // TestEvaluator_NpmDeprecation_NoStableVersion_EffectivePURLOnly_Bug218 reproduces
@@ -85,7 +110,7 @@ func TestEvaluator_NpmDeprecation_NoStableVersion_EffectivePURLOnly_Bug218(t *te
 	}
 	ev := NewEvaluator(nil)
 	ev.SetMaxWorkers(1)
-	ev.npm = npm
+	ev.SetNpmClient(npm)
 
 	a := &domain.Analysis{
 		Package:       &domain.Package{PURL: "pkg:npm/vm2@3.9.19"},
@@ -100,6 +125,15 @@ func TestEvaluator_NpmDeprecation_NoStableVersion_EffectivePURLOnly_Bug218(t *te
 	if st.State != domain.EOLEndOfLife {
 		t.Fatalf("issue #218: expected EOL for deprecated npm pkg (empty ReleaseInfo), got %v", st.State)
 	}
+	if npm.calledNamespace != "" {
+		t.Errorf("expected empty namespace, got %q", npm.calledNamespace)
+	}
+	if npm.calledName != "vm2" {
+		t.Errorf("expected name %q, got %q", "vm2", npm.calledName)
+	}
+	if npm.calledVersion != "3.9.19" {
+		t.Errorf("expected version %q, got %q", "3.9.19", npm.calledVersion)
+	}
 }
 
 // TestEvaluator_NpmDeprecation_ScopedPackage_NoStableVersion ensures scoped npm
@@ -111,7 +145,7 @@ func TestEvaluator_NpmDeprecation_ScopedPackage_NoStableVersion(t *testing.T) {
 	}
 	ev := NewEvaluator(nil)
 	ev.SetMaxWorkers(1)
-	ev.npm = npm
+	ev.SetNpmClient(npm)
 
 	a := &domain.Analysis{
 		Package:       &domain.Package{PURL: "pkg:npm/%40old/pkg@1.0.0"},
@@ -124,5 +158,14 @@ func TestEvaluator_NpmDeprecation_ScopedPackage_NoStableVersion(t *testing.T) {
 	st := out["k"]
 	if st.State != domain.EOLEndOfLife {
 		t.Fatalf("expected EOL for deprecated scoped npm pkg without StableVersion, got %v", st.State)
+	}
+	if npm.calledNamespace != "@old" {
+		t.Errorf("expected namespace %q, got %q", "@old", npm.calledNamespace)
+	}
+	if npm.calledName != "pkg" {
+		t.Errorf("expected name %q, got %q", "pkg", npm.calledName)
+	}
+	if npm.calledVersion != "1.0.0" {
+		t.Errorf("expected version %q, got %q", "1.0.0", npm.calledVersion)
 	}
 }

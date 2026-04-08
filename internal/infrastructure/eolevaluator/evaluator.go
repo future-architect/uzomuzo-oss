@@ -71,7 +71,7 @@ func (e *Evaluator) SetNuGetClient(ng *nuget.Client) { e.ng = ng }
 func (e *Evaluator) SetMavenClient(mv *maven.Client) { e.mvn = mv }
 
 // SetNpmClient overrides the default npmjs client (useful for tests).
-func (e *Evaluator) SetNpmClient(npm *npmjs.Client) { e.npm = npm }
+func (e *Evaluator) SetNpmClient(npm npmDeprecationClient) { e.npm = npm }
 
 // SetPyPIClient overrides the default PyPI client (useful for tests).
 func (e *Evaluator) SetPyPIClient(pc *pypi.Client) { e.pypi = pc }
