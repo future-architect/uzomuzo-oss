@@ -325,16 +325,16 @@ func TestComputeSummary_EasyWinsWithNewScoring(t *testing.T) {
 	}
 }
 
-func TestComputeImpactScore_EOLScoreFloor(t *testing.T) {
+func TestComputeImpactScore_LifecycleScoreFloor(t *testing.T) {
 	tests := []struct {
-		name      string
-		graph     GraphMetrics
-		coupling  CouplingAnalysis
-		health    HealthSignals
-		wantMin   float64
-		wantMax   float64
-		wantHard  bool // expect "hard" difficulty
-		wantFloor bool // expect score was clamped to eolScoreFloor
+		name           string
+		graph          GraphMetrics
+		coupling       CouplingAnalysis
+		health         HealthSignals
+		wantMin        float64
+		wantMax        float64
+		wantDifficulty string // expected Difficulty classification
+		wantFloor      bool   // expect score was clamped to lifecycleScoreFloor
 	}{
 		{
 			name:     "EOL + hard difficulty gets floor",
@@ -342,10 +342,10 @@ func TestComputeImpactScore_EOLScoreFloor(t *testing.T) {
 			coupling: CouplingAnalysis{ImportFileCount: 80, CallSiteCount: 523, APIBreadth: 115},
 			health:   HealthSignals{HealthRisk: 0.8, IsEOL: true},
 			// Without the floor this would be near-zero; with it, exactly 0.10.
-			wantMin:   eolScoreFloor,
-			wantMax:   eolScoreFloor + 0.001,
-			wantHard:  true,
-			wantFloor: true,
+			wantMin:        lifecycleScoreFloor,
+			wantMax:        lifecycleScoreFloor + 0.001,
+			wantDifficulty: DifficultyHard,
+			wantFloor:      true,
 		},
 		{
 			name:     "EOL + easy difficulty stays above floor naturally",
@@ -353,9 +353,9 @@ func TestComputeImpactScore_EOLScoreFloor(t *testing.T) {
 			coupling: CouplingAnalysis{ImportFileCount: 1, CallSiteCount: 2, APIBreadth: 1},
 			health:   HealthSignals{HealthRisk: 0.9, IsEOL: true},
 			// Easy coupling: deterministic score ≈ 0.4793, well above 0.10 floor.
-			wantMin:  0.479,
-			wantMax:  0.480,
-			wantHard: false,
+			wantMin:        0.479,
+			wantMax:        0.480,
+			wantDifficulty: DifficultyEasy,
 		},
 		{
 			name:     "non-EOL + hard difficulty stays low (no floor)",
@@ -363,9 +363,9 @@ func TestComputeImpactScore_EOLScoreFloor(t *testing.T) {
 			coupling: CouplingAnalysis{ImportFileCount: 80, CallSiteCount: 523, APIBreadth: 115},
 			health:   HealthSignals{HealthRisk: 0.8, IsEOL: false},
 			// Non-EOL hard deps should NOT get the floor — deterministic score ≈ 0.0058.
-			wantMin:  0.005,
-			wantMax:  0.006,
-			wantHard: true,
+			wantMin:        0.005,
+			wantMax:        0.006,
+			wantDifficulty: DifficultyHard,
 		},
 		{
 			name:     "Archived + hard difficulty gets floor",
@@ -373,10 +373,10 @@ func TestComputeImpactScore_EOLScoreFloor(t *testing.T) {
 			coupling: CouplingAnalysis{ImportFileCount: 80, CallSiteCount: 523, APIBreadth: 115},
 			health:   HealthSignals{HealthRisk: 0.8, MaintenanceStatus: maintenanceStatusArchived},
 			// Archived (not IsEOL) with hard difficulty should also get the floor.
-			wantMin:   eolScoreFloor,
-			wantMax:   eolScoreFloor + 0.001,
-			wantHard:  true,
-			wantFloor: true,
+			wantMin:        lifecycleScoreFloor,
+			wantMax:        lifecycleScoreFloor + 0.001,
+			wantDifficulty: DifficultyHard,
+			wantFloor:      true,
 		},
 		{
 			name:     "EOL + moderate difficulty above floor naturally",
@@ -384,9 +384,9 @@ func TestComputeImpactScore_EOLScoreFloor(t *testing.T) {
 			coupling: CouplingAnalysis{ImportFileCount: 5, CallSiteCount: 20, APIBreadth: 10},
 			health:   HealthSignals{HealthRisk: 0.7, IsEOL: true},
 			// Deterministic score ≈ 0.1295, strictly above the 0.10 floor.
-			wantMin:  0.129,
-			wantMax:  0.130,
-			wantHard: false,
+			wantMin:        0.129,
+			wantMax:        0.130,
+			wantDifficulty: DifficultyModerate,
 		},
 	}
 	for _, tt := range tests {
@@ -399,13 +399,13 @@ func TestComputeImpactScore_EOLScoreFloor(t *testing.T) {
 			if score.PriorityScore > tt.wantMax {
 				t.Errorf("PriorityScore = %f, want <= %f", score.PriorityScore, tt.wantMax)
 			}
-			if tt.wantHard && score.Difficulty != DifficultyHard {
-				t.Errorf("Difficulty = %s, want %s", score.Difficulty, DifficultyHard)
+			if score.Difficulty != tt.wantDifficulty {
+				t.Errorf("Difficulty = %s, want %s", score.Difficulty, tt.wantDifficulty)
 			}
 			if tt.wantFloor {
 				const tolerance = 0.001
-				if score.PriorityScore < eolScoreFloor-tolerance || score.PriorityScore > eolScoreFloor+tolerance {
-					t.Errorf("PriorityScore = %f, want exactly %f (floor)", score.PriorityScore, eolScoreFloor)
+				if score.PriorityScore < lifecycleScoreFloor-tolerance || score.PriorityScore > lifecycleScoreFloor+tolerance {
+					t.Errorf("PriorityScore = %f, want exactly %f (floor)", score.PriorityScore, lifecycleScoreFloor)
 				}
 			}
 		})

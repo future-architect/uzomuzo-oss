@@ -37,12 +37,12 @@ const (
 	unusedBaseOffset   = 0.2
 )
 
-// eolScoreFloor is the minimum PriorityScore for dependencies with EOL or
-// Archived lifecycle status. The multiplicative formula can produce near-zero
-// scores for EOL deps with hard difficulty (high coupling effort), burying
-// strategically important items at the bottom of the ranking. This floor
-// ensures they remain visible and actionable. See #214.
-const eolScoreFloor = 0.10
+// lifecycleScoreFloor is the minimum PriorityScore for dependencies with EOL
+// or Archived lifecycle status. The multiplicative formula can produce
+// near-zero scores for EOL deps with hard difficulty (high coupling effort),
+// burying strategically important items at the bottom of the ranking. This
+// floor ensures they remain visible and actionable. See #214.
+const lifecycleScoreFloor = 0.10
 
 // maintenanceStatusArchived is the HealthSignals.MaintenanceStatus value
 // for GitHub-archived repositories. Defined here because the diet domain
@@ -73,8 +73,8 @@ func ComputeImpactScore(graph GraphMetrics, coupling CouplingAnalysis, health He
 	// multiplicative formula heavily penalizes hard difficulty, which can
 	// zero out the score for deeply coupled EOL deps — exactly the items
 	// that most need strategic attention.
-	if (health.IsEOL || health.MaintenanceStatus == maintenanceStatusArchived) && priority < eolScoreFloor {
-		priority = eolScoreFloor
+	if (health.IsEOL || health.MaintenanceStatus == maintenanceStatusArchived) && priority < lifecycleScoreFloor {
+		priority = lifecycleScoreFloor
 	}
 
 	return ImpactScore{
