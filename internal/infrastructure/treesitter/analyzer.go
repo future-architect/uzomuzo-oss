@@ -79,15 +79,31 @@ type Analyzer struct {
 }
 
 // newJSLikeConfig creates a langConfig for JS-family languages (JS, TS, TSX).
-func newJSLikeConfig(lang *sitter.Language) *langConfig {
+// When includeJSX is true, the call query also matches JSX element syntax
+// (e.g., <Camera /> and <Icon size={24}>) so that component usage is counted
+// as call sites. Pass true for languages whose grammar supports JSX nodes
+// (JavaScript and TSX).
+func newJSLikeConfig(lang *sitter.Language, includeJSX bool) *langConfig {
 	importQ := strings.Join([]string{
 		`(import_statement source: (string) @import)`,
 		`(call_expression function: (identifier) @func (#eq? @func "require") arguments: (arguments (string) @import))`,
 	}, "\n")
-	callQ := strings.Join([]string{
+	callPatterns := []string{
 		`(member_expression object: (identifier) @obj property: (property_identifier) @prop)`,
+		// foo() — bare function call on an imported named binding
 		`(call_expression function: (identifier) @func)`,
-	}, "\n")
+		// new Foo() — constructor call on an imported named binding
+		`(new_expression constructor: (identifier) @func)`,
+		// { [ATTR]: val } — imported constant used as computed property key
+		`(computed_property_name (identifier) @func)`,
+	}
+	if includeJSX {
+		callPatterns = append(callPatterns,
+			`(jsx_self_closing_element name: (identifier) @func)`,
+			`(jsx_opening_element name: (identifier) @func)`,
+		)
+	}
+	callQ := strings.Join(callPatterns, "\n")
 
 	cfg := &langConfig{
 		language:    lang,
@@ -159,9 +175,9 @@ func NewAnalyzer() *Analyzer {
 	}
 	compileQueries(a.configs[langPython])
 
-	a.configs[langJavaScript] = newJSLikeConfig(javascript.GetLanguage())
-	a.configs[langTypeScript] = newJSLikeConfig(typescript.GetLanguage())
-	a.configs[langTSX] = newJSLikeConfig(tsx.GetLanguage())
+	a.configs[langJavaScript] = newJSLikeConfig(javascript.GetLanguage(), true)
+	a.configs[langTypeScript] = newJSLikeConfig(typescript.GetLanguage(), false)
+	a.configs[langTSX] = newJSLikeConfig(tsx.GetLanguage(), true)
 
 	a.configs[langJava] = &langConfig{
 		language:    java.GetLanguage(),
