@@ -50,3 +50,170 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Use Ecosystem-Neutral Language in Multi-Language Error Messages**: When a CLI tool supports multiple ecosystems, error hints and suggestions must not reference language-specific files (e.g., `go.mod`) unless the current context is confirmed to be that language. Generic messages like "dependency manifest not found" are safer than ecosystem-specific ones.
 - **Extract Shared Helpers for Near-Duplicate Code Paths**: When two functions follow the same sequence (e.g., parse input → call external API → interpret result → populate output) differing only in how one parameter is obtained, extract the shared sequence into a single helper parameterized on that value. Near-duplicate paths drift silently when logging, error handling, or evidence formatting is updated in one copy but not the other.
 - **Narrow Candidate Heuristics and Map Assertions to Specific Items**: When generating candidate values (import paths, match keys) from heuristics, validate each candidate against its target domain to avoid false-positive attribution from overly broad matching. Similarly, when asserting on `map[K]V` results, check the specific key under test (`paths := m[key]; len(paths) == 0`) — not the whole map (`len(m) == 0`), which only confirms any key has data without verifying the key you care about.
+
+## Pending Copilot Patterns
+
+<!--
+Cross-PR pattern accumulator for /review Phase 3.
+New entries are inserted at random positions to avoid merge conflicts.
+When a category reaches 2+ entries across different PRs, it is promoted
+to a rule in the section above, and the promoted entries are removed.
+
+Schema (YAML-in-Markdown):
+  - category: "<pattern-category>"
+    summary: "<one-line description>"
+    pr: <PR number>
+    file: "<path>"
+    date: "YYYY-MM-DD"
+-->
+
+```yaml
+pending_patterns:
+  - category: "testing"
+    summary: "Propagate build tags (e.g., //go:build cgo) to test files that import build-tag-constrained packages — otherwise CGO_ENABLED=0 builds fail"
+    pr: 237
+    file: "internal/application/diet/coupling_integration_test.go"
+    date: "2026-04-08"
+  - category: "testing"
+    summary: "Capture and assert arguments passed to test fakes/mocks — unconditional return values let tests pass even when PURL parsing/decoding is wrong"
+    pr: 236
+    file: "internal/infrastructure/eolevaluator/evaluator_npm_test.go"
+    date: "2026-04-08"
+  - category: "testing"
+    summary: "Accept interface types in test-setter methods (e.g., SetXxxClient) so fakes can be injected via public API instead of unexported fields"
+    pr: 236
+    file: "internal/infrastructure/eolevaluator/evaluator.go"
+    date: "2026-04-08"
+  - category: "testing"
+    summary: "When a function can return nil to signal 'unavailable' vs empty to signal 'no matches', ensure tests include at least one matching item so the result is non-nil and the test exercises actual behavior — not a vacuous early return"
+    pr: 237
+    file: "internal/application/diet/coupling_integration_test.go"
+    date: "2026-04-08"
+  - category: "whitespace-agnostic-matching"
+    summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
+    pr: 140
+    file: "internal/infrastructure/depparser/detect.go"
+    date: "2026-04-05"
+  - category: "testing"
+    summary: "Test fixture PURLs must match the import package prefix they map to — mismatched PURL/import pairs make tests confusing and hide incorrect mappings"
+    pr: 235
+    file: "internal/infrastructure/treesitter/analyzer_test.go"
+    date: "2026-04-08"
+  - category: "api-consistency"
+    summary: "Remove omitempty from boolean and always-present slice JSON tags — omitempty makes absent-vs-false/empty ambiguous for downstream schema consumers"
+    pr: 223
+    file: "internal/interfaces/cli/diet_render.go"
+    date: "2026-04-07"
+```
+
+<!-- Promotion history (kept for audit trail):
+  # error-handling: promoted to error-handling.instructions.md (PRs #87, #159 — surface initialization errors instead of silent degradation)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:382 — filter tree-sitter captures by name to skip non-import captures)
+  # deterministic-output: already covered by promoted rule (PR #159, analyzer.go:315 — sort ImportFiles for deterministic JSON output)
+  # comment-doc-drift: already covered by promoted rule (PR #159, diet.go:18 — comment documented CLI default but code has different semantics for programmatic callers)
+  # defensive-coding: promoted to coding-standards.instructions.md (PRs #127, #130 — match validation format strings, CI staging completeness, dynamic refs)
+  # duplicate-parsing: promoted to copilot-learned-coding.instructions.md (PRs #111, #236 — extract shared helpers for near-duplicate code paths)
+  # naming-consistency: already covered by "Use Domain Constants for Domain-Defined String Values" (PR #119, boxdraw.go — domain constants vs raw strings)
+  # comment-doc-drift: already covered by promoted rule (PR #121, aggregates.go — enum precedence comments used old labels)
+  # comment-doc-drift: already covered by promoted rule (PR #121, types.go — struct field comment referenced old label names)
+  # testing (PR #121): promoted — see testing-performance.instructions.md "Use `filepath.Join` for Temp File Paths"
+  # comment-doc-drift: already covered by promoted rule in coding-standards (PR #127, main.go:203 — replaceBlock comment claimed duplicate marker detection but only checked begin markers)
+  # defensive-coding: already covered by promoted rules (PR #127, main.go:214 — dynamic Markdown fence delimiter to avoid backtick collisions)
+  # defensive-coding: refined existing rule "Use Case-Insensitive Comparison for URL Components" (PR #119, boxdraw.go:680)
+  # defensive-coding: already covered by "Branch Output Display on Each Field's Own Availability" (PR #119, boxdraw.go:314, boxdraw.go:403, boxdraw.go:606, boxdraw.go:741)
+  # defensive-coding: guard loop/slice budgets against non-positive values to prevent panic/infinite loop (PR #119, boxdraw.go:163)
+  # api-consistency: promoted to coding-standards.instructions.md (PRs #101, #107, #115, #116)
+  # defensive-coding: promoted to coding-standards.instructions.md (PRs #101, #103, #106, #107, #111, #115, #116)
+  # testing: promoted to testing-performance.instructions.md (PRs #101, #103, #106, #107, #115, #116, #119)
+  # comment-doc-drift: promoted to coding-standards.instructions.md (PRs #101, #106, #111, #116)
+  # deterministic-output: promoted to coding-standards.instructions.md (PRs #106, #111)
+  # naming-consistency: promoted to coding-standards.instructions.md (PRs #87, #116, #119 — context-sensitive labels for mixed input types)
+  # logging-consistency: promoted to coding-standards.instructions.md (PRs #116, #119)
+  # defensive-coding: already covered by "Consolidate Detection Heuristics — Single Source of Truth" (PR #119, batch.go:724 — use common.IsValidGitHubURL instead of partial scheme-prefix check)
+  # comment-doc-drift: already covered by promoted rule in coding-standards (PR #119, boxdraw.go:88 — writeLine comment overstated URL-exclusion heuristic)
+  # defensive-coding: already covered by budget guard rule (PR #119, boxdraw.go:171 — preserve unbroken tokens instead of force-splitting mid-token)
+  # api-consistency: already covered by "Branch Output Display on Each Field's Own Availability" (PR #123, boxdraw.go:634 — deps.dev link coupled to direct advisory presence instead of any-advisory presence)
+  # api-consistency: already covered by "Consistent Conditional Columns Across Output Formats" (PR #123, scan_render.go:433 — blank vs "0" for zero-count numeric CSV columns)
+  # comment-doc-drift: already covered by promoted rule (PR #123, helpers.go:165 — comment claimed UI URL in summary but implementation no longer includes it)
+  # naming-consistency: already covered by promoted rule (PR #123, lifecycle_assessor.go:432,437 — "vulns" abbreviation inconsistent with "vulnerabilities" used elsewhere)
+  # deterministic-output: already covered by promoted rule (PR #123, enrich_transitive_advisory.go:76 — nondeterministic map iteration for transitive advisory entries)
+  # api-consistency: already covered by "Branch Output Display" spirit (PR #123, boxdraw.go:804 — header dep names derived from full list instead of displayed/truncated subset)
+  # comment-doc-drift: already covered by promoted rule (PR #130, ci.yml:40 — checkout comment said "default ref" but workflow_dispatch uses user-selected ref)
+  # comment-doc-drift: already covered by promoted rule (PR #140, detect.go:21 — comment claimed "always" for sniff window but long headers can push directive past 512 bytes)
+  # testing: promoted to testing-performance.instructions.md (PRs #121, #140 — use filepath.Join for portable temp file paths in tests)
+  # testing: promoted to testing-performance.instructions.md (PRs #143, #159 — bounded waits, no t.Fatal from goroutines, concurrent pipe reads)
+  # defensive-coding (PR #236): already covered by "Guard Nil Structs Consistently Across Output Formats" and "Defensive Coding — Validate Early, Fail Clearly" — nil-check client dependency in all caller paths before delegating to shared helper that unconditionally dereferences it
+  # defensive-coding (PR #236 round 4): typed-nil interface bypasses != nil guard — already covered by "Guard Nil Structs Consistently" and reflect-based nil check added in 7fd4564
+  # defensive-coding (PR #236 round 5): reflect.ValueOf().IsNil() panics on non-nilable dynamic types — already covered by "Guard Nil Structs Consistently"; extracted isNilInterface helper with Kind check in ed944c5
+  # duplicate-parsing (PR #236 round 5): double-parse of EffectivePURL in fallback path — already covered by promoted "Extract Shared Helpers for Near-Duplicate Code Paths" rule; refactored checkNpmDeprecation to accept pre-parsed ns/name/ver in ed944c5
+  # logging-consistency (PR #236 round 4): already covered by promoted "Structured Logging Conventions" rule — align error log prefix with file-local convention ("eol: ..." prefix) instead of event-id style
+  # logging-consistency (PR #236 round 6): already covered by promoted rule — include caller-identifier logEvent as structured field in both debug and error logs for disambiguation
+  # testing (PR #236 round 6): already covered by "Cover New Control Flow Branches with Tests" — add regression test for typed-nil client guard (isNilInterface + checkNpmDeprecation early return)
+  # naming-consistency: promoted to coding-standards.instructions.md (PRs #144, #159 — output column header must match rendered data field)
+  # defensive-coding: promoted to coding-standards.instructions.md (PRs #144, #159 — unique map keys for sentinels, framework-provided parsed args, classify before rounding)
+  # comment-doc-drift: already covered by "Comment-Code Consistency" rule (PR #144, build_health_assessor.go:56 — comment claimed SLSA provenance but implementation excludes SLSA signals)
+  # comment-doc-drift: already covered by promoted rule (PR #144, build_health_assessor.go:25 — ScorecardCheck comment referenced SLSA/Attestation but those signals are excluded)
+  # api-consistency: already covered by "Consistent Conditional Columns Across Output Formats" (PR #144, scan_render.go:501,560 — JSON/CSV per-entry omitted "Ungraded" while summary counted it)
+  # comment-doc-drift: already covered by "Comment-Code Consistency" rule (PR #148, boxdraw.go:422 — function header comment didn't document VerdictReplace early return)
+  # naming-consistency: already covered by "Comment-Code Consistency" spirit (PR #148, verdict_test.go:68 — test function name implied build integrity drives verdict after semantics changed to ignore it)
+  # testing: already covered by "Cover New Control Flow Branches with Tests" (PR #148, scan_render.go:362 — missing test for buildIntegrityDisplay VerdictReplace branch)
+  # testing: already covered by "Cover New Control Flow Branches with Tests" (PR #148, boxdraw.go:449 — missing tests for writeBoxBuildIntegrity header+icon format and replace-verdict hiding)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:284 — IsUnused boolean flag defined on wrong field; diet_render.go:181 — display message inconsistent with flag semantics)
+  # defensive-coding: already covered by promoted rules (PR #159, service.go:275 — Maven import path heuristic used groupId.artifactId instead of groupId alone)
+  # defensive-coding: already covered by promoted rules (PR #159, commands.go:279 — use framework-provided parsed args instead of os.Args)
+  # error-handling: already covered by promoted rules (PR #159, commands.go:272 — wrap underlying LookPath error with %w)
+  # defensive-coding: already covered by "Consolidate Detection Heuristics" (PR #159, diet.go:36 — use centralized createAnalysisService instead of direct constructor)
+  # testing: already covered by promoted rules (PR #159, e2e_test.go:94 — check pipe read/close errors; graph_test.go — check json.Marshal errors)
+  # defensive-coding: already covered by "Nil vs Empty Map Semantics for Sentinel-Checked Maps" (PR #159, sbomgraph/types.go:118 + depgraph/graph.go:33)
+  # comment-doc-drift: already covered by promoted rule (PR #159, analyzer.go:431 — misleading "BUG" labels for intentional import handling)
+  # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, analyzer.go:336 — return nil coupling map when no source files analyzed, not empty map that misclassifies all deps as unused)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:434 — blank imports are side-effect usage; skipping them misclassifies deps as unused)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:447 — shared sentinel key for blank/dot imports overwrites earlier entries)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:82 — use tree-sitter #eq? predicates to constrain overly broad query patterns)
+  # defensive-coding: already covered by "Deterministic Output from Non-Deterministic Sources" (PR #159, analyzer.go:420,513 — nondeterministic map iteration for prefix matching; use longest-match selection)
+  # defensive-coding: already covered by promoted rules (PR #159, commands.go:285 — use urfcli.Exit instead of os.Exit for testability and cleanup)
+  # defensive-coding: already covered by "Defensive Coding — Validate Early, Fail Clearly" (PR #159, diet.go:31 — validate required --sbom flag before file I/O)
+  # testing: promoted to testing-performance.instructions.md (PRs #159, #160 — mirror production JSON tags in test structs; use t.Cleanup for global restoration)
+  # defensive-coding: already covered by "Deterministic Output from Non-Deterministic Sources" (PR #159, analyzer.go:494 — Python prefix matching used first-match instead of longest-match)
+  # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:461 — Go alias derivation needs vN suffix and gopkg.in heuristics for accurate call-site counting)
+  # defensive-coding: already covered by "Normalize User-Provided Enum Values" spirit (PR #159, service.go:288 — PyPI distribution names need hyphen→underscore and lowercase normalization for import matching)
+  # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, sbomgraph/types.go:122 — ResolveDirectPURLs returned nil for 0 direct deps, conflating with "no graph info")
+  # defensive-coding: already covered by "Nil vs Empty Map Semantics" (PR #159, depgraph/graph.go:37 — AnalyzeGraph used == nil instead of len == 0, misaligned with ResolveDirectPURLs empty-slice semantics)
+  # defensive-coding: promoted to coding-standards.instructions.md (PRs #160, #173, #175, #176 — validate generated strings against target-language syntax; ecosystem-agnostic error hints; collect all AST matches; consistent map key normalization)
+  # defensive-coding (PR #176): skip Maven groupId.artifactId candidates when artifactId contains chars invalid in Java package names
+  # defensive-coding (PR #176 round 2): reject identifier-first-digit (e.g. "3scale") and validate dot-separated namespace segments independently
+  # logging-consistency: already covered by promoted rule (PR #175, service.go:72 — log must report post-filter count when subsequent phases use filtered data)
+  # defensive-coding: already covered by "Delete Unused Code" rule (PR #173, analyzer.go:516 — unused cfg parameter in resolvePythonPURL)
+  # defensive-coding: already covered by "Collect All Matches in Collector Functions" spirit (PR #173, analyzer.go:518 — import x as y alias not registered; must handle all AST node variants)
+  # testing: already covered by promoted rules (PR #160, e2e_test.go:366 — close pipe fds in t.Cleanup; e2e_test.go:387 — check Close() errors for consistency)
+  # testing: already covered by promoted rules (PR #160, e2e_test.go:100 — surface pipe close/read errors in shared test helpers for diagnosability)
+  # testing: already covered by "Use `t.Cleanup` When Replacing Process-Global State" (PR #160, e2e_test.go:353 — close stdinW in t.Cleanup to prevent FD leak on early abort)
+  # testing: already covered by promoted rules (PR #160, e2e_test.go:380 — capture ReadFrom error via channel for consistency with runDiet)
+  # defensive-coding (PR #176 round 3): already covered by "Normalize User-Provided Enum Values" spirit — case-insensitive override lookup key for Maven package overrides
+  # defensive-coding (PR #176 round 3): already covered by "Validate Generated Strings Against Target-Language Syntax" — gate fallback artifactId candidate behind isJavaPackageSafe
+  # defensive-coding (PR #176 round 4): already covered by "Use Case-Insensitive Comparison for URL Components" spirit — use strings.EqualFold for namespace/name equality in Maven candidate filtering
+  # defensive-coding (PR #176 round 5): already covered by "Validate Generated Strings Against Target-Language Syntax" — validate namespace with isJavaDottedPackageSafe before emitting groupId.artifactId candidate
+  # defensive-coding (PR #226): already covered by "Comment-Code Consistency" — clamp condition checked IsEOL but not MaintenanceStatus=="Archived", missing documented qualifier
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #227, #237 — narrow candidate heuristics and map assertions to specific items)
+  # naming-consistency (PR #198): already covered by "Use Domain Constants for Domain-Defined String Values" spirit — extract magic coefficients to named constants
+  # comment-doc-drift (PR #198): already covered by "Comment-Code Consistency" rule — test case name didn't match domain mapping for healthRisk values
+  # testing: promoted to testing-performance.instructions.md (PRs #197, #198, #223 — assert exact values not thresholds, omit unused test fixture fields, assert all new output fields)
+  # testing: promoted to testing-performance.instructions.md (PRs #197, #198 — assert exact computed values; omit unused struct fields in test fixtures)
+  # testing: promoted to testing-performance.instructions.md (PRs #197, #198 — assert exact values with tolerance; omit unused fixture fields)
+  # defensive-coding (PR #199): already covered by "use tree-sitter predicates to constrain overly broad query patterns" — add !object negation to bare-call query to prevent double-counting
+  # defensive-coding (PR #199): already covered by "Consolidate Detection Heuristics — Single Source of Truth" — handle wildcard static imports with sentinel alias consistent with Python
+  # comment-doc-drift (PR #199): already covered by "Comment-Code Consistency" — clarify ImportFileCount vs import-statement count in test comment
+  # defensive-coding (PR #200): already covered by "Deduplicate Inputs Before Batch API Calls" spirit — compact map[K][]V slices after append to prevent double-counting
+  # comment-doc-drift (PR #200): already covered by promoted rule — blank-import comment said "multiple blank imports in one file" but key is per import path
+  # testing (PR #200): already covered by promoted rules — Go collision test name implied unrealistic multi-version scenario; renamed to reflect actual behavior
+  # comment-doc-drift (PR #223): already covered by "ADR and Documentation Must Describe Actual Behavior" — detailed output now renders a truncated symbols list (fixed in cf5ca6e)
+  # testing (PR #223): promoted — assert all new output fields when extending structs (see testing-performance.instructions.md)
+  # testing (PR #223 round 4): already covered by promoted rule — add IsUnused/HasWildcardImport assertions for blank-import case to lock in intended behavior
+  # testing (PR #223 round 5): already covered by promoted rule — assert CallSiteCount baseline for dot-import case that documents "has baseline call sites"
+  # comment-doc-drift (PR #230): already covered by "Comment-Code Consistency" rule — test name claimed constructor detection ("new FormData()") but call query only matches member_expression/call_expression, not new_expression
+  # comment-doc-drift (PR #229): already covered by "Comment-Code Consistency" rule — goPackageFromHyphenated conditional logic skipped go- prefix stripping after -go suffix stripping, diverging from documented sequential heuristic
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #227, #237 — narrow candidate heuristics and map assertions to specific items)
+  # defensive-coding (PR #227): already covered by "Validate Generated Strings Against Target-Language Syntax" — add isPythonIdentifierSafe validation for PyPI import path candidates
+  # defensive-coding (PR #227 round 2): already covered by "Validate Generated Strings Against Target-Language Syntax" — validate dotted module paths (e.g., zope.interface) by splitting on "." and checking each segment independently
+  # comment-doc-drift (PR #227 round 2): WONT_FIX — PR description reflects initial implementation; code and tests were updated in prior commit
+-->
