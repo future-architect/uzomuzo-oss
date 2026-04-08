@@ -354,9 +354,9 @@ var pypiPrefixes = []string{
 
 // buildPyPIImportPaths generates candidate Python import module names for a
 // PyPI distribution name. The canonical candidate (hyphen→underscore, lowered)
-// is always first. Additional candidates are produced by stripping well-known
-// prefixes (e.g., "python-", "py-"). Each candidate is validated against
-// Python identifier rules before inclusion.
+// is added first when it passes validation. Additional candidates are produced
+// by stripping well-known prefixes (e.g., "python-", "py-"). Each candidate
+// is validated against Python identifier rules before inclusion.
 func buildPyPIImportPaths(name string) []string {
 	seen := make(map[string]struct{})
 	var paths []string
