@@ -446,6 +446,95 @@ const res = axios.get("https://example.com");
 	}
 }
 
+func TestAnalyzer_TSXJSXComponentUsage(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "App.tsx"), []byte(`import { Camera, ArrowRight } from "lucide-react";
+
+function App() {
+  return (
+    <div>
+      <Camera size={24} />
+      <ArrowRight className="h-5" />
+      <Camera />
+    </div>
+  );
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/lucide-react@0.300.0": {"lucide-react"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/lucide-react@0.300.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for lucide-react")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	// 3 JSX usages: <Camera .../>, <ArrowRight .../>, <Camera />
+	if ca.CallSiteCount != 3 {
+		t.Errorf("CallSiteCount = %d, want 3", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 2 {
+		t.Errorf("APIBreadth = %d, want 2", ca.APIBreadth)
+	}
+	wantSymbols := []string{"ArrowRight", "Camera"}
+	sort.Strings(ca.Symbols)
+	if len(ca.Symbols) != len(wantSymbols) {
+		t.Errorf("Symbols = %v, want %v", ca.Symbols, wantSymbols)
+	} else {
+		for i, s := range ca.Symbols {
+			if s != wantSymbols[i] {
+				t.Errorf("Symbols[%d] = %q, want %q", i, s, wantSymbols[i])
+			}
+		}
+	}
+}
+
+func TestAnalyzer_JSXComponentInJSX(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "App.jsx"), []byte(`import { HiArrowUp } from "react-icons/hi";
+
+function App() {
+  return <HiArrowUp className="icon" />;
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/react-icons@4.0.0": {"react-icons"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/react-icons@4.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for react-icons")
+	}
+
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 1 {
+		t.Errorf("APIBreadth = %d, want 1", ca.APIBreadth)
+	}
+}
+
 func TestAnalyzer_Java(t *testing.T) {
 	dir := t.TempDir()
 	// Java variable-declaration resolution: "Gson gson = new Gson()" should
@@ -1814,4 +1903,3 @@ public class Main {
 		})
 	}
 }
-
