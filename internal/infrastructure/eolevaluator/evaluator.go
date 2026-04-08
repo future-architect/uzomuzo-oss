@@ -190,7 +190,12 @@ func (e *Evaluator) applyNpmStableDeprecation(ctx context.Context, a *domain.Ana
 	if status.State == domain.EOLEndOfLife || a == nil || a.EffectivePURL == "" || e.npm == nil || a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || a.ReleaseInfo.StableVersion.Version == "" {
 		return false
 	}
-	return e.checkNpmDeprecation(ctx, a.EffectivePURL, a.ReleaseInfo.StableVersion.Version, "npmjs_stable_version_is_eol", status)
+	purlParser := purl.NewParser()
+	parsed, err := purlParser.Parse(a.EffectivePURL)
+	if err != nil || parsed.GetEcosystem() != "npm" {
+		return false
+	}
+	return e.checkNpmDeprecation(ctx, parsed.Namespace(), parsed.Name(), a.ReleaseInfo.StableVersion.Version, "npmjs_stable_version_is_eol", status)
 }
 
 // applyNpmPURLDeprecation is a fallback npm deprecation check that uses the version
@@ -214,25 +219,17 @@ func (e *Evaluator) applyNpmPURLDeprecation(ctx context.Context, a *domain.Analy
 	if ver == "" {
 		return false
 	}
-	return e.checkNpmDeprecation(ctx, a.EffectivePURL, ver, "npmjs_purl_version_is_eol", status)
+	return e.checkNpmDeprecation(ctx, parsed.Namespace(), parsed.Name(), ver, "npmjs_purl_version_is_eol", status)
 }
 
 // checkNpmDeprecation is the shared core for npm deprecation detection.
-// It parses the PURL for namespace/name, queries the npm registry for the given
-// version, and populates status on confirmed EOL. logEvent identifies the caller
-// in structured log output.
-func (e *Evaluator) checkNpmDeprecation(ctx context.Context, effectivePURL, ver, logEvent string, status *domain.EOLStatus) (done bool) {
+// It queries the npm registry for the given namespace/name/version and populates
+// status on confirmed EOL. logEvent identifies the caller in structured log output.
+func (e *Evaluator) checkNpmDeprecation(ctx context.Context, ns, name, ver, logEvent string, status *domain.EOLStatus) (done bool) {
 	// Guard against typed-nil interface (e.g., var c *npmjs.Client = nil passed to SetNpmClient).
-	if e.npm == nil || reflect.ValueOf(e.npm).IsNil() {
+	if isNilInterface(e.npm) {
 		return false
 	}
-	purlParser := purl.NewParser()
-	parsed, err := purlParser.Parse(effectivePURL)
-	if err != nil || parsed.GetEcosystem() != "npm" {
-		return false
-	}
-	ns := parsed.Namespace()
-	name := parsed.Name()
 	info, found, err := e.npm.GetDeprecation(ctx, ns, name, ver)
 	if err != nil || !found || info == nil {
 		if err != nil {
@@ -255,6 +252,23 @@ func (e *Evaluator) checkNpmDeprecation(ctx context.Context, effectivePURL, ver,
 		return true
 	}
 	return false
+}
+
+// isNilInterface reports whether v is nil or a typed-nil interface (e.g., a nil
+// pointer wrapped in an interface). It safely handles non-nilable dynamic types
+// (struct values with value receivers) by checking the reflected Kind before
+// calling IsNil.
+func isNilInterface(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return rv.IsNil()
+	default:
+		return false
+	}
 }
 
 // applyMavenRelocation detects Maven relocation metadata.
