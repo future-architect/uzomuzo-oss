@@ -1754,7 +1754,7 @@ public class Main {
 
 	analyzer := NewAnalyzer()
 	importPaths := map[string][]string{
-		"pkg:maven/javax.inject/javax.inject@1":                       {"javax.annotation"},
+		"pkg:maven/com.google.code.findbugs/jsr305@3.0.2":              {"javax.annotation"},
 		"pkg:maven/com.google.inject/guice@5.1":                       {"com.google.inject"},
 		"pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.15": {"com.fasterxml.jackson.annotation"},
 	}
@@ -1772,7 +1772,7 @@ public class Main {
 	}{
 		{
 			name:          "marker annotation @Nullable",
-			purl:          "pkg:maven/javax.inject/javax.inject@1",
+			purl:          "pkg:maven/com.google.code.findbugs/jsr305@3.0.2",
 			wantImports:   1,
 			wantCallSites: 1,
 			wantBreadth:   1,
