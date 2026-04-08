@@ -371,7 +371,7 @@ func TestComputeImpactScore_LifecycleScoreFloor(t *testing.T) {
 			name:     "Archived + hard difficulty gets floor",
 			graph:    GraphMetrics{ExclusiveTransitiveCount: 5},
 			coupling: CouplingAnalysis{ImportFileCount: 80, CallSiteCount: 523, APIBreadth: 115},
-			health:   HealthSignals{HealthRisk: 0.8, MaintenanceStatus: maintenanceStatusArchived},
+			health:   HealthSignals{HealthRisk: 0.8, MaintenanceStatus: MaintenanceStatusArchived},
 			// Archived (not IsEOL) with hard difficulty should also get the floor.
 			wantMin:        lifecycleScoreFloor,
 			wantMax:        lifecycleScoreFloor + 0.001,
@@ -393,20 +393,20 @@ func TestComputeImpactScore_LifecycleScoreFloor(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			score := ComputeImpactScore(tt.graph, tt.coupling, tt.health, 100)
 
-			if score.PriorityScore < tt.wantMin {
-				t.Errorf("PriorityScore = %f, want >= %f", score.PriorityScore, tt.wantMin)
-			}
-			if score.PriorityScore > tt.wantMax {
-				t.Errorf("PriorityScore = %f, want <= %f", score.PriorityScore, tt.wantMax)
+			if tt.wantFloor {
+				if score.PriorityScore != lifecycleScoreFloor {
+					t.Errorf("PriorityScore = %f, want exactly %f (floor)", score.PriorityScore, lifecycleScoreFloor)
+				}
+			} else {
+				if score.PriorityScore < tt.wantMin {
+					t.Errorf("PriorityScore = %f, want >= %f", score.PriorityScore, tt.wantMin)
+				}
+				if score.PriorityScore > tt.wantMax {
+					t.Errorf("PriorityScore = %f, want <= %f", score.PriorityScore, tt.wantMax)
+				}
 			}
 			if score.Difficulty != tt.wantDifficulty {
 				t.Errorf("Difficulty = %s, want %s", score.Difficulty, tt.wantDifficulty)
-			}
-			if tt.wantFloor {
-				const tolerance = 0.001
-				if score.PriorityScore < lifecycleScoreFloor-tolerance || score.PriorityScore > lifecycleScoreFloor+tolerance {
-					t.Errorf("PriorityScore = %f, want exactly %f (floor)", score.PriorityScore, lifecycleScoreFloor)
-				}
 			}
 		})
 	}

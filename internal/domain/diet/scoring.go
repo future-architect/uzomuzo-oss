@@ -44,10 +44,10 @@ const (
 // floor ensures they remain visible and actionable. See #214.
 const lifecycleScoreFloor = 0.10
 
-// maintenanceStatusArchived is the HealthSignals.MaintenanceStatus value
-// for GitHub-archived repositories. Defined here because the diet domain
-// uses a plain string (not the analysis.MaintenanceStatus type).
-const maintenanceStatusArchived = "Archived"
+// MaintenanceStatusArchived is the HealthSignals.MaintenanceStatus value
+// for GitHub-archived repositories. Exported so that producers (application
+// layer) and consumers (scoring) share a single source of truth.
+const MaintenanceStatusArchived = "Archived"
 
 // ComputeImpactScore calculates the removability priority for a single dependency.
 // maxExclusive is the largest ExclusiveTransitiveCount across all entries in the dataset,
@@ -73,7 +73,7 @@ func ComputeImpactScore(graph GraphMetrics, coupling CouplingAnalysis, health He
 	// multiplicative formula heavily penalizes hard difficulty, which can
 	// zero out the score for deeply coupled EOL deps — exactly the items
 	// that most need strategic attention.
-	if (health.IsEOL || health.MaintenanceStatus == maintenanceStatusArchived) && priority < lifecycleScoreFloor {
+	if (health.IsEOL || health.MaintenanceStatus == MaintenanceStatusArchived) && priority < lifecycleScoreFloor {
 		priority = lifecycleScoreFloor
 	}
 
