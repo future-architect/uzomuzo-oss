@@ -152,36 +152,41 @@ syft . --source-name myproject -o cyclonedx-json > bom.json
 uzomuzo diet --sbom bom.json --source .
 ```
 
-**Real output — FastAPI (29 direct deps, 239 transitive):**
+**Real output — [fastapi/fastapi](https://github.com/fastapi/fastapi) (18 direct deps, 35 transitive, Trivy SBOM):**
 
 ```
-── Diet Plan (29 direct dependencies) ─────────────────────────
+── Diet Plan (18 direct dependencies) ─────────────────────────
 
-  Unused (0 imports):  24
-  Quick wins:          1  (trivial/easy + high impact)
+  Unused (0 imports):  4
+  Quick wins:          3  (trivial/easy + high impact)
 
-RANK  SCORE  EFFORT    PURL                                  REMOVES  IMPORTS  CALLS  STATUS
-────  ─────  ──────    ────                                  ───────  ───────  ─────  ──────
-1     0.43   trivial   pkg:pypi/pydantic-ai@1.63.0           104      0        0      Active
-2     0.10   trivial   pkg:pypi/cairosvg@2.9.0               6        0        0      Active
-3     0.10   trivial   pkg:pypi/fastapi-cli@0.0.20           5        0        0      Active
+RANK  SCORE  EFFORT    PURL                                    REMOVES  REMAINS  IMPORTS  CALLS  STATUS
+────  ─────  ──────    ────                                    ───────  ───────  ───────  ─────  ──────
+1     0.42   trivial   pkg:pypi/itsdangerous@2.2.0             0        -        0        0      Stalled
+2     0.31   trivial   pkg:pypi/pyyaml@6.0.3                   0        yes      0        0      Active
+3     0.30   trivial   pkg:pypi/click@8.2.1                    0        yes      0        0      Active
+4     0.29   trivial   pkg:pypi/pydantic-extra-types@2.11.0    0        -        0        0      Active
+5     0.19   easy      pkg:pypi/fastapi-cli@0.0.20             7        -        1        1      Active
+6     0.14   easy      pkg:pypi/jinja2@3.1.6                   1        -        1        1      Stalled
 ...
-28    0.01   moderate  pkg:pypi/playwright@1.58.0             1        12       14     Active
-29    0.01   moderate  pkg:pypi/sqlmodel@0.0.32               1        8        0      Active
+17    0.00   hard      pkg:pypi/pydantic@2.12.5                0        yes      233      162    Active
+18    0.00   hard      pkg:pypi/starlette@0.52.1               0        -        41       49     Active
 
 ── Dependency Tree ─────────────────────────────────────────────
-  Direct deps:          29
-  Transitive deps:      239
-  └ removes-with-dep:   143  (removable if that direct dep is removed)
+  Direct deps:          18
+  Transitive deps:      35
+  └ removes-with-dep:   8  (removable if that direct dep is removed)
+  ⚠ remains-indirect:   11  (remain in tree via another direct dep)
 ```
 
-`pydantic-ai` alone drags in **104 transitive deps** with zero source coupling — removing it eliminates 43% of the entire dependency tree.
+Top-ranked `itsdangerous` has zero imports — it can be removed from `requirements.txt` immediately. Bottom-ranked `pydantic` (233 files, 162 calls) is deeply embedded — the tool tells you not to start there.
 
 | Column | Meaning |
 |--------|---------|
 | SCORE | Overall removal priority (higher = remove first) |
 | EFFORT | trivial (0 imports) / easy / moderate / hard |
 | REMOVES | Transitive deps that disappear when this dep is removed |
+| REMAINS | `yes` = stays in tree as indirect dep of another package |
 | IMPORTS / CALLS | Source files and call sites — measures how hard to untangle |
 
 Supports **Go, Python, JavaScript/TypeScript, Java**. Uses [tree-sitter](https://tree-sitter.github.io/) for multi-language source analysis.
