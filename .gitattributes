@@ -1,5 +1,5 @@
 # Append-only files — auto-merge both sides to avoid conflicts in parallel PRs
-.github/copilot-patterns.yml merge=union
+# (copilot-patterns.yml was consolidated into copilot-learned-coding.instructions.md)
 
 # Generated files — auto-collapsed in GitHub PR diffs
 .claude/rules/coding-standards.md linguist-generated=true

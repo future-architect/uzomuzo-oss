@@ -29,6 +29,12 @@ Launch **both** review agents in parallel:
 1. **code-reviewer** agent — Code quality, Go idioms, error handling, security
 2. **architect** agent — DDD layer compliance, dependency direction, package structure
 
+In addition to standard review checks, instruct both agents to check the diff against
+the **Pending Copilot Patterns** section in `.github/instructions/copilot-learned-coding.instructions.md`.
+These are patterns that Copilot has flagged on previous PRs but have not yet been promoted
+to full rules. Catching them proactively during Claude review prevents Copilot from
+re-flagging the same issues.
+
 Provide each agent with the relevant diff context:
 - If a PR number is given, use `gh pr diff <PR number>`
 - Otherwise, detect the associated PR via `gh pr list --head "$(git branch --show-current)" --json number --jq '.[0].number'` and use `gh pr diff <number>`. If no PR exists, fall back to `git diff main...HEAD`
@@ -233,12 +239,14 @@ mutation {
 After resolving all threads, analyze the FIX-classified comments for **recurring patterns**
 that the project's coding rules should prevent in the future.
 
-This phase uses `.github/copilot-patterns.yml` as a **cross-PR pattern accumulator**.
+This phase uses the `## Pending Copilot Patterns` section at the bottom of
+`.github/instructions/copilot-learned-coding.instructions.md` as a **cross-PR pattern accumulator**.
 Patterns are recorded per-PR and promoted to coding rules once a category reaches 2+ entries.
+This consolidation keeps patterns and rules in a single file, reducing merge-conflict surfaces.
 
 #### Step 3.0: Sync Rule Files with Main (REQUIRED)
 
-Phase 3 modifies shared files (`.github/copilot-patterns.yml`, `.github/instructions/*.instructions.md`)
+Phase 3 modifies shared files (`.github/instructions/*.instructions.md`, `.claude/rules/`)
 that may have been updated on `main` by other PRs since this branch diverged. To avoid overwriting
 those updates, **merge main into the PR branch before editing any rule files**:
 
@@ -248,9 +256,8 @@ git merge origin/main --no-edit
 ```
 
 If the merge has conflicts:
-- If conflicts are **only in rule files** (`.github/copilot-patterns.yml`, `.github/instructions/`,
-  `.claude/rules/`): resolve them by keeping both sides (accept all additions from both branches),
-  then continue with Phase 3.
+- If conflicts are **only in rule files** (`.github/instructions/`, `.claude/rules/`): resolve
+  them by keeping both sides (accept all additions from both branches), then continue with Phase 3.
 - If conflicts touch **source code**: abort the merge (`git merge --abort`), skip Phase 3 entirely,
   and report "Phase 3 skipped: PR branch has merge conflicts with main. Rebase manually before
   re-running."
@@ -270,14 +277,22 @@ on the same PR), assign a category:
 | security | "User input not validated" |
 | dependency-pinning | "Pin dependency version for reproducibility" |
 
-Read `.github/copilot-patterns.yml` and **insert each new entry at a random position** among existing entries (both active entries and comment lines). Do NOT append to the end — appending causes merge conflicts when multiple PRs run `/review` in parallel, because all PRs modify the same lines at the end of the file.
+Open `.github/instructions/copilot-learned-coding.instructions.md` and locate the
+`## Pending Copilot Patterns` section. Inside the fenced `yaml` code block under
+`pending_patterns:`, **insert each new entry at a random position** among existing
+entries. Do NOT append to the end — appending causes merge conflicts when multiple
+PRs run `/review` in parallel, because all PRs modify the same lines at the end of
+the block.
 
-**Insertion strategy**: Pick a random line between the first entry (after `patterns:`) and the last entry. Insert the new entry block there. If adding multiple entries, insert each at a different random position.
+**Insertion strategy**: Pick a random position between complete YAML list items inside
+the `pending_patterns:` block. Never insert inside an existing item (e.g., between
+`category:` and `date:`). If adding multiple entries, insert each at a different
+random position.
 
 If `--dry-run` is active, perform this step **in-memory only** — do not write to disk:
 
 ```yaml
-patterns:
+pending_patterns:
   # ... existing entries ...
   - category: "defensive-coding"
     summary: "Fail-closed fork-rejection gate"
@@ -326,8 +341,10 @@ Apply the rule:
 
 1. Check if an equivalent rule already exists in the target file (including any prior
    `Learned from Copilot Reviews` section). If so, skip or refine instead of duplicating.
-2. Append the rule to the appropriate `.github/instructions/` file under a
-   `## Learned from Copilot Reviews` section (create the section if it doesn't exist)
+2. **Insert the rule at a random position** in the target file's rule list (or
+   `## Learned from Copilot Reviews` section). Do NOT append to the end — use the same
+   random-insertion strategy as for pending patterns to minimize merge conflicts.
+   Create the section if it doesn't exist.
 3. Run `make sync-instructions` to regenerate `.claude/rules/`
 
 If `--dry-run` is active, only show the proposals without modifying files.
@@ -335,15 +352,21 @@ If `--dry-run` is active, only show the proposals without modifying files.
 #### Step 3.5: Remove Promoted Entries from YAML
 
 After a category is promoted to a coding rule, **remove all entries of that category**
-from `.github/copilot-patterns.yml`. This keeps the file small — it only holds
-patterns that have not yet reached the promotion threshold.
+from the `pending_patterns:` block in `copilot-learned-coding.instructions.md`.
+This keeps the pending section small — it only holds patterns that have not yet
+reached the promotion threshold.
+
+When adding the promoted rule to the bullet list in the same file, **insert it at a
+random position** among existing rules (the `- **Rule Name**: ...` bullet points).
+Do NOT append to the end of the list — use the same random-insertion strategy as for
+pending patterns to minimize merge conflicts.
 
 #### Step 3.6: Save and Commit
 
 If `--dry-run` is active, skip this step entirely — do not write files or commit.
 
-Write the updated `.github/copilot-patterns.yml` (with new entries added and promoted
-entries removed).
+Write the updated `.github/instructions/copilot-learned-coding.instructions.md`
+(with new pending entries added and promoted entries moved to the rules section).
 
 Commit all Phase 3 changes together:
 
@@ -393,7 +416,7 @@ Threads resolved: N/N
 - During Phase 1 fixes, do NOT post new review comments to the PR — fix the code directly instead
 - During Phase 1 fixes, only fix issues found in the diff under review; do not refactor unrelated code
 - During Phase 2 fixes, you may reply to existing Copilot review threads as needed to resolve them, but do NOT start new review threads
-- During Phase 2 fixes, NEVER modify files outside the scope of Copilot's comments; the only exceptions are Phase 3 updates to `.github/copilot-patterns.yml` and `.github/instructions/*` for pattern tracking and confirmed recurring patterns
+- During Phase 2 fixes, NEVER modify files outside the scope of Copilot's comments; the only exceptions are Phase 3 updates to `.github/instructions/*` for pattern tracking and confirmed recurring patterns
 - Always verify `go build` passes before committing
 - If `go test` fails after fixes, revert the failing change and classify as WONT_FIX
 - If the PR branch has merge conflicts, skip that PR and report it
