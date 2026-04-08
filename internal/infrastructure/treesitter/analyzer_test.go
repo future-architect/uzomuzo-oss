@@ -1333,8 +1333,8 @@ followRedirects.https;
 		},
 		{
 			// new FormData() is a new_expression, which the call query does not match;
-			// only FormData.prototype (member_expression) is counted as a call site.
-			name:     "ES default import with member access (new_expression ignored)",
+			// new FormData() is counted via new_expression, FormData.prototype via member_expression.
+			name:     "ES default import with new and member access",
 			filename: "index.js",
 			code: `import FormData from 'form-data';
 
@@ -1346,8 +1346,8 @@ FormData.prototype;
 			},
 			purl:        "pkg:npm/form-data@4.0.0",
 			wantImports: 1,
-			wantCalls:   1,
-			wantBreadth: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
 		},
 		{
 			name:     "require with property access",
@@ -1906,6 +1906,116 @@ public class Main {
 			}
 			if ca.IsUnused {
 				t.Error("IsUnused = true, want false")
+			}
+		})
+	}
+}
+
+func TestAnalyzer_TypeScriptNamedImportCallSites(t *testing.T) {
+	tests := []struct {
+		name        string
+		code        string
+		purl        string
+		pkg         string
+		wantCalls   int
+		wantBreadth int
+		wantSymbols []string
+	}{
+		{
+			name: "named class import with constructor",
+			code: `import { Mutex } from "async-mutex";
+
+const mutex = new Mutex();
+mutex.acquire();
+`,
+			purl:        "pkg:npm/async-mutex@0.4.0",
+			pkg:         "async-mutex",
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"Mutex"},
+		},
+		{
+			name: "named export import used as value",
+			code: `import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
+
+const config = {
+  [ATTR_SERVICE_NAME]: "my-service",
+};
+`,
+			purl:        "pkg:npm/%40opentelemetry/semantic-conventions@1.0.0",
+			pkg:         "@opentelemetry/semantic-conventions",
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"ATTR_SERVICE_NAME"},
+		},
+		{
+			name: "named class import with new and method",
+			code: `import { PrismaPg } from "@prisma/adapter-pg";
+
+const adapter = new PrismaPg(pool);
+`,
+			purl:        "pkg:npm/%40prisma/adapter-pg@1.0.0",
+			pkg:         "@prisma/adapter-pg",
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"PrismaPg"},
+		},
+		{
+			name: "multiple named imports with mixed usage",
+			code: `import { EventEmitter, Transform, Readable } from "stream-utils";
+
+const emitter = new EventEmitter();
+const t = new Transform();
+const data = Readable.from([1, 2, 3]);
+`,
+			purl:        "pkg:npm/stream-utils@1.0.0",
+			pkg:         "stream-utils",
+			wantCalls:   3,
+			wantBreadth: 3,
+			// EventEmitter/Transform from new_expression, "from" from Readable.from() member_expression
+			wantSymbols: []string{"EventEmitter", "Transform", "from"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "app.ts"), []byte(tt.code), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			importPaths := map[string][]string{
+				tt.purl: {tt.pkg},
+			}
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.ImportFileCount != 1 {
+				t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+
+			sort.Strings(tt.wantSymbols)
+			if len(ca.Symbols) != len(tt.wantSymbols) {
+				t.Errorf("Symbols = %v, want %v", ca.Symbols, tt.wantSymbols)
+			} else {
+				for i, s := range ca.Symbols {
+					if s != tt.wantSymbols[i] {
+						t.Errorf("Symbols[%d] = %q, want %q", i, s, tt.wantSymbols[i])
+					}
+				}
 			}
 		})
 	}

@@ -90,7 +90,14 @@ func newJSLikeConfig(lang *sitter.Language, includeJSX bool) *langConfig {
 	}, "\n")
 	callPatterns := []string{
 		`(member_expression object: (identifier) @obj property: (property_identifier) @prop)`,
+		// foo() — bare function call on an imported named binding
 		`(call_expression function: (identifier) @func)`,
+		// new Foo() — constructor call on an imported named binding
+		`(new_expression constructor: (identifier) @func)`,
+		// new pkg.Foo() — constructor call via member expression
+		`(new_expression constructor: (member_expression object: (identifier) @obj property: (property_identifier) @prop))`,
+		// { [ATTR]: val } — imported constant used as computed property key
+		`(computed_property_name (identifier) @func)`,
 	}
 	if includeJSX {
 		callPatterns = append(callPatterns,
