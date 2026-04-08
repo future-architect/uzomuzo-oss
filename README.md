@@ -179,7 +179,7 @@ RANK  SCORE  EFFORT    PURL                                    REMOVES  REMAINS 
   ⚠ remains-indirect:   11  (remain in tree via another direct dep)
 ```
 
-Top-ranked `itsdangerous` has zero imports — it can be removed from `requirements.txt` immediately. Bottom-ranked `pydantic` (233 files, 162 calls) is deeply embedded — the tool tells you not to start there.
+The ranking surfaces actionable insights: `fastapi-cli` (rank 5) removes **7 transitive deps** with only 1 import — a high-impact, low-effort win. Bottom-ranked `pydantic` (233 files, 162 calls) is deeply embedded — the tool tells you not to start there.
 
 | Column | Meaning |
 |--------|---------|
