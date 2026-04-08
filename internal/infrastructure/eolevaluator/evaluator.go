@@ -3,6 +3,7 @@ package eolevaluator
 import (
 	"context"
 	"log/slog"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -221,6 +222,10 @@ func (e *Evaluator) applyNpmPURLDeprecation(ctx context.Context, a *domain.Analy
 // version, and populates status on confirmed EOL. logEvent identifies the caller
 // in structured log output.
 func (e *Evaluator) checkNpmDeprecation(ctx context.Context, effectivePURL, ver, logEvent string, status *domain.EOLStatus) (done bool) {
+	// Guard against typed-nil interface (e.g., var c *npmjs.Client = nil passed to SetNpmClient).
+	if e.npm == nil || reflect.ValueOf(e.npm).IsNil() {
+		return false
+	}
 	purlParser := purl.NewParser()
 	parsed, err := purlParser.Parse(effectivePURL)
 	if err != nil || parsed.GetEcosystem() != "npm" {
@@ -231,7 +236,7 @@ func (e *Evaluator) checkNpmDeprecation(ctx context.Context, effectivePURL, ver,
 	info, found, err := e.npm.GetDeprecation(ctx, ns, name, ver)
 	if err != nil || !found || info == nil {
 		if err != nil {
-			slog.Error("npmjs_deprecation_check_failed", "error", err, "namespace", ns, "name", name, "version", ver)
+			slog.Error("eol: npmjs deprecation check failed", "error", err, "namespace", ns, "name", name, "version", ver)
 		}
 		return false
 	}
