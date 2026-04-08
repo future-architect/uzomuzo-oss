@@ -566,13 +566,13 @@ public class Main {
 	if ca.ImportFileCount != 1 {
 		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
 	}
-	// 3 call sites: assertEquals() x2 + assertTrue() x1
-	if ca.CallSiteCount != 3 {
-		t.Errorf("CallSiteCount = %d, want 3", ca.CallSiteCount)
+	// 4 call sites: assertEquals() x2 + assertTrue() x1 + @Test x1
+	if ca.CallSiteCount != 4 {
+		t.Errorf("CallSiteCount = %d, want 4", ca.CallSiteCount)
 	}
-	// 2 distinct symbols: assertEquals, assertTrue
-	if ca.APIBreadth != 2 {
-		t.Errorf("APIBreadth = %d, want 2 (assertEquals, assertTrue)", ca.APIBreadth)
+	// 3 distinct symbols: assertEquals, assertTrue, Test (annotation)
+	if ca.APIBreadth != 3 {
+		t.Errorf("APIBreadth = %d, want 3 (assertEquals, assertTrue, Test)", ca.APIBreadth)
 	}
 	if ca.IsUnused {
 		t.Error("IsUnused = true, want false")
@@ -1721,6 +1721,95 @@ func TestGoPackageFromHyphenated(t *testing.T) {
 			got := goPackageFromHyphenated(tt.input)
 			if got != tt.want {
 				t.Errorf("goPackageFromHyphenated(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAnalyzer_JavaAnnotation(t *testing.T) {
+	dir := t.TempDir()
+	// Java annotation libraries (e.g., @Nullable, @Inject) are imported
+	// but their usage via annotations was not counted as call sites.
+	// This test verifies that annotations contribute to call_site_count.
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import javax.annotation.Nullable;
+import com.google.inject.Inject;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public class Main {
+    @Inject
+    private Service service;
+
+    @Nullable
+    public String getName() {
+        return null;
+    }
+
+    @JsonProperty("name")
+    public String name;
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/com.google.code.findbugs/jsr305@3.0.2":              {"javax.annotation"},
+		"pkg:maven/com.google.inject/guice@5.1":                       {"com.google.inject"},
+		"pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.15": {"com.fasterxml.jackson.annotation"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name          string
+		purl          string
+		wantImports   int
+		wantCallSites int
+		wantBreadth   int
+	}{
+		{
+			name:          "marker annotation @Nullable",
+			purl:          "pkg:maven/com.google.code.findbugs/jsr305@3.0.2",
+			wantImports:   1,
+			wantCallSites: 1,
+			wantBreadth:   1,
+		},
+		{
+			name:          "marker annotation @Inject",
+			purl:          "pkg:maven/com.google.inject/guice@5.1",
+			wantImports:   1,
+			wantCallSites: 1,
+			wantBreadth:   1,
+		},
+		{
+			name:          "annotation with arguments @JsonProperty",
+			purl:          "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.15",
+			wantImports:   1,
+			wantCallSites: 1,
+			wantBreadth:   1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCallSites {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCallSites)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
 			}
 		})
 	}

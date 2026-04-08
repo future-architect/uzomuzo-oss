@@ -169,6 +169,8 @@ func NewAnalyzer() *Analyzer {
 		callQuery: strings.Join([]string{
 			`(method_invocation object: (identifier) @obj name: (identifier) @method)`,
 			`(method_invocation !object name: (identifier) @func)`,
+			`(marker_annotation name: (identifier) @func)`,
+			`(annotation name: (identifier) @func)`,
 		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {
