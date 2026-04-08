@@ -233,7 +233,7 @@ func (e *Evaluator) checkNpmDeprecation(ctx context.Context, ns, name, ver, logE
 	info, found, err := e.npm.GetDeprecation(ctx, ns, name, ver)
 	if err != nil || !found || info == nil {
 		if err != nil {
-			slog.Error("eol: npmjs deprecation check failed", "error", err, "namespace", ns, "name", name, "version", ver)
+			slog.Error("eol: npmjs deprecation check failed", "event", logEvent, "error", err, "namespace", ns, "name", name, "version", ver)
 		}
 		return false
 	}
@@ -248,7 +248,7 @@ func (e *Evaluator) checkNpmDeprecation(ctx context.Context, ns, name, ver, logE
 		if len(evidences) > 0 {
 			status.Evidences = append(status.Evidences, evidences...)
 		}
-		slog.Debug(logEvent, "pkg", pkgID, "version", ver, "successor", successor)
+		slog.Debug("eol: npmjs package is eol", "event", logEvent, "pkg", pkgID, "version", ver, "successor", successor)
 		return true
 	}
 	return false

@@ -169,3 +169,28 @@ func TestEvaluator_NpmDeprecation_ScopedPackage_NoStableVersion(t *testing.T) {
 		t.Errorf("expected version %q, got %q", "1.0.0", npm.calledVersion)
 	}
 }
+
+// TestEvaluator_NpmDeprecation_TypedNilClient verifies that passing a typed-nil
+// *npmjs.Client via SetNpmClient does not panic and leaves State as NotEOL.
+func TestEvaluator_NpmDeprecation_TypedNilClient(t *testing.T) {
+	var nilClient *npmjs.Client // typed-nil
+	ev := NewEvaluator(nil)
+	ev.SetMaxWorkers(1)
+	ev.SetNpmClient(nilClient) // typed-nil interface
+
+	a := &domain.Analysis{
+		Package:       &domain.Package{PURL: "pkg:npm/vm2@3.9.19"},
+		EffectivePURL: "pkg:npm/vm2@3.9.19",
+		ReleaseInfo: &domain.ReleaseInfo{
+			StableVersion: &domain.VersionDetail{Version: "3.9.19"},
+		},
+	}
+	out, err := ev.EvaluateBatch(context.Background(), map[string]*domain.Analysis{"k": a})
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	st := out["k"]
+	if st.State != domain.EOLNotEOL {
+		t.Fatalf("expected NotEOL with typed-nil npm client, got %v", st.State)
+	}
+}
