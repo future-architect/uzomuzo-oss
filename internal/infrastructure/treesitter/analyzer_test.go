@@ -1332,7 +1332,6 @@ followRedirects.https;
 			wantBreadth: 2,
 		},
 		{
-			// new FormData() is a new_expression, which the call query does not match;
 			// new FormData() is counted via new_expression, FormData.prototype via member_expression.
 			name:     "ES default import with new and member access",
 			filename: "index.js",
