@@ -52,6 +52,16 @@ patterns:
   # comment-doc-drift: already covered by promoted rule (PR #140, detect.go:21 — comment claimed "always" for sniff window but long headers can push directive past 512 bytes)
   # testing: promoted to testing-performance.instructions.md (PRs #121, #140 — use filepath.Join for portable temp file paths in tests)
   # testing: promoted to testing-performance.instructions.md (PRs #143, #159 — bounded waits, no t.Fatal from goroutines, concurrent pipe reads)
+  - category: "testing"
+    summary: "Capture and assert arguments passed to test fakes/mocks — unconditional return values let tests pass even when PURL parsing/decoding is wrong"
+    pr: 236
+    file: "internal/infrastructure/eolevaluator/evaluator_npm_test.go"
+    date: "2026-04-08"
+  - category: "testing"
+    summary: "Accept interface types in test-setter methods (e.g., SetXxxClient) so fakes can be injected via public API instead of unexported fields"
+    pr: 236
+    file: "internal/infrastructure/eolevaluator/evaluator.go"
+    date: "2026-04-08"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
