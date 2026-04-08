@@ -325,9 +325,10 @@ func buildImportPaths(purls []string) map[string][]string {
 				importPath = parsed.Name
 			}
 		case "pypi":
-			// Normalize PyPI distribution name to Python import convention:
-			// replace hyphens with underscores and lowercase (e.g., "PyYAML" → "pyyaml").
-			importPath = strings.ToLower(strings.ReplaceAll(parsed.Name, "-", "_"))
+			if paths := buildPyPIImportPaths(parsed.Name); len(paths) > 0 {
+				result[p] = paths
+			}
+			continue
 		case "maven":
 			if paths := buildMavenImportPaths(parsed); len(paths) > 0 {
 				result[p] = paths
@@ -341,6 +342,89 @@ func buildImportPaths(purls []string) map[string][]string {
 		}
 	}
 	return result
+}
+
+// pypiPrefixes lists common PyPI distribution name prefixes that are not part
+// of the actual Python import module name (e.g., "python-multipart" is imported
+// as "multipart").
+var pypiPrefixes = []string{
+	"python-",
+	"py-",
+}
+
+// buildPyPIImportPaths generates candidate Python import module names for a
+// PyPI distribution name. The canonical candidate (hyphen→underscore, lowered)
+// is added first when it passes validation. Additional candidates are produced
+// by stripping well-known prefixes (e.g., "python-", "py-"). Each candidate
+// is validated against Python identifier rules before inclusion.
+func buildPyPIImportPaths(name string) []string {
+	seen := make(map[string]struct{})
+	var paths []string
+
+	add := func(p string) {
+		if p == "" {
+			return
+		}
+		if !isPythonDottedIdentifierSafe(p) {
+			return
+		}
+		if _, ok := seen[p]; ok {
+			return
+		}
+		seen[p] = struct{}{}
+		paths = append(paths, p)
+	}
+
+	// 1. Canonical: replace hyphens with underscores and lowercase.
+	canonical := strings.ToLower(strings.ReplaceAll(name, "-", "_"))
+	add(canonical)
+
+	lower := strings.ToLower(name)
+
+	// 2. Strip well-known prefixes (e.g., "python-multipart" → "multipart").
+	for _, prefix := range pypiPrefixes {
+		if after, ok := strings.CutPrefix(lower, prefix); ok && after != "" {
+			add(strings.ReplaceAll(after, "-", "_"))
+		}
+	}
+
+	return paths
+}
+
+// isPythonIdentifierSafe reports whether s is a valid Python identifier.
+// The first character must be an ASCII letter or underscore; subsequent
+// characters may also include ASCII digits.  This filters out candidates that
+// can never match a real Python import statement (e.g., names starting with a
+// digit).
+func isPythonIdentifierSafe(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_' {
+			continue
+		}
+		if i > 0 && r >= '0' && r <= '9' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// isPythonDottedIdentifierSafe reports whether s is a valid dot-separated
+// Python module path (e.g. "zope.interface").  Each segment between dots must
+// satisfy isPythonIdentifierSafe.
+func isPythonDottedIdentifierSafe(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, seg := range strings.Split(s, ".") {
+		if !isPythonIdentifierSafe(seg) {
+			return false
+		}
+	}
+	return true
 }
 
 // mavenPackageOverrides maps "groupId/artifactId" to known Java package
