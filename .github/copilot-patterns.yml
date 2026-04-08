@@ -63,6 +63,8 @@ patterns:
   # defensive-coding (PR #236 round 5): reflect.ValueOf().IsNil() panics on non-nilable dynamic types — already covered by "Guard Nil Structs Consistently"; extracted isNilInterface helper with Kind check in ed944c5
   # duplicate-parsing (PR #236 round 5): double-parse of EffectivePURL in fallback path — already covered by promoted "Extract Shared Helpers for Near-Duplicate Code Paths" rule; refactored checkNpmDeprecation to accept pre-parsed ns/name/ver in ed944c5
   # logging-consistency (PR #236 round 4): already covered by promoted "Structured Logging Conventions" rule — align error log prefix with file-local convention ("eol: ..." prefix) instead of event-id style
+  # logging-consistency (PR #236 round 6): already covered by promoted rule — include caller-identifier logEvent as structured field in both debug and error logs for disambiguation
+  # testing (PR #236 round 6): already covered by "Cover New Control Flow Branches with Tests" — add regression test for typed-nil client guard (isNilInterface + checkNpmDeprecation early return)
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
