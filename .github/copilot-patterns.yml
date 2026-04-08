@@ -18,11 +18,7 @@ patterns:
   # deterministic-output: already covered by promoted rule (PR #159, analyzer.go:315 — sort ImportFiles for deterministic JSON output)
   # comment-doc-drift: already covered by promoted rule (PR #159, diet.go:18 — comment documented CLI default but code has different semantics for programmatic callers)
   # defensive-coding: promoted to coding-standards.instructions.md (PRs #127, #130 — match validation format strings, CI staging completeness, dynamic refs)
-  - category: "duplicate-parsing"
-    summary: "Provide a combined parser (ParseWorkflowAll) when callers need both external URLs and local paths, avoiding double YAML unmarshal"
-    pr: 111
-    file: "internal/infrastructure/actionscan/discovery.go"
-    date: "2026-04-03"
+  # duplicate-parsing: promoted to copilot-learned-coding.instructions.md (PRs #111, #236 — extract shared helpers for near-duplicate code paths)
   # naming-consistency: already covered by "Use Domain Constants for Domain-Defined String Values" (PR #119, boxdraw.go — domain constants vs raw strings)
   # comment-doc-drift: already covered by promoted rule (PR #121, aggregates.go — enum precedence comments used old labels)
   # comment-doc-drift: already covered by promoted rule (PR #121, types.go — struct field comment referenced old label names)
