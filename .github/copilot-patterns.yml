@@ -1,6 +1,7 @@
 # Copilot review patterns awaiting promotion to coding rules.
 #
-# Phase 3 of /review appends new FIX-classified patterns here.
+# Phase 3 of /review inserts new entries at random positions to avoid
+# merge conflicts when multiple PRs run /review in parallel.
 # When a category reaches 2+ entries, it is promoted to a rule in
 # .github/instructions/ and the promoted entries are removed.
 #

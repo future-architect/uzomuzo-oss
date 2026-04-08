@@ -270,7 +270,10 @@ on the same PR), assign a category:
 | security | "User input not validated" |
 | dependency-pinning | "Pin dependency version for reproducibility" |
 
-Read `.github/copilot-patterns.yml` and append each new FIX comment as an entry.
+Read `.github/copilot-patterns.yml` and **insert each new entry at a random position** among existing entries (both active entries and comment lines). Do NOT append to the end — appending causes merge conflicts when multiple PRs run `/review` in parallel, because all PRs modify the same lines at the end of the file.
+
+**Insertion strategy**: Pick a random line between the first entry (after `patterns:`) and the last entry. Insert the new entry block there. If adding multiple entries, insert each at a different random position.
+
 If `--dry-run` is active, perform this step **in-memory only** — do not write to disk:
 
 ```yaml
