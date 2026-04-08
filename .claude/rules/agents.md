@@ -21,6 +21,7 @@
 | review | `/review [PR#] [--copilot-only] [--dry-run]` | Unified review: Claude + Copilot resolution + rule learning |
 | batch-issues | `/batch-issues [issue#s] [--dry-run] [--max-parallel N]` | Parallel issue processing with conflict-aware agent dispatch |
 | diet-trial | `/diet-trial <org/repo> [--tool trivy\|syft] [--compare]` | Run diet on external OSS for testing, bug finding, and case study data |
+| diet-fuzz | `/diet-fuzz <languages\|all> [--count N] [--tool trivy,syft,cdxgen] [--max-parallel N]` | Batch fuzz-test diet across many OSS projects for parser accuracy bugs |
 
 ## Immediate Agent Usage
 
