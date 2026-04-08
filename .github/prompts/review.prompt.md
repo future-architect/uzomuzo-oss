@@ -29,6 +29,12 @@ Launch **both** review agents in parallel:
 1. **code-reviewer** agent — Code quality, Go idioms, error handling, security
 2. **architect** agent — DDD layer compliance, dependency direction, package structure
 
+In addition to standard review checks, instruct both agents to check the diff against
+the **Pending Copilot Patterns** section in `.github/instructions/copilot-learned-coding.instructions.md`.
+These are patterns that Copilot has flagged on previous PRs but have not yet been promoted
+to full rules. Catching them proactively during Claude review prevents Copilot from
+re-flagging the same issues.
+
 Provide each agent with the relevant diff context:
 - If a PR number is given, use `gh pr diff <PR number>`
 - Otherwise, detect the associated PR via `gh pr list --head "$(git branch --show-current)" --json number --jq '.[0].number'` and use `gh pr diff <number>`. If no PR exists, fall back to `git diff main...HEAD`
