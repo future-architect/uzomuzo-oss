@@ -189,37 +189,7 @@ func (e *Evaluator) applyNpmStableDeprecation(ctx context.Context, a *domain.Ana
 	if status.State == domain.EOLEndOfLife || a == nil || a.EffectivePURL == "" || a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || a.ReleaseInfo.StableVersion.Version == "" {
 		return false
 	}
-	purlParser := purl.NewParser()
-	parsed, err := purlParser.Parse(a.EffectivePURL)
-	if err != nil || parsed.GetEcosystem() != "npm" {
-		return false
-	}
-	ns := parsed.Namespace()
-	name := parsed.Name()
-	stableVer := a.ReleaseInfo.StableVersion.Version
-	info, found, err := e.npm.GetDeprecation(ctx, ns, name, stableVer)
-	if err != nil || !found || info == nil {
-		if err != nil {
-			slog.Error("npmjs stable deprecation check failed", "error", err, "namespace", ns, "name", name, "version", stableVer)
-		}
-		return false
-	}
-	pkgID := name
-	if ns != "" {
-		pkgID = ns + "/" + name
-	}
-	state, successor, evidences := decideNpmEOL(pkgID, stableVer, info)
-	if state == domain.EOLEndOfLife {
-		status.State = state
-		status.Successor = successor
-		if len(evidences) > 0 {
-			status.Evidences = append(status.Evidences, evidences...)
-		}
-		// Downgraded to Debug: terminal state already captured in status; avoid spamming Info level for batch operations.
-		slog.Debug("npmjs stable version is EOL", "pkg", pkgID, "version", stableVer, "successor", successor)
-		return true
-	}
-	return false
+	return e.checkNpmDeprecation(ctx, a.EffectivePURL, a.ReleaseInfo.StableVersion.Version, "npmjs_stable_version_is_eol", status)
 }
 
 // applyNpmPURLDeprecation is a fallback npm deprecation check that uses the version
@@ -243,12 +213,25 @@ func (e *Evaluator) applyNpmPURLDeprecation(ctx context.Context, a *domain.Analy
 	if ver == "" {
 		return false
 	}
+	return e.checkNpmDeprecation(ctx, a.EffectivePURL, ver, "npmjs_purl_version_is_eol", status)
+}
+
+// checkNpmDeprecation is the shared core for npm deprecation detection.
+// It parses the PURL for namespace/name, queries the npm registry for the given
+// version, and populates status on confirmed EOL. logEvent identifies the caller
+// in structured log output.
+func (e *Evaluator) checkNpmDeprecation(ctx context.Context, effectivePURL, ver, logEvent string, status *domain.EOLStatus) (done bool) {
+	purlParser := purl.NewParser()
+	parsed, err := purlParser.Parse(effectivePURL)
+	if err != nil || parsed.GetEcosystem() != "npm" {
+		return false
+	}
 	ns := parsed.Namespace()
 	name := parsed.Name()
 	info, found, err := e.npm.GetDeprecation(ctx, ns, name, ver)
 	if err != nil || !found || info == nil {
 		if err != nil {
-			slog.Error("npmjs purl deprecation check failed", "error", err, "namespace", ns, "name", name, "version", ver)
+			slog.Error("npmjs_deprecation_check_failed", "error", err, "namespace", ns, "name", name, "version", ver)
 		}
 		return false
 	}
@@ -263,7 +246,7 @@ func (e *Evaluator) applyNpmPURLDeprecation(ctx context.Context, a *domain.Analy
 		if len(evidences) > 0 {
 			status.Evidences = append(status.Evidences, evidences...)
 		}
-		slog.Debug("npmjs_purl_version_is_eol", "pkg", pkgID, "version", ver, "successor", successor)
+		slog.Debug(logEvent, "pkg", pkgID, "version", ver, "successor", successor)
 		return true
 	}
 	return false
