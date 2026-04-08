@@ -107,11 +107,6 @@ patterns:
   # defensive-coding (PR #199): already covered by "use tree-sitter predicates to constrain overly broad query patterns" — add !object negation to bare-call query to prevent double-counting
   # defensive-coding (PR #199): already covered by "Consolidate Detection Heuristics — Single Source of Truth" — handle wildcard static imports with sentinel alias consistent with Python
   # comment-doc-drift (PR #199): already covered by "Comment-Code Consistency" — clarify ImportFileCount vs import-statement count in test comment
-  # testing: promoted to testing-performance.instructions.md (PRs #198, #197 — assert exact computed values with tolerance; omit unused struct fields in test fixtures)
-  # defensive-coding (PR #199): already covered by "use tree-sitter predicates to constrain overly broad query patterns" — add !object negation to bare-call query to prevent double-counting
-  # defensive-coding (PR #199): already covered by "Consolidate Detection Heuristics — Single Source of Truth" — handle wildcard static imports with sentinel alias consistent with Python
-  # comment-doc-drift (PR #199): already covered by "Comment-Code Consistency" — clarify ImportFileCount vs import-statement count in test comment
-  # testing (PR #197): promoted — see above
   # defensive-coding (PR #200): already covered by "Deduplicate Inputs Before Batch API Calls" spirit — compact map[K][]V slices after append to prevent double-counting
   # comment-doc-drift (PR #200): already covered by promoted rule — blank-import comment said "multiple blank imports in one file" but key is per import path
   # testing (PR #200): already covered by promoted rules — Go collision test name implied unrealistic multi-version scenario; renamed to reflect actual behavior
