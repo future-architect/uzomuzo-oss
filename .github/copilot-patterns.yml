@@ -13,6 +13,11 @@
 #       file: "<path>"
 #       date: "YYYY-MM-DD"
 patterns:
+  - category: "testing"
+    summary: "Propagate build tags (e.g., //go:build cgo) to test files that import build-tag-constrained packages — otherwise CGO_ENABLED=0 builds fail"
+    pr: 237
+    file: "internal/application/diet/coupling_integration_test.go"
+    date: "2026-04-08"
   # error-handling: promoted to error-handling.instructions.md (PRs #87, #159 — surface initialization errors instead of silent degradation)
   # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:382 — filter tree-sitter captures by name to skip non-import captures)
   # deterministic-output: already covered by promoted rule (PR #159, analyzer.go:315 — sort ImportFiles for deterministic JSON output)
@@ -65,6 +70,10 @@ patterns:
   # logging-consistency (PR #236 round 4): already covered by promoted "Structured Logging Conventions" rule — align error log prefix with file-local convention ("eol: ..." prefix) instead of event-id style
   # logging-consistency (PR #236 round 6): already covered by promoted rule — include caller-identifier logEvent as structured field in both debug and error logs for disambiguation
   # testing (PR #236 round 6): already covered by "Cover New Control Flow Branches with Tests" — add regression test for typed-nil client guard (isNilInterface + checkNpmDeprecation early return)
+    summary: "When a function can return nil to signal 'unavailable' vs empty to signal 'no matches', ensure tests include at least one matching item so the result is non-nil and the test exercises actual behavior — not a vacuous early return"
+    pr: 237
+    file: "internal/application/diet/coupling_integration_test.go"
+    date: "2026-04-08"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
@@ -115,6 +124,7 @@ patterns:
   # defensive-coding (PR #176 round 4): already covered by "Use Case-Insensitive Comparison for URL Components" spirit — use strings.EqualFold for namespace/name equality in Maven candidate filtering
   # defensive-coding (PR #176 round 5): already covered by "Validate Generated Strings Against Target-Language Syntax" — validate namespace with isJavaDottedPackageSafe before emitting groupId.artifactId candidate
   # defensive-coding (PR #226): already covered by "Comment-Code Consistency" — clamp condition checked IsEOL but not MaintenanceStatus=="Archived", missing documented qualifier
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #227, #237 — narrow candidate heuristics and map assertions to specific items)
   # naming-consistency (PR #198): already covered by "Use Domain Constants for Domain-Defined String Values" spirit — extract magic coefficients to named constants
   # comment-doc-drift (PR #198): already covered by "Comment-Code Consistency" rule — test case name didn't match domain mapping for healthRisk values
   # testing: promoted to testing-performance.instructions.md (PRs #197, #198, #223 — assert exact values not thresholds, omit unused test fixture fields, assert all new output fields)
@@ -142,11 +152,7 @@ patterns:
   # testing (PR #223 round 5): already covered by promoted rule — assert CallSiteCount baseline for dot-import case that documents "has baseline call sites"
   # comment-doc-drift (PR #230): already covered by "Comment-Code Consistency" rule — test name claimed constructor detection ("new FormData()") but call query only matches member_expression/call_expression, not new_expression
   # comment-doc-drift (PR #229): already covered by "Comment-Code Consistency" rule — goPackageFromHyphenated conditional logic skipped go- prefix stripping after -go suffix stripping, diverging from documented sequential heuristic
-  - category: "defensive-coding"
-    summary: "Narrow import-path candidate heuristics to avoid false attribution collisions — overly broad substring matching (e.g., last segment after delimiter) can cause unrelated deps to be marked as used"
-    pr: 227
-    file: "internal/application/diet/service.go"
-    date: "2026-04-07"
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #227, #237 — narrow candidate heuristics and map assertions to specific items)
   # defensive-coding (PR #227): already covered by "Validate Generated Strings Against Target-Language Syntax" — add isPythonIdentifierSafe validation for PyPI import path candidates
   # defensive-coding (PR #227 round 2): already covered by "Validate Generated Strings Against Target-Language Syntax" — validate dotted module paths (e.g., zope.interface) by splitting on "." and checking each segment independently
   # comment-doc-drift (PR #227 round 2): WONT_FIX — PR description reflects initial implementation; code and tests were updated in prior commit
