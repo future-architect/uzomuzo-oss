@@ -24,3 +24,7 @@ scorecard.csv
 # Temporary plans
 docs/plans/
 
+# Case study raw data (SBOMs, diet results)
+docs/case-studies/uzomuzo-diet/
+bom.json
+
