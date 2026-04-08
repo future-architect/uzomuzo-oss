@@ -448,13 +448,19 @@ const res = axios.get("https://example.com");
 
 func TestAnalyzer_TSXJSXComponentUsage(t *testing.T) {
 	dir := t.TempDir()
+	// Mix self-closing tags (<Camera />, <Camera />) and non-self-closing
+	// tags (<ArrowRight>...</ArrowRight>) to cover both jsx_self_closing_element
+	// and jsx_opening_element patterns. The closing tag should NOT be counted
+	// as a separate call site.
 	err := os.WriteFile(filepath.Join(dir, "App.tsx"), []byte(`import { Camera, ArrowRight } from "lucide-react";
 
 function App() {
   return (
     <div>
       <Camera size={24} />
-      <ArrowRight className="h-5" />
+      <ArrowRight className="h-5">
+        <span>Next</span>
+      </ArrowRight>
       <Camera />
     </div>
   );
@@ -481,7 +487,8 @@ function App() {
 	if ca.ImportFileCount != 1 {
 		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
 	}
-	// 3 JSX usages: <Camera .../>, <ArrowRight .../>, <Camera />
+	// 3 JSX usages: <Camera .../>, <ArrowRight>...</ArrowRight>, <Camera />
+	// The non-self-closing <ArrowRight> counts once (opening element only).
 	if ca.CallSiteCount != 3 {
 		t.Errorf("CallSiteCount = %d, want 3", ca.CallSiteCount)
 	}
