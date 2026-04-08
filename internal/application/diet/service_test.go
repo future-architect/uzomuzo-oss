@@ -315,7 +315,7 @@ func TestComputeHealthSignals_Archived(t *testing.T) {
 		},
 	}
 	h := computeHealthSignals(a)
-	if h.MaintenanceStatus != "Archived" {
+	if h.MaintenanceStatus != domaindiet.MaintenanceStatusArchived {
 		t.Errorf("expected MaintenanceStatus = Archived, got %s", h.MaintenanceStatus)
 	}
 	if h.HealthRisk < 0.85 {

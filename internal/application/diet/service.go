@@ -224,7 +224,7 @@ func computeHealthSignals(a *domain.Analysis) domaindiet.HealthSignals {
 	// Check repo state for archived/stalled
 	if a.RepoState != nil {
 		if a.RepoState.IsArchived {
-			h.MaintenanceStatus = "Archived"
+			h.MaintenanceStatus = domaindiet.MaintenanceStatusArchived
 			h.HealthRisk = math.Max(h.HealthRisk, 0.85)
 		}
 		if a.RepoState.DaysSinceLastCommit > 365 {

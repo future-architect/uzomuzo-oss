@@ -325,6 +325,93 @@ func TestComputeSummary_EasyWinsWithNewScoring(t *testing.T) {
 	}
 }
 
+func TestComputeImpactScore_LifecycleScoreFloor(t *testing.T) {
+	tests := []struct {
+		name           string
+		graph          GraphMetrics
+		coupling       CouplingAnalysis
+		health         HealthSignals
+		wantMin        float64
+		wantMax        float64
+		wantDifficulty string // expected Difficulty classification
+		wantFloor      bool   // expect score was clamped to lifecycleScoreFloor
+	}{
+		{
+			name:     "EOL + hard difficulty gets floor",
+			graph:    GraphMetrics{ExclusiveTransitiveCount: 5},
+			coupling: CouplingAnalysis{ImportFileCount: 80, CallSiteCount: 523, APIBreadth: 115},
+			health:   HealthSignals{HealthRisk: 0.8, IsEOL: true},
+			// Without the floor this would be near-zero; with it, exactly 0.10.
+			wantMin:        lifecycleScoreFloor,
+			wantMax:        lifecycleScoreFloor + 0.001,
+			wantDifficulty: DifficultyHard,
+			wantFloor:      true,
+		},
+		{
+			name:     "EOL + easy difficulty stays above floor naturally",
+			graph:    GraphMetrics{ExclusiveTransitiveCount: 50},
+			coupling: CouplingAnalysis{ImportFileCount: 1, CallSiteCount: 2, APIBreadth: 1},
+			health:   HealthSignals{HealthRisk: 0.9, IsEOL: true},
+			// Easy coupling: deterministic score ≈ 0.4793, well above 0.10 floor.
+			wantMin:        0.479,
+			wantMax:        0.480,
+			wantDifficulty: DifficultyEasy,
+		},
+		{
+			name:     "non-EOL + hard difficulty stays low (no floor)",
+			graph:    GraphMetrics{ExclusiveTransitiveCount: 5},
+			coupling: CouplingAnalysis{ImportFileCount: 80, CallSiteCount: 523, APIBreadth: 115},
+			health:   HealthSignals{HealthRisk: 0.8, IsEOL: false},
+			// Non-EOL hard deps should NOT get the floor — deterministic score ≈ 0.0058.
+			wantMin:        0.005,
+			wantMax:        0.006,
+			wantDifficulty: DifficultyHard,
+		},
+		{
+			name:     "Archived + hard difficulty gets floor",
+			graph:    GraphMetrics{ExclusiveTransitiveCount: 5},
+			coupling: CouplingAnalysis{ImportFileCount: 80, CallSiteCount: 523, APIBreadth: 115},
+			health:   HealthSignals{HealthRisk: 0.8, MaintenanceStatus: MaintenanceStatusArchived},
+			// Archived (not IsEOL) with hard difficulty should also get the floor.
+			wantMin:        lifecycleScoreFloor,
+			wantMax:        lifecycleScoreFloor + 0.001,
+			wantDifficulty: DifficultyHard,
+			wantFloor:      true,
+		},
+		{
+			name:     "EOL + moderate difficulty above floor naturally",
+			graph:    GraphMetrics{ExclusiveTransitiveCount: 30},
+			coupling: CouplingAnalysis{ImportFileCount: 5, CallSiteCount: 20, APIBreadth: 10},
+			health:   HealthSignals{HealthRisk: 0.7, IsEOL: true},
+			// Deterministic score ≈ 0.1295, strictly above the 0.10 floor.
+			wantMin:        0.129,
+			wantMax:        0.130,
+			wantDifficulty: DifficultyModerate,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score := ComputeImpactScore(tt.graph, tt.coupling, tt.health, 100)
+
+			if tt.wantFloor {
+				if score.PriorityScore != lifecycleScoreFloor {
+					t.Errorf("PriorityScore = %f, want exactly %f (floor)", score.PriorityScore, lifecycleScoreFloor)
+				}
+			} else {
+				if score.PriorityScore < tt.wantMin {
+					t.Errorf("PriorityScore = %f, want >= %f", score.PriorityScore, tt.wantMin)
+				}
+				if score.PriorityScore > tt.wantMax {
+					t.Errorf("PriorityScore = %f, want <= %f", score.PriorityScore, tt.wantMax)
+				}
+			}
+			if score.Difficulty != tt.wantDifficulty {
+				t.Errorf("Difficulty = %s, want %s", score.Difficulty, tt.wantDifficulty)
+			}
+		})
+	}
+}
+
 func TestComputeSummary_StaysAsIndirectCount(t *testing.T) {
 	entries := []DietEntry{
 		{

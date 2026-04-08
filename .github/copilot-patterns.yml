@@ -101,6 +101,7 @@ patterns:
   # defensive-coding (PR #176 round 3): already covered by "Validate Generated Strings Against Target-Language Syntax" — gate fallback artifactId candidate behind isJavaPackageSafe
   # defensive-coding (PR #176 round 4): already covered by "Use Case-Insensitive Comparison for URL Components" spirit — use strings.EqualFold for namespace/name equality in Maven candidate filtering
   # defensive-coding (PR #176 round 5): already covered by "Validate Generated Strings Against Target-Language Syntax" — validate namespace with isJavaDottedPackageSafe before emitting groupId.artifactId candidate
+  # defensive-coding (PR #226): already covered by "Comment-Code Consistency" — clamp condition checked IsEOL but not MaintenanceStatus=="Archived", missing documented qualifier
   # naming-consistency (PR #198): already covered by "Use Domain Constants for Domain-Defined String Values" spirit — extract magic coefficients to named constants
   # comment-doc-drift (PR #198): already covered by "Comment-Code Consistency" rule — test case name didn't match domain mapping for healthRisk values
   # testing: promoted to testing-performance.instructions.md (PRs #197, #198, #223 — assert exact values not thresholds, omit unused test fixture fields, assert all new output fields)
