@@ -40,7 +40,7 @@ public class Main {
 }
 `,
 			wantImportCount: 1,
-			wantCallSites:   2,
+			wantCallSites:   3,
 			wantUnused:      false,
 		},
 		{
