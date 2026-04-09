@@ -83,6 +83,11 @@ pending_patterns:
     pr: 236
     file: "internal/infrastructure/eolevaluator/evaluator_npm_test.go"
     date: "2026-04-08"
+  - category: "comment-doc-drift"
+    summary: "Doc comments must not make absolute claims about external system behavior — scope claims to what the current function actually handles"
+    pr: 253
+    file: "internal/infrastructure/treesitter/analyzer.go"
+    date: "2026-04-09"
   - category: "testing"
     summary: "Accept interface types in test-setter methods (e.g., SetXxxClient) so fakes can be injected via public API instead of unexported fields"
     pr: 236
