@@ -222,7 +222,7 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 		}
 		p.printf("│\n")
 		p.printf("│  Coupling\n")
-		if e.Scope == domaindiet.ScopeTool {
+		if e.Scope == domaindiet.ScopeTool && e.Coupling.IsUnused {
 			p.printf("│    Status: TOOL (go.mod tool directive — not imported in source)\n")
 		} else if e.Coupling.IsUnused {
 			p.printf("│    Status: UNUSED (0 imports found)\n")

@@ -83,43 +83,36 @@ func TestParser_Parse_ToolDirective(t *testing.T) {
 		t.Fatalf("Parse() error = %v", err)
 	}
 
-	// Should have 2 deps: copywrite (tool) and gin (regular)
-	if len(deps) != 2 {
-		t.Fatalf("got %d deps, want 2", len(deps))
+	// Should have 3 deps: copywrite (tool, exact match), exhaustive (tool, /cmd/... match), gin (regular)
+	if len(deps) != 3 {
+		t.Fatalf("got %d deps, want 3", len(deps))
 	}
 
-	// Find the tool dep by name
-	var toolDep, regularDep *struct {
-		name  string
-		scope string
-	}
-	for i := range deps {
-		switch deps[i].Name {
-		case "github.com/hashicorp/copywrite":
-			toolDep = &struct {
-				name  string
-				scope string
-			}{deps[i].Name, deps[i].Scope}
-		case "github.com/gin-gonic/gin":
-			regularDep = &struct {
-				name  string
-				scope string
-			}{deps[i].Name, deps[i].Scope}
-		}
+	// Build scope map by name for easy lookup
+	scopeByName := make(map[string]string, len(deps))
+	for _, d := range deps {
+		scopeByName[d.Name] = d.Scope
 	}
 
-	if toolDep == nil {
+	// Exact-match tool directive
+	if scope, ok := scopeByName["github.com/hashicorp/copywrite"]; !ok {
 		t.Fatal("tool dependency github.com/hashicorp/copywrite not found")
-	}
-	if toolDep.scope != "tool" {
-		t.Errorf("tool dep Scope = %q, want %q", toolDep.scope, "tool")
+	} else if scope != "tool" {
+		t.Errorf("copywrite Scope = %q, want %q", scope, "tool")
 	}
 
-	if regularDep == nil {
-		t.Fatal("regular dependency github.com/gin-gonic/gin not found")
+	// /cmd/... tool directive resolved to module path
+	if scope, ok := scopeByName["github.com/nishanths/exhaustive"]; !ok {
+		t.Fatal("tool dependency github.com/nishanths/exhaustive not found")
+	} else if scope != "tool" {
+		t.Errorf("exhaustive Scope = %q, want %q", scope, "tool")
 	}
-	if regularDep.scope != "" {
-		t.Errorf("regular dep Scope = %q, want %q (empty)", regularDep.scope, "")
+
+	// Regular dep
+	if scope, ok := scopeByName["github.com/gin-gonic/gin"]; !ok {
+		t.Fatal("regular dependency github.com/gin-gonic/gin not found")
+	} else if scope != "" {
+		t.Errorf("gin Scope = %q, want %q (empty)", scope, "")
 	}
 }
 
@@ -128,11 +121,16 @@ func TestParseToolPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseToolPaths() error = %v", err)
 	}
-	if len(toolPaths) != 1 {
-		t.Fatalf("got %d tool paths, want 1", len(toolPaths))
+	if len(toolPaths) != 2 {
+		t.Fatalf("got %d tool paths, want 2", len(toolPaths))
 	}
+	// Exact-match tool directive
 	if _, ok := toolPaths["github.com/hashicorp/copywrite"]; !ok {
-		t.Error("expected tool path github.com/hashicorp/copywrite to be present")
+		t.Error("expected module path github.com/hashicorp/copywrite to be present")
+	}
+	// /cmd/... tool directive resolved to module path
+	if _, ok := toolPaths["github.com/nishanths/exhaustive"]; !ok {
+		t.Error("expected module path github.com/nishanths/exhaustive to be present (resolved from /cmd/exhaustive)")
 	}
 }
 

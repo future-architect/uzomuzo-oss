@@ -35,11 +35,12 @@ func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDepend
 		replaces[rep.Old.Path] = rep
 	}
 
-	// Build tool set: module paths declared in tool directives (Go 1.24+).
-	toolPaths := make(map[string]struct{}, len(f.Tool))
-	for _, t := range f.Tool {
-		toolPaths[t.Path] = struct{}{}
-	}
+	// Build tool set: require module paths that correspond to tool directives
+	// (Go 1.24+). Tool directives reference package import paths (e.g.,
+	// github.com/foo/bar/cmd/baz) while require entries use module paths
+	// (e.g., github.com/foo/bar). We match by checking if the tool path
+	// equals or is a sub-path of the require module path.
+	toolPaths := resolveToolModulePaths(f.Tool, f.Require)
 
 	var deps []depparser.ParsedDependency
 	for _, req := range f.Require {
@@ -82,7 +83,11 @@ func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDepend
 	return deps, nil
 }
 
-// ParseToolPaths extracts tool directive module paths from a go.mod file.
+// ParseToolPaths extracts the require module paths that correspond to tool
+// directives from a go.mod file. Tool directives reference package import
+// paths (e.g., github.com/foo/bar/cmd/baz) while require entries use module
+// paths (e.g., github.com/foo/bar). This function resolves tool paths to
+// their matching require module paths using longest-prefix matching.
 // Returns an empty set if the file has no tool directives.
 // This is used by the diet pipeline to identify tool deps that intentionally
 // have zero source imports.
@@ -91,9 +96,32 @@ func ParseToolPaths(data []byte) (map[string]struct{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse go.mod: %w", err)
 	}
-	result := make(map[string]struct{}, len(f.Tool))
-	for _, t := range f.Tool {
-		result[t.Path] = struct{}{}
+	return resolveToolModulePaths(f.Tool, f.Require), nil
+}
+
+// resolveToolModulePaths resolves tool directive package paths to their
+// corresponding require module paths. A tool path matches a require module
+// path if the tool path equals the module path or has it as a prefix with
+// a "/" boundary. When multiple require modules match, the longest module
+// path wins.
+func resolveToolModulePaths(tools []*modfile.Tool, requires []*modfile.Require) map[string]struct{} {
+	if len(tools) == 0 {
+		return make(map[string]struct{})
 	}
-	return result, nil
+	result := make(map[string]struct{}, len(tools))
+	for _, t := range tools {
+		bestModule := ""
+		for _, req := range requires {
+			modPath := req.Mod.Path
+			if t.Path == modPath || strings.HasPrefix(t.Path, modPath+"/") {
+				if len(modPath) > len(bestModule) {
+					bestModule = modPath
+				}
+			}
+		}
+		if bestModule != "" {
+			result[bestModule] = struct{}{}
+		}
+	}
+	return result
 }
