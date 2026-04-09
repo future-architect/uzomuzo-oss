@@ -186,6 +186,46 @@ func TestBuildMavenImportPaths(t *testing.T) {
 			purl: "pkg:maven/my-company/mylib@1.0.0",
 			want: []string{"mylib"},
 		},
+		{
+			name: "override: jackson-annotations groupId differs from package",
+			purl: "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.17.0",
+			want: []string{"com.fasterxml.jackson.annotation", "com.fasterxml.jackson.core"},
+		},
+		{
+			name: "override: jackson-databind groupId differs from package",
+			purl: "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.17.0",
+			want: []string{"com.fasterxml.jackson.databind", "com.fasterxml.jackson.core"},
+		},
+		{
+			name: "override: jackson-dataformat-yaml",
+			purl: "pkg:maven/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml@2.17.0",
+			want: []string{"com.fasterxml.jackson.dataformat.yaml", "com.fasterxml.jackson.dataformat"},
+		},
+		{
+			name: "override: jackson-dataformat-xml",
+			purl: "pkg:maven/com.fasterxml.jackson.dataformat/jackson-dataformat-xml@2.17.0",
+			want: []string{"com.fasterxml.jackson.dataformat.xml", "com.fasterxml.jackson.dataformat"},
+		},
+		{
+			name: "override: jackson-dataformat-csv",
+			purl: "pkg:maven/com.fasterxml.jackson.dataformat/jackson-dataformat-csv@2.17.0",
+			want: []string{"com.fasterxml.jackson.dataformat.csv", "com.fasterxml.jackson.dataformat"},
+		},
+		{
+			name: "override: jackson-datatype-jsr310",
+			purl: "pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jsr310@2.17.0",
+			want: []string{"com.fasterxml.jackson.datatype.jsr310", "com.fasterxml.jackson.datatype"},
+		},
+		{
+			name: "override: jackson-module-kotlin",
+			purl: "pkg:maven/com.fasterxml.jackson.module/jackson-module-kotlin@2.17.0",
+			want: []string{"com.fasterxml.jackson.module.kotlin", "com.fasterxml.jackson.module"},
+		},
+		{
+			name: "override: javax.inject groupId matches package",
+			purl: "pkg:maven/javax.inject/javax.inject@1",
+			want: []string{"javax.inject"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
