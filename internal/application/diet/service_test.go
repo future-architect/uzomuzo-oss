@@ -571,6 +571,9 @@ func TestRun_ToolDepsNotFlaggedAsUnused(t *testing.T) {
 			if e.Coupling.IsUnused {
 				t.Error("tool dep copywrite should NOT be flagged as unused")
 			}
+			if e.Scores.Difficulty == domaindiet.DifficultyTrivial {
+				t.Error("tool dep copywrite should NOT be classified as trivial difficulty")
+			}
 		case "github.com/gin-gonic/gin":
 			if e.Scope != "" {
 				t.Errorf("gin Scope = %q, want empty", e.Scope)

@@ -184,8 +184,20 @@ func (s *Service) buildEntries(
 
 		// Tool directive deps intentionally have zero source imports.
 		// Override IsUnused so they are not flagged as trivial removals.
-		if entry.Scope == domaindiet.ScopeTool && entry.Coupling.IsUnused {
-			entry.Coupling.IsUnused = false
+		//
+		// Also provide a minimal synthetic coupling signal when the analyzer has
+		// no source-coupling data for tool deps. Leaving IsUnused=false together
+		// with all coupling counts at zero can be interpreted downstream as
+		// zero-effort removal, which incorrectly surfaces tool deps as trivial/easy.
+		if entry.Scope == domaindiet.ScopeTool {
+			if entry.Coupling.IsUnused {
+				entry.Coupling.IsUnused = false
+			}
+			if entry.Coupling.ImportFileCount == 0 &&
+				entry.Coupling.CallSiteCount == 0 &&
+				entry.Coupling.APIBreadth == 0 {
+				entry.Coupling.APIBreadth = 1
+			}
 		}
 
 		if a, ok := health[purl]; ok && a != nil {
