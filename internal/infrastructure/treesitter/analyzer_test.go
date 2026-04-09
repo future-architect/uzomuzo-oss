@@ -2238,6 +2238,30 @@ Fernet("key")
 			wantImportCount: 1,
 			wantCallSites:   1,
 		},
+		{
+			name: "try/except with tuple containing ImportError",
+			code: `try:
+    import cryptography
+except (ImportError, ValueError):
+    pass
+`,
+			wantBlankImport: true,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   0,
+		},
+		{
+			name: "try/except with tuple of unrelated exceptions",
+			code: `try:
+    import cryptography
+except (ValueError, TypeError):
+    pass
+`,
+			wantBlankImport: false,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   0,
+		},
 	}
 
 	for _, tt := range tests {

@@ -695,14 +695,29 @@ func hasPythonImportErrorHandler(tryStmt *sitter.Node, src []byte) bool {
 		}
 
 		// Check each child of the except_clause for exception type identifiers.
+		// Exception types may appear as direct identifier children (single type)
+		// or inside a tuple child (multiple types, e.g., "except (ImportError, ValueError)").
 		hasExceptionType := false
 		for j := 0; j < int(child.ChildCount()); j++ {
 			gc := child.Child(j)
-			if gc.Type() == "identifier" {
+			switch gc.Type() {
+			case "identifier":
 				hasExceptionType = true
 				name := gc.Content(src)
 				if name == "ImportError" || name == "ModuleNotFoundError" {
 					return true
+				}
+			case "tuple":
+				// except (ExcA, ExcB): — identifiers are inside the tuple node.
+				for k := 0; k < int(gc.ChildCount()); k++ {
+					tc := gc.Child(k)
+					if tc.Type() == "identifier" {
+						hasExceptionType = true
+						name := tc.Content(src)
+						if name == "ImportError" || name == "ModuleNotFoundError" {
+							return true
+						}
+					}
 				}
 			}
 		}
