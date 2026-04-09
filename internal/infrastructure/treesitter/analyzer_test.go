@@ -2019,3 +2019,100 @@ const data = Readable.from([1, 2, 3]);
 		})
 	}
 }
+
+// TestAnalyzer_TypeScriptDefaultImportCall verifies that a default import binding
+// used as a direct function call is detected as a call site.
+// e.g., `import _generate from '@babel/generator'; _generate(ast);`
+func TestAnalyzer_TypeScriptDefaultImportCall(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "codegen.ts"), []byte(`import _generate from '@babel/generator';
+
+const result = _generate(ast, { comments: true });
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/%40babel/generator@7.0.0": {"@babel/generator"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/%40babel/generator@7.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for @babel/generator")
+	}
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount < 1 {
+		t.Errorf("CallSiteCount = %d, want >= 1", ca.CallSiteCount)
+	}
+}
+
+// TestAnalyzer_TypeScriptSideEffectImport verifies that a bare side-effect import
+// (`import 'reflect-metadata'`) is tracked as used (not classified as unused).
+func TestAnalyzer_TypeScriptSideEffectImport(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "bootstrap.ts"), []byte(`import 'reflect-metadata';
+
+// No bindings — this is a side-effect-only import (polyfill registration).
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/reflect-metadata@0.1.13": {"reflect-metadata"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:npm/reflect-metadata@0.1.13"]
+	if !ok {
+		t.Fatal("expected coupling analysis for reflect-metadata")
+	}
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false (side-effect import should not be classified as unused)")
+	}
+	if !ca.HasBlankImport {
+		t.Error("HasBlankImport = false, want true (side-effect import analogous to Go blank import)")
+	}
+}
+
+// TestAnalyzer_TypeScriptTypeOnlyImportExclusion verifies that `import type { ... }`
+// in a .ts file (not just .tsx) is excluded from coupling analysis.
+func TestAnalyzer_TypeScriptTypeOnlyImportExclusion(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "types.ts"), []byte(`import type { Foo, Bar } from "some-lib";
+
+// Type-only import — no runtime coupling.
+const x: Foo = {} as any;
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/some-lib@1.0.0": {"some-lib"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result) != 0 {
+		t.Errorf("expected no coupling for type-only import in .ts file, got %d results", len(result))
+	}
+}

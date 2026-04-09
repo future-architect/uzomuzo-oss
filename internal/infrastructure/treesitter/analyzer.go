@@ -826,9 +826,19 @@ func (a *Analyzer) handleJSImport(
 		return
 	}
 
+	// Side-effect imports (`import 'reflect-metadata'`) have no import_clause,
+	// meaning no bindings are introduced. Treat them like Go blank imports:
+	// record the import file so the dep is not misclassified as "unused", but
+	// skip call-site counting.
+	if isSideEffectImport(node) {
+		key := blankImportAlias + importPath
+		aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
+		return
+	}
+
 	// Extract the JS/TS binding names from the AST (e.g., "cloud" from
 	// `import cloud from '@strapi/plugin-cloud'`). Falls back to aliasFromPkg
-	// for side-effect imports or patterns we cannot resolve.
+	// for patterns we cannot resolve from the AST.
 	aliases := extractJSBindings(node, src)
 	if len(aliases) == 0 {
 		aliases = []string{cfg.aliasFromPkg(importPath)}
@@ -986,6 +996,23 @@ func isTypeOnlyImport(node *sitter.Node) bool {
 		}
 	}
 	return false
+}
+
+// isSideEffectImport checks if a JS/TS import is a bare side-effect import
+// with no bindings (e.g., `import 'reflect-metadata'`). These imports have an
+// import_statement parent but no import_clause child — only the source string.
+// CJS require() calls are never side-effect imports (they always bind a value).
+func isSideEffectImport(node *sitter.Node) bool {
+	parent := node.Parent()
+	if parent == nil || parent.Type() != "import_statement" {
+		return false
+	}
+	for i := 0; i < int(parent.ChildCount()); i++ {
+		if parent.Child(i).Type() == "import_clause" {
+			return false
+		}
+	}
+	return true
 }
 
 // countCallSites counts selector/member expressions matching known aliases.
