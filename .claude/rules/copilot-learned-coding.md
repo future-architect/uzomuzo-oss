@@ -93,16 +93,6 @@ pending_patterns:
     pr: 236
     file: "internal/infrastructure/eolevaluator/evaluator.go"
     date: "2026-04-08"
-  - category: "defensive-coding"
-    summary: "Resolve tool/package import paths to their canonical module paths (longest-prefix match against require entries) before matching — raw tool directive paths like github.com/foo/bar/cmd/baz won't exact-match the module path github.com/foo/bar"
-    pr: 254
-    file: "internal/infrastructure/depparser/gomod/parser.go"
-    date: "2026-04-09"
-  - category: "defensive-coding"
-    summary: "Guard conditional UI status overrides on the specific triggering condition (e.g., IsUnused), not just the scope/type — an unconditional override hides real data when the dep is both a tool and used at runtime"
-    pr: 254
-    file: "internal/interfaces/cli/diet_render.go"
-    date: "2026-04-09"
   - category: "testing"
     summary: "When a function can return nil to signal 'unavailable' vs empty to signal 'no matches', ensure tests include at least one matching item so the result is non-nil and the test exercises actual behavior — not a vacuous early return"
     pr: 237
