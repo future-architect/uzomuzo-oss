@@ -46,6 +46,10 @@ type ParsedDependency struct {
 	// ViaParents lists the short names of direct dependencies through which
 	// this transitive dependency is pulled in. Empty for direct or unknown deps.
 	ViaParents []string
+	// Scope indicates the dependency's role in the project.
+	// Empty string means runtime (the default). "tool" means a Go tool directive
+	// dependency (Go 1.24+), which is a dev/CI tool not imported in source code.
+	Scope string
 }
 
 // DependencyParser extracts dependencies from raw input data.

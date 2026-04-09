@@ -519,6 +519,74 @@ func TestFilterWorkspaceDeps(t *testing.T) {
 	}
 }
 
+func TestRun_ToolDepsNotFlaggedAsUnused(t *testing.T) {
+	graphResult := &domaindiet.GraphResult{
+		DirectDeps: []string{
+			"pkg:golang/github.com/hashicorp/copywrite@v0.19.0",
+			"pkg:golang/github.com/gin-gonic/gin@v1.10.0",
+		},
+		Metrics: map[string]*domaindiet.GraphMetrics{
+			"pkg:golang/github.com/hashicorp/copywrite@v0.19.0": {
+				ExclusiveTransitiveCount: 1,
+				TotalTransitiveCount:     1,
+			},
+			"pkg:golang/github.com/gin-gonic/gin@v1.10.0": {
+				ExclusiveTransitiveCount: 10,
+				TotalTransitiveCount:     15,
+			},
+		},
+		TotalTransitive: 16,
+	}
+
+	// Source analysis returns no coupling for either dep — both would
+	// normally be flagged as unused.
+	sourceResults := map[string]*domaindiet.CouplingAnalysis{}
+
+	toolDeps := map[string]struct{}{
+		"github.com/hashicorp/copywrite": {},
+	}
+
+	svc := NewService(
+		&stubGraphAnalyzer{result: graphResult},
+		&stubSourceAnalyzer{result: sourceResults},
+		nil,
+	)
+
+	plan, err := svc.Run(context.Background(), DietInput{
+		SBOMData:   []byte("fake-sbom"),
+		SBOMPath:   "test.sbom.json",
+		SourceRoot: "/tmp/src",
+		ToolDeps:   toolDeps,
+	})
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	for _, e := range plan.Entries {
+		switch e.Name {
+		case "github.com/hashicorp/copywrite":
+			if e.Scope != domaindiet.ScopeTool {
+				t.Errorf("copywrite Scope = %q, want %q", e.Scope, domaindiet.ScopeTool)
+			}
+			if e.Coupling.IsUnused {
+				t.Error("tool dep copywrite should NOT be flagged as unused")
+			}
+		case "github.com/gin-gonic/gin":
+			if e.Scope != "" {
+				t.Errorf("gin Scope = %q, want empty", e.Scope)
+			}
+			if !e.Coupling.IsUnused {
+				t.Error("non-tool dep gin with 0 imports should be flagged as unused")
+			}
+		}
+	}
+
+	// Summary: only gin should count as unused, not copywrite
+	if plan.Summary.UnusedDirect != 1 {
+		t.Errorf("expected UnusedDirect = 1 (gin only), got %d", plan.Summary.UnusedDirect)
+	}
+}
+
 func TestRun_NoSourceAnalyzer(t *testing.T) {
 	graphResult := &domaindiet.GraphResult{
 		DirectDeps: []string{"pkg:golang/github.com/foo/bar@v1.0.0"},

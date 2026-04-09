@@ -33,6 +33,10 @@ type DietInput struct {
 	SBOMData   []byte
 	SBOMPath   string
 	SourceRoot string // empty = skip source analysis
+	// ToolDeps is a set of module paths declared in go.mod tool directives
+	// (Go 1.24+). These are dev/CI executables that intentionally have zero
+	// source imports and should not be flagged as unused.
+	ToolDeps map[string]struct{}
 }
 
 // Service orchestrates the 4-phase diet pipeline.
@@ -122,7 +126,7 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 	// Phase 4: Scoring and prioritization
 	slog.Info("Phase 4: Computing scores and ranking")
 	maxExclusive := graphResult.MaxExclusiveTransitiveCount()
-	entries := s.buildEntries(graphResult, couplingResults, healthResults, maxExclusive)
+	entries := s.buildEntries(graphResult, couplingResults, healthResults, maxExclusive, input.ToolDeps)
 	domaindiet.RankEntries(entries)
 	summary := domaindiet.ComputeSummary(entries, graphResult.TotalTransitive)
 
@@ -148,6 +152,7 @@ func (s *Service) buildEntries(
 	coupling map[string]*domaindiet.CouplingAnalysis,
 	health map[string]*domain.Analysis,
 	maxExclusive int,
+	toolDeps map[string]struct{},
 ) []domaindiet.DietEntry {
 	entries := make([]domaindiet.DietEntry, 0, len(graph.DirectDeps))
 	for _, purl := range graph.DirectDeps {
@@ -157,6 +162,13 @@ func (s *Service) buildEntries(
 		}
 
 		entry.Name, entry.Ecosystem, entry.Version = parsePURLParts(purl)
+
+		// Check if this dependency is a Go tool directive dep.
+		if toolDeps != nil {
+			if _, ok := toolDeps[entry.Name]; ok {
+				entry.Scope = domaindiet.ScopeTool
+			}
+		}
 
 		if m, ok := graph.Metrics[purl]; ok {
 			entry.Graph = *m
@@ -168,6 +180,12 @@ func (s *Service) buildEntries(
 			} else {
 				entry.Coupling = domaindiet.CouplingAnalysis{IsUnused: true}
 			}
+		}
+
+		// Tool directive deps intentionally have zero source imports.
+		// Override IsUnused so they are not flagged as trivial removals.
+		if entry.Scope == domaindiet.ScopeTool && entry.Coupling.IsUnused {
+			entry.Coupling.IsUnused = false
 		}
 
 		if a, ok := health[purl]; ok && a != nil {

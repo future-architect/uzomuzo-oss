@@ -76,6 +76,76 @@ func TestParser_Parse_Empty(t *testing.T) {
 	}
 }
 
+func TestParser_Parse_ToolDirective(t *testing.T) {
+	p := &gomod.Parser{}
+	deps, err := p.Parse(context.Background(), readTestData(t, "with_tool.mod"))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	// Should have 2 deps: copywrite (tool) and gin (regular)
+	if len(deps) != 2 {
+		t.Fatalf("got %d deps, want 2", len(deps))
+	}
+
+	// Find the tool dep by name
+	var toolDep, regularDep *struct {
+		name  string
+		scope string
+	}
+	for i := range deps {
+		switch deps[i].Name {
+		case "github.com/hashicorp/copywrite":
+			toolDep = &struct {
+				name  string
+				scope string
+			}{deps[i].Name, deps[i].Scope}
+		case "github.com/gin-gonic/gin":
+			regularDep = &struct {
+				name  string
+				scope string
+			}{deps[i].Name, deps[i].Scope}
+		}
+	}
+
+	if toolDep == nil {
+		t.Fatal("tool dependency github.com/hashicorp/copywrite not found")
+	}
+	if toolDep.scope != "tool" {
+		t.Errorf("tool dep Scope = %q, want %q", toolDep.scope, "tool")
+	}
+
+	if regularDep == nil {
+		t.Fatal("regular dependency github.com/gin-gonic/gin not found")
+	}
+	if regularDep.scope != "" {
+		t.Errorf("regular dep Scope = %q, want %q (empty)", regularDep.scope, "")
+	}
+}
+
+func TestParseToolPaths(t *testing.T) {
+	toolPaths, err := gomod.ParseToolPaths(readTestData(t, "with_tool.mod"))
+	if err != nil {
+		t.Fatalf("ParseToolPaths() error = %v", err)
+	}
+	if len(toolPaths) != 1 {
+		t.Fatalf("got %d tool paths, want 1", len(toolPaths))
+	}
+	if _, ok := toolPaths["github.com/hashicorp/copywrite"]; !ok {
+		t.Error("expected tool path github.com/hashicorp/copywrite to be present")
+	}
+}
+
+func TestParseToolPaths_NoTools(t *testing.T) {
+	toolPaths, err := gomod.ParseToolPaths(readTestData(t, "go.mod"))
+	if err != nil {
+		t.Fatalf("ParseToolPaths() error = %v", err)
+	}
+	if len(toolPaths) != 0 {
+		t.Errorf("expected 0 tool paths for go.mod without tool directives, got %d", len(toolPaths))
+	}
+}
+
 func TestParser_Parse_InvalidData(t *testing.T) {
 	p := &gomod.Parser{}
 	_, err := p.Parse(context.Background(), []byte("not a go.mod"))

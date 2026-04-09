@@ -36,6 +36,7 @@ type dietJSONEntry struct {
 	Name      string `json:"name"`
 	Version   string `json:"version"`
 	Ecosystem string `json:"ecosystem"`
+	Scope     string `json:"scope,omitempty"`
 
 	PriorityScore  float64 `json:"priority_score"`
 	GraphImpact    float64 `json:"graph_impact"`
@@ -102,6 +103,7 @@ func renderDietJSON(w io.Writer, plan *domaindiet.DietPlan) error {
 			Name:                e.Name,
 			Version:             e.Version,
 			Ecosystem:           e.Ecosystem,
+			Scope:               e.Scope,
 			PriorityScore:       e.Scores.PriorityScore,
 			GraphImpact:         e.Scores.GraphImpact,
 			CouplingEffort:      e.Scores.CouplingEffort,
@@ -204,6 +206,9 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 	for _, e := range plan.Entries {
 		p.printf("┌─ #%d %s (%s) ─────────────────────\n", e.Scores.Rank, e.Name, e.Version)
 		p.printf("│  PURL:       %s\n", e.PURL)
+		if e.Scope != "" {
+			p.printf("│  Scope:      %s\n", e.Scope)
+		}
 		p.printf("│  Score:       %.2f  Effort: %s\n", e.Scores.PriorityScore, e.Scores.Difficulty)
 		p.printf("│\n")
 		p.printf("│  Graph Impact\n")
@@ -217,7 +222,9 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 		}
 		p.printf("│\n")
 		p.printf("│  Coupling\n")
-		if e.Coupling.IsUnused {
+		if e.Scope == domaindiet.ScopeTool {
+			p.printf("│    Status: TOOL (go.mod tool directive — not imported in source)\n")
+		} else if e.Coupling.IsUnused {
 			p.printf("│    Status: UNUSED (0 imports found)\n")
 		} else {
 			p.printf("│    Imports:    %d\n", e.Coupling.ImportFileCount)
