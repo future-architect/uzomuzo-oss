@@ -1849,8 +1849,8 @@ public class Main {
 
 	analyzer := NewAnalyzer()
 	importPaths := map[string][]string{
-		"pkg:maven/com.google.code.findbugs/jsr305@3.0.2":              {"javax.annotation"},
-		"pkg:maven/com.google.inject/guice@5.1":                       {"com.google.inject"},
+		"pkg:maven/com.google.code.findbugs/jsr305@3.0.2":               {"javax.annotation"},
+		"pkg:maven/com.google.inject/guice@5.1":                         {"com.google.inject"},
 		"pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.15": {"com.fasterxml.jackson.annotation"},
 	}
 	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
@@ -2195,6 +2195,48 @@ except ValueError:
 			wantUnused:      false,
 			wantImportCount: 1,
 			wantCallSites:   0,
+		},
+		{
+			name: "import inside except ImportError is not feature detection",
+			code: `try:
+    import unavailable_module
+except ImportError:
+    import cryptography
+
+cryptography.fernet.Fernet("key")
+`,
+			wantBlankImport: false,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   1,
+		},
+		{
+			name: "try/except ImportError import used via module attribute",
+			code: `try:
+    import cryptography
+except ImportError:
+    pass
+
+cryptography.fernet.Fernet("key")
+`,
+			wantBlankImport: true,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   1,
+		},
+		{
+			name: "try/except ImportError from import used via imported name",
+			code: `try:
+    from cryptography.fernet import Fernet
+except ImportError:
+    pass
+
+Fernet("key")
+`,
+			wantBlankImport: true,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   1,
 		},
 	}
 
