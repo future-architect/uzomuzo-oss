@@ -2301,3 +2301,156 @@ except (ValueError, TypeError):
 		})
 	}
 }
+
+func TestAnalyzer_JSInlineRequireCallSites(t *testing.T) {
+	tests := []struct {
+		name         string
+		filename     string
+		code         string
+		importPaths  map[string][]string
+		purl         string
+		wantImports  int
+		wantCalls    int
+		wantIsUnused bool
+		wantBlank    bool
+		wantBreadth  int
+		wantNoResult bool // true if we expect no coupling result for the PURL
+	}{
+		{
+			name:     "chained property access: require('pkg').method()",
+			filename: "index.js",
+			code: `var html = require('dom-serialize').serializeDocument(document);
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/dom-serialize@2.0.0": {"dom-serialize"},
+			},
+			purl:         "pkg:npm/dom-serialize@2.0.0",
+			wantImports:  1,
+			wantCalls:    0,
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "immediate invocation: require('pkg')()",
+			filename: "index.js",
+			code: `require('browser-stdout')();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/browser-stdout@1.3.1": {"browser-stdout"},
+			},
+			purl:         "pkg:npm/browser-stdout@1.3.1",
+			wantImports:  1,
+			wantCalls:    0,
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "factory pattern: require('pkg')('arg')",
+			filename: "index.js",
+			code: `var deprecate = require('depd')('express');
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/depd@2.0.0": {"depd"},
+			},
+			purl:         "pkg:npm/depd@2.0.0",
+			wantImports:  1,
+			wantCalls:    0,
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "bare side-effect require: require('pkg')",
+			filename: "index.js",
+			code: `require('side-effect-only');
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/side-effect-only@1.0.0": {"side-effect-only"},
+			},
+			purl:         "pkg:npm/side-effect-only@1.0.0",
+			wantImports:  1,
+			wantCalls:    0,
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "normal require with variable binding still works",
+			filename: "index.js",
+			code: `const serialize = require('dom-serialize');
+
+serialize(document);
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/dom-serialize@2.0.0": {"dom-serialize"},
+			},
+			purl:         "pkg:npm/dom-serialize@2.0.0",
+			wantImports:  1,
+			wantCalls:    1,
+			wantIsUnused: false,
+			wantBlank:    false,
+			wantBreadth:  1,
+		},
+		{
+			name:     "chained member access without call: require('pkg').prop",
+			filename: "index.js",
+			code: `var version = require('some-pkg').version;
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    0,
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if tt.wantNoResult {
+				if _, ok := result[tt.purl]; ok {
+					t.Fatalf("expected no coupling result for %s, but got one", tt.purl)
+				}
+				return
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.IsUnused != tt.wantIsUnused {
+				t.Errorf("IsUnused = %v, want %v", ca.IsUnused, tt.wantIsUnused)
+			}
+			if ca.HasBlankImport != tt.wantBlank {
+				t.Errorf("HasBlankImport = %v, want %v", ca.HasBlankImport, tt.wantBlank)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+		})
+	}
+}
