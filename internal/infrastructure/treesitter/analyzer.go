@@ -1001,7 +1001,8 @@ func isTypeOnlyImport(node *sitter.Node) bool {
 // isSideEffectImport checks if a JS/TS import is a bare side-effect import
 // with no bindings (e.g., `import 'reflect-metadata'`). These imports have an
 // import_statement parent but no import_clause child — only the source string.
-// CJS require() calls are never side-effect imports (they always bind a value).
+// This helper only classifies bare ESM `import "x"` statements as side-effect
+// imports; it does not attempt to classify CommonJS `require()` usage.
 func isSideEffectImport(node *sitter.Node) bool {
 	parent := node.Parent()
 	if parent == nil || parent.Type() != "import_statement" {
