@@ -107,3 +107,45 @@ Accumulated across both rounds, IBNC patterns fall into clear categories:
 | Python optional imports (`try/except ImportError`) | Python | Yes | Detect import inside try block as conditional usage |
 | Cross-language SBOM contamination | Go, Python | No | SBOM tool limitation — mixed-language repos |
 | Type-only imports (`csstype`, `typing-extensions`) | TS, Python | Maybe | Detect TYPE_CHECKING blocks |
+
+## 2026-04-09 — diet-fuzz round 3 (5 TypeScript projects, targeted deep-dive)
+
+### Selection Strategy
+
+TypeScript-only round targeting decorator DI (Angular), ORM conditional drivers (Prisma, Drizzle), RPC frameworks (tRPC), and AI SDK (Vercel AI). All 5 projects succeeded (15/15 tool combos).
+
+### Angular: Karma Plugins and HTML Template Components
+
+- **Karma test runner plugins** (7 packages, 45+ files): `karma-chrome-launcher`, `karma-jasmine`, `karma-coverage`, etc. — loaded via `karma.conf.js`, not source imports. Same config-driven pattern as eslint/remark plugins but in the test runner ecosystem.
+- **HTML template component pattern** (NEW): `ngx-progressbar`, `angular-split` are Angular components used via HTML template selectors (`<ngx-progressbar>`) and NgModule declarations. The "call site" is in `.html` templates, which tree-sitter does not scan for TypeScript import usage. This is a fundamentally different pattern from all others — the usage is in a different file type.
+- **`zone.js` side-effect import**: 7 files. Angular's async tracking library, imported as `import 'zone.js'` — patches global async APIs. Additional evidence for #261.
+- **`@angular/aria`**: 111 import files, 0 call sites. Used through Angular's dependency injection — the module is imported and registered, but API calls go through DI-resolved instances.
+
+### Prisma: Generator and Script Dependencies
+
+- `@prisma/generator` (24 files): Internal package used through Prisma's code generation pipeline, not direct function calls.
+- `next`, `@octokit/rest`, `esbuild-register`: Example app and CI script dependencies — not part of the Prisma library itself. Monorepo SBOM includes workspace dev dependencies.
+
+### Drizzle-ORM: Minimal IBNC
+
+- Only 3 IBNC (syft): `zx` (dev script runner), `@typescript-eslint/experimental-utils` (ESLint tooling), `ws` (conditional WebSocket driver). Clean result — Drizzle's direct import patterns are well-handled.
+
+### tRPC and Vercel AI
+
+- tRPC: 13 IBNC (trivy). Mix of remark plugins (docs site), `event-source-polyfill` (side-effect), `server-only` (Next.js build guard), `@fastify/websocket` (conditional transport).
+- Vercel AI: 6 IBNC (trivy). `@vercel/kv` (SDK), `json-schema` (indirect usage), `react-server-dom-webpack` (framework internal), cross-language deps (`pydantic`, `@angular/common` from examples).
+
+### Updated Pattern Taxonomy (3 rounds combined)
+
+| Pattern | Languages | Evidence | Actionable? | Issue |
+|---------|-----------|----------|-------------|-------|
+| Side-effect import (`import 'x'`, `import _ "x"`) | Go, TS, JS | 805+ files (reflect-metadata alone) | **HIGH** | #261 |
+| DB driver conditional loading | Go, TS | typeorm, vault, drizzle | **HIGH** | #260 |
+| Config-driven plugins (karma, eslint, remark, postcss) | TS, JS | 20+ packages | No — config files | #245 |
+| Framework DI/decorator | TS, JS | Angular, Nest, Ember | **MEDIUM** | #245 |
+| HTML template components | TS (Angular) | ngx-progressbar, angular-split | **NEW** — cross-file-type | #245 |
+| Delegated composition | JS, Go | koa, SDK wrappers | No — library-internal | #241 |
+| Python optional imports | Python | flask, fastapi | **MEDIUM** | #243 |
+| Cross-language SBOM contamination | Go, Python, TS | vault, dagster, vercel/ai | No — SBOM tool issue | — |
+| Type-only imports | TS, Python | csstype, typing-extensions, @cloudflare/workers-types | **LOW** | — |
+| Example/script deps in monorepo | TS | prisma, trpc | No — SBOM scope issue | — |
