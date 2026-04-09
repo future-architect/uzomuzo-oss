@@ -344,6 +344,22 @@ func buildImportPaths(purls []string) map[string][]string {
 	return result
 }
 
+// pypiImportOverrides maps lowercased PyPI distribution names to their actual
+// Python import module names for well-known packages where the distribution
+// name cannot be derived from simple heuristics (prefix stripping, hyphen
+// normalization).  Add entries as real-world mismatches are discovered.
+var pypiImportOverrides = map[string][]string{
+	"attrs":           {"attr"},
+	"beautifulsoup4":  {"bs4"},
+	"opencv-python":   {"cv2"},
+	"pillow":          {"PIL"},
+	"protobuf":        {"google.protobuf"},
+	"pyyaml":          {"yaml"},
+	"python-dateutil": {"dateutil"},
+	"python-dotenv":   {"dotenv"},
+	"scikit-learn":    {"sklearn"},
+}
+
 // pypiPrefixes lists common PyPI distribution name prefixes that are not part
 // of the actual Python import module name (e.g., "python-multipart" is imported
 // as "multipart").
@@ -353,10 +369,11 @@ var pypiPrefixes = []string{
 }
 
 // buildPyPIImportPaths generates candidate Python import module names for a
-// PyPI distribution name. The canonical candidate (hyphen→underscore, lowered)
-// is added first when it passes validation. Additional candidates are produced
-// by stripping well-known prefixes (e.g., "python-", "py-"). Each candidate
-// is validated against Python identifier rules before inclusion.
+// PyPI distribution name. Override entries from pypiImportOverrides are added
+// first as highest-priority candidates. The canonical candidate
+// (hyphen→underscore, lowered) and prefix-stripped variants follow as
+// fallbacks. Each candidate is validated against Python identifier rules
+// before inclusion.
 func buildPyPIImportPaths(name string) []string {
 	seen := make(map[string]struct{})
 	var paths []string
@@ -375,13 +392,20 @@ func buildPyPIImportPaths(name string) []string {
 		paths = append(paths, p)
 	}
 
-	// 1. Canonical: replace hyphens with underscores and lowercase.
+	lower := strings.ToLower(name)
+
+	// 1. Well-known overrides take highest priority.
+	if overrides, ok := pypiImportOverrides[lower]; ok {
+		for _, o := range overrides {
+			add(o)
+		}
+	}
+
+	// 2. Canonical: replace hyphens with underscores and lowercase.
 	canonical := strings.ToLower(strings.ReplaceAll(name, "-", "_"))
 	add(canonical)
 
-	lower := strings.ToLower(name)
-
-	// 2. Strip well-known prefixes (e.g., "python-multipart" → "multipart").
+	// 3. Strip well-known prefixes (e.g., "python-multipart" → "multipart").
 	for _, prefix := range pypiPrefixes {
 		if after, ok := strings.CutPrefix(lower, prefix); ok && after != "" {
 			add(strings.ReplaceAll(after, "-", "_"))

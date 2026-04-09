@@ -224,9 +224,9 @@ func TestBuildPyPIImportPaths(t *testing.T) {
 			want: []string{"email_validator"},
 		},
 		{
-			name: "case normalization: PyYAML",
+			name: "override: PyYAML -> yaml",
 			purl: "pkg:pypi/PyYAML@6.0.1",
-			want: []string{"pyyaml"},
+			want: []string{"yaml", "pyyaml"},
 		},
 		{
 			name: "no hyphens: requests",
@@ -252,6 +252,46 @@ func TestBuildPyPIImportPaths(t *testing.T) {
 			name: "dotted name: zope.interface",
 			purl: "pkg:pypi/zope.interface@6.0",
 			want: []string{"zope.interface"},
+		},
+		{
+			name: "override: Pillow -> PIL",
+			purl: "pkg:pypi/Pillow@10.0.0",
+			want: []string{"PIL", "pillow"},
+		},
+		{
+			name: "override: scikit-learn -> sklearn",
+			purl: "pkg:pypi/scikit-learn@1.3.0",
+			want: []string{"sklearn", "scikit_learn"},
+		},
+		{
+			name: "override: beautifulsoup4 -> bs4",
+			purl: "pkg:pypi/beautifulsoup4@4.12.0",
+			want: []string{"bs4", "beautifulsoup4"},
+		},
+		{
+			name: "override: python-dateutil -> dateutil",
+			purl: "pkg:pypi/python-dateutil@2.8.2",
+			want: []string{"dateutil", "python_dateutil"},
+		},
+		{
+			name: "override: attrs -> attr",
+			purl: "pkg:pypi/attrs@23.1.0",
+			want: []string{"attr", "attrs"},
+		},
+		{
+			name: "override: protobuf -> google.protobuf",
+			purl: "pkg:pypi/protobuf@4.24.0",
+			want: []string{"google.protobuf", "protobuf"},
+		},
+		{
+			name: "override: opencv-python -> cv2",
+			purl: "pkg:pypi/opencv-python@4.8.0",
+			want: []string{"cv2", "opencv_python"},
+		},
+		{
+			name: "override: python-dotenv -> dotenv",
+			purl: "pkg:pypi/python-dotenv@1.0.0",
+			want: []string{"dotenv", "python_dotenv"},
 		},
 	}
 	for _, tt := range tests {
