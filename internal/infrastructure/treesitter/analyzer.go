@@ -617,6 +617,16 @@ func (a *Analyzer) handlePythonImport(
 		return
 	}
 
+	// Check if this import is inside a try/except ImportError block.
+	// This is a Python feature-detection pattern where the import itself is
+	// the usage (checking if the package is installed). Treat like a Go blank
+	// import: record the import file but skip call-site counting.
+	if isPythonTryExceptImport(parent, src) {
+		key := blankImportAlias + importPath
+		aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
+		return
+	}
+
 	switch parent.Type() {
 	case "import_statement":
 		// Regular import (e.g., "import requests") — register module name as alias.
@@ -643,6 +653,58 @@ func (a *Analyzer) handlePythonImport(
 		// so we only register the individual imported names.
 		a.registerFromImportNames(node, src, purls, aliasMap)
 	}
+}
+
+// isPythonTryExceptImport checks if a Python import statement is inside a
+// try/except block that catches ImportError or ModuleNotFoundError.
+// This is a common feature-detection pattern where the import itself is the
+// usage (checking if the package is installed).
+//
+// importStmt is the import_statement or import_from_statement node (the parent
+// of the captured dotted_name). src is the file source for reading node content.
+func isPythonTryExceptImport(importStmt *sitter.Node, src []byte) bool {
+	// Walk up from the import statement to find a try_statement ancestor.
+	// Expected AST: import_statement -> block -> try_statement (depth 2).
+	// Limit walk depth to avoid false matches in deeply nested code.
+	current := importStmt.Parent()
+	for depth := 0; current != nil && depth < maxAncestorWalkDepth; depth++ {
+		if current.Type() == "try_statement" {
+			return hasPythonImportErrorHandler(current, src)
+		}
+		current = current.Parent()
+	}
+	return false
+}
+
+// hasPythonImportErrorHandler checks whether a try_statement has an except_clause
+// that catches ImportError, ModuleNotFoundError, or is a bare except (no type).
+func hasPythonImportErrorHandler(tryStmt *sitter.Node, src []byte) bool {
+	for i := 0; i < int(tryStmt.ChildCount()); i++ {
+		child := tryStmt.Child(i)
+		if child.Type() != "except_clause" {
+			continue
+		}
+
+		// Check each child of the except_clause for exception type identifiers.
+		hasExceptionType := false
+		for j := 0; j < int(child.ChildCount()); j++ {
+			gc := child.Child(j)
+			if gc.Type() == "identifier" {
+				hasExceptionType = true
+				name := gc.Content(src)
+				if name == "ImportError" || name == "ModuleNotFoundError" {
+					return true
+				}
+			}
+		}
+
+		// Bare except (no exception type specified) catches everything
+		// including ImportError.
+		if !hasExceptionType {
+			return true
+		}
+	}
+	return false
 }
 
 // resolvePythonPURLs resolves a Python import path to its PURLs.
