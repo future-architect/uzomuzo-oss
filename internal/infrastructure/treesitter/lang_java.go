@@ -4,6 +4,8 @@ package treesitter
 
 import (
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/java"
@@ -85,7 +87,8 @@ func (a *Analyzer) handleJavaImport(
 	// Regular import: last component is a class name (e.g., Gson, StringUtils).
 	aliasMap[alias] = appendUniquePURLs(aliasMap[alias], bestPURLs)
 	// Also register lowercase for variable-style calls (e.g., Gson gson = ...; gson.toJson()).
-	lower := strings.ToLower(alias[:1]) + alias[1:]
+	firstRune, size := utf8.DecodeRuneInString(alias)
+	lower := string(unicode.ToLower(firstRune)) + alias[size:]
 	if lower != alias {
 		aliasMap[lower] = appendUniquePURLs(aliasMap[lower], bestPURLs)
 	}
