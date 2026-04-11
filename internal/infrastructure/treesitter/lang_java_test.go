@@ -479,9 +479,8 @@ public class Main {
 		t.Fatal("expected coupling analysis for guava")
 	}
 
-	// The scoped constructor "new ImmutableList.Builder<>()" should be counted.
-	// The method_invocation pattern already captures "ImmutableList.Builder" as obj+method,
-	// but object_creation_expression with scoped_type_identifier captures the "new" usage.
+	// The scoped constructor "new ImmutableList.Builder<>()" should be counted
+	// via the object_creation_expression + scoped_type_identifier pattern.
 	if ca.CallSiteCount < 1 {
 		t.Errorf("CallSiteCount = %d, want >= 1", ca.CallSiteCount)
 	}
