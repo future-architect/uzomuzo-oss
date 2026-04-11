@@ -17,6 +17,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path"
 	"sort"
 	"strings"
@@ -27,6 +28,11 @@ import (
 // maxWheelSize is the maximum wheel file size we are willing to download (5 MB).
 // Wheels larger than this are skipped to avoid excessive network and memory usage.
 const maxWheelSize = 5 << 20
+
+// maxEntrySize caps the decompressed size of a single ZIP entry (1 MB).
+// This prevents zip-bomb attacks where a tiny compressed entry expands to
+// gigabytes of data.
+const maxEntrySize = 1 << 20
 
 // importNameCacheEntry stores resolved import names with a timestamp for TTL.
 type importNameCacheEntry struct {
@@ -126,16 +132,12 @@ func (c *Client) ResolveImportNames(ctx context.Context, packageName string) ([]
 // selectSmallestWheel fetches the PyPI JSON API and returns the URL of the
 // smallest bdist_wheel distribution that fits within maxWheelSize.
 func (c *Client) selectSmallestWheel(ctx context.Context, packageName string) (string, error) {
-	base := c.baseURL
-	if base == "" {
-		base = "https://pypi.org"
-	}
-	apiURL := fmt.Sprintf("%s/pypi/%s/json", base, packageName)
+	apiURL := fmt.Sprintf("%s/pypi/%s/json", c.resolvedBaseURL(), url.PathEscape(packageName))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("User-Agent", "uzomuzo-pypi-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
+	req.Header.Set("User-Agent", pypiUserAgent)
 
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
@@ -144,6 +146,7 @@ func (c *Client) selectSmallestWheel(ctx context.Context, packageName string) (s
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
+		slog.Debug("pypi_wheel: package not found on PyPI", "package", packageName)
 		return "", nil
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -163,7 +166,10 @@ func (c *Client) selectSmallestWheel(ctx context.Context, packageName string) (s
 		if u.PackageType != "bdist_wheel" {
 			continue
 		}
-		if u.Size > maxWheelSize {
+		if u.Size <= 0 || u.Size > maxWheelSize {
+			continue
+		}
+		if u.URL == "" {
 			continue
 		}
 		candidates = append(candidates, u)
@@ -180,12 +186,12 @@ func (c *Client) selectSmallestWheel(ctx context.Context, packageName string) (s
 }
 
 // downloadWheel fetches the wheel file content, capped at maxWheelSize.
-func (c *Client) downloadWheel(ctx context.Context, wheelURL string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, wheelURL, nil)
+func (c *Client) downloadWheel(ctx context.Context, dlURL string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dlURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("User-Agent", "uzomuzo-pypi-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
+	req.Header.Set("User-Agent", pypiUserAgent)
 
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
@@ -249,7 +255,7 @@ func parseTopLevelTxt(r *zip.Reader) []string {
 		if err != nil {
 			continue
 		}
-		data, err := io.ReadAll(rc)
+		data, err := io.ReadAll(io.LimitReader(rc, maxEntrySize))
 		_ = rc.Close()
 		if err != nil {
 			continue
@@ -277,7 +283,7 @@ func parseTopLevelTxt(r *zip.Reader) []string {
 
 // parseRECORD extracts top-level package directories from a RECORD file
 // inside .dist-info. Each line is "path,hash,size". We look for entries
-// whose first path component contains __init__.py.
+// whose first path component contains __init__.py at depth 1 only.
 func parseRECORD(r *zip.Reader) []string {
 	for _, f := range r.File {
 		dir, base := path.Split(f.Name)
@@ -291,7 +297,7 @@ func parseRECORD(r *zip.Reader) []string {
 		if err != nil {
 			continue
 		}
-		data, err := io.ReadAll(rc)
+		data, err := io.ReadAll(io.LimitReader(rc, maxEntrySize))
 		_ = rc.Close()
 		if err != nil {
 			continue
@@ -303,7 +309,7 @@ func parseRECORD(r *zip.Reader) []string {
 			if line == "" {
 				continue
 			}
-			// RECORD format: path,hash,size
+			// RECORD format: path,hash,size — extract the path field only.
 			fields := strings.SplitN(line, ",", 2)
 			recPath := fields[0]
 
@@ -318,8 +324,8 @@ func parseRECORD(r *zip.Reader) []string {
 			if strings.HasSuffix(topDir, ".dist-info") || strings.HasSuffix(topDir, ".data") {
 				continue
 			}
-			// Only include directories that have __init__.py
-			if rest == "__init__.py" || strings.HasPrefix(rest, "__init__.py,") {
+			// Only include top-level directories that have __init__.py (depth 1).
+			if rest == "__init__.py" {
 				if isPyIdentifierSafe(topDir) {
 					pkgDirs[topDir] = struct{}{}
 				}

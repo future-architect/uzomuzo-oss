@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync/atomic"
 	"testing"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
@@ -647,12 +648,12 @@ func (s *stubPyPIResolver) ResolveImportNames(_ context.Context, name string) ([
 type retrySourceAnalyzer struct {
 	firstResult  map[string]*domaindiet.CouplingAnalysis
 	secondResult map[string]*domaindiet.CouplingAnalysis
-	callCount    int
+	callCount    atomic.Int32
 }
 
 func (s *retrySourceAnalyzer) AnalyzeCoupling(_ context.Context, _ string, _ map[string][]string) (map[string]*domaindiet.CouplingAnalysis, error) {
-	s.callCount++
-	if s.callCount == 1 {
+	n := s.callCount.Add(1)
+	if n == 1 {
 		return s.firstResult, nil
 	}
 	return s.secondResult, nil
@@ -755,10 +756,17 @@ func TestRun_WheelFallback_NilResolver(t *testing.T) {
 		t.Fatalf("Run() error: %v", err)
 	}
 
+	found := false
 	for _, entry := range plan.Entries {
-		if entry.PURL == pypiPURL && !entry.Coupling.IsUnused {
-			t.Error("without resolver, beautifulsoup4 should stay unused")
+		if entry.PURL == pypiPURL {
+			found = true
+			if !entry.Coupling.IsUnused {
+				t.Error("without resolver, beautifulsoup4 should stay unused")
+			}
 		}
+	}
+	if !found {
+		t.Fatal("beautifulsoup4 entry not found in plan")
 	}
 }
 
@@ -800,9 +808,16 @@ func TestRun_WheelFallback_ResolverError(t *testing.T) {
 	}
 
 	// Should gracefully degrade — beautifulsoup4 stays unused
+	found := false
 	for _, entry := range plan.Entries {
-		if entry.PURL == pypiPURL && !entry.Coupling.IsUnused {
-			t.Error("on resolver error, beautifulsoup4 should stay unused")
+		if entry.PURL == pypiPURL {
+			found = true
+			if !entry.Coupling.IsUnused {
+				t.Error("on resolver error, beautifulsoup4 should stay unused")
+			}
 		}
+	}
+	if !found {
+		t.Fatal("beautifulsoup4 entry not found in plan")
 	}
 }

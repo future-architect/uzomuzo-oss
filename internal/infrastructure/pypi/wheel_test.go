@@ -54,12 +54,15 @@ func TestExtractImportNamesFromWheel_TopLevelTxt_Multiple(t *testing.T) {
 		"_yaml/__init__.py":               "",
 	})
 	names := extractImportNamesFromWheel(wheel)
-	// _yaml starts with underscore but isPyIdentifierSafe allows it
-	if len(names) != 2 {
-		t.Fatalf("expected 2 names, got %v", names)
+	// top_level.txt preserves order, so names follow file order: yaml, _yaml
+	want := []string{"yaml", "_yaml"}
+	if len(names) != len(want) {
+		t.Fatalf("expected %v, got %v", want, names)
 	}
-	if names[0] != "yaml" && names[1] != "yaml" {
-		t.Fatalf("expected yaml in result, got %v", names)
+	for i, w := range want {
+		if names[i] != w {
+			t.Fatalf("names[%d] = %q, want %q (full: %v)", i, names[i], w, names)
+		}
 	}
 }
 
@@ -145,7 +148,7 @@ func TestResolveImportNames_Integration(t *testing.T) {
 						"filename":    "beautifulsoup4-4.12.3.tar.gz",
 						"packagetype": "sdist",
 						"size":        500000,
-						"url":         fmt.Sprintf("%s/files/beautifulsoup4-4.12.3.tar.gz", r.Host),
+						"url":         fmt.Sprintf("http://%s/files/beautifulsoup4-4.12.3.tar.gz", r.Host),
 					},
 					{
 						"filename":    "beautifulsoup4-4.12.3-py3-none-any.whl",

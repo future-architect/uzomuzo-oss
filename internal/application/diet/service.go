@@ -112,7 +112,9 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 				slog.Info("Phase 2 complete", "analyzed", len(couplingResults))
 			}
 
-			// Phase 2.5: Wheel-based fallback for PyPI packages with zero matches
+			// Phase 2.5: Wheel-based fallback for PyPI packages with zero matches.
+			// Skip when couplingResults is nil (Phase 2 error) — no point retrying
+			// if the source analyzer itself failed.
 			if s.pypiResolver != nil && couplingResults != nil {
 				retryPaths := s.resolveUnmatchedPyPI(ctx, graphResult.DirectDeps, couplingResults)
 				if len(retryPaths) > 0 {
