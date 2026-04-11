@@ -341,6 +341,155 @@ class MyTest extends TestCase {
 	}
 }
 
+func TestAnalyzer_JavaGenericType(t *testing.T) {
+	dir := t.TempDir()
+	// The tree-sitter Java grammar wraps types with angle brackets in a
+	// generic_type node rather than a bare type_identifier. This means
+	// "new Foo<>()", "extends Foo<T>", and "implements Foo<T>" are all
+	// missed by patterns that only match (type_identifier).
+	// Additionally, qualified constructors like "new Outer.Inner()" use
+	// scoped_type_identifier instead of type_identifier.
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.google.gson.Gson;
+import com.google.common.collect.ImmutableList;
+import org.reactivestreams.Publisher;
+import junit.framework.TestCase;
+
+public class Main extends TestCase {
+    public static void main(String[] args) {
+        // bare constructor — should already work
+        Gson gson = new Gson();
+
+        // generic constructor with diamond — requires generic_type pattern
+        ImmutableList<String> list = new ImmutableList<>();
+
+        // generic constructor with explicit type arg
+        ImmutableList<Integer> list2 = new ImmutableList<Integer>();
+    }
+}
+
+// generic implements — requires generic_type pattern for super_interfaces
+class MyPublisher implements Publisher<String> {
+    public void subscribe(Object subscriber) {}
+}
+
+// generic extends — requires generic_type pattern for superclass
+class MyList extends ImmutableList<String> {
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/com.google.code.gson/gson@2.10":             {"com.google.gson"},
+		"pkg:maven/com.google.guava/guava@33.0":                {"com.google.common"},
+		"pkg:maven/org.reactivestreams/reactive-streams@1.0.4": {"org.reactivestreams"},
+		"pkg:maven/junit/junit@4.13.2":                         {"junit.framework"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name         string
+		purl         string
+		wantCalls    int
+		wantBreadth  int
+	}{
+		{
+			// bare "new Gson()" — already works with existing type_identifier pattern
+			name:        "bare constructor new Gson()",
+			purl:        "pkg:maven/com.google.code.gson/gson@2.10",
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			// "new ImmutableList<>()" and "new ImmutableList<Integer>()" are generic_type,
+			// plus "extends ImmutableList<String>" is also generic_type in superclass
+			name:        "generic constructors and generic extends",
+			purl:        "pkg:maven/com.google.guava/guava@33.0",
+			wantCalls:   3,
+			wantBreadth: 1,
+		},
+		{
+			// "implements Publisher<String>" uses generic_type in super_interfaces
+			name:        "generic implements Publisher<String>",
+			purl:        "pkg:maven/org.reactivestreams/reactive-streams@1.0.4",
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			// "extends TestCase" is a bare type_identifier — should already work
+			name:        "bare extends TestCase (baseline)",
+			purl:        "pkg:maven/junit/junit@4.13.2",
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
+			}
+		})
+	}
+}
+
+func TestAnalyzer_JavaScopedConstructor(t *testing.T) {
+	dir := t.TempDir()
+	// Qualified constructors like "new ImmutableList.Builder()" use
+	// scoped_type_identifier in tree-sitter rather than bare type_identifier.
+	// Without a pattern for scoped_type_identifier, these are missed.
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.google.common.collect.ImmutableList;
+
+public class Main {
+    public static void main(String[] args) {
+        ImmutableList.Builder<String> builder = new ImmutableList.Builder<>();
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/com.google.guava/guava@33.0": {"com.google.common"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:maven/com.google.guava/guava@33.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for guava")
+	}
+
+	// The scoped constructor "new ImmutableList.Builder<>()" should be counted.
+	// The method_invocation pattern already captures "ImmutableList.Builder" as obj+method,
+	// but object_creation_expression with scoped_type_identifier captures the "new" usage.
+	if ca.CallSiteCount < 1 {
+		t.Errorf("CallSiteCount = %d, want >= 1", ca.CallSiteCount)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false")
+	}
+}
+
 func TestAnalyzer_JavaConstructorCall(t *testing.T) {
 	dir := t.TempDir()
 	// Constructor calls (new Type()) should count as call sites.

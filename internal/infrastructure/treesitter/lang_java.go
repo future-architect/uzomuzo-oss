@@ -21,9 +21,24 @@ func registerJavaConfig(a *Analyzer) {
 			`(method_invocation !object name: (identifier) @func)`,
 			`(marker_annotation name: (identifier) @func)`,
 			`(annotation name: (identifier) @func)`,
+			// Bare constructors: new Foo()
 			`(object_creation_expression type: (type_identifier) @func)`,
+			// Generic constructors: new Foo<T>(), new Foo<>()
+			`(object_creation_expression type: (generic_type (type_identifier) @func))`,
+			// Qualified constructors: new Outer.Inner()
+			// Captures both type_identifier children; only the one matching
+			// an imported alias will produce a call site in countCallSites.
+			`(object_creation_expression type: (scoped_type_identifier (type_identifier) @func))`,
+			// Qualified generic constructors: new Outer.Inner<T>()
+			`(object_creation_expression type: (generic_type (scoped_type_identifier (type_identifier) @func)))`,
+			// Bare implements: implements Foo
 			`(super_interfaces (type_list (type_identifier) @func))`,
+			// Generic implements: implements Foo<T>
+			`(super_interfaces (type_list (generic_type (type_identifier) @func)))`,
+			// Bare extends: extends Foo
 			`(superclass (type_identifier) @func)`,
+			// Generic extends: extends Foo<T>
+			`(superclass (generic_type (type_identifier) @func))`,
 		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {
