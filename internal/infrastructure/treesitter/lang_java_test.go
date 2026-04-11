@@ -461,11 +461,21 @@ func TestAnalyzer_JavaScopedConstructor(t *testing.T) {
 	// Qualified constructors like "new ImmutableList.Builder()" use
 	// scoped_type_identifier in tree-sitter rather than bare type_identifier.
 	// Without a pattern for scoped_type_identifier, these are missed.
+	// This test covers both generic ("new ImmutableList.Builder<>()") and
+	// non-generic ("new ImmutableList.Builder()") scoped constructor forms.
 	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.google.common.collect.ImmutableList;
+import java.util.Map;
 
 public class Main {
     public static void main(String[] args) {
-        ImmutableList.Builder<String> builder = new ImmutableList.Builder<>();
+        // Non-generic scoped constructor — matched by scoped_type_identifier pattern
+        ImmutableList.Builder builder = new ImmutableList.Builder();
+
+        // Generic scoped constructor — matched by generic_type + scoped_type_identifier pattern
+        ImmutableList.Builder<String> typedBuilder = new ImmutableList.Builder<>();
+
+        // Non-generic scoped constructor from a different import
+        Map.Entry entry = new Map.Entry();
     }
 }
 `), 0644)
@@ -476,30 +486,57 @@ public class Main {
 	analyzer := NewAnalyzer()
 	importPaths := map[string][]string{
 		"pkg:maven/com.google.guava/guava@33.0": {"com.google.common"},
+		"pkg:maven/java/jdk@17":                 {"java.util"},
 	}
 	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ca, ok := result["pkg:maven/com.google.guava/guava@33.0"]
-	if !ok {
-		t.Fatal("expected coupling analysis for guava")
+	tests := []struct {
+		name        string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			// "new ImmutableList.Builder()" (non-generic) + "new ImmutableList.Builder<>()" (generic)
+			name:        "guava scoped constructors (generic + non-generic)",
+			purl:        "pkg:maven/com.google.guava/guava@33.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 1,
+		},
+		{
+			// "new Map.Entry()" — non-generic scoped constructor
+			name:        "jdk non-generic scoped constructor",
+			purl:        "pkg:maven/java/jdk@17",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
 	}
 
-	// The scoped constructor "new ImmutableList.Builder<>()" should be counted
-	// via the object_creation_expression + generic_type + scoped_type_identifier pattern.
-	if ca.ImportFileCount != 1 {
-		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
-	}
-	if ca.CallSiteCount != 1 {
-		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
-	}
-	if ca.APIBreadth != 1 {
-		t.Errorf("APIBreadth = %d, want 1", ca.APIBreadth)
-	}
-	if ca.IsUnused {
-		t.Error("IsUnused = true, want false")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
+			}
+		})
 	}
 }
 
