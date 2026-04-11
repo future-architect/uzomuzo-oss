@@ -927,6 +927,19 @@ func (a *Analyzer) handleJSImport(
 	// for patterns we cannot resolve from the AST.
 	aliases := extractJSBindings(node, src)
 	if len(aliases) == 0 {
+		// No variable binding — check for inline require patterns:
+		//   require('x')()          — immediate invocation
+		//   require('x').method()   — chained property access
+		//   require('x')('arg')     — factory pattern
+		//   require('x');           — bare side-effect require
+		// These are used without binding to a variable, so call-site queries
+		// cannot match them. Register with the blank-import sentinel to treat
+		// the require itself as proof of usage.
+		if isInlineRequireUsage(node) {
+			key := blankImportAlias + importPath
+			aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
+			return
+		}
 		aliases = []string{cfg.aliasFromPkg(importPath)}
 	}
 	for _, alias := range aliases {
@@ -972,6 +985,54 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 	}
 
 	return nil
+}
+
+// isInlineRequireUsage checks whether a CJS require() call is used inline without
+// a variable binding. The node is the string literal inside require('pkg').
+//
+// Inline patterns detected:
+//   - require('x')()        — immediate invocation (parent call_expression is the function of an outer call)
+//   - require('x').method() — chained property access (parent call_expression is the object of a member_expression)
+//   - require('x')('arg')   — factory pattern (same AST shape as immediate invocation)
+//   - require('x');          — bare side-effect require (parent call_expression is inside expression_statement)
+//   - require('x').prop      — member access without call (parent call_expression is object of member_expression)
+//
+// AST walk: string → arguments → call_expression(require) → check parent type.
+func isInlineRequireUsage(node *sitter.Node) bool {
+	if node == nil {
+		return false
+	}
+	// node is the string literal; its parent should be arguments.
+	args := node.Parent()
+	if args == nil || args.Type() != "arguments" {
+		return false
+	}
+	// arguments' parent should be the require() call_expression.
+	requireCall := args.Parent()
+	if requireCall == nil || requireCall.Type() != "call_expression" {
+		return false
+	}
+	// Check what uses the require() call_expression.
+	parent := requireCall.Parent()
+	if parent == nil {
+		return false
+	}
+	switch parent.Type() {
+	case "call_expression":
+		// require('x')() or require('x')('arg') — the require call is the function of an outer call.
+		return true
+	case "member_expression":
+		// require('x').method or require('x').prop — chained property access.
+		return true
+	case "expression_statement":
+		// require('x'); — bare side-effect require.
+		return true
+	case "arguments":
+		// f(require('x')) — passed as argument to another function.
+		return true
+	default:
+		return false
+	}
 }
 
 // jsExpressionTypes contains AST node types that can sit between a call_expression
