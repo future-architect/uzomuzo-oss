@@ -85,6 +85,11 @@ pending_patterns:
     pr: 236
     file: "internal/infrastructure/eolevaluator/evaluator_npm_test.go"
     date: "2026-04-08"
+  - category: "testing"
+    summary: "When code merges results into a map that may be nil (e.g., initialized only on non-empty results), add a test where the initial map is nil and the merge path still executes — catches nil map assignment panics"
+    pr: 276
+    file: "internal/application/diet/service_test.go"
+    date: "2026-04-11"
   - category: "security"
     summary: "Validate URL host non-empty alongside scheme check — hostless URLs like https:///path pass scheme validation but fail later in uncontrolled ways"
     pr: 276
