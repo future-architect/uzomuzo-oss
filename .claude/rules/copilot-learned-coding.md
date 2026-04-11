@@ -14,6 +14,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Reject Flags That Silently Have No Effect**: When a CLI flag only applies to a specific input mode (e.g., `--sample` for PURL list files), explicitly reject it with a clear error when the input is a different mode (e.g., go.mod or SBOM). Do not silently ignore the flag — users assume their flags take effect.
 - **Deduplicate Inputs Before Batch API Calls**: When accepting user-provided input lists (PURLs, URLs) that feed into batch API calls, deduplicate them while preserving first-seen order before processing. Duplicates cause redundant external calls, skew logging/counts, and waste resources.
 - **Normalize User-Provided Enum Values**: When accepting string values for format selectors, mode switches, or other enums from CLI flags, normalize with `strings.TrimSpace(strings.ToLower(...))` before validation. Case-sensitive matching rejects common inputs like `--format JSON` or `--format "json "`.
+- **Interface Contract Documentation Must Match Signature Semantics**: When documenting an interface method, the doc comment must accurately reflect the method's full signature — including error returns, nil semantics, and parameter constraints. If the signature returns `(T, error)`, do not document it as "returns nil/empty on failure" — state that errors may be returned and describe the caller's expected handling (e.g., non-fatal/graceful degradation). Mismatched contract documentation misleads implementers and callers.
 - **GitHub Actions `||` Treats Empty as Falsy**: When a workflow input documents "empty = X behavior", do not use `${{ inputs.foo || 'default' }}` — the `||` operator treats empty string as falsy and applies the default, preventing users from intentionally selecting the empty option. Instead, pass the raw input via an env var and apply defaults conditionally (e.g., only for scheduled triggers).
 - **Guard Downstream Jobs Against Missing Outputs**: When a CI job produces outputs that downstream jobs depend on (exit codes, flags), gate downstream jobs on `needs.<job>.outputs.<key> != ''` to prevent execution when the upstream job fails before setting outputs. Otherwise, empty values may be misinterpreted (e.g., empty exit code `""` compared with `!= "0"` evaluates to true, creating misleading reports).
 - **CI Job Gating — Key on Outputs, Not Job Result**: When a CI job intentionally exits non-zero for a primary use case (e.g., policy violations), downstream jobs must not gate on `needs.<job>.result == 'success'`. Use explicit output variables (exit codes, flags) to control downstream behavior, so jobs run in the scenarios they are designed for.
@@ -30,6 +31,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Nil vs Empty Map Semantics for Sentinel-Checked Maps**: When a function returns a map that callers check for `nil` as a sentinel (e.g., "no data available" vs "data resolved but empty"), return `nil` when the resolved set is empty rather than an empty non-nil map. An empty non-nil map can cause callers to misinterpret "no results found" as "all items excluded", leading to incorrect classification or silent data loss.
 - **Normalize Repo-Scoped Paths with `path.Clean`**: When accepting user- or YAML-supplied paths that are scoped within a repository (e.g., local action `./` references), normalize with `path.Clean` (not `filepath.Clean`) and reject results that equal `"."` or start with `".."`. Also reject backslashes. This prevents traversal beyond the repository root via the Contents API without blocking valid intra-repo `..` segments (e.g., `./foo/../bar` → `bar`).
 - **Accurate Error Map Keys**: When recording errors in a `map[string]error` keyed by file path, use the actual resolved path — not a hardcoded filename. If a fetch tries `action.yml` then falls back to `action.yaml`, the error key must reflect which file was attempted, or use the parent path without a filename assumption.
+- **Handle All Valid Input Forms in Format Parsers**: When parsing a structured format (ZIP entries, RECORD files, manifests), handle all valid representations defined by the spec — not just the common case. For example, Python wheel RECORD files contain both package directories (`pkg/__init__.py`) and root-level modules (`six.py`); skipping root-level entries silently drops valid import names for single-module packages.
 - **Explicit Fallback for Unknown Enum Values**: When mapping external values (API responses, YAML fields) to internal enums or display strings, map unrecognized values to an explicit fallback (e.g., `"unknown(X)"`) rather than silently defaulting to a valid enum member. Silent defaults hide data quality issues and make debugging harder.
 - **Machine-Readable Columns Must Contain Single Values**: When adding columns to machine-readable output (CSV, JSON), each column must contain exactly one data type — do not combine a label and a number in a single field (e.g., `"HIGH (7.5)"`). Split compound values into separate columns (e.g., `max_advisory_severity` + `max_cvss3_score`). Mixed-format cells break downstream parsing and sorting.
 - **Use Domain Constants for Domain-Defined String Values**: When display or mapping logic switches on string values that are defined as domain constants (e.g., `LicenseSource*`), reference the constants — not duplicated raw strings. Duplicating values causes silent drift when constants are renamed or new values are added.
@@ -83,16 +85,6 @@ pending_patterns:
     pr: 236
     file: "internal/infrastructure/eolevaluator/evaluator_npm_test.go"
     date: "2026-04-08"
-  - category: "comment-doc-drift"
-    summary: "Doc comments must not make absolute claims about external system behavior — scope claims to what the current function actually handles"
-    pr: 253
-    file: "internal/infrastructure/treesitter/analyzer.go"
-    date: "2026-04-09"
-  - category: "defensive-coding"
-    summary: "Use utf8.DecodeRuneInString + unicode.ToLower for first-character case conversion — byte slicing alias[:1] produces invalid UTF-8 for non-ASCII identifiers"
-    pr: 277
-    file: "internal/infrastructure/treesitter/lang_java.go"
-    date: "2026-04-11"
   - category: "testing"
     summary: "Accept interface types in test-setter methods (e.g., SetXxxClient) so fakes can be injected via public API instead of unexported fields"
     pr: 236
@@ -121,6 +113,8 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #253, #276 — interface contract doc must match signature semantics)
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #277, #276 — handle all valid input forms in format parsers)
   # error-handling: promoted to error-handling.instructions.md (PRs #87, #159 — surface initialization errors instead of silent degradation)
   # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:382 — filter tree-sitter captures by name to skip non-import captures)
   # deterministic-output: already covered by promoted rule (PR #159, analyzer.go:315 — sort ImportFiles for deterministic JSON output)
