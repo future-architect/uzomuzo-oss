@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -133,7 +134,7 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 		slog.Debug("pypi: cache hit", "name", lower)
 		return info, true, nil
 	}
-	apiURL := fmt.Sprintf("%s/pypi/%s/json", c.resolvedBaseURL(), n)
+	apiURL := fmt.Sprintf("%s/pypi/%s/json", c.resolvedBaseURL(), url.PathEscape(n))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, false, fmt.Errorf("pypi request build failed: %w", err)

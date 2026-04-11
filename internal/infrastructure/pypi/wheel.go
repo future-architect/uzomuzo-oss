@@ -156,7 +156,8 @@ func (c *Client) selectSmallestWheel(ctx context.Context, packageName string) (s
 	var raw struct {
 		URLs []wheelURL `json:"urls"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+	// Cap the JSON response to 10 MB to prevent memory exhaustion.
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&raw); err != nil {
 		return "", fmt.Errorf("decode failed: %w", err)
 	}
 
@@ -187,6 +188,10 @@ func (c *Client) selectSmallestWheel(ctx context.Context, packageName string) (s
 
 // downloadWheel fetches the wheel file content, capped at maxWheelSize.
 func (c *Client) downloadWheel(ctx context.Context, dlURL string) ([]byte, error) {
+	parsed, err := url.Parse(dlURL)
+	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") {
+		return nil, fmt.Errorf("invalid wheel URL scheme: %s", dlURL)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dlURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
