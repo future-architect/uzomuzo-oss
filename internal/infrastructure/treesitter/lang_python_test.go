@@ -426,3 +426,139 @@ except (ValueError, TypeError):
 		})
 	}
 }
+
+func TestAnalyzer_PythonTypeCheckingImport(t *testing.T) {
+	tests := []struct {
+		name            string
+		code            string
+		importPaths     map[string][]string
+		purl            string
+		wantImports     int
+		wantCalls       int
+		wantBreadth     int
+		wantBlankImport bool
+	}{
+		{
+			name: "if TYPE_CHECKING from-import skipped",
+			code: `from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from hpack import HeaderTuple
+
+def foo():
+    pass
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/hpack@4.0.0": {"hpack"},
+			},
+			purl:        "pkg:pypi/hpack@4.0.0",
+			wantImports: 0,
+			wantCalls:   0,
+			wantBreadth: 0,
+		},
+		{
+			name: "if typing.TYPE_CHECKING from-import skipped",
+			code: `import typing
+if typing.TYPE_CHECKING:
+    from hpack import HeaderTuple
+
+def foo():
+    pass
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/hpack@4.0.0": {"hpack"},
+			},
+			purl:        "pkg:pypi/hpack@4.0.0",
+			wantImports: 0,
+			wantCalls:   0,
+			wantBreadth: 0,
+		},
+		{
+			name: "mixed: TYPE_CHECKING import and normal import",
+			code: `from typing import TYPE_CHECKING
+import requests
+if TYPE_CHECKING:
+    from hpack import HeaderTuple
+
+requests.get("https://example.com")
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/hpack@4.0.0":     {"hpack"},
+				"pkg:pypi/requests@2.31.0": {"requests"},
+			},
+			purl:        "pkg:pypi/hpack@4.0.0",
+			wantImports: 0,
+			wantCalls:   0,
+			wantBreadth: 0,
+		},
+		{
+			name: "normal import not affected by TYPE_CHECKING",
+			code: `from typing import TYPE_CHECKING
+import requests
+if TYPE_CHECKING:
+    from hpack import HeaderTuple
+
+requests.get("https://example.com")
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/hpack@4.0.0":     {"hpack"},
+				"pkg:pypi/requests@2.31.0": {"requests"},
+			},
+			purl:        "pkg:pypi/requests@2.31.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "if TYPE_CHECKING bare import skipped",
+			code: `from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import hpack
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/hpack@4.0.0": {"hpack"},
+			},
+			purl:        "pkg:pypi/hpack@4.0.0",
+			wantImports: 0,
+			wantCalls:   0,
+			wantBreadth: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, "main.py"), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if tt.wantImports == 0 && tt.wantCalls == 0 && !ok {
+				// PURL not in result at all means 0 imports/calls — expected.
+				return
+			}
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+			if ca.HasBlankImport != tt.wantBlankImport {
+				t.Errorf("HasBlankImport = %v, want %v", ca.HasBlankImport, tt.wantBlankImport)
+			}
+		})
+	}
+}

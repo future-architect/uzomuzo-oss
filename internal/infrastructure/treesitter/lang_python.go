@@ -53,6 +53,12 @@ func (a *Analyzer) handlePythonImport(
 		return
 	}
 
+	// Skip imports inside `if TYPE_CHECKING:` blocks — they are type-only and
+	// never execute at runtime, so they should not count toward IBNC.
+	if isPythonTypeCheckingImport(parent, src) {
+		return
+	}
+
 	// Check if this import is inside a try/except ImportError block.
 	// This is often a Python feature-detection pattern where the import itself
 	// signals optional dependency detection. Record that fact like a Go blank
@@ -162,6 +168,57 @@ func hasPythonImportErrorHandler(tryStmt *sitter.Node, src []byte) bool {
 		// including ImportError.
 		if !hasExceptionType {
 			return true
+		}
+	}
+	return false
+}
+
+// isPythonTypeCheckingImport checks if a Python import-related node is inside an
+// `if TYPE_CHECKING:` or `if typing.TYPE_CHECKING:` block. Python's
+// typing.TYPE_CHECKING constant is False at runtime, so imports guarded by it
+// are type-only and never execute. These imports should not count toward IBNC.
+//
+// importStmt may be an import_statement, import_from_statement, or another
+// import-related node. src is the file source for reading node content.
+func isPythonTypeCheckingImport(importStmt *sitter.Node, src []byte) bool {
+	// Walk up from the import statement to find the nearest enclosing if_statement,
+	// tracking the child path to ensure the import is in the if body (consequence),
+	// not in an else clause.
+	child := importStmt
+	current := importStmt.Parent()
+	for depth := 0; current != nil && depth < maxAncestorWalkDepth; depth++ {
+		if current.Type() == "if_statement" {
+			// Only match imports in the if body (consequence), not else/elif.
+			body := current.ChildByFieldName("consequence")
+			if body == nil || body != child {
+				return false
+			}
+			return isTypeCheckingCondition(current, src)
+		}
+		child = current
+		current = current.Parent()
+	}
+	return false
+}
+
+// isTypeCheckingCondition checks if an if_statement's condition is
+// `TYPE_CHECKING` (bare identifier) or `typing.TYPE_CHECKING` (attribute access).
+func isTypeCheckingCondition(ifStmt *sitter.Node, src []byte) bool {
+	cond := ifStmt.ChildByFieldName("condition")
+	if cond == nil {
+		return false
+	}
+
+	switch cond.Type() {
+	case "identifier":
+		// `if TYPE_CHECKING:`
+		return cond.Content(src) == "TYPE_CHECKING"
+	case "attribute":
+		// `if typing.TYPE_CHECKING:`
+		obj := cond.ChildByFieldName("object")
+		attr := cond.ChildByFieldName("attribute")
+		if obj != nil && attr != nil {
+			return obj.Content(src) == "typing" && attr.Content(src) == "TYPE_CHECKING"
 		}
 	}
 	return false
