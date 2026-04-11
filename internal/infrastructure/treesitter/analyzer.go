@@ -617,6 +617,16 @@ func (a *Analyzer) handlePythonImport(
 		return
 	}
 
+	// Check if this import is inside a try/except ImportError block.
+	// This is often a Python feature-detection pattern where the import itself
+	// signals optional dependency detection. Record that fact like a Go blank
+	// import, but still register the actual binding so later call-site counting
+	// can attribute usage such as "cryptography.*" or "fernet()".
+	if isPythonTryExceptImport(parent, src) {
+		key := blankImportAlias + importPath
+		aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
+	}
+
 	switch parent.Type() {
 	case "import_statement":
 		// Regular import (e.g., "import requests") — register module name as alias.
@@ -643,6 +653,82 @@ func (a *Analyzer) handlePythonImport(
 		// so we only register the individual imported names.
 		a.registerFromImportNames(node, src, purls, aliasMap)
 	}
+}
+
+// isPythonTryExceptImport checks if a Python import-related node is inside the
+// try body of a try/except block that catches ImportError or
+// ModuleNotFoundError. This is a common feature-detection pattern where the
+// import itself is the usage (checking if the package is installed).
+//
+// importStmt may be an import_statement, import_from_statement, aliased_import,
+// or another import-related descendant node. src is the file source for
+// reading node content.
+func isPythonTryExceptImport(importStmt *sitter.Node, src []byte) bool {
+	// Walk up from the import statement to find the nearest enclosing
+	// try_statement while tracking the child path. Only imports contained in the
+	// try_statement's body field should be treated as feature-detection imports;
+	// imports in except/else/finally blocks are fallback or cleanup logic and
+	// must not be classified as blank imports.
+	child := importStmt
+	current := importStmt.Parent()
+	for depth := 0; current != nil && depth < maxAncestorWalkDepth; depth++ {
+		if current.Type() == "try_statement" {
+			tryBody := current.ChildByFieldName("body")
+			if tryBody == nil || tryBody != child {
+				return false
+			}
+			return hasPythonImportErrorHandler(current, src)
+		}
+		child = current
+		current = current.Parent()
+	}
+	return false
+}
+
+// hasPythonImportErrorHandler checks whether a try_statement has an except_clause
+// that catches ImportError, ModuleNotFoundError, or is a bare except (no type).
+func hasPythonImportErrorHandler(tryStmt *sitter.Node, src []byte) bool {
+	for i := 0; i < int(tryStmt.ChildCount()); i++ {
+		child := tryStmt.Child(i)
+		if child.Type() != "except_clause" {
+			continue
+		}
+
+		// Check each child of the except_clause for exception type identifiers.
+		// Exception types may appear as direct identifier children (single type)
+		// or inside a tuple child (multiple types, e.g., "except (ImportError, ValueError)").
+		hasExceptionType := false
+		for j := 0; j < int(child.ChildCount()); j++ {
+			gc := child.Child(j)
+			switch gc.Type() {
+			case "identifier":
+				hasExceptionType = true
+				name := gc.Content(src)
+				if name == "ImportError" || name == "ModuleNotFoundError" {
+					return true
+				}
+			case "tuple":
+				// except (ExcA, ExcB): — identifiers are inside the tuple node.
+				for k := 0; k < int(gc.ChildCount()); k++ {
+					tc := gc.Child(k)
+					if tc.Type() == "identifier" {
+						hasExceptionType = true
+						name := tc.Content(src)
+						if name == "ImportError" || name == "ModuleNotFoundError" {
+							return true
+						}
+					}
+				}
+			}
+		}
+
+		// Bare except (no exception type specified) catches everything
+		// including ImportError.
+		if !hasExceptionType {
+			return true
+		}
+	}
+	return false
 }
 
 // resolvePythonPURLs resolves a Python import path to its PURLs.
@@ -897,9 +983,10 @@ var jsExpressionTypes = map[string]bool{
 	"assignment_expression":    true,
 }
 
-// maxAncestorWalkDepth limits how far findAncestorVariableDeclarator walks up
-// the AST. Prevents false matches against distant, unrelated variable_declarators
-// in pathological nesting (e.g., deeply nested ternary chains).
+// maxAncestorWalkDepth limits how far ancestor-walking functions (e.g.,
+// findAncestorVariableDeclarator, isPythonTryExceptImport) traverse the AST.
+// Prevents false matches against distant, unrelated ancestors in pathological
+// nesting.
 const maxAncestorWalkDepth = 5
 
 // findAncestorVariableDeclarator walks up from node looking for a variable_declarator,

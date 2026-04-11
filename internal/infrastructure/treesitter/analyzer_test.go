@@ -1849,8 +1849,8 @@ public class Main {
 
 	analyzer := NewAnalyzer()
 	importPaths := map[string][]string{
-		"pkg:maven/com.google.code.findbugs/jsr305@3.0.2":              {"javax.annotation"},
-		"pkg:maven/com.google.inject/guice@5.1":                       {"com.google.inject"},
+		"pkg:maven/com.google.code.findbugs/jsr305@3.0.2":               {"javax.annotation"},
+		"pkg:maven/com.google.inject/guice@5.1":                         {"com.google.inject"},
 		"pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.15": {"com.fasterxml.jackson.annotation"},
 	}
 	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
@@ -2114,5 +2114,190 @@ const x: Foo = {} as any;
 
 	if len(result) != 0 {
 		t.Errorf("expected no coupling for type-only import in .ts file, got %d results", len(result))
+	}
+}
+
+func TestAnalyzer_PythonTryExceptImport(t *testing.T) {
+	tests := []struct {
+		name            string
+		code            string
+		wantBlankImport bool
+		wantUnused      bool
+		wantImportCount int
+		wantCallSites   int
+	}{
+		{
+			name: "try/except ImportError bare import",
+			code: `try:
+    import cryptography
+except ImportError:
+    pass
+`,
+			wantBlankImport: true,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   0,
+		},
+		{
+			name: "try/except ModuleNotFoundError",
+			code: `try:
+    import cryptography
+except ModuleNotFoundError:
+    raise RuntimeError("missing")
+`,
+			wantBlankImport: true,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   0,
+		},
+		{
+			name: "try/except bare except",
+			code: `try:
+    import cryptography
+except:
+    pass
+`,
+			wantBlankImport: true,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   0,
+		},
+		{
+			name: "try/except with from-import",
+			code: `try:
+    from cryptography import fernet
+except ImportError:
+    fernet = None
+`,
+			wantBlankImport: true,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   0,
+		},
+		{
+			name: "regular import not in try/except",
+			code: `import cryptography
+cryptography.fernet.Fernet("key")
+`,
+			wantBlankImport: false,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   1,
+		},
+		{
+			name: "try/except with unrelated exception type",
+			code: `try:
+    import cryptography
+except ValueError:
+    pass
+`,
+			wantBlankImport: false,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   0,
+		},
+		{
+			name: "import inside except ImportError is not feature detection",
+			code: `try:
+    import unavailable_module
+except ImportError:
+    import cryptography
+
+cryptography.fernet.Fernet("key")
+`,
+			wantBlankImport: false,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   1,
+		},
+		{
+			name: "try/except ImportError import used via module attribute",
+			code: `try:
+    import cryptography
+except ImportError:
+    pass
+
+cryptography.fernet.Fernet("key")
+`,
+			wantBlankImport: true,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   1,
+		},
+		{
+			name: "try/except ImportError from import used via imported name",
+			code: `try:
+    from cryptography.fernet import Fernet
+except ImportError:
+    pass
+
+Fernet("key")
+`,
+			wantBlankImport: true,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   1,
+		},
+		{
+			name: "try/except with tuple containing ImportError",
+			code: `try:
+    import cryptography
+except (ImportError, ValueError):
+    pass
+`,
+			wantBlankImport: true,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   0,
+		},
+		{
+			name: "try/except with tuple of unrelated exceptions",
+			code: `try:
+    import cryptography
+except (ValueError, TypeError):
+    pass
+`,
+			wantBlankImport: false,
+			wantUnused:      false,
+			wantImportCount: 1,
+			wantCallSites:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, "main.py"), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			importPaths := map[string][]string{
+				"pkg:pypi/cryptography@41.0.0": {"cryptography"},
+			}
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result["pkg:pypi/cryptography@41.0.0"]
+			if !ok {
+				t.Fatal("expected coupling analysis for cryptography")
+			}
+
+			if ca.HasBlankImport != tt.wantBlankImport {
+				t.Errorf("HasBlankImport = %v, want %v", ca.HasBlankImport, tt.wantBlankImport)
+			}
+			if ca.IsUnused != tt.wantUnused {
+				t.Errorf("IsUnused = %v, want %v", ca.IsUnused, tt.wantUnused)
+			}
+			if ca.ImportFileCount != tt.wantImportCount {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImportCount)
+			}
+			if ca.CallSiteCount != tt.wantCallSites {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCallSites)
+			}
+		})
 	}
 }
