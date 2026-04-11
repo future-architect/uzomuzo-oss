@@ -776,6 +776,31 @@ func main() {
 	}
 }
 
+func TestGoAliasFromImportPath(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"github.com/miscreant/miscreant.go", "miscreant"},             // .go suffix stripped
+		{"github.com/oschwald/geoip2-golang", "geoip2"},               // -golang suffix stripped
+		{"github.com/stretchr/testify", "testify"},                     // normal path
+		{"example.com/foo/v2", "foo"},                                  // major version peeled
+		{"gopkg.in/yaml.v3", "yaml"},                                   // gopkg.in version stripped
+		{"gopkg.in/foo.go.v2", "foo"},                                  // gopkg.in + .go suffix
+		{"github.com/go-redis/redis/v9", "redis"},                      // major version + go- prefix
+		{"github.com/opentracing/opentracing-go", "opentracing"},       // -go suffix stripped
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := goAliasFromImportPath(tt.input)
+			if got != tt.want {
+				t.Errorf("goAliasFromImportPath(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGoPackageFromHyphenated(t *testing.T) {
 	tests := []struct {
 		input string
@@ -798,8 +823,9 @@ func TestGoPackageFromHyphenated(t *testing.T) {
 		{"-go", "-go"},             // empty after strip; guard preserves original
 		{"go-", "go-"},             // empty after prefix strip; guard preserves original
 		{"go-golang", "go"},        // strip -golang -> "go" (no hyphens)
-		{"go-redis", "redis"},      // real package: prefix go- stripped
-		{"go-sqlite3", "sqlite3"},  // real package: prefix go- stripped
+		{"go-redis", "redis"},          // real package: prefix go- stripped
+		{"go-sqlite3", "sqlite3"},      // real package: prefix go- stripped
+		{"foo-bar-golang", "foobar"},   // -golang stripped, remaining hyphen removed
 	}
 
 	for _, tt := range tests {
