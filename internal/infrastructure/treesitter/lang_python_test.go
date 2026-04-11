@@ -509,6 +509,25 @@ requests.get("https://example.com")
 			wantBreadth: 1,
 		},
 		{
+			name: "nested if inside TYPE_CHECKING skipped",
+			code: `from typing import TYPE_CHECKING
+import sys
+if TYPE_CHECKING:
+    if sys.version_info >= (3, 10):
+        from hpack import HeaderTuple
+
+def foo():
+    pass
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/hpack@4.0.0": {"hpack"},
+			},
+			purl:        "pkg:pypi/hpack@4.0.0",
+			wantImports: 0,
+			wantCalls:   0,
+			wantBreadth: 0,
+		},
+		{
 			name: "if TYPE_CHECKING bare import skipped",
 			code: `from typing import TYPE_CHECKING
 if TYPE_CHECKING:

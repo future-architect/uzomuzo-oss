@@ -181,19 +181,21 @@ func hasPythonImportErrorHandler(tryStmt *sitter.Node, src []byte) bool {
 // importStmt may be an import_statement, import_from_statement, or another
 // import-related node. src is the file source for reading node content.
 func isPythonTypeCheckingImport(importStmt *sitter.Node, src []byte) bool {
-	// Walk up from the import statement to find the nearest enclosing if_statement,
-	// tracking the child path to ensure the import is in the if body (consequence),
-	// not in an else clause.
+	// Walk up from the import statement through enclosing ancestors, tracking the
+	// child path to ensure the import remains within an if body (consequence), not
+	// an else/elif branch. Keep walking past non-TYPE_CHECKING if-statements so
+	// nested imports inside a TYPE_CHECKING block are still detected.
 	child := importStmt
 	current := importStmt.Parent()
 	for depth := 0; current != nil && depth < maxAncestorWalkDepth; depth++ {
 		if current.Type() == "if_statement" {
-			// Only match imports in the if body (consequence), not else/elif.
+			// Only consider if-statements whose consequence directly contains the
+			// current child path. If this node is reached through an else/elif path,
+			// continue walking upward without matching this if-statement.
 			body := current.ChildByFieldName("consequence")
-			if body == nil || body != child {
-				return false
+			if body == child && isTypeCheckingCondition(current, src) {
+				return true
 			}
-			return isTypeCheckingCondition(current, src)
 		}
 		child = current
 		current = current.Parent()
