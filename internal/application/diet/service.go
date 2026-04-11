@@ -33,7 +33,10 @@ type GraphAnalyzer interface {
 type PyPIImportResolver interface {
 	// ResolveImportNames fetches the actual Python import names for a PyPI
 	// package by downloading and inspecting the smallest wheel file.
-	// Returns nil/empty if resolution fails (graceful degradation).
+	// It may return an error if metadata lookup, wheel download, or inspection
+	// fails. Callers should treat such errors as non-fatal fallback failures
+	// (graceful degradation) and continue with heuristic guesses or an empty
+	// result when appropriate.
 	ResolveImportNames(ctx context.Context, packageName string) ([]string, error)
 }
 

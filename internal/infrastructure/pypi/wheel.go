@@ -322,6 +322,13 @@ func parseRECORD(r *zip.Reader) []string {
 
 			parts := strings.SplitN(recPath, "/", 2)
 			if len(parts) < 2 {
+				// Root-level .py module (e.g., "six.py", "certifi.py").
+				if strings.HasSuffix(recPath, ".py") {
+					stem := strings.TrimSuffix(recPath, ".py")
+					if isPyIdentifierSafe(stem) && !strings.HasPrefix(stem, "_") {
+						pkgDirs[stem] = struct{}{}
+					}
+				}
 				continue
 			}
 			topDir := parts[0]
@@ -331,7 +338,7 @@ func parseRECORD(r *zip.Reader) []string {
 			if strings.HasSuffix(topDir, ".dist-info") || strings.HasSuffix(topDir, ".data") {
 				continue
 			}
-			// Only include top-level directories that have __init__.py (depth 1).
+			// Top-level directories with __init__.py (depth 1).
 			if rest == "__init__.py" {
 				if isPyIdentifierSafe(topDir) {
 					pkgDirs[topDir] = struct{}{}

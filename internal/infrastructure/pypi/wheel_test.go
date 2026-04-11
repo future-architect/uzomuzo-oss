@@ -81,6 +81,20 @@ func TestExtractImportNamesFromWheel_RECORD(t *testing.T) {
 	}
 }
 
+func TestExtractImportNamesFromWheel_RECORD_RootLevelModule(t *testing.T) {
+	t.Parallel()
+	// Wheels like "six" expose a single root-level .py file, not a package dir.
+	wheel := buildTestWheel(t, map[string]string{
+		"six.py": "",
+		"six-1.16.0.dist-info/RECORD": "six.py,sha256=abc,100\n" +
+			"six-1.16.0.dist-info/METADATA,,\n",
+	})
+	names := extractImportNamesFromWheel(wheel)
+	if len(names) != 1 || names[0] != "six" {
+		t.Fatalf("expected [six], got %v", names)
+	}
+}
+
 func TestExtractImportNamesFromWheel_InitPyFallback(t *testing.T) {
 	t.Parallel()
 	// No top_level.txt, no RECORD — only directory structure
