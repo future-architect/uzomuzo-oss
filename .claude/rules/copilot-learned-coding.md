@@ -85,6 +85,11 @@ pending_patterns:
     pr: 236
     file: "internal/infrastructure/eolevaluator/evaluator_npm_test.go"
     date: "2026-04-08"
+  - category: "security"
+    summary: "Validate URL host non-empty alongside scheme check — hostless URLs like https:///path pass scheme validation but fail later in uncontrolled ways"
+    pr: 276
+    file: "internal/infrastructure/pypi/wheel.go"
+    date: "2026-04-11"
   - category: "defensive-coding"
     summary: "Gate fallback/retry logic on the error value, not result nilness — a nil result with nil error is a valid success case (e.g., zero matches) and should still trigger fallback behavior"
     pr: 276
@@ -100,6 +105,11 @@ pending_patterns:
     pr: 237
     file: "internal/application/diet/coupling_integration_test.go"
     date: "2026-04-08"
+  - category: "defensive-coding"
+    summary: "Use spec-compliant parsers (e.g., encoding/csv) instead of naive string splitting for standardized file formats — naive splits misparse quoted or escaped fields"
+    pr: 276
+    file: "internal/infrastructure/pypi/wheel.go"
+    date: "2026-04-11"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
