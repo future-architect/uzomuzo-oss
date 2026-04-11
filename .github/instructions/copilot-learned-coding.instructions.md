@@ -83,6 +83,11 @@ pending_patterns:
     pr: 236
     file: "internal/infrastructure/eolevaluator/evaluator_npm_test.go"
     date: "2026-04-08"
+  - category: "defensive-coding"
+    summary: "Gate fallback/retry logic on the error value, not result nilness — a nil result with nil error is a valid success case (e.g., zero matches) and should still trigger fallback behavior"
+    pr: 276
+    file: "internal/application/diet/service.go"
+    date: "2026-04-11"
   - category: "testing"
     summary: "Accept interface types in test-setter methods (e.g., SetXxxClient) so fakes can be injected via public API instead of unexported fields"
     pr: 236
