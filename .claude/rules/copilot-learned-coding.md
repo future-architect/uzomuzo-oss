@@ -85,6 +85,11 @@ pending_patterns:
     pr: 236
     file: "internal/infrastructure/eolevaluator/evaluator_npm_test.go"
     date: "2026-04-08"
+  - category: "security"
+    summary: "Cap HTTP response body sizes with io.LimitReader before decoding — uncapped reads from overridden base URLs or mirrors can cause excessive memory usage"
+    pr: 276
+    file: "internal/infrastructure/pypi/client.go"
+    date: "2026-04-11"
   - category: "testing"
     summary: "When code merges results into a map that may be nil (e.g., initialized only on non-empty results), add a test where the initial map is nil and the merge path still executes — catches nil map assignment panics"
     pr: 276
