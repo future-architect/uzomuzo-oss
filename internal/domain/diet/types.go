@@ -1,5 +1,12 @@
 package diet
 
+// Scope constants for DietEntry.Scope.
+const (
+	// ScopeTool indicates a Go tool directive dependency (Go 1.24+).
+	// Tool deps are dev/CI executables that intentionally have zero source imports.
+	ScopeTool = "tool"
+)
+
 // DietEntry represents a single dependency's removability analysis.
 type DietEntry struct {
 	PURL      string
@@ -7,6 +14,7 @@ type DietEntry struct {
 	Ecosystem string
 	Version   string
 	Relation  string // "direct" or "transitive"
+	Scope     string // "" (runtime, default) or "tool" (Go tool directive)
 
 	Graph    GraphMetrics
 	Coupling CouplingAnalysis

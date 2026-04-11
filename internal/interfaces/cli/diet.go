@@ -14,6 +14,10 @@ type DietOptions struct {
 	SBOMPath   string // --sbom flag (required)
 	SourceRoot string // --source flag (optional; empty = skip source analysis, CLI defaults to ".")
 	Format     string // --format flag (json, table, detailed)
+	// ToolDeps is a set of module paths declared in go.mod tool directives
+	// (Go 1.24+). Populated by the composition root when a Go source root
+	// is provided. Tool deps are excluded from unused-dependency detection.
+	ToolDeps map[string]struct{}
 }
 
 // RunDiet is the entry point for the "diet" subcommand.
@@ -57,6 +61,7 @@ func RunDiet(
 		SBOMData:   sbomData,
 		SBOMPath:   opts.SBOMPath,
 		SourceRoot: opts.SourceRoot,
+		ToolDeps:   opts.ToolDeps,
 	})
 	if err != nil {
 		return fmt.Errorf("diet analysis failed: %w", err)

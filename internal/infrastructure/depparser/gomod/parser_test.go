@@ -76,6 +76,74 @@ func TestParser_Parse_Empty(t *testing.T) {
 	}
 }
 
+func TestParser_Parse_ToolDirective(t *testing.T) {
+	p := &gomod.Parser{}
+	deps, err := p.Parse(context.Background(), readTestData(t, "with_tool.mod"))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	// Should have 3 deps: copywrite (tool, exact match), exhaustive (tool, /cmd/... match), gin (regular)
+	if len(deps) != 3 {
+		t.Fatalf("got %d deps, want 3", len(deps))
+	}
+
+	// Build scope map by name for easy lookup
+	scopeByName := make(map[string]string, len(deps))
+	for _, d := range deps {
+		scopeByName[d.Name] = d.Scope
+	}
+
+	// Exact-match tool directive
+	if scope, ok := scopeByName["github.com/hashicorp/copywrite"]; !ok {
+		t.Fatal("tool dependency github.com/hashicorp/copywrite not found")
+	} else if scope != "tool" {
+		t.Errorf("copywrite Scope = %q, want %q", scope, "tool")
+	}
+
+	// /cmd/... tool directive resolved to module path
+	if scope, ok := scopeByName["github.com/nishanths/exhaustive"]; !ok {
+		t.Fatal("tool dependency github.com/nishanths/exhaustive not found")
+	} else if scope != "tool" {
+		t.Errorf("exhaustive Scope = %q, want %q", scope, "tool")
+	}
+
+	// Regular dep
+	if scope, ok := scopeByName["github.com/gin-gonic/gin"]; !ok {
+		t.Fatal("regular dependency github.com/gin-gonic/gin not found")
+	} else if scope != "" {
+		t.Errorf("gin Scope = %q, want %q (empty)", scope, "")
+	}
+}
+
+func TestParseToolPaths(t *testing.T) {
+	toolPaths, err := gomod.ParseToolPaths(readTestData(t, "with_tool.mod"))
+	if err != nil {
+		t.Fatalf("ParseToolPaths() error = %v", err)
+	}
+	if len(toolPaths) != 2 {
+		t.Fatalf("got %d tool paths, want 2", len(toolPaths))
+	}
+	// Exact-match tool directive
+	if _, ok := toolPaths["github.com/hashicorp/copywrite"]; !ok {
+		t.Error("expected module path github.com/hashicorp/copywrite to be present")
+	}
+	// /cmd/... tool directive resolved to module path
+	if _, ok := toolPaths["github.com/nishanths/exhaustive"]; !ok {
+		t.Error("expected module path github.com/nishanths/exhaustive to be present (resolved from /cmd/exhaustive)")
+	}
+}
+
+func TestParseToolPaths_NoTools(t *testing.T) {
+	toolPaths, err := gomod.ParseToolPaths(readTestData(t, "go.mod"))
+	if err != nil {
+		t.Fatalf("ParseToolPaths() error = %v", err)
+	}
+	if len(toolPaths) != 0 {
+		t.Errorf("expected 0 tool paths for go.mod without tool directives, got %d", len(toolPaths))
+	}
+}
+
 func TestParser_Parse_InvalidData(t *testing.T) {
 	p := &gomod.Parser{}
 	_, err := p.Parse(context.Background(), []byte("not a go.mod"))
