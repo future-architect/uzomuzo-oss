@@ -488,30 +488,22 @@ Use `uzomuzo --help` for the full list, or `uzomuzo scan --help` for scan-specif
 
 ## Analysis Precision and `GITHUB_TOKEN`
 
-uzomuzo combines data from **deps.dev** (package registry) and **GitHub API** (repository state). When `GITHUB_TOKEN` is not set, GitHub API calls are skipped and analysis relies on deps.dev data only, which significantly reduces lifecycle assessment precision.
+uzomuzo works well without `GITHUB_TOKEN`. Most lifecycle signals — package versions, publish dates, Scorecard metrics (including archive detection), advisories, and license info — come from **deps.dev**, which requires no token.
 
-### What each data source provides
+Setting `GITHUB_TOKEN` adds commit-level signals for edge cases where deps.dev data alone is ambiguous:
 
-| Data Source | Available Without Token | Requires `GITHUB_TOKEN` |
-|-------------|------------------------|------------------------|
-| **deps.dev** | Package versions & publish dates, Scorecard metrics (including archive detection via "Maintained" check), Advisory/CVE counts, Dependent counts, License info | — |
-| **GitHub API** | — | Last human commit date, Bot vs. human commit ratio, Fork detection |
+| Signal | Without Token | With Token |
+|--------|--------------|------------|
+| Archive detection | Via Scorecard "Maintained" check | Via Scorecard + GitHub API |
+| Human vs. bot commit ratio | Not available | Available — detects Dependabot-only maintenance |
+| Last human commit date | Not available | Available — improves Stalled/Active boundary |
+| Fork detection | Not available | Available |
 
-### How missing data affects lifecycle classification
+### When to add a token
 
-| Actual State | With Token | Without Token | Risk |
-|--------------|-----------|---------------|------|
-| Archived repository | **EOL-Confirmed** | **EOL-Confirmed** | Detected via Scorecard "Maintained" check — no token needed |
-| Unpatched CVEs + no commits for 2+ years | **EOL-Effective** | Stalled | False negative — supply chain risk missed |
-| Active Go/Composer package (commits but no registry publish) | **Active** | Stalled | False positive — healthy package flagged |
-| Frozen utility with zero advisories | **Legacy-Safe** | Stalled | False positive — safe package flagged |
-| Bot-only maintenance (Dependabot/Renovate) | **Stalled** | Active | False negative — automation masquerades as maintenance |
+Start without a token. If you see packages classified as **Stalled** that you suspect are actually healthy (e.g., Go/Composer packages that commit but rarely publish to a registry), adding a token will resolve these edge cases.
 
-Without `GITHUB_TOKEN`, many packages fall into **Review Needed** instead of actionable categories because the assessor lacks commit-based signals to make a confident determination.
-
-### Recommendation
-
-For production CI gates and security audits, always set `GITHUB_TOKEN`. The token requires no special scopes for public repositories — a default `GITHUB_TOKEN` from GitHub Actions or `gh auth login` is sufficient.
+The token requires no special scopes for public repositories — a default `GITHUB_TOKEN` from GitHub Actions or `gh auth login` is sufficient.
 
 ```bash
 # GitHub Actions — automatic

@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml) [![Dependency Scan](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/future-architect/uzomuzo-oss)](https://goreportcard.com/report/github.com/future-architect/uzomuzo-oss) [![Go Reference](https://pkg.go.dev/badge/github.com/future-architect/uzomuzo-oss.svg)](https://pkg.go.dev/github.com/future-architect/uzomuzo-oss) [![Release](https://img.shields.io/github/v/release/future-architect/uzomuzo-oss)](https://github.com/future-architect/uzomuzo-oss/releases/latest) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
+📊 **We analyzed 16,000 production packages: [48% have lifecycle risk](https://www.vuls.biz/software-supplychain/eol-risk). SCA tools like Trivy, Syft, and cdxgen detect none of them.**
+
 **Find abandoned dependencies before they become vulnerabilities. Then remove them — in the right order.**
 
 uzomuzo does two things SCA tools can't:
@@ -60,23 +62,18 @@ STATUS     PURL                 LIFECYCLE      BUILD
 
 No official deprecation, no archived repository — yet `dicer` has an unpatched ReDoS vulnerability (CVSS 7.5 — HIGH severity) with zero human commits in over two years. SCA tools report "1 CVE" and move on. uzomuzo recognizes the combination of HIGH/CRITICAL unpatched advisory + maintenance absence as **effectively end-of-life**. This package sits in the Express dependency chain (via busboy → multer), meaning millions of applications silently depend on abandoned code.
 
-### Real-world scan: OWASP Juice Shop
+### Found in the wild — reported and tracked
 
-```bash
-trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
-  | ./uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective
-```
+We used uzomuzo to scan major OSS projects and reported findings upstream:
 
-```text
-🏷️  LABEL SUMMARY (1,540 evaluated packages):
-  🟢 Active:        630 (40.9%)
-  🔵 Legacy-Safe:   556 (36.1%)
-  ⚪ Stalled:       263 (17.1%)
-  🔴 EOL-Confirmed:  88 (5.7%)
-  🛑 EOL-Effective:    3 (0.2%)
-```
+| Project | Issue/PR | Finding |
+|---------|----------|---------|
+| Grafana | [grafana/grafana#121911](https://github.com/grafana/grafana/issues/121911) | Archived Action in release pipeline — triggered internal fix |
+| Vault | [hashicorp/vault#31899](https://github.com/hashicorp/vault/issues/31899) | 3 archived mitchellh packages in ACL layer |
+| Trivy | [aquasecurity/trivy#10484](https://github.com/aquasecurity/trivy/pull/10484) | Archived go-homedir — stdlib replacement PR |
+| Next.js | [vercel/next.js#92479](https://github.com/vercel/next.js/discussions/92479) | Deprecated @vercel/kv — @upstash/redis migration |
 
-**59% of dependencies have lifecycle concerns invisible to SCA tools.** See the [full scan result](docs/assets/juice-shop-eol-result.txt) (EOL-Confirmed and EOL-Effective packages only; filtered with `--show-only replace`).
+All findings were invisible to standard SCA tools (zero CVEs). uzomuzo detected them in seconds.
 
 ## Installation
 
@@ -105,7 +102,7 @@ CGO_ENABLED=1 go build -o uzomuzo-diet ./cmd/uzomuzo-diet  # requires C compiler
 ## Quick Start
 
 ```bash
-export GITHUB_TOKEN=ghp_...  # optional; enables commit history and Scorecard
+export GITHUB_TOKEN=ghp_...  # optional; adds commit history analysis and fork detection
 ```
 
 ```bash
@@ -126,7 +123,7 @@ uzomuzo scan --format json       # JSON output for CI integration
 uzomuzo scan --sbom bom.json --fail-on eol-confirmed
 
 # Batch from Trivy SBOM (show only packages that need replacement)
-trivy image --format cyclonedx bkimminich/juice-shop:v14.5.1 \
+trivy fs --format cyclonedx ./my-project \
   | uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective --show-only replace
 
 # Scan a repo's GitHub Actions dependencies
