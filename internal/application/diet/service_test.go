@@ -722,6 +722,64 @@ func TestRun_WheelFallback(t *testing.T) {
 	t.Fatal("beautifulsoup4 entry not found in plan")
 }
 
+func TestRun_WheelFallback_NilCouplingResults(t *testing.T) {
+	t.Parallel()
+
+	pypiPURL := "pkg:pypi/beautifulsoup4@4.12.3"
+
+	graphResult := &domaindiet.GraphResult{
+		DirectDeps: []string{pypiPURL},
+		Metrics: map[string]*domaindiet.GraphMetrics{
+			pypiPURL: {TotalTransitiveCount: 2},
+		},
+		TotalTransitive: 2,
+	}
+
+	// Phase 2 returns (nil, nil) — zero imports matched any dependency.
+	// Phase 2.5 should still run and merge retry results without panicking.
+	sourceAnalyzer := &retrySourceAnalyzer{
+		firstResult:  nil, // nil map, not empty map
+		secondResult: map[string]*domaindiet.CouplingAnalysis{
+			pypiPURL: {ImportFileCount: 1, CallSiteCount: 2},
+		},
+	}
+
+	resolver := &stubPyPIResolver{
+		names: map[string][]string{
+			"beautifulsoup4": {"bs4"},
+		},
+	}
+
+	svc := NewService(
+		&stubGraphAnalyzer{result: graphResult},
+		sourceAnalyzer,
+		resolver,
+		nil,
+	)
+
+	plan, err := svc.Run(context.Background(), DietInput{
+		SBOMData:   []byte("fake-sbom"),
+		SBOMPath:   "test.sbom.json",
+		SourceRoot: "/tmp/src",
+	})
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	for _, entry := range plan.Entries {
+		if entry.PURL == pypiPURL {
+			if entry.Coupling.IsUnused {
+				t.Errorf("beautifulsoup4 should not be marked unused after wheel fallback with nil initial results")
+			}
+			if entry.Coupling.ImportFileCount != 1 {
+				t.Errorf("expected ImportFileCount=1, got %d", entry.Coupling.ImportFileCount)
+			}
+			return
+		}
+	}
+	t.Fatal("beautifulsoup4 entry not found in plan")
+}
+
 func TestRun_WheelFallback_NilResolver(t *testing.T) {
 	t.Parallel()
 
