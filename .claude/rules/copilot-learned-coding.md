@@ -100,6 +100,11 @@ pending_patterns:
     pr: 276
     file: "internal/infrastructure/pypi/client.go"
     date: "2026-04-11"
+  - category: "defensive-coding"
+    summary: "In chained heuristic pipelines where each step transforms an intermediate result, fallback on empty must return the original input — not the intermediate value from a prior step — to match the documented contract"
+    pr: 281
+    file: "internal/infrastructure/treesitter/lang_go.go"
+    date: "2026-04-11"
   - category: "testing"
     summary: "When code merges results into a map that may be nil (e.g., initialized only on non-empty results), add a test where the initial map is nil and the merge path still executes — catches nil map assignment panics"
     pr: 276
@@ -259,4 +264,5 @@ pending_patterns:
   # defensive-coding (PR #227): already covered by "Validate Generated Strings Against Target-Language Syntax" — add isPythonIdentifierSafe validation for PyPI import path candidates
   # defensive-coding (PR #227 round 2): already covered by "Validate Generated Strings Against Target-Language Syntax" — validate dotted module paths (e.g., zope.interface) by splitting on "." and checking each segment independently
   # comment-doc-drift (PR #227 round 2): WONT_FIX — PR description reflects initial implementation; code and tests were updated in prior commit
+  # duplicate-parsing (PR #281): already covered by promoted "Extract Shared Helpers for Near-Duplicate Code Paths" rule — aliasFromPkg closure inconsistent with handleGoImport; extracted goAliasFromImportPath shared helper
 -->
