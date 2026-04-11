@@ -559,6 +559,39 @@ HeaderTuple()
 			wantCalls:   1,
 			wantBreadth: 1,
 		},
+		{
+			name: "elif TYPE_CHECKING from-import skipped",
+			code: `from typing import TYPE_CHECKING
+import sys
+if sys.platform == "win32":
+    from os import path
+elif TYPE_CHECKING:
+    from hpack import HeaderTuple
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/hpack@4.0.0": {"hpack"},
+			},
+			purl:        "pkg:pypi/hpack@4.0.0",
+			wantImports: 0,
+			wantCalls:   0,
+			wantBreadth: 0,
+		},
+		{
+			name: "if not TYPE_CHECKING not skipped",
+			code: `from typing import TYPE_CHECKING
+if not TYPE_CHECKING:
+    from hpack import HeaderTuple
+
+HeaderTuple()
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/hpack@4.0.0": {"hpack"},
+			},
+			purl:        "pkg:pypi/hpack@4.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
 	}
 
 	for _, tt := range tests {

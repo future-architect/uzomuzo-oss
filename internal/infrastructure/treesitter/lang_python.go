@@ -188,10 +188,10 @@ func isPythonTypeCheckingImport(importStmt *sitter.Node, src []byte) bool {
 	child := importStmt
 	current := importStmt.Parent()
 	for depth := 0; current != nil && depth < maxAncestorWalkDepth; depth++ {
-		if current.Type() == "if_statement" {
-			// Only consider if-statements whose consequence directly contains the
-			// current child path. If this node is reached through an else/elif path,
-			// continue walking upward without matching this if-statement.
+		if current.Type() == "if_statement" || current.Type() == "elif_clause" {
+			// Only consider if/elif nodes whose consequence directly contains the
+			// current child path. If this node is reached through an else path,
+			// continue walking upward without matching.
 			body := current.ChildByFieldName("consequence")
 			if body == child && isTypeCheckingCondition(current, src) {
 				return true
@@ -203,7 +203,7 @@ func isPythonTypeCheckingImport(importStmt *sitter.Node, src []byte) bool {
 	return false
 }
 
-// isTypeCheckingCondition checks if an if_statement's condition is
+// isTypeCheckingCondition checks if an if_statement or elif_clause's condition is
 // `TYPE_CHECKING` (bare identifier) or `typing.TYPE_CHECKING` (attribute access).
 func isTypeCheckingCondition(ifStmt *sitter.Node, src []byte) bool {
 	cond := ifStmt.ChildByFieldName("condition")
