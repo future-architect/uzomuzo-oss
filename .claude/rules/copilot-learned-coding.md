@@ -261,5 +261,6 @@ pending_patterns:
   # comment-doc-drift (PR #227 round 2): WONT_FIX — PR description reflects initial implementation; code and tests were updated in prior commit
   # duplicate-parsing (PR #281): already covered by promoted "Extract Shared Helpers for Near-Duplicate Code Paths" rule — aliasFromPkg closure inconsistent with handleGoImport; extracted goAliasFromImportPath shared helper
   # comment-doc-drift (PR #283): already covered by "Comment-Code Consistency" rule — scoped_type_identifier comment inaccurately described capture matching behavior in countCallSites
+  # comment-doc-drift (PR #283 round 2): already covered by "Comment-Code Consistency" rule — scoped_type_identifier comment still inaccurate after first fix; rewording must reflect positional capture semantics of countCallSites
   # comment-doc-drift (PR #283): already covered by "Comment-Code Consistency" rule — test comment incorrectly attributed scoped constructor match to method_invocation pattern
 -->
