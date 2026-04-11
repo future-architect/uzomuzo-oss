@@ -263,4 +263,5 @@ pending_patterns:
   # comment-doc-drift (PR #283): already covered by "Comment-Code Consistency" rule — scoped_type_identifier comment inaccurately described capture matching behavior in countCallSites
   # comment-doc-drift (PR #283 round 2): already covered by "Comment-Code Consistency" rule — scoped_type_identifier comment still inaccurate after first fix; rewording must reflect positional capture semantics of countCallSites
   # comment-doc-drift (PR #283): already covered by "Comment-Code Consistency" rule — test comment incorrectly attributed scoped constructor match to method_invocation pattern
+  # testing (PR #283): already covered by "Cover New Control Flow Branches with Tests" and "Verify Tree-Sitter Query Patterns Do Not Overlap" — each tree-sitter query pattern variant (generic vs non-generic scoped constructor) needs its own test case
 -->
