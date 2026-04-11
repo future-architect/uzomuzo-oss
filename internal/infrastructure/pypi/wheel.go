@@ -266,9 +266,12 @@ func parseTopLevelTxt(r *zip.Reader) []string {
 		if err != nil {
 			continue
 		}
-		data, err := io.ReadAll(io.LimitReader(rc, maxEntrySize))
+		data, err := io.ReadAll(io.LimitReader(rc, maxEntrySize+1))
 		_ = rc.Close()
 		if err != nil {
+			continue
+		}
+		if int64(len(data)) > maxEntrySize {
 			continue
 		}
 		var names []string
@@ -308,9 +311,12 @@ func parseRECORD(r *zip.Reader) []string {
 		if err != nil {
 			continue
 		}
-		data, err := io.ReadAll(io.LimitReader(rc, maxEntrySize))
+		data, err := io.ReadAll(io.LimitReader(rc, maxEntrySize+1))
 		_ = rc.Close()
 		if err != nil {
+			continue
+		}
+		if int64(len(data)) > maxEntrySize {
 			continue
 		}
 

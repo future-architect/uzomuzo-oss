@@ -123,16 +123,41 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 				retryPaths := s.resolveUnmatchedPyPI(ctx, graphResult.DirectDeps, couplingResults)
 				if len(retryPaths) > 0 {
 					slog.Info("Phase 2.5: Retrying coupling with wheel-resolved import names", "count", len(retryPaths))
-					retryCoupling, retryErr := s.sourceAnalyzer.AnalyzeCoupling(ctx, input.SourceRoot, retryPaths)
+
+					// Build combined importPaths (original heuristic + wheel-resolved)
+					// so AnalyzeCoupling sees the full dependency set and collision
+					// attribution stays consistent with Phase 2.
+					combinedImportPaths := make(map[string][]string, len(importPaths))
+					for purl, paths := range importPaths {
+						copiedPaths := make([]string, len(paths))
+						copy(copiedPaths, paths)
+						combinedImportPaths[purl] = copiedPaths
+					}
+					for purl, paths := range retryPaths {
+						seen := make(map[string]struct{}, len(combinedImportPaths[purl])+len(paths))
+						mergedPaths := make([]string, 0, len(combinedImportPaths[purl])+len(paths))
+						for _, p := range combinedImportPaths[purl] {
+							if _, ok := seen[p]; ok {
+								continue
+							}
+							seen[p] = struct{}{}
+							mergedPaths = append(mergedPaths, p)
+						}
+						for _, p := range paths {
+							if _, ok := seen[p]; ok {
+								continue
+							}
+							seen[p] = struct{}{}
+							mergedPaths = append(mergedPaths, p)
+						}
+						combinedImportPaths[purl] = mergedPaths
+					}
+
+					retryCoupling, retryErr := s.sourceAnalyzer.AnalyzeCoupling(ctx, input.SourceRoot, combinedImportPaths)
 					if retryErr != nil {
 						slog.Warn("Phase 2.5 failed, continuing with heuristic results", "error", retryErr)
 					} else {
-						if couplingResults == nil {
-							couplingResults = make(map[string]*domaindiet.CouplingAnalysis, len(retryCoupling))
-						}
-						for purl, ca := range retryCoupling {
-							couplingResults[purl] = ca
-						}
+						couplingResults = retryCoupling
 						slog.Info("Phase 2.5 complete", "resolved", len(retryCoupling))
 					}
 				}
