@@ -116,9 +116,10 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 			}
 
 			// Phase 2.5: Wheel-based fallback for PyPI packages with zero matches.
-			// Skip when couplingResults is nil (Phase 2 error) — no point retrying
-			// if the source analyzer itself failed.
-			if s.pypiResolver != nil && couplingResults != nil {
+			// Gate on couplingErr (not couplingResults) because AnalyzeCoupling
+			// returns (nil, nil) when no imports matched — that nil map is exactly
+			// the scenario the wheel fallback should recover from.
+			if s.pypiResolver != nil && couplingErr == nil {
 				retryPaths := s.resolveUnmatchedPyPI(ctx, graphResult.DirectDeps, couplingResults)
 				if len(retryPaths) > 0 {
 					slog.Info("Phase 2.5: Retrying coupling with wheel-resolved import names", "count", len(retryPaths))
@@ -126,6 +127,9 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 					if retryErr != nil {
 						slog.Warn("Phase 2.5 failed, continuing with heuristic results", "error", retryErr)
 					} else {
+						if couplingResults == nil {
+							couplingResults = make(map[string]*domaindiet.CouplingAnalysis, len(retryCoupling))
+						}
 						for purl, ca := range retryCoupling {
 							couplingResults[purl] = ca
 						}

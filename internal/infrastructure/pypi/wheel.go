@@ -91,9 +91,12 @@ type wheelURL struct {
 }
 
 // ResolveImportNames fetches the actual Python import module names for a PyPI
-// package by downloading and inspecting the smallest wheel file. Returns nil
-// if resolution fails (graceful degradation — the caller should fall back to
-// heuristic names).
+// package by downloading and inspecting the smallest wheel file.
+//
+// It returns nil, nil when the package name is empty or when no suitable wheel
+// can be used to resolve import names. It may return a non-nil error for wheel
+// lookup or download failures; callers should treat those as non-fatal fallback
+// failures and fall back to heuristic names.
 func (c *Client) ResolveImportNames(ctx context.Context, packageName string) ([]string, error) {
 	n := strings.TrimSpace(packageName)
 	if n == "" {
