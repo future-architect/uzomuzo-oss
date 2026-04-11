@@ -187,6 +187,9 @@ func NewAnalyzer() *Analyzer {
 			`(method_invocation !object name: (identifier) @func)`,
 			`(marker_annotation name: (identifier) @func)`,
 			`(annotation name: (identifier) @func)`,
+			`(object_creation_expression type: (type_identifier) @func)`,
+			`(super_interfaces (type_list (type_identifier) @func))`,
+			`(superclass (type_identifier) @func)`,
 		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {

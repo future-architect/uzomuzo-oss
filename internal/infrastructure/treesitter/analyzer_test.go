@@ -577,11 +577,11 @@ public class Main {
 	if ca.ImportFileCount != 1 {
 		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
 	}
-	if ca.CallSiteCount != 2 {
-		t.Errorf("CallSiteCount = %d, want 2", ca.CallSiteCount)
+	if ca.CallSiteCount != 3 {
+		t.Errorf("CallSiteCount = %d, want 3 (new Gson, toJson, fromJson)", ca.CallSiteCount)
 	}
-	if ca.APIBreadth != 2 {
-		t.Errorf("APIBreadth = %d, want 2 (toJson, fromJson)", ca.APIBreadth)
+	if ca.APIBreadth != 3 {
+		t.Errorf("APIBreadth = %d, want 3 (Gson, toJson, fromJson)", ca.APIBreadth)
 	}
 	if ca.IsUnused {
 		t.Error("IsUnused = true, want false")
@@ -1257,8 +1257,8 @@ public class Main {
 		if ca.ImportFileCount != 1 {
 			t.Errorf("%s: ImportFileCount = %d, want 1", purl, ca.ImportFileCount)
 		}
-		if ca.CallSiteCount != 1 {
-			t.Errorf("%s: CallSiteCount = %d, want 1", purl, ca.CallSiteCount)
+		if ca.CallSiteCount != 2 {
+			t.Errorf("%s: CallSiteCount = %d, want 2 (new Gson, toJson)", purl, ca.CallSiteCount)
 		}
 	}
 }
@@ -2020,6 +2020,147 @@ const data = Readable.from([1, 2, 3]);
 	}
 }
 
+func TestAnalyzer_JavaImplementsExtends(t *testing.T) {
+	dir := t.TempDir()
+	// Interface inheritance (implements/extends) should count as call sites.
+	// These are type references that indicate coupling to the dependency.
+	err := os.WriteFile(filepath.Join(dir, "MyPublisher.java"), []byte(`import org.reactivestreams.Publisher;
+import junit.framework.TestCase;
+
+public class MyPublisher implements Publisher {
+    public void subscribe(Object subscriber) {}
+}
+
+class MyTest extends TestCase {
+    public void testSomething() {}
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/org.reactivestreams/reactive-streams@1.0.4": {"org.reactivestreams"},
+		"pkg:maven/junit/junit@4.13.2":                         {"junit.framework"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name          string
+		purl          string
+		wantImports   int
+		wantCallSites int
+		wantBreadth   int
+	}{
+		{
+			name:          "implements Publisher",
+			purl:          "pkg:maven/org.reactivestreams/reactive-streams@1.0.4",
+			wantImports:   1,
+			wantCallSites: 1,
+			wantBreadth:   1,
+		},
+		{
+			name:          "extends TestCase",
+			purl:          "pkg:maven/junit/junit@4.13.2",
+			wantImports:   1,
+			wantCallSites: 1,
+			wantBreadth:   1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCallSites {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCallSites)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
+			}
+		})
+	}
+}
+
+func TestAnalyzer_JavaConstructorCall(t *testing.T) {
+	dir := t.TempDir()
+	// Constructor calls (new Type()) should count as call sites.
+	// This captures usage like "new Gson()", "new ObjectMapper()" where the
+	// class name is used directly without a method_invocation on an alias.
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.google.gson.Gson;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class Main {
+    public static void main(String[] args) {
+        Gson gson = new Gson();
+        ObjectMapper mapper = new ObjectMapper();
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/com.google.code.gson/gson@2.10":                     {"com.google.gson"},
+		"pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.15.2": {"com.fasterxml.jackson.databind"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name           string
+		purl           string
+		wantMinCalls   int
+		wantMinBreadth int
+	}{
+		{
+			name:           "new Gson() constructor",
+			purl:           "pkg:maven/com.google.code.gson/gson@2.10",
+			wantMinCalls:   1,
+			wantMinBreadth: 1,
+		},
+		{
+			name:           "new ObjectMapper() constructor",
+			purl:           "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.15.2",
+			wantMinCalls:   1,
+			wantMinBreadth: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.CallSiteCount < tt.wantMinCalls {
+				t.Errorf("CallSiteCount = %d, want >= %d", ca.CallSiteCount, tt.wantMinCalls)
+			}
+			if ca.APIBreadth < tt.wantMinBreadth {
+				t.Errorf("APIBreadth = %d, want >= %d", ca.APIBreadth, tt.wantMinBreadth)
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
+			}
+		})
+	}
+}
 // TestAnalyzer_TypeScriptDefaultImportCall verifies that a default import binding
 // used as a direct function call is detected as a call site.
 // e.g., `import _generate from '@babel/generator'; _generate(ast);`
@@ -2053,7 +2194,6 @@ const result = _generate(ast, { comments: true });
 		t.Errorf("CallSiteCount = %d, want >= 1", ca.CallSiteCount)
 	}
 }
-
 // TestAnalyzer_TypeScriptSideEffectImport verifies that a bare side-effect import
 // (`import 'reflect-metadata'`) is tracked as used (not classified as unused).
 func TestAnalyzer_TypeScriptSideEffectImport(t *testing.T) {
@@ -2089,7 +2229,6 @@ func TestAnalyzer_TypeScriptSideEffectImport(t *testing.T) {
 		t.Error("HasBlankImport = false, want true (side-effect import analogous to Go blank import)")
 	}
 }
-
 // TestAnalyzer_TypeScriptTypeOnlyImportExclusion verifies that `import type { ... }`
 // in a .ts file (not just .tsx) is excluded from coupling analysis.
 func TestAnalyzer_TypeScriptTypeOnlyImportExclusion(t *testing.T) {
@@ -2116,7 +2255,6 @@ const x: Foo = {} as any;
 		t.Errorf("expected no coupling for type-only import in .ts file, got %d results", len(result))
 	}
 }
-
 func TestAnalyzer_PythonTryExceptImport(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -2301,7 +2439,6 @@ except (ValueError, TypeError):
 		})
 	}
 }
-
 func TestAnalyzer_JSInlineRequireCallSites(t *testing.T) {
 	tests := []struct {
 		name         string
