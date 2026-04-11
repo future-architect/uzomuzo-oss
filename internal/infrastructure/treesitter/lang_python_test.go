@@ -541,6 +541,24 @@ if TYPE_CHECKING:
 			wantCalls:   0,
 			wantBreadth: 0,
 		},
+		{
+			name: "else branch of TYPE_CHECKING not skipped",
+			code: `from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from typing import Protocol
+else:
+    from hpack import HeaderTuple
+
+HeaderTuple()
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/hpack@4.0.0": {"hpack"},
+			},
+			purl:        "pkg:pypi/hpack@4.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
 	}
 
 	for _, tt := range tests {
