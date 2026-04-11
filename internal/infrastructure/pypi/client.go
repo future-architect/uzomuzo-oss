@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -161,7 +162,7 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 			HomePage    string            `json:"home_page"`
 		} `json:"info"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&raw); err != nil {
 		return nil, false, fmt.Errorf("pypi decode failed: %w", err)
 	}
 	info := &ProjectInfo{
