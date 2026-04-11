@@ -141,6 +141,10 @@ Analyzes your source code to measure how deeply each dependency is integrated:
 
 Supported languages: Go, Python, JavaScript/TypeScript, Java.
 
+#### Phase 2.5: Wheel-based PyPI fallback
+
+For Python (PyPI) packages where Phase 2 finds zero import matches, diet automatically downloads the smallest wheel file and extracts actual import names from `top_level.txt`, `RECORD`, or `__init__.py` directory listing. This resolves common PyPI name mismatches (e.g., `beautifulsoup4` imports as `bs4`, `pyyaml` as `yaml`). Wheels larger than 5 MB are skipped.
+
 ### Phase 3: Health Signals (API)
 
 Reuses the existing `uzomuzo scan` infrastructure to fetch:

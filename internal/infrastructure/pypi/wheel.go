@@ -34,6 +34,9 @@ const maxWheelSize = 5 << 20
 // gigabytes of data.
 const maxEntrySize = 1 << 20
 
+// maxJSONResponseSize caps the PyPI JSON API response body (10 MB).
+const maxJSONResponseSize = 10 << 20
+
 // importNameCacheEntry stores resolved import names with a timestamp for TTL.
 type importNameCacheEntry struct {
 	names []string
@@ -156,8 +159,7 @@ func (c *Client) selectSmallestWheel(ctx context.Context, packageName string) (s
 	var raw struct {
 		URLs []wheelURL `json:"urls"`
 	}
-	// Cap the JSON response to 10 MB to prevent memory exhaustion.
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&raw); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&raw); err != nil {
 		return "", fmt.Errorf("decode failed: %w", err)
 	}
 
