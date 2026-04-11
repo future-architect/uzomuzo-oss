@@ -162,8 +162,15 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 			declarator := findAncestorVariableDeclarator(callExpr)
 			if declarator != nil {
 				nameNode := declarator.ChildByFieldName("name")
-				if nameNode != nil && nameNode.Type() == "identifier" {
+				if nameNode == nil {
+					return nil
+				}
+				switch nameNode.Type() {
+				case "identifier":
 					return []string{nameNode.Content(src)}
+				case "object_pattern":
+					// Destructured: const { X, Y } = require('pkg')
+					return extractCJSDestructuredBindings(nameNode, src)
 				}
 			}
 		}
@@ -305,6 +312,35 @@ func extractNamedImportBindings(namedImports *sitter.Node, src []byte) []string 
 		nameNode := spec.ChildByFieldName("name")
 		if nameNode != nil {
 			bindings = append(bindings, nameNode.Content(src))
+		}
+	}
+	return bindings
+}
+
+// extractCJSDestructuredBindings extracts binding names from a CJS destructured
+// require pattern. For `const { foo, bar: baz } = require("pkg")`, the AST has
+// an object_pattern with children:
+//   - shorthand_property_identifier_pattern for `{ foo }` (name == foo, local binding == foo)
+//   - pair_pattern for `{ bar: baz }` (key == bar, value == baz, local binding == baz)
+//
+// This mirrors extractNamedImportBindings for ESM named imports.
+func extractCJSDestructuredBindings(objectPattern *sitter.Node, src []byte) []string {
+	var bindings []string
+	for i := 0; i < int(objectPattern.ChildCount()); i++ {
+		child := objectPattern.Child(i)
+		if child == nil {
+			continue
+		}
+		switch child.Type() {
+		case "shorthand_property_identifier_pattern":
+			// { X } — the identifier itself is the local binding.
+			bindings = append(bindings, child.Content(src))
+		case "pair_pattern":
+			// { X: alias } — the value side is the local binding.
+			valueNode := child.ChildByFieldName("value")
+			if valueNode != nil && valueNode.Type() == "identifier" {
+				bindings = append(bindings, valueNode.Content(src))
+			}
 		}
 	}
 	return bindings
