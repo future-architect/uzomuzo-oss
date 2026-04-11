@@ -886,6 +886,18 @@ bar();
 					t.Errorf("expected no coupling for type-only import, got ImportFileCount=%d CallSiteCount=%d",
 						ca.ImportFileCount, ca.CallSiteCount)
 				}
+
+				// Verify that other (runtime) imports in the same file still produce coupling.
+				for purl := range tt.importPaths {
+					if purl == tt.purlToCheck {
+						continue
+					}
+					if rca, rok := result[purl]; !rok {
+						t.Errorf("expected coupling for runtime import %s, got no result", purl)
+					} else if rca.ImportFileCount == 0 {
+						t.Errorf("expected ImportFileCount > 0 for runtime import %s, got 0", purl)
+					}
+				}
 				return
 			}
 
