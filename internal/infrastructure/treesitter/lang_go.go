@@ -18,13 +18,41 @@ func registerGoConfig(a *Analyzer) {
 			`(selector_expression operand: (identifier) @pkg field: (field_identifier) @field)`,
 			`(qualified_type package: (package_identifier) @pkg name: (type_identifier) @field)`,
 		}, "\n"),
-		stripQuotes: true,
-		aliasFromPkg: func(importPath string) string {
-			parts := strings.Split(importPath, "/")
-			return parts[len(parts)-1]
-		},
+		stripQuotes:  true,
+		aliasFromPkg: goAliasFromImportPath,
 	}
 	compileQueries(a.configs[langGo])
+}
+
+// goAliasFromImportPath derives the default Go package alias from an import path.
+// It applies Go-specific heuristics: major-version suffixes, gopkg.in version
+// suffixes, ".go" module name suffixes, and hyphenated directory names.
+func goAliasFromImportPath(importPath string) string {
+	parts := strings.Split(importPath, "/")
+	alias := parts[len(parts)-1]
+
+	// Handle major-version suffixes (e.g., "example.com/foo/v2" → "foo").
+	if len(parts) >= 2 && len(alias) >= 2 && alias[0] == 'v' && alias[1] >= '0' && alias[1] <= '9' {
+		alias = parts[len(parts)-2]
+	}
+
+	// Handle gopkg.in version suffixes (e.g., "yaml.v3" → "yaml").
+	if idx := strings.LastIndex(alias, ".v"); idx > 0 && idx+2 < len(alias) && alias[idx+2] >= '0' && alias[idx+2] <= '9' {
+		alias = alias[:idx]
+	}
+
+	// Handle .go suffix in module names (e.g., "miscreant.go" → "miscreant").
+	// Some Go modules use ".go" as a suffix in their repository/module name,
+	// but the actual Go package name omits the suffix.
+	if trimmed := strings.TrimSuffix(alias, ".go"); trimmed != "" && trimmed != alias {
+		alias = trimmed
+	}
+
+	// Handle hyphenated package names. Go identifiers cannot contain hyphens,
+	// so the actual package name differs from the directory name.
+	alias = goPackageFromHyphenated(alias)
+
+	return alias
 }
 
 // handleGoImport processes a Go import spec node.
@@ -85,32 +113,7 @@ func (a *Analyzer) handleGoImport(
 	}
 
 	if alias == "" {
-		// Default: last path component, with heuristics for Go conventions.
-		parts := strings.Split(importPath, "/")
-		alias = parts[len(parts)-1]
-
-		// Handle major-version suffixes (e.g., "example.com/foo/v2" → "foo").
-		if len(parts) >= 2 && len(alias) >= 2 && alias[0] == 'v' && alias[1] >= '0' && alias[1] <= '9' {
-			alias = parts[len(parts)-2]
-		}
-
-		// Handle gopkg.in version suffixes (e.g., "yaml.v3" → "yaml").
-		if idx := strings.LastIndex(alias, ".v"); idx > 0 && idx+2 < len(alias) && alias[idx+2] >= '0' && alias[idx+2] <= '9' {
-			alias = alias[:idx]
-		}
-
-		// Handle .go suffix in module names (e.g., "miscreant.go" → "miscreant").
-		// Some Go modules use ".go" as a suffix in their repository/module name,
-		// but the actual Go package name omits the suffix.
-		if trimmed := strings.TrimSuffix(alias, ".go"); trimmed != "" && trimmed != alias {
-			alias = trimmed
-		}
-
-		// Handle hyphenated package names. Go identifiers cannot contain hyphens,
-		// so the actual package name differs from the directory name.
-		// Common conventions: "opentracing-go" → "opentracing", "go-loser" → "loser",
-		// "go-spew" → "spew", "mmap-go" → "mmap".
-		alias = goPackageFromHyphenated(alias)
+		alias = goAliasFromImportPath(importPath)
 	}
 
 	aliasMap[alias] = appendUniquePURLs(aliasMap[alias], purls)
@@ -148,7 +151,7 @@ func goPackageFromHyphenated(name string) string {
 	// Strip "-go" suffix (e.g., "opentracing-go" → "opentracing", "mmap-go" → "mmap").
 	trimmed := strings.TrimSuffix(result, "-go")
 	if trimmed == "" {
-		return result
+		return name
 	}
 	result = trimmed
 	if !strings.Contains(result, "-") {
@@ -158,7 +161,7 @@ func goPackageFromHyphenated(name string) string {
 	// Strip "go-" prefix (only reached if hyphens remain after steps 1-2).
 	trimmed = strings.TrimPrefix(result, "go-")
 	if trimmed == "" {
-		return result
+		return name
 	}
 	result = trimmed
 	if !strings.Contains(result, "-") {
