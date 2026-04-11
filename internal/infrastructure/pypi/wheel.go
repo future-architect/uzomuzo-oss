@@ -12,6 +12,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -194,8 +195,8 @@ func (c *Client) selectSmallestWheel(ctx context.Context, packageName string) (s
 // downloadWheel fetches the wheel file content, capped at maxWheelSize.
 func (c *Client) downloadWheel(ctx context.Context, dlURL string) ([]byte, error) {
 	parsed, err := url.Parse(dlURL)
-	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") {
-		return nil, fmt.Errorf("invalid wheel URL scheme: %s", dlURL)
+	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" {
+		return nil, fmt.Errorf("invalid wheel URL: %s", dlURL)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dlURL, nil)
 	if err != nil {
@@ -314,14 +315,20 @@ func parseRECORD(r *zip.Reader) []string {
 		}
 
 		pkgDirs := make(map[string]struct{})
-		for _, line := range strings.Split(string(data), "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" {
+		csvReader := csv.NewReader(bytes.NewReader(data))
+		csvReader.FieldsPerRecord = -1 // variable field count
+		for {
+			record, csvErr := csvReader.Read()
+			if csvErr != nil {
+				break
+			}
+			if len(record) == 0 {
 				continue
 			}
-			// RECORD format: path,hash,size — extract the path field only.
-			fields := strings.SplitN(line, ",", 2)
-			recPath := fields[0]
+			recPath := strings.TrimSpace(record[0])
+			if recPath == "" {
+				continue
+			}
 
 			parts := strings.SplitN(recPath, "/", 2)
 			if len(parts) < 2 {
