@@ -28,6 +28,8 @@ type Client struct {
 	mu    sync.RWMutex
 	cache map[string]cacheEntry
 	ttl   time.Duration
+
+	importCacheFields // wheel-based import name cache (lazily initialised)
 }
 
 type cacheEntry struct {

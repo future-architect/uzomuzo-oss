@@ -28,6 +28,15 @@ type GraphAnalyzer interface {
 	AnalyzeGraph(ctx context.Context, sbomData []byte) (*domaindiet.GraphResult, error)
 }
 
+// PyPIImportResolver resolves Python import names from wheel metadata.
+// This is the fallback used when heuristic import path guessing fails.
+type PyPIImportResolver interface {
+	// ResolveImportNames fetches the actual Python import names for a PyPI
+	// package by downloading and inspecting the smallest wheel file.
+	// Returns nil/empty if resolution fails (graceful degradation).
+	ResolveImportNames(ctx context.Context, packageName string) ([]string, error)
+}
+
 // DietInput contains the inputs for a diet analysis run.
 type DietInput struct {
 	SBOMData   []byte
@@ -42,7 +51,8 @@ type DietInput struct {
 // Service orchestrates the 4-phase diet pipeline.
 type Service struct {
 	graphAnalyzer   GraphAnalyzer
-	sourceAnalyzer  SourceAnalyzer // nil = skip source analysis
+	sourceAnalyzer  SourceAnalyzer     // nil = skip source analysis
+	pypiResolver    PyPIImportResolver // nil = skip wheel fallback
 	analysisService *application.AnalysisService
 }
 
@@ -50,11 +60,13 @@ type Service struct {
 func NewService(
 	graphAnalyzer GraphAnalyzer,
 	sourceAnalyzer SourceAnalyzer,
+	pypiResolver PyPIImportResolver,
 	analysisService *application.AnalysisService,
 ) *Service {
 	return &Service{
 		graphAnalyzer:   graphAnalyzer,
 		sourceAnalyzer:  sourceAnalyzer,
+		pypiResolver:    pypiResolver,
 		analysisService: analysisService,
 	}
 }
@@ -98,6 +110,23 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 				slog.Warn("Phase 2: no imports matched any dependency — verify --source points to the correct directory", "source", input.SourceRoot)
 			} else {
 				slog.Info("Phase 2 complete", "analyzed", len(couplingResults))
+			}
+
+			// Phase 2.5: Wheel-based fallback for PyPI packages with zero matches
+			if s.pypiResolver != nil && couplingResults != nil {
+				retryPaths := s.resolveUnmatchedPyPI(ctx, graphResult.DirectDeps, couplingResults)
+				if len(retryPaths) > 0 {
+					slog.Info("Phase 2.5: Retrying coupling with wheel-resolved import names", "count", len(retryPaths))
+					retryCoupling, retryErr := s.sourceAnalyzer.AnalyzeCoupling(ctx, input.SourceRoot, retryPaths)
+					if retryErr != nil {
+						slog.Warn("Phase 2.5 failed, continuing with heuristic results", "error", retryErr)
+					} else {
+						for purl, ca := range retryCoupling {
+							couplingResults[purl] = ca
+						}
+						slog.Info("Phase 2.5 complete", "resolved", len(retryCoupling))
+					}
+				}
 			}
 		} else {
 			slog.Info("Phase 2: Skipped (no source root provided)")
@@ -473,13 +502,13 @@ var mavenPackageOverrides = map[string][]string{
 
 	// Jackson family: Maven groupId (e.g. com.fasterxml.jackson.core) does not
 	// match the actual Java package name (e.g. com.fasterxml.jackson.annotation).
-	"com.fasterxml.jackson.core/jackson-annotations":          {"com.fasterxml.jackson.annotation"},
-	"com.fasterxml.jackson.core/jackson-databind":             {"com.fasterxml.jackson.databind"},
-	"com.fasterxml.jackson.dataformat/jackson-dataformat-csv": {"com.fasterxml.jackson.dataformat.csv"},
-	"com.fasterxml.jackson.dataformat/jackson-dataformat-xml": {"com.fasterxml.jackson.dataformat.xml"},
+	"com.fasterxml.jackson.core/jackson-annotations":           {"com.fasterxml.jackson.annotation"},
+	"com.fasterxml.jackson.core/jackson-databind":              {"com.fasterxml.jackson.databind"},
+	"com.fasterxml.jackson.dataformat/jackson-dataformat-csv":  {"com.fasterxml.jackson.dataformat.csv"},
+	"com.fasterxml.jackson.dataformat/jackson-dataformat-xml":  {"com.fasterxml.jackson.dataformat.xml"},
 	"com.fasterxml.jackson.dataformat/jackson-dataformat-yaml": {"com.fasterxml.jackson.dataformat.yaml"},
-	"com.fasterxml.jackson.datatype/jackson-datatype-jsr310":  {"com.fasterxml.jackson.datatype.jsr310"},
-	"com.fasterxml.jackson.module/jackson-module-kotlin":      {"com.fasterxml.jackson.module.kotlin"},
+	"com.fasterxml.jackson.datatype/jackson-datatype-jsr310":   {"com.fasterxml.jackson.datatype.jsr310"},
+	"com.fasterxml.jackson.module/jackson-module-kotlin":       {"com.fasterxml.jackson.module.kotlin"},
 
 	// javax.inject: groupId and artifactId both equal "javax.inject", so the
 	// heuristic already produces the correct candidate, but an explicit override
@@ -574,4 +603,34 @@ func isJavaDottedPackageSafe(s string) bool {
 		}
 	}
 	return true
+}
+
+// resolveUnmatchedPyPI identifies PyPI PURLs that had zero coupling matches
+// and attempts to resolve their import names via wheel metadata. Returns
+// a map of PURL → resolved import paths suitable for a retry AnalyzeCoupling call.
+func (s *Service) resolveUnmatchedPyPI(
+	ctx context.Context,
+	directDeps []string,
+	couplingResults map[string]*domaindiet.CouplingAnalysis,
+) map[string][]string {
+	retryPaths := make(map[string][]string)
+	for _, purl := range directDeps {
+		parsed, err := packageurl.FromString(purl)
+		if err != nil || parsed.Type != "pypi" {
+			continue
+		}
+		// Only retry packages that got zero matches from heuristic paths.
+		if _, found := couplingResults[purl]; found {
+			continue
+		}
+		names, resolveErr := s.pypiResolver.ResolveImportNames(ctx, parsed.Name)
+		if resolveErr != nil {
+			slog.Debug("pypi_wheel: resolve failed, skipping", "package", parsed.Name, "error", resolveErr)
+			continue
+		}
+		if len(names) > 0 {
+			retryPaths[purl] = names
+		}
+	}
+	return retryPaths
 }

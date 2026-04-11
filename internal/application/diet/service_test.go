@@ -2,6 +2,7 @@ package diet
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -431,6 +432,7 @@ func TestRun_BasicPipeline(t *testing.T) {
 	svc := NewService(
 		&stubGraphAnalyzer{result: graphResult},
 		&stubSourceAnalyzer{result: sourceResults},
+		nil, // no PyPI resolver for this test
 		nil, // no AnalysisService for this test
 	)
 
@@ -549,7 +551,8 @@ func TestRun_ToolDepsNotFlaggedAsUnused(t *testing.T) {
 	svc := NewService(
 		&stubGraphAnalyzer{result: graphResult},
 		&stubSourceAnalyzer{result: sourceResults},
-		nil,
+		nil, // no PyPI resolver
+		nil, // no AnalysisService
 	)
 
 	plan, err := svc.Run(context.Background(), DietInput{
@@ -605,7 +608,8 @@ func TestRun_NoSourceAnalyzer(t *testing.T) {
 	svc := NewService(
 		&stubGraphAnalyzer{result: graphResult},
 		nil, // no source analyzer
-		nil,
+		nil, // no PyPI resolver
+		nil, // no AnalysisService
 	)
 
 	plan, err := svc.Run(context.Background(), DietInput{
@@ -621,5 +625,184 @@ func TestRun_NoSourceAnalyzer(t *testing.T) {
 	// Without source analyzer, coupling should be zero-value (not unused)
 	if plan.Entries[0].Coupling.IsUnused {
 		t.Error("without source analyzer, coupling should not be marked unused")
+	}
+}
+
+// --- Phase 2.5 wheel fallback tests ---
+
+type stubPyPIResolver struct {
+	names map[string][]string // packageName → import names
+	err   error
+}
+
+func (s *stubPyPIResolver) ResolveImportNames(_ context.Context, name string) ([]string, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.names[name], nil
+}
+
+// retrySourceAnalyzer returns different results on the first vs second call.
+// First call returns firstResult; second call returns secondResult.
+type retrySourceAnalyzer struct {
+	firstResult  map[string]*domaindiet.CouplingAnalysis
+	secondResult map[string]*domaindiet.CouplingAnalysis
+	callCount    int
+}
+
+func (s *retrySourceAnalyzer) AnalyzeCoupling(_ context.Context, _ string, _ map[string][]string) (map[string]*domaindiet.CouplingAnalysis, error) {
+	s.callCount++
+	if s.callCount == 1 {
+		return s.firstResult, nil
+	}
+	return s.secondResult, nil
+}
+
+func TestRun_WheelFallback(t *testing.T) {
+	t.Parallel()
+
+	pypiPURL := "pkg:pypi/beautifulsoup4@4.12.3"
+	goPURL := "pkg:golang/github.com/stretchr/testify@v1.9.0"
+
+	graphResult := &domaindiet.GraphResult{
+		DirectDeps: []string{pypiPURL, goPURL},
+		Metrics: map[string]*domaindiet.GraphMetrics{
+			pypiPURL: {TotalTransitiveCount: 2},
+			goPURL:   {TotalTransitiveCount: 5},
+		},
+		TotalTransitive: 7,
+	}
+
+	// Phase 2: heuristic paths find testify but NOT beautifulsoup4 (it needs "bs4").
+	// Phase 2.5: wheel resolver returns "bs4", retry finds it.
+	sourceAnalyzer := &retrySourceAnalyzer{
+		firstResult: map[string]*domaindiet.CouplingAnalysis{
+			goPURL: {ImportFileCount: 3, CallSiteCount: 5},
+		},
+		secondResult: map[string]*domaindiet.CouplingAnalysis{
+			pypiPURL: {ImportFileCount: 1, CallSiteCount: 2},
+		},
+	}
+
+	resolver := &stubPyPIResolver{
+		names: map[string][]string{
+			"beautifulsoup4": {"bs4"},
+		},
+	}
+
+	svc := NewService(
+		&stubGraphAnalyzer{result: graphResult},
+		sourceAnalyzer,
+		resolver,
+		nil,
+	)
+
+	plan, err := svc.Run(context.Background(), DietInput{
+		SBOMData:   []byte("fake-sbom"),
+		SBOMPath:   "test.sbom.json",
+		SourceRoot: "/tmp/src",
+	})
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	// beautifulsoup4 should NOT be marked unused (resolved via wheel fallback)
+	for _, entry := range plan.Entries {
+		if entry.PURL == pypiPURL {
+			if entry.Coupling.IsUnused {
+				t.Errorf("beautifulsoup4 should not be marked unused after wheel fallback")
+			}
+			if entry.Coupling.ImportFileCount != 1 {
+				t.Errorf("expected ImportFileCount=1, got %d", entry.Coupling.ImportFileCount)
+			}
+			return
+		}
+	}
+	t.Fatal("beautifulsoup4 entry not found in plan")
+}
+
+func TestRun_WheelFallback_NilResolver(t *testing.T) {
+	t.Parallel()
+
+	pypiPURL := "pkg:pypi/beautifulsoup4@4.12.3"
+
+	graphResult := &domaindiet.GraphResult{
+		DirectDeps: []string{pypiPURL},
+		Metrics: map[string]*domaindiet.GraphMetrics{
+			pypiPURL: {TotalTransitiveCount: 2},
+		},
+		TotalTransitive: 2,
+	}
+
+	// Source analyzer finds nothing — beautifulsoup4 unmatched.
+	sourceAnalyzer := &stubSourceAnalyzer{
+		result: map[string]*domaindiet.CouplingAnalysis{},
+	}
+
+	svc := NewService(
+		&stubGraphAnalyzer{result: graphResult},
+		sourceAnalyzer,
+		nil, // no resolver
+		nil,
+	)
+
+	plan, err := svc.Run(context.Background(), DietInput{
+		SBOMData:   []byte("fake-sbom"),
+		SBOMPath:   "test.sbom.json",
+		SourceRoot: "/tmp/src",
+	})
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	for _, entry := range plan.Entries {
+		if entry.PURL == pypiPURL && !entry.Coupling.IsUnused {
+			t.Error("without resolver, beautifulsoup4 should stay unused")
+		}
+	}
+}
+
+func TestRun_WheelFallback_ResolverError(t *testing.T) {
+	t.Parallel()
+
+	pypiPURL := "pkg:pypi/beautifulsoup4@4.12.3"
+
+	graphResult := &domaindiet.GraphResult{
+		DirectDeps: []string{pypiPURL},
+		Metrics: map[string]*domaindiet.GraphMetrics{
+			pypiPURL: {TotalTransitiveCount: 2},
+		},
+		TotalTransitive: 2,
+	}
+
+	sourceAnalyzer := &stubSourceAnalyzer{
+		result: map[string]*domaindiet.CouplingAnalysis{},
+	}
+
+	resolver := &stubPyPIResolver{
+		err: fmt.Errorf("network error"),
+	}
+
+	svc := NewService(
+		&stubGraphAnalyzer{result: graphResult},
+		sourceAnalyzer,
+		resolver,
+		nil,
+	)
+
+	plan, err := svc.Run(context.Background(), DietInput{
+		SBOMData:   []byte("fake-sbom"),
+		SBOMPath:   "test.sbom.json",
+		SourceRoot: "/tmp/src",
+	})
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	// Should gracefully degrade — beautifulsoup4 stays unused
+	for _, entry := range plan.Entries {
+		if entry.PURL == pypiPURL && !entry.Coupling.IsUnused {
+			t.Error("on resolver error, beautifulsoup4 should stay unused")
+		}
 	}
 }

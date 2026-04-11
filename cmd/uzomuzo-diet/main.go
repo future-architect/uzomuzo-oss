@@ -13,6 +13,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/config"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depgraph"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/gomod"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/treesitter"
 	"github.com/future-architect/uzomuzo-oss/internal/interfaces/cli"
 
@@ -72,8 +73,9 @@ func main() {
 
 			graphAnalyzer := depgraph.NewAnalyzer()
 			sourceAnalyzer := treesitter.NewAnalyzer()
+			pypiResolver := pypi.NewClient()
 
-			return cli.RunDiet(ctx, cfg, opts, graphAnalyzer, sourceAnalyzer)
+			return cli.RunDiet(ctx, cfg, opts, graphAnalyzer, sourceAnalyzer, pypiResolver)
 		},
 	}
 

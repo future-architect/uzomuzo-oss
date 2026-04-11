@@ -27,6 +27,7 @@ func RunDiet(
 	opts DietOptions,
 	graphAnalyzer dietapp.GraphAnalyzer,
 	sourceAnalyzer dietapp.SourceAnalyzer,
+	pypiResolver dietapp.PyPIImportResolver,
 ) error {
 	// Validate required options
 	if opts.SBOMPath == "" {
@@ -54,7 +55,7 @@ func RunDiet(
 	analysisService := createAnalysisService(cfg)
 
 	// Create diet service
-	svc := dietapp.NewService(graphAnalyzer, sourceAnalyzer, analysisService)
+	svc := dietapp.NewService(graphAnalyzer, sourceAnalyzer, pypiResolver, analysisService)
 
 	// Run diet pipeline
 	plan, err := svc.Run(ctx, dietapp.DietInput{
