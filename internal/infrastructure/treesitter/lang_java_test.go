@@ -393,15 +393,17 @@ class MyList extends ImmutableList<String> {
 	}
 
 	tests := []struct {
-		name         string
-		purl         string
-		wantCalls    int
-		wantBreadth  int
+		name        string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
 	}{
 		{
 			// bare "new Gson()" — already works with existing type_identifier pattern
 			name:        "bare constructor new Gson()",
 			purl:        "pkg:maven/com.google.code.gson/gson@2.10",
+			wantImports: 1,
 			wantCalls:   1,
 			wantBreadth: 1,
 		},
@@ -410,6 +412,7 @@ class MyList extends ImmutableList<String> {
 			// plus "extends ImmutableList<String>" is also generic_type in superclass
 			name:        "generic constructors and generic extends",
 			purl:        "pkg:maven/com.google.guava/guava@33.0",
+			wantImports: 1,
 			wantCalls:   3,
 			wantBreadth: 1,
 		},
@@ -417,6 +420,7 @@ class MyList extends ImmutableList<String> {
 			// "implements Publisher<String>" uses generic_type in super_interfaces
 			name:        "generic implements Publisher<String>",
 			purl:        "pkg:maven/org.reactivestreams/reactive-streams@1.0.4",
+			wantImports: 1,
 			wantCalls:   1,
 			wantBreadth: 1,
 		},
@@ -424,6 +428,7 @@ class MyList extends ImmutableList<String> {
 			// "extends TestCase" is a bare type_identifier — should already work
 			name:        "bare extends TestCase (baseline)",
 			purl:        "pkg:maven/junit/junit@4.13.2",
+			wantImports: 1,
 			wantCalls:   1,
 			wantBreadth: 1,
 		},
@@ -434,6 +439,9 @@ class MyList extends ImmutableList<String> {
 			ca, ok := result[tt.purl]
 			if !ok {
 				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
 			}
 			if ca.CallSiteCount != tt.wantCalls {
 				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
@@ -480,9 +488,15 @@ public class Main {
 	}
 
 	// The scoped constructor "new ImmutableList.Builder<>()" should be counted
-	// via the object_creation_expression + scoped_type_identifier pattern.
-	if ca.CallSiteCount < 1 {
-		t.Errorf("CallSiteCount = %d, want >= 1", ca.CallSiteCount)
+	// via the object_creation_expression + generic_type + scoped_type_identifier pattern.
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 1 {
+		t.Errorf("APIBreadth = %d, want 1", ca.APIBreadth)
 	}
 	if ca.IsUnused {
 		t.Error("IsUnused = true, want false")

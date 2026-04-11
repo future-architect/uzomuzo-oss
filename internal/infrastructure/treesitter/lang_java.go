@@ -26,8 +26,8 @@ func registerJavaConfig(a *Analyzer) {
 			// Generic constructors: new Foo<T>(), new Foo<>()
 			`(object_creation_expression type: (generic_type (type_identifier) @func))`,
 			// Qualified constructors: new Outer.Inner()
-			// Captures both type_identifier children; countCallSites uses the
-			// first capture as the aliasMap key and the second as the symbol.
+			// Captures all type_identifier children; only the one matching
+			// an imported alias in aliasMap produces a call site.
 			`(object_creation_expression type: (scoped_type_identifier (type_identifier) @func))`,
 			// Qualified generic constructors: new Outer.Inner<T>()
 			`(object_creation_expression type: (generic_type (scoped_type_identifier (type_identifier) @func)))`,
