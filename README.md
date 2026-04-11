@@ -102,7 +102,7 @@ CGO_ENABLED=1 go build -o uzomuzo-diet ./cmd/uzomuzo-diet  # requires C compiler
 ## Quick Start
 
 ```bash
-export GITHUB_TOKEN=ghp_...  # optional; adds commit history analysis and archived repo detection
+export GITHUB_TOKEN=ghp_...  # optional; adds commit history analysis and fork detection
 ```
 
 ```bash
