@@ -440,6 +440,21 @@ var mavenPackageOverrides = map[string][]string{
 	"commons-logging/commons-logging":         {"org.apache.commons.logging"},
 	"junit/junit":                             {"junit", "org.junit"},
 	"log4j/log4j":                             {"org.apache.log4j"},
+
+	// Jackson family: Maven groupId (e.g. com.fasterxml.jackson.core) does not
+	// match the actual Java package name (e.g. com.fasterxml.jackson.annotation).
+	"com.fasterxml.jackson.core/jackson-annotations":          {"com.fasterxml.jackson.annotation"},
+	"com.fasterxml.jackson.core/jackson-databind":             {"com.fasterxml.jackson.databind"},
+	"com.fasterxml.jackson.dataformat/jackson-dataformat-csv": {"com.fasterxml.jackson.dataformat.csv"},
+	"com.fasterxml.jackson.dataformat/jackson-dataformat-xml": {"com.fasterxml.jackson.dataformat.xml"},
+	"com.fasterxml.jackson.dataformat/jackson-dataformat-yaml": {"com.fasterxml.jackson.dataformat.yaml"},
+	"com.fasterxml.jackson.datatype/jackson-datatype-jsr310":  {"com.fasterxml.jackson.datatype.jsr310"},
+	"com.fasterxml.jackson.module/jackson-module-kotlin":      {"com.fasterxml.jackson.module.kotlin"},
+
+	// javax.inject: groupId and artifactId both equal "javax.inject", so the
+	// heuristic already produces the correct candidate, but an explicit override
+	// ensures stability.
+	"javax.inject/javax.inject": {"javax.inject"},
 }
 
 // buildMavenImportPaths generates candidate import path prefixes for a Maven PURL.
