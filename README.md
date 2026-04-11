@@ -73,7 +73,7 @@ We used uzomuzo to scan major OSS projects and reported findings upstream:
 | Trivy | [aquasecurity/trivy#10484](https://github.com/aquasecurity/trivy/pull/10484) | Archived go-homedir — stdlib replacement PR |
 | Next.js | [vercel/next.js#92479](https://github.com/vercel/next.js/discussions/92479) | Deprecated @vercel/kv — @upstash/redis migration |
 
-All findings were invisible to standard SCA tools (zero CVEs). uzomuzo detected them in seconds.
+All findings were invisible to standard SCA tools (zero CVEs). uzomuzo detected them in seconds. See the [full scan results](docs/case-studies/scan-results-oss-2026-04.md) across 20 major projects.
 
 ## Installation
 
