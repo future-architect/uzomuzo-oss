@@ -11,6 +11,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Nullable Field Documentation**: When documenting a pointer or optional field, enumerate **all** conditions under which it can be nil/empty — not just the primary case. For example, a `ForkSource` field should note it is empty when `IsFork` is false **and** when the parent is private/inaccessible. Similarly, ensure the comment names the correct upstream API field (e.g., `parent` vs `source`) that the implementation actually uses.
 - **Defensive Coding — Validate Early, Fail Clearly**: When a constructor or factory function receives a required dependency (e.g., a service, client, or parser), validate it is non-nil and return a descriptive error rather than allowing a nil-pointer panic later. Similarly, when CLI flags are mutually exclusive, reject the invalid combination at the validation layer with a clear message instead of silently preferring one. When a data field is a collection (slice/array), emit all items in serialized output rather than silently taking only the first. When sniffing file formats, validate field **values** (not just key presence) — e.g., check `bomFormat == "CycloneDX"`, not just that `bomFormat` exists.
 - **File Type Detection — Use Exact Basename, Not Suffix**: When detecting file types by name (e.g., `go.mod`), use `filepath.Base(path) == "go.mod"` instead of `strings.HasSuffix(path, ".mod")`. Suffix matching can misclassify unrelated files (e.g., `deps.mod`) and route them to the wrong parser. Similarly, when matching path segments (e.g., `.github/workflows/`), require a leading path separator (`/.github/workflows/`) to avoid false positives from paths where the segment is embedded (e.g., `/tmp/not.github/workflows/`).
+- **Use Spec-Compliant Parsers for Standardized Formats**: When parsing standardized file formats (CSV, RECORD, TSV), use the language's spec-compliant parser (e.g., `encoding/csv`) instead of naive `strings.Split` or similar. Naive splitting misparses quoted or escaped fields, producing silent data corruption.
 - **Reject Flags That Silently Have No Effect**: When a CLI flag only applies to a specific input mode (e.g., `--sample` for PURL list files), explicitly reject it with a clear error when the input is a different mode (e.g., go.mod or SBOM). Do not silently ignore the flag — users assume their flags take effect.
 - **Deduplicate Inputs Before Batch API Calls**: When accepting user-provided input lists (PURLs, URLs) that feed into batch API calls, deduplicate them while preserving first-seen order before processing. Duplicates cause redundant external calls, skew logging/counts, and waste resources.
 - **Normalize User-Provided Enum Values**: When accepting string values for format selectors, mode switches, or other enums from CLI flags, normalize with `strings.TrimSpace(strings.ToLower(...))` before validation. Case-sensitive matching rejects common inputs like `--format JSON` or `--format "json "`.
@@ -23,6 +24,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Lazy I/O During Format Detection**: When probing a file's format, prefer path-based checks first, then read only a small prefix for content-based heuristics. Read the full file only after confirming the format to avoid wasted I/O on non-matching files (e.g., reading an entire docker-compose.yml just to check if it's a GitHub Actions workflow).
 - **Deterministic Output from Non-Deterministic Sources**: When building ordered output from non-deterministic sources (Go map iteration, goroutine-collected results, API directory listings), sort the data before further processing. This applies to rendered text, BFS seed queues, and any "first-seen wins" algorithm where input order determines provenance.
 - **Post-Filter Fuzzy Search Results**: When using search APIs that perform fuzzy or word-level matching (e.g., GitHub issue search), add a post-filter to verify exact matches before acting on results. Fuzzy matches can cause false-positive deduplication or incorrect state transitions.
+- **Rerun Analyzers with Combined Input Sets on Retry**: When retrying a subset of inputs through an analyzer that tracks collisions or shared matches, rerun with the combined input set (original + retry) to preserve attribution consistency. Subset reruns can misattribute shared matches to the wrong source.
 - **Consolidate Detection Heuristics — Single Source of Truth**: When a detection heuristic (file type sniffing, format detection, path matching) is used in multiple locations, centralize it in the responsible package and have callers delegate. Duplicating the heuristic across layers (e.g., `cmd/` and `infrastructure/`) risks drift when one copy is updated but the other is not.
 - **Use Correct GitHub API Media Types**: When calling GitHub REST APIs, use the documented `Accept` header for the desired response format. For raw file content use `application/vnd.github.raw` (not `application/vnd.github.raw+json`). Incorrect media types may cause silent content-negotiation failures or unexpected response formats. Refer to GitHub's REST API media type documentation before adding a new endpoint call.
 - **Narrow Typed Error Matching to Specific Conditions**: When checking typed errors (e.g., `IsResourceNotFoundError`), verify the error's message or context matches the expected source — not just the error type. A single error type can be returned by multiple code paths with different semantics (e.g., "repo not found" vs "no package managers"), and a broad type check can trigger incorrect fallback behavior for unrelated error origins.
@@ -39,6 +41,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Use `utf8.RuneCountInString` for Terminal Display Widths**: When computing string widths for terminal display (box drawing, alignment), use `utf8.RuneCountInString` — not `len` — to avoid incorrect sizing with multi-byte characters (box-drawing glyphs, emoji). Clamp computed padding to zero when content already exceeds the budget rather than forcing a minimum that widens output beyond the declared width.
 - **Filter and Normalize IDs Before Batch API Calls**: When building batch API requests from collected IDs, filter empty/whitespace values and deduplicate before processing to prevent invalid HTTP requests and cache pollution. Use `select` on `ctx.Done()` alongside channel operations in batch goroutines to avoid blocking after context cancellation.
 - **Guard Nil Structs Consistently Across Output Formats**: When a struct field may be nil (e.g., `ReleaseInfo`), apply the nil guard in every output renderer that accesses it (text, CSV, JSON). If one renderer has the guard and another does not, the unguarded path will panic on nil input.
+- **Gate Fallback Logic on Error, Not Result Nilness**: When deciding whether to trigger fallback or retry logic, check the error value — not whether the result is nil. A nil result with nil error is a valid success case (e.g., zero matches found), and treating it as a failure triggers unnecessary retries or incorrect fallback paths.
 - **Use Case-Insensitive Comparison for URL Components**: When comparing URL components (scheme, host), use case-insensitive comparison per RFC 3986 — schemes (`HTTP://`) and hosts (`GitHub.COM`) are case-insensitive. Normalize with `strings.ToLower` or `strings.EqualFold` before prefix checks or host matching to avoid double-prefixing or missed matches.
 - **Structured Logging Conventions**: When adding `slog` calls: use DEBUG level for routine per-item telemetry (reserve INFO for exceptional events); use `snake_case` for event names (not spaces) for consistency and filterability; choose field key names that accurately describe the data across all call sites (e.g., `"ref"` not `"purl"` when the function handles both PURLs and URLs).
 - **Match Validation Format Strings to Production Format Strings**: When a validation or check function mirrors a production function's output (e.g., marker validation vs. marker replacement), use the exact same format strings and delimiters. Mismatched formats allow invalid input to pass validation silently.
@@ -50,6 +53,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Classify from Raw Values Before Rounding**: When deriving a category or label from a computed numeric value (e.g., score → difficulty bucket), apply the classification logic to the raw value before any rounding. Rounding first can push boundary values into the wrong bucket.
 - **Validate Generated Strings Against Target-Language Syntax**: When programmatically generating identifiers, import paths, or package names for a target language, validate each candidate against that language's syntax rules before emitting it. Validation must cover the full identifier grammar — not just invalid characters but also positional rules (e.g., Java identifiers cannot start with a digit) and compound structures (e.g., dot-separated package names must validate each segment independently). For example, Maven artifactIds often contain hyphens (`commons-lang3`) and groupIds can too (`commons-io`), which are invalid in Java package names — emitting them verbatim produces candidates that can never match real imports. Similarly, error hints and suggestions must use terminology appropriate to the detected language/ecosystem, not hardcode references to a single ecosystem (e.g., `go.mod`) when the tool supports multiple languages.
 - **Collect All Matches in Collector Functions — No Early Return**: When a function iterates over children/items to collect all matching results (e.g., AST bindings, search hits), append each match to a slice and return the slice after the loop. Do not `return` on the first match — early return drops remaining items. This applies whenever the caller needs *all* matches, not just the first.
+- **Continue AST Ancestor Walks Past Non-Matching Nodes**: When walking AST ancestors to find a guarding condition (e.g., `if TYPE_CHECKING:` blocks), continue past intermediate nodes of the same type that don't match the target condition. Returning early on the first type match (e.g., the first `if_statement`) misses the actual guard when the import is nested inside inner conditionals.
 - **Normalize Map Keys Consistently Across Insert and Lookup**: When building a `map[string]T` with normalized keys (e.g., `strings.ToLower` at insertion), apply the same normalization at every lookup site. A mismatch causes silent lookup failures for inputs with non-canonical casing (e.g., mixed-case Python module names like `OpenSSL`). Audit all functions that query the map, not just the one you're currently editing.
 - **Use Ecosystem-Neutral Language in Multi-Language Error Messages**: When a CLI tool supports multiple ecosystems, error hints and suggestions must not reference language-specific files (e.g., `go.mod`) unless the current context is confirmed to be that language. Generic messages like "dependency manifest not found" are safer than ecosystem-specific ones.
 - **Extract Shared Helpers for Near-Duplicate Code Paths**: When two functions follow the same sequence (e.g., parse input → call external API → interpret result → populate output) differing only in how one parameter is obtained, extract the shared sequence into a single helper parameterized on that value. Near-duplicate paths drift silently when logging, error handling, or evidence formatting is updated in one copy but not the other.
@@ -85,11 +89,6 @@ pending_patterns:
     pr: 236
     file: "internal/infrastructure/eolevaluator/evaluator_npm_test.go"
     date: "2026-04-08"
-  - category: "defensive-coding"
-    summary: "When retrying a subset of inputs through an analyzer that tracks collisions, rerun with the combined input set (original + retry) to preserve attribution consistency — subset reruns misattribute shared matches"
-    pr: 276
-    file: "internal/application/diet/service.go"
-    date: "2026-04-11"
   - category: "security"
     summary: "When using io.LimitReader to cap entry reads, read maxSize+1 and reject if oversized — plain LimitReader silently truncates, causing downstream parsers to operate on partial/corrupt data"
     pr: 276
@@ -110,11 +109,6 @@ pending_patterns:
     pr: 276
     file: "internal/infrastructure/pypi/wheel.go"
     date: "2026-04-11"
-  - category: "defensive-coding"
-    summary: "Gate fallback/retry logic on the error value, not result nilness — a nil result with nil error is a valid success case (e.g., zero matches) and should still trigger fallback behavior"
-    pr: 276
-    file: "internal/application/diet/service.go"
-    date: "2026-04-11"
   - category: "testing"
     summary: "Accept interface types in test-setter methods (e.g., SetXxxClient) so fakes can be injected via public API instead of unexported fields"
     pr: 236
@@ -125,11 +119,6 @@ pending_patterns:
     pr: 237
     file: "internal/application/diet/coupling_integration_test.go"
     date: "2026-04-08"
-  - category: "defensive-coding"
-    summary: "Use spec-compliant parsers (e.g., encoding/csv) instead of naive string splitting for standardized file formats — naive splits misparse quoted or escaped fields"
-    pr: 276
-    file: "internal/infrastructure/pypi/wheel.go"
-    date: "2026-04-11"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
@@ -148,6 +137,7 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #276, #280 — rerun analyzers with combined input, gate fallback on error, spec-compliant parsers, AST ancestor walk continuation)
   # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #253, #276 — interface contract doc must match signature semantics)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #277, #276 — handle all valid input forms in format parsers)
   # error-handling: promoted to error-handling.instructions.md (PRs #87, #159 — surface initialization errors instead of silent degradation)
