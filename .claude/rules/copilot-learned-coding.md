@@ -88,6 +88,11 @@ pending_patterns:
     pr: 253
     file: "internal/infrastructure/treesitter/analyzer.go"
     date: "2026-04-09"
+  - category: "defensive-coding"
+    summary: "Use utf8.DecodeRuneInString + unicode.ToLower for first-character case conversion — byte slicing alias[:1] produces invalid UTF-8 for non-ASCII identifiers"
+    pr: 277
+    file: "internal/infrastructure/treesitter/lang_java.go"
+    date: "2026-04-11"
   - category: "testing"
     summary: "Accept interface types in test-setter methods (e.g., SetXxxClient) so fakes can be injected via public API instead of unexported fields"
     pr: 236
