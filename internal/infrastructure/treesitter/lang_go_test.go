@@ -694,6 +694,88 @@ func create() bar.MyType { return bar.MyType{} }
 	}
 }
 
+func TestAnalyzer_GoSuffixedModuleNames(t *testing.T) {
+	tests := []struct {
+		name        string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			name: ".go suffix stripped (miscreant.go)",
+			code: `package main
+
+import "github.com/miscreant/miscreant.go"
+
+func main() {
+	miscreant.NewAEAD("AES-SIV", nil)
+	miscreant.NewAEAD("AES-PMAC-SIV", nil)
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/miscreant/miscreant.go@v0.3.0": {"github.com/miscreant/miscreant.go"},
+			},
+			purl:        "pkg:golang/github.com/miscreant/miscreant.go@v0.3.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 1,
+		},
+		{
+			name: "-golang suffix stripped (geoip2-golang)",
+			code: `package main
+
+import "github.com/oschwald/geoip2-golang"
+
+func main() {
+	geoip2.Open("test.mmdb")
+	geoip2.FromBytes(nil)
+	geoip2.Open("test2.mmdb")
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/oschwald/geoip2-golang@v1.9.0": {"github.com/oschwald/geoip2-golang"},
+			},
+			purl:        "pkg:golang/github.com/oschwald/geoip2-golang@v1.9.0",
+			wantImports: 1,
+			wantCalls:   3,
+			wantBreadth: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(tt.code), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+		})
+	}
+}
+
 func TestGoPackageFromHyphenated(t *testing.T) {
 	tests := []struct {
 		input string
@@ -709,6 +791,9 @@ func TestGoPackageFromHyphenated(t *testing.T) {
 		{"proto-go-sql", "protogosql"},
 		{"go-foo-go", "foo"},
 		{"testify", "testify"},
+		{"geoip2-golang", "geoip2"},
+		{"maxminddb-golang", "maxminddb"},
+		{"foo-golang", "foo"},
 	}
 
 	for _, tt := range tests {

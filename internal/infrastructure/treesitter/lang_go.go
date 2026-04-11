@@ -99,6 +99,13 @@ func (a *Analyzer) handleGoImport(
 			alias = alias[:idx]
 		}
 
+		// Handle .go suffix in module names (e.g., "miscreant.go" → "miscreant").
+		// Some Go modules use ".go" as a suffix in their repository/module name,
+		// but the actual Go package name omits the suffix.
+		if trimmed := strings.TrimSuffix(alias, ".go"); trimmed != "" && trimmed != alias {
+			alias = trimmed
+		}
+
 		// Handle hyphenated package names. Go identifiers cannot contain hyphens,
 		// so the actual package name differs from the directory name.
 		// Common conventions: "opentracing-go" → "opentracing", "go-loser" → "loser",
@@ -114,11 +121,12 @@ func (a *Analyzer) handleGoImport(
 // "go-loser", or "mmap-go" map to package names "opentracing", "loser", "mmap".
 //
 // Heuristics (applied in order, short-circuiting when no hyphens remain):
-//  1. Strip "-go" suffix (e.g., "opentracing-go" → "opentracing", "mmap-go" → "mmap")
-//  2. Strip "go-" prefix (e.g., "go-loser" → "loser", "go-spew" → "spew")
-//     Only reached if hyphens remain after step 1.
-//  3. Remove remaining hyphens (e.g., "some-pkg" → "somepkg")
+//  1. Strip "-golang" suffix (e.g., "geoip2-golang" → "geoip2")
+//  2. Strip "-go" suffix (e.g., "opentracing-go" → "opentracing", "mmap-go" → "mmap")
+//  3. Strip "go-" prefix (e.g., "go-loser" → "loser", "go-spew" → "spew")
 //     Only reached if hyphens remain after steps 1-2.
+//  4. Remove remaining hyphens (e.g., "some-pkg" → "somepkg")
+//     Only reached if hyphens remain after steps 1-3.
 //
 // If the input contains no hyphens, it is returned unchanged.
 // If a step produces an empty string (e.g., input is "-go"), the original name
@@ -128,8 +136,8 @@ func goPackageFromHyphenated(name string) string {
 		return name
 	}
 
-	// Strip "-go" suffix first (more specific).
-	result := strings.TrimSuffix(name, "-go")
+	// Strip "-golang" suffix first (most specific).
+	result := strings.TrimSuffix(name, "-golang")
 	if result == "" {
 		return name
 	}
@@ -137,8 +145,18 @@ func goPackageFromHyphenated(name string) string {
 		return result
 	}
 
-	// Strip "go-" prefix (only reached if hyphens remain after step 1).
-	trimmed := strings.TrimPrefix(result, "go-")
+	// Strip "-go" suffix (e.g., "opentracing-go" → "opentracing", "mmap-go" → "mmap").
+	trimmed := strings.TrimSuffix(result, "-go")
+	if trimmed == "" {
+		return result
+	}
+	result = trimmed
+	if !strings.Contains(result, "-") {
+		return result
+	}
+
+	// Strip "go-" prefix (only reached if hyphens remain after steps 1-2).
+	trimmed = strings.TrimPrefix(result, "go-")
 	if trimmed == "" {
 		return result
 	}
