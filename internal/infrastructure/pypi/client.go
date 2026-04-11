@@ -11,14 +11,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
+
+// pypiUserAgent is the User-Agent sent on all PyPI HTTP requests.
+const pypiUserAgent = "uzomuzo-pypi-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)"
 
 // Client fetches PyPI project JSON metadata.
 type Client struct {
@@ -28,6 +33,8 @@ type Client struct {
 	mu    sync.RWMutex
 	cache map[string]cacheEntry
 	ttl   time.Duration
+
+	importCacheFields // wheel-based import name cache (lazily initialised)
 }
 
 type cacheEntry struct {
@@ -72,6 +79,14 @@ func (c *Client) SetBaseURL(u string) { c.baseURL = strings.TrimRight(u, "/") }
 
 // SetCacheTTL sets the in-memory cache TTL (<=0 disables caching).
 func (c *Client) SetCacheTTL(d time.Duration) { c.ttl = d }
+
+// resolvedBaseURL returns the configured base URL or the default.
+func (c *Client) resolvedBaseURL() string {
+	if c.baseURL != "" {
+		return c.baseURL
+	}
+	return "https://pypi.org"
+}
 
 func (c *Client) getCached(name string) (*ProjectInfo, bool) {
 	if c.ttl <= 0 {
@@ -120,16 +135,12 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 		slog.Debug("pypi: cache hit", "name", lower)
 		return info, true, nil
 	}
-	base := c.baseURL
-	if base == "" {
-		base = "https://pypi.org"
-	}
-	url := fmt.Sprintf("%s/pypi/%s/json", base, n)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	apiURL := fmt.Sprintf("%s/pypi/%s/json", c.resolvedBaseURL(), url.PathEscape(n))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, false, fmt.Errorf("pypi request build failed: %w", err)
 	}
-	req.Header.Set("User-Agent", "uzomuzo-pypi-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
+	req.Header.Set("User-Agent", pypiUserAgent)
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
 		return nil, false, fmt.Errorf("pypi http failed: %w", err)
@@ -151,7 +162,7 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 			HomePage    string            `json:"home_page"`
 		} `json:"info"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&raw); err != nil {
 		return nil, false, fmt.Errorf("pypi decode failed: %w", err)
 	}
 	info := &ProjectInfo{

@@ -91,7 +91,7 @@ func runDiet(t *testing.T, format string) string {
 		readErrCh <- readErr
 	}()
 
-	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
+	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer, nil)
 
 	os.Stdout = oldStdout
 	if err := w.Close(); err != nil {
@@ -277,7 +277,7 @@ func TestE2E_DietCLIFlags(t *testing.T) {
 				SourceRoot: cmd.String("source"),
 				Format:     cmd.String("format"),
 			}
-			return cli.RunDiet(ctx, cfg, opts, graphAnalyzer, sourceAnalyzer)
+			return cli.RunDiet(ctx, cfg, opts, graphAnalyzer, sourceAnalyzer, nil)
 		},
 	}
 
@@ -308,7 +308,7 @@ func TestE2E_DietSourceValidation(t *testing.T) {
 		SourceRoot: testSBOMPath, // a file, not a directory
 		Format:     "json",
 	}
-	err = cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
+	err = cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer, nil)
 	if err == nil {
 		t.Fatal("expected error when --source is a file, got nil")
 	}
@@ -318,7 +318,7 @@ func TestE2E_DietSourceValidation(t *testing.T) {
 
 	// --source pointing to nonexistent path should fail
 	opts.SourceRoot = "/nonexistent/path/that/does/not/exist"
-	err = cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
+	err = cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer, nil)
 	if err == nil {
 		t.Fatal("expected error when --source does not exist, got nil")
 	}
@@ -388,7 +388,7 @@ func TestE2E_DietStdinSBOM(t *testing.T) {
 
 	graphAnalyzer := depgraph.NewAnalyzer()
 	sourceAnalyzer := treesitter.NewAnalyzer()
-	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer)
+	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer, nil)
 
 	os.Stdout = oldStdout
 	if err := w.Close(); err != nil {
