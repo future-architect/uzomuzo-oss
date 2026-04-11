@@ -105,6 +105,11 @@ pending_patterns:
     pr: 276
     file: "internal/application/diet/service_test.go"
     date: "2026-04-11"
+  - category: "testing"
+    summary: "When a test asserts wantNoResult for one item in a multi-item input set, also assert that sibling items produce expected coupling — otherwise a regression that drops all items passes silently"
+    pr: 282
+    file: "internal/infrastructure/treesitter/lang_javascript_test.go"
+    date: "2026-04-11"
   - category: "security"
     summary: "Validate URL host non-empty alongside scheme check — hostless URLs like https:///path pass scheme validation but fail later in uncontrolled ways"
     pr: 276
