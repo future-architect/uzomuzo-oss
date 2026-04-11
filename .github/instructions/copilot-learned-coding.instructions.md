@@ -83,6 +83,16 @@ pending_patterns:
     pr: 236
     file: "internal/infrastructure/eolevaluator/evaluator_npm_test.go"
     date: "2026-04-08"
+  - category: "defensive-coding"
+    summary: "When retrying a subset of inputs through an analyzer that tracks collisions, rerun with the combined input set (original + retry) to preserve attribution consistency — subset reruns misattribute shared matches"
+    pr: 276
+    file: "internal/application/diet/service.go"
+    date: "2026-04-11"
+  - category: "security"
+    summary: "When using io.LimitReader to cap entry reads, read maxSize+1 and reject if oversized — plain LimitReader silently truncates, causing downstream parsers to operate on partial/corrupt data"
+    pr: 276
+    file: "internal/infrastructure/pypi/wheel.go"
+    date: "2026-04-11"
   - category: "security"
     summary: "Cap HTTP response body sizes with io.LimitReader before decoding — uncapped reads from overridden base URLs or mirrors can cause excessive memory usage"
     pr: 276
