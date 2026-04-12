@@ -549,7 +549,8 @@ var mavenPackageOverrides = map[string][]string{
 	"com.google.guava/guava": {"com.google.common"},
 
 	// ANTLR runtime: Maven artifactId "antlr4-runtime" maps to "org.antlr.v4.runtime",
-	// and the ST (StringTemplate) artifact maps to "org.stringtemplate.v4".
+	// and the ST (StringTemplate) artifact maps under the broader
+	// "org.stringtemplate.*" package prefix.
 	"org.antlr/antlr4-runtime": {"org.antlr.v4"},
 	"org.antlr/st4":            {"org.stringtemplate"},
 
