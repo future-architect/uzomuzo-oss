@@ -102,6 +102,11 @@ pending_patterns:
     file: "internal/infrastructure/treesitter/lang_go.go"
     date: "2026-04-11"
   - category: "comment-doc-drift"
+    summary: "Test case name claimed 'web vs data-jpa' but input PURL was spring-boot-starter-security — test names must match the actual input under test"
+    pr: 299
+    file: "internal/application/diet/service_test.go"
+    date: "2026-04-12"
+  - category: "comment-doc-drift"
     summary: "Constant doc comment named only Python but the sentinel was reused for Java wildcard imports — doc comments on shared constants must enumerate all languages/contexts that use them"
     pr: 298
     file: "internal/infrastructure/treesitter/analyzer.go"
