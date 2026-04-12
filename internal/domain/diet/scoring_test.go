@@ -415,8 +415,8 @@ func TestComputeImpactScore_LifecycleScoreFloor(t *testing.T) {
 func TestNormalizeCouplingEffort_BlankImportSideEffect(t *testing.T) {
 	// Regression test for #261: side-effect-only imports (Go blank import,
 	// JS bare import, CJS bare require) should produce zero coupling effort.
-	// Before the fix, ImportFileCount > 0 caused non-zero effort even though
-	// the dependency has no callable API (CallSiteCount=0, APIBreadth=0).
+	// Before the fix, ImportFileCount > 0 caused non-zero effort even when
+	// there were no attributed API symbols/breadth for the dependency.
 	tests := []struct {
 		name        string
 		c           CouplingAnalysis

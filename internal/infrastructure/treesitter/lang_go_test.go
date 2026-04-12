@@ -201,7 +201,8 @@ func TestAnalyzer_GoBlankImportBaselineCallSite(t *testing.T) {
 	// Regression test for #261: blank imports should get CallSiteCount=1
 	// as a baseline (mirrors the existing dot-import behavior). Before the
 	// fix, blank imports had CallSiteCount=0, causing them to be scored as
-	// "imported but no calls" even though they have no callable API.
+	// "imported but no calls" even though side-effect imports have no
+	// attributable call sites in the importing file.
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
 
