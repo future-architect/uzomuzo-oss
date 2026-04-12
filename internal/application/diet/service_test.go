@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	packageurl "github.com/package-url/packageurl-go"
-
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
 )
@@ -229,6 +227,36 @@ func TestBuildMavenImportPaths(t *testing.T) {
 			name: "override: javax.inject groupId matches package",
 			purl: "pkg:maven/javax.inject/javax.inject@1",
 			want: []string{"javax.inject"},
+		},
+		{
+			name: "override: guava groupId differs from package",
+			purl: "pkg:maven/com.google.guava/guava@33.0.0",
+			want: []string{"com.google.common", "com.google.guava", "com.google.guava.guava"},
+		},
+		{
+			name: "override: antlr4-runtime groupId differs from package",
+			purl: "pkg:maven/org.antlr/antlr4-runtime@4.13.0",
+			want: []string{"org.antlr.v4", "org.antlr"},
+		},
+		{
+			name: "override: ST4 case-insensitive lookup",
+			purl: "pkg:maven/org.antlr/ST4@4.3.4",
+			want: []string{"org.stringtemplate", "org.antlr", "org.antlr.ST4"},
+		},
+		{
+			name: "override: trove4j groupId differs from package",
+			purl: "pkg:maven/net.sf.trove4j/trove4j@3.0.3",
+			want: []string{"gnu.trove", "net.sf.trove4j", "net.sf.trove4j.trove4j"},
+		},
+		{
+			name: "override: scala-library hyphenated namespace",
+			purl: "pkg:maven/org.scala-lang/scala-library@2.13.12",
+			want: []string{"scala"},
+		},
+		{
+			name: "override: scala-reflect hyphenated namespace",
+			purl: "pkg:maven/org.scala-lang/scala-reflect@2.13.12",
+			want: []string{"scala.reflect"},
 		},
 	}
 	for _, tt := range tests {
@@ -882,73 +910,3 @@ func TestRun_WheelFallback_ResolverError(t *testing.T) {
 	}
 }
 
-func TestBuildMavenImportPaths_Overrides(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name      string
-		namespace string
-		pkg       string
-		wantFirst string // first (override) element
-	}{
-		{
-			name:      "guava",
-			namespace: "com.google.guava",
-			pkg:       "guava",
-			wantFirst: "com.google.common",
-		},
-		{
-			name:      "antlr4-runtime",
-			namespace: "org.antlr",
-			pkg:       "antlr4-runtime",
-			wantFirst: "org.antlr.v4",
-		},
-		{
-			name:      "stringtemplate",
-			namespace: "org.antlr",
-			pkg:       "ST4",
-			wantFirst: "org.stringtemplate",
-		},
-		{
-			name:      "trove4j",
-			namespace: "net.sf.trove4j",
-			pkg:       "trove4j",
-			wantFirst: "gnu.trove",
-		},
-		{
-			name:      "scala-library",
-			namespace: "org.scala-lang",
-			pkg:       "scala-library",
-			wantFirst: "scala",
-		},
-		{
-			name:      "scala-reflect",
-			namespace: "org.scala-lang",
-			pkg:       "scala-reflect",
-			wantFirst: "scala.reflect",
-		},
-		{
-			name:      "gson (existing)",
-			namespace: "com.google.code.gson",
-			pkg:       "gson",
-			wantFirst: "com.google.gson",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			parsed := packageurl.PackageURL{
-				Namespace: tt.namespace,
-				Name:      tt.pkg,
-			}
-			paths := buildMavenImportPaths(parsed)
-			if len(paths) == 0 {
-				t.Fatal("expected at least one path, got none")
-			}
-			if paths[0] != tt.wantFirst {
-				t.Errorf("first path = %q, want %q", paths[0], tt.wantFirst)
-			}
-		})
-	}
-}
