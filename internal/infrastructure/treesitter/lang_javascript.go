@@ -35,6 +35,10 @@ func newJSLikeConfig(lang *sitter.Language, includeJSX bool) *langConfig {
 	importQ := strings.Join([]string{
 		`(import_statement source: (string) @import)`,
 		`(call_expression function: (identifier) @func (#eq? @func "require") arguments: (arguments (string) @import))`,
+		// Re-exports: export { foo } from "pkg", export * from "pkg"
+		`(export_statement source: (string) @import)`,
+		// Dynamic import(): const mod = await import("pkg")
+		`(call_expression function: (import) arguments: (arguments (string) @import))`,
 	}, "\n")
 	callPatterns := []string{
 		`(member_expression object: (identifier) @obj property: (property_identifier) @prop)`,
@@ -123,6 +127,28 @@ func (a *Analyzer) handleJSImport(
 		}
 	}
 	if !ok {
+		return
+	}
+
+	// Re-exports (export { foo } from "pkg", export * from "pkg") introduce no
+	// local binding. The re-exporting file IS consuming the dependency at the
+	// module boundary. Treat like a side-effect import.
+	if isReExport(node) {
+		// Skip TypeScript type-only re-exports (export type { Foo } from "pkg").
+		if isTypeOnlyReExport(node) {
+			return
+		}
+		key := blankImportAlias + importPath
+		aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
+		return
+	}
+
+	// Dynamic import() (const mod = await import("pkg")) — the import keyword
+	// is the function of a call_expression, not a variable binding. We cannot
+	// track the promised module binding through await/then. Treat as blank import.
+	if isDynamicImport(node) {
+		key := blankImportAlias + importPath
+		aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
 		return
 	}
 
@@ -430,6 +456,47 @@ func isTypeOnlyImport(node *sitter.Node) bool {
 		}
 	}
 	return false
+}
+
+// isReExport checks if a JS/TS module specifier is inside an export_statement
+// (re-export pattern like `export { foo } from "pkg"` or `export * from "pkg"`).
+// Plain `export { foo }` (local re-export without source) has no source field
+// and will not be captured by the import query.
+func isReExport(node *sitter.Node) bool {
+	parent := node.Parent()
+	return parent != nil && parent.Type() == "export_statement"
+}
+
+// isTypeOnlyReExport checks if a re-export is a TypeScript type-only re-export
+// (`export type { Foo } from "bar"` — no runtime coupling). The "type" keyword
+// appears as a direct child of the export_statement node.
+func isTypeOnlyReExport(node *sitter.Node) bool {
+	parent := node.Parent()
+	if parent == nil || parent.Type() != "export_statement" {
+		return false
+	}
+	for i := 0; i < int(parent.ChildCount()); i++ {
+		if parent.Child(i).Type() == "type" {
+			return true
+		}
+	}
+	return false
+}
+
+// isDynamicImport checks if a string literal is the argument of a dynamic
+// import() call expression.
+// AST: string -> arguments -> call_expression(function: import).
+func isDynamicImport(node *sitter.Node) bool {
+	args := node.Parent()
+	if args == nil || args.Type() != "arguments" {
+		return false
+	}
+	callExpr := args.Parent()
+	if callExpr == nil || callExpr.Type() != "call_expression" {
+		return false
+	}
+	fnNode := callExpr.ChildByFieldName("function")
+	return fnNode != nil && fnNode.Type() == "import"
 }
 
 // isSideEffectImport checks if a JS/TS import is a bare side-effect import

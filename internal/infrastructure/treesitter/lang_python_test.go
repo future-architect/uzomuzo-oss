@@ -632,3 +632,100 @@ HeaderTuple()
 		})
 	}
 }
+
+func TestAnalyzer_PythonDecoratorUsage(t *testing.T) {
+	// Verify that decorators using imported modules are captured as call sites
+	// via the existing (attribute) query pattern. This is a coverage verification
+	// test — no code changes needed for this pattern.
+	tests := []struct {
+		name        string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			name: "attribute decorator @pytest.fixture",
+			code: `import pytest
+
+@pytest.fixture
+def my_fixture():
+    return 42
+
+def test_something(my_fixture):
+    assert my_fixture == 42
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/pytest@7.0.0": {"pytest"},
+			},
+			purl:        "pkg:pypi/pytest@7.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "bare decorator from from-import",
+			code: `from pytest import fixture
+
+@fixture
+def my_fixture():
+    return 42
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/pytest@7.0.0": {"pytest"},
+			},
+			purl:        "pkg:pypi/pytest@7.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "decorator with arguments @pytest.mark.parametrize",
+			code: `import pytest
+
+@pytest.mark
+def test_something():
+    pass
+`,
+			importPaths: map[string][]string{
+				"pkg:pypi/pytest@7.0.0": {"pytest"},
+			},
+			purl:        "pkg:pypi/pytest@7.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, "test_main.py"), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+		})
+	}
+}

@@ -717,6 +717,36 @@ func create() bar.MyType { return bar.MyType{} }
 			wantCalls:   2,
 			wantBreadth: 1,
 		},
+		{
+			// Type assertion x.(bar.Type) uses qualified_type — verify coverage.
+			name: "type assertion",
+			code: `package main
+
+import "github.com/foo/bar"
+
+func check(x interface{}) {
+	_ = x.(bar.MyType)
+}
+`,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			// Type switch case bar.Type: uses qualified_type — verify coverage.
+			name: "type switch case",
+			code: `package main
+
+import "github.com/foo/bar"
+
+func check(x interface{}) {
+	switch x.(type) {
+	case bar.MyType:
+	}
+}
+`,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
 	}
 
 	for _, tt := range tests {

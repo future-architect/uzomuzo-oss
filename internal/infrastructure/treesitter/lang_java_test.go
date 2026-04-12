@@ -639,17 +639,304 @@ public class Main {
 			// simple (Strings::isNullOrEmpty) and two scoped (Builder::add,
 			// Builder::new) where field_access captures "ImmutableList" for
 			// aliasMap lookup.
-			// 3 call sites, 3 symbols: isNullOrEmpty, add, Builder.
+			// 5 call sites: 1 (Strings::isNullOrEmpty) + 2 (ImmutableList.Builder
+			// field_access + Builder::add method_reference) + 2 (ImmutableList.Builder
+			// field_access + Builder::new method_reference).
+			// 3 symbols: isNullOrEmpty, add, Builder.
 			name:        "guava method references (simple + scoped qualifier + scoped constructor)",
 			purl:        "pkg:maven/com.google.guava/guava@33.0",
 			wantImports: 1,
-			wantCalls:   3,
+			wantCalls:   5,
 			wantBreadth: 3,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
+			}
+		})
+	}
+}
+
+func TestAnalyzer_JavaWildcardClassImport(t *testing.T) {
+	tests := []struct {
+		name         string
+		code         string
+		importPaths  map[string][]string
+		purl         string
+		wantImports  int
+		wantCalls    int
+		wantBreadth  int
+		wantWildcard bool
+	}{
+		{
+			name: "wildcard class import used",
+			code: `import com.google.gson.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Gson gson = new Gson();
+        gson.toJson("hello");
+    }
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:maven/com.google.code.gson/gson@2.10": {"com.google.gson"},
+			},
+			purl:         "pkg:maven/com.google.code.gson/gson@2.10",
+			wantImports:  1,
+			wantCalls:    0, // cannot attribute calls to wildcard imports
+			wantBreadth:  0,
+			wantWildcard: true,
+		},
+		{
+			name: "wildcard alongside specific import",
+			code: `import com.google.gson.*;
+import org.apache.commons.lang3.StringUtils;
+
+public class Main {
+    public static void main(String[] args) {
+        Gson gson = new Gson();
+        StringUtils.isBlank("");
+    }
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:maven/com.google.code.gson/gson@2.10":        {"com.google.gson"},
+				"pkg:maven/org.apache.commons/commons-lang3@3.14": {"org.apache.commons.lang3"},
+			},
+			purl:         "pkg:maven/org.apache.commons/commons-lang3@3.14",
+			wantImports:  1,
+			wantCalls:    1,
+			wantBreadth:  1,
+			wantWildcard: false,
+		},
+		{
+			name: "wildcard static import",
+			code: `import static org.junit.Assert.*;
+
+public class Main {
+    @org.junit.Test
+    public void test() {
+        assertEquals("a", "a");
+    }
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:maven/junit/junit@4.13.2": {"org.junit"},
+			},
+			purl:         "pkg:maven/junit/junit@4.13.2",
+			wantImports:  1,
+			wantCalls:    0,
+			wantBreadth:  0,
+			wantWildcard: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+			if ca.HasWildcardImport != tt.wantWildcard {
+				t.Errorf("HasWildcardImport = %v, want %v", ca.HasWildcardImport, tt.wantWildcard)
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
+			}
+		})
+	}
+}
+
+func TestAnalyzer_JavaFieldAccess(t *testing.T) {
+	tests := []struct {
+		name        string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			name: "enum constant access",
+			code: `import com.example.Status;
+
+public class Main {
+    Status s = Status.ACTIVE;
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:maven/com.example/enums@1.0": {"com.example"},
+			},
+			purl:        "pkg:maven/com.example/enums@1.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "static constant access",
+			code: `import java.util.Locale;
+
+public class Main {
+    Locale loc = Locale.US;
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:maven/java/jdk@17": {"java.util"},
+			},
+			purl:        "pkg:maven/java/jdk@17",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "field access does not false match local variables",
+			code: `import com.google.gson.Gson;
+
+public class Main {
+    Gson g = new Gson();
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:maven/com.google.code.gson/gson@2.10": {"com.google.gson"},
+			},
+			purl:        "pkg:maven/com.google.code.gson/gson@2.10",
+			wantImports: 1,
+			wantCalls:   1, // only new Gson()
+			wantBreadth: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+		})
+	}
+}
+
+func TestAnalyzer_JavaCastAndInstanceof(t *testing.T) {
+	tests := []struct {
+		name        string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			name: "cast expression",
+			code: `import com.google.gson.JsonElement;
+
+public class Main {
+    Object obj = null;
+    JsonElement e = (JsonElement) obj;
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:maven/com.google.code.gson/gson@2.10": {"com.google.gson"},
+			},
+			purl:        "pkg:maven/com.google.code.gson/gson@2.10",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name: "instanceof check",
+			code: `import com.google.gson.JsonObject;
+
+public class Main {
+    boolean isJson(Object obj) {
+        return obj instanceof JsonObject;
+    }
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:maven/com.google.code.gson/gson@2.10": {"com.google.gson"},
+			},
+			purl:        "pkg:maven/com.google.code.gson/gson@2.10",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			ca, ok := result[tt.purl]
 			if !ok {
 				t.Fatalf("expected coupling analysis for %s", tt.purl)

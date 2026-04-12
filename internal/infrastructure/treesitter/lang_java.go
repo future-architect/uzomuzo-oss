@@ -57,6 +57,20 @@ func registerJavaConfig(a *Analyzer) {
 			// attribution, and capture the inner type identifier as the
 			// recorded symbol to align with scoped constructor calls.
 			`(method_reference . (field_access (identifier) @obj (identifier) @method) . "new")`,
+			// Field access: MyEnum.VALUE, Constants.PI, Locale.US.
+			// NOTE: this pattern also matches the field_access node inside scoped
+			// method references (e.g., ImmutableList.Builder::add), which is
+			// intentional — the field access represents genuine type coupling
+			// even when nested inside a method reference expression.
+			`(field_access object: (identifier) @obj field: (identifier) @field)`,
+			// Cast expression: (MyType) obj
+			`(cast_expression type: (type_identifier) @func)`,
+			// Generic cast: (List<String>) obj
+			`(cast_expression type: (generic_type (type_identifier) @func))`,
+			// instanceof: obj instanceof MyType
+			`(instanceof_expression right: (type_identifier) @func)`,
+			// Generic instanceof: obj instanceof List<String> (Java 16+ pattern matching)
+			`(instanceof_expression right: (generic_type (type_identifier) @func))`,
 		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {
@@ -94,6 +108,16 @@ func (a *Analyzer) handleJavaImport(
 		return
 	}
 
+	// Wildcard imports (import com.example.* or import static org.junit.Assert.*)
+	// cannot track individual names. In tree-sitter-java, the asterisk is a
+	// separate child of import_declaration (not part of scoped_identifier),
+	// so the captured import path does not include "*".
+	if isJavaWildcardImport(node) {
+		key := wildcardImportAlias + importPath
+		aliasMap[key] = appendUniquePURLs(aliasMap[key], bestPURLs)
+		return
+	}
+
 	// Check if this is a static import by looking for a "static" child
 	// in the parent import_declaration node.
 	isStatic := isJavaStaticImport(node)
@@ -102,14 +126,6 @@ func (a *Analyzer) handleJavaImport(
 	alias := parts[len(parts)-1]
 
 	if isStatic {
-		if alias == "*" {
-			// Wildcard static import (import static org.junit.Assert.*) — cannot
-			// track individual names. Register a sentinel so ImportFileCount is
-			// correct, but bare calls will be undercounted.
-			key := wildcardImportAlias + importPath
-			aliasMap[key] = appendUniquePURLs(aliasMap[key], bestPURLs)
-			return
-		}
 		// Static import: the last component is a method/field name (e.g., assertEquals).
 		// Register it directly so bare calls like assertEquals() are matched
 		// via the single-capture call query pattern.
@@ -125,6 +141,26 @@ func (a *Analyzer) handleJavaImport(
 	if lower != alias {
 		aliasMap[lower] = appendUniquePURLs(aliasMap[lower], bestPURLs)
 	}
+}
+
+// isJavaWildcardImport checks whether a scoped_identifier node is part of a wildcard import
+// (import com.example.* or import static org.junit.Assert.*).
+// In tree-sitter-java, `import com.example.*;` parses as:
+//
+//	import_declaration -> ["import", scoped_identifier("com.example"), ".", asterisk, ";"]
+//
+// The asterisk is a separate child of import_declaration, not part of scoped_identifier.
+func isJavaWildcardImport(node *sitter.Node) bool {
+	parent := node.Parent()
+	if parent == nil || parent.Type() != "import_declaration" {
+		return false
+	}
+	for i := 0; i < int(parent.ChildCount()); i++ {
+		if parent.Child(i).Type() == "asterisk" {
+			return true
+		}
+	}
+	return false
 }
 
 // isJavaStaticImport checks whether a scoped_identifier node is part of a static import.
