@@ -1959,6 +1959,8 @@ sync();
 // component-library dependencies that are only used via HTML template selectors.
 // Closes #262.
 func TestAnalyzer_AngularDecoratorRegistrations(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		filename    string
@@ -2106,6 +2108,8 @@ export class SharedModule {}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			dir := t.TempDir()
 			err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0644)
 			if err != nil {
@@ -2131,6 +2135,7 @@ export class SharedModule {}
 			}
 
 			sort.Strings(tt.wantSymbols)
+			sort.Strings(ca.Symbols)
 			if len(ca.Symbols) != len(tt.wantSymbols) {
 				t.Errorf("Symbols = %v, want %v", ca.Symbols, tt.wantSymbols)
 			} else {
