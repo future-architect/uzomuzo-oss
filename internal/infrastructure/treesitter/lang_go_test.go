@@ -197,6 +197,61 @@ func main() {
 	}
 }
 
+func TestAnalyzer_GoBlankImportBaselineCallSite(t *testing.T) {
+	// Regression test for #261: blank imports should get CallSiteCount=1
+	// as a baseline (mirrors the existing dot-import behavior). Before the
+	// fix, blank imports had CallSiteCount=0, causing them to be scored as
+	// "imported but no calls" even though they have no callable API.
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
+
+import (
+	_ "github.com/lib/pq"
+	"github.com/foo/bar"
+)
+
+func main() {
+	bar.Do()
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/lib/pq@v1.10.0": {"github.com/lib/pq"},
+		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	caPQ, ok := result["pkg:golang/github.com/lib/pq@v1.10.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for blank import pq")
+	}
+	if !caPQ.HasBlankImport {
+		t.Error("pq: HasBlankImport = false, want true")
+	}
+	if caPQ.CallSiteCount != 1 {
+		t.Errorf("pq: CallSiteCount = %d, want 1 (blank import baseline)", caPQ.CallSiteCount)
+	}
+	if caPQ.IsUnused {
+		t.Error("pq: IsUnused = true, want false")
+	}
+
+	// Verify regular import still works normally alongside blank import.
+	caBar, ok := result["pkg:golang/github.com/foo/bar@v1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for regular import bar")
+	}
+	if caBar.CallSiteCount != 1 {
+		t.Errorf("bar: CallSiteCount = %d, want 1", caBar.CallSiteCount)
+	}
+}
+
 func TestAnalyzer_GoMultipleFiles(t *testing.T) {
 	dir := t.TempDir()
 	for _, f := range []struct {
@@ -781,14 +836,14 @@ func TestGoAliasFromImportPath(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"github.com/miscreant/miscreant.go", "miscreant"},             // .go suffix stripped
-		{"github.com/oschwald/geoip2-golang", "geoip2"},               // -golang suffix stripped
-		{"github.com/stretchr/testify", "testify"},                     // normal path
-		{"example.com/foo/v2", "foo"},                                  // major version peeled
-		{"gopkg.in/yaml.v3", "yaml"},                                   // gopkg.in version stripped
-		{"gopkg.in/foo.go.v2", "foo"},                                  // gopkg.in + .go suffix
-		{"github.com/go-redis/redis/v9", "redis"},                      // major version + go- prefix
-		{"github.com/opentracing/opentracing-go", "opentracing"},       // -go suffix stripped
+		{"github.com/miscreant/miscreant.go", "miscreant"},       // .go suffix stripped
+		{"github.com/oschwald/geoip2-golang", "geoip2"},          // -golang suffix stripped
+		{"github.com/stretchr/testify", "testify"},               // normal path
+		{"example.com/foo/v2", "foo"},                            // major version peeled
+		{"gopkg.in/yaml.v3", "yaml"},                             // gopkg.in version stripped
+		{"gopkg.in/foo.go.v2", "foo"},                            // gopkg.in + .go suffix
+		{"github.com/go-redis/redis/v9", "redis"},                // major version + go- prefix
+		{"github.com/opentracing/opentracing-go", "opentracing"}, // -go suffix stripped
 	}
 
 	for _, tt := range tests {
@@ -819,13 +874,13 @@ func TestGoPackageFromHyphenated(t *testing.T) {
 		{"geoip2-golang", "geoip2"},
 		{"maxminddb-golang", "maxminddb"},
 		{"foo-golang", "foo"},
-		{"-golang", "-golang"},     // empty after strip; guard preserves original
-		{"-go", "-go"},             // empty after strip; guard preserves original
-		{"go-", "go-"},             // empty after prefix strip; guard preserves original
-		{"go-golang", "go"},        // strip -golang -> "go" (no hyphens)
-		{"go-redis", "redis"},          // real package: prefix go- stripped
-		{"go-sqlite3", "sqlite3"},      // real package: prefix go- stripped
-		{"foo-bar-golang", "foobar"},   // -golang stripped, remaining hyphen removed
+		{"-golang", "-golang"},       // empty after strip; guard preserves original
+		{"-go", "-go"},               // empty after strip; guard preserves original
+		{"go-", "go-"},               // empty after prefix strip; guard preserves original
+		{"go-golang", "go"},          // strip -golang -> "go" (no hyphens)
+		{"go-redis", "redis"},        // real package: prefix go- stripped
+		{"go-sqlite3", "sqlite3"},    // real package: prefix go- stripped
+		{"foo-bar-golang", "foobar"}, // -golang stripped, remaining hyphen removed
 	}
 
 	for _, tt := range tests {

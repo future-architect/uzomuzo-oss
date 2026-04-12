@@ -412,6 +412,72 @@ func TestComputeImpactScore_LifecycleScoreFloor(t *testing.T) {
 	}
 }
 
+func TestNormalizeCouplingEffort_BlankImportSideEffect(t *testing.T) {
+	// Regression test for #261: side-effect-only imports (Go blank import,
+	// JS bare import, CJS bare require) should produce zero coupling effort.
+	// Before the fix, ImportFileCount > 0 caused non-zero effort even though
+	// the dependency has no callable API (CallSiteCount=0, APIBreadth=0).
+	tests := []struct {
+		name string
+		c    CouplingAnalysis
+		want float64
+	}{
+		{
+			name: "Go blank import: side-effect only, no calls",
+			c: CouplingAnalysis{
+				ImportFileCount: 1,
+				CallSiteCount:   1,
+				HasBlankImport:  true,
+			},
+			want: 0.0,
+		},
+		{
+			name: "JS side-effect import: import 'reflect-metadata'",
+			c: CouplingAnalysis{
+				ImportFileCount: 1,
+				CallSiteCount:   1,
+				HasBlankImport:  true,
+			},
+			want: 0.0,
+		},
+		{
+			name: "CJS bare require: require('pkg')",
+			c: CouplingAnalysis{
+				ImportFileCount: 1,
+				CallSiteCount:   1,
+				HasBlankImport:  true,
+			},
+			want: 0.0,
+		},
+		{
+			name: "blank import with actual API usage should NOT be zero",
+			c: CouplingAnalysis{
+				ImportFileCount: 2,
+				CallSiteCount:   5,
+				APIBreadth:      3,
+				HasBlankImport:  true,
+			},
+			want: -1, // non-zero; use wantNonZero check
+		},
+	}
+	const tolerance = 0.001
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeCouplingEffort(tt.c)
+			if tt.want < 0 {
+				// expect non-zero
+				if got < 0.01 {
+					t.Errorf("normalizeCouplingEffort() = %f, expected > 0 for blank import with API usage", got)
+				}
+				return
+			}
+			if got < tt.want-tolerance || got > tt.want+tolerance {
+				t.Errorf("normalizeCouplingEffort() = %f, want %f (±%f)", got, tt.want, tolerance)
+			}
+		})
+	}
+}
+
 func TestComputeSummary_StaysAsIndirectCount(t *testing.T) {
 	entries := []DietEntry{
 		{

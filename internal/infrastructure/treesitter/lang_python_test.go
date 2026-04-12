@@ -261,7 +261,7 @@ except ImportError:
 			wantBlankImport: true,
 			wantUnused:      false,
 			wantImportCount: 1,
-			wantCallSites:   0,
+			wantCallSites:   1, // baseline for blank/side-effect import (#261)
 		},
 		{
 			name: "try/except ModuleNotFoundError",
@@ -273,7 +273,7 @@ except ModuleNotFoundError:
 			wantBlankImport: true,
 			wantUnused:      false,
 			wantImportCount: 1,
-			wantCallSites:   0,
+			wantCallSites:   1, // baseline for blank/side-effect import (#261)
 		},
 		{
 			name: "try/except bare except",
@@ -285,7 +285,7 @@ except:
 			wantBlankImport: true,
 			wantUnused:      false,
 			wantImportCount: 1,
-			wantCallSites:   0,
+			wantCallSites:   1, // baseline for blank/side-effect import (#261)
 		},
 		{
 			name: "try/except with from-import",
@@ -297,7 +297,7 @@ except ImportError:
 			wantBlankImport: true,
 			wantUnused:      false,
 			wantImportCount: 1,
-			wantCallSites:   0,
+			wantCallSites:   1, // baseline for blank/side-effect import (#261)
 		},
 		{
 			name: "regular import not in try/except",
@@ -373,7 +373,7 @@ except (ImportError, ValueError):
 			wantBlankImport: true,
 			wantUnused:      false,
 			wantImportCount: 1,
-			wantCallSites:   0,
+			wantCallSites:   1, // baseline for blank/side-effect import (#261)
 		},
 		{
 			name: "try/except with tuple of unrelated exceptions",
