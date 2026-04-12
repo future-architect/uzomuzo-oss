@@ -573,7 +573,7 @@ Operational tuning without code changes (low risk, reversible).
 
 ## Logging
 
-Uzomuzo outputs structured logs via Go's `slog`. Designed for batch/cron operation and incident investigation.
+uzomuzo outputs structured logs via Go's `slog`. Designed for batch/cron operation and incident investigation.
 
 For automated monthly scanning with GitHub Actions, see [Integration Examples: GitHub Actions Scheduled Scanning](/docs/integration-examples.md#github-actions-scheduled-scanning).
 
