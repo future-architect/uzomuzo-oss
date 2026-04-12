@@ -1952,3 +1952,194 @@ sync();
 		})
 	}
 }
+
+// TestAnalyzer_AngularDecoratorRegistrations verifies that identifiers inside
+// Angular decorator array arguments (@NgModule imports/declarations, standalone
+// @Component imports) are detected as call sites. This prevents false IBNC for
+// component-library dependencies that are only used via HTML template selectors.
+// Closes #262.
+func TestAnalyzer_AngularDecoratorRegistrations(t *testing.T) {
+	tests := []struct {
+		name        string
+		filename    string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantCalls   int
+		wantBreadth int
+		wantSymbols []string
+	}{
+		{
+			name:     "NgModule imports array",
+			filename: "app.module.ts",
+			code: `import { NgModule } from "@angular/core";
+import { FormsModule } from "@angular/forms";
+import { HttpClientModule } from "@angular/common/http";
+import { AppComponent } from "./app.component";
+
+@NgModule({
+  imports: [FormsModule, HttpClientModule],
+  declarations: [AppComponent],
+})
+export class AppModule {}
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/%40angular/forms@17.0.0": {"@angular/forms"},
+			},
+			purl:        "pkg:npm/%40angular/forms@17.0.0",
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"FormsModule"},
+		},
+		{
+			name:     "NgModule declarations array",
+			filename: "app.module.ts",
+			code: `import { NgModule } from "@angular/core";
+import { BrowserModule } from "@angular/platform-browser";
+import { AppComponent } from "./app.component";
+import { HeroComponent } from "./hero.component";
+
+@NgModule({
+  imports: [BrowserModule],
+  declarations: [AppComponent, HeroComponent],
+})
+export class AppModule {}
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/%40angular/platform-browser@17.0.0": {"@angular/platform-browser"},
+			},
+			purl:        "pkg:npm/%40angular/platform-browser@17.0.0",
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"BrowserModule"},
+		},
+		{
+			name:     "standalone Component imports",
+			filename: "my.component.ts",
+			code: `import { Component } from "@angular/core";
+import { CommonModule } from "@angular/common";
+import { RouterModule } from "@angular/router";
+
+@Component({
+  standalone: true,
+  imports: [CommonModule, RouterModule],
+  template: '<div></div>',
+})
+export class MyComponent {}
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/%40angular/common@17.0.0": {"@angular/common"},
+				"pkg:npm/%40angular/router@17.0.0": {"@angular/router"},
+			},
+			purl:        "pkg:npm/%40angular/common@17.0.0",
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"CommonModule"},
+		},
+		{
+			name:     "Injectable decorator NOT captured as extra call sites",
+			filename: "my.service.ts",
+			code: `import { Injectable } from "@angular/core";
+
+@Injectable({
+  providedIn: 'root',
+})
+export class MyService {}
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/%40angular/core@17.0.0": {"@angular/core"},
+			},
+			purl: "pkg:npm/%40angular/core@17.0.0",
+			// Injectable() is captured as a bare call_expression by existing patterns.
+			// Its string argument ('root') should not produce extra call sites.
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"Injectable"},
+		},
+		{
+			name:     "Vue defineComponent with components option",
+			filename: "MyPage.ts",
+			code: `import { defineComponent } from "vue";
+import MyChild from "my-child-component";
+
+export default defineComponent({
+  components: {
+    MyChild,
+  },
+  setup() {
+    return {};
+  }
+});
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/my-child-component@1.0.0": {"my-child-component"},
+			},
+			purl:        "pkg:npm/my-child-component@1.0.0",
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"MyChild"},
+		},
+		{
+			name:     "multiple modules in NgModule imports and exports",
+			filename: "shared.module.ts",
+			code: `import { NgModule } from "@angular/core";
+import { CommonModule } from "@angular/common";
+import { FormsModule, ReactiveFormsModule } from "@angular/forms";
+
+@NgModule({
+  imports: [CommonModule, FormsModule, ReactiveFormsModule],
+  exports: [CommonModule, FormsModule, ReactiveFormsModule],
+})
+export class SharedModule {}
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/%40angular/forms@17.0.0": {"@angular/forms"},
+			},
+			purl: "pkg:npm/%40angular/forms@17.0.0",
+			// FormsModule appears in both imports and exports (2 sites),
+			// ReactiveFormsModule appears in both imports and exports (2 sites).
+			wantCalls:   4,
+			wantBreadth: 2,
+			wantSymbols: []string{"FormsModule", "ReactiveFormsModule"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+
+			sort.Strings(tt.wantSymbols)
+			if len(ca.Symbols) != len(tt.wantSymbols) {
+				t.Errorf("Symbols = %v, want %v", ca.Symbols, tt.wantSymbols)
+			} else {
+				for i, s := range ca.Symbols {
+					if s != tt.wantSymbols[i] {
+						t.Errorf("Symbols[%d] = %q, want %q", i, s, tt.wantSymbols[i])
+					}
+				}
+			}
+		})
+	}
+}

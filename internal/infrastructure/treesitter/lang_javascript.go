@@ -77,6 +77,19 @@ func newJSLikeConfig(lang *sitter.Language, includeJSX bool) *langConfig {
 		`(return_statement (identifier) @func)`,
 		// x = DEV
 		`(assignment_expression right: (identifier) @func)`,
+
+		// Framework decorator/registration patterns (#262).
+		// Angular @NgModule/@Component: identifiers in decorator array arguments
+		// (imports, declarations, exports) are module/component registrations that
+		// prove the dependency is used, even though actual usage happens in HTML
+		// templates outside the TypeScript AST.
+		// countCallSites filters by aliasMap, so only imported identifiers are counted.
+		`(decorator (call_expression arguments: (arguments (object (pair value: (array (identifier) @func))))))`,
+		// Vue defineComponent / Options API: shorthand property identifiers inside
+		// a nested object value (e.g., components: { MyChild }) register components
+		// for template use. The shorthand_property_identifier node represents `MyChild`
+		// in `{ MyChild }` (shorthand for `{ MyChild: MyChild }`).
+		`(call_expression arguments: (arguments (object (pair value: (object (shorthand_property_identifier) @func)))))`,
 	}
 	if includeJSX {
 		callPatterns = append(callPatterns,
