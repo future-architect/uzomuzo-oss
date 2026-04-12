@@ -39,6 +39,24 @@ func registerJavaConfig(a *Analyzer) {
 			`(superclass (type_identifier) @func)`,
 			// Generic extends: extends Foo<T>
 			`(superclass (generic_type (type_identifier) @func))`,
+			// Method reference: Foo::bar — capture simple qualifiers directly
+			// so alias lookup remains consistent with method_invocation.
+			`(method_reference . (identifier) @obj . (identifier) @method)`,
+			// Scoped method reference: Outer.Inner::bar, Map.Entry::getKey.
+			// tree-sitter-java represents the qualifier as a field_access node;
+			// capture the first identifier child (e.g., "ImmutableList" from
+			// "ImmutableList.Builder") for aliasMap lookup.
+			`(method_reference . (field_access (identifier) @obj) . (identifier) @method)`,
+			// Constructor reference: Foo::new — tree-sitter-java represents
+			// "new" as a token, not an identifier, so match it explicitly,
+			// but record the qualifier/type as the symbol to keep constructor
+			// references consistent with constructor calls (new Foo()).
+			`(method_reference . (identifier) @obj @method . "new")`,
+			// Scoped constructor reference: Outer.Inner::new.
+			// Capture the imported qualifier identifier for alias-based
+			// attribution, and capture the inner type identifier as the
+			// recorded symbol to align with scoped constructor calls.
+			`(method_reference . (field_access (identifier) @obj (identifier) @method) . "new")`,
 		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {
