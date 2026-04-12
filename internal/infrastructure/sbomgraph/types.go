@@ -135,6 +135,8 @@ func ResolveDirectPURLs(bom *BOMEnvelope, refMap map[string]string) map[string]s
 
 	// Root not in dependencies array — infer direct deps as refs that are never
 	// listed in any dependsOn (i.e., no other component depends on them).
+	// Aggregator flattening is not applied here because this fallback targets
+	// SBOM tools (syft, Trivy) that do not produce Maven aggregator patterns.
 	slog.Debug("root component not in dependencies array, inferring direct deps", "ref", rootRef)
 	dependedOn := make(map[string]struct{})
 	for _, d := range bom.Dependencies {
@@ -282,19 +284,31 @@ func flattenAggregatorModules(
 		candidates = append(candidates, subModule{purl: dp, refs: refs})
 	}
 
-	// All direct deps are sub-modules. Flatten: collect their children.
+	// All direct deps are sub-modules. Flatten one level: collect their children.
+	// Intentionally non-recursive — deeply nested aggregators are rare in practice,
+	// and recursive flattening risks promoting transitive external deps to direct.
 	slog.Debug("detected Maven aggregator POM, flattening sub-modules",
 		"sub_module_count", len(candidates), "root_namespace", rootNamespace)
 
+	// Build a local set of sub-module PURLs to filter out inter-module deps
+	// without mutating the caller's selfPURLs map.
+	subModulePURLs := make(map[string]struct{}, len(candidates))
+	for _, sm := range candidates {
+		subModulePURLs[sm.purl] = struct{}{}
+	}
+
 	flattened := make(map[string]struct{})
 	for _, sm := range candidates {
-		selfPURLs[sm.purl] = struct{}{} // mark sub-module as internal
 		for _, ref := range sm.refs {
 			for _, childRef := range depIndex[ref] {
 				if childPURL, ok := refMap[childRef]; ok {
-					if _, isSelf := selfPURLs[childPURL]; !isSelf {
-						flattened[childPURL] = struct{}{}
+					if _, isSelf := selfPURLs[childPURL]; isSelf {
+						continue
 					}
+					if _, isSub := subModulePURLs[childPURL]; isSub {
+						continue
+					}
+					flattened[childPURL] = struct{}{}
 				}
 			}
 		}

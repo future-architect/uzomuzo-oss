@@ -126,10 +126,12 @@ func (a *Analyzer) handleGoImport(
 // Heuristics (applied in order, short-circuiting when no hyphens remain):
 //  1. Strip "-golang" suffix (e.g., "geoip2-golang" → "geoip2")
 //  2. Strip "-go" suffix (e.g., "opentracing-go" → "opentracing", "mmap-go" → "mmap")
-//  3. Strip "go-" prefix (e.g., "go-loser" → "loser", "go-spew" → "spew")
-//     Only reached if hyphens remain after steps 1-2.
-//  4. Remove remaining hyphens (e.g., "some-pkg" → "somepkg")
+//  3. Strip compound suffixes "-sdk", "-api", "-client", "-lib"
+//     (e.g., "onepassword-sdk-go" → "onepassword" after step 2 yields "onepassword-sdk")
+//  4. Strip "go-" prefix (e.g., "go-loser" → "loser", "go-spew" → "spew")
 //     Only reached if hyphens remain after steps 1-3.
+//  5. Remove remaining hyphens (e.g., "some-pkg" → "somepkg")
+//     Only reached if hyphens remain after steps 1-4.
 //
 // If the input contains no hyphens, it is returned unchanged.
 // If a step produces an empty string (e.g., input is "-go"), the original name
