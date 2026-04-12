@@ -79,21 +79,16 @@ Schema (YAML-in-Markdown):
 
 ```yaml
 pending_patterns:
-  - category: "testing"
-    summary: "Propagate build tags (e.g., //go:build cgo) to test files that import build-tag-constrained packages — otherwise CGO_ENABLED=0 builds fail"
-    pr: 237
-    file: "internal/application/diet/coupling_integration_test.go"
-    date: "2026-04-08"
-  - category: "testing"
-    summary: "Capture and assert arguments passed to test fakes/mocks — unconditional return values let tests pass even when PURL parsing/decoding is wrong"
-    pr: 236
-    file: "internal/infrastructure/eolevaluator/evaluator_npm_test.go"
-    date: "2026-04-08"
   - category: "security"
     summary: "When using io.LimitReader to cap entry reads, read maxSize+1 and reject if oversized — plain LimitReader silently truncates, causing downstream parsers to operate on partial/corrupt data"
     pr: 276
     file: "internal/infrastructure/pypi/wheel.go"
     date: "2026-04-11"
+  - category: "comment-doc-drift"
+    summary: "Test header comment claimed 'no code changes needed' but test relied on newly added bare-decorator capture — comments must reflect current implementation scope"
+    pr: 298
+    file: "internal/infrastructure/treesitter/lang_python_test.go"
+    date: "2026-04-12"
   - category: "security"
     summary: "Cap HTTP response body sizes with io.LimitReader before decoding — uncapped reads from overridden base URLs or mirrors can cause excessive memory usage"
     pr: 276
@@ -104,41 +99,16 @@ pending_patterns:
     pr: 281
     file: "internal/infrastructure/treesitter/lang_go.go"
     date: "2026-04-11"
-  - category: "testing"
-    summary: "When code merges results into a map that may be nil (e.g., initialized only on non-empty results), add a test where the initial map is nil and the merge path still executes — catches nil map assignment panics"
-    pr: 276
-    file: "internal/application/diet/service_test.go"
-    date: "2026-04-11"
-  - category: "testing"
-    summary: "When a test asserts wantNoResult for one item in a multi-item input set, also assert that sibling items produce expected coupling — otherwise a regression that drops all items passes silently"
-    pr: 282
-    file: "internal/infrastructure/treesitter/lang_javascript_test.go"
-    date: "2026-04-11"
-  - category: "security"
-    summary: "Validate URL host non-empty alongside scheme check — hostless URLs like https:///path pass scheme validation but fail later in uncontrolled ways"
-    pr: 276
-    file: "internal/infrastructure/pypi/wheel.go"
-    date: "2026-04-11"
-  - category: "testing"
-    summary: "Accept interface types in test-setter methods (e.g., SetXxxClient) so fakes can be injected via public API instead of unexported fields"
-    pr: 236
-    file: "internal/infrastructure/eolevaluator/evaluator.go"
-    date: "2026-04-08"
-  - category: "testing"
-    summary: "When a function can return nil to signal 'unavailable' vs empty to signal 'no matches', ensure tests include at least one matching item so the result is non-nil and the test exercises actual behavior — not a vacuous early return"
-    pr: 237
-    file: "internal/application/diet/coupling_integration_test.go"
-    date: "2026-04-08"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
-  - category: "testing"
-    summary: "Test fixture PURLs must match the import package prefix they map to — mismatched PURL/import pairs make tests confusing and hide incorrect mappings"
-    pr: 235
-    file: "internal/infrastructure/treesitter/analyzer_test.go"
-    date: "2026-04-08"
+  - category: "security"
+    summary: "Validate URL host non-empty alongside scheme check — hostless URLs like https:///path pass scheme validation but fail later in uncontrolled ways"
+    pr: 276
+    file: "internal/infrastructure/pypi/wheel.go"
+    date: "2026-04-11"
   - category: "api-consistency"
     summary: "Remove omitempty from boolean and always-present slice JSON tags — omitempty makes absent-vs-false/empty ambiguous for downstream schema consumers"
     pr: 223
@@ -149,6 +119,7 @@ pending_patterns:
 <!-- Promotion history (kept for audit trail):
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #276, #280 — rerun analyzers with combined input, gate fallback on error, spec-compliant parsers, AST ancestor walk continuation)
   # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #253, #276 — interface contract doc must match signature semantics)
+  # testing: promoted to testing-performance.instructions.md (PRs #276, #282, #298 — nil map merge tests, sibling assertions, test name/code consistency, unconditional test assertions)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #277, #276 — handle all valid input forms in format parsers)
   # error-handling: promoted to error-handling.instructions.md (PRs #87, #159 — surface initialization errors instead of silent degradation)
   # defensive-coding: already covered by promoted rules (PR #159, analyzer.go:382 — filter tree-sitter captures by name to skip non-import captures)
