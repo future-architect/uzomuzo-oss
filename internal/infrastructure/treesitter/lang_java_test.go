@@ -567,7 +567,7 @@ public class Main {
 
     // Constructor reference (Type::new)
     Gson gson = Arrays.asList("config").stream()
-        .map(s -> new Gson())
+        .map(Gson::new)
         .findFirst().orElse(null);
 
     // Method reference with qualified static method
@@ -582,9 +582,9 @@ public class Main {
 
 	analyzer := NewAnalyzer()
 	importPaths := map[string][]string{
-		"pkg:maven/com.google.code.gson/gson@2.10":            {"com.google.gson"},
-		"pkg:maven/com.google.guava/guava@33.0":               {"com.google.common"},
-		"pkg:maven/org.apache.commons/commons-lang3@3.14":     {"org.apache.commons.lang3"},
+		"pkg:maven/com.google.code.gson/gson@2.10":        {"com.google.gson"},
+		"pkg:maven/com.google.guava/guava@33.0":           {"com.google.common"},
+		"pkg:maven/org.apache.commons/commons-lang3@3.14": {"org.apache.commons.lang3"},
 	}
 	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
 	if err != nil {
@@ -602,6 +602,16 @@ public class Main {
 			// StringUtils::isBlank — method reference to external static method
 			name:        "method reference StringUtils::isBlank",
 			purl:        "pkg:maven/org.apache.commons/commons-lang3@3.14",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			// Gson::new — constructor reference matched by method_reference pattern.
+			// "new Gson()::toJson" is an expression-qualified reference; the aliasMap
+			// lookup on the expression text does not match, so only Gson::new counts.
+			name:        "constructor reference Gson::new",
+			purl:        "pkg:maven/com.google.code.gson/gson@2.10",
 			wantImports: 1,
 			wantCalls:   1,
 			wantBreadth: 1,

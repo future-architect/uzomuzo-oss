@@ -39,8 +39,10 @@ func registerJavaConfig(a *Analyzer) {
 			`(superclass (type_identifier) @func)`,
 			// Generic extends: extends Foo<T>
 			`(superclass (generic_type (type_identifier) @func))`,
-			// Method reference: Foo::bar
-			`(method_reference . (identifier) @func)`,
+			// Method reference: Foo::bar — dual capture so alias lookup uses
+			// the qualifier while symbol recording uses the method name,
+			// consistent with method_invocation handling.
+			`(method_reference . (_) @obj . (identifier) @method)`,
 		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {
