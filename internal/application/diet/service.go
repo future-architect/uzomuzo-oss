@@ -544,6 +544,23 @@ var mavenPackageOverrides = map[string][]string{
 	"com.fasterxml.jackson.datatype/jackson-datatype-jsr310":   {"com.fasterxml.jackson.datatype.jsr310"},
 	"com.fasterxml.jackson.module/jackson-module-kotlin":       {"com.fasterxml.jackson.module.kotlin"},
 
+	// Guava: Maven groupId is "com.google.guava" but Java packages live under
+	// "com.google.common.*".
+	"com.google.guava/guava": {"com.google.common"},
+
+	// ANTLR runtime: Maven artifactId "antlr4-runtime" maps to "org.antlr.v4.runtime",
+	// and the ST (StringTemplate) artifact maps to "org.stringtemplate.v4".
+	"org.antlr/antlr4-runtime": {"org.antlr.v4"},
+	"org.antlr/st4":            {"org.stringtemplate"},
+
+	// Trove4j: Maven groupId "net.sf.trove4j" but Java packages are "gnu.trove.*".
+	"net.sf.trove4j/trove4j": {"gnu.trove"},
+
+	// Scala standard library: Maven groupId "org.scala-lang" but Java/Scala
+	// packages are "scala.*".
+	"org.scala-lang/scala-library": {"scala"},
+	"org.scala-lang/scala-reflect": {"scala.reflect"},
+
 	// javax.inject: groupId and artifactId both equal "javax.inject", so the
 	// heuristic already produces the correct candidate, but an explicit override
 	// ensures stability.

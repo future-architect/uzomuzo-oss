@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	packageurl "github.com/package-url/packageurl-go"
+
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
 )
@@ -738,7 +740,7 @@ func TestRun_WheelFallback_NilCouplingResults(t *testing.T) {
 	// Phase 2 returns (nil, nil) — zero imports matched any dependency.
 	// Phase 2.5 should still run and merge retry results without panicking.
 	sourceAnalyzer := &retrySourceAnalyzer{
-		firstResult:  nil, // nil map, not empty map
+		firstResult: nil, // nil map, not empty map
 		secondResult: map[string]*domaindiet.CouplingAnalysis{
 			pypiPURL: {ImportFileCount: 1, CallSiteCount: 2},
 		},
@@ -877,5 +879,76 @@ func TestRun_WheelFallback_ResolverError(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("beautifulsoup4 entry not found in plan")
+	}
+}
+
+func TestBuildMavenImportPaths_Overrides(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		namespace string
+		pkg       string
+		wantFirst string // first (override) element
+	}{
+		{
+			name:      "guava",
+			namespace: "com.google.guava",
+			pkg:       "guava",
+			wantFirst: "com.google.common",
+		},
+		{
+			name:      "antlr4-runtime",
+			namespace: "org.antlr",
+			pkg:       "antlr4-runtime",
+			wantFirst: "org.antlr.v4",
+		},
+		{
+			name:      "stringtemplate",
+			namespace: "org.antlr",
+			pkg:       "ST4",
+			wantFirst: "org.stringtemplate",
+		},
+		{
+			name:      "trove4j",
+			namespace: "net.sf.trove4j",
+			pkg:       "trove4j",
+			wantFirst: "gnu.trove",
+		},
+		{
+			name:      "scala-library",
+			namespace: "org.scala-lang",
+			pkg:       "scala-library",
+			wantFirst: "scala",
+		},
+		{
+			name:      "scala-reflect",
+			namespace: "org.scala-lang",
+			pkg:       "scala-reflect",
+			wantFirst: "scala.reflect",
+		},
+		{
+			name:      "gson (existing)",
+			namespace: "com.google.code.gson",
+			pkg:       "gson",
+			wantFirst: "com.google.gson",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			parsed := packageurl.PackageURL{
+				Namespace: tt.namespace,
+				Name:      tt.pkg,
+			}
+			paths := buildMavenImportPaths(parsed)
+			if len(paths) == 0 {
+				t.Fatal("expected at least one path, got none")
+			}
+			if paths[0] != tt.wantFirst {
+				t.Errorf("first path = %q, want %q", paths[0], tt.wantFirst)
+			}
+		})
 	}
 }
