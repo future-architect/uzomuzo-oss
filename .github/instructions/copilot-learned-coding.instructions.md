@@ -59,6 +59,8 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Narrow Heuristic Candidate Sets to Avoid False Attribution**: When building candidate lists for matching (e.g., import-path heuristics, file-type detection), prefer precise patterns over broad substring matching. An overly broad heuristic (e.g., taking only the last segment after a delimiter) can collide with unrelated entries and cause false attribution (e.g., marking an unrelated dependency as "used"). Add validation or specificity constraints to each candidate before insertion.
 - **Verify Tree-Sitter Query Patterns Do Not Overlap**: When adding new tree-sitter (or similar AST) query patterns to a multi-pattern query, verify that the new pattern does not match nodes already captured by an existing pattern via parent-child nesting. For example, a standalone `member_expression` pattern already matches the inner `pkg.Foo` node inside `new pkg.Foo()`, so adding a `new_expression` wrapping `member_expression` pattern would double-count the same call site. Test with representative code that exercises both the new and existing patterns.
 
+- **Guard Ecosystem-Specific Heuristics by PURL Type**: When a detection heuristic (aggregator flattening, workspace detection, monorepo inference) is designed for a specific package ecosystem, guard it with an explicit PURL type check (e.g., `rootType != "maven"`). Structural properties like shared namespaces and parent-child dependency trees exist across ecosystems (Maven groupIds, npm scopes, PyPI namespaces) but have different semantics. Without a type guard, a Maven-specific heuristic can misfire on npm or other ecosystems that happen to share the same structural pattern, silently rewriting dependency graphs.
+
 ## Pending Copilot Patterns
 
 <!--
@@ -97,6 +99,11 @@ pending_patterns:
     pr: 281
     file: "internal/infrastructure/treesitter/lang_go.go"
     date: "2026-04-11"
+  - category: "comment-doc-drift"
+    summary: "Test case name claimed 'web vs data-jpa' but input PURL was spring-boot-starter-security — test names must match the actual input under test"
+    pr: 299
+    file: "internal/application/diet/service_test.go"
+    date: "2026-04-12"
   - category: "comment-doc-drift"
     summary: "Constant doc comment named only Python but the sentinel was reused for Java wildcard imports — doc comments on shared constants must enumerate all languages/contexts that use them"
     pr: 298
