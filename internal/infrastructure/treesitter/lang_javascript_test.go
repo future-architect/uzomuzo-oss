@@ -1468,3 +1468,150 @@ serialize(document);
 		})
 	}
 }
+
+// TestAnalyzer_CJSPropertyAssignRequire verifies that require() assigned to an
+// object property (e.g., `file.glob = require('glob')`) is tracked correctly.
+// The full qualified member expression (for example, `file.glob`) becomes an
+// alias so that subsequent usage like `file.glob.sync()` or `file.glob()` is
+// counted as a call site.
+// Closes #290.
+func TestAnalyzer_CJSPropertyAssignRequire(t *testing.T) {
+	tests := []struct {
+		name        string
+		filename    string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+		wantSymbols []string
+	}{
+		{
+			name:     "property assign with method call: file.glob = require('glob')",
+			filename: "index.js",
+			code: `file.glob = require('glob');
+
+file.glob.sync(pattern);
+file.glob.hasMagic(pattern);
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/glob@7.0.0": {"glob"},
+			},
+			purl:        "pkg:npm/glob@7.0.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
+			wantSymbols: []string{"hasMagic", "sync"},
+		},
+		{
+			name:     "property assign with direct call: file.minimatch = require('minimatch')",
+			filename: "index.js",
+			code: `file.minimatch = require('minimatch');
+
+file.minimatch(pattern, '*.js');
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/minimatch@3.0.0": {"minimatch"},
+			},
+			purl:        "pkg:npm/minimatch@3.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"file.minimatch"},
+		},
+		{
+			name:     "property assign with dateformat pattern: template.date = require('dateformat')",
+			filename: "index.js",
+			code: `template.date = require('dateformat');
+
+var result = template.date(new Date(), "yyyy-mm-dd");
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/dateformat@4.0.0": {"dateformat"},
+			},
+			purl:        "pkg:npm/dateformat@4.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"template.date"},
+		},
+		{
+			name:     "property assign with findup pattern: file.findup = require('findup-sync')",
+			filename: "index.js",
+			code: `file.findup = require('findup-sync');
+
+var fp = file.findup('Gruntfile.js');
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/findup-sync@5.0.0": {"findup-sync"},
+			},
+			purl:        "pkg:npm/findup-sync@5.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"file.findup"},
+		},
+		{
+			name:     "no false positive: method name does not collide with separate import alias",
+			filename: "index.js",
+			code: `file.glob = require('glob');
+const sync = require('sync');
+
+file.glob.sync(pattern);
+sync();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/glob@7.0.0": {"glob"},
+				"pkg:npm/sync@1.0.0": {"sync"},
+			},
+			purl:        "pkg:npm/sync@1.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"sync"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+
+			sort.Strings(tt.wantSymbols)
+			if len(ca.Symbols) != len(tt.wantSymbols) {
+				t.Errorf("Symbols = %v, want %v", ca.Symbols, tt.wantSymbols)
+			} else {
+				for i, s := range ca.Symbols {
+					if s != tt.wantSymbols[i] {
+						t.Errorf("Symbols[%d] = %q, want %q", i, s, tt.wantSymbols[i])
+					}
+				}
+			}
+		})
+	}
+}

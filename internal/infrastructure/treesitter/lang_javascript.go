@@ -38,8 +38,17 @@ func newJSLikeConfig(lang *sitter.Language, includeJSX bool) *langConfig {
 	}, "\n")
 	callPatterns := []string{
 		`(member_expression object: (identifier) @obj property: (property_identifier) @prop)`,
+		// obj.alias.method() — nested member access where a qualified alias such as
+		// `obj.alias` was assigned via `obj.alias = require('pkg')`. Capture the full
+		// inner member_expression as @obj so chained property access is keyed by
+		// its qualified receiver instead of only the trailing property name.
+		`(member_expression object: (member_expression) @obj property: (property_identifier) @prop)`,
 		// foo() — bare function call on an imported named binding
 		`(call_expression function: (identifier) @func)`,
+		// obj.alias() — direct call on a qualified require binding. Capture the full
+		// member_expression so aliases remain qualified and do not collide with
+		// unrelated plain identifiers that share the same property name.
+		`(call_expression function: (member_expression) @func)`,
 		// new Foo() — constructor call on an imported named binding
 		`(new_expression constructor: (identifier) @func)`,
 		// { [ATTR]: val } — imported constant used as computed property key
@@ -155,7 +164,8 @@ func (a *Analyzer) handleJSImport(
 // extractJSBindings walks the AST from an import source node to find all JS binding names.
 //
 // ESM: import_statement → import_clause → identifier / namespace_import
-// CJS: string → arguments → call_expression → variable_declarator → name
+// CJS (variable): string → arguments → call_expression → variable_declarator → name
+// CJS (property): string → arguments → call_expression → assignment_expression → member_expression → property
 //
 // Combined imports (e.g., `import def, * as ns from "pkg"`) produce multiple bindings.
 func extractJSBindings(node *sitter.Node, src []byte) []string {
@@ -179,6 +189,7 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 	if parent.Type() == "arguments" {
 		callExpr := parent.Parent()
 		if callExpr != nil && callExpr.Type() == "call_expression" {
+			// Check for variable declarator: const x = require('pkg')
 			declarator := findAncestorVariableDeclarator(callExpr)
 			if declarator != nil {
 				nameNode := declarator.ChildByFieldName("name")
@@ -192,6 +203,13 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 					// Destructured: const { X, Y } = require('pkg')
 					return extractCJSDestructuredBindings(nameNode, src)
 				}
+			}
+
+			// Check for property assignment: obj.prop = require('pkg')
+			// The qualified member expression becomes the binding alias (for example, `file.glob`)
+			// to avoid collisions and so that call sites like obj.prop.method() or obj.prop() can be tracked.
+			if binding := extractPropertyAssignBinding(callExpr, src); binding != "" {
+				return []string{binding}
 			}
 		}
 	}
@@ -364,6 +382,39 @@ func extractCJSDestructuredBindings(objectPattern *sitter.Node, src []byte) []st
 		}
 	}
 	return bindings
+}
+
+// extractPropertyAssignBinding extracts the full member_expression text from a
+// CJS require() assigned to an object property. For `obj.prop = require('pkg')`,
+// the AST is:
+//
+//	assignment_expression
+//	  left: member_expression
+//	    object: identifier (obj)
+//	    property: property_identifier (prop)
+//	  right: call_expression (require('pkg'))
+//
+// This function walks up from the call_expression through intermediate
+// expression nodes (e.g., binary_expression) to find the assignment_expression,
+// then extracts the full member_expression text from the left side (for example,
+// `obj.prop` rather than only `prop`). Returns empty string if the pattern does
+// not match.
+func extractPropertyAssignBinding(callExpr *sitter.Node, src []byte) string {
+	current := callExpr.Parent()
+	for depth := 0; current != nil && depth < maxAncestorWalkDepth; depth++ {
+		if current.Type() == "assignment_expression" {
+			left := current.ChildByFieldName("left")
+			if left != nil && left.Type() == "member_expression" {
+				return left.Content(src)
+			}
+			return ""
+		}
+		if !jsExpressionTypes[current.Type()] {
+			return ""
+		}
+		current = current.Parent()
+	}
+	return ""
 }
 
 // isTypeOnlyImport checks if a node's parent import_statement is a TypeScript
