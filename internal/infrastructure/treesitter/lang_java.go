@@ -44,8 +44,8 @@ func registerJavaConfig(a *Analyzer) {
 			`(method_reference . (identifier) @obj . (identifier) @method)`,
 			// Scoped method reference: Outer.Inner::bar, Map.Entry::getKey.
 			// tree-sitter-java represents the qualifier as a field_access node;
-			// capture inner identifiers so aliasMap can match the imported
-			// simple type name instead of the full qualified node text.
+			// capture the first identifier child (e.g., "ImmutableList" from
+			// "ImmutableList.Builder") for aliasMap lookup.
 			`(method_reference . (field_access (identifier) @obj) . (identifier) @method)`,
 			// Constructor reference: Foo::new — tree-sitter-java represents
 			// "new" as a token, not an identifier, so match it explicitly,
@@ -53,9 +53,10 @@ func registerJavaConfig(a *Analyzer) {
 			// references consistent with constructor calls (new Foo()).
 			`(method_reference . (identifier) @obj @method . "new")`,
 			// Scoped constructor reference: Outer.Inner::new.
-			// Capture inner identifiers from the field_access qualifier for
-			// alias-based attribution.
-			`(method_reference . (field_access (identifier) @obj) @method . "new")`,
+			// Capture the imported qualifier identifier for alias-based
+			// attribution, and capture the inner type identifier as the
+			// recorded symbol to align with scoped constructor calls.
+			`(method_reference . (field_access (identifier) @obj (identifier) @method) . "new")`,
 		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {

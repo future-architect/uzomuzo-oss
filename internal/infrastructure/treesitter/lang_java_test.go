@@ -577,10 +577,16 @@ public class Main {
         .collect(Collectors.toList());
 
     // Scoped qualifier method reference: ImmutableList.Builder::add
-    // The qualifier is a scoped_identifier; only the inner identifier
-    // ("Builder") should be matched against aliasMap.
+    // The qualifier is represented as field_access; in this fixture,
+    // aliasMap matching is performed against "ImmutableList".
     java.util.function.Function<String, ImmutableList.Builder<String>> adder =
         ImmutableList.Builder::add;
+
+    // Scoped constructor reference: ImmutableList.Builder::new
+    // field_access + "new" pattern captures "ImmutableList" for alias lookup
+    // and "Builder" as the recorded symbol (consistent with scoped constructor calls).
+    java.util.function.Supplier<ImmutableList.Builder<String>> factory =
+        ImmutableList.Builder::new;
 }
 `), 0644)
 	if err != nil {
@@ -627,17 +633,18 @@ public class Main {
 			wantBreadth: 1,
 		},
 		{
-			// Strings::isNullOrEmpty + ImmutableList.Builder::add — guava has
-			// two imports (Strings, ImmutableList) in one file and two method
-			// references: one simple (Strings::isNullOrEmpty) and one scoped
-			// (ImmutableList.Builder::add) where the field_access query
-			// captures "ImmutableList" for aliasMap lookup.
-			// ImportFileCount = 1 because both imports are in the same file.
-			name:        "guava method references (simple + scoped qualifier)",
+			// Strings::isNullOrEmpty + ImmutableList.Builder::add +
+			// ImmutableList.Builder::new — guava has two imports (Strings,
+			// ImmutableList) in one file with three method references: one
+			// simple (Strings::isNullOrEmpty) and two scoped (Builder::add,
+			// Builder::new) where field_access captures "ImmutableList" for
+			// aliasMap lookup.
+			// 3 call sites, 3 symbols: isNullOrEmpty, add, Builder.
+			name:        "guava method references (simple + scoped qualifier + scoped constructor)",
 			purl:        "pkg:maven/com.google.guava/guava@33.0",
 			wantImports: 1,
-			wantCalls:   2,
-			wantBreadth: 2,
+			wantCalls:   3,
+			wantBreadth: 3,
 		},
 	}
 
