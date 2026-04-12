@@ -139,12 +139,14 @@ func normalizeCouplingEffort(c CouplingAnalysis) float64 {
 	if c.IsUnused {
 		return 0.0
 	}
-	// Side-effect-only imports (Go blank imports, JS bare imports, CJS bare
-	// require) have no callable API — their coupling effort is zero. The
-	// baseline CallSiteCount=1 from the analyzer marks them as "used" but
+	// Imports with no attributed symbol usage in the file (for example Go
+	// blank imports, JS/CJS side-effect imports, or Python feature-detection
+	// imports) should contribute zero coupling effort. The dependency may
+	// expose an API, but this file does not reference it. The baseline
+	// CallSiteCount=1 from the analyzer marks these imports as "used" but
 	// should not inflate the coupling score. Without this guard, the
 	// logistic on ImportFileCount produces a small but misleading non-zero
-	// effort that misclassifies side-effect deps as "easy" instead of "trivial".
+	// effort that misclassifies these deps as "easy" instead of "trivial".
 	if c.HasBlankImport && c.CallSiteCount <= 1 && c.APIBreadth == 0 {
 		return 0.0
 	}

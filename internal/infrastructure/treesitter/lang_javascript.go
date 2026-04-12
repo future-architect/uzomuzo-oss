@@ -46,7 +46,9 @@ func newJSLikeConfig(lang *sitter.Language, includeJSX bool) *langConfig {
 		`(computed_property_name (identifier) @func)`,
 		// Bare identifier usage patterns for constant-only packages (#278).
 		// These detect imported identifiers used as values rather than in calls.
-		// Safe because countCallSites filters by aliasMap (only imported names match).
+		// countCallSites filters matches by aliasMap, so this is limited to identifiers
+		// whose names match imported aliases. This is name-based matching and does
+		// not resolve lexical scope, so shadowed locals with the same name may also match.
 		// if (DEV) { ... }
 		`(if_statement condition: (parenthesized_expression (identifier) @func))`,
 		// DEV ? x : y (condition, consequence, or alternative)

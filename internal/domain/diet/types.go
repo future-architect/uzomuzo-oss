@@ -69,9 +69,10 @@ type CouplingAnalysis struct {
 	IsUnused        bool
 
 	// Import style flags — affect call-site tracking accuracy.
-	// HasBlankImport indicates a side-effect-only import with no callable API.
-	// Go: import _ "pkg", JS: import 'x' (bare), CJS: require('x') (inline).
-	// Scoring treats these as zero coupling effort.
+	// HasBlankImport indicates side-effect-oriented or feature-detection import patterns.
+	// Examples: Go: import _ "pkg", JS: import 'x', CJS: require('x'),
+	// Python: try/except import checks. This flag can co-exist with callable API
+	// usage elsewhere and should not be interpreted as implying zero coupling effort.
 	HasBlankImport    bool
 	HasDotImport      bool // Go: import . "pkg" (symbols callable without prefix — undercounted)
 	HasWildcardImport bool // Python: from x import * / Java: import static x.* (undercounted)

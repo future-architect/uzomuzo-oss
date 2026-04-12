@@ -282,8 +282,8 @@ func (a *Analyzer) AnalyzeCoupling(
 		}
 
 		// Blank/side-effect imports (Go: import _ "pkg", JS: import 'x',
-		// CJS: require('x')) have no callable API. Set a baseline call site
-		// count so that scoring does not penalize them as "imported but no calls".
+		// CJS: require('x')) may have implicit or otherwise uncountable usage.
+		// Set a baseline call site count when usage cannot be reliably attributed.
 		if acc.hasBlankImport && !acc.hasDotImport {
 			isUnused = false
 			if callSites == 0 {
