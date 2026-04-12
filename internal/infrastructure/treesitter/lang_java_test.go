@@ -607,10 +607,11 @@ public class Main {
 			wantBreadth: 1,
 		},
 		{
-			// Gson::new — constructor reference matched by method_reference pattern.
-			// "new Gson()::toJson" is an expression-qualified reference; the aliasMap
-			// lookup on the expression text does not match, so only Gson::new counts.
-			name:        "constructor reference Gson::new",
+			// "new Gson()::toJson" contains an object_creation_expression which is
+			// matched by the constructor query, counting "Gson" as a call site.
+			// "Gson::new" does NOT match the method_reference pattern because "new"
+			// is a keyword, not an identifier node.
+			name:        "gson object creation inside method reference",
 			purl:        "pkg:maven/com.google.code.gson/gson@2.10",
 			wantImports: 1,
 			wantCalls:   1,
