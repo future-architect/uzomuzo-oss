@@ -269,7 +269,7 @@ func TestBuildMavenImportPaths(t *testing.T) {
 			want: []string{"org.springframework.data.jpa", "javax.persistence", "jakarta.persistence", "org.springframework.boot"},
 		},
 		{
-			name: "starters produce different paths (web vs data-jpa)",
+			name: "override: spring-boot-starter-security maps to security packages",
 			purl: "pkg:maven/org.springframework.boot/spring-boot-starter-security@3.2.0",
 			want: []string{"org.springframework.security", "org.springframework.boot"},
 		},
