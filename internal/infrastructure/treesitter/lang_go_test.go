@@ -694,6 +694,113 @@ func create() bar.MyType { return bar.MyType{} }
 	}
 }
 
+func TestAnalyzer_GoSuffixedModuleNames(t *testing.T) {
+	tests := []struct {
+		name        string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			name: ".go suffix stripped (miscreant.go)",
+			code: `package main
+
+import "github.com/miscreant/miscreant.go"
+
+func main() {
+	miscreant.NewAEAD("AES-SIV", nil)
+	miscreant.NewAEAD("AES-PMAC-SIV", nil)
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/miscreant/miscreant.go@v0.3.0": {"github.com/miscreant/miscreant.go"},
+			},
+			purl:        "pkg:golang/github.com/miscreant/miscreant.go@v0.3.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 1,
+		},
+		{
+			name: "-golang suffix stripped (geoip2-golang)",
+			code: `package main
+
+import "github.com/oschwald/geoip2-golang"
+
+func main() {
+	geoip2.Open("test.mmdb")
+	geoip2.FromBytes(nil)
+	geoip2.Open("test2.mmdb")
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/oschwald/geoip2-golang@v1.9.0": {"github.com/oschwald/geoip2-golang"},
+			},
+			purl:        "pkg:golang/github.com/oschwald/geoip2-golang@v1.9.0",
+			wantImports: 1,
+			wantCalls:   3,
+			wantBreadth: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(tt.code), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+		})
+	}
+}
+
+func TestGoAliasFromImportPath(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"github.com/miscreant/miscreant.go", "miscreant"},             // .go suffix stripped
+		{"github.com/oschwald/geoip2-golang", "geoip2"},               // -golang suffix stripped
+		{"github.com/stretchr/testify", "testify"},                     // normal path
+		{"example.com/foo/v2", "foo"},                                  // major version peeled
+		{"gopkg.in/yaml.v3", "yaml"},                                   // gopkg.in version stripped
+		{"gopkg.in/foo.go.v2", "foo"},                                  // gopkg.in + .go suffix
+		{"github.com/go-redis/redis/v9", "redis"},                      // major version + go- prefix
+		{"github.com/opentracing/opentracing-go", "opentracing"},       // -go suffix stripped
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := goAliasFromImportPath(tt.input)
+			if got != tt.want {
+				t.Errorf("goAliasFromImportPath(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGoPackageFromHyphenated(t *testing.T) {
 	tests := []struct {
 		input string
@@ -709,6 +816,16 @@ func TestGoPackageFromHyphenated(t *testing.T) {
 		{"proto-go-sql", "protogosql"},
 		{"go-foo-go", "foo"},
 		{"testify", "testify"},
+		{"geoip2-golang", "geoip2"},
+		{"maxminddb-golang", "maxminddb"},
+		{"foo-golang", "foo"},
+		{"-golang", "-golang"},     // empty after strip; guard preserves original
+		{"-go", "-go"},             // empty after strip; guard preserves original
+		{"go-", "go-"},             // empty after prefix strip; guard preserves original
+		{"go-golang", "go"},        // strip -golang -> "go" (no hyphens)
+		{"go-redis", "redis"},          // real package: prefix go- stripped
+		{"go-sqlite3", "sqlite3"},      // real package: prefix go- stripped
+		{"foo-bar-golang", "foobar"},   // -golang stripped, remaining hyphen removed
 	}
 
 	for _, tt := range tests {
