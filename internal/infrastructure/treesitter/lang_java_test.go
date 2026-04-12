@@ -709,11 +709,11 @@ public class Service {
 	// Map.Entry in: field type (1), return type (1), param (1), local var (1) = 4.
 	// Each scoped_type_identifier captures "Map" and "Entry" as separate type_identifiers,
 	// but only "Map" matches aliasMap, so 4 call sites for "Map".
-	if ca.CallSiteCount < 4 {
-		t.Errorf("CallSiteCount = %d, want >= 4 (Map.Entry in field, return, param, local)", ca.CallSiteCount)
+	if ca.CallSiteCount != 4 {
+		t.Errorf("CallSiteCount = %d, want 4 (Map.Entry in field, return, param, local)", ca.CallSiteCount)
 	}
-	if ca.APIBreadth < 1 {
-		t.Errorf("APIBreadth = %d, want >= 1", ca.APIBreadth)
+	if ca.APIBreadth != 1 {
+		t.Errorf("APIBreadth = %d, want 1", ca.APIBreadth)
 	}
 	if ca.IsUnused {
 		t.Error("IsUnused = true, want false")
