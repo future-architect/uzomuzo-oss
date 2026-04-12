@@ -1998,22 +1998,22 @@ export class AppModule {}
 			filename: "app.module.ts",
 			code: `import { NgModule } from "@angular/core";
 import { BrowserModule } from "@angular/platform-browser";
+import { HeroListComponent } from "@hero/components";
 import { AppComponent } from "./app.component";
-import { HeroComponent } from "./hero.component";
 
 @NgModule({
   imports: [BrowserModule],
-  declarations: [AppComponent, HeroComponent],
+  declarations: [AppComponent, HeroListComponent],
 })
 export class AppModule {}
 `,
 			importPaths: map[string][]string{
-				"pkg:npm/%40angular/platform-browser@17.0.0": {"@angular/platform-browser"},
+				"pkg:npm/%40hero/components@1.0.0": {"@hero/components"},
 			},
-			purl:        "pkg:npm/%40angular/platform-browser@17.0.0",
+			purl:        "pkg:npm/%40hero/components@1.0.0",
 			wantCalls:   1,
 			wantBreadth: 1,
-			wantSymbols: []string{"BrowserModule"},
+			wantSymbols: []string{"HeroListComponent"},
 		},
 		{
 			name:     "standalone Component imports",
