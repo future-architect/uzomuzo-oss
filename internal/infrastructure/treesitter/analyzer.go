@@ -378,7 +378,8 @@ func (a *Analyzer) extractImports(
 }
 
 // maxAncestorWalkDepth limits how far ancestor-walking functions (e.g.,
-// findAncestorVariableDeclarator, isPythonTryExceptImport) traverse the AST.
+// findAncestorVariableDeclarator, isPythonTryExceptImport,
+// isPythonTypeCheckingImport) traverse the AST.
 // Prevents false matches against distant, unrelated ancestors in pathological
 // nesting.
 const maxAncestorWalkDepth = 5
