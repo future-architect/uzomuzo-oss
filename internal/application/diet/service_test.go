@@ -228,6 +228,36 @@ func TestBuildMavenImportPaths(t *testing.T) {
 			purl: "pkg:maven/javax.inject/javax.inject@1",
 			want: []string{"javax.inject"},
 		},
+		{
+			name: "override: guava groupId differs from package",
+			purl: "pkg:maven/com.google.guava/guava@33.0.0",
+			want: []string{"com.google.common", "com.google.guava", "com.google.guava.guava"},
+		},
+		{
+			name: "override: antlr4-runtime groupId differs from package",
+			purl: "pkg:maven/org.antlr/antlr4-runtime@4.13.0",
+			want: []string{"org.antlr.v4", "org.antlr"},
+		},
+		{
+			name: "override: ST4 case-insensitive lookup",
+			purl: "pkg:maven/org.antlr/ST4@4.3.4",
+			want: []string{"org.stringtemplate", "org.antlr", "org.antlr.ST4"},
+		},
+		{
+			name: "override: trove4j groupId differs from package",
+			purl: "pkg:maven/net.sf.trove4j/trove4j@3.0.3",
+			want: []string{"gnu.trove", "net.sf.trove4j", "net.sf.trove4j.trove4j"},
+		},
+		{
+			name: "override: scala-library hyphenated namespace",
+			purl: "pkg:maven/org.scala-lang/scala-library@2.13.12",
+			want: []string{"scala"},
+		},
+		{
+			name: "override: scala-reflect hyphenated namespace",
+			purl: "pkg:maven/org.scala-lang/scala-reflect@2.13.12",
+			want: []string{"scala.reflect"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -738,7 +768,7 @@ func TestRun_WheelFallback_NilCouplingResults(t *testing.T) {
 	// Phase 2 returns (nil, nil) — zero imports matched any dependency.
 	// Phase 2.5 should still run and merge retry results without panicking.
 	sourceAnalyzer := &retrySourceAnalyzer{
-		firstResult:  nil, // nil map, not empty map
+		firstResult: nil, // nil map, not empty map
 		secondResult: map[string]*domaindiet.CouplingAnalysis{
 			pypiPURL: {ImportFileCount: 1, CallSiteCount: 2},
 		},
@@ -879,3 +909,4 @@ func TestRun_WheelFallback_ResolverError(t *testing.T) {
 		t.Fatal("beautifulsoup4 entry not found in plan")
 	}
 }
+
