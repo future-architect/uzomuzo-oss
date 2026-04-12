@@ -235,7 +235,7 @@ func (s *Service) buildEntries(
 
 		// Check if this dependency is a Maven runtime dep (reflection-loaded).
 		if entry.Scope == "" && entry.Ecosystem == "maven" {
-			if _, ok := mavenRuntimeDeps[entry.Name]; ok {
+			if _, ok := mavenRuntimeDeps[strings.ToLower(entry.Name)]; ok {
 				entry.Scope = domaindiet.ScopeRuntime
 			}
 		}
