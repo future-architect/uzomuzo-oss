@@ -748,30 +748,170 @@ func TestAnalyzer_TypeScriptSideEffectImport(t *testing.T) {
 	}
 }
 
-// TestAnalyzer_TypeScriptTypeOnlyImportExclusion verifies that `import type { ... }`
-// in a .ts file (not just .tsx) is excluded from coupling analysis.
-func TestAnalyzer_TypeScriptTypeOnlyImportExclusion(t *testing.T) {
-	dir := t.TempDir()
-	err := os.WriteFile(filepath.Join(dir, "types.ts"), []byte(`import type { Foo, Bar } from "some-lib";
+// TestAnalyzer_TypeScriptImportTypeExclusion verifies that all forms of TypeScript
+// `import type` statements are excluded from coupling analysis. Type-only imports
+// are erased at compile time and produce no runtime code, so counting them inflates
+// IBNC (imports-but-no-calls). Closes #268.
+func TestAnalyzer_TypeScriptImportTypeExclusion(t *testing.T) {
+	tests := []struct {
+		name            string
+		filename        string
+		code            string
+		importPaths     map[string][]string
+		purlToCheck     string
+		wantNoResult    bool // true if we expect no coupling result
+		wantImportFiles int
+		wantCallSites   int
+	}{
+		{
+			name:     "import type with named imports excluded",
+			filename: "types.ts",
+			code: `import type { Foo, Bar } from "some-lib";
 
-// Type-only import — no runtime coupling.
 const x: Foo = {} as any;
-`), 0644)
-	if err != nil {
-		t.Fatal(err)
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-lib@1.0.0": {"some-lib"},
+			},
+			purlToCheck:  "pkg:npm/some-lib@1.0.0",
+			wantNoResult: true,
+		},
+		{
+			// Exact pattern from strapi: import type { Core, UID } from '@strapi/types'
+			name:     "import type scoped package excluded (strapi pattern)",
+			filename: "register.ts",
+			code: `import type { Core, UID } from "@strapi/types";
+
+// Type-only — no runtime coupling
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/%40strapi/types@1.0.0": {"@strapi/types"},
+			},
+			purlToCheck:  "pkg:npm/%40strapi/types@1.0.0",
+			wantNoResult: true,
+		},
+		{
+			name:     "import type default import excluded",
+			filename: "types.ts",
+			code: `import type Foo from "some-lib";
+
+const x: Foo = {} as any;
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-lib@1.0.0": {"some-lib"},
+			},
+			purlToCheck:  "pkg:npm/some-lib@1.0.0",
+			wantNoResult: true,
+		},
+		{
+			// Empty type import used for module augmentation
+			name:     "import type empty braces excluded",
+			filename: "augment.ts",
+			code: `import type {} from "@strapi/types";
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/%40strapi/types@1.0.0": {"@strapi/types"},
+			},
+			purlToCheck:  "pkg:npm/%40strapi/types@1.0.0",
+			wantNoResult: true,
+		},
+		{
+			// Mixed import: `import { type X, Y }` has a runtime binding Y,
+			// so the import should still count.
+			name:     "mixed import with inline type specifier still counted",
+			filename: "app.ts",
+			code: `import { type Config, createApp } from "some-framework";
+
+createApp();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-framework@1.0.0": {"some-framework"},
+			},
+			purlToCheck:     "pkg:npm/some-framework@1.0.0",
+			wantNoResult:    false,
+			wantImportFiles: 1,
+			wantCallSites:   1,
+		},
+		{
+			name:     "regular named import unaffected",
+			filename: "app.ts",
+			code: `import { useState } from "react";
+
+useState(0);
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/react@18.0.0": {"react"},
+			},
+			purlToCheck:     "pkg:npm/react@18.0.0",
+			wantNoResult:    false,
+			wantImportFiles: 1,
+			wantCallSites:   1,
+		},
+		{
+			// Type-only and regular import of different packages in the same file.
+			// Only the runtime import should produce coupling.
+			name:     "type-only and regular import coexist in same file",
+			filename: "mixed.ts",
+			code: `import type { Foo } from "type-only-pkg";
+import { bar } from "runtime-pkg";
+
+bar();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/type-only-pkg@1.0.0": {"type-only-pkg"},
+				"pkg:npm/runtime-pkg@1.0.0":   {"runtime-pkg"},
+			},
+			purlToCheck:  "pkg:npm/type-only-pkg@1.0.0",
+			wantNoResult: true,
+		},
 	}
 
-	analyzer := NewAnalyzer()
-	importPaths := map[string][]string{
-		"pkg:npm/some-lib@1.0.0": {"some-lib"},
-	}
-	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	if len(result) != 0 {
-		t.Errorf("expected no coupling for type-only import in .ts file, got %d results", len(result))
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if tt.wantNoResult {
+				ca, ok := result[tt.purlToCheck]
+				if ok {
+					t.Errorf("expected no coupling for type-only import, got ImportFileCount=%d CallSiteCount=%d",
+						ca.ImportFileCount, ca.CallSiteCount)
+				}
+
+				// Verify that other (runtime) imports in the same file still produce coupling.
+				for purl := range tt.importPaths {
+					if purl == tt.purlToCheck {
+						continue
+					}
+					if rca, rok := result[purl]; !rok {
+						t.Errorf("expected coupling for runtime import %s, got no result", purl)
+					} else if rca.ImportFileCount == 0 {
+						t.Errorf("expected ImportFileCount > 0 for runtime import %s, got 0", purl)
+					}
+				}
+				return
+			}
+
+			ca, ok := result[tt.purlToCheck]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purlToCheck)
+			}
+			if ca.ImportFileCount != tt.wantImportFiles {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImportFiles)
+			}
+			if ca.CallSiteCount != tt.wantCallSites {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCallSites)
+			}
+		})
 	}
 }
 
