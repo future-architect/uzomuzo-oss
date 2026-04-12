@@ -209,18 +209,26 @@ function App() {
 	if !ok {
 		t.Fatal("expected coupling analysis for lucide-react")
 	}
-	// Icons.Camera (self-closing x1) + Icons.Arrow (opening x1) = at least 2.
-	// The generic member_expression pattern may also match, so use >= 2.
-	if icons.CallSiteCount < 2 {
-		t.Errorf("lucide-react CallSiteCount = %d, want >= 2", icons.CallSiteCount)
+	// Icons.Camera (self-closing, 1 member_expression) + Icons.Arrow (opening
+	// + closing, 2 member_expression nodes) = 3 call sites via the generic
+	// member_expression pattern. 2 distinct symbols: Camera, Arrow.
+	if icons.CallSiteCount != 3 {
+		t.Errorf("lucide-react CallSiteCount = %d, want 3", icons.CallSiteCount)
+	}
+	if icons.APIBreadth != 2 {
+		t.Errorf("lucide-react APIBreadth = %d, want 2", icons.APIBreadth)
 	}
 
 	form, ok := result["pkg:npm/react-bootstrap@2.10.0"]
 	if !ok {
 		t.Fatal("expected coupling analysis for react-bootstrap")
 	}
-	if form.CallSiteCount < 1 {
-		t.Errorf("react-bootstrap CallSiteCount = %d, want >= 1", form.CallSiteCount)
+	// Form.Control (self-closing) = 1 call site, 1 symbol.
+	if form.CallSiteCount != 1 {
+		t.Errorf("react-bootstrap CallSiteCount = %d, want 1", form.CallSiteCount)
+	}
+	if form.APIBreadth != 1 {
+		t.Errorf("react-bootstrap APIBreadth = %d, want 1", form.APIBreadth)
 	}
 }
 
@@ -1530,6 +1538,7 @@ func TestAnalyzer_JSReExport(t *testing.T) {
 		importPaths map[string][]string
 		purl        string
 		wantImports int
+		wantCalls   int // expected CallSiteCount (0 for blank-import-only)
 		wantBlank   bool
 		wantUnused  bool
 	}{
@@ -1600,6 +1609,7 @@ axios.post("/api");
 			},
 			purl:        "pkg:npm/axios@1.6.0",
 			wantImports: 1,
+			wantCalls:   1, // axios.post("/api") from the regular import
 			wantBlank:   true,
 		},
 		{
@@ -1631,10 +1641,12 @@ export { foo };
 			}
 
 			if tt.wantUnused {
+				// The PURL should not appear in the result map — the import
+				// was either filtered (type-only) or never captured.
 				if result != nil {
-					ca, ok := result[tt.purl]
-					if ok && !ca.IsUnused {
-						t.Errorf("expected no coupling or IsUnused=true for %s, got ImportFileCount=%d", tt.purl, ca.ImportFileCount)
+					if ca, ok := result[tt.purl]; ok {
+						t.Errorf("expected PURL %s absent from results, got ImportFileCount=%d IsUnused=%v",
+							tt.purl, ca.ImportFileCount, ca.IsUnused)
 					}
 				}
 				return
@@ -1646,6 +1658,9 @@ export { foo };
 			}
 			if ca.ImportFileCount != tt.wantImports {
 				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if tt.wantCalls > 0 && ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
 			}
 			if ca.HasBlankImport != tt.wantBlank {
 				t.Errorf("HasBlankImport = %v, want %v", ca.HasBlankImport, tt.wantBlank)
