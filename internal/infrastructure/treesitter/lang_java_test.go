@@ -720,6 +720,59 @@ public class Service {
 	}
 }
 
+func TestAnalyzer_JavaScopedInstanceofCastAndGenericArg(t *testing.T) {
+	dir := t.TempDir()
+	// Scoped types in instanceof, cast, and generic type arguments must be
+	// detected as call sites via their type_identifier children.
+	err := os.WriteFile(filepath.Join(dir, "Processor.java"), []byte(`import java.util.Map;
+import java.util.List;
+
+public class Processor {
+    public void process(Object obj) {
+        // scoped instanceof
+        if (obj instanceof Map.Entry) {
+            // scoped cast
+            Map.Entry entry = (Map.Entry) obj;
+        }
+        // scoped type in generic type argument
+        List<Map.Entry> entries = null;
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/java/jdk@17": {"java.util"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:maven/java/jdk@17"]
+	if !ok {
+		t.Fatal("expected coupling analysis for jdk")
+	}
+
+	// Map.Entry in: instanceof (1), cast (1), local var scoped type (1),
+	// Map.Entry in: generic type argument (1) = 4 call sites for "Map".
+	// List in: generic local var outer type (1) = 1 call site for "List".
+	// Total = 5. APIBreadth = 2 (Map + List).
+	// Note: "Entry" is also captured but does not match aliasMap.
+	if ca.CallSiteCount != 5 {
+		t.Errorf("CallSiteCount = %d, want 5", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 2 {
+		t.Errorf("APIBreadth = %d, want 2 (Map + List)", ca.APIBreadth)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false")
+	}
+}
+
 func TestAnalyzer_JavaConstructorCall(t *testing.T) {
 	dir := t.TempDir()
 	// Constructor calls (new Type()) should count as call sites.

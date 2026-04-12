@@ -32,9 +32,12 @@ func registerJavaConfig(a *Analyzer) {
 			`(object_creation_expression type: (generic_type (type_identifier) @func))`,
 			// Type arguments in generic constructors: new Foo<Bar>() captures Bar
 			`(object_creation_expression type: (generic_type (type_arguments (type_identifier) @func)))`,
+			// Type arguments with qualified type: new Foo<Map.Entry>() captures Map, Entry
+			`(object_creation_expression type: (generic_type (type_arguments (scoped_type_identifier (type_identifier) @func))))`,
 			// Qualified constructors: new Outer.Inner()
-			// Single @func capture; countCallSites matches each captured
-			// type_identifier against aliasMap as a bare identifier.
+			// Each type_identifier child of scoped_type_identifier produces a
+			// separate single-capture match, so countCallSites treats each as a
+			// bare identifier lookup in aliasMap.
 			`(object_creation_expression type: (scoped_type_identifier (type_identifier) @func))`,
 			// Qualified generic constructors: new Outer.Inner<T>()
 			`(object_creation_expression type: (generic_type (scoped_type_identifier (type_identifier) @func)))`,
@@ -46,12 +49,16 @@ func registerJavaConfig(a *Analyzer) {
 			`(super_interfaces (type_list (generic_type (type_identifier) @func)))`,
 			// Generic implements type argument: implements Foo<Bar> — captures Bar
 			`(super_interfaces (type_list (generic_type (type_arguments (type_identifier) @func))))`,
+			// Generic implements type argument with qualified type: implements Foo<Map.Entry>
+			`(super_interfaces (type_list (generic_type (type_arguments (scoped_type_identifier (type_identifier) @func)))))`,
 			// Bare extends: extends Foo
 			`(superclass (type_identifier) @func)`,
 			// Generic extends: extends Foo<T> — outer type
 			`(superclass (generic_type (type_identifier) @func))`,
 			// Generic extends type argument: extends Foo<Bar> — captures Bar
 			`(superclass (generic_type (type_arguments (type_identifier) @func)))`,
+			// Generic extends type argument with qualified type: extends Foo<Map.Entry>
+			`(superclass (generic_type (type_arguments (scoped_type_identifier (type_identifier) @func))))`,
 
 			// --- Type checks and casts ---
 			// instanceof: obj instanceof Foo
@@ -74,6 +81,8 @@ func registerJavaConfig(a *Analyzer) {
 			`(field_declaration type: (generic_type (scoped_type_identifier (type_identifier) @func)))`,
 			// Field generic type argument: private List<Foo> field — captures Foo
 			`(field_declaration type: (generic_type (type_arguments (type_identifier) @func)))`,
+			// Field generic type argument with qualified type: private List<Map.Entry> field
+			`(field_declaration type: (generic_type (type_arguments (scoped_type_identifier (type_identifier) @func))))`,
 			// Method return type: public Foo method()
 			`(method_declaration type: (type_identifier) @func)`,
 			// Method return type: public Map.Entry method() — capture bare identifiers for aliasMap lookup
@@ -84,6 +93,8 @@ func registerJavaConfig(a *Analyzer) {
 			`(method_declaration type: (generic_type (scoped_type_identifier (type_identifier) @func)))`,
 			// Method return generic type argument: public List<Foo> method() — captures Foo
 			`(method_declaration type: (generic_type (type_arguments (type_identifier) @func)))`,
+			// Method return generic type argument with qualified type: public List<Map.Entry> method()
+			`(method_declaration type: (generic_type (type_arguments (scoped_type_identifier (type_identifier) @func))))`,
 			// Formal parameter: method(Foo param)
 			`(formal_parameter type: (type_identifier) @func)`,
 			// Formal parameter: method(Map.Entry param) — capture bare identifiers for aliasMap lookup
@@ -94,6 +105,8 @@ func registerJavaConfig(a *Analyzer) {
 			`(formal_parameter type: (generic_type (scoped_type_identifier (type_identifier) @func)))`,
 			// Formal parameter generic type argument: method(List<Foo> param) — captures Foo
 			`(formal_parameter type: (generic_type (type_arguments (type_identifier) @func)))`,
+			// Formal parameter generic type argument with qualified type: method(List<Map.Entry> param)
+			`(formal_parameter type: (generic_type (type_arguments (scoped_type_identifier (type_identifier) @func))))`,
 			// Local variable: Foo local = ...
 			`(local_variable_declaration type: (type_identifier) @func)`,
 			// Local variable: Map.Entry local = ... — capture bare identifiers for aliasMap lookup
@@ -104,6 +117,8 @@ func registerJavaConfig(a *Analyzer) {
 			`(local_variable_declaration type: (generic_type (scoped_type_identifier (type_identifier) @func)))`,
 			// Local variable generic type argument: List<Foo> local = ... — captures Foo
 			`(local_variable_declaration type: (generic_type (type_arguments (type_identifier) @func)))`,
+			// Local variable generic type argument with qualified type: List<Map.Entry> local = ...
+			`(local_variable_declaration type: (generic_type (type_arguments (scoped_type_identifier (type_identifier) @func))))`,
 
 			// --- Method references ---
 			// Method reference: Foo::bar — capture simple qualifiers directly
