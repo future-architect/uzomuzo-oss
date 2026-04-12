@@ -548,6 +548,7 @@ func TestAnalyzer_JavaMethodReference(t *testing.T) {
 	// are undercounted (call_site_count = 0 despite active usage).
 	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.google.gson.Gson;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.List;
@@ -574,6 +575,12 @@ public class Main {
     List<Boolean> nullOrEmpty = Arrays.asList("a", null).stream()
         .map(Strings::isNullOrEmpty)
         .collect(Collectors.toList());
+
+    // Scoped qualifier method reference: ImmutableList.Builder::add
+    // The qualifier is a scoped_identifier; only the inner identifier
+    // ("Builder") should be matched against aliasMap.
+    java.util.function.Function<String, ImmutableList.Builder<String>> adder =
+        ImmutableList.Builder::add;
 }
 `), 0644)
 	if err != nil {
@@ -620,12 +627,17 @@ public class Main {
 			wantBreadth: 1,
 		},
 		{
-			// Strings::isNullOrEmpty — method reference to guava static method
-			name:        "method reference Strings::isNullOrEmpty",
+			// Strings::isNullOrEmpty + ImmutableList.Builder::add — guava has
+			// two imports (Strings, ImmutableList) in one file and two method
+			// references: one simple (Strings::isNullOrEmpty) and one scoped
+			// (ImmutableList.Builder::add) where the field_access query
+			// captures "ImmutableList" for aliasMap lookup.
+			// ImportFileCount = 1 because both imports are in the same file.
+			name:        "guava method references (simple + scoped qualifier)",
 			purl:        "pkg:maven/com.google.guava/guava@33.0",
 			wantImports: 1,
-			wantCalls:   1,
-			wantBreadth: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
 		},
 	}
 
