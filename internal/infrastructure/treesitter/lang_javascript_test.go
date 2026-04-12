@@ -1195,8 +1195,9 @@ serialize(document);
 
 // TestAnalyzer_CJSPropertyAssignRequire verifies that require() assigned to an
 // object property (e.g., `file.glob = require('glob')`) is tracked correctly.
-// The property name becomes an alias so that subsequent usage like
-// `file.glob.sync()` or `file.glob()` is counted as a call site.
+// The full qualified member expression (for example, `file.glob`) becomes an
+// alias so that subsequent usage like `file.glob.sync()` or `file.glob()` is
+// counted as a call site.
 // Closes #290.
 func TestAnalyzer_CJSPropertyAssignRequire(t *testing.T) {
 	tests := []struct {

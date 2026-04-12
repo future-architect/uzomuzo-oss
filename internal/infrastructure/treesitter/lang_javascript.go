@@ -186,8 +186,8 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 			}
 
 			// Check for property assignment: obj.prop = require('pkg')
-			// The property name becomes the binding alias so that call sites
-			// like obj.prop.method() or obj.prop() can be tracked.
+			// The qualified member expression becomes the binding alias (for example, `file.glob`)
+			// to avoid collisions and so that call sites like obj.prop.method() or obj.prop() can be tracked.
 			if binding := extractPropertyAssignBinding(callExpr, src); binding != "" {
 				return []string{binding}
 			}
