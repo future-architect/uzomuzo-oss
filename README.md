@@ -1,4 +1,4 @@
-# Uzomuzo
+# uzomuzo
 
 [![CI](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml) [![Dependency Scan](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/future-architect/uzomuzo-oss)](https://goreportcard.com/report/github.com/future-architect/uzomuzo-oss) [![Go Reference](https://pkg.go.dev/badge/github.com/future-architect/uzomuzo-oss.svg)](https://pkg.go.dev/github.com/future-architect/uzomuzo-oss) [![Release](https://img.shields.io/github/v/release/future-architect/uzomuzo-oss)](https://github.com/future-architect/uzomuzo-oss/releases/latest) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 

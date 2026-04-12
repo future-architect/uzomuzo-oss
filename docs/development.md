@@ -4,7 +4,7 @@
 
 ## SPDX Data Update (`update-spdx` Subcommand)
 
-Uzomuzo vendors the upstream SPDX License List (JSON) and generates a fast lookup table for license normalization. The `update-spdx` subcommand provides end-to-end automation:
+uzomuzo vendors the upstream SPDX License List (JSON) and generates a fast lookup table for license normalization. The `update-spdx` subcommand provides end-to-end automation:
 
 1. Downloads the latest `licenses.json` from the official SPDX repository (fails on truncation if size < ~2KB)
 2. Atomically writes to `third_party/spdx/licenses.json` (temp file + rename)
