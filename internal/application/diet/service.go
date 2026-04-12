@@ -233,6 +233,13 @@ func (s *Service) buildEntries(
 			}
 		}
 
+		// Check if this dependency is a Maven runtime dep (reflection-loaded).
+		if entry.Scope == "" && entry.Ecosystem == "maven" {
+			if _, ok := mavenRuntimeDeps[entry.Name]; ok {
+				entry.Scope = domaindiet.ScopeRuntime
+			}
+		}
+
 		if m, ok := graph.Metrics[purl]; ok {
 			entry.Graph = *m
 		}
@@ -253,6 +260,20 @@ func (s *Service) buildEntries(
 		// with all coupling counts at zero can be interpreted downstream as
 		// zero-effort removal, which incorrectly surfaces tool deps as trivial/easy.
 		if entry.Scope == domaindiet.ScopeTool {
+			if entry.Coupling.IsUnused {
+				entry.Coupling.IsUnused = false
+			}
+			if entry.Coupling.ImportFileCount == 0 &&
+				entry.Coupling.CallSiteCount == 0 &&
+				entry.Coupling.APIBreadth == 0 {
+				entry.Coupling.APIBreadth = 1
+			}
+		}
+
+		// Runtime-scoped deps (JDBC drivers, logging backends, webjars) are
+		// loaded via reflection/ServiceLoader/classpath and intentionally have
+		// zero static imports. Same override pattern as ScopeTool above.
+		if entry.Scope == domaindiet.ScopeRuntime {
 			if entry.Coupling.IsUnused {
 				entry.Coupling.IsUnused = false
 			}
@@ -565,6 +586,46 @@ var mavenPackageOverrides = map[string][]string{
 	// heuristic already produces the correct candidate, but an explicit override
 	// ensures stability.
 	"javax.inject/javax.inject": {"javax.inject"},
+}
+
+// mavenRuntimeDeps is a set of Maven "groupId/artifactId" coordinates for
+// dependencies that are loaded via runtime mechanisms (reflection, ServiceLoader,
+// classpath scanning) rather than static imports. Static source analysis cannot
+// detect their usage, so they are recognized as runtime-scoped to prevent
+// false-positive unused-dependency reports.
+var mavenRuntimeDeps = map[string]struct{}{
+	// JDBC drivers — loaded via java.sql.DriverManager / ServiceLoader.
+	"mysql/mysql-connector-java":           {},
+	"mysql/mysql-connector-j":              {},
+	"org.postgresql/postgresql":            {},
+	"com.h2database/h2":                    {},
+	"org.mariadb.jdbc/mariadb-java-client": {},
+	"com.oracle.database.jdbc/ojdbc11":     {},
+	"com.microsoft.sqlserver/mssql-jdbc":   {},
+	"org.xerial/sqlite-jdbc":               {},
+	"com.amazon.redshift/redshift-jdbc42":  {},
+	"org.hsqldb/hsqldb":                    {},
+	"org.apache.derby/derby":               {},
+	"com.ibm.db2/jcc":                      {},
+	"org.firebirdsql.jdbc/jaybird":         {},
+	"net.snowflake/snowflake-jdbc":         {},
+	"com.clickhouse/clickhouse-jdbc":       {},
+	"org.duckdb/duckdb_jdbc":               {},
+
+	// Logging backends — loaded via SLF4J ServiceLoader / classpath binding.
+	"ch.qos.logback/logback-classic":             {},
+	"org.apache.logging.log4j/log4j-core":        {},
+	"org.slf4j/slf4j-simple":                     {},
+	"org.apache.logging.log4j/log4j-slf4j-impl":  {},
+	"org.apache.logging.log4j/log4j-slf4j2-impl": {},
+
+	// WebJars — served as classpath resources, never imported in Java source.
+	"org.webjars/bootstrap":            {},
+	"org.webjars/font-awesome":         {},
+	"org.webjars/webjars-locator-lite": {},
+	"org.webjars/webjars-locator-core": {},
+	"org.webjars/jquery":               {},
+	"org.webjars.npm/htmx.org":         {},
 }
 
 // buildMavenImportPaths generates candidate import path prefixes for a Maven PURL.

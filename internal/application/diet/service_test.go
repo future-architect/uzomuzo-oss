@@ -910,3 +910,109 @@ func TestRun_WheelFallback_ResolverError(t *testing.T) {
 	}
 }
 
+func TestRun_RuntimeDepsNotFlaggedAsUnused(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		purl           string
+		wantScope      string
+		wantIsUnused   bool
+		wantMinBreadth int
+	}{
+		{
+			name:           "MySQL JDBC driver recognized as runtime",
+			purl:           "pkg:maven/mysql/mysql-connector-j@9.0.0",
+			wantScope:      domaindiet.ScopeRuntime,
+			wantIsUnused:   false,
+			wantMinBreadth: 1,
+		},
+		{
+			name:           "PostgreSQL JDBC driver recognized as runtime",
+			purl:           "pkg:maven/org.postgresql/postgresql@42.7.0",
+			wantScope:      domaindiet.ScopeRuntime,
+			wantIsUnused:   false,
+			wantMinBreadth: 1,
+		},
+		{
+			name:           "Logback logging backend recognized as runtime",
+			purl:           "pkg:maven/ch.qos.logback/logback-classic@1.5.6",
+			wantScope:      domaindiet.ScopeRuntime,
+			wantIsUnused:   false,
+			wantMinBreadth: 1,
+		},
+		{
+			name:           "WebJars bootstrap recognized as runtime",
+			purl:           "pkg:maven/org.webjars/bootstrap@5.3.3",
+			wantScope:      domaindiet.ScopeRuntime,
+			wantIsUnused:   false,
+			wantMinBreadth: 1,
+		},
+		{
+			name:         "Non-runtime Maven dep unaffected",
+			purl:         "pkg:maven/com.google.guava/guava@33.0.0",
+			wantScope:    "",
+			wantIsUnused: true,
+		},
+		{
+			name:         "Non-Maven PURL unaffected",
+			purl:         "pkg:golang/github.com/gin-gonic/gin@v1.10.0",
+			wantScope:    "",
+			wantIsUnused: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			graphResult := &domaindiet.GraphResult{
+				DirectDeps: []string{tt.purl},
+				Metrics: map[string]*domaindiet.GraphMetrics{
+					tt.purl: {
+						ExclusiveTransitiveCount: 3,
+						TotalTransitiveCount:     5,
+					},
+				},
+				TotalTransitive: 5,
+			}
+
+			// Source analysis returns no coupling — dep would normally be unused.
+			sourceResults := map[string]*domaindiet.CouplingAnalysis{}
+
+			svc := NewService(
+				&stubGraphAnalyzer{result: graphResult},
+				&stubSourceAnalyzer{result: sourceResults},
+				nil, // no PyPI resolver
+				nil, // no AnalysisService
+			)
+
+			plan, err := svc.Run(context.Background(), DietInput{
+				SBOMData:   []byte("fake-sbom"),
+				SBOMPath:   "test.sbom.json",
+				SourceRoot: "/tmp/src",
+			})
+			if err != nil {
+				t.Fatalf("Run() error: %v", err)
+			}
+			if len(plan.Entries) != 1 {
+				t.Fatalf("expected 1 entry, got %d", len(plan.Entries))
+			}
+
+			entry := plan.Entries[0]
+			if entry.Scope != tt.wantScope {
+				t.Errorf("Scope = %q, want %q", entry.Scope, tt.wantScope)
+			}
+			if entry.Coupling.IsUnused != tt.wantIsUnused {
+				t.Errorf("IsUnused = %v, want %v", entry.Coupling.IsUnused, tt.wantIsUnused)
+			}
+			if tt.wantMinBreadth > 0 && entry.Coupling.APIBreadth < tt.wantMinBreadth {
+				t.Errorf("APIBreadth = %d, want >= %d", entry.Coupling.APIBreadth, tt.wantMinBreadth)
+			}
+			// Runtime deps should not be classified as trivial difficulty.
+			if tt.wantScope == domaindiet.ScopeRuntime && entry.Scores.Difficulty == domaindiet.DifficultyTrivial {
+				t.Errorf("runtime dep should not be classified as trivial difficulty")
+			}
+		})
+	}
+}

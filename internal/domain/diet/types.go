@@ -5,6 +5,13 @@ const (
 	// ScopeTool indicates a Go tool directive dependency (Go 1.24+).
 	// Tool deps are dev/CI executables that intentionally have zero source imports.
 	ScopeTool = "tool"
+
+	// ScopeRuntime indicates a dependency loaded via runtime mechanisms
+	// (reflection, ServiceLoader, classpath resources) rather than static imports.
+	// Examples: JDBC drivers, logging backends, Spring auto-config, webjars.
+	// These deps intentionally have zero source-level imports and should not
+	// be flagged as unused.
+	ScopeRuntime = "runtime"
 )
 
 // DietEntry represents a single dependency's removability analysis.
@@ -14,7 +21,7 @@ type DietEntry struct {
 	Ecosystem string
 	Version   string
 	Relation  string // "direct" or "transitive"
-	Scope     string // "" (runtime, default) or "tool" (Go tool directive)
+	Scope     string // "" (default), "tool" (Go tool directive), or "runtime" (reflection-loaded)
 
 	Graph    GraphMetrics
 	Coupling CouplingAnalysis
