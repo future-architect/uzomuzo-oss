@@ -143,7 +143,8 @@ func (a *Analyzer) handleJSImport(
 // extractJSBindings walks the AST from an import source node to find all JS binding names.
 //
 // ESM: import_statement → import_clause → identifier / namespace_import
-// CJS: string → arguments → call_expression → variable_declarator → name
+// CJS (variable): string → arguments → call_expression → variable_declarator → name
+// CJS (property): string → arguments → call_expression → assignment_expression → member_expression → property
 //
 // Combined imports (e.g., `import def, * as ns from "pkg"`) produce multiple bindings.
 func extractJSBindings(node *sitter.Node, src []byte) []string {
