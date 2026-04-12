@@ -2,6 +2,52 @@
 
 Accumulated insights from diet-trial and diet-fuzz runs.
 
+## 2026-04-12 — diet-fuzz run (21 projects × trivy/syft/cdxgen, focus: under-tested languages & legacy)
+
+### Selection Strategy
+
+Targeted gaps from previous runs: Java (severely under-tested, only 5 prior projects), Python with lockfiles, Go legacy (pre-2018), and JS/TS legacy (pre-2018). 21 projects total across 5 languages.
+
+### NEW Root Cause: Java Annotation Processing (#287)
+
+- **Bean Validation annotations** (`@NotNull`, `@Size`, `@Min`, `@Max`) from `hibernate-validator` are applied to entity fields as annotations — the annotation **is** the usage, but no function call exists. Found in linlinjava/litemall (2 import files, 0 call sites). This pattern is extremely common across the Java ecosystem: JPA (`@Entity`, `@Column`), Spring (`@Autowired`, `@Service`), Lombok (`@Data`, `@Getter`), Jackson (`@JsonProperty`).
+
+### NEW Root Cause: Java NIO Framework Interface Dispatch (#288)
+
+- **Netty types** (`ByteBuf`, `HttpRequest`, `SslHandler`) in OpenFeign/feign are imported for type declarations and interface implementations. The framework dispatches via the channel pipeline — handlers are invoked by the Netty event loop, not by direct user code method calls. 3 Netty modules (netty-buffer, netty-codec-http, netty-handler), each with 1 import file and 0 call sites. This pattern applies to all inversion-of-control frameworks (Vert.x, Akka, gRPC stubs).
+
+### Vue Template Component Usage (added to #262)
+
+- **PrimeVue** and **@fortawesome/vue-fontawesome** in spring-boot-admin: Components registered in `<script>` and used in `<template>` blocks — same root cause as Angular template detection (#262). Confirmed across all 3 SBOM tools (trivy, syft, cdxgen).
+
+### Icon Data Imports — Constant Usage (added to #278)
+
+- **@fortawesome/free-*-svg-icons** (3 packages) in spring-boot-admin: Imported icon objects (`faGithub`, `faTwitter`) are passed as data to `library.add()` — no function call on the imported symbol itself. Same root cause as constant-only usage (#278).
+
+### CSS-Only Imports (added to #261)
+
+- **normalize.css** in litemall and **office-ui-fabric-core** in fluentui: Pure CSS packages with zero JavaScript API surface. `import 'normalize.css'` and SCSS `@import` are side-effect patterns (#261).
+
+### Java SBOM Tool Observations
+
+- **Trivy Maven resolution timeout**: 3/8 Java projects (apollo, flyway, eladmin) failed due to Maven repository network resolution. Environment-specific, not a diet bug.
+- **Syft low dep counts for multi-module Java**: syft detected PURLs but diet analyzed very few (apollo=4, cas=1, eladmin=1). Syft's dependency graph for Java multi-module projects doesn't resolve well without a build.
+- **Mixed-language projects dominate Java IBNC**: spring-boot-admin and conductor include Vue/React frontends. Most IBNC (45/49) was JavaScript deps from the frontend, not Java deps.
+
+### Go Legacy: Zero Anomalies (confirmed)
+
+- 4 legacy Go projects (nats-server 2012, grpc-gateway 2015, validator 2015, hey 2016) × 3 tools = 12 runs. **Zero IBNC, zero EOL-ZERO, zero HIGH-HARD**. Go remains the most stable language for diet analysis, even for legacy repos.
+
+### Python SBOM Tooling Remains the Bottleneck
+
+- **Syft**: Failed on all 4 Python projects (no dependency graph).
+- **Trivy**: Only works with lockfiles/requirements.txt — succeeded only for django-silk.
+- **cdxgen**: Detected components but classified **all as transitive** (0 direct deps). This makes diet unable to identify removable direct dependencies.
+
+### Cross-Language: 0 Direct Deps Across All npm SBOM Tools
+
+- All 5 JS/TS legacy projects report 0 direct dependencies from all 3 SBOM tools. The `is_direct` field is not populated for npm/yarn lockfile-based SBOMs by any tool. This is a known SBOM ecosystem limitation, not a diet bug.
+
 ## 2026-04-08 — diet-fuzz run (20 projects × syft, 4 languages)
 
 ### SBOM Tool Limitations
@@ -107,3 +153,40 @@ Accumulated across both rounds, IBNC patterns fall into clear categories:
 | Python optional imports (`try/except ImportError`) | Python | Yes | Detect import inside try block as conditional usage |
 | Cross-language SBOM contamination | Go, Python | No | SBOM tool limitation — mixed-language repos |
 | Type-only imports (`csstype`, `typing-extensions`) | TS, Python | Maybe | Detect TYPE_CHECKING blocks |
+
+## 2026-04-12 — diet-fuzz run (18 projects × trivy/syft, 4 languages)
+
+### Selection Strategy
+
+Round 4 targeted under-tested patterns: Java generics/functional API (validate #283 fix), Go plugin/backend systems (validate #281 fix), Python auto-discovery/C-extension projects, JS/TS constructor/chained-command patterns. All 18 projects were previously untested and excluded from a parallel session running 21 other projects.
+
+### NEW Root Cause: Java Generic Type Arguments Not Captured (#286)
+
+- **Pattern**: `extends Foo<Bar>` — the #283 fix captures `Foo` (outer type) but NOT `Bar` (type argument). When `Foo` is from the local package and `Bar` is from an external package, the external dependency usage is missed.
+- **Evidence**: netty/netty — `protobuf-java` has 4 import files, 0 call sites. `ProtobufEncoder extends MessageToMessageEncoder<MessageLiteOrBuilder>` — `MessageLiteOrBuilder` from protobuf-java is not captured.
+- **Additional missing patterns in Java**: `instanceof`, type cast, class literal, method reference, type bounds — none are captured by current call site queries.
+- **Impact**: Any Java project using an external library primarily for type definitions (common with protobuf, JPA entities, serialization frameworks) will show false IBNC.
+- Filed as **#286**.
+
+### Go Type-Only Package Usage — Evidence for #278
+
+- **rclone `go-proton-api`** (1 import file, 0 call sites): Package used extensively for types (`proton.Link`, `proton.Auth`, `proton.User`) and constants (`proton.LinkStateActive`) but zero function/method calls. Same file's `proton-api-bridge` import correctly shows 9 call sites, proving the analyzer works for that file.
+- This confirms #278 is not limited to constant-only packages — **type-only packages** with zero callable API surface are equally affected.
+
+### SBOM Tool Findings
+
+- **syft v1.42.4 produces no dependency graph for ANY Python project** (4/4 failed). syft found components (54 for django, 57 for matplotlib) but zero dependency graph edges. Only trivy produced usable Python SBOMs.
+- **trivy misparses django dependencies**: Detected 6 deps, all test eggs (`brokenapp`, `commandegg`, etc.) from `tests/setup.cfg` — not the real runtime deps (`asgiref`, `sqlparse`). Root `setup.cfg` was ignored.
+- **matplotlib SBOM uses `pkg:conda/*` PURLs**: Dependencies from `environment.yml` are conda packages, not PyPI. Coupling analysis cannot match imports to conda PURLs.
+- **Go SBOM discrepancy remains large**: trivy finds 4-12× more deps than syft across all Go projects (moby: 170 vs 25, traefik: 295 vs 59, etcd: 231 vs 24).
+
+### Cross-Run Pattern Updates
+
+| Pattern | Languages | New evidence |
+|---------|-----------|-------------|
+| Generic type argument (`<Bar>` in `extends Foo<Bar>`) | Java | **NEW** — netty protobuf-java (#286) |
+| Type-only / constant-only packages | Go | rclone go-proton-api (#278) |
+| Go blank imports | Go | moby go-md2man, rclone x/mobile, etcd dev tools (#258) |
+| CommonJS chained/inline require | JS | pm2 debug (17 files), mkdirp, source-map-support (#241) |
+| CommonJS destructured require | JS | pm2 eventemitter2 (#274) |
+| Angular template components | Java (cross-lang), TS | flink @angular/forms (17 files), cypress @angular/common (#262) |
