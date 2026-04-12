@@ -148,7 +148,8 @@ func goPackageFromHyphenated(name string) string {
 		return result
 	}
 
-	// Strip "-go" suffix (e.g., "opentracing-go" → "opentracing", "mmap-go" → "mmap").
+	// Strip "-go" suffix, including compound suffixes like "-sdk-go"
+	// (e.g., "opentracing-go" → "opentracing", "onepassword-sdk-go" → "onepassword").
 	trimmed := strings.TrimSuffix(result, "-go")
 	if trimmed == "" {
 		return name
@@ -158,7 +159,18 @@ func goPackageFromHyphenated(name string) string {
 		return result
 	}
 
-	// Strip "go-" prefix (only reached if hyphens remain after steps 1-2).
+	// After stripping "-go", try removing common compound suffixes
+	// (e.g., "onepassword-sdk" → "onepassword").
+	for _, suffix := range []string{"-sdk", "-api", "-client", "-lib"} {
+		if t := strings.TrimSuffix(result, suffix); t != "" && t != result {
+			result = t
+			if !strings.Contains(result, "-") {
+				return result
+			}
+		}
+	}
+
+	// Strip "go-" prefix (only reached if hyphens remain after steps above).
 	trimmed = strings.TrimPrefix(result, "go-")
 	if trimmed == "" {
 		return name

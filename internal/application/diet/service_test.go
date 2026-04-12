@@ -258,6 +258,31 @@ func TestBuildMavenImportPaths(t *testing.T) {
 			purl: "pkg:maven/org.scala-lang/scala-reflect@2.13.12",
 			want: []string{"scala.reflect"},
 		},
+		{
+			name: "override: spring-boot-starter-web maps to web packages, not bare groupId",
+			purl: "pkg:maven/org.springframework.boot/spring-boot-starter-web@3.2.0",
+			want: []string{"org.springframework.web", "org.springframework.boot.web", "org.springframework.boot"},
+		},
+		{
+			name: "override: spring-boot-starter-data-jpa maps to JPA packages",
+			purl: "pkg:maven/org.springframework.boot/spring-boot-starter-data-jpa@3.2.0",
+			want: []string{"org.springframework.data.jpa", "javax.persistence", "jakarta.persistence", "org.springframework.boot"},
+		},
+		{
+			name: "starters produce different paths (web vs data-jpa)",
+			purl: "pkg:maven/org.springframework.boot/spring-boot-starter-security@3.2.0",
+			want: []string{"org.springframework.security", "org.springframework.boot"},
+		},
+		{
+			name: "heuristic fallback: unlisted starter derives prefix from suffix",
+			purl: "pkg:maven/org.springframework.boot/spring-boot-starter-quartz@3.2.0",
+			want: []string{"org.springframework.quartz", "org.springframework.boot"},
+		},
+		{
+			name: "override: spring-core maps to specific sub-packages",
+			purl: "pkg:maven/org.springframework/spring-core@6.1.0",
+			want: []string{"org.springframework.core", "org.springframework.util", "org.springframework"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

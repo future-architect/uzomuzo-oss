@@ -4,6 +4,7 @@ package sbomgraph
 
 import (
 	"log/slog"
+	"strings"
 
 	"github.com/package-url/packageurl-go"
 )
@@ -116,9 +117,18 @@ func ResolveDirectPURLs(bom *BOMEnvelope, refMap map[string]string) map[string]s
 		}
 	}
 
+	// Extract root namespace for aggregator detection.
+	rootNamespace := ""
+	if bom.Metadata.Component.PURL != "" {
+		if p, err := packageurl.FromString(bom.Metadata.Component.PURL); err == nil {
+			rootNamespace = strings.ToLower(p.Namespace)
+		}
+	}
+
 	// Try explicit root entry first.
 	if rootDeps, ok := depIndex[rootRef]; ok {
-		return resolveDirectRefs(rootDeps, refMap, depIndex, selfPURLs)
+		direct := resolveDirectRefs(rootDeps, refMap, depIndex, selfPURLs)
+		return flattenAggregatorModules(direct, rootNamespace, refMap, depIndex, selfPURLs)
 	}
 
 	// Root not in dependencies array — infer direct deps as refs that are never
@@ -205,6 +215,85 @@ func resolveDirectRefs(refs []string, refMap map[string]string, depIndex map[str
 		walk(ref, false)
 	}
 	return result
+}
+
+// flattenAggregatorModules detects Maven aggregator POM patterns where all
+// "direct" dependencies share the root component's namespace (groupId) and
+// each has its own dependsOn entries. In that case, these are internal
+// sub-modules, not external dependencies. Their children are promoted to
+// direct dependencies instead (#247).
+//
+// The heuristic fires only when:
+//  1. rootNamespace is non-empty
+//  2. ALL resolved direct PURLs share the same namespace as the root
+//  3. EVERY sub-module candidate has children in depIndex (i.e., it depends
+//     on something, confirming it is a module, not a leaf library)
+//
+// If the heuristic does not match, the original set is returned unchanged.
+func flattenAggregatorModules(
+	directPURLs map[string]struct{},
+	rootNamespace string,
+	refMap map[string]string,
+	depIndex map[string][]string,
+	selfPURLs map[string]struct{},
+) map[string]struct{} {
+	if rootNamespace == "" || len(directPURLs) == 0 {
+		return directPURLs
+	}
+
+	// Check if all direct PURLs share the root's namespace and have children.
+	// Build a reverse map: PURL → []ref for child lookup.
+	type subModule struct {
+		purl string
+		refs []string // dependency refs that carry this PURL
+	}
+	var candidates []subModule
+
+	purlToRefs := make(map[string][]string)
+	for ref, purl := range refMap {
+		purlToRefs[purl] = append(purlToRefs[purl], ref)
+	}
+
+	for dp := range directPURLs {
+		parsed, err := packageurl.FromString(dp)
+		if err != nil || !strings.EqualFold(parsed.Namespace, rootNamespace) {
+			return directPURLs // mixed namespaces → not an aggregator
+		}
+		refs := purlToRefs[dp]
+		hasChildren := false
+		for _, ref := range refs {
+			if len(depIndex[ref]) > 0 {
+				hasChildren = true
+				break
+			}
+		}
+		if !hasChildren {
+			return directPURLs // leaf dep with same namespace → not a sub-module
+		}
+		candidates = append(candidates, subModule{purl: dp, refs: refs})
+	}
+
+	// All direct deps are sub-modules. Flatten: collect their children.
+	slog.Debug("detected Maven aggregator POM, flattening sub-modules",
+		"sub_module_count", len(candidates), "root_namespace", rootNamespace)
+
+	flattened := make(map[string]struct{})
+	for _, sm := range candidates {
+		selfPURLs[sm.purl] = struct{}{} // mark sub-module as internal
+		for _, ref := range sm.refs {
+			for _, childRef := range depIndex[ref] {
+				if childPURL, ok := refMap[childRef]; ok {
+					if _, isSelf := selfPURLs[childPURL]; !isSelf {
+						flattened[childPURL] = struct{}{}
+					}
+				}
+			}
+		}
+	}
+	if len(flattened) == 0 {
+		return directPURLs // safety: don't return empty if flattening found nothing
+	}
+	return flattened
 }
 
 // NormalizePURL parses and rebuilds a PURL, stripping qualifiers and subpath.

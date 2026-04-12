@@ -909,9 +909,14 @@ func TestGoPackageFromHyphenated(t *testing.T) {
 		{"-go", "-go"},               // empty after strip; guard preserves original
 		{"go-", "go-"},               // empty after prefix strip; guard preserves original
 		{"go-golang", "go"},          // strip -golang -> "go" (no hyphens)
-		{"go-redis", "redis"},        // real package: prefix go- stripped
-		{"go-sqlite3", "sqlite3"},    // real package: prefix go- stripped
-		{"foo-bar-golang", "foobar"}, // -golang stripped, remaining hyphen removed
+		{"go-redis", "redis"},                // real package: prefix go- stripped
+		{"go-sqlite3", "sqlite3"},            // real package: prefix go- stripped
+		{"foo-bar-golang", "foobar"},         // -golang stripped, remaining hyphen removed
+		{"onepassword-sdk-go", "onepassword"},  // compound: -go then -sdk stripped (#258)
+		{"aws-sdk-go", "aws"},                  // compound: -go then -sdk stripped
+		{"example-client-go", "example"},       // compound: -go then -client stripped
+		{"mylib-api-go", "mylib"},              // compound: -go then -api stripped
+		{"thing-lib-go", "thing"},              // compound: -go then -lib stripped
 	}
 
 	for _, tt := range tests {

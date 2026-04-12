@@ -565,6 +565,43 @@ var mavenPackageOverrides = map[string][]string{
 	// heuristic already produces the correct candidate, but an explicit override
 	// ensures stability.
 	"javax.inject/javax.inject": {"javax.inject"},
+
+	// Spring Boot starters: groupId is always "org.springframework.boot" but each
+	// starter pulls in distinct Spring libraries. Without these overrides, ALL starters
+	// map to "org.springframework.boot" and receive identical coupling scores (#295).
+	"org.springframework.boot/spring-boot-starter":            {"org.springframework.boot"},
+	"org.springframework.boot/spring-boot-starter-web":        {"org.springframework.web", "org.springframework.boot.web"},
+	"org.springframework.boot/spring-boot-starter-webflux":    {"org.springframework.web.reactive"},
+	"org.springframework.boot/spring-boot-starter-data-jpa":   {"org.springframework.data.jpa", "javax.persistence", "jakarta.persistence"},
+	"org.springframework.boot/spring-boot-starter-data-redis": {"org.springframework.data.redis"},
+	"org.springframework.boot/spring-boot-starter-data-mongodb": {"org.springframework.data.mongodb"},
+	"org.springframework.boot/spring-boot-starter-security":   {"org.springframework.security"},
+	"org.springframework.boot/spring-boot-starter-test":       {"org.springframework.boot.test", "org.springframework.test"},
+	"org.springframework.boot/spring-boot-starter-actuator":   {"org.springframework.boot.actuate"},
+	"org.springframework.boot/spring-boot-starter-validation": {"javax.validation", "jakarta.validation"},
+	"org.springframework.boot/spring-boot-starter-thymeleaf":  {"org.thymeleaf"},
+	"org.springframework.boot/spring-boot-starter-mail":       {"org.springframework.mail", "javax.mail", "jakarta.mail"},
+	"org.springframework.boot/spring-boot-starter-cache":      {"org.springframework.cache"},
+	"org.springframework.boot/spring-boot-starter-aop":        {"org.aspectj", "org.springframework.aop"},
+	"org.springframework.boot/spring-boot-starter-batch":      {"org.springframework.batch"},
+	"org.springframework.boot/spring-boot-starter-amqp":       {"org.springframework.amqp"},
+	"org.springframework.boot/spring-boot-starter-websocket":  {"org.springframework.web.socket"},
+	"org.springframework.boot/spring-boot-starter-jdbc":       {"org.springframework.jdbc"},
+	"org.springframework.boot/spring-boot-starter-json":       {"com.fasterxml.jackson"},
+	"org.springframework.boot/spring-boot-starter-logging":    {"org.slf4j", "ch.qos.logback"},
+
+	// Spring non-starter libraries: groupId "org.springframework" but each
+	// library uses a specific sub-package.
+	"org.springframework/spring-core":    {"org.springframework.core", "org.springframework.util"},
+	"org.springframework/spring-context": {"org.springframework.context"},
+	"org.springframework/spring-beans":   {"org.springframework.beans"},
+	"org.springframework/spring-web":     {"org.springframework.web"},
+	"org.springframework/spring-webmvc":  {"org.springframework.web.servlet"},
+	"org.springframework/spring-tx":      {"org.springframework.transaction"},
+	"org.springframework/spring-orm":     {"org.springframework.orm"},
+	"org.springframework/spring-aop":     {"org.springframework.aop"},
+	"org.springframework/spring-jdbc":    {"org.springframework.jdbc"},
+	"org.springframework/spring-test":    {"org.springframework.test"},
 }
 
 // buildMavenImportPaths generates candidate import path prefixes for a Maven PURL.
@@ -588,6 +625,22 @@ func buildMavenImportPaths(parsed packageurl.PackageURL) []string {
 	// 1. Well-known overrides take priority.
 	for _, p := range mavenPackageOverrides[key] {
 		add(p)
+	}
+
+	// 1b. Heuristic for unlisted Spring Boot starters: derive a prefix from
+	// the starter suffix (e.g., "spring-boot-starter-data-jpa" →
+	// "org.springframework.data.jpa"). This prevents all starters from
+	// collapsing to the bare "org.springframework.boot" groupId (#295).
+	if len(paths) == 0 &&
+		strings.EqualFold(parsed.Namespace, "org.springframework.boot") &&
+		strings.HasPrefix(strings.ToLower(parsed.Name), "spring-boot-starter-") {
+		suffix := strings.TrimPrefix(strings.ToLower(parsed.Name), "spring-boot-starter-")
+		if suffix != "" {
+			candidate := "org.springframework." + strings.ReplaceAll(suffix, "-", ".")
+			if isJavaDottedPackageSafe(candidate) {
+				add(candidate)
+			}
+		}
 	}
 
 	// 2. groupId (namespace) — the most common convention.
