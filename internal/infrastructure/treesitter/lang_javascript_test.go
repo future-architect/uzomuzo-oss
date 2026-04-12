@@ -1241,7 +1241,7 @@ file.minimatch(pattern, '*.js');
 			wantImports: 1,
 			wantCalls:   1,
 			wantBreadth: 1,
-			wantSymbols: []string{"minimatch"},
+			wantSymbols: []string{"file.minimatch"},
 		},
 		{
 			name:     "property assign with dateformat pattern: template.date = require('dateformat')",
@@ -1257,7 +1257,7 @@ var result = template.date(new Date(), "yyyy-mm-dd");
 			wantImports: 1,
 			wantCalls:   1,
 			wantBreadth: 1,
-			wantSymbols: []string{"date"},
+			wantSymbols: []string{"template.date"},
 		},
 		{
 			name:     "property assign with findup pattern: file.findup = require('findup-sync')",
@@ -1273,7 +1273,26 @@ var fp = file.findup('Gruntfile.js');
 			wantImports: 1,
 			wantCalls:   1,
 			wantBreadth: 1,
-			wantSymbols: []string{"findup"},
+			wantSymbols: []string{"file.findup"},
+		},
+		{
+			name:     "no false positive: method name does not collide with separate import alias",
+			filename: "index.js",
+			code: `file.glob = require('glob');
+const sync = require('sync');
+
+file.glob.sync(pattern);
+sync();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/glob@7.0.0": {"glob"},
+				"pkg:npm/sync@1.0.0": {"sync"},
+			},
+			purl:        "pkg:npm/sync@1.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"sync"},
 		},
 	}
 
