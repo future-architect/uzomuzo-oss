@@ -38,8 +38,16 @@ func newJSLikeConfig(lang *sitter.Language, includeJSX bool) *langConfig {
 	}, "\n")
 	callPatterns := []string{
 		`(member_expression object: (identifier) @obj property: (property_identifier) @prop)`,
+		// obj.alias.method() — nested member access where alias was assigned via
+		// `obj.alias = require('pkg')`. Matches the outer member_expression with
+		// the inner's property as @obj and the outer's property as @prop.
+		`(member_expression object: (member_expression property: (property_identifier) @obj) property: (property_identifier) @prop)`,
 		// foo() — bare function call on an imported named binding
 		`(call_expression function: (identifier) @func)`,
+		// obj.alias() — direct call on a property-assigned require binding.
+		// Captures just the property name so it can match aliases registered from
+		// `obj.alias = require('pkg')`.
+		`(call_expression function: (member_expression property: (property_identifier) @func))`,
 		// new Foo() — constructor call on an imported named binding
 		`(new_expression constructor: (identifier) @func)`,
 		// { [ATTR]: val } — imported constant used as computed property key
@@ -159,6 +167,7 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 	if parent.Type() == "arguments" {
 		callExpr := parent.Parent()
 		if callExpr != nil && callExpr.Type() == "call_expression" {
+			// Check for variable declarator: const x = require('pkg')
 			declarator := findAncestorVariableDeclarator(callExpr)
 			if declarator != nil {
 				nameNode := declarator.ChildByFieldName("name")
@@ -172,6 +181,13 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 					// Destructured: const { X, Y } = require('pkg')
 					return extractCJSDestructuredBindings(nameNode, src)
 				}
+			}
+
+			// Check for property assignment: obj.prop = require('pkg')
+			// The property name becomes the binding alias so that call sites
+			// like obj.prop.method() or obj.prop() can be tracked.
+			if binding := extractPropertyAssignBinding(callExpr, src); binding != "" {
+				return []string{binding}
 			}
 		}
 	}
@@ -344,6 +360,40 @@ func extractCJSDestructuredBindings(objectPattern *sitter.Node, src []byte) []st
 		}
 	}
 	return bindings
+}
+
+// extractPropertyAssignBinding extracts the property name from a CJS require()
+// assigned to an object property. For `obj.prop = require('pkg')`, the AST is:
+//
+//	assignment_expression
+//	  left: member_expression
+//	    object: identifier (obj)
+//	    property: property_identifier (prop)
+//	  right: call_expression (require('pkg'))
+//
+// This function walks up from the call_expression through intermediate
+// expression nodes (e.g., binary_expression) to find the assignment_expression,
+// then extracts the property name from the member_expression on the left side.
+// Returns empty string if the pattern does not match.
+func extractPropertyAssignBinding(callExpr *sitter.Node, src []byte) string {
+	current := callExpr.Parent()
+	for depth := 0; current != nil && depth < maxAncestorWalkDepth; depth++ {
+		if current.Type() == "assignment_expression" {
+			left := current.ChildByFieldName("left")
+			if left != nil && left.Type() == "member_expression" {
+				propNode := left.ChildByFieldName("property")
+				if propNode != nil {
+					return propNode.Content(src)
+				}
+			}
+			return ""
+		}
+		if !jsExpressionTypes[current.Type()] {
+			return ""
+		}
+		current = current.Parent()
+	}
+	return ""
 }
 
 // isTypeOnlyImport checks if a node's parent import_statement is a TypeScript
