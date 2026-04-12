@@ -175,6 +175,63 @@ function App() {
 	}
 }
 
+func TestAnalyzer_JSXMemberExpression(t *testing.T) {
+	dir := t.TempDir()
+	src := `import * as Icons from "lucide-react";
+import Form from "react-bootstrap";
+
+function App() {
+    return (
+        <div>
+            <Icons.Camera size={24} />
+            <Icons.Arrow>text</Icons.Arrow>
+            <Form.Control type="text" />
+        </div>
+    );
+}
+`
+	err := os.WriteFile(filepath.Join(dir, "App.tsx"), []byte(src), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:npm/lucide-react@0.300.0":   {"lucide-react"},
+		"pkg:npm/react-bootstrap@2.10.0": {"react-bootstrap"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	icons, ok := result["pkg:npm/lucide-react@0.300.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for lucide-react")
+	}
+	// Icons.Camera (self-closing, 1 member_expression) + Icons.Arrow (opening
+	// + closing, 2 member_expression nodes) = 3 call sites via the generic
+	// member_expression pattern. 2 distinct symbols: Camera, Arrow.
+	if icons.CallSiteCount != 3 {
+		t.Errorf("lucide-react CallSiteCount = %d, want 3", icons.CallSiteCount)
+	}
+	if icons.APIBreadth != 2 {
+		t.Errorf("lucide-react APIBreadth = %d, want 2", icons.APIBreadth)
+	}
+
+	form, ok := result["pkg:npm/react-bootstrap@2.10.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for react-bootstrap")
+	}
+	// Form.Control (self-closing) = 1 call site, 1 symbol.
+	if form.CallSiteCount != 1 {
+		t.Errorf("react-bootstrap CallSiteCount = %d, want 1", form.CallSiteCount)
+	}
+	if form.APIBreadth != 1 {
+		t.Errorf("react-bootstrap APIBreadth = %d, want 1", form.APIBreadth)
+	}
+}
+
 func TestAnalyzer_JSCaseInsensitivePURL(t *testing.T) {
 	dir := t.TempDir()
 	// Source code uses mixed-case import path, but PURL (and hence importToPURL key)
@@ -1464,6 +1521,286 @@ serialize(document);
 			}
 			if ca.APIBreadth != tt.wantBreadth {
 				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+		})
+	}
+}
+
+// TestAnalyzer_JSReExport verifies that re-exports (export { foo } from "pkg",
+// export * from "pkg") are detected as dependency usage. Re-exports introduce no
+// local binding, so they are registered as blank imports. Type-only re-exports
+// (export type { Foo } from "pkg") are skipped.
+func TestAnalyzer_JSReExport(t *testing.T) {
+	tests := []struct {
+		name        string
+		filename    string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int // expected CallSiteCount (1 baseline for blank-import-only)
+		wantBlank   bool
+		wantUnused  bool
+	}{
+		{
+			name:     "named re-export",
+			filename: "index.ts",
+			code:     `export { useState } from "react";` + "\n",
+			importPaths: map[string][]string{
+				"pkg:npm/react@18.0.0": {"react"},
+			},
+			purl:        "pkg:npm/react@18.0.0",
+			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
+			wantBlank:   true,
+		},
+		{
+			name:     "aliased re-export",
+			filename: "index.ts",
+			code:     `export { useState as default } from "react";` + "\n",
+			importPaths: map[string][]string{
+				"pkg:npm/react@18.0.0": {"react"},
+			},
+			purl:        "pkg:npm/react@18.0.0",
+			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
+			wantBlank:   true,
+		},
+		{
+			name:     "namespace re-export",
+			filename: "index.js",
+			code:     `export * from "lodash";` + "\n",
+			importPaths: map[string][]string{
+				"pkg:npm/lodash@4.17.21": {"lodash"},
+			},
+			purl:        "pkg:npm/lodash@4.17.21",
+			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
+			wantBlank:   true,
+		},
+		{
+			name:     "namespace aliased re-export",
+			filename: "index.ts",
+			code:     `export * as utils from "lodash";` + "\n",
+			importPaths: map[string][]string{
+				"pkg:npm/lodash@4.17.21": {"lodash"},
+			},
+			purl:        "pkg:npm/lodash@4.17.21",
+			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
+			wantBlank:   true,
+		},
+		{
+			name:     "type-only re-export skipped",
+			filename: "index.ts",
+			code:     `export type { Foo } from "bar";` + "\n",
+			importPaths: map[string][]string{
+				"pkg:npm/bar@1.0.0": {"bar"},
+			},
+			purl:       "pkg:npm/bar@1.0.0",
+			wantUnused: true,
+		},
+		{
+			name:     "re-export alongside regular import",
+			filename: "index.ts",
+			code: `import axios from "axios";
+export { get } from "axios";
+
+axios.post("/api");
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/axios@1.6.0": {"axios"},
+			},
+			purl:        "pkg:npm/axios@1.6.0",
+			wantImports: 1,
+			wantCalls:   1, // axios.post("/api") from the regular import
+			wantBlank:   true,
+		},
+		{
+			name:     "local export no from clause does not match",
+			filename: "index.js",
+			code: `const foo = 42;
+export { foo };
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/foo@1.0.0": {"foo"},
+			},
+			purl:       "pkg:npm/foo@1.0.0",
+			wantUnused: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if tt.wantUnused {
+				// The PURL should not appear in the result map — the import
+				// was either filtered (type-only) or never captured.
+				if result != nil {
+					if ca, ok := result[tt.purl]; ok {
+						t.Errorf("expected PURL %s absent from results, got ImportFileCount=%d IsUnused=%v",
+							tt.purl, ca.ImportFileCount, ca.IsUnused)
+					}
+				}
+				return
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.HasBlankImport != tt.wantBlank {
+				t.Errorf("HasBlankImport = %v, want %v", ca.HasBlankImport, tt.wantBlank)
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
+			}
+		})
+	}
+}
+
+func TestAnalyzer_JSDynamicImport(t *testing.T) {
+	tests := []struct {
+		name        string
+		filename    string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int // expected CallSiteCount (1 baseline for blank-import-only)
+		wantBreadth int
+		wantBlank   bool
+		wantUnused  bool
+	}{
+		{
+			name:     "basic dynamic import",
+			filename: "index.js",
+			code:     `const mod = await import("lodash");` + "\n",
+			importPaths: map[string][]string{
+				"pkg:npm/lodash@4.17.21": {"lodash"},
+			},
+			purl:        "pkg:npm/lodash@4.17.21",
+			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
+			wantBreadth: 0,
+			wantBlank:   true,
+		},
+		{
+			name:     "dynamic import with promise chain",
+			filename: "index.js",
+			code:     `import("lodash").then(m => m.default());` + "\n",
+			importPaths: map[string][]string{
+				"pkg:npm/lodash@4.17.21": {"lodash"},
+			},
+			purl:        "pkg:npm/lodash@4.17.21",
+			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
+			wantBreadth: 0,
+			wantBlank:   true,
+		},
+		{
+			name:     "destructured dynamic import",
+			filename: "index.ts",
+			code:     `const { get } = await import("axios");` + "\n",
+			importPaths: map[string][]string{
+				"pkg:npm/axios@1.6.0": {"axios"},
+			},
+			purl:        "pkg:npm/axios@1.6.0",
+			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
+			wantBreadth: 0,
+			wantBlank:   true,
+		},
+		{
+			name:     "dynamic import of scoped package",
+			filename: "index.ts",
+			code:     `const s3 = await import("@aws-sdk/client-s3");` + "\n",
+			importPaths: map[string][]string{
+				"pkg:npm/%40aws-sdk/client-s3@3.0.0": {"@aws-sdk/client-s3"},
+			},
+			purl:        "pkg:npm/%40aws-sdk/client-s3@3.0.0",
+			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
+			wantBreadth: 0,
+			wantBlank:   true,
+		},
+		{
+			name:     "dynamic import coexists with static import",
+			filename: "index.ts",
+			code: `import axios from "axios";
+const lazy = await import("axios");
+
+axios.get("/api");
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/axios@1.6.0": {"axios"},
+			},
+			purl:        "pkg:npm/axios@1.6.0",
+			wantImports: 1,
+			wantCalls:   1, // axios.get from static import
+			wantBreadth: 1, // get
+			wantBlank:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if tt.wantUnused {
+				if result != nil {
+					if _, ok := result[tt.purl]; ok {
+						t.Errorf("expected no coupling analysis for %s", tt.purl)
+					}
+				}
+				return
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+			if ca.HasBlankImport != tt.wantBlank {
+				t.Errorf("HasBlankImport = %v, want %v", ca.HasBlankImport, tt.wantBlank)
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
 			}
 		})
 	}

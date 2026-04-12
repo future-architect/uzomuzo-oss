@@ -21,6 +21,8 @@ func registerPythonConfig(a *Analyzer) {
 		callQuery: strings.Join([]string{
 			`(attribute object: (identifier) @pkg attribute: (identifier) @attr)`,
 			`(call function: (identifier) @func)`,
+			// Bare decorator: @fixture (no parens, from-imported name used directly)
+			`(decorator (identifier) @func)`,
 		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {

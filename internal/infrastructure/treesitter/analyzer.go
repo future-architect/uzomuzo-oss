@@ -51,9 +51,10 @@ const dotImportAlias = "\x00dot"
 // so we record the import file but skip call-site counting.
 const blankImportAlias = "\x00blank"
 
-// wildcardImportAlias is a sentinel alias for Python wildcard imports (from x import *).
-// Wildcard-imported symbols are called without a package prefix, so bare identifier
-// queries cannot attribute them. We mark them as "used but uncountable."
+// wildcardImportAlias is a sentinel alias for wildcard imports (Python: from x import *,
+// Java: import com.example.*). Wildcard-imported symbols are called without a package
+// prefix, so bare identifier queries cannot attribute them. We mark them as "used but
+// uncountable."
 const wildcardImportAlias = "\x00wildcard"
 
 // langConfig holds the tree-sitter language and query patterns.
