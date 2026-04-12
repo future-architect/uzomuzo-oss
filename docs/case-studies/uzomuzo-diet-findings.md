@@ -2,6 +2,37 @@
 
 Accumulated insights from diet-trial and diet-fuzz runs.
 
+## 2026-04-12 — diet-fuzz round 5 (Java 26 + cdxgen 12.1.5, targeted validation)
+
+### Selection Strategy
+
+Targeted validation of recent fixes (PR #294 method_reference, PR #296 Maven overrides) and known Java issues (#286, #287, #288) using projects that require Java 26. 3 projects: ReactiveX/RxJava (Gradle), spring-projects/spring-framework (Gradle monorepo), spring-projects/spring-petclinic (Maven).
+
+### Fix Validation: Maven Package Overrides (PR #296)
+
+- **Guava override confirmed**: RxJava's `com.google.guava/guava` now shows `calls=4, imports=2` — previously 0 due to groupId (`com.google.guava`) not matching Java package (`com.google.common`). 6 new overrides added for Guava, ANTLR, Trove4j, Scala.
+
+### Fix Validation: Java Method Reference Detection (PR #294)
+
+- **RxJava: 0 gaps** (imports > 0, calls = 0) across 14 direct deps. RxJava has 239 method references in source — all correctly detected as call sites.
+- **Spring Petclinic: 0 gaps** across 23 direct deps. Method references in service/repository layers correctly attributed.
+
+### NEW Root Cause: Spring Boot Starter False-Sharing (#295)
+
+- **Pattern**: All Spring Boot starters share Maven groupId `org.springframework.boot`. Since artifactIds contain hyphens (e.g., `spring-boot-starter-data-jpa`), they fail `isJavaPackageSafe` and the `groupId.artifactId` candidate is skipped. All starters map to the single candidate prefix `org.springframework.boot`, producing **identical** coupling scores.
+- **Evidence**: Spring Petclinic — 12 starters all show `calls=22, imports=12, api_breadth=10`. Each starter should have distinct scores reflecting its actual transitive packages (e.g., `spring-boot-starter-data-jpa` → `org.springframework.data.jpa`, `jakarta.persistence`).
+- **Impact**: Any project using multiple Spring Boot starters (extremely common) will have indistinguishable coupling for all of them, making diet recommendations meaningless for the starter layer.
+- Filed as **#295**.
+
+### Framework Dispatch Reconfirmed (#288)
+
+- Spring Petclinic: `caffeine` (cache), `mysql-connector-j`, `postgresql`, `h2` all classified UNUSED. These are loaded via Spring Boot auto-configuration (classpath scanning + reflection), not direct imports — same root cause as #288 (Netty in round 4).
+
+### SBOM Tool Findings
+
+- **cdxgen + Gradle monorepo root detection**: spring-framework's cdxgen SBOM (330 components: 248 npm, 75 maven, 7 github) used `pkg:npm/framework-docs` as root — the Antora documentation module, not the Java project. All 75 Maven components became transitive-only, producing only 7 direct deps (all npm). **Workaround**: Use single-module projects or specify `--project-type` for monorepos.
+- **cdxgen + Gradle + Java 26**: RxJava and Petclinic both resolved successfully. cdxgen 12.1.5 handles Java 26 without issues for single-module Gradle and Maven projects.
+
 ## 2026-04-12 — diet-fuzz run (21 projects × trivy/syft/cdxgen, focus: under-tested languages & legacy)
 
 ### Selection Strategy
