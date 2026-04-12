@@ -505,19 +505,25 @@ public class Main {
 		wantBreadth int
 	}{
 		{
-			// "new ImmutableList.Builder()" (non-generic) + "new ImmutableList.Builder<>()" (generic)
-			name:        "guava scoped constructors (generic + non-generic)",
+			// "ImmutableList.Builder builder" local var scoped type captures "ImmutableList" (1)
+			// + "new ImmutableList.Builder()" constructor scoped (1)
+			// + "ImmutableList.Builder<String> typedBuilder" local var generic scoped captures "ImmutableList" (1)
+			// + "new ImmutableList.Builder<>()" constructor generic scoped (1)
+			// = 4 total call sites
+			name:        "guava scoped constructors + local var types",
 			purl:        "pkg:maven/com.google.guava/guava@33.0",
 			wantImports: 1,
-			wantCalls:   2,
+			wantCalls:   4,
 			wantBreadth: 1,
 		},
 		{
-			// "new Map.Entry()" — non-generic scoped constructor
-			name:        "jdk non-generic scoped constructor",
+			// "Map.Entry entry" local var scoped type captures "Map" (1)
+			// + "new Map.Entry()" constructor scoped (1)
+			// = 2 total call sites
+			name:        "jdk scoped constructor + local var type",
 			purl:        "pkg:maven/java/jdk@17",
 			wantImports: 1,
-			wantCalls:   1,
+			wantCalls:   2,
 			wantBreadth: 1,
 		},
 	}
@@ -660,6 +666,57 @@ public class Main {
 				t.Error("IsUnused = true, want false")
 			}
 		})
+	}
+}
+
+func TestAnalyzer_JavaScopedTypeDeclaration(t *testing.T) {
+	dir := t.TempDir()
+	// Qualified/nested types used in declarations (e.g., Map.Entry) must be
+	// detected as call sites via their individual type_identifier children,
+	// not as a whole "Map.Entry" string that won't match aliasMap.
+	err := os.WriteFile(filepath.Join(dir, "Service.java"), []byte(`import java.util.Map;
+
+public class Service {
+    private Map.Entry field;
+
+    public Map.Entry getEntry(Map.Entry param) {
+        Map.Entry local = null;
+        return local;
+    }
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/java/jdk@17": {"java.util"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:maven/java/jdk@17"]
+	if !ok {
+		t.Fatal("expected coupling analysis for jdk")
+	}
+
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	// Map.Entry in: field type (1), return type (1), param (1), local var (1) = 4.
+	// Each scoped_type_identifier captures "Map" and "Entry" as separate type_identifiers,
+	// but only "Map" matches aliasMap, so 4 call sites for "Map".
+	if ca.CallSiteCount < 4 {
+		t.Errorf("CallSiteCount = %d, want >= 4 (Map.Entry in field, return, param, local)", ca.CallSiteCount)
+	}
+	if ca.APIBreadth < 1 {
+		t.Errorf("APIBreadth = %d, want >= 1", ca.APIBreadth)
+	}
+	if ca.IsUnused {
+		t.Error("IsUnused = true, want false")
 	}
 }
 
