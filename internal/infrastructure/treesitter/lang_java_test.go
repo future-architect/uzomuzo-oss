@@ -829,7 +829,7 @@ public class Main {
 			wantBreadth: 2, // Locale + US
 		},
 		{
-			name: "field access does not false match local variables",
+			name: "constructor-only usage produces no field_access match",
 			code: `import com.google.gson.Gson;
 
 public class Main {

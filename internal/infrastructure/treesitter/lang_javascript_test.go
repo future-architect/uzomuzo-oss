@@ -1684,6 +1684,8 @@ func TestAnalyzer_JSDynamicImport(t *testing.T) {
 		importPaths map[string][]string
 		purl        string
 		wantImports int
+		wantCalls   int // expected CallSiteCount (1 baseline for blank-import-only)
+		wantBreadth int
 		wantBlank   bool
 		wantUnused  bool
 	}{
@@ -1696,6 +1698,8 @@ func TestAnalyzer_JSDynamicImport(t *testing.T) {
 			},
 			purl:        "pkg:npm/lodash@4.17.21",
 			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
+			wantBreadth: 0,
 			wantBlank:   true,
 		},
 		{
@@ -1707,6 +1711,8 @@ func TestAnalyzer_JSDynamicImport(t *testing.T) {
 			},
 			purl:        "pkg:npm/lodash@4.17.21",
 			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
+			wantBreadth: 0,
 			wantBlank:   true,
 		},
 		{
@@ -1718,6 +1724,8 @@ func TestAnalyzer_JSDynamicImport(t *testing.T) {
 			},
 			purl:        "pkg:npm/axios@1.6.0",
 			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
+			wantBreadth: 0,
 			wantBlank:   true,
 		},
 		{
@@ -1729,6 +1737,8 @@ func TestAnalyzer_JSDynamicImport(t *testing.T) {
 			},
 			purl:        "pkg:npm/%40aws-sdk/client-s3@3.0.0",
 			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
+			wantBreadth: 0,
 			wantBlank:   true,
 		},
 		{
@@ -1744,6 +1754,8 @@ axios.get("/api");
 			},
 			purl:        "pkg:npm/axios@1.6.0",
 			wantImports: 1,
+			wantCalls:   1, // axios.get from static import
+			wantBreadth: 1, // get
 			wantBlank:   true,
 		},
 	}
@@ -1777,6 +1789,12 @@ axios.get("/api");
 			}
 			if ca.ImportFileCount != tt.wantImports {
 				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
 			}
 			if ca.HasBlankImport != tt.wantBlank {
 				t.Errorf("HasBlankImport = %v, want %v", ca.HasBlankImport, tt.wantBlank)
