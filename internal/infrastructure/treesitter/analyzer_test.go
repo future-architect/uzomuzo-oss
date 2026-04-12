@@ -103,8 +103,9 @@ public class Main {
 		if ca.ImportFileCount != 1 {
 			t.Errorf("%s: ImportFileCount = %d, want 1", purl, ca.ImportFileCount)
 		}
-		if ca.CallSiteCount != 2 {
-			t.Errorf("%s: CallSiteCount = %d, want 2 (new Gson, toJson)", purl, ca.CallSiteCount)
+		// 3 call sites: Gson local var type (1) + new Gson() (1) + gson.toJson (1)
+		if ca.CallSiteCount != 3 {
+			t.Errorf("%s: CallSiteCount = %d, want 3 (Gson type decl, new Gson, toJson)", purl, ca.CallSiteCount)
 		}
 	}
 }

@@ -40,8 +40,9 @@ public class Main {
 }
 `,
 			wantImportCount: 1,
-			wantCallSites:   3,
-			wantUnused:      false,
+			// 4 call sites: Gson local var type (1) + new Gson() (1) + gson.toJson (1) + gson.fromJson (1)
+			wantCallSites: 4,
+			wantUnused:    false,
 		},
 		{
 			name:       "commons-lang3 via groupId heuristic",

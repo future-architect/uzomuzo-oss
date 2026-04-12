@@ -44,8 +44,10 @@ public class Main {
 	if ca.ImportFileCount != 1 {
 		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
 	}
-	if ca.CallSiteCount != 3 {
-		t.Errorf("CallSiteCount = %d, want 3 (new Gson, toJson, fromJson)", ca.CallSiteCount)
+	// 4 call sites: "Gson" as local var type (1) + new Gson() constructor (1) +
+	// gson.toJson (1) + gson.fromJson (1)
+	if ca.CallSiteCount != 4 {
+		t.Errorf("CallSiteCount = %d, want 4 (Gson type decl, new Gson, toJson, fromJson)", ca.CallSiteCount)
 	}
 	if ca.APIBreadth != 3 {
 		t.Errorf("APIBreadth = %d, want 3 (Gson, toJson, fromJson)", ca.APIBreadth)
@@ -400,20 +402,22 @@ class MyList extends ImmutableList<String> {
 		wantBreadth int
 	}{
 		{
-			// bare "new Gson()" — already works with existing type_identifier pattern
-			name:        "bare constructor new Gson()",
+			// "Gson gson = new Gson()" = local var type (1) + constructor (1) = 2
+			name:        "bare constructor new Gson() + local var type",
 			purl:        "pkg:maven/com.google.code.gson/gson@2.10",
 			wantImports: 1,
-			wantCalls:   1,
+			wantCalls:   2,
 			wantBreadth: 1,
 		},
 		{
-			// "new ImmutableList<>()" and "new ImmutableList<Integer>()" are generic_type,
-			// plus "extends ImmutableList<String>" is also generic_type in superclass
-			name:        "generic constructors and generic extends",
+			// ImmutableList<String> list = new ImmutableList<>() → local var generic_type (1) + constructor generic_type (1)
+			// ImmutableList<Integer> list2 = new ImmutableList<Integer>() → local var generic_type (1) + constructor generic_type (1)
+			// class MyList extends ImmutableList<String> → superclass generic_type (1)
+			// Total: 5 call sites
+			name:        "generic constructors + local var types + generic extends",
 			purl:        "pkg:maven/com.google.guava/guava@33.0",
 			wantImports: 1,
-			wantCalls:   3,
+			wantCalls:   5,
 			wantBreadth: 1,
 		},
 		{
@@ -544,8 +548,6 @@ func TestAnalyzer_JavaMethodReference(t *testing.T) {
 	dir := t.TempDir()
 	// Java method references (Foo::bar) produce method_reference AST nodes.
 	// These should be counted as call sites when the type is from an external dependency.
-	// Without a method_reference query pattern, deps used ONLY via method references
-	// are undercounted (call_site_count = 0 despite active usage).
 	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.google.gson.Gson;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -556,35 +558,25 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 public class Main {
-    // Method reference to external type's static method
     List<Boolean> blanks = Arrays.asList("a", "b").stream()
         .map(StringUtils::isBlank)
         .collect(Collectors.toList());
 
-    // Method reference to external type's instance method
     List<String> jsons = Arrays.asList("a", "b").stream()
         .map(new Gson()::toJson)
         .collect(Collectors.toList());
 
-    // Constructor reference (Type::new)
     Gson gson = Arrays.asList("config").stream()
         .map(Gson::new)
         .findFirst().orElse(null);
 
-    // Method reference with qualified static method
     List<Boolean> nullOrEmpty = Arrays.asList("a", null).stream()
         .map(Strings::isNullOrEmpty)
         .collect(Collectors.toList());
 
-    // Scoped qualifier method reference: ImmutableList.Builder::add
-    // The qualifier is represented as field_access; in this fixture,
-    // aliasMap matching is performed against "ImmutableList".
     java.util.function.Function<String, ImmutableList.Builder<String>> adder =
         ImmutableList.Builder::add;
 
-    // Scoped constructor reference: ImmutableList.Builder::new
-    // field_access + "new" pattern captures "ImmutableList" for alias lookup
-    // and "Builder" as the recorded symbol (consistent with scoped constructor calls).
     java.util.function.Supplier<ImmutableList.Builder<String>> factory =
         ImmutableList.Builder::new;
 }
@@ -625,11 +617,12 @@ public class Main {
 			// "Gson::new" is matched by the constructor reference pattern
 			// (method_reference with "new" token), recording the qualifier "Gson"
 			// as the symbol — consistent with how new Foo() records "Foo".
-			// Total: 2 call sites, 1 unique symbol ("Gson").
+			// new Gson() (constructor) + Gson::new (constructor ref) +
+			// Gson gson = ... (local var type declaration) = 3 calls.
 			name:        "gson constructor reference and object creation",
 			purl:        "pkg:maven/com.google.code.gson/gson@2.10",
 			wantImports: 1,
-			wantCalls:   2,
+			wantCalls:   3,
 			wantBreadth: 1,
 		},
 		{
