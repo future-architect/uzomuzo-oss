@@ -117,18 +117,20 @@ func ResolveDirectPURLs(bom *BOMEnvelope, refMap map[string]string) map[string]s
 		}
 	}
 
-	// Extract root namespace for aggregator detection.
+	// Extract root namespace and type for aggregator detection.
 	rootNamespace := ""
+	rootType := ""
 	if bom.Metadata.Component.PURL != "" {
 		if p, err := packageurl.FromString(bom.Metadata.Component.PURL); err == nil {
 			rootNamespace = strings.ToLower(p.Namespace)
+			rootType = p.Type
 		}
 	}
 
 	// Try explicit root entry first.
 	if rootDeps, ok := depIndex[rootRef]; ok {
 		direct := resolveDirectRefs(rootDeps, refMap, depIndex, selfPURLs)
-		return flattenAggregatorModules(direct, rootNamespace, refMap, depIndex, selfPURLs)
+		return flattenAggregatorModules(direct, rootNamespace, rootType, refMap, depIndex, selfPURLs)
 	}
 
 	// Root not in dependencies array — infer direct deps as refs that are never
@@ -233,11 +235,18 @@ func resolveDirectRefs(refs []string, refMap map[string]string, depIndex map[str
 func flattenAggregatorModules(
 	directPURLs map[string]struct{},
 	rootNamespace string,
+	rootType string,
 	refMap map[string]string,
 	depIndex map[string][]string,
 	selfPURLs map[string]struct{},
 ) map[string]struct{} {
 	if rootNamespace == "" || len(directPURLs) == 0 {
+		return directPURLs
+	}
+	// Guard: aggregator-module flattening is a Maven-specific pattern.
+	// Other ecosystems (npm scopes, PyPI namespaces) can have shared
+	// namespaces without being aggregator modules.
+	if rootType != "maven" {
 		return directPURLs
 	}
 

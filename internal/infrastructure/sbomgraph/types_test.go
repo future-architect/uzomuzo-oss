@@ -100,6 +100,46 @@ func TestResolveDirectPURLs_NormalProject(t *testing.T) {
 	}
 }
 
+func TestResolveDirectPURLs_NonMavenSharedNamespace(t *testing.T) {
+	// npm scoped packages share a namespace but are NOT aggregator modules.
+	// The heuristic must NOT flatten them (#299 Copilot review).
+	bom := &BOMEnvelope{
+		Metadata: &BOMMetadata{
+			Component: &Component{
+				BOMRef: "root-ref",
+				PURL:   "pkg:npm/%40myorg/app@1.0.0",
+			},
+		},
+		Dependencies: []Dependency{
+			{Ref: "root-ref", DependsOn: []string{"pkg-a-ref", "pkg-b-ref"}},
+			{Ref: "pkg-a-ref", DependsOn: []string{"lodash-ref"}},
+			{Ref: "pkg-b-ref", DependsOn: []string{"axios-ref"}},
+			{Ref: "lodash-ref"},
+			{Ref: "axios-ref"},
+		},
+	}
+	refMap := map[string]string{
+		"root-ref":   "pkg:npm/%40myorg/app@1.0.0",
+		"pkg-a-ref":  "pkg:npm/%40myorg/utils@1.0.0",
+		"pkg-b-ref":  "pkg:npm/%40myorg/core@1.0.0",
+		"lodash-ref": "pkg:npm/lodash@4.17.21",
+		"axios-ref":  "pkg:npm/axios@1.6.0",
+	}
+
+	direct := ResolveDirectPURLs(bom, refMap)
+
+	// Non-Maven: no flattening even though all direct deps share the namespace.
+	if _, ok := direct["pkg:npm/%40myorg/utils@1.0.0"]; !ok {
+		t.Error("expected @myorg/utils in direct deps (non-Maven, no flattening)")
+	}
+	if _, ok := direct["pkg:npm/%40myorg/core@1.0.0"]; !ok {
+		t.Error("expected @myorg/core in direct deps (non-Maven, no flattening)")
+	}
+	if len(direct) != 2 {
+		t.Errorf("direct dep count = %d, want 2", len(direct))
+	}
+}
+
 func TestResolveDirectPURLs_MixedNamespaces(t *testing.T) {
 	// Root has deps with a mix of same-namespace (sub-modules) and different
 	// namespaces (external). Should NOT be flattened because not all direct
