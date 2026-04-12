@@ -56,32 +56,52 @@ func registerJavaConfig(a *Analyzer) {
 			// --- Type checks and casts ---
 			// instanceof: obj instanceof Foo
 			`(instanceof_expression (type_identifier) @func)`,
+			// instanceof: obj instanceof Map.Entry
+			`(instanceof_expression (scoped_type_identifier) @func)`,
 			// Cast: (Foo) obj
 			`(cast_expression type: (type_identifier) @func)`,
+			// Cast: (Map.Entry) obj
+			`(cast_expression type: (scoped_type_identifier) @func)`,
 
 			// --- Type declarations ---
 			// Field declaration: private Foo field
 			`(field_declaration type: (type_identifier) @func)`,
+			// Field declaration: private Map.Entry field
+			`(field_declaration type: (scoped_type_identifier) @func)`,
 			// Field with generic type: private List<Foo> field — outer type
 			`(field_declaration type: (generic_type (type_identifier) @func))`,
+			// Field with generic type: private Outer.Inner<Foo> field — outer type
+			`(field_declaration type: (generic_type (scoped_type_identifier) @func))`,
 			// Field generic type argument: private List<Foo> field — captures Foo
 			`(field_declaration type: (generic_type (type_arguments (type_identifier) @func)))`,
 			// Method return type: public Foo method()
 			`(method_declaration type: (type_identifier) @func)`,
+			// Method return type: public Map.Entry method()
+			`(method_declaration type: (scoped_type_identifier) @func)`,
 			// Method return generic type: public List<Foo> method() — outer type
 			`(method_declaration type: (generic_type (type_identifier) @func))`,
+			// Method return generic type: public Outer.Inner<Foo> method() — outer type
+			`(method_declaration type: (generic_type (scoped_type_identifier) @func))`,
 			// Method return generic type argument: public List<Foo> method() — captures Foo
 			`(method_declaration type: (generic_type (type_arguments (type_identifier) @func)))`,
 			// Formal parameter: method(Foo param)
 			`(formal_parameter type: (type_identifier) @func)`,
+			// Formal parameter: method(Map.Entry param)
+			`(formal_parameter type: (scoped_type_identifier) @func)`,
 			// Formal parameter generic type: method(List<Foo> param) — outer type
 			`(formal_parameter type: (generic_type (type_identifier) @func))`,
+			// Formal parameter generic type: method(Outer.Inner<Foo> param) — outer type
+			`(formal_parameter type: (generic_type (scoped_type_identifier) @func))`,
 			// Formal parameter generic type argument: method(List<Foo> param) — captures Foo
 			`(formal_parameter type: (generic_type (type_arguments (type_identifier) @func)))`,
 			// Local variable: Foo local = ...
 			`(local_variable_declaration type: (type_identifier) @func)`,
+			// Local variable: Map.Entry local = ...
+			`(local_variable_declaration type: (scoped_type_identifier) @func)`,
 			// Local variable generic type: List<Foo> local = ... — outer type
 			`(local_variable_declaration type: (generic_type (type_identifier) @func))`,
+			// Local variable generic type: Outer.Inner<Foo> local = ... — outer type
+			`(local_variable_declaration type: (generic_type (scoped_type_identifier) @func))`,
 			// Local variable generic type argument: List<Foo> local = ... — captures Foo
 			`(local_variable_declaration type: (generic_type (type_arguments (type_identifier) @func)))`,
 
