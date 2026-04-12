@@ -1538,7 +1538,7 @@ func TestAnalyzer_JSReExport(t *testing.T) {
 		importPaths map[string][]string
 		purl        string
 		wantImports int
-		wantCalls   int // expected CallSiteCount (0 for blank-import-only)
+		wantCalls   int // expected CallSiteCount (1 baseline for blank-import-only)
 		wantBlank   bool
 		wantUnused  bool
 	}{
@@ -1551,6 +1551,7 @@ func TestAnalyzer_JSReExport(t *testing.T) {
 			},
 			purl:        "pkg:npm/react@18.0.0",
 			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
 			wantBlank:   true,
 		},
 		{
@@ -1562,6 +1563,7 @@ func TestAnalyzer_JSReExport(t *testing.T) {
 			},
 			purl:        "pkg:npm/react@18.0.0",
 			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
 			wantBlank:   true,
 		},
 		{
@@ -1573,6 +1575,7 @@ func TestAnalyzer_JSReExport(t *testing.T) {
 			},
 			purl:        "pkg:npm/lodash@4.17.21",
 			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
 			wantBlank:   true,
 		},
 		{
@@ -1584,6 +1587,7 @@ func TestAnalyzer_JSReExport(t *testing.T) {
 			},
 			purl:        "pkg:npm/lodash@4.17.21",
 			wantImports: 1,
+			wantCalls:   1, // blank-import baseline
 			wantBlank:   true,
 		},
 		{
@@ -1659,7 +1663,7 @@ export { foo };
 			if ca.ImportFileCount != tt.wantImports {
 				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
 			}
-			if tt.wantCalls > 0 && ca.CallSiteCount != tt.wantCalls {
+			if ca.CallSiteCount != tt.wantCalls {
 				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
 			}
 			if ca.HasBlankImport != tt.wantBlank {

@@ -634,9 +634,9 @@ HeaderTuple()
 }
 
 func TestAnalyzer_PythonDecoratorUsage(t *testing.T) {
-	// Verify that decorators using imported modules are captured as call sites
-	// via the existing (attribute) query pattern. This is a coverage verification
-	// test — no code changes needed for this pattern.
+	// Verify that decorator usage is captured as call sites for both imported
+	// module attributes (for example, @pytest.fixture) and bare decorators
+	// introduced via from-imports (for example, @fixture).
 	tests := []struct {
 		name        string
 		code        string
@@ -685,9 +685,9 @@ def my_fixture():
 			name: "decorator with arguments @pytest.mark.parametrize",
 			code: `import pytest
 
-@pytest.mark
-def test_something():
-    pass
+@pytest.mark.parametrize("value", [1, 2])
+def test_something(value):
+    assert value in [1, 2]
 `,
 			importPaths: map[string][]string{
 				"pkg:pypi/pytest@7.0.0": {"pytest"},
