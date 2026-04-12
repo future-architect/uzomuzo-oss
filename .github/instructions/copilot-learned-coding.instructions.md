@@ -263,4 +263,5 @@ pending_patterns:
   # comment-doc-drift (PR #283): already covered by "Comment-Code Consistency" rule — test comment incorrectly attributed scoped constructor match to method_invocation pattern
   # testing (PR #283): already covered by "Cover New Control Flow Branches with Tests" and "Verify Tree-Sitter Query Patterns Do Not Overlap" — each tree-sitter query pattern variant (generic vs non-generic scoped constructor) needs its own test case
   # comment-doc-drift (PR #283 round 4): already covered by "Comment-Code Consistency" rule — scoped constructor comment described 2-capture positional behavior but queries only have a single @func capture
+  # comment-doc-drift (PR #285): already covered by "Comment-Code Consistency" rule — HasBlankImport comments/docs said "no callable API" but flag covers broader patterns (Python feature-detection) that may have callable APIs; aliasMap comment claimed safety without noting lack of scope resolution
 -->
