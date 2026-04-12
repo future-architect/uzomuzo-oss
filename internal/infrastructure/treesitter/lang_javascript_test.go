@@ -775,6 +775,131 @@ const x: Foo = {} as any;
 	}
 }
 
+func TestAnalyzer_CJSDestructuredRequire(t *testing.T) {
+	tests := []struct {
+		name        string
+		filename    string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+		wantSymbols []string
+	}{
+		{
+			name:     "shorthand destructuring: const { X } = require('pkg')",
+			filename: "index.js",
+			code: `const { RawSource, ConcatSource } = require("webpack-sources");
+
+const x = new RawSource("hello");
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/webpack-sources@3.0.0": {"webpack-sources"},
+			},
+			purl:        "pkg:npm/webpack-sources@3.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"RawSource"},
+		},
+		{
+			name:     "renamed destructuring: const { X: alias } = require('pkg')",
+			filename: "index.js",
+			code: `const { Tapable: tap } = require("tapable");
+
+tap.init();
+tap.run();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/tapable@2.0.0": {"tapable"},
+			},
+			purl:        "pkg:npm/tapable@2.0.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
+			wantSymbols: []string{"init", "run"},
+		},
+		{
+			name:     "multiple destructured bindings with usage",
+			filename: "index.js",
+			code: `const { join, resolve, basename } = require("path");
+
+const p = join("a", "b");
+const abs = resolve(".");
+const name = basename("/foo/bar.txt");
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/path@1.0.0": {"path"},
+			},
+			purl:        "pkg:npm/path@1.0.0",
+			wantImports: 1,
+			wantCalls:   3,
+			wantBreadth: 3,
+			wantSymbols: []string{"basename", "join", "resolve"},
+		},
+		{
+			name:     "simple CJS require still works alongside destructured",
+			filename: "index.js",
+			code: `const axios = require("axios");
+
+axios.get("https://example.com");
+axios.post("https://example.com");
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/axios@1.6.0": {"axios"},
+			},
+			purl:        "pkg:npm/axios@1.6.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
+			wantSymbols: []string{"get", "post"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+
+			sort.Strings(tt.wantSymbols)
+			if len(ca.Symbols) != len(tt.wantSymbols) {
+				t.Errorf("Symbols = %v, want %v", ca.Symbols, tt.wantSymbols)
+			} else {
+				for i, s := range ca.Symbols {
+					if s != tt.wantSymbols[i] {
+						t.Errorf("Symbols[%d] = %q, want %q", i, s, tt.wantSymbols[i])
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestAnalyzer_JSInlineRequireCallSites(t *testing.T) {
 	tests := []struct {
 		name         string
