@@ -99,6 +99,11 @@ pending_patterns:
     pr: 281
     file: "internal/infrastructure/treesitter/lang_go.go"
     date: "2026-04-11"
+  - category: "comment-doc-drift"
+    summary: "Constant doc comment named only Python but the sentinel was reused for Java wildcard imports — doc comments on shared constants must enumerate all languages/contexts that use them"
+    pr: 298
+    file: "internal/infrastructure/treesitter/analyzer.go"
+    date: "2026-04-12"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
