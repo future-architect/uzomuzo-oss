@@ -610,14 +610,14 @@ public class Main {
 			// "new Gson()::toJson" contains an object_creation_expression which is
 			// matched by the constructor query, counting "Gson" as a call site.
 			// "Gson::new" is matched by the constructor reference pattern
-			// (method_reference with "new" token), counting "new" as a symbol.
-			// Total: 2 call sites (object_creation + constructor reference),
-			// 2 symbols ("Gson" from constructor, "new" from method reference).
+			// (method_reference with "new" token), recording the qualifier "Gson"
+			// as the symbol — consistent with how new Foo() records "Foo".
+			// Total: 2 call sites, 1 unique symbol ("Gson").
 			name:        "gson constructor reference and object creation",
 			purl:        "pkg:maven/com.google.code.gson/gson@2.10",
 			wantImports: 1,
 			wantCalls:   2,
-			wantBreadth: 2,
+			wantBreadth: 1,
 		},
 		{
 			// Strings::isNullOrEmpty — method reference to guava static method

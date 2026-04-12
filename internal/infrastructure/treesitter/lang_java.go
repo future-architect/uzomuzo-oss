@@ -44,8 +44,10 @@ func registerJavaConfig(a *Analyzer) {
 			// name, consistent with method_invocation handling.
 			`(method_reference . (_) @obj . (identifier) @method)`,
 			// Constructor reference: Foo::new — tree-sitter-java represents
-			// "new" as a token, not an identifier, so match it explicitly.
-			`(method_reference . (_) @obj . "new" @method)`,
+			// "new" as a token, not an identifier, so match it explicitly,
+			// but record the qualifier/type as the symbol to keep constructor
+			// references consistent with constructor calls (new Foo()).
+			`(method_reference . (_) @obj @method . "new")`,
 		}, "\n"),
 		stripQuotes: false,
 		aliasFromPkg: func(importPath string) string {
