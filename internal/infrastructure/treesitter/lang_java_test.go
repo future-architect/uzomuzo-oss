@@ -540,6 +540,104 @@ public class Main {
 	}
 }
 
+func TestAnalyzer_JavaMethodReference(t *testing.T) {
+	dir := t.TempDir()
+	// Java method references (Foo::bar) produce method_reference AST nodes.
+	// These should be counted as call sites when the type is from an external dependency.
+	// Without a method_reference query pattern, deps used ONLY via method references
+	// are undercounted (call_site_count = 0 despite active usage).
+	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.google.gson.Gson;
+import com.google.common.base.Strings;
+import org.apache.commons.lang3.StringUtils;
+
+import java.util.List;
+import java.util.Arrays;
+import java.util.stream.Collectors;
+
+public class Main {
+    // Method reference to external type's static method
+    List<Boolean> blanks = Arrays.asList("a", "b").stream()
+        .map(StringUtils::isBlank)
+        .collect(Collectors.toList());
+
+    // Method reference to external type's instance method
+    List<String> jsons = Arrays.asList("a", "b").stream()
+        .map(new Gson()::toJson)
+        .collect(Collectors.toList());
+
+    // Constructor reference (Type::new)
+    Gson gson = Arrays.asList("config").stream()
+        .map(s -> new Gson())
+        .findFirst().orElse(null);
+
+    // Method reference with qualified static method
+    List<Boolean> nullOrEmpty = Arrays.asList("a", null).stream()
+        .map(Strings::isNullOrEmpty)
+        .collect(Collectors.toList());
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:maven/com.google.code.gson/gson@2.10":            {"com.google.gson"},
+		"pkg:maven/com.google.guava/guava@33.0":               {"com.google.common"},
+		"pkg:maven/org.apache.commons/commons-lang3@3.14":     {"org.apache.commons.lang3"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			// StringUtils::isBlank — method reference to external static method
+			name:        "method reference StringUtils::isBlank",
+			purl:        "pkg:maven/org.apache.commons/commons-lang3@3.14",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			// Strings::isNullOrEmpty — method reference to guava static method
+			name:        "method reference Strings::isNullOrEmpty",
+			purl:        "pkg:maven/com.google.guava/guava@33.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
+			}
+		})
+	}
+}
+
 func TestAnalyzer_JavaConstructorCall(t *testing.T) {
 	dir := t.TempDir()
 	// Constructor calls (new Type()) should count as call sites.
