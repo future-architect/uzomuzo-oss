@@ -387,6 +387,19 @@ func (a *Analyzer) extractImports(
 // nesting.
 const maxAncestorWalkDepth = 5
 
+// callSiteCaptureNames lists the tree-sitter capture names used for call-site
+// counting across all language configs. Captures not in this set (e.g., @decorator,
+// @metaKey used only for predicate filtering) are excluded from counting logic.
+var callSiteCaptureNames = map[string]bool{
+	"func":   true, // JS/TS/Python/Java: bare function or constructor call
+	"obj":    true, // JS: member_expression object
+	"prop":   true, // JS: member_expression property
+	"pkg":    true, // Go/Python: package or module identifier
+	"attr":   true, // Python: attribute access
+	"field":  true, // Go/Java: field or member access
+	"method": true, // Java: method invocation or reference
+}
+
 // countCallSites counts selector/member expressions matching known aliases.
 func (a *Analyzer) countCallSites(
 	cfg *langConfig,
@@ -413,11 +426,22 @@ func (a *Analyzer) countCallSites(
 		if !ok {
 			break
 		}
+		// Apply tree-sitter predicates (e.g., #eq?, #match?) to filter matches.
+		match = cursor.FilterPredicates(match, src)
 
-		if len(match.Captures) >= 2 {
+		// Extract only the captures relevant to call-site counting, skipping
+		// auxiliary captures used solely for predicate filtering (e.g., @decorator, @metaKey).
+		var relevant []sitter.QueryCapture
+		for _, c := range match.Captures {
+			if callSiteCaptureNames[query.CaptureNameForId(c.Index)] {
+				relevant = append(relevant, c)
+			}
+		}
+
+		if len(relevant) >= 2 {
 			// Two-capture match: pkg.field pattern (e.g., requests.get)
-			pkg := match.Captures[0].Node.Content(src)
-			field := match.Captures[1].Node.Content(src)
+			pkg := relevant[0].Node.Content(src)
+			field := relevant[1].Node.Content(src)
 
 			purls, ok := aliasMap[pkg]
 			if !ok {
@@ -431,9 +455,9 @@ func (a *Analyzer) countCallSites(
 				acc.callSites++
 				acc.symbols[field] = true
 			}
-		} else if len(match.Captures) == 1 {
+		} else if len(relevant) == 1 {
 			// Single-capture match: bare identifier call (e.g., get() from "from x import get")
-			funcName := match.Captures[0].Node.Content(src)
+			funcName := relevant[0].Node.Content(src)
 
 			purls, ok := aliasMap[funcName]
 			if !ok {

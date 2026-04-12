@@ -77,6 +77,37 @@ func newJSLikeConfig(lang *sitter.Language, includeJSX bool) *langConfig {
 		`(return_statement (identifier) @func)`,
 		// x = DEV
 		`(assignment_expression right: (identifier) @func)`,
+
+		// Framework decorator/registration patterns (#262).
+		// Angular @NgModule/@Component: identifiers in decorator array arguments
+		// (imports, declarations, exports) are module/component registrations that
+		// prove the dependency is used, even though actual usage happens in HTML
+		// templates outside the TypeScript AST.
+		// Constrained to NgModule/Component decorators and imports/declarations/exports
+		// keys to avoid false positives from unrelated decorators (e.g., providers).
+		`((decorator
+			(call_expression
+				function: (identifier) @decorator
+				arguments: (arguments
+					(object
+						(pair
+							key: (property_identifier) @metaKey
+							value: (array (identifier) @func))))))
+			(#match? @decorator "^(NgModule|Component)$")
+			(#match? @metaKey "^(imports|declarations|exports)$"))`,
+		// Vue defineComponent / Options API: shorthand property identifiers inside
+		// the `components` option object (e.g., components: { MyChild }) register
+		// components for template use. Constrained to defineComponent({ components: { ... } })
+		// to avoid false positives from unrelated nested object literals.
+		`(call_expression
+			function: (identifier) @vueCallee
+			(#eq? @vueCallee "defineComponent")
+			arguments: (arguments
+				(object
+					(pair
+						key: (property_identifier) @vueComponentsKey
+						(#eq? @vueComponentsKey "components")
+						value: (object (shorthand_property_identifier) @func)))))`,
 	}
 	if includeJSX {
 		callPatterns = append(callPatterns,

@@ -252,28 +252,11 @@ func (s *Service) buildEntries(
 			}
 		}
 
-		// Tool directive deps intentionally have zero source imports.
-		// Override IsUnused so they are not flagged as trivial removals.
-		//
-		// Also provide a minimal synthetic coupling signal when the analyzer has
-		// no source-coupling data for tool deps. Leaving IsUnused=false together
-		// with all coupling counts at zero can be interpreted downstream as
-		// zero-effort removal, which incorrectly surfaces tool deps as trivial/easy.
-		if entry.Scope == domaindiet.ScopeTool {
-			if entry.Coupling.IsUnused {
-				entry.Coupling.IsUnused = false
-			}
-			if entry.Coupling.ImportFileCount == 0 &&
-				entry.Coupling.CallSiteCount == 0 &&
-				entry.Coupling.APIBreadth == 0 {
-				entry.Coupling.APIBreadth = 1
-			}
-		}
-
-		// Runtime-scoped deps (JDBC drivers, logging backends, webjars) are
-		// loaded via reflection/ServiceLoader/classpath and intentionally have
-		// zero static imports. Same override pattern as ScopeTool above.
-		if entry.Scope == domaindiet.ScopeRuntime {
+		// Non-static-import scopes (tool directives, runtime/reflection deps)
+		// intentionally have zero source imports. Override IsUnused so they are
+		// not flagged as trivial removals, and provide a minimal synthetic
+		// coupling signal so downstream scoring does not treat them as zero-effort.
+		if entry.Scope == domaindiet.ScopeTool || entry.Scope == domaindiet.ScopeRuntime {
 			if entry.Coupling.IsUnused {
 				entry.Coupling.IsUnused = false
 			}

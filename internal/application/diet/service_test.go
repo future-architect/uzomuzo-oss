@@ -914,51 +914,53 @@ func TestRun_RuntimeDepsNotFlaggedAsUnused(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		purl           string
-		wantScope      string
-		wantIsUnused   bool
-		wantMinBreadth int
+		name            string
+		purl            string
+		wantScope       string
+		wantIsUnused    bool
+		wantAPIBreadth  int
 	}{
 		{
 			name:           "MySQL JDBC driver recognized as runtime",
 			purl:           "pkg:maven/mysql/mysql-connector-j@9.0.0",
 			wantScope:      domaindiet.ScopeRuntime,
 			wantIsUnused:   false,
-			wantMinBreadth: 1,
+			wantAPIBreadth: 1,
 		},
 		{
 			name:           "PostgreSQL JDBC driver recognized as runtime",
 			purl:           "pkg:maven/org.postgresql/postgresql@42.7.0",
 			wantScope:      domaindiet.ScopeRuntime,
 			wantIsUnused:   false,
-			wantMinBreadth: 1,
+			wantAPIBreadth: 1,
 		},
 		{
 			name:           "Logback logging backend recognized as runtime",
 			purl:           "pkg:maven/ch.qos.logback/logback-classic@1.5.6",
 			wantScope:      domaindiet.ScopeRuntime,
 			wantIsUnused:   false,
-			wantMinBreadth: 1,
+			wantAPIBreadth: 1,
 		},
 		{
 			name:           "WebJars bootstrap recognized as runtime",
 			purl:           "pkg:maven/org.webjars/bootstrap@5.3.3",
 			wantScope:      domaindiet.ScopeRuntime,
 			wantIsUnused:   false,
-			wantMinBreadth: 1,
+			wantAPIBreadth: 1,
 		},
 		{
-			name:         "Non-runtime Maven dep unaffected",
-			purl:         "pkg:maven/com.google.guava/guava@33.0.0",
-			wantScope:    "",
-			wantIsUnused: true,
+			name:           "Non-runtime Maven dep unaffected",
+			purl:           "pkg:maven/com.google.guava/guava@33.0.0",
+			wantScope:      "",
+			wantIsUnused:   true,
+			wantAPIBreadth: 0,
 		},
 		{
-			name:         "Non-Maven PURL unaffected",
-			purl:         "pkg:golang/github.com/gin-gonic/gin@v1.10.0",
-			wantScope:    "",
-			wantIsUnused: true,
+			name:           "Non-Maven PURL unaffected",
+			purl:           "pkg:golang/github.com/gin-gonic/gin@v1.10.0",
+			wantScope:      "",
+			wantIsUnused:   true,
+			wantAPIBreadth: 0,
 		},
 	}
 
@@ -1006,8 +1008,8 @@ func TestRun_RuntimeDepsNotFlaggedAsUnused(t *testing.T) {
 			if entry.Coupling.IsUnused != tt.wantIsUnused {
 				t.Errorf("IsUnused = %v, want %v", entry.Coupling.IsUnused, tt.wantIsUnused)
 			}
-			if tt.wantMinBreadth > 0 && entry.Coupling.APIBreadth < tt.wantMinBreadth {
-				t.Errorf("APIBreadth = %d, want >= %d", entry.Coupling.APIBreadth, tt.wantMinBreadth)
+			if entry.Coupling.APIBreadth != tt.wantAPIBreadth {
+				t.Errorf("APIBreadth = %d, want %d", entry.Coupling.APIBreadth, tt.wantAPIBreadth)
 			}
 			// Runtime deps should not be classified as trivial difficulty.
 			if tt.wantScope == domaindiet.ScopeRuntime && entry.Scores.Difficulty == domaindiet.DifficultyTrivial {
