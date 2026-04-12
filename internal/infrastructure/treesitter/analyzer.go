@@ -272,19 +272,11 @@ func (a *Analyzer) AnalyzeCoupling(
 		callSites := acc.callSites
 		isUnused := len(acc.importFiles) == 0
 
-		// Dot imports are used but uncountable via selector queries.
-		// Mark as used with a baseline call site count.
-		if acc.hasDotImport {
-			isUnused = false
-			if callSites == 0 {
-				callSites = 1
-			}
-		}
-
-		// Blank/side-effect imports (Go: import _ "pkg", JS: import 'x',
-		// CJS: require('x')) may have implicit or otherwise uncountable usage.
-		// Set a baseline call site count when usage cannot be reliably attributed.
-		if acc.hasBlankImport && !acc.hasDotImport {
+		// Dot imports and blank/side-effect imports (Go: import _ "pkg",
+		// JS: import 'x', CJS: require('x')) are used but uncountable via
+		// standard call-site queries. Mark as used with a baseline call
+		// site count so scoring does not penalize them.
+		if acc.hasDotImport || acc.hasBlankImport {
 			isUnused = false
 			if callSites == 0 {
 				callSites = 1

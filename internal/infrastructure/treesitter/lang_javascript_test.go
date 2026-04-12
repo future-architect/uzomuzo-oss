@@ -1181,6 +1181,12 @@ const x = UNRELATED_CONST;
 			if ca.APIBreadth != tt.wantBreadth {
 				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
 			}
+			if ca.HasBlankImport {
+				t.Error("HasBlankImport = true, want false (named import, not side-effect)")
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
+			}
 		})
 	}
 }
