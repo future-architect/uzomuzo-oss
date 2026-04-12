@@ -915,6 +915,282 @@ bar();
 	}
 }
 
+// TestAnalyzer_JSConditionalRequire verifies that require() calls inside
+// try/catch and switch/case blocks are correctly detected. Closes #260.
+func TestAnalyzer_JSConditionalRequire(t *testing.T) {
+	tests := []struct {
+		name        string
+		filename    string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantImports int
+		wantCalls   int
+		wantBlank   bool
+	}{
+		{
+			name:     "require inside try/catch block",
+			filename: "db.js",
+			code: `try {
+  var pg = require('pg');
+  pg.connect('postgres://localhost/mydb');
+} catch(e) {
+  console.log('pg not available');
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/pg@8.0.0": {"pg"},
+			},
+			purl:        "pkg:npm/pg@8.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBlank:   false,
+		},
+		{
+			name:     "require inside switch/case block",
+			filename: "driver.js",
+			code: `switch (dbType) {
+  case 'pg':
+    var driver = require('pg');
+    driver.Pool();
+    break;
+  case 'mysql':
+    break;
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/pg@8.0.0": {"pg"},
+			},
+			purl:        "pkg:npm/pg@8.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBlank:   false,
+		},
+		{
+			name:     "bare require inside try/catch (side-effect)",
+			filename: "polyfill.js",
+			code: `try {
+  require('optional-polyfill');
+} catch(e) {}
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/optional-polyfill@1.0.0": {"optional-polyfill"},
+			},
+			purl:        "pkg:npm/optional-polyfill@1.0.0",
+			wantImports: 1,
+			wantCalls:   1, // baseline for blank/side-effect import (#261)
+			wantBlank:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.ImportFileCount != tt.wantImports {
+				t.Errorf("ImportFileCount = %d, want %d", ca.ImportFileCount, tt.wantImports)
+			}
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.HasBlankImport != tt.wantBlank {
+				t.Errorf("HasBlankImport = %v, want %v", ca.HasBlankImport, tt.wantBlank)
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
+			}
+		})
+	}
+}
+
+// TestAnalyzer_JSBareIdentifierUsage verifies that imported constants used as
+// bare identifiers (not in function calls or member expressions) are counted
+// as call sites. Closes #278.
+func TestAnalyzer_JSBareIdentifierUsage(t *testing.T) {
+	tests := []struct {
+		name        string
+		filename    string
+		code        string
+		importPaths map[string][]string
+		purl        string
+		wantCalls   int
+		wantBreadth int
+	}{
+		{
+			name:     "constant in if condition",
+			filename: "app.js",
+			code: `import { DEV } from 'esm-env';
+
+if (DEV) {
+  console.log('dev mode');
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/esm-env@1.0.0": {"esm-env"},
+			},
+			purl:        "pkg:npm/esm-env@1.0.0",
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name:     "constant in ternary condition",
+			filename: "app.js",
+			code: `import { DEV } from 'esm-env';
+
+const url = DEV ? 'http://localhost' : 'https://prod.com';
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/esm-env@1.0.0": {"esm-env"},
+			},
+			purl:        "pkg:npm/esm-env@1.0.0",
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name:     "constant in binary expression",
+			filename: "app.js",
+			code: `import { DEV } from 'esm-env';
+
+const debug = DEV && true;
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/esm-env@1.0.0": {"esm-env"},
+			},
+			purl:        "pkg:npm/esm-env@1.0.0",
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name:     "constant assigned to variable",
+			filename: "config.js",
+			code: `import { DEV } from 'esm-env';
+
+const isDev = DEV;
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/esm-env@1.0.0": {"esm-env"},
+			},
+			purl:        "pkg:npm/esm-env@1.0.0",
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name:     "constant in return statement",
+			filename: "helper.js",
+			code: `import { DEV } from 'esm-env';
+
+function isDev() {
+  return DEV;
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/esm-env@1.0.0": {"esm-env"},
+			},
+			purl:        "pkg:npm/esm-env@1.0.0",
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name:     "constant in assignment RHS",
+			filename: "config.js",
+			code: `import { DEV } from 'esm-env';
+
+let mode;
+mode = DEV;
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/esm-env@1.0.0": {"esm-env"},
+			},
+			purl:        "pkg:npm/esm-env@1.0.0",
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+		{
+			name:     "multiple bare identifier patterns combined",
+			filename: "complex.js",
+			code: `import { DEV, BROWSER } from 'esm-env';
+
+if (DEV) {
+  console.log('dev');
+}
+const isBrowser = BROWSER;
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/esm-env@1.0.0": {"esm-env"},
+			},
+			purl:        "pkg:npm/esm-env@1.0.0",
+			wantCalls:   2,
+			wantBreadth: 2,
+		},
+		{
+			name:     "non-imported identifier not counted",
+			filename: "app.js",
+			code: `import { DEV } from 'esm-env';
+
+if (DEV) {
+  console.log('dev');
+}
+const x = UNRELATED_CONST;
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/esm-env@1.0.0": {"esm-env"},
+			},
+			purl:        "pkg:npm/esm-env@1.0.0",
+			wantCalls:   1,
+			wantBreadth: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0644)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling analysis for %s", tt.purl)
+			}
+
+			if ca.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, tt.wantCalls)
+			}
+			if ca.APIBreadth != tt.wantBreadth {
+				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
+			}
+			if ca.HasBlankImport {
+				t.Error("HasBlankImport = true, want false (named import, not side-effect)")
+			}
+			if ca.IsUnused {
+				t.Error("IsUnused = true, want false")
+			}
+		})
+	}
+}
+
 func TestAnalyzer_CJSDestructuredRequire(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1064,7 +1340,7 @@ func TestAnalyzer_JSInlineRequireCallSites(t *testing.T) {
 			},
 			purl:         "pkg:npm/dom-serialize@2.0.0",
 			wantImports:  1,
-			wantCalls:    0,
+			wantCalls:    1, // baseline for blank/side-effect import (#261)
 			wantIsUnused: false,
 			wantBlank:    true,
 			wantBreadth:  0,
@@ -1079,7 +1355,7 @@ func TestAnalyzer_JSInlineRequireCallSites(t *testing.T) {
 			},
 			purl:         "pkg:npm/browser-stdout@1.3.1",
 			wantImports:  1,
-			wantCalls:    0,
+			wantCalls:    1, // baseline for blank/side-effect import (#261)
 			wantIsUnused: false,
 			wantBlank:    true,
 			wantBreadth:  0,
@@ -1094,7 +1370,7 @@ func TestAnalyzer_JSInlineRequireCallSites(t *testing.T) {
 			},
 			purl:         "pkg:npm/depd@2.0.0",
 			wantImports:  1,
-			wantCalls:    0,
+			wantCalls:    1, // baseline for blank/side-effect import (#261)
 			wantIsUnused: false,
 			wantBlank:    true,
 			wantBreadth:  0,
@@ -1109,7 +1385,7 @@ func TestAnalyzer_JSInlineRequireCallSites(t *testing.T) {
 			},
 			purl:         "pkg:npm/side-effect-only@1.0.0",
 			wantImports:  1,
-			wantCalls:    0,
+			wantCalls:    1, // baseline for blank/side-effect import (#261)
 			wantIsUnused: false,
 			wantBlank:    true,
 			wantBreadth:  0,
@@ -1141,7 +1417,7 @@ serialize(document);
 			},
 			purl:         "pkg:npm/some-pkg@1.0.0",
 			wantImports:  1,
-			wantCalls:    0,
+			wantCalls:    1, // baseline for blank/side-effect import (#261)
 			wantIsUnused: false,
 			wantBlank:    true,
 			wantBreadth:  0,

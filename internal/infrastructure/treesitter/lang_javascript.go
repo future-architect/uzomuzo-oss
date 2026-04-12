@@ -44,6 +44,26 @@ func newJSLikeConfig(lang *sitter.Language, includeJSX bool) *langConfig {
 		`(new_expression constructor: (identifier) @func)`,
 		// { [ATTR]: val } — imported constant used as computed property key
 		`(computed_property_name (identifier) @func)`,
+		// Bare identifier usage patterns for constant-only packages (#278).
+		// These detect imported identifiers used as values rather than in calls.
+		// countCallSites filters matches by aliasMap, so this is limited to identifiers
+		// whose names match imported aliases. This is name-based matching and does
+		// not resolve lexical scope, so shadowed locals with the same name may also match.
+		// if (DEV) { ... }
+		`(if_statement condition: (parenthesized_expression (identifier) @func))`,
+		// DEV ? x : y (condition, consequence, or alternative)
+		`(ternary_expression condition: (identifier) @func)`,
+		`(ternary_expression consequence: (identifier) @func)`,
+		`(ternary_expression alternative: (identifier) @func)`,
+		// DEV && x, x || DEV
+		`(binary_expression left: (identifier) @func)`,
+		`(binary_expression right: (identifier) @func)`,
+		// const x = DEV
+		`(variable_declarator value: (identifier) @func)`,
+		// return DEV
+		`(return_statement (identifier) @func)`,
+		// x = DEV
+		`(assignment_expression right: (identifier) @func)`,
 	}
 	if includeJSX {
 		callPatterns = append(callPatterns,
