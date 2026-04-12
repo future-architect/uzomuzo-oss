@@ -258,4 +258,9 @@ pending_patterns:
   # defensive-coding (PR #227 round 2): already covered by "Validate Generated Strings Against Target-Language Syntax" — validate dotted module paths (e.g., zope.interface) by splitting on "." and checking each segment independently
   # comment-doc-drift (PR #227 round 2): WONT_FIX — PR description reflects initial implementation; code and tests were updated in prior commit
   # duplicate-parsing (PR #281): already covered by promoted "Extract Shared Helpers for Near-Duplicate Code Paths" rule — aliasFromPkg closure inconsistent with handleGoImport; extracted goAliasFromImportPath shared helper
+  # comment-doc-drift (PR #283): already covered by "Comment-Code Consistency" rule — scoped_type_identifier comment inaccurately described capture matching behavior in countCallSites
+  # comment-doc-drift (PR #283 round 2): already covered by "Comment-Code Consistency" rule — scoped_type_identifier comment still inaccurate after first fix; rewording must reflect positional capture semantics of countCallSites
+  # comment-doc-drift (PR #283): already covered by "Comment-Code Consistency" rule — test comment incorrectly attributed scoped constructor match to method_invocation pattern
+  # testing (PR #283): already covered by "Cover New Control Flow Branches with Tests" and "Verify Tree-Sitter Query Patterns Do Not Overlap" — each tree-sitter query pattern variant (generic vs non-generic scoped constructor) needs its own test case
+  # comment-doc-drift (PR #283 round 4): already covered by "Comment-Code Consistency" rule — scoped constructor comment described 2-capture positional behavior but queries only have a single @func capture
 -->
