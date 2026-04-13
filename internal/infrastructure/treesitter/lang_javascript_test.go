@@ -2107,6 +2107,7 @@ export class SharedModule {}
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2134,14 +2135,16 @@ export class SharedModule {}
 				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
 			}
 
-			sort.Strings(tt.wantSymbols)
-			sort.Strings(ca.Symbols)
-			if len(ca.Symbols) != len(tt.wantSymbols) {
-				t.Errorf("Symbols = %v, want %v", ca.Symbols, tt.wantSymbols)
+			wantSymbols := append([]string(nil), tt.wantSymbols...)
+			gotSymbols := append([]string(nil), ca.Symbols...)
+			sort.Strings(wantSymbols)
+			sort.Strings(gotSymbols)
+			if len(gotSymbols) != len(wantSymbols) {
+				t.Errorf("Symbols = %v, want %v", gotSymbols, wantSymbols)
 			} else {
-				for i, s := range ca.Symbols {
-					if s != tt.wantSymbols[i] {
-						t.Errorf("Symbols[%d] = %q, want %q", i, s, tt.wantSymbols[i])
+				for i, s := range gotSymbols {
+					if s != wantSymbols[i] {
+						t.Errorf("Symbols[%d] = %q, want %q", i, s, wantSymbols[i])
 					}
 				}
 			}
