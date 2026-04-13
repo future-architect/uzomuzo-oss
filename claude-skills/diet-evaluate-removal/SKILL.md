@@ -40,6 +40,7 @@ Display ALL of these from the diet JSON. Do NOT re-compute any of them.
 |-------|-------------------|
 | `name` / `version` / `ecosystem` | Dependency identity |
 | `purl` | Canonical package URL identifier |
+| `scope` | Dependency scope (e.g., `"tool"` for build-time-only deps) |
 | `rank` / `priority_score` | Where this dep sits in the removal priority list |
 | `difficulty` | trivial / easy / moderate / hard |
 | `exclusive_transitive` / `total_transitive` | Deps removed together / total transitive count |
@@ -52,18 +53,20 @@ Display ALL of these from the diet JSON. Do NOT re-compute any of them.
 | `import_files` | Exact file paths that import this dep |
 | `has_blank_import` / `has_dot_import` / `has_wildcard_import` | Special import patterns |
 | `is_unused` | Whether diet detected zero imports |
-| `lifecycle` | EOL-Confirmed / Archived / Stalled / Active / etc. |
+| `lifecycle` | Active / Stalled / Legacy-Safe / EOL-Confirmed / EOL-Effective / EOL-Scheduled / Archived / Review Needed |
 | `has_vulnerabilities` / `vulnerability_count` / `max_cvss_score` | Security signals |
+| `overall_score` | Composite health score (OpenSSF Scorecard) |
 | `graph_impact` / `coupling_effort` / `health_risk` | Score components |
 
 ### Data quality check
 
 Before proceeding, flag any of these patterns -- they indicate diet's coupling data may be unreliable:
 
+- `scope: "tool"` + `import_file_count: 0` -- Expected for build-time-only tool deps. Not an IBNC pattern. These have zero runtime imports by design.
 - `has_blank_import: true` + `call_site_count: 0` -- The blank import IS the usage (Go DB drivers, JS polyfills). Coupling is underestimated.
 - `has_wildcard_import: true` -- All symbols are in scope. `api_breadth` may undercount.
 - `has_dot_import: true` -- Broadly coupled; symbols lack package qualifier.
-- `import_file_count > 0` + `call_site_count: 0` -- Possible IBNC pattern (type-only usage, annotation processing, framework DI, config-driven plugins). Investigate before trusting "0 calls."
+- `import_file_count > 0` + `call_site_count: 0` (without blank/dot/wildcard flags) -- Possible IBNC pattern (type-only usage, annotation processing, framework DI, config-driven plugins). Investigate before trusting "0 calls." Note: distinct from the blank-import pattern above -- blank imports typically produce `call_site_count = 1`, not 0.
 
 ---
 
@@ -80,6 +83,7 @@ Classify each entry in `import_files` by its role in the project. This is the si
 | **CI / Infrastructure** | `.github/`, `scripts/`, `ci/`, `Makefile`, `build/` | Often trivially replaceable |
 | **Example / Demo** | `examples/`, `example/`, `demo/`, `sample/` | Can delete or update separately |
 | **Generated** | Files with `// Code generated` header, `*_gen.go`, `*.pb.go` | Re-run generator with replacement |
+| **Vendored** | `vendor/`, `node_modules/`, `third_party/` | Exclude from analysis -- copies of the dep, not usage |
 
 ### Output format
 
@@ -117,14 +121,16 @@ Two checks that diet cannot automate: API leakage (a binary gate) and symbol rep
 - If **yes** -- removing it is a **breaking change** for downstream consumers. Flag this immediately. The verdict must account for the breaking change cost.
 - If **no** -- internal swap, no API impact.
 
+Look for the package's types in **exported function signatures** (parameter types, return types), **exported struct field types**, and **exported interface method signatures**. Internal usage within function bodies is NOT API leakage.
+
 Check approach by ecosystem:
 
-| Ecosystem | Command |
-|-----------|---------|
-| Go | `grep -rn "func.*{pkg}\|type.*{pkg}" --include="*.go" \| grep -v _test.go` -- look for exported (capitalized) identifiers |
-| npm/TS | `grep -rn "export.*from.*'{pkg}'" --include="*.ts" --include="*.tsx"` |
-| Python | `grep -rn "from {pkg} import" --include="*.py"` in `__init__.py` files (re-exports) |
-| Java/Maven | `grep -rn "public.*{pkg}" --include="*.java"` in non-test source sets |
+| Ecosystem | What to check |
+|-----------|---------------|
+| Go | Exported func signatures, struct fields, and interface methods that reference the dep's types. Search non-test files for the dep's package name in type positions. |
+| npm/TS | `export ... from '{pkg}'` re-exports, or exported types/interfaces using the dep's types. |
+| Python | Re-exports in `__init__.py` files: `from {pkg} import ...` that are part of the public API. |
+| Java/Maven | Public class signatures, method parameters, return types, or field types referencing the dep's packages in non-test source sets. |
 
 ### 3b. Symbol Migration Map
 
@@ -151,7 +157,8 @@ Summary: {N}/{total} stdlib, {N} existing-dep, {N} self-impl, {N} no-replacement
 
 **Special cases**:
 - If `is_unused: true` -- skip this step. The dep can simply be deleted.
-- If `has_blank_import: true` and `call_site_count <= 1` -- the import itself is the usage (driver registration, polyfill). Check what `init()` does; the replacement is typically a different driver package, not a code change.
+- If `has_blank_import: true` and `call_site_count <= 1` -- the import itself is the usage (driver registration, polyfill). Check what `init()` does; the replacement is typically a different driver package, not a code change. Score Replaceability as High if a drop-in alternative driver/polyfill exists, Low if not.
+- If `symbols` is empty but `import_file_count > 0` (without blank/dot/wildcard flags) -- diet's coupling analysis may be incomplete. Manually inspect the import files to determine actual API usage before scoring Replaceability. Note the gap in the rationale.
 
 ---
 
@@ -163,10 +170,15 @@ Rate each axis High/Med/Low using the data gathered in Phases 1-3. Each axis is 
 |------|-----------|------|--------|------|
 | **Transitive Cleanup** | `exclusive_transitive` | >= 10 exclusive deps | 1-9 exclusive | 0 exclusive |
 | **Production Scope** | Phase 2 classification | 0 production files (all test/CI/example) | < 50% production files | >= 50% production files |
-| **Coupling Depth** | `coupling_effort`, `import_file_count`, `call_site_count` | `coupling_effort` < 0.2 (trivial/easy) | 0.2 - 0.5 (moderate) | > 0.5 (hard, deeply wired) |
+| **Coupling Depth** | `coupling_effort`, `import_file_count`, `call_site_count` | `coupling_effort` < 0.25 (trivial/easy) | 0.25 - 0.6 (moderate) | >= 0.6 (hard, deeply wired) |
 | **Replaceability** | Phase 3b symbol map | > 80% symbols have stdlib/existing-dep replacement | 50-80% replaceable | < 50%, or crypto/protocol involved |
-| **Security Urgency** | `has_vulnerabilities`, `max_cvss_score`, `lifecycle` | CVSS >= 7.0, or lifecycle EOL/Archived | CVSS 4.0-6.9, or lifecycle Stalled | No vulns, lifecycle Active |
+| **Security Urgency** | `has_vulnerabilities`, `max_cvss_score`, `lifecycle` | CVSS >= 7.0, or lifecycle EOL-Confirmed/EOL-Effective/Archived | CVSS 4.0-6.9, or lifecycle Stalled/EOL-Scheduled | No vulns, lifecycle Active/Legacy-Safe |
 | **Cascade Potential** | `exclusive_transitive`, project knowledge | Removing unblocks 3+ further removals | Unblocks 1-2 | Standalone, no cascade |
+
+### Scoring overrides
+
+- **Coupling Depth override**: When Phase 2 shows ALL import files are non-production (test/CI/example), override Coupling Depth to **High** regardless of `coupling_effort`. Test/CI refactoring is low-risk regardless of call count.
+- **Transitive Cleanup caveat**: When `stays_as_indirect: true`, `exclusive_transitive` may overestimate actual cleanup -- some "exclusive" transitives may remain reachable via the indirect path. Note this uncertainty in the rationale.
 
 ### Scoring output
 
@@ -223,16 +235,28 @@ Synthesize all phases into a structured recommendation. Use the exact field name
 
 ### Recommendation logic
 
+Rules are evaluated **top-to-bottom; first match wins.** If multiple rows could match, the earlier row takes priority.
+
 | Condition | Recommendation |
 |-----------|---------------|
 | `is_unused: true` | REMOVE, Trivial, Priority S |
-| All 6 axes High or Med, no API leakage | REMOVE |
-| 1-2 axes Low, rest High/Med, no API leakage | REMOVE -- note the Low axes as caveats in rationale |
+| API leakage = Yes AND Security Urgency = High | REMOVE with BREAKING CHANGE warning -- security overrides API stability. Rationale must document the breaking change and recommend a major version bump or deprecation timeline. Escalate to `/diet-assess-risk` |
 | API leakage = Yes | DEFER (needs major version bump or deprecation period) |
-| Replaceability = Low (crypto/protocol) | KEEP unless Security Urgency is High |
+| Replaceability = Low (crypto/protocol) | KEEP -- find an alternative maintained library rather than self-implementing. If Security Urgency is also High, escalate to `/diet-assess-risk` for full risk analysis. Never recommend self-implementing crypto/protocol |
+| All 6 axes High or Med | REMOVE |
+| 1-2 axes Low, rest High/Med | REMOVE -- note the Low axes as caveats in rationale |
 | >= 3 axes Low | KEEP |
 | Security Urgency = High, others mixed | REMOVE (prioritize security). Suggest `/diet-assess-risk` for full analysis |
 | `stays_as_indirect: true`, coupling low | REMOVE (still valuable: delegates version management, unblocks future cleanup) |
+
+### Effort derivation
+
+| Effort | Criteria |
+|--------|----------|
+| Trivial (<1h) | `is_unused: true`, OR 0 production files, OR all symbols stdlib-replaceable with <= 3 files |
+| Small (1-4h) | <= 5 production files AND > 80% symbols replaceable |
+| Medium (1-3d) | 6-15 production files, OR 50-80% symbols replaceable, OR API leakage requiring deprecation |
+| Large (1w+) | > 15 production files, OR < 50% symbols replaceable, OR crypto/protocol replacement needed |
 
 ### When to recommend further analysis
 
