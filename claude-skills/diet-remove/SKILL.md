@@ -22,6 +22,16 @@ Parse `$ARGUMENTS` for flags:
 
 **Safety principle**: Every removal must pass build + vet + test before committing. If any step fails, stop and diagnose — don't force it.
 
+### Ecosystem detection
+
+Detect the ecosystem from the PURL scheme or module path (`pkg:golang/` → Go, `pkg:npm/` → npm, `pkg:pypi/` → Python, `pkg:maven/` → Maven, `pkg:githubactions/` → GitHub Actions).
+
+If the ecosystem is **not Go**, display this notice to the user before proceeding:
+
+> **Note**: This skill's PR-mode commands and common patterns are optimized for Go. Issue mode and IBNC safety checks work for any language, but ecosystem-specific PR-mode guidance (verification commands, edge cases, lockfile handling) is still being developed for {ecosystem}. If you discover surprises or improvements during this removal, please contribute them via an issue or PR to [future-architect/uzomuzo-oss](https://github.com/future-architect/uzomuzo-oss).
+
+Then continue with the rest of the flow — the analysis, IBNC checks, and issue template are language-agnostic.
+
 ### GitHub Actions detection
 
 If the target PURL starts with `pkg:githubactions/` or is a GitHub Action name (`owner/action`):
