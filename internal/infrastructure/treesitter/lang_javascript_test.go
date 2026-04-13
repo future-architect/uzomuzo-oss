@@ -1959,6 +1959,8 @@ sync();
 // component-library dependencies that are only used via HTML template selectors.
 // Closes #262.
 func TestAnalyzer_AngularDecoratorRegistrations(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		filename    string
@@ -1996,22 +1998,22 @@ export class AppModule {}
 			filename: "app.module.ts",
 			code: `import { NgModule } from "@angular/core";
 import { BrowserModule } from "@angular/platform-browser";
+import { HeroListComponent } from "@hero/components";
 import { AppComponent } from "./app.component";
-import { HeroComponent } from "./hero.component";
 
 @NgModule({
   imports: [BrowserModule],
-  declarations: [AppComponent, HeroComponent],
+  declarations: [AppComponent, HeroListComponent],
 })
 export class AppModule {}
 `,
 			importPaths: map[string][]string{
-				"pkg:npm/%40angular/platform-browser@17.0.0": {"@angular/platform-browser"},
+				"pkg:npm/%40hero/components@1.0.0": {"@hero/components"},
 			},
-			purl:        "pkg:npm/%40angular/platform-browser@17.0.0",
+			purl:        "pkg:npm/%40hero/components@1.0.0",
 			wantCalls:   1,
 			wantBreadth: 1,
-			wantSymbols: []string{"BrowserModule"},
+			wantSymbols: []string{"HeroListComponent"},
 		},
 		{
 			name:     "standalone Component imports",
@@ -2105,7 +2107,10 @@ export class SharedModule {}
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			dir := t.TempDir()
 			err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0644)
 			if err != nil {
@@ -2130,13 +2135,16 @@ export class SharedModule {}
 				t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, tt.wantBreadth)
 			}
 
-			sort.Strings(tt.wantSymbols)
-			if len(ca.Symbols) != len(tt.wantSymbols) {
-				t.Errorf("Symbols = %v, want %v", ca.Symbols, tt.wantSymbols)
+			wantSymbols := append([]string(nil), tt.wantSymbols...)
+			gotSymbols := append([]string(nil), ca.Symbols...)
+			sort.Strings(wantSymbols)
+			sort.Strings(gotSymbols)
+			if len(gotSymbols) != len(wantSymbols) {
+				t.Errorf("Symbols = %v, want %v", gotSymbols, wantSymbols)
 			} else {
-				for i, s := range ca.Symbols {
-					if s != tt.wantSymbols[i] {
-						t.Errorf("Symbols[%d] = %q, want %q", i, s, tt.wantSymbols[i])
+				for i, s := range gotSymbols {
+					if s != wantSymbols[i] {
+						t.Errorf("Symbols[%d] = %q, want %q", i, s, wantSymbols[i])
 					}
 				}
 			}

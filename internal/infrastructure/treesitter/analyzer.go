@@ -431,14 +431,19 @@ func (a *Analyzer) countCallSites(
 
 		// Extract only the captures relevant to call-site counting, skipping
 		// auxiliary captures used solely for predicate filtering (e.g., @decorator, @metaKey).
-		var relevant []sitter.QueryCapture
+		// Use a fixed array to avoid per-match heap allocation.
+		var relevant [2]sitter.QueryCapture
+		nRelevant := 0
 		for _, c := range match.Captures {
 			if callSiteCaptureNames[query.CaptureNameForId(c.Index)] {
-				relevant = append(relevant, c)
+				if nRelevant < len(relevant) {
+					relevant[nRelevant] = c
+				}
+				nRelevant++
 			}
 		}
 
-		if len(relevant) >= 2 {
+		if nRelevant >= 2 {
 			// Two-capture match: pkg.field pattern (e.g., requests.get)
 			pkg := relevant[0].Node.Content(src)
 			field := relevant[1].Node.Content(src)
@@ -455,7 +460,7 @@ func (a *Analyzer) countCallSites(
 				acc.callSites++
 				acc.symbols[field] = true
 			}
-		} else if len(relevant) == 1 {
+		} else if nRelevant == 1 {
 			// Single-capture match: bare identifier call (e.g., get() from "from x import get")
 			funcName := relevant[0].Node.Content(src)
 
