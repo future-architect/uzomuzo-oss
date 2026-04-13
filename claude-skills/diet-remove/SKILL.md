@@ -22,9 +22,20 @@ Parse `$ARGUMENTS` for flags:
 
 **Safety principle**: Every removal must pass build + vet + test before committing. If any step fails, stop and diagnose — don't force it.
 
+### GitHub Actions detection
+
+If the target PURL starts with `pkg:githubactions/` or is a GitHub Action name (`owner/action`):
+
+1. **Find usage**: `grep -rn "{action-name}" .github/workflows/ --include="*.yml" --include="*.yaml"`
+2. **Assess impact**: Count workflow files and jobs affected. Note whether release-critical pipelines are involved.
+3. **Find replacement**: Check if an official replacement, maintained fork, or first-party alternative exists (e.g., `tibdex/github-app-token` → `actions/create-github-app-token`).
+4. **Pin strategy**: Replacement should use SHA pins with version comments (e.g., `uses: actions/checkout@<sha> # v4.2.0`).
+
+The rest of the flow (duplicate check, issue template, etc.) proceeds identically. In the Usage breakdown table, list workflow files instead of source files.
+
 ## Phase 1: Pre-flight checks
 
-Before writing any code, answer these three questions:
+Before writing any code, run through these checks:
 
 ### 1. Will it actually disappear?
 
@@ -77,8 +88,25 @@ Check these before starting:
 - **Generated code**: Files with `// Code generated` headers are trivially migrated
   by re-running the generator with the replacement tool.
 
-- **Blank imports**: `import _ "pkg"` only runs `init()`. Check what `init()` does
-  (usually driver/codec registration) before removing.
+- **Blank / side-effect imports**: See the IBNC checklist in step 4 below.
+
+### 4. IBNC safety check (imports-but-no-calls patterns)
+
+If the dependency shows 0 call sites but >0 import files, it may still be required. Verify it is not:
+
+- [ ] Side-effect import (`import _ "pkg"`, `import 'pkg'`, `require('pkg')` without assignment)
+- [ ] Database / driver registration (blank import or conditional `require()`)
+- [ ] Config-driven plugin (eslint, tailwind, babel, postcss — referenced in config files, not imports)
+- [ ] Framework DI / decorator (`@Entity`, `@Autowired`, `extends Framework`, Ember DI)
+- [ ] Annotation-only usage (Java: `@NotNull`, `@JsonProperty` — the annotation *is* the usage)
+- [ ] Type-only / constant-only package (imported for types or constants, zero function calls)
+- [ ] Delegated composition (called indirectly through SDK wrappers or framework context objects)
+
+If any apply, the dependency is **not safe to remove** even if call-site analysis shows 0 calls. See `docs/ibnc-patterns.md` for the full pattern taxonomy with evidence from 79+ OSS projects.
+
+### 5. SBOM tool awareness
+
+Note which SBOM tool (trivy/syft/cdxgen) and version generated the dependency data. Tool choice can produce 10-20x variance in dependency counts for the same project, affecting which dependencies appear and their coupling scores. If the dep count seems unexpectedly low, cross-check with a different tool.
 
 ## Issue mode (default): File a GitHub Issue
 
@@ -125,11 +153,12 @@ Title: dep: replace EOL {dependency} with {replacement}
 Body:
 ## Problem
 
-`{dependency}` is {lifecycle status} (detected by [uzomuzo diet](https://github.com/future-architect/uzomuzo-oss)).
+`{dependency}` is {lifecycle status}.
 {1-2 sentences on why this matters — security risk, no more patches, etc.}
 
 ## Impact analysis
 
+- **Detected by**: [uzomuzo diet](https://github.com/future-architect/uzomuzo-oss) with {sbom-tool} {version}
 - **Files**: {N} files import this dependency
 - **Call sites**: {N} calls across {N} APIs
 - **Exclusive transitive deps**: {N} (removed together)
@@ -156,6 +185,14 @@ Body:
 
 {any env var renames needed, or "None"}
 
+## False-positive risk
+
+{If the dependency matches an IBNC pattern (side-effect import, config-driven plugin, framework DI, etc.), note it here. If none apply, write "None — all usage is via direct function calls."}
+
+## Cross-project context
+
+{If the same dependency is known to be EOL/archived in other major OSS projects, note it here. E.g., "mitchellh/go-homedir is archived and also affects Trivy, Terraform, Vault, and MinIO." If no cross-project data is available, write "No cross-project data available."}
+
 ## Notes
 
 - {any hidden complications from Phase 1 step 3}
@@ -174,7 +211,15 @@ Before filing, check the target repository's issue templates:
    ```
 3. If blank issues are enabled or a "feature request" template exists, use `gh issue create`
 
-**After filing, stop.** Do not proceed to implementation.
+### After filing
+
+Do not proceed to implementation. The issue/discussion is the deliverable.
+
+**Follow-up guidance:**
+- If no maintainer response after **2 weeks**, add a polite ping comment.
+- If the maintainer responds with **"PR welcome"**, you may re-run with `--pr` to implement (but check if you can reproduce CI locally first).
+- If the same dependency is EOL across **multiple projects** (e.g., mitchellh/* packages), cross-reference the issues in each body so maintainers see the ecosystem-wide pattern.
+- If the dependency would benefit from **structural reform** rather than individual removal (e.g., a framework that pulls in many EOL deps), mention this in the Notes section — the insight is valuable even if you can't implement it yourself.
 
 If `--pr` was specified, skip this section and continue to Phase 1.5 below.
 
@@ -290,6 +335,8 @@ go mod tidy
 For npm: Remove from `package.json`, run `npm install` or equivalent.
 For Python: Remove from `requirements.txt` / `pyproject.toml`, run `pip install`.
 For Maven: Remove from `pom.xml`.
+
+**Monorepo warning**: In monorepos with workspace-managed lockfiles (pnpm, yarn workspaces, Gradle multi-module), the lockfile must be regenerated in the monorepo environment. If you cannot run the package manager locally, use Issue mode instead of PR mode — the next.js @vercel/kv removal failed CI entirely because `pnpm-lock.yaml` was not regenerated.
 
 ## Phase 3: Verification
 
