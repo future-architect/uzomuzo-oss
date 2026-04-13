@@ -21,7 +21,7 @@ type DietEntry struct {
 	Ecosystem string
 	Version   string
 	Relation  string // "direct" or "transitive"
-	Scope     string // "" (default), "tool" (Go tool directive), or "runtime" (reflection-loaded)
+	Scope     string // "" (default), "tool" (Go tool directive), or "runtime" (loaded via runtime mechanisms such as reflection, ServiceLoader, or classpath resources)
 
 	Graph    GraphMetrics
 	Coupling CouplingAnalysis

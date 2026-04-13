@@ -225,7 +225,7 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 		if e.Scope == domaindiet.ScopeTool {
 			p.printf("│    Status: TOOL (go.mod tool directive — not imported in source)\n")
 		} else if e.Scope == domaindiet.ScopeRuntime {
-			p.printf("│    Status: RUNTIME (reflection/ServiceLoader — not statically imported)\n")
+			p.printf("│    Status: RUNTIME (reflection/ServiceLoader/classpath resources — not statically imported)\n")
 		} else if e.Coupling.IsUnused {
 			p.printf("│    Status: UNUSED (0 imports found)\n")
 		} else {
