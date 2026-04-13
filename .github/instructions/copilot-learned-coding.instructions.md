@@ -60,6 +60,8 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Verify Tree-Sitter Query Patterns Do Not Overlap**: When adding new tree-sitter (or similar AST) query patterns to a multi-pattern query, verify that the new pattern does not match nodes already captured by an existing pattern via parent-child nesting. For example, a standalone `member_expression` pattern already matches the inner `pkg.Foo` node inside `new pkg.Foo()`, so adding a `new_expression` wrapping `member_expression` pattern would double-count the same call site. Test with representative code that exercises both the new and existing patterns.
 - **Constrain Tree-Sitter Queries with Predicates for Framework-Specific Patterns**: When adding tree-sitter query patterns that target framework-specific AST shapes (e.g., Angular decorators, Vue component registrations), use `#eq?` or `#match?` predicates to constrain matches to the intended decorator names, function names, and property keys. Unconstrained structural patterns (e.g., "any decorator with an array argument") match far more broadly than intended and introduce false-positive call sites from unrelated code that happens to share the same AST shape. Always verify that `FilterPredicates` is called in the match loop so predicates are actually applied, and use dedicated capture names for predicate-only captures (e.g., `@decorator`, `@metaKey`) that are excluded from counting logic.
 
+- **Guard Ecosystem-Specific Heuristics by PURL Type**: When a detection heuristic (aggregator flattening, workspace detection, monorepo inference) is designed for a specific package ecosystem, guard it with an explicit PURL type check (e.g., `rootType != "maven"`). Structural properties like shared namespaces and parent-child dependency trees exist across ecosystems (Maven groupIds, npm scopes, PyPI namespaces) but have different semantics. Without a type guard, a Maven-specific heuristic can misfire on npm or other ecosystems that happen to share the same structural pattern, silently rewriting dependency graphs.
+
 ## Pending Copilot Patterns
 
 <!--
@@ -98,6 +100,11 @@ pending_patterns:
     pr: 281
     file: "internal/infrastructure/treesitter/lang_go.go"
     date: "2026-04-11"
+  - category: "comment-doc-drift"
+    summary: "Test case name claimed 'web vs data-jpa' but input PURL was spring-boot-starter-security — test names must match the actual input under test"
+    pr: 299
+    file: "internal/application/diet/service_test.go"
+    date: "2026-04-12"
   - category: "comment-doc-drift"
     summary: "Constant doc comment named only Python but the sentinel was reused for Java wildcard imports — doc comments on shared constants must enumerate all languages/contexts that use them"
     pr: 298

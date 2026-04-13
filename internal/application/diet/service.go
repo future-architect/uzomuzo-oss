@@ -233,6 +233,13 @@ func (s *Service) buildEntries(
 			}
 		}
 
+		// Check if this dependency is a Maven runtime dep (reflection-loaded).
+		if entry.Scope == "" && entry.Ecosystem == "maven" {
+			if _, ok := mavenRuntimeDeps[strings.ToLower(entry.Name)]; ok {
+				entry.Scope = domaindiet.ScopeRuntime
+			}
+		}
+
 		if m, ok := graph.Metrics[purl]; ok {
 			entry.Graph = *m
 		}
@@ -245,14 +252,11 @@ func (s *Service) buildEntries(
 			}
 		}
 
-		// Tool directive deps intentionally have zero source imports.
-		// Override IsUnused so they are not flagged as trivial removals.
-		//
-		// Also provide a minimal synthetic coupling signal when the analyzer has
-		// no source-coupling data for tool deps. Leaving IsUnused=false together
-		// with all coupling counts at zero can be interpreted downstream as
-		// zero-effort removal, which incorrectly surfaces tool deps as trivial/easy.
-		if entry.Scope == domaindiet.ScopeTool {
+		// Non-static-import scopes (tool directives, runtime/reflection deps)
+		// intentionally have zero source imports. Override IsUnused so they are
+		// not flagged as trivial removals, and provide a minimal synthetic
+		// coupling signal so downstream scoring does not treat them as zero-effort.
+		if entry.Scope == domaindiet.ScopeTool || entry.Scope == domaindiet.ScopeRuntime {
 			if entry.Coupling.IsUnused {
 				entry.Coupling.IsUnused = false
 			}
@@ -565,6 +569,83 @@ var mavenPackageOverrides = map[string][]string{
 	// heuristic already produces the correct candidate, but an explicit override
 	// ensures stability.
 	"javax.inject/javax.inject": {"javax.inject"},
+
+	// Spring Boot starters: groupId is always "org.springframework.boot" but each
+	// starter pulls in distinct Spring libraries. Without these overrides, ALL starters
+	// map to "org.springframework.boot" and receive identical coupling scores (#295).
+	"org.springframework.boot/spring-boot-starter":            {"org.springframework.boot"},
+	"org.springframework.boot/spring-boot-starter-web":        {"org.springframework.web", "org.springframework.boot.web"},
+	"org.springframework.boot/spring-boot-starter-webflux":    {"org.springframework.web.reactive"},
+	"org.springframework.boot/spring-boot-starter-data-jpa":   {"org.springframework.data.jpa", "javax.persistence", "jakarta.persistence"},
+	"org.springframework.boot/spring-boot-starter-data-redis": {"org.springframework.data.redis"},
+	"org.springframework.boot/spring-boot-starter-data-mongodb": {"org.springframework.data.mongodb"},
+	"org.springframework.boot/spring-boot-starter-security":   {"org.springframework.security"},
+	"org.springframework.boot/spring-boot-starter-test":       {"org.springframework.boot.test", "org.springframework.test"},
+	"org.springframework.boot/spring-boot-starter-actuator":   {"org.springframework.boot.actuate"},
+	"org.springframework.boot/spring-boot-starter-validation": {"javax.validation", "jakarta.validation"},
+	"org.springframework.boot/spring-boot-starter-thymeleaf":  {"org.thymeleaf"},
+	"org.springframework.boot/spring-boot-starter-mail":       {"org.springframework.mail", "javax.mail", "jakarta.mail"},
+	"org.springframework.boot/spring-boot-starter-cache":      {"org.springframework.cache"},
+	"org.springframework.boot/spring-boot-starter-aop":        {"org.aspectj", "org.springframework.aop"},
+	"org.springframework.boot/spring-boot-starter-batch":      {"org.springframework.batch"},
+	"org.springframework.boot/spring-boot-starter-amqp":       {"org.springframework.amqp"},
+	"org.springframework.boot/spring-boot-starter-websocket":  {"org.springframework.web.socket"},
+	"org.springframework.boot/spring-boot-starter-jdbc":       {"org.springframework.jdbc"},
+	"org.springframework.boot/spring-boot-starter-json":       {"com.fasterxml.jackson"},
+	"org.springframework.boot/spring-boot-starter-logging":    {"org.slf4j", "ch.qos.logback"},
+
+	// Spring non-starter libraries: groupId "org.springframework" but each
+	// library uses a specific sub-package.
+	"org.springframework/spring-core":    {"org.springframework.core", "org.springframework.util"},
+	"org.springframework/spring-context": {"org.springframework.context"},
+	"org.springframework/spring-beans":   {"org.springframework.beans"},
+	"org.springframework/spring-web":     {"org.springframework.web"},
+	"org.springframework/spring-webmvc":  {"org.springframework.web.servlet"},
+	"org.springframework/spring-tx":      {"org.springframework.transaction"},
+	"org.springframework/spring-orm":     {"org.springframework.orm"},
+	"org.springframework/spring-aop":     {"org.springframework.aop"},
+	"org.springframework/spring-jdbc":    {"org.springframework.jdbc"},
+	"org.springframework/spring-test":    {"org.springframework.test"},
+}
+
+// mavenRuntimeDeps is a set of Maven "groupId/artifactId" coordinates for
+// dependencies that are loaded via runtime mechanisms (reflection, ServiceLoader,
+// classpath scanning) rather than static imports. Static source analysis cannot
+// detect their usage, so they are recognized as runtime-scoped to prevent
+// false-positive unused-dependency reports.
+var mavenRuntimeDeps = map[string]struct{}{
+	// JDBC drivers — loaded via java.sql.DriverManager / ServiceLoader.
+	"mysql/mysql-connector-java":           {},
+	"mysql/mysql-connector-j":              {},
+	"org.postgresql/postgresql":            {},
+	"com.h2database/h2":                    {},
+	"org.mariadb.jdbc/mariadb-java-client": {},
+	"com.oracle.database.jdbc/ojdbc11":     {},
+	"com.microsoft.sqlserver/mssql-jdbc":   {},
+	"org.xerial/sqlite-jdbc":               {},
+	"com.amazon.redshift/redshift-jdbc42":  {},
+	"org.hsqldb/hsqldb":                    {},
+	"org.apache.derby/derby":               {},
+	"com.ibm.db2/jcc":                      {},
+	"org.firebirdsql.jdbc/jaybird":         {},
+	"net.snowflake/snowflake-jdbc":         {},
+	"com.clickhouse/clickhouse-jdbc":       {},
+	"org.duckdb/duckdb_jdbc":               {},
+
+	// Logging backends — loaded via SLF4J ServiceLoader / classpath binding.
+	"ch.qos.logback/logback-classic":             {},
+	"org.apache.logging.log4j/log4j-core":        {},
+	"org.slf4j/slf4j-simple":                     {},
+	"org.apache.logging.log4j/log4j-slf4j-impl":  {},
+	"org.apache.logging.log4j/log4j-slf4j2-impl": {},
+
+	// WebJars — served as classpath resources, never imported in Java source.
+	"org.webjars/bootstrap":            {},
+	"org.webjars/font-awesome":         {},
+	"org.webjars/webjars-locator-lite": {},
+	"org.webjars/webjars-locator-core": {},
+	"org.webjars/jquery":               {},
+	"org.webjars.npm/htmx.org":         {},
 }
 
 // buildMavenImportPaths generates candidate import path prefixes for a Maven PURL.
@@ -588,6 +669,22 @@ func buildMavenImportPaths(parsed packageurl.PackageURL) []string {
 	// 1. Well-known overrides take priority.
 	for _, p := range mavenPackageOverrides[key] {
 		add(p)
+	}
+
+	// 1b. Heuristic for unlisted Spring Boot starters: derive a prefix from
+	// the starter suffix (e.g., "spring-boot-starter-data-jpa" →
+	// "org.springframework.data.jpa"). This prevents all starters from
+	// collapsing to the bare "org.springframework.boot" groupId (#295).
+	if len(paths) == 0 &&
+		strings.EqualFold(parsed.Namespace, "org.springframework.boot") &&
+		strings.HasPrefix(strings.ToLower(parsed.Name), "spring-boot-starter-") {
+		suffix := strings.TrimPrefix(strings.ToLower(parsed.Name), "spring-boot-starter-")
+		if suffix != "" {
+			candidate := "org.springframework." + strings.ReplaceAll(suffix, "-", ".")
+			if isJavaDottedPackageSafe(candidate) {
+				add(candidate)
+			}
+		}
 	}
 
 	// 2. groupId (namespace) — the most common convention.
