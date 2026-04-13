@@ -468,6 +468,8 @@ Structural reform approaches:
 | `c-robinson/iplib` | `net/netip` CIDR enumeration | 1 hr | IPv4 network/broadcast edge cases |
 | Trivy fanal framework | Direct parser calls | 2 days | -68% binary size, found pnpm bug |
 
+**Language coverage**: PR mode commands and common patterns are currently Go-centric, built from real removal experience. Issue mode and IBNC checks are language-agnostic. PRs adding equivalent PR-mode guidance for npm, pip, Maven, or other ecosystems (backed by actual removal data) are welcome.
+
 ## Primary Source Links
 
 All generated content (commit messages, issues, PRs, discussions) MUST include primary source links so reviewers can verify claims independently.
