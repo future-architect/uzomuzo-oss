@@ -34,11 +34,11 @@ Or read from a saved diet JSON file. All fields are available.
 
 ### Mode B: PURL only (no diet JSON)
 
-Run `uzomuzo scan <purl>` to get health signals. Mark coupling fields (`import_file_count`, `call_site_count`, `api_breadth`, `symbols`, `import_files`) as "unavailable". Proceed with health-only assessment (Phase 1 + Phase 3, skip Phase 2).
+Run `uzomuzo scan <purl>` to get health signals. Mark coupling fields (`import_file_count`, `call_site_count`, `api_breadth`, `symbols`, `import_files`) as "unavailable". Proceed with Phase 1 Steps 1-2 and Phase 3 only. Skip Phase 1 Steps 3-4 (no coupling data to filter) and Phase 2 (no source code).
 
 ### Mode C: "top N"
 
-Sort diet entries by `health_risk * (1 - coupling_effort)` descending. This prioritizes dependencies that are both unhealthy and deeply embedded. Run Phase 0-3 for each of the top N entries, then produce the summary table.
+Sort diet entries by `health_risk * (1 - coupling_effort)` descending (both fields are 0.0-1.0 normalized). This prioritizes dependencies that are both unhealthy and actionable — high health risk combined with lower coupling effort gives the best risk-reduction ROI. Run Phase 0-3 for each of the top N entries (N is user-specified, default 5), then produce the summary table.
 
 ### Early exits
 
@@ -56,13 +56,16 @@ Extract the full diet entry. These fields will appear verbatim in the verdict's 
 | Field | JSON key | Use |
 |-------|----------|-----|
 | Identity | `purl`, `name`, `version`, `ecosystem` | Package identification |
-| Scores | `priority_score`, `overall_score` | Diet's automated ranking |
+| Ranking | `rank`, `priority_score`, `overall_score` | Diet's automated ranking (`rank` is position among all deps) |
 | Health | `health_risk`, `lifecycle`, `has_vulnerabilities`, `vulnerability_count`, `max_cvss_score` | Maintenance and vulnerability status |
 | Graph | `graph_impact`, `exclusive_transitive`, `total_transitive` | Blast radius |
 | Coupling | `coupling_effort`, `difficulty`, `import_file_count`, `call_site_count`, `api_breadth` | Integration depth |
+| Coupling detail | `symbols`, `import_files` | Specific APIs used and files importing them (Phase 2 starting points) |
 | Persistence | `stays_as_indirect`, `indirect_via` | Whether risk is eliminable |
 | Import style | `has_blank_import`, `has_dot_import`, `has_wildcard_import` | Coupling accuracy caveats |
-| Scope | `scope` | `"tool"` deps have different risk profile (build-time only) |
+| Scope | `scope` | `"tool"` deps have different risk profile (build-time only); absent for normal deps |
+
+Note: Fields with `omitempty` in the JSON schema (`has_vulnerabilities`, `vulnerability_count`, `max_cvss_score`, `overall_score`, `scope`, `indirect_via`, `import_files`) may be absent from the JSON. Treat absent booleans as `false` and absent numbers as `0`.
 
 ### Step 2: Classify threat profile
 
@@ -73,8 +76,8 @@ Assign one of four profiles based on diet data:
 | **CRITICAL-EXPOSURE** | `has_vulnerabilities=true` AND `lifecycle` in {EOL-Confirmed, EOL-Effective, Archived, Stalled} AND `import_file_count > 0` | Full Phase 2 on all security-critical files |
 | **LATENT-RISK** | `lifecycle` in {EOL-Confirmed, EOL-Effective, EOL-Scheduled, Archived, Stalled} AND `import_file_count > 0` AND `has_vulnerabilities=false` | Phase 2 on security-critical files only |
 | **SUPPLY-CHAIN-ONLY** | `import_file_count = 0` OR `is_unused = true` | Skip Phase 2 -- risk is graph/supply-chain, not data flow |
-| **MONITORING** | `lifecycle` is Active or Legacy-Safe, but `has_vulnerabilities=true` | Phase 2 optional -- assess known CVE impact |
-| *(fallback)* | Any combination not matching above (e.g., `Review Needed` with no vulns and coupling) | Treat as LATENT-RISK -- err on the side of caution |
+| **MONITORING** | `lifecycle` is Active, Legacy-Safe, or Review Needed, but `has_vulnerabilities=true` | Phase 2 optional -- assess known CVE impact |
+| *(fallback)* | Any combination not matching above (e.g., `Legacy-Safe` or `Review Needed` with no vulns) | Low risk -- produce minimal assessment noting the dependency is healthy or benign |
 
 Lifecycle values produced by diet: `Active`, `Stalled`, `Legacy-Safe`, `EOL-Confirmed`, `EOL-Effective`, `EOL-Scheduled`, `Archived`, `Review Needed`.
 
@@ -108,7 +111,7 @@ Record:
 - **Security-critical files**: filtered subset of `import_files[]`
 - **Remaining files**: everything else (for statistical summary only)
 
-When the security-relevant subset exceeds 50% of `api_breadth`, the dependency is likely an infrastructure/security SDK where nearly the entire API is security-relevant. In that case, skip symbol-level filtering and focus Phase 2 scoping entirely on file path classification.
+When the security-relevant subset exceeds 50% of `api_breadth`, the dependency is likely an infrastructure/security SDK where nearly the entire API is security-relevant. In that case, treat all symbols as in-scope (do not filter by name) and focus Phase 2 scoping entirely on the file path classification from above. The file path filter becomes the primary mechanism for managing token budget.
 
 ### Step 4: Note coupling accuracy caveats
 
@@ -178,7 +181,9 @@ Build scenarios from the actual data flows observed in Step 2, not from generic 
 
 ### Step 4: Identify mitigating factors
 
-For each, cite the evidence from the code:
+These factors affect **risk severity** (how dangerous is keeping this dependency), not removal feasibility (how hard is it to remove). Removal planning belongs in `/diet-evaluate-removal`.
+
+For each applicable factor, cite the evidence from the code:
 
 - Upstream encryption before data reaches this package
 - Downstream validation after data leaves this package
@@ -199,24 +204,23 @@ For each, cite the evidence from the code:
 
 | Metric | Value |
 |--------|-------|
-| PURL | `{purl}` |
-| Rank | #{rank} of {total_deps} |
+| PURL | `{purl}` ({name} {version}, {ecosystem}) |
+| Rank | #{rank} of {summary.total_direct} direct deps |
 | Lifecycle | {lifecycle} ([registry link]) |
-| Known CVEs | {vulnerability_count} {(max CVSS: {max_cvss_score}) if available, else "(CVSS unavailable)"} |
-| Priority score | {priority_score} |
-| Overall score | {overall_score} |
-| Difficulty | {difficulty} |
+| Known CVEs | {vulnerability_count} {(max CVSS: {max_cvss_score}) if present, else "(CVSS unavailable)"} |
+| Priority / Overall | {priority_score} / {overall_score} |
+| Difficulty | {difficulty} (coupling_effort: {coupling_effort}) |
 | Coupling | {import_file_count} files, {call_site_count} calls, {api_breadth} APIs |
 | Graph impact | {graph_impact} (exclusive: {exclusive_transitive}, total: {total_transitive}) |
 | Health risk | {health_risk} |
 | Stays as indirect | {stays_as_indirect} {-- via {indirect_via} if true} |
-| Scope | {scope, omit row if empty/absent} |
+| Scope | {scope} *(omit row if absent)* |
 
 #### New Findings (from this assessment)
 
 **Threat profile**: {CRITICAL-EXPOSURE | LATENT-RISK | SUPPLY-CHAIN-ONLY | MONITORING}
 
-**Security-relevant coupling**: {N} of {import_file_count} files in security-critical paths, {M} of {api_breadth} APIs are security-sensitive
+**Security-relevant coupling**: {count of security-critical files from Phase 1 Step 3} of {import_file_count} files in security-critical paths, {count of security-relevant symbols from Phase 1 Step 3} of {api_breadth} APIs are security-sensitive
 
 **Data flow summary**:
 
@@ -285,7 +289,7 @@ The core analysis (Phases 0-3) is language-neutral. Use this table for language-
 |--------|-----|--------|----------------------|------|
 | Build constraints | `//go:build` tags | N/A | N/A | Maven profiles |
 | Side-effect imports | `import _ "pkg"` | `try/except ImportError` | `import 'pkg'` (no binding), `require('pkg')` | Static initializer blocks |
-| Wildcard imports | `import . "pkg"` | `from x import *` | `import * from 'x'` | `import static x.*` |
+| Wildcard imports | `import . "pkg"` | `from x import *` | `import * as ns from 'x'` | `import static x.*` |
 | Lockfile integrity | `go.sum` hash verification | `pip --require-hashes` | `package-lock.json` integrity field | `maven-enforcer-plugin` |
 | Vulnerability scanner | `govulncheck` | `pip-audit`, `safety` | `npm audit` | `dependency-check`, OWASP |
 | Test file patterns | `*_test.go` | `test_*.py`, `tests/` | `*.test.js`, `__tests__/` | `*Test.java`, `src/test/` |
