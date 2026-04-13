@@ -299,7 +299,39 @@ Some dependencies are used via configuration files, annotations, or runtime clas
 
 These show 0 files / 0 calls in the coupling analysis, which is **expected behavior, not a false positive**. Diet still ranks them correctly: config-driven deps are easy to swap (low coupling) but may bring many transitive deps (high graph impact).
 
-### 3. Leftover dependencies (genuine waste)
+#### Java runtime-loaded dependency detection
+
+Java has the highest density of runtime-loaded dependencies among supported languages. Diet uses a layered detection strategy:
+
+| Layer | Mechanism | Coverage | Limitations |
+|-------|-----------|----------|-------------|
+| **SBOM scope** | CycloneDX `scope` field from cdxgen / CycloneDX Maven Plugin | `optional` (provided) and `excluded` (test) deps | Cannot distinguish `compile` from `runtime` — both map to CycloneDX `required`. Trivy/syft do not populate this field. |
+| **Runtime whitelist** | Hardcoded `mavenRuntimeDeps` list of known groupId/artifactId coordinates | JDBC drivers, SLF4J logging backends, WebJars | Not exhaustive — unknown runtime deps will still be flagged as unused. Whitelist is expanded empirically via diet-fuzz testing. |
+| **Tree-sitter AST** | Static analysis of `import` statements and call sites | Compile-time couplings (method calls, constructors, annotations, type declarations, generics, casts) | Cannot detect reflection (`Class.forName(var)`), ServiceLoader, Spring classpath scanning. Only 4.6% of reflection call sites are string-literal `Class.forName` detectable by AST. |
+
+**What is fundamentally undetectable:**
+
+- **Spring Boot autoconfiguration** — `@SpringBootApplication` triggers classpath scanning. No static analysis can determine which dependencies are activated by Spring's `spring.factories` / `AutoConfiguration.imports` mechanism.
+- **Variable-based reflection** — `Class.forName(driverName)` where the class name comes from XML config, properties files, or method parameters.
+- **ServiceLoader** — `java.util.ServiceLoader.load(Interface.class)` discovers implementations via `META-INF/services/` at runtime.
+
+See [ADR-0015](adr/0015-java-reflection-detection-strategy.md) for the full investigation across 6 Java OSS projects.
+
+### 3. Provided-scope dependencies (Maven `provided`, Gradle `compileOnly`)
+
+Dependencies declared as `provided` scope compile against the API but are not bundled — the runtime environment (application server, container) supplies them at deploy time. Common examples:
+
+- `javax.servlet-api` / `jakarta.servlet-api` — provided by Tomcat/Jetty
+- `lombok` — annotation processor, removed at compile time
+- `javax.annotation-api` — provided by the JEE container
+
+These typically DO have source-level imports (unlike runtime-loaded deps), so coupling analysis produces accurate data. When the SBOM tool populates the CycloneDX `scope` field, diet annotates them as `OPTIONAL` to distinguish them from bundled dependencies.
+
+### 4. Test-scope dependencies leaked into the SBOM
+
+Some SBOM tools include test-scope dependencies (`junit`, `mockito`, `testcontainers`) alongside production dependencies. When the SBOM tool provides CycloneDX `scope: "excluded"`, diet automatically filters these out. Otherwise, they appear as "unused" — which is correct (they have no production imports) but not actionable.
+
+### 5. Leftover dependencies (genuine waste)
 
 Dependencies that were once used but whose `import` was removed without cleaning up `package.json` / `go.mod` / `pom.xml`. **These are the most valuable findings** — they can be removed immediately with zero code changes.
 
@@ -311,8 +343,8 @@ The quality of diet analysis depends heavily on what the SBOM tool includes. Dif
 |------|-------------------|-----------------|-------|
 | **syft** | **Yes (all)** | No | Includes everything — devDependencies, test deps, build tools. No way to filter. |
 | **Trivy** | **No (default)** | No | Excludes dev deps by default. Use `--include-dev-deps` to include them. |
-| **cdxgen** | **Yes (all)** | **Yes** (`scope` field) | Includes all deps but marks them as `required`, `optional`, or `excluded`. |
-| **CycloneDX Maven Plugin** | Configurable | Yes (`scope` field) | Respects Maven scopes (compile/test/provided/runtime). |
+| **cdxgen** | **Yes (all)** | **Yes** (`scope` field) | Includes all deps but marks them as `required`, `optional`, or `excluded`. Diet uses scope to filter `excluded` (test) deps and annotate `optional` (provided) deps. |
+| **CycloneDX Maven Plugin** | Configurable | Yes (`scope` field) | Respects Maven scopes. Note: both `compile` and `runtime` map to CycloneDX `required` — diet cannot distinguish them via scope alone (uses runtime whitelist instead). |
 
 ### Real-world impact (Vue.js core)
 
@@ -337,4 +369,4 @@ The quality of diet analysis depends heavily on what the SBOM tool includes. Dif
 | Python | ✓ | ✓ | v0.1 |
 | JavaScript | ✓ | ✓ | v0.1 |
 | TypeScript | ✓ | ✓ | v0.1 |
-| Java | ✓ | ✓ | v0.1 |
+| Java | ✓ | ✓ | v0.1 — runtime-loaded deps (JDBC, logging, WebJars) detected via [whitelist + SBOM scope](#java-runtime-loaded-dependency-detection); reflection/Spring autoconfiguration not detectable |
