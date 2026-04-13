@@ -40,7 +40,7 @@ Display ALL of these from the diet JSON. Do NOT re-compute any of them.
 |-------|-------------------|
 | `name` / `version` / `ecosystem` | Dependency identity |
 | `purl` | Canonical package URL identifier |
-| `scope` | Dependency scope (e.g., `"tool"` for build-time-only deps) |
+| `scope` | Dependency scope: `"tool"` (build-time-only), `"runtime"` (reflection/ServiceLoader-loaded) |
 | `rank` / `priority_score` | Where this dep sits in the removal priority list |
 | `difficulty` | trivial / easy / moderate / hard |
 | `exclusive_transitive` / `total_transitive` | Deps removed together / total transitive count |
@@ -63,6 +63,7 @@ Display ALL of these from the diet JSON. Do NOT re-compute any of them.
 Before proceeding, flag any of these patterns -- they indicate diet's coupling data may be unreliable:
 
 - `scope: "tool"` + `import_file_count: 0` -- Expected for build-time-only tool deps. Not an IBNC pattern. These have zero runtime imports by design.
+- `scope: "runtime"` + `import_file_count: 0` -- Expected for runtime-mechanism deps (JDBC drivers, logging backends, Spring auto-config). Loaded via reflection/ServiceLoader/classpath, not static imports.
 - `has_blank_import: true` + `call_site_count: 0` -- The blank import IS the usage (Go DB drivers, JS polyfills). Coupling is underestimated.
 - `has_wildcard_import: true` -- All symbols are in scope. `api_breadth` may undercount.
 - `has_dot_import: true` -- Broadly coupled; symbols lack package qualifier.
@@ -172,7 +173,7 @@ Rate each axis High/Med/Low using the data gathered in Phases 1-3. Each axis is 
 | **Production Scope** | Phase 2 classification | 0 production files (all test/CI/example) | < 50% production files | >= 50% production files |
 | **Coupling Depth** | `coupling_effort`, `import_file_count`, `call_site_count` | `coupling_effort` < 0.25 (trivial/easy) | 0.25 - 0.6 (moderate) | >= 0.6 (hard, deeply wired) |
 | **Replaceability** | Phase 3b symbol map | > 80% symbols have stdlib/existing-dep replacement | 50-80% replaceable | < 50%, or crypto/protocol involved |
-| **Security Urgency** | `has_vulnerabilities`, `max_cvss_score`, `lifecycle` | CVSS >= 7.0, or lifecycle EOL-Confirmed/EOL-Effective/Archived | CVSS 4.0-6.9, or lifecycle Stalled/EOL-Scheduled | No vulns, lifecycle Active/Legacy-Safe |
+| **Security Urgency** | `has_vulnerabilities`, `max_cvss_score`, `lifecycle` | CVSS >= 7.0, or lifecycle EOL-Confirmed/EOL-Effective/Archived | CVSS 4.0-6.9, or lifecycle Stalled/EOL-Scheduled/Review Needed | No vulns, lifecycle Active/Legacy-Safe |
 | **Cascade Potential** | `exclusive_transitive`, project knowledge | Removing unblocks 3+ further removals | Unblocks 1-2 | Standalone, no cascade |
 
 ### Scoring overrides
@@ -245,8 +246,8 @@ Rules are evaluated **top-to-bottom; first match wins.** If multiple rows could 
 | Replaceability = Low (crypto/protocol) | KEEP -- find an alternative maintained library rather than self-implementing. If Security Urgency is also High, escalate to `/diet-assess-risk` for full risk analysis. Never recommend self-implementing crypto/protocol |
 | All 6 axes High or Med | REMOVE |
 | 1-2 axes Low, rest High/Med | REMOVE -- note the Low axes as caveats in rationale |
-| >= 3 axes Low | KEEP |
 | Security Urgency = High, others mixed | REMOVE (prioritize security). Suggest `/diet-assess-risk` for full analysis |
+| >= 3 axes Low | KEEP |
 | `stays_as_indirect: true`, coupling low | REMOVE (still valuable: delegates version management, unblocks future cleanup) |
 
 ### Effort derivation
