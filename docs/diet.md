@@ -299,7 +299,39 @@ Some dependencies are used via configuration files, annotations, or runtime clas
 
 These show 0 files / 0 calls in the coupling analysis, which is **expected behavior, not a false positive**. Diet still ranks them correctly: config-driven deps are easy to swap (low coupling) but may bring many transitive deps (high graph impact).
 
-### 3. Leftover dependencies (genuine waste)
+#### Java runtime-loaded dependency detection
+
+Java has the highest density of runtime-loaded dependencies among supported languages. Diet uses a layered detection strategy:
+
+| Layer | Mechanism | Coverage | Limitations |
+|-------|-----------|----------|-------------|
+| **SBOM scope** (not yet implemented) | CycloneDX `scope` field from cdxgen / CycloneDX Maven Plugin | `optional` (provided) and `excluded` (test) deps | Cannot distinguish `compile` from `runtime` — both map to CycloneDX `required`. Trivy/syft do not populate this field. See #303. |
+| **Runtime whitelist** | Hardcoded `mavenRuntimeDeps` list of known groupId/artifactId coordinates | JDBC drivers, SLF4J logging backends, WebJars | Not exhaustive — unknown runtime deps will still be flagged as unused. Whitelist is expanded empirically via diet-fuzz testing. |
+| **Tree-sitter AST** | Static analysis of `import` statements and call sites | Compile-time couplings (method calls, constructors, annotations, type declarations, generics, casts) | Cannot detect reflection (`Class.forName(var)`), ServiceLoader, Spring classpath scanning. Only 4.6% of reflection call sites are string-literal `Class.forName` detectable by AST. |
+
+**What is fundamentally undetectable:**
+
+- **Spring Boot autoconfiguration** — `@SpringBootApplication` triggers classpath scanning. No static analysis can determine which dependencies are activated by Spring's `spring.factories` / `AutoConfiguration.imports` mechanism.
+- **Variable-based reflection** — `Class.forName(driverName)` where the class name comes from XML config, properties files, or method parameters.
+- **ServiceLoader** — `java.util.ServiceLoader.load(Interface.class)` discovers implementations via `META-INF/services/` at runtime.
+
+See [ADR-0015](adr/0015-java-reflection-detection-strategy.md) for the full investigation across 6 Java OSS projects.
+
+### 3. Provided-scope dependencies (Maven `provided`, Gradle `compileOnly`)
+
+Dependencies declared as `provided` scope compile against the API but are not bundled — the runtime environment (application server, container) supplies them at deploy time. Common examples:
+
+- `javax.servlet-api` / `jakarta.servlet-api` — provided by Tomcat/Jetty
+- `lombok` — annotation processor, removed at compile time
+- `javax.annotation-api` — provided by the JEE container
+
+These typically DO have source-level imports (unlike runtime-loaded deps), so coupling analysis produces accurate data for them. When the SBOM tool populates the CycloneDX `scope` field with `optional`, this information could be used to annotate them in the diet plan (see #303 for the design).
+
+### 4. Test-scope dependencies leaked into the SBOM
+
+Some SBOM tools include test-scope dependencies (`junit`, `mockito`, `testcontainers`) alongside production dependencies. These appear as "unused" — which is correct (they have no production imports) but not actionable. CycloneDX SBOMs from cdxgen mark these with `scope: "excluded"`, which could be used to filter them automatically (see #303). For now, use Trivy (which excludes test deps by default) or configure your SBOM tool to omit test-scope dependencies.
+
+### 5. Leftover dependencies (genuine waste)
 
 Dependencies that were once used but whose `import` was removed without cleaning up `package.json` / `go.mod` / `pom.xml`. **These are the most valuable findings** — they can be removed immediately with zero code changes.
 
@@ -311,8 +343,8 @@ The quality of diet analysis depends heavily on what the SBOM tool includes. Dif
 |------|-------------------|-----------------|-------|
 | **syft** | **Yes (all)** | No | Includes everything — devDependencies, test deps, build tools. No way to filter. |
 | **Trivy** | **No (default)** | No | Excludes dev deps by default. Use `--include-dev-deps` to include them. |
-| **cdxgen** | **Yes (all)** | **Yes** (`scope` field) | Includes all deps but marks them as `required`, `optional`, or `excluded`. |
-| **CycloneDX Maven Plugin** | Configurable | Yes (`scope` field) | Respects Maven scopes (compile/test/provided/runtime). |
+| **cdxgen** | **Yes (all)** | **Yes** (`scope` field) | Includes all deps but marks them as `required`, `optional`, or `excluded`. Diet does not yet use scope for filtering (see #303). |
+| **CycloneDX Maven Plugin** | Configurable | Yes (`scope` field) | Respects Maven scopes. Note: both `compile` and `runtime` map to CycloneDX `required` — scope alone cannot distinguish them. |
 
 ### Real-world impact (Vue.js core)
 
@@ -331,10 +363,51 @@ The quality of diet analysis depends heavily on what the SBOM tool includes. Dif
 
 ## Supported Languages
 
-| Language | Import Detection | Call Site Counting | Status |
-|----------|-----------------|-------------------|--------|
-| Go | ✓ | ✓ | v0.1 |
-| Python | ✓ | ✓ | v0.1 |
-| JavaScript | ✓ | ✓ | v0.1 |
-| TypeScript | ✓ | ✓ | v0.1 |
-| Java | ✓ | ✓ | v0.1 |
+All languages use tree-sitter for AST-based analysis. Files larger than 1 MB are skipped. Test directories (`testdata`, `__pycache__`, `target`) and vendored code (`vendor`, `node_modules`) are excluded.
+
+### Go
+
+| Capability | Details |
+|-----------|---------|
+| Import syntaxes | `import "pkg"`, `import alias "pkg"`, grouped imports |
+| Blank imports | `import _ "pkg"` — detected, marked as side-effect (no call site tracking) |
+| Dot imports | `import . "pkg"` — detected, marked as uncountable (symbols callable without prefix) |
+| Call sites | Selector expressions (`pkg.Func`), qualified types (`pkg.Type`) |
+| Ecosystem features | Go tool directives (`go.mod tool`, Go 1.24+) excluded from unused detection |
+| Import path handling | Strips major version suffixes (`/v2`), `gopkg.in` version suffixes (`.v3`), hyphenated package aliases (`go-loser` -> `loser`, `geoip2-golang` -> `geoip2`) |
+| Limitations | Dot-imported symbols cannot be attributed to a specific dependency |
+
+### Python
+
+| Capability | Details |
+|-----------|---------|
+| Import syntaxes | `import mod`, `import mod as alias`, `from mod import name`, `from mod import *` |
+| Wildcard imports | `from x import *` — detected, marked as uncountable |
+| Type-checking imports | `if TYPE_CHECKING:` blocks — skipped entirely (no runtime coupling) |
+| Try/except imports | `try: import x except ImportError:` — marked as feature-detection (blank import) |
+| Call sites | `obj.attr`, bare function calls, decorator usage (`@fixture`) |
+| Ecosystem features | **Wheel-based import resolution** (Phase 2.5 fallback): downloads smallest wheel to extract actual import names when heuristic paths match nothing. Strips common prefixes (`python-`, `py-`) from distribution names. |
+| Limitations | Wildcard-imported names cannot be attributed. Type-checking blocks fully ignored. |
+
+### JavaScript / TypeScript / TSX
+
+| Capability | Details |
+|-----------|---------|
+| Import syntaxes | ESM (`import`, `import { }`, `import * as`), CommonJS (`require()`), dynamic `import()`, re-exports (`export { } from`, `export * from`) |
+| Side-effect imports | `import 'pkg'`, bare `require('x')` — marked as blank import |
+| Type-only imports | TypeScript `import type { }` — skipped (no runtime coupling) |
+| Call sites | Member expressions (`obj.method`), bare calls, constructors (`new Foo`), computed properties, JSX elements (`<Component />`), constant-only patterns |
+| Framework detection | **Angular**: decorator array identifiers (`@NgModule`, `@Component` imports/declarations). **Vue**: `defineComponent({ components: {} })` shorthand properties. |
+| CJS destructuring | `const { X } = require('pkg')` — each destructured name tracked as alias |
+| Limitations | Dynamic import bindings not tracked through `await`/`.then()`. JSX patterns only for `.js`/`.jsx`/`.tsx` (not `.ts`). Bare identifier matching may false-positive on shadowed locals. |
+
+### Java
+
+| Capability | Details |
+|-----------|---------|
+| Import syntaxes | `import com.example.Class`, `import static com.example.Class.method`, `import com.example.*` |
+| Wildcard imports | `import pkg.*`, `import static pkg.*` — detected, marked as uncountable |
+| Static imports | Last component registered as bare alias (`assertEquals` from `import static org.junit.Assert.assertEquals`) |
+| Call sites | Method invocations, constructors (incl. generics `new Foo<T>()`), annotations, inheritance (`extends`/`implements`), type declarations, `instanceof`/casts, method references (`Foo::bar`), field access |
+| Ecosystem features | **Maven package overrides** (~40 entries): maps groupId/artifactId to actual Java packages where they differ (Guava, Jackson, commons-*, Spring Boot starters). **Runtime whitelist**: JDBC drivers, logging backends, WebJars marked as `ScopeRuntime`. **Spring Boot starter heuristics**: derives package prefix from starter suffix. |
+| Limitations | Reflection (`Class.forName(var)`), ServiceLoader, and Spring Boot autoconfiguration are [fundamentally undetectable](#java-runtime-loaded-dependency-detection) by static analysis. CycloneDX `scope` field not yet used (#303). See [ADR-0015](adr/0015-java-reflection-detection-strategy.md). |
