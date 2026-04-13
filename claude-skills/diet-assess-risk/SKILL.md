@@ -106,12 +106,13 @@ storage/, database/, physical/, cache/, session/, login/,
 api/, endpoint/, route/, grpc/, http/
 ```
 
-Record:
-- **Security-relevant symbols**: filtered subset of `symbols[]`
-- **Security-critical files**: filtered subset of `import_files[]`
-- **Remaining files**: everything else (for statistical summary only)
+These patterns are **heuristics for prioritization, not hard filters**. A file that matches no pattern is not "safe" — it is merely lower priority. Any file in `import_files[]` could contain security-relevant code regardless of its path name.
 
-When the security-relevant subset exceeds 50% of `api_breadth`, the dependency is likely an infrastructure/security SDK where nearly the entire API is security-relevant. In that case, treat all symbols as in-scope (do not filter by name) and focus Phase 2 scoping entirely on the file path classification from above. The file path filter becomes the primary mechanism for managing token budget.
+Record:
+- **Priority 1 (high-confidence security)**: files matching path patterns above
+- **Priority 2 (remaining)**: all other files in `import_files[]`
+
+When the security-relevant subset exceeds 50% of `api_breadth`, the dependency is likely an infrastructure/security SDK where nearly the entire API is security-relevant. In that case, treat all symbols as in-scope (do not filter by name) and rely solely on file prioritization for Phase 2 ordering.
 
 ### Step 4: Note coupling accuracy caveats
 
@@ -136,15 +137,19 @@ For each skip case, add a "Limitations" note to the verdict explaining what coul
 
 ### Scoping strategy
 
-Do NOT read all files. Use the file count and API breadth to select a strategy:
+Read files in priority order (Priority 1 first, then Priority 2). **Stop when you have enough evidence to construct credible attack scenarios for both Scenario A and Scenario B** (see Step 3 below). You have enough evidence when you can answer all four questions in Step 2 (Data IN, Data OUT, Security boundary, Failure mode) for at least the most security-critical call sites.
 
-| `import_file_count` | `api_breadth` | Strategy |
-|---------------------|---------------|----------|
-| 1-5 | any | Read all importing files |
-| 6-15 | any | Read security-critical files (from Phase 1 Step 3). Grep remaining files for security-relevant symbols. |
-| 16-50 | 1-20 | Read security-critical files. Grep remaining files for security-relevant symbols. Summarize non-critical files statistically. |
-| 16-50 | 21+ | Read security-critical files only. Produce a statistical summary for the rest: "N files in auth paths, M in infrastructure, K in tests." |
-| 51+ | any | Read at most 10 security-critical files. Everything else is statistical summary. State the sampling limitation in the verdict. |
+**Reading order:**
+1. Priority 1 files (from Phase 1 Step 3) — read these first
+2. Priority 2 files — read in order until you have enough evidence, or all files are read
+3. For any files not read, produce a statistical summary: "N files in auth paths, M in infrastructure, K in tests"
+
+**Stopping criteria — you have enough evidence when:**
+- You can name the concrete data types flowing IN and OUT of the dependency
+- You can describe at least one realistic attack scenario grounded in observed data flows
+- Reading more files would add volume but not change the risk verdict
+
+If you stop before reading all files, record which files were read and which were not in the verdict's "Limitations" section. This is not a failure — it is an explicit scope decision.
 
 ### Step 1: Classify import sites by security impact
 
@@ -221,7 +226,7 @@ For each applicable factor, cite the evidence from the code:
 
 **Threat profile**: {CRITICAL-EXPOSURE | LATENT-RISK | SUPPLY-CHAIN-ONLY | MONITORING | LOW-RISK}
 
-**Security-relevant coupling**: {count of security-critical files from Phase 1 Step 3} of {import_file_count} files in security-critical paths, {count of security-relevant symbols from Phase 1 Step 3} of {api_breadth} APIs are security-sensitive
+**Files inspected**: {N} of {import_file_count} files read ({M} Priority 1, {K} Priority 2)
 
 **Data flow summary**:
 
@@ -298,7 +303,7 @@ The core analysis (Phases 0-3) is language-neutral. Use this table for language-
 ## Important rules
 
 - **Start from diet's output.** Do not re-discover what diet already computed. The `symbols[]` and `import_files[]` fields are your starting points for Phase 2.
-- **Scope aggressively.** You cannot read 140 API symbols across 31 files. Filter to security-relevant subsets first using Phase 1 Step 3.
+- **Read in priority order, stop when you have enough.** Phase 1 Step 3 gives you the reading order. Stop when you can construct credible attack scenarios — not when you hit an arbitrary file count.
 - **Be precise.** Quote specific file paths and line numbers. "The auth module uses this" is too vague.
 - **Do not speculate.** If you cannot determine something from the code, say "undetermined from static analysis."
 - **Do not overstate risk.** If data is encrypted before reaching the package, the supply chain scenario changes. Say so.
