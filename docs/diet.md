@@ -363,10 +363,51 @@ The quality of diet analysis depends heavily on what the SBOM tool includes. Dif
 
 ## Supported Languages
 
-| Language | Import Detection | Call Site Counting | Status |
-|----------|-----------------|-------------------|--------|
-| Go | ✓ | ✓ | v0.1 |
-| Python | ✓ | ✓ | v0.1 |
-| JavaScript | ✓ | ✓ | v0.1 |
-| TypeScript | ✓ | ✓ | v0.1 |
-| Java | ✓ | ✓ | v0.1 — runtime-loaded deps (JDBC, logging, WebJars) detected via [whitelist + SBOM scope](#java-runtime-loaded-dependency-detection); reflection/Spring autoconfiguration not detectable |
+All languages use tree-sitter for AST-based analysis. Files larger than 1 MB are skipped. Test directories (`testdata`, `__pycache__`, `target`) and vendored code (`vendor`, `node_modules`) are excluded.
+
+### Go
+
+| Capability | Details |
+|-----------|---------|
+| Import syntaxes | `import "pkg"`, `import alias "pkg"`, grouped imports |
+| Blank imports | `import _ "pkg"` — detected, marked as side-effect (no call site tracking) |
+| Dot imports | `import . "pkg"` — detected, marked as uncountable (symbols callable without prefix) |
+| Call sites | Selector expressions (`pkg.Func`), qualified types (`pkg.Type`) |
+| Ecosystem features | Go tool directives (`go.mod tool`, Go 1.24+) excluded from unused detection |
+| Import path handling | Strips major version suffixes (`/v2`), `gopkg.in` version suffixes (`.v3`), hyphenated package aliases (`go-loser` -> `loser`, `geoip2-golang` -> `geoip2`) |
+| Limitations | Dot-imported symbols cannot be attributed to a specific dependency |
+
+### Python
+
+| Capability | Details |
+|-----------|---------|
+| Import syntaxes | `import mod`, `import mod as alias`, `from mod import name`, `from mod import *` |
+| Wildcard imports | `from x import *` — detected, marked as uncountable |
+| Type-checking imports | `if TYPE_CHECKING:` blocks — skipped entirely (no runtime coupling) |
+| Try/except imports | `try: import x except ImportError:` — marked as feature-detection (blank import) |
+| Call sites | `obj.attr`, bare function calls, decorator usage (`@fixture`) |
+| Ecosystem features | **Wheel-based import resolution** (Phase 2.5 fallback): downloads smallest wheel to extract actual import names when heuristic paths match nothing. Strips common prefixes (`python-`, `py-`) from distribution names. |
+| Limitations | Wildcard-imported names cannot be attributed. Type-checking blocks fully ignored. |
+
+### JavaScript / TypeScript / TSX
+
+| Capability | Details |
+|-----------|---------|
+| Import syntaxes | ESM (`import`, `import { }`, `import * as`), CommonJS (`require()`), dynamic `import()`, re-exports (`export { } from`, `export * from`) |
+| Side-effect imports | `import 'pkg'`, bare `require('x')` — marked as blank import |
+| Type-only imports | TypeScript `import type { }` — skipped (no runtime coupling) |
+| Call sites | Member expressions (`obj.method`), bare calls, constructors (`new Foo`), computed properties, JSX elements (`<Component />`), constant-only patterns |
+| Framework detection | **Angular**: decorator array identifiers (`@NgModule`, `@Component` imports/declarations). **Vue**: `defineComponent({ components: {} })` shorthand properties. |
+| CJS destructuring | `const { X } = require('pkg')` — each destructured name tracked as alias |
+| Limitations | Dynamic import bindings not tracked through `await`/`.then()`. JSX patterns only for `.js`/`.jsx`/`.tsx` (not `.ts`). Bare identifier matching may false-positive on shadowed locals. |
+
+### Java
+
+| Capability | Details |
+|-----------|---------|
+| Import syntaxes | `import com.example.Class`, `import static com.example.Class.method`, `import com.example.*` |
+| Wildcard imports | `import pkg.*`, `import static pkg.*` — detected, marked as uncountable |
+| Static imports | Last component registered as bare alias (`assertEquals` from `import static org.junit.Assert.assertEquals`) |
+| Call sites | Method invocations, constructors (incl. generics `new Foo<T>()`), annotations, inheritance (`extends`/`implements`), type declarations, `instanceof`/casts, method references (`Foo::bar`), field access |
+| Ecosystem features | **Maven package overrides** (~40 entries): maps groupId/artifactId to actual Java packages where they differ (Guava, Jackson, commons-*, Spring Boot starters). **Runtime whitelist**: JDBC drivers, logging backends, WebJars marked as `ScopeRuntime`. **Spring Boot starter heuristics**: derives package prefix from starter suffix. |
+| Limitations | Reflection (`Class.forName(var)`), ServiceLoader, and Spring Boot autoconfiguration are [fundamentally undetectable](#java-runtime-loaded-dependency-detection) by static analysis. See [ADR-0015](adr/0015-java-reflection-detection-strategy.md). |
