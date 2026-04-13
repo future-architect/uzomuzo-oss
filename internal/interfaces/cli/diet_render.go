@@ -222,11 +222,12 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 		}
 		p.printf("│\n")
 		p.printf("│  Coupling\n")
-		if e.Scope == domaindiet.ScopeTool {
+		switch e.Scope {
+		case domaindiet.ScopeTool:
 			p.printf("│    Status: TOOL (go.mod tool directive — not imported in source)\n")
-		} else if e.Scope == domaindiet.ScopeRuntime {
+		case domaindiet.ScopeRuntime:
 			p.printf("│    Status: RUNTIME (reflection/ServiceLoader/classpath resources — not statically imported)\n")
-		} else {
+		default:
 			if e.Scope == domaindiet.ScopeOptional {
 				p.printf("│    Scope:  OPTIONAL (provided by runtime environment — not bundled)\n")
 			}

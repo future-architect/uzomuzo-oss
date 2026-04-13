@@ -16,6 +16,10 @@ import (
 	"github.com/package-url/packageurl-go"
 )
 
+// cdxScopeExcluded is the CycloneDX scope value for test-scope dependencies.
+// Used only for filtering in filterExcludedDeps; never assigned to DietEntry.Scope.
+const cdxScopeExcluded = "excluded"
+
 // SourceAnalyzer abstracts static analysis of source code against dependencies.
 type SourceAnalyzer interface {
 	// AnalyzeCoupling scans the source tree and returns coupling data per PURL.
@@ -249,7 +253,7 @@ func (s *Service) buildEntries(
 		// the SBOM tool populates scope (cdxgen, CycloneDX Maven Plugin) and no
 		// higher-confidence scope (tool, runtime) was already set.
 		if entry.Scope == "" && graph.ScopeByPURL != nil {
-			if graph.ScopeByPURL[purl] == "optional" {
+			if graph.ScopeByPURL[purl] == domaindiet.ScopeOptional {
 				entry.Scope = domaindiet.ScopeOptional
 			}
 		}
@@ -420,7 +424,7 @@ func filterExcludedDeps(purls []string, scopeByPURL map[string]string) []string 
 	}
 	filtered := make([]string, 0, len(purls))
 	for _, p := range purls {
-		if scopeByPURL[p] == "excluded" {
+		if scopeByPURL[p] == cdxScopeExcluded {
 			slog.Debug("skipping excluded-scope dependency", "purl", p)
 			continue
 		}

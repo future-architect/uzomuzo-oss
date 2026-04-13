@@ -337,9 +337,9 @@ func BuildScopeMap(components []Component) map[string]string {
 func buildScopeMapRecursive(components []Component, m map[string]string, depth int) {
 	if depth > MaxNestingDepth {
 		slog.Warn(
-			"max nesting depth exceeded while building scope map; truncating traversal",
+			"max CycloneDX SBOM component nesting depth exceeded; scope map construction truncated",
+			"maxDepth", MaxNestingDepth,
 			"depth", depth,
-			"max_depth", MaxNestingDepth,
 		)
 		return
 	}
