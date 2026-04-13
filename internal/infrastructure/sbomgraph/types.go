@@ -28,10 +28,10 @@ type BOMMetadata struct {
 
 // Component represents a CycloneDX component with optional nested sub-components.
 type Component struct {
-	BOMRef     string      `json:"bom-ref"`
-	Name       string      `json:"name"`
-	PURL       string      `json:"purl"`
-	Scope      string      `json:"scope,omitempty"`
+	BOMRef string      `json:"bom-ref"`
+	Name   string      `json:"name"`
+	PURL   string      `json:"purl"`
+	Scope  string      `json:"scope,omitempty"` // CycloneDX scope: "required", "optional", or "excluded"
 	Components []Component `json:"components"`
 }
 
