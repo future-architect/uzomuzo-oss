@@ -34,7 +34,7 @@ Or read from a saved diet JSON file. All fields are available.
 
 ### Mode B: PURL only (no diet JSON)
 
-Run `uzomuzo scan <purl>` to get health signals. Mark coupling fields (`import_file_count`, `call_site_count`, `api_breadth`, `symbols`, `import_files`) as "unavailable". Proceed with Phase 1 Steps 1-2 and Phase 3 only. Skip Phase 1 Steps 3-4 (no coupling data to filter) and Phase 2 (no source code).
+Run `uzomuzo scan <purl>` to get health signals. Mark coupling fields (`import_file_count`, `call_site_count`, `api_breadth`, `symbols`, `import_files`) as "unavailable". Proceed with Phase 1 Steps 1-2 and Phase 3 only. Skip Phase 1 Steps 3-4 (no coupling data to filter) and Phase 2 (no source code). When classifying threat profile in Step 2, treat absent `import_file_count` as "assume > 0" (conservative — do not default to SUPPLY-CHAIN-ONLY). In the verdict, omit the "Security-relevant coupling" line and note "Source coupling data unavailable" in Limitations.
 
 ### Mode C: "top N"
 
@@ -69,15 +69,15 @@ Note: Fields with `omitempty` in the JSON schema (`has_vulnerabilities`, `vulner
 
 ### Step 2: Classify threat profile
 
-Assign one of four profiles based on diet data:
+Assign a threat profile based on diet data:
 
 | Profile | Criteria | Phase 2 strategy |
 |---------|----------|-----------------|
-| **CRITICAL-EXPOSURE** | `has_vulnerabilities=true` AND `lifecycle` in {EOL-Confirmed, EOL-Effective, Archived, Stalled} AND `import_file_count > 0` | Full Phase 2 on all security-critical files |
+| **CRITICAL-EXPOSURE** | `has_vulnerabilities=true` AND `lifecycle` in {EOL-Confirmed, EOL-Effective, EOL-Scheduled, Archived, Stalled} AND `import_file_count > 0` | Full Phase 2 on all security-critical files |
 | **LATENT-RISK** | `lifecycle` in {EOL-Confirmed, EOL-Effective, EOL-Scheduled, Archived, Stalled} AND `import_file_count > 0` AND `has_vulnerabilities=false` | Phase 2 on security-critical files only |
 | **SUPPLY-CHAIN-ONLY** | `import_file_count = 0` OR `is_unused = true` | Skip Phase 2 -- risk is graph/supply-chain, not data flow |
 | **MONITORING** | `lifecycle` is Active, Legacy-Safe, or Review Needed, but `has_vulnerabilities=true` | Phase 2 optional -- assess known CVE impact |
-| *(fallback)* | Any combination not matching above (e.g., `Legacy-Safe` or `Review Needed` with no vulns) | Low risk -- produce minimal assessment noting the dependency is healthy or benign |
+| **LOW-RISK** | Any combination not matching above (e.g., `Legacy-Safe` or `Review Needed` with no vulns) | Produce minimal assessment noting the dependency is healthy or benign |
 
 Lifecycle values produced by diet: `Active`, `Stalled`, `Legacy-Safe`, `EOL-Confirmed`, `EOL-Effective`, `EOL-Scheduled`, `Archived`, `Review Needed`.
 
@@ -214,11 +214,12 @@ For each applicable factor, cite the evidence from the code:
 | Graph impact | {graph_impact} (exclusive: {exclusive_transitive}, total: {total_transitive}) |
 | Health risk | {health_risk} |
 | Stays as indirect | {stays_as_indirect} {-- via {indirect_via} if true} |
+| Import caveats | {list any true flags: has_dot_import, has_wildcard_import, has_blank_import} *(omit row if all false)* |
 | Scope | {scope} *(omit row if absent)* |
 
 #### New Findings (from this assessment)
 
-**Threat profile**: {CRITICAL-EXPOSURE | LATENT-RISK | SUPPLY-CHAIN-ONLY | MONITORING}
+**Threat profile**: {CRITICAL-EXPOSURE | LATENT-RISK | SUPPLY-CHAIN-ONLY | MONITORING | LOW-RISK}
 
 **Security-relevant coupling**: {count of security-critical files from Phase 1 Step 3} of {import_file_count} files in security-critical paths, {count of security-relevant symbols from Phase 1 Step 3} of {api_breadth} APIs are security-sensitive
 
@@ -289,7 +290,7 @@ The core analysis (Phases 0-3) is language-neutral. Use this table for language-
 |--------|-----|--------|----------------------|------|
 | Build constraints | `//go:build` tags | N/A | N/A | Maven profiles |
 | Side-effect imports | `import _ "pkg"` | `try/except ImportError` | `import 'pkg'` (no binding), `require('pkg')` | Static initializer blocks |
-| Wildcard imports | `import . "pkg"` | `from x import *` | `import * as ns from 'x'` | `import static x.*` |
+| Wildcard imports | `import . "pkg"` | `from x import *` | N/A (namespace `import * as ns` -- symbols tracked via `ns.` prefix) | `import static x.*` |
 | Lockfile integrity | `go.sum` hash verification | `pip --require-hashes` | `package-lock.json` integrity field | `maven-enforcer-plugin` |
 | Vulnerability scanner | `govulncheck` | `pip-audit`, `safety` | `npm audit` | `dependency-check`, OWASP |
 | Test file patterns | `*_test.go` | `test_*.py`, `tests/` | `*.test.js`, `__tests__/` | `*Test.java`, `src/test/` |
