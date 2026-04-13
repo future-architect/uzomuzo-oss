@@ -22,19 +22,26 @@ Detects EOL packages with uzomuzo, then uses the LLM to trace data flow through 
 /diet-assess-risk top 5
 ```
 
-### `/diet-evaluate-removal` — 6-Axis Dependency Removal Evaluation
+### `/diet-evaluate-removal` — Data-Driven Dependency Removal Evaluation
 
-Evaluates a single dependency for removal feasibility across six axes.
+Evaluates a single dependency for removal using a 5-phase data-driven framework that leverages diet's full JSON output.
 
-**The 6 axes:**
-| Axis | Question |
-|------|----------|
-| Update PR reduction | How many automated PRs does this dep generate? |
-| Clean dependency list | Does removing it clarify the dependency intent? |
-| Code standardization | Can it be replaced with stdlib? |
-| Supply chain risk | Is it abandoned? Does removing reduce attack surface? |
-| Code portability | How coupled is the usage? |
-| Future removal readiness | Does removing this unblock further cleanups? |
+**The 5 phases:**
+1. **Ingest Diet Data** -- Extract all fields from diet JSON (existing file or fresh run)
+2. **Usage Classification** -- Classify `import_files` into production/test/CI/example/generated
+3. **Feasibility Analysis** -- API leakage gate check + symbol-by-symbol migration map
+4. **6-Axis Scoring** -- Data-anchored ratings (no guesswork)
+5. **Verdict** -- Structured REMOVE/DEFER/KEEP recommendation
+
+**The 6 axes** (each anchored to concrete diet data):
+| Axis | Data source |
+|------|-------------|
+| Transitive Cleanup | `exclusive_transitive` |
+| Production Scope | Usage classification from Phase 2 |
+| Coupling Depth | `coupling_effort`, `call_site_count`, `api_breadth` |
+| Replaceability | Symbol migration map from Phase 3 |
+| Security Urgency | `has_vulnerabilities`, `max_cvss_score`, `lifecycle` |
+| Cascade Potential | `exclusive_transitive` + project knowledge |
 
 ```bash
 # In Claude Code
@@ -92,8 +99,8 @@ These skills are the LLM-powered stages of the `scan → diet → LLM → remove
 ```
 uzomuzo diet              Rank all deps by removability        (automated, CLI)
        ↓
-/diet-assess-risk         "How dangerous is it to keep?"       (LLM reads source)
-/diet-evaluate-removal    "Is removal worth the effort?"       (LLM evaluates 6 axes)
+/diet-assess-risk         "How dangerous is it to keep?"       (LLM traces data flow)
+/diet-evaluate-removal    "Is removal worth the effort?"       (LLM classifies usage + scores 6 axes)
        ↓
 /diet-remove              "Remove it safely"                   (LLM implements change)
 ```
