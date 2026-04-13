@@ -86,10 +86,15 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 	preFilterCount := len(graphResult.DirectDeps)
 	graphResult.DirectDeps = filterWorkspaceDeps(graphResult.DirectDeps)
 
+	// Filter excluded-scope dependencies (test deps that leaked into the SBOM).
+	postWorkspaceCount := len(graphResult.DirectDeps)
+	graphResult.DirectDeps = filterExcludedDeps(graphResult.DirectDeps, graphResult.ScopeByPURL)
+
 	slog.Info("Phase 1 complete",
 		"direct", len(graphResult.DirectDeps),
 		"totalTransitive", graphResult.TotalTransitive,
-		"workspaceDepsFiltered", preFilterCount-len(graphResult.DirectDeps),
+		"workspaceDepsFiltered", preFilterCount-postWorkspaceCount,
+		"excludedDepsFiltered", postWorkspaceCount-len(graphResult.DirectDeps),
 	)
 
 	// Phase 2 & 3: run concurrently (both only depend on graphResult from Phase 1)
@@ -237,6 +242,15 @@ func (s *Service) buildEntries(
 		if entry.Scope == "" && entry.Ecosystem == "maven" {
 			if _, ok := mavenRuntimeDeps[strings.ToLower(entry.Name)]; ok {
 				entry.Scope = domaindiet.ScopeRuntime
+			}
+		}
+
+		// Check CycloneDX scope for optional (provided) deps. Only applies when
+		// the SBOM tool populates scope (cdxgen, CycloneDX Maven Plugin) and no
+		// higher-confidence scope (tool, runtime) was already set.
+		if entry.Scope == "" && graph.ScopeByPURL != nil {
+			if graph.ScopeByPURL[purl] == "optional" {
+				entry.Scope = domaindiet.ScopeOptional
 			}
 		}
 
@@ -390,6 +404,24 @@ func filterWorkspaceDeps(purls []string) []string {
 	for _, p := range purls {
 		if isWorkspaceDep(p) {
 			slog.Debug("skipping workspace dependency", "purl", p)
+			continue
+		}
+		filtered = append(filtered, p)
+	}
+	return filtered
+}
+
+// filterExcludedDeps removes dependencies with CycloneDX scope "excluded" (test
+// scope in Maven) from the direct deps list. These are not production dependencies
+// and should not appear in the diet plan.
+func filterExcludedDeps(purls []string, scopeByPURL map[string]string) []string {
+	if scopeByPURL == nil {
+		return purls
+	}
+	filtered := make([]string, 0, len(purls))
+	for _, p := range purls {
+		if scopeByPURL[p] == "excluded" {
+			slog.Debug("skipping excluded-scope dependency", "purl", p)
 			continue
 		}
 		filtered = append(filtered, p)

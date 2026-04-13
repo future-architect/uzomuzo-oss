@@ -12,6 +12,13 @@ const (
 	// These deps intentionally have zero source-level imports and should not
 	// be flagged as unused.
 	ScopeRuntime = "runtime"
+
+	// ScopeOptional indicates a dependency declared as provided/optional in the
+	// build system (Maven provided, Gradle compileOnly). The runtime environment
+	// supplies these at deploy time; the project compiles against them but does
+	// not bundle them. Unlike ScopeTool/ScopeRuntime, optional deps typically DO
+	// have source-level imports, so IsUnused is NOT suppressed.
+	ScopeOptional = "optional"
 )
 
 // DietEntry represents a single dependency's removability analysis.
@@ -21,7 +28,7 @@ type DietEntry struct {
 	Ecosystem string
 	Version   string
 	Relation  string // "direct" or "transitive"
-	Scope     string // "" (default), "tool" (Go tool directive), or "runtime" (loaded via runtime mechanisms such as reflection, ServiceLoader, or classpath resources)
+	Scope     string // "" (default), "tool", "runtime", or "optional" (provided by runtime environment)
 
 	Graph    GraphMetrics
 	Coupling CouplingAnalysis
@@ -35,6 +42,10 @@ type GraphResult struct {
 	AllDeps         []string
 	Metrics         map[string]*GraphMetrics
 	TotalTransitive int
+	// ScopeByPURL maps normalized PURLs to CycloneDX scope values
+	// ("required", "optional", "excluded"). Nil when the SBOM tool does not
+	// populate scope (e.g., Trivy, syft).
+	ScopeByPURL map[string]string
 }
 
 // MaxExclusiveTransitiveCount returns the largest ExclusiveTransitiveCount

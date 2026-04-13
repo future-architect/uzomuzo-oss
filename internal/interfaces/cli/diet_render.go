@@ -226,27 +226,32 @@ func renderDietDetailed(w io.Writer, plan *domaindiet.DietPlan) error {
 			p.printf("│    Status: TOOL (go.mod tool directive — not imported in source)\n")
 		} else if e.Scope == domaindiet.ScopeRuntime {
 			p.printf("│    Status: RUNTIME (reflection/ServiceLoader/classpath resources — not statically imported)\n")
-		} else if e.Coupling.IsUnused {
-			p.printf("│    Status: UNUSED (0 imports found)\n")
 		} else {
-			p.printf("│    Imports:    %d\n", e.Coupling.ImportFileCount)
-			p.printf("│    Call sites: %d\n", e.Coupling.CallSiteCount)
-			p.printf("│    API breadth: %d distinct symbols\n", e.Coupling.APIBreadth)
-			if len(e.Coupling.Symbols) > 0 {
-				p.printf("│    Symbols: %s\n", formatSymbolList(e.Coupling.Symbols))
+			if e.Scope == domaindiet.ScopeOptional {
+				p.printf("│    Scope:  OPTIONAL (provided by runtime environment — not bundled)\n")
 			}
-			if e.Coupling.HasBlankImport || e.Coupling.HasDotImport || e.Coupling.HasWildcardImport {
-				var flags []string
-				if e.Coupling.HasBlankImport {
-					flags = append(flags, "blank-import")
+			if e.Coupling.IsUnused {
+				p.printf("│    Status: UNUSED (0 imports found)\n")
+			} else {
+				p.printf("│    Imports:    %d\n", e.Coupling.ImportFileCount)
+				p.printf("│    Call sites: %d\n", e.Coupling.CallSiteCount)
+				p.printf("│    API breadth: %d distinct symbols\n", e.Coupling.APIBreadth)
+				if len(e.Coupling.Symbols) > 0 {
+					p.printf("│    Symbols: %s\n", formatSymbolList(e.Coupling.Symbols))
 				}
-				if e.Coupling.HasDotImport {
-					flags = append(flags, "dot-import")
+				if e.Coupling.HasBlankImport || e.Coupling.HasDotImport || e.Coupling.HasWildcardImport {
+					var flags []string
+					if e.Coupling.HasBlankImport {
+						flags = append(flags, "blank-import")
+					}
+					if e.Coupling.HasDotImport {
+						flags = append(flags, "dot-import")
+					}
+					if e.Coupling.HasWildcardImport {
+						flags = append(flags, "wildcard-import")
+					}
+					p.printf("│    ⚠ Import flags: %s\n", strings.Join(flags, ", "))
 				}
-				if e.Coupling.HasWildcardImport {
-					flags = append(flags, "wildcard-import")
-				}
-				p.printf("│    ⚠ Import flags: %s\n", strings.Join(flags, ", "))
 			}
 		}
 		p.printf("│\n")

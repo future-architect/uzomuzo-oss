@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted (amended by #303: CycloneDX scope integration)
 
 ## Context
 
@@ -66,10 +66,11 @@ Of 174 reflection call sites, only ~25 actually load external dependencies. The 
 | B. `ScopeRuntime` whitelist (#300) | Known categories (JDBC, logging, WebJars, etc.) | Low | Low (list additions only) |
 | C. A + B combined | Marginal improvement over B alone | High | High |
 | D. SPI `META-INF/services` scanning | 0% in our sample (no SPI files found) | Medium | Low |
+| E. CycloneDX `scope` field (#303) | `optional` (provided) and `excluded` (test) deps only | Low | Low |
 
 ## Decision
 
-**Adopt approach B (`ScopeRuntime` whitelist) as the primary strategy. Do not implement tree-sitter reflection detection at this time.**
+**Adopt approach B (`ScopeRuntime` whitelist) as the primary strategy, supplemented by approach E (CycloneDX `scope` field) for provided/test-scope detection. Do not implement tree-sitter reflection detection at this time.**
 
 ### Rationale
 
@@ -81,6 +82,22 @@ Of 174 reflection call sites, only ~25 actually load external dependencies. The 
 
 4. **The "optional dependency probe" pattern (okhttp) is niche**: While technically detectable, this pattern appears in library internals probing for optional TLS providers. End-user applications rarely use this pattern directly — they depend on okhttp, which depends on bouncycastle. Transitive dependency analysis handles this better than reflection detection.
 
+### Amendment: CycloneDX Scope Integration (#303)
+
+Investigation into using the CycloneDX `scope` field for runtime detection revealed a critical limitation: the CycloneDX spec defines only three scope values (`required`, `optional`, `excluded`), and **both Maven compile and runtime scopes map to `required`**. CycloneDX scope therefore cannot distinguish runtime from compile dependencies.
+
+However, the `scope` field provides value for two other categories:
+
+| CycloneDX scope | Maven scope | Action |
+|-----------------|-------------|--------|
+| `required` | compile, runtime | No action (default). Runtime detection uses `mavenRuntimeDeps` whitelist. |
+| `optional` | provided | Annotate as `ScopeOptional`. These deps are provided by the runtime environment (e.g., `javax.servlet-api`, `lombok`). Unlike runtime deps, they typically DO have source imports, so `IsUnused` is NOT suppressed. |
+| `excluded` | test | Filter out from diet plan. Test deps should not appear in production dependency analysis. |
+
+**Tool support**: Only cdxgen and CycloneDX Maven Plugin populate the `scope` field. Trivy and syft do not. When scope is absent, the existing `mavenRuntimeDeps` whitelist serves as the sole runtime-scope detection mechanism.
+
+**Hybrid strategy**: SBOM scope for optional/excluded classification + hardcoded whitelist for runtime reflection detection. The scope precedence chain is: `toolDeps` → `mavenRuntimeDeps` → CycloneDX `scope`.
+
 ## Consequences
 
 ### Positive
@@ -88,10 +105,12 @@ Of 174 reflection call sites, only ~25 actually load external dependencies. The 
 - #300's `ScopeRuntime` whitelist ships immediately with low risk
 - No new tree-sitter query complexity for Java/Kotlin reflection patterns
 - diet-fuzz pipeline drives whitelist expansion empirically
+- #303's CycloneDX scope parsing adds provided/test-scope detection with minimal implementation cost
 
 ### Negative
 
 - Unknown runtime dependencies not in the whitelist will still be flagged as UNUSED
+- CycloneDX scope is only available from cdxgen and CycloneDX Maven Plugin; Trivy/syft users get no scope benefit
 - If a future ecosystem heavily uses string-literal `Class.forName` for dep loading, this decision should be revisited
 
 ### Future Reconsideration Triggers
@@ -99,10 +118,12 @@ Of 174 reflection call sites, only ~25 actually load external dependencies. The 
 - A diet-fuzz batch reveals >20% false positives from non-whitelisted reflection-loaded deps
 - A new language ecosystem (e.g., Clojure, Scala) shows high `Class.forName("literal")` usage for dep loading
 - SPI (`META-INF/services`) becomes a significant source of false positives in surveyed projects
+- SBOM tools begin embedding the original Maven scope in CycloneDX `properties` (e.g., `cdx:maven:scope`), enabling runtime-vs-compile distinction without the whitelist
 
 ## References
 
 - #300: Recognize Java reflection-loaded deps as runtime-scoped
+- #303: Use CycloneDX scope field for optional/excluded detection
 - #248: JDBC drivers flagged as unused (parent issue)
 - #288: Framework dispatch detection (Spring Boot autoconfiguration)
 - ADR-0014: diet command architecture (tree-sitter design constraints)

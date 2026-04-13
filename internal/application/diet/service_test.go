@@ -559,6 +559,63 @@ func TestIsWorkspaceDep(t *testing.T) {
 	}
 }
 
+func TestFilterExcludedDeps(t *testing.T) {
+	purls := []string{
+		"pkg:maven/com.google.guava/guava@33.0.0",
+		"pkg:maven/junit/junit@4.13.2",
+		"pkg:maven/javax.servlet/javax.servlet-api@4.0.1",
+		"pkg:maven/org.projectlombok/lombok@1.18.30",
+	}
+
+	tests := []struct {
+		name        string
+		scopeByPURL map[string]string
+		wantCount   int
+	}{
+		{
+			name:        "nil scope map passes all through",
+			scopeByPURL: nil,
+			wantCount:   4,
+		},
+		{
+			name:        "empty scope map passes all through",
+			scopeByPURL: map[string]string{},
+			wantCount:   4,
+		},
+		{
+			name: "filters excluded deps",
+			scopeByPURL: map[string]string{
+				"pkg:maven/junit/junit@4.13.2": "excluded",
+			},
+			wantCount: 3,
+		},
+		{
+			name: "keeps optional and required deps",
+			scopeByPURL: map[string]string{
+				"pkg:maven/com.google.guava/guava@33.0.0":        "required",
+				"pkg:maven/javax.servlet/javax.servlet-api@4.0.1": "optional",
+				"pkg:maven/junit/junit@4.13.2":                   "excluded",
+				"pkg:maven/org.projectlombok/lombok@1.18.30":     "optional",
+			},
+			wantCount: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filtered := filterExcludedDeps(purls, tt.scopeByPURL)
+			if len(filtered) != tt.wantCount {
+				t.Errorf("filterExcludedDeps() returned %d deps, want %d: %v", len(filtered), tt.wantCount, filtered)
+			}
+			for _, p := range filtered {
+				if tt.scopeByPURL != nil && tt.scopeByPURL[p] == "excluded" {
+					t.Errorf("excluded dep %q should have been filtered out", p)
+				}
+			}
+		})
+	}
+}
+
 func TestFilterWorkspaceDeps(t *testing.T) {
 	purls := []string{
 		"pkg:npm/express@4.18.0",
@@ -932,6 +989,159 @@ func TestRun_WheelFallback_ResolverError(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("beautifulsoup4 entry not found in plan")
+	}
+}
+
+func TestRun_OptionalScopeAnnotation(t *testing.T) {
+	t.Parallel()
+
+	servletPURL := "pkg:maven/javax.servlet/javax.servlet-api@4.0.1"
+	guavaPURL := "pkg:maven/com.google.guava/guava@33.0.0"
+
+	graphResult := &domaindiet.GraphResult{
+		DirectDeps: []string{servletPURL, guavaPURL},
+		Metrics: map[string]*domaindiet.GraphMetrics{
+			servletPURL: {ExclusiveTransitiveCount: 0, TotalTransitiveCount: 0},
+			guavaPURL:   {ExclusiveTransitiveCount: 5, TotalTransitiveCount: 10},
+		},
+		TotalTransitive: 10,
+		ScopeByPURL: map[string]string{
+			servletPURL: "optional",
+			guavaPURL:   "required",
+		},
+	}
+
+	// Servlet API has imports (provided deps typically do), guava also has imports.
+	sourceResults := map[string]*domaindiet.CouplingAnalysis{
+		servletPURL: {ImportFileCount: 3, CallSiteCount: 5, APIBreadth: 2},
+		guavaPURL:   {ImportFileCount: 7, CallSiteCount: 12, APIBreadth: 4},
+	}
+
+	svc := NewService(
+		&stubGraphAnalyzer{result: graphResult},
+		&stubSourceAnalyzer{result: sourceResults},
+		nil,
+		nil,
+	)
+
+	plan, err := svc.Run(context.Background(), DietInput{
+		SBOMData:   []byte("fake-sbom"),
+		SBOMPath:   "test.sbom.json",
+		SourceRoot: "/tmp/src",
+	})
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if len(plan.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(plan.Entries))
+	}
+
+	for _, e := range plan.Entries {
+		switch e.PURL {
+		case servletPURL:
+			if e.Scope != domaindiet.ScopeOptional {
+				t.Errorf("servlet-api Scope = %q, want %q", e.Scope, domaindiet.ScopeOptional)
+			}
+			// Optional deps should NOT suppress IsUnused — coupling data is preserved.
+			if e.Coupling.IsUnused {
+				t.Error("servlet-api should not be IsUnused (has imports)")
+			}
+			if e.Coupling.ImportFileCount != 3 {
+				t.Errorf("servlet-api ImportFileCount = %d, want 3", e.Coupling.ImportFileCount)
+			}
+		case guavaPURL:
+			if e.Scope != "" {
+				t.Errorf("guava Scope = %q, want empty (required = default)", e.Scope)
+			}
+		}
+	}
+}
+
+func TestRun_OptionalScopeNotOverriddenByRuntime(t *testing.T) {
+	t.Parallel()
+
+	// A JDBC driver should get ScopeRuntime from the whitelist even if
+	// CycloneDX scope says "optional". Whitelist takes precedence.
+	mysqlPURL := "pkg:maven/mysql/mysql-connector-j@9.0.0"
+
+	graphResult := &domaindiet.GraphResult{
+		DirectDeps: []string{mysqlPURL},
+		Metrics: map[string]*domaindiet.GraphMetrics{
+			mysqlPURL: {ExclusiveTransitiveCount: 2, TotalTransitiveCount: 3},
+		},
+		TotalTransitive: 3,
+		ScopeByPURL: map[string]string{
+			mysqlPURL: "optional",
+		},
+	}
+
+	svc := NewService(
+		&stubGraphAnalyzer{result: graphResult},
+		&stubSourceAnalyzer{result: map[string]*domaindiet.CouplingAnalysis{}},
+		nil,
+		nil,
+	)
+
+	plan, err := svc.Run(context.Background(), DietInput{
+		SBOMData:   []byte("fake-sbom"),
+		SBOMPath:   "test.sbom.json",
+		SourceRoot: "/tmp/src",
+	})
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if len(plan.Entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(plan.Entries))
+	}
+
+	entry := plan.Entries[0]
+	// mavenRuntimeDeps whitelist should take precedence over CycloneDX optional scope.
+	if entry.Scope != domaindiet.ScopeRuntime {
+		t.Errorf("mysql Scope = %q, want %q (runtime whitelist takes precedence)", entry.Scope, domaindiet.ScopeRuntime)
+	}
+}
+
+func TestRun_ExcludedDepsFilteredOut(t *testing.T) {
+	t.Parallel()
+
+	junitPURL := "pkg:maven/junit/junit@4.13.2"
+	guavaPURL := "pkg:maven/com.google.guava/guava@33.0.0"
+
+	graphResult := &domaindiet.GraphResult{
+		DirectDeps: []string{junitPURL, guavaPURL},
+		Metrics: map[string]*domaindiet.GraphMetrics{
+			junitPURL: {ExclusiveTransitiveCount: 1, TotalTransitiveCount: 2},
+			guavaPURL: {ExclusiveTransitiveCount: 5, TotalTransitiveCount: 10},
+		},
+		TotalTransitive: 12,
+		ScopeByPURL: map[string]string{
+			junitPURL: "excluded",
+			guavaPURL: "required",
+		},
+	}
+
+	svc := NewService(
+		&stubGraphAnalyzer{result: graphResult},
+		&stubSourceAnalyzer{result: map[string]*domaindiet.CouplingAnalysis{}},
+		nil,
+		nil,
+	)
+
+	plan, err := svc.Run(context.Background(), DietInput{
+		SBOMData:   []byte("fake-sbom"),
+		SBOMPath:   "test.sbom.json",
+		SourceRoot: "/tmp/src",
+	})
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	// junit (excluded) should be filtered out, only guava remains.
+	if len(plan.Entries) != 1 {
+		t.Fatalf("expected 1 entry (excluded dep filtered), got %d", len(plan.Entries))
+	}
+	if plan.Entries[0].PURL != guavaPURL {
+		t.Errorf("remaining entry PURL = %q, want %q", plan.Entries[0].PURL, guavaPURL)
 	}
 }
 

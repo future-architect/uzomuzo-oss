@@ -120,6 +120,7 @@ func (a *Analyzer) AnalyzeGraph(_ context.Context, sbomData []byte) (*domaindiet
 		AllDeps:         allDepList,
 		Metrics:         metrics,
 		TotalTransitive: totalTransitive,
+		ScopeByPURL:     sbomgraph.BuildScopeMap(bom.Components),
 	}, nil
 }
 

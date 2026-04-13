@@ -175,3 +175,81 @@ func TestResolveDirectPURLs_MixedNamespaces(t *testing.T) {
 		t.Error("expected external/lib in direct deps")
 	}
 }
+
+func TestBuildScopeMap(t *testing.T) {
+	tests := []struct {
+		name       string
+		components []Component
+		want       map[string]string
+	}{
+		{
+			name: "extracts scope from flat components",
+			components: []Component{
+				{PURL: "pkg:maven/javax.servlet/javax.servlet-api@4.0.1", Scope: "optional"},
+				{PURL: "pkg:maven/com.google.guava/guava@33.0.0", Scope: "required"},
+				{PURL: "pkg:maven/junit/junit@4.13.2", Scope: "excluded"},
+			},
+			want: map[string]string{
+				"pkg:maven/javax.servlet/javax.servlet-api@4.0.1": "optional",
+				"pkg:maven/com.google.guava/guava@33.0.0":        "required",
+				"pkg:maven/junit/junit@4.13.2":                   "excluded",
+			},
+		},
+		{
+			name: "extracts scope from nested components",
+			components: []Component{
+				{
+					PURL:  "pkg:maven/com.example/parent@1.0.0",
+					Scope: "required",
+					Components: []Component{
+						{PURL: "pkg:maven/org.projectlombok/lombok@1.18.30", Scope: "optional"},
+					},
+				},
+			},
+			want: map[string]string{
+				"pkg:maven/com.example/parent@1.0.0":            "required",
+				"pkg:maven/org.projectlombok/lombok@1.18.30": "optional",
+			},
+		},
+		{
+			name: "skips components without scope",
+			components: []Component{
+				{PURL: "pkg:maven/com.google.guava/guava@33.0.0"},
+				{PURL: "pkg:npm/express@4.18.0"},
+			},
+			want: nil,
+		},
+		{
+			name: "skips components without PURL",
+			components: []Component{
+				{Name: "my-app", Scope: "required"},
+			},
+			want: nil,
+		},
+		{
+			name:       "returns nil for empty components",
+			components: nil,
+			want:       nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := BuildScopeMap(tt.components)
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("BuildScopeMap() = %v, want nil", got)
+				}
+				return
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("BuildScopeMap() returned %d entries, want %d\ngot: %v", len(got), len(tt.want), got)
+			}
+			for purl, wantScope := range tt.want {
+				if gotScope := got[purl]; gotScope != wantScope {
+					t.Errorf("scope[%s] = %q, want %q", purl, gotScope, wantScope)
+				}
+			}
+		})
+	}
+}
