@@ -1,0 +1,108 @@
+# ADR-0015: Java Reflection Detection Strategy for diet IBNC Analysis
+
+## Status
+
+Accepted
+
+## Context
+
+`uzomuzo diet` uses tree-sitter AST analysis to detect import-but-not-called (IBNC) dependencies. For Java, this works well for compile-time couplings (method calls, constructors, type declarations, annotations, etc.), but fails for dependencies loaded via reflection at runtime.
+
+Issue #300 proposes a `ScopeRuntime` whitelist for known reflection-loaded dependencies (JDBC drivers, logging backends, WebJars). Before accepting that approach, we needed evidence on whether tree-sitter-based reflection detection is a viable alternative or complement.
+
+### Investigation: Reflection Patterns in 6 Java OSS Projects
+
+We surveyed reflection usage in 6 real-world Java OSS projects: spring-petclinic, apolloconfig/apollo, mybatis/mybatis-3, google/gson, square/okhttp, and OpenFeign/feign.
+
+#### Raw Reflection Counts (non-test code)
+
+| Pattern | Count | AST Detectable? |
+|---------|-------|-----------------|
+| `Class.forName("literal")` | 8 | Yes |
+| `Class.forName(variable/interpolation)` | 12 | No |
+| `ServiceLoader.load` | 0 | — |
+| `DriverManager.*` | 11 | No |
+| `.newInstance()` | 93 | No |
+| `getMethod/invoke` | 50 | No |
+| **Total** | **174** | **8 (4.6%)** |
+
+#### Critical Finding: Most Reflection Is Not Dependency Loading
+
+Of 174 reflection call sites, only ~25 actually load external dependencies. The rest are:
+
+- JAXP factory calls (`DocumentBuilderFactory.newInstance()`) — stdlib, not external deps
+- Self-referential introspection (gson serializing user types, mybatis mapper proxies)
+- JDK version probing (okhttp checking for `SSLSocket.getApplicationProtocol`)
+- Array allocation (`Array.newInstance`)
+
+#### Dep-Loading Reflection Detectability (~25 calls)
+
+| Pattern | Example | Detectable? |
+|---------|---------|-------------|
+| OkHttp TLS provider probes | `Class.forName("org.bouncycastle.jsse...")` | **Yes** (3–4 calls) |
+| OkHttp Android platform probes | `Class.forName("$packageName.OpenSSL*")` | Partial (dynamic prefix) |
+| MyBatis JDBC driver loading | `Class.forName(driverName)` from XML config | No |
+| MyBatis plugin/TypeHandler loading | `resolveClass(props.get("..."))` | No |
+| Spring Boot autoconfiguration | `@SpringBootApplication` classpath scanning | No |
+
+**Honest detectability: ~3–7 / ~25 dep-loading calls = 12–28%**
+
+#### Per-Project Summary
+
+| Project | Reflection Profile | AST Detection Value |
+|---------|-------------------|---------------------|
+| spring-petclinic | Zero direct reflection; all Spring DI | None |
+| apollo | Near-zero; Spring `@Autowired` | None |
+| mybatis-3 | XML-config-driven `Class.forName(var)` | None |
+| gson | JDK internal probing, self-introspection | None |
+| **okhttp** | **String-literal `Class.forName` for optional TLS providers** | **Sole win** |
+| feign | JAXP factories, own API internals | None |
+
+### Approaches Considered
+
+| Approach | Coverage | Cost | Maintainability |
+|----------|----------|------|-----------------|
+| A. tree-sitter reflection AST detection | 12–28% of dep-loading reflection | High (new query patterns, Kotlin support needed for okhttp) | Medium |
+| B. `ScopeRuntime` whitelist (#300) | Known categories (JDBC, logging, WebJars, etc.) | Low | Low (list additions only) |
+| C. A + B combined | Marginal improvement over B alone | High | High |
+| D. SPI `META-INF/services` scanning | 0% in our sample (no SPI files found) | Medium | Low |
+
+## Decision
+
+**Adopt approach B (`ScopeRuntime` whitelist) as the primary strategy. Do not implement tree-sitter reflection detection at this time.**
+
+### Rationale
+
+1. **Low ROI for AST detection**: Only 3–7 out of ~25 dep-loading reflection calls across 6 projects are string-literal `Class.forName` — the sole pattern tree-sitter can reliably detect. The investment in new query patterns, cross-language support (Kotlin for okhttp), and edge-case handling is not justified.
+
+2. **Spring Boot is the dominant case and is fundamentally undetectable**: The most common source of false-positive UNUSED flags on Java dependencies is Spring Boot autoconfiguration. No static analysis — not even full type resolution — can detect classpath-scanned dependencies. The whitelist approach directly addresses this by recognizing known runtime dependency categories.
+
+3. **Whitelist is extensible and cheap**: Adding a new Maven coordinate to the `ScopeRuntime` list is a one-line change. The diet-fuzz testing pipeline continuously discovers new false positives, making whitelist expansion data-driven.
+
+4. **The "optional dependency probe" pattern (okhttp) is niche**: While technically detectable, this pattern appears in library internals probing for optional TLS providers. End-user applications rarely use this pattern directly — they depend on okhttp, which depends on bouncycastle. Transitive dependency analysis handles this better than reflection detection.
+
+## Consequences
+
+### Positive
+
+- #300's `ScopeRuntime` whitelist ships immediately with low risk
+- No new tree-sitter query complexity for Java/Kotlin reflection patterns
+- diet-fuzz pipeline drives whitelist expansion empirically
+
+### Negative
+
+- Unknown runtime dependencies not in the whitelist will still be flagged as UNUSED
+- If a future ecosystem heavily uses string-literal `Class.forName` for dep loading, this decision should be revisited
+
+### Future Reconsideration Triggers
+
+- A diet-fuzz batch reveals >20% false positives from non-whitelisted reflection-loaded deps
+- A new language ecosystem (e.g., Clojure, Scala) shows high `Class.forName("literal")` usage for dep loading
+- SPI (`META-INF/services`) becomes a significant source of false positives in surveyed projects
+
+## References
+
+- #300: Recognize Java reflection-loaded deps as runtime-scoped
+- #248: JDBC drivers flagged as unused (parent issue)
+- #288: Framework dispatch detection (Spring Boot autoconfiguration)
+- ADR-0014: diet command architecture (tree-sitter design constraints)
