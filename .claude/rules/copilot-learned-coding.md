@@ -57,6 +57,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Normalize Map Keys Consistently Across Insert and Lookup**: When building a `map[string]T` with normalized keys (e.g., `strings.ToLower` at insertion), apply the same normalization at every lookup site. A mismatch causes silent lookup failures for inputs with non-canonical casing (e.g., mixed-case Python module names like `OpenSSL`). Audit all functions that query the map, not just the one you're currently editing.
 - **Use Ecosystem-Neutral Language in Multi-Language Error Messages**: When a CLI tool supports multiple ecosystems, error hints and suggestions must not reference language-specific files (e.g., `go.mod`) unless the current context is confirmed to be that language. Generic messages like "dependency manifest not found" are safer than ecosystem-specific ones.
 - **Extract Shared Helpers for Near-Duplicate Code Paths**: When two functions follow the same sequence (e.g., parse input → call external API → interpret result → populate output) differing only in how one parameter is obtained, extract the shared sequence into a single helper parameterized on that value. Near-duplicate paths drift silently when logging, error handling, or evidence formatting is updated in one copy but not the other.
+- **Mirror Sibling Function Behavior for Logging and Error Handling**: When adding a new recursive or iterative function that parallels an existing one (e.g., `buildScopeMapRecursive` alongside `buildRefMapRecursive`), replicate the same logging, error handling, and guard behavior — especially depth-limit warnings, nil checks, and fallback paths. Silent divergence in sibling functions makes one code path harder to diagnose than the other and reduces visibility into edge cases like malicious or malformed input.
 - **Narrow Candidate Heuristics and Map Assertions to Specific Items**: When generating candidate values (import paths, match keys) from heuristics, validate each candidate against its target domain to avoid false-positive attribution from overly broad matching. Similarly, when asserting on `map[K]V` results, check the specific key under test (`paths := m[key]; len(paths) == 0`) — not the whole map (`len(m) == 0`), which only confirms any key has data without verifying the key you care about.
 - **Narrow Heuristic Candidate Sets to Avoid False Attribution**: When building candidate lists for matching (e.g., import-path heuristics, file-type detection), prefer precise patterns over broad substring matching. An overly broad heuristic (e.g., taking only the last segment after a delimiter) can collide with unrelated entries and cause false attribution (e.g., marking an unrelated dependency as "used"). Add validation or specificity constraints to each candidate before insertion.
 - **Verify Tree-Sitter Query Patterns Do Not Overlap**: When adding new tree-sitter (or similar AST) query patterns to a multi-pattern query, verify that the new pattern does not match nodes already captured by an existing pattern via parent-child nesting. For example, a standalone `member_expression` pattern already matches the inner `pkg.Foo` node inside `new pkg.Foo()`, so adding a `new_expression` wrapping `member_expression` pattern would double-count the same call site. Test with representative code that exercises both the new and existing patterns.
@@ -97,11 +98,6 @@ pending_patterns:
     pr: 276
     file: "internal/infrastructure/pypi/client.go"
     date: "2026-04-11"
-  - category: "defensive-coding"
-    summary: "In chained heuristic pipelines where each step transforms an intermediate result, fallback on empty must return the original input — not the intermediate value from a prior step — to match the documented contract"
-    pr: 281
-    file: "internal/infrastructure/treesitter/lang_go.go"
-    date: "2026-04-11"
   - category: "comment-doc-drift"
     summary: "Test case name claimed 'web vs data-jpa' but input PURL was spring-boot-starter-security — test names must match the actual input under test"
     pr: 299
@@ -130,6 +126,7 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #281, #304 — mirror sibling function behavior for logging/error handling)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #276, #280 — rerun analyzers with combined input, gate fallback on error, spec-compliant parsers, AST ancestor walk continuation)
   # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #253, #276 — interface contract doc must match signature semantics)
   # testing: promoted to testing-performance.instructions.md (PRs #276, #282, #298 — nil map merge tests, sibling assertions, test name/code consistency, unconditional test assertions)
