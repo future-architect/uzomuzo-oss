@@ -28,10 +28,10 @@ type BOMMetadata struct {
 
 // Component represents a CycloneDX component with optional nested sub-components.
 type Component struct {
-	BOMRef string      `json:"bom-ref"`
-	Name   string      `json:"name"`
-	PURL   string      `json:"purl"`
-	Scope  string      `json:"scope,omitempty"` // CycloneDX scope: "required", "optional", or "excluded"
+	BOMRef     string      `json:"bom-ref"`
+	Name       string      `json:"name"`
+	PURL       string      `json:"purl"`
+	Scope      string      `json:"scope,omitempty"` // CycloneDX scope: "required", "optional", or "excluded"
 	Components []Component `json:"components"`
 }
 
@@ -336,6 +336,11 @@ func BuildScopeMap(components []Component) map[string]string {
 // buildScopeMapRecursive populates m with normalizedPURL → CycloneDX scope mappings.
 func buildScopeMapRecursive(components []Component, m map[string]string, depth int) {
 	if depth > MaxNestingDepth {
+		slog.Warn(
+			"max nesting depth exceeded while building scope map; truncating traversal",
+			"depth", depth,
+			"max_depth", MaxNestingDepth,
+		)
 		return
 	}
 	for _, c := range components {
