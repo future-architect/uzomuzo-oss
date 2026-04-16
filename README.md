@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml) [![Dependency Scan](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/future-architect/uzomuzo-oss)](https://goreportcard.com/report/github.com/future-architect/uzomuzo-oss) [![Go Reference](https://pkg.go.dev/badge/github.com/future-architect/uzomuzo-oss.svg)](https://pkg.go.dev/github.com/future-architect/uzomuzo-oss) [![Release](https://img.shields.io/github/v/release/future-architect/uzomuzo-oss)](https://github.com/future-architect/uzomuzo-oss/releases/latest) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-📊 **We analyzed 16,000 production packages: 48% have lifecycle risk. SCA tools like Trivy, Syft, and cdxgen detect none of them.** (Presented at [FIRST VulnCon 2026](https://www.first.org/conference/vulncon26/program#pThe-CVE-Blind-Spot-Defeating-Hidden-EOLs-and-Repo-Jacking-with-Engineering-Triage-Code-Diet))
+📊 **We analyzed 16,000 production packages: 48% have lifecycle risk. SCA tools like Trivy, Syft, and cdxgen detect none of them.** (Presented at [FIRST VulnCon 2026](https://www.first.org/conference/vulncon26/program#pThe-CVE-Blind-Spot-Defeating-Hidden-EOLs-and-Repo-Jacking-with-Engineering-Triage-Code-Diet) — [slides](docs/presentations/vulncon2026.pdf))
 
 **Find abandoned dependencies before they become vulnerabilities. Then remove them — in the right order.**
 
@@ -672,6 +672,7 @@ See [Data Flow](docs/data-flow.md) for API integration diagram and two-path asse
 | [License Resolution](docs/license-resolution.md) | ResolvedLicense / normalization / fallback / promotion |
 | [Development Guide](docs/development.md) | SPDX updates, testing, performance, troubleshooting |
 | [Claude Code Skills](claude-skills/) | LLM-powered dependency analysis: EOL risk tracing + 6-axis removal evaluation |
+| [VulnCon 2026 Slides](docs/presentations/vulncon2026.pdf) | FIRST VulnCon 2026 presentation: "The CVE Blind Spot" |
 
 ## Why "Uzomuzo"?
 
