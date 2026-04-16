@@ -677,7 +677,7 @@ See [Data Flow](docs/data-flow.md) for API integration diagram and two-path asse
 
 Pronounced **oo-zoh-moo-zoh** — from the Japanese *uzōmuzō* (有象無象).
 
-In Japanese Buddhist philosophy, *uzō* (有象) means "things with form" and *muzō* (無象) means "things without form." Together, *uzōmuzō* originally described "all things in the universe — the visible and the invisible."
+In Buddhist philosophy, *uzō* (有象) means "things with form" and *muzō* (無象) means "things without form." Together, *uzōmuzō* originally described "all things in the universe — the visible and the invisible."
 
 Modern software supply chains are exactly that: a vast universe of seen (direct) and unseen (transitive) dependencies. **uzomuzo** illuminates this complexity — mapping every element of your dependency tree to bring clarity to the chaos.
 
