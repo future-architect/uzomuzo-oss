@@ -252,10 +252,16 @@ func dependenciesSupportedEcosystem(eco string) bool {
 }
 
 // enrichDependencyCounts fetches dependency counts (direct + transitive) from deps.dev
-// and populates Analysis.DirectDepsCount and Analysis.TransitiveDepsCount.
+// and populates Analysis.DirectDepsCount, Analysis.TransitiveDepsCount, and
+// Analysis.HasDependencyGraph.
 // Returns the raw DependenciesResponse map for downstream use (e.g., transitive advisory enrichment).
 //
-// Version selection: StableVersion > PrereleaseVersion (latest release for catalog DB).
+// Version selection: delegated to latestReleaseVersion (StableVersion >
+// MaxSemverVersion > PreReleaseVersion). This intentionally differs from
+// enrichDependentCounts / resolvedVersion (which prefers Package.Version) —
+// DependentCount asks "who depends on this exact version" while DirectDepsCount
+// asks "what does the current release of this package depend on". Keep the two
+// helpers distinct; do not unify them.
 // Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
 // Unsupported ecosystems are filtered out before making API requests to avoid
 // wasting HTTP round-trips on guaranteed 404 responses (important for large batches).
