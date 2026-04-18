@@ -338,17 +338,36 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 	return perPURL
 }
 
-// latestReleaseVersion returns the latest release version for dependency count queries.
-// Preference: StableVersion > PrereleaseVersion.
+// latestReleaseVersion returns the best version string for dependency count queries.
+// Preference order:
+//  1. StableVersion       — latest stable release (best representation of the current dependency surface)
+//  2. MaxSemverVersion    — highest semver across published versions (often matches stable; useful when deps.dev data lacks IsDefault/stable flags)
+//  3. PreReleaseVersion   — latest non-stable release, for ecosystems/packages where no stable exists yet
+//  4. RequestedVersion    — user-pinned version from the request, if present
+//  5. Package.Version     — version embedded in the original PURL
+//
+// The first three probe "what does this package currently depend on". The
+// last two ensure we still issue a deps.dev query when upstream release
+// metadata is sparse but a concrete version is known from the input.
 func latestReleaseVersion(a *domain.Analysis) string {
-	if a.ReleaseInfo == nil {
-		return ""
+	if a.ReleaseInfo != nil {
+		if v := a.ReleaseInfo.StableVersion; v != nil && v.Version != "" {
+			return v.Version
+		}
+		if v := a.ReleaseInfo.MaxSemverVersion; v != nil && v.Version != "" {
+			return v.Version
+		}
+		if v := a.ReleaseInfo.PreReleaseVersion; v != nil && v.Version != "" {
+			return v.Version
+		}
+		if v := a.ReleaseInfo.RequestedVersion; v != nil && v.Version != "" {
+			return v.Version
+		}
 	}
-	if a.ReleaseInfo.StableVersion != nil && a.ReleaseInfo.StableVersion.Version != "" {
-		return a.ReleaseInfo.StableVersion.Version
-	}
-	if a.ReleaseInfo.PreReleaseVersion != nil && a.ReleaseInfo.PreReleaseVersion.Version != "" {
-		return a.ReleaseInfo.PreReleaseVersion.Version
+	if a.Package != nil {
+		if v := strings.TrimSpace(a.Package.Version); v != "" {
+			return v
+		}
 	}
 	return ""
 }

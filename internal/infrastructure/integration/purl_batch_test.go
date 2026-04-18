@@ -311,18 +311,38 @@ func TestLatestReleaseVersion(t *testing.T) {
 			want:     "2.0.0",
 		},
 		{
-			name:     "fallback to prerelease",
+			name:     "fallback to max semver when no stable",
+			analysis: &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{MaxSemverVersion: &domain.VersionDetail{Version: "4.5.0"}, PreReleaseVersion: &domain.VersionDetail{Version: "1.0.0-beta.1"}}},
+			want:     "4.5.0",
+		},
+		{
+			name:     "fallback to prerelease when no stable or max semver",
 			analysis: &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{PreReleaseVersion: &domain.VersionDetail{Version: "1.0.0-beta.1"}}},
 			want:     "1.0.0-beta.1",
 		},
 		{
-			name:     "nil release info",
+			name:     "fallback to requested version when no release candidates",
+			analysis: &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{RequestedVersion: &domain.VersionDetail{Version: "0.9.0"}}},
+			want:     "0.9.0",
+		},
+		{
+			name:     "fallback to package version when no release info",
+			analysis: &domain.Analysis{Package: &domain.Package{Version: "7.2.1"}},
+			want:     "7.2.1",
+		},
+		{
+			name:     "package version trimmed",
+			analysis: &domain.Analysis{Package: &domain.Package{Version: "  7.2.1  "}},
+			want:     "7.2.1",
+		},
+		{
+			name:     "nil release info and nil package",
 			analysis: &domain.Analysis{},
 			want:     "",
 		},
 		{
-			name:     "empty versions",
-			analysis: &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Version: ""}}},
+			name:     "all empty versions",
+			analysis: &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Version: ""}}, Package: &domain.Package{Version: ""}},
 			want:     "",
 		},
 	}
@@ -416,6 +436,50 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantDirect:             map[string]int{"pkg:npm/beta-only": 1},
 			wantTransitive:         map[string]int{"pkg:npm/beta-only": 1},
 			wantHasDependencyGraph: map[string]bool{"pkg:npm/beta-only": true},
+		},
+		{
+			name:  "versionless PURL falls back to max semver when stable missing",
+			purls: []string{"pkg:pypi/django"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:pypi/django": {
+					EffectivePURL: "pkg:pypi/django",
+					Package:       &domain.Package{Ecosystem: "pypi"},
+					// Upstream release metadata missing stable but has MaxSemver —
+					// the deps query should still succeed using the semver fallback.
+					ReleaseInfo: &domain.ReleaseInfo{MaxSemverVersion: &domain.VersionDetail{Version: "5.1.0"}},
+				},
+			},
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:pypi/django": {
+					Nodes: []depsdev.DependencyNode{
+						{Relation: "SELF"},
+						{Relation: "DIRECT"},
+						{Relation: "DIRECT"},
+					},
+				},
+			},
+			wantDirect:             map[string]int{"pkg:pypi/django": 2},
+			wantTransitive:         map[string]int{"pkg:pypi/django": 0},
+			wantHasDependencyGraph: map[string]bool{"pkg:pypi/django": true},
+		},
+		{
+			name:  "versionless PURL falls back to package version",
+			purls: []string{"pkg:cargo/serde"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:cargo/serde": {
+					EffectivePURL: "pkg:cargo/serde",
+					Package:       &domain.Package{Ecosystem: "cargo", Version: "1.0.210"},
+					// No ReleaseInfo at all — Package.Version is the last-resort fallback.
+				},
+			},
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:cargo/serde": {
+					Nodes: []depsdev.DependencyNode{{Relation: "SELF"}, {Relation: "DIRECT"}},
+				},
+			},
+			wantDirect:             map[string]int{"pkg:cargo/serde": 1},
+			wantTransitive:         map[string]int{"pkg:cargo/serde": 0},
+			wantHasDependencyGraph: map[string]bool{"pkg:cargo/serde": true},
 		},
 		{
 			name:  "leaf package with zero deps still marks graph as present",
