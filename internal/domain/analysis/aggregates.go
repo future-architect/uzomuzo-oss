@@ -77,17 +77,30 @@ type Analysis struct {
 	// used in the deps.dev query:
 	//   - If EffectivePURL includes a version, that exact version is used.
 	//   - Otherwise, the latest release is used (stable > prerelease).
-	// Zero means unknown, unsupported ecosystem, or no version resolved.
 	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
+	// Zero is ambiguous without HasDependencyGraph: it can mean "genuinely a leaf
+	// package" (e.g., react@19 has no runtime deps), "unsupported ecosystem", or
+	// "no version resolved". Consult HasDependencyGraph to distinguish.
 	DirectDepsCount int
 
 	// TransitiveDepsCount is the number of transitive (indirect) dependencies for the
 	// package version used in the deps.dev query:
 	//   - If EffectivePURL includes a version, that exact version is used.
 	//   - Otherwise, the latest release is used (stable > prerelease).
-	// Zero means unknown, unsupported ecosystem, or no version resolved.
 	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
+	// Zero is ambiguous without HasDependencyGraph: it can mean "no transitive
+	// deps" (e.g., pypi's graph only covers direct deps), "unsupported ecosystem",
+	// or "no version resolved". Consult HasDependencyGraph to distinguish.
 	TransitiveDepsCount int
+
+	// HasDependencyGraph reports whether a deps.dev dependency-graph response was
+	// successfully retrieved for this analysis. When true, DirectDepsCount and
+	// TransitiveDepsCount reflect the graph contents (zero means the resolved
+	// version genuinely has no dependencies in that relation class). When false,
+	// the graph was unavailable — typical reasons are an unsupported ecosystem,
+	// a versionless analysis with no resolvable release, a 404 from deps.dev, or
+	// a transport error — so the counts carry no positive information.
+	HasDependencyGraph bool
 
 	// Canonical package links (homepage, registry, docs, changelog)
 	PackageLinks *PackageLinks
