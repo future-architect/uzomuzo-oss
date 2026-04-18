@@ -76,21 +76,24 @@ type Analysis struct {
 	// DirectDepsCount is the number of direct dependencies for the package version
 	// used in the deps.dev query:
 	//   - If EffectivePURL includes a version, that exact version is used.
-	//   - Otherwise, the latest release is used (stable > prerelease).
+	//   - Otherwise, the latest release is used (stable > maxSemver > prerelease).
 	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
-	// Zero is ambiguous without HasDependencyGraph: it can mean "genuinely a leaf
-	// package" (e.g., react@19 has no runtime deps), "unsupported ecosystem", or
-	// "no version resolved". Consult HasDependencyGraph to distinguish.
+	// When HasDependencyGraph is true, zero means the resolved version genuinely
+	// has no direct dependencies (e.g., react@19 declares none). When
+	// HasDependencyGraph is false, zero is uninformative — the graph was not
+	// reached (unsupported ecosystem, no resolvable release, 404, or transport
+	// error). Always consult HasDependencyGraph before interpreting zero.
 	DirectDepsCount int
 
 	// TransitiveDepsCount is the number of transitive (indirect) dependencies for the
 	// package version used in the deps.dev query:
 	//   - If EffectivePURL includes a version, that exact version is used.
-	//   - Otherwise, the latest release is used (stable > prerelease).
+	//   - Otherwise, the latest release is used (stable > maxSemver > prerelease).
 	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
-	// Zero is ambiguous without HasDependencyGraph: it can mean "no transitive
-	// deps" (e.g., pypi's graph only covers direct deps), "unsupported ecosystem",
-	// or "no version resolved". Consult HasDependencyGraph to distinguish.
+	// When HasDependencyGraph is true, zero means the resolved version genuinely
+	// has no transitive dependencies in the graph (e.g., pypi responses typically
+	// include only direct deps). When HasDependencyGraph is false, zero is
+	// uninformative. Always consult HasDependencyGraph before interpreting zero.
 	TransitiveDepsCount int
 
 	// HasDependencyGraph reports whether a deps.dev dependency-graph response was

@@ -93,9 +93,10 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	}()
 	go func() {
 		defer enrichWg.Done()
-		// Uses latestReleaseVersion (stable > prerelease) instead of resolvedVersion
-		// because catalog DB stores version-agnostic package data; the latest release
-		// best represents the current dependency surface for OSS selection.
+		// Uses latestReleaseVersion (stable > maxSemver > prerelease) instead of
+		// resolvedVersion because catalog DB stores version-agnostic package data;
+		// the latest release best represents the current dependency surface for
+		// OSS selection.
 		depsGraphResults = s.enrichDependencyCounts(ctx, purls, analyses)
 	}()
 	enrichWg.Wait()
@@ -281,7 +282,7 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 			ep = p
 		}
 		// The :dependencies endpoint requires a versioned PURL.
-		// Use the latest release version (stable > prerelease) for catalog consistency.
+		// Use the latest release version (stable > maxSemver > prerelease) for catalog consistency.
 		if !strings.Contains(ep, "@") {
 			if v := latestReleaseVersion(a); v != "" {
 				if versioned, err := purl.WithVersion(ep, v); err == nil {
@@ -340,34 +341,28 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 
 // latestReleaseVersion returns the best version string for dependency count queries.
 // Preference order:
-//  1. StableVersion       — latest stable release (best representation of the current dependency surface)
-//  2. MaxSemverVersion    — highest semver across published versions (often matches stable; useful when deps.dev data lacks IsDefault/stable flags)
-//  3. PreReleaseVersion   — latest non-stable release, for ecosystems/packages where no stable exists yet
-//  4. RequestedVersion    — user-pinned version from the request, if present
-//  5. Package.Version     — version embedded in the original PURL
+//  1. StableVersion     — latest stable release (best representation of the current dependency surface)
+//  2. MaxSemverVersion  — highest semver across published versions (often matches stable; useful when deps.dev data lacks IsDefault/stable flags)
+//  3. PreReleaseVersion — latest non-stable release, for ecosystems/packages where no stable exists yet
 //
-// The first three probe "what does this package currently depend on". The
-// last two ensure we still issue a deps.dev query when upstream release
-// metadata is sparse but a concrete version is known from the input.
+// Intentionally does NOT fall back to RequestedVersion or Package.Version:
+// the contract is "current dependency surface", not "whatever version happens
+// to be pinned". Callers that want version-specific semantics (as in
+// DependentCount) use resolvedVersion instead, which has the opposite
+// ordering (Package.Version first). Keeping the two helpers distinct prevents
+// silent drift between "latest release" and "pinned version" queries.
 func latestReleaseVersion(a *domain.Analysis) string {
-	if a.ReleaseInfo != nil {
-		if v := a.ReleaseInfo.StableVersion; v != nil && v.Version != "" {
-			return v.Version
-		}
-		if v := a.ReleaseInfo.MaxSemverVersion; v != nil && v.Version != "" {
-			return v.Version
-		}
-		if v := a.ReleaseInfo.PreReleaseVersion; v != nil && v.Version != "" {
-			return v.Version
-		}
-		if v := a.ReleaseInfo.RequestedVersion; v != nil && v.Version != "" {
-			return v.Version
-		}
+	if a == nil || a.ReleaseInfo == nil {
+		return ""
 	}
-	if a.Package != nil {
-		if v := strings.TrimSpace(a.Package.Version); v != "" {
-			return v
-		}
+	if v := a.ReleaseInfo.StableVersion; v != nil && v.Version != "" {
+		return v.Version
+	}
+	if v := a.ReleaseInfo.MaxSemverVersion; v != nil && v.Version != "" {
+		return v.Version
+	}
+	if v := a.ReleaseInfo.PreReleaseVersion; v != nil && v.Version != "" {
+		return v.Version
 	}
 	return ""
 }
