@@ -13,6 +13,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/integration"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
 )
 
@@ -35,9 +36,11 @@ func NewFetchServiceFromConfig(cfg *config.Config) *FetchService {
 	githubClient := github.NewClient(cfg)
 	rgClient := rubygems.NewClient()
 	pkgClient := packagist.NewClient()
+	pyClient := pypi.NewClient()
 	depsdevClient := depsdev.NewDepsDevClient(&cfg.DepsDev).
 		WithRubyGems(rgClient).
 		WithPackagist(pkgClient).
+		WithPyPI(pyClient).
 		WithMaven(func() *maven.Client {
 			mv := maven.NewClient()
 			if u := cfg.Maven.BaseURL; strings.TrimSpace(u) != "" {
@@ -50,6 +53,7 @@ func NewFetchServiceFromConfig(cfg *config.Config) *FetchService {
 		integration.WithConfig(cfg),
 		integration.WithRubyGemsClient(rgClient),
 		integration.WithPackagistClient(pkgClient),
+		integration.WithPyPIClient(pyClient),
 	)
 	return &FetchService{integrationService: integrationService}
 }

@@ -79,6 +79,11 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 		slog.Debug("github_enhancement_failed", "error", err)
 	}
 
+	// PyPI Summary override (best-effort): for ecosystem=pypi analyses, replace the
+	// repo-level Summary with PyPI info.summary — the canonical short field for PyPI
+	// packages. Runs after GitHub enrichment so PyPI takes precedence on conflict.
+	s.enrichPyPISummary(ctx, analyses)
+
 	// Dependent count + dependency count enrichment (best-effort, parallel).
 	// These are independent enrichment steps hitting different deps.dev endpoints,
 	// so running them concurrently halves wall-clock time for large batches (30k+ PURLs).

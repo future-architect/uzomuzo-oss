@@ -20,19 +20,48 @@ type ResponseData struct {
 
 // RepositoryInfo represents the structure for repository information
 type RepositoryInfo struct {
-	IsArchived               bool                     `json:"isArchived"`
-	IsDisabled               bool                     `json:"isDisabled"`
-	IsFork                   bool                     `json:"isFork"`
-	StargazerCount           int                      `json:"stargazerCount"`
-	ForkCount                int                      `json:"forkCount"`
-	Description              string                   `json:"description"`
-	HomepageURL              string                   `json:"homepageUrl"`
-	DefaultBranchRef         DefaultBranchRef         `json:"defaultBranchRef"`
-	DependencyGraphManifests DependencyGraphManifests `json:"dependencyGraphManifests"`
-	LicenseInfo              *LicenseInfo             `json:"licenseInfo"`
+	IsArchived               bool                      `json:"isArchived"`
+	IsDisabled               bool                      `json:"isDisabled"`
+	IsFork                   bool                      `json:"isFork"`
+	StargazerCount           int                       `json:"stargazerCount"`
+	ForkCount                int                       `json:"forkCount"`
+	Description              string                    `json:"description"`
+	HomepageURL              string                    `json:"homepageUrl"`
+	DefaultBranchRef         DefaultBranchRef          `json:"defaultBranchRef"`
+	DependencyGraphManifests DependencyGraphManifests  `json:"dependencyGraphManifests"`
+	LicenseInfo              *LicenseInfo              `json:"licenseInfo"`
+	RepositoryTopics         RepositoryTopicConnection `json:"repositoryTopics"`
 	// Parent is the immediate parent repository from which this repo was forked (GitHub GraphQL "parent" field).
 	// Nil when the repository is not a fork, or when the parent is private/inaccessible.
 	Parent *ParentInfo `json:"parent,omitempty"`
+}
+
+// RepositoryTopicConnection mirrors the GraphQL repositoryTopics connection.
+type RepositoryTopicConnection struct {
+	Nodes []RepositoryTopicNode `json:"nodes"`
+}
+
+// RepositoryTopicNode wraps a single topic edge node.
+type RepositoryTopicNode struct {
+	Topic Topic `json:"topic"`
+}
+
+// Topic carries the lowercased GitHub topic name.
+type Topic struct {
+	Name string `json:"name"`
+}
+
+// repoMeta carries enrichment metadata returned alongside RepoState from a successful
+// GraphQL fetch. Topics is non-nil (possibly empty) on success — see Repository.Topics
+// godoc for nil vs empty-slice semantics.
+type repoMeta struct {
+	stars         int
+	forks         int
+	description   string
+	homepage      string
+	license       *LicenseInfo
+	defaultBranch string
+	topics        []string
 }
 
 // ParentInfo represents a parent repository in a fork chain.

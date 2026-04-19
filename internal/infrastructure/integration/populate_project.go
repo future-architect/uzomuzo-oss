@@ -30,6 +30,7 @@ func (s *IntegrationService) populateProjectScorecard(analysis *domain.Analysis,
 	analysis.Repository.StarsCount = project.StarsCount
 	analysis.Repository.ForksCount = project.ForksCount
 	analysis.Repository.Description = project.Description
+	analysis.Repository.Summary = domain.NormalizeSummary(project.Description)
 	analysis.OverallScore = project.Scorecard.OverallScore
 	projectKey := project.ProjectKey.ID
 	if projectKey != "" {

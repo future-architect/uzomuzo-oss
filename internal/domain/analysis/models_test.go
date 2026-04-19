@@ -21,6 +21,8 @@ func TestRepository(t *testing.T) {
 				ForksCount:  20,
 				Language:    "Go",
 				Description: "Test repository",
+				Summary:     "Test repository",
+				Topics:      []string{"go", "library"},
 				LastCommit:  time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			},
 			expected: Repository{
@@ -31,6 +33,8 @@ func TestRepository(t *testing.T) {
 				ForksCount:  20,
 				Language:    "Go",
 				Description: "Test repository",
+				Summary:     "Test repository",
+				Topics:      []string{"go", "library"},
 				LastCommit:  time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			},
 		},
@@ -44,6 +48,8 @@ func TestRepository(t *testing.T) {
 				ForksCount:  0,
 				Language:    "",
 				Description: "",
+				Summary:     "",
+				Topics:      nil,
 				LastCommit:  time.Time{},
 			},
 			expected: Repository{
@@ -54,7 +60,20 @@ func TestRepository(t *testing.T) {
 				ForksCount:  0,
 				Language:    "",
 				Description: "",
+				Summary:     "",
+				Topics:      nil,
 				LastCommit:  time.Time{},
+			},
+		},
+		{
+			name: "fetched_repository_zero_topics",
+			repository: Repository{
+				URL:    "https://github.com/owner/quiet",
+				Topics: []string{},
+			},
+			expected: Repository{
+				URL:    "https://github.com/owner/quiet",
+				Topics: []string{},
 			},
 		},
 	}
@@ -81,6 +100,22 @@ func TestRepository(t *testing.T) {
 			}
 			if tt.repository.Description != tt.expected.Description {
 				t.Errorf("Repository.Description = %v, want %v", tt.repository.Description, tt.expected.Description)
+			}
+			if tt.repository.Summary != tt.expected.Summary {
+				t.Errorf("Repository.Summary = %v, want %v", tt.repository.Summary, tt.expected.Summary)
+			}
+			// Distinguish nil vs []string{} (empty) sentinels — both compare as len==0.
+			if (tt.repository.Topics == nil) != (tt.expected.Topics == nil) {
+				t.Errorf("Repository.Topics nil mismatch: got nil=%v, want nil=%v",
+					tt.repository.Topics == nil, tt.expected.Topics == nil)
+			}
+			if len(tt.repository.Topics) != len(tt.expected.Topics) {
+				t.Errorf("Repository.Topics length = %d, want %d", len(tt.repository.Topics), len(tt.expected.Topics))
+			}
+			for i := range tt.repository.Topics {
+				if tt.repository.Topics[i] != tt.expected.Topics[i] {
+					t.Errorf("Repository.Topics[%d] = %v, want %v", i, tt.repository.Topics[i], tt.expected.Topics[i])
+				}
 			}
 			if !tt.repository.LastCommit.Equal(tt.expected.LastCommit) {
 				t.Errorf("Repository.LastCommit = %v, want %v", tt.repository.LastCommit, tt.expected.LastCommit)

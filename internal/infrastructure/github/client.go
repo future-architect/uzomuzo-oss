@@ -49,6 +49,10 @@ type repoResult struct {
 	homepage      string
 	license       *LicenseInfo // newly captured licenseInfo (spdxId/name) to avoid extra query
 	defaultBranch string
+	// topics is non-nil (possibly empty) on a successful fetch. Stays nil when
+	// the result represents an error so downstream callers can distinguish
+	// "fetched, none" from "not fetched". See domain.Repository.Topics.
+	topics []string
 }
 
 // Client implements GitHub API client with parallel processing support
@@ -133,6 +137,7 @@ func (c *Client) FetchBasicRepositoryInfo(ctx context.Context, owner, repo strin
 		    description
 		    homepageUrl
 		    licenseInfo { spdxId name }
+		    repositoryTopics(first: 20) { nodes { topic { name } } }
 		    parent { nameWithOwner }
 
 		    defaultBranchRef {
@@ -196,6 +201,7 @@ func (c *Client) FetchDetailedRepositoryInfo(ctx context.Context, owner, repo st
 		    description
 		    homepageUrl
 		    licenseInfo { spdxId name }
+		    repositoryTopics(first: 20) { nodes { topic { name } } }
 		    parent { nameWithOwner }
 
 		    defaultBranchRef {
@@ -342,6 +348,7 @@ func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]
 			}
 			if meta.description != "" {
 				analysis.Repository.Description = meta.description
+				analysis.Repository.Summary = domain.NormalizeSummary(meta.description)
 			}
 			if meta.homepage != "" {
 				if analysis.PackageLinks == nil {
@@ -361,6 +368,11 @@ func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]
 					analysis.ProjectLicense = updated
 				}
 			}
+			// Topics: meta entry exists ⇒ GraphQL fetch succeeded. meta.topics is non-nil
+			// (possibly empty); preserve nil sentinel for analyses without a meta entry.
+			if meta.topics != nil {
+				analysis.Repository.Topics = meta.topics
+			}
 		}
 	}
 
@@ -368,19 +380,9 @@ func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]
 }
 
 // FetchRepositoryStatesBatch efficiently fetches repository states for multiple URLs
-func (c *Client) FetchRepositoryStatesBatch(ctx context.Context, repoURLs []string) (map[string]*domain.RepoState, map[string]error, map[string]struct {
-	stars, forks          int
-	description, homepage string
-	license               *LicenseInfo
-	defaultBranch         string
-}) {
+func (c *Client) FetchRepositoryStatesBatch(ctx context.Context, repoURLs []string) (map[string]*domain.RepoState, map[string]error, map[string]repoMeta) {
 	if len(repoURLs) == 0 {
-		return make(map[string]*domain.RepoState), make(map[string]error), make(map[string]struct {
-			stars, forks          int
-			description, homepage string
-			license               *LicenseInfo
-			defaultBranch         string
-		})
+		return make(map[string]*domain.RepoState), make(map[string]error), make(map[string]repoMeta)
 	}
 
 	// Remove duplicates
@@ -440,12 +442,7 @@ func (c *Client) FetchRepositoryStatesBatch(ctx context.Context, repoURLs []stri
 	}() // Collect results and errors with progress tracking
 	results := make(map[string]*domain.RepoState)
 	errors := make(map[string]error)
-	metas := make(map[string]struct {
-		stars, forks          int
-		description, homepage string
-		license               *LicenseInfo
-		defaultBranch         string
-	})
+	metas := make(map[string]repoMeta)
 	rateLimitExceeded := false
 	processedCount := 0
 	totalRepos := len(uniqueURLs)
@@ -473,12 +470,15 @@ func (c *Client) FetchRepositoryStatesBatch(ctx context.Context, repoURLs []stri
 			errors[result.repoURL] = result.err
 		} else {
 			results[result.repoURL] = result.repoState
-			metas[result.repoURL] = struct {
-				stars, forks          int
-				description, homepage string
-				license               *LicenseInfo
-				defaultBranch         string
-			}{stars: result.stars, forks: result.forks, description: result.description, homepage: result.homepage, license: result.license, defaultBranch: result.defaultBranch}
+			metas[result.repoURL] = repoMeta{
+				stars:         result.stars,
+				forks:         result.forks,
+				description:   result.description,
+				homepage:      result.homepage,
+				license:       result.license,
+				defaultBranch: result.defaultBranch,
+				topics:        result.topics,
+			}
 		}
 		// Display progress every 100 repositories (or at the end) including aggregated rate limit info
 		if totalRepos > 100 && (processedCount%100 == 0 || processedCount == totalRepos) {
@@ -536,9 +536,9 @@ func (c *Client) githubWorker(ctx context.Context, batchCancel context.CancelFun
 			resultChannel <- repoResult{
 				repoURL: repoURL,
 				// Use AuthenticationError so these skipped entries are grouped with the
-			// original auth failure in the batch error summary display.
-			// Currently the only fatal error that triggers batchCancel is auth failure.
-			err: common.NewAuthenticationError("skipped: GitHub authentication failed (see earlier error)", ctx.Err()),
+				// original auth failure in the batch error summary display.
+				// Currently the only fatal error that triggers batchCancel is auth failure.
+				err: common.NewAuthenticationError("skipped: GitHub authentication failed (see earlier error)", ctx.Err()),
 			}
 			continue
 		}
@@ -627,7 +627,17 @@ func (c *Client) githubWorker(ctx context.Context, batchCancel context.CancelFun
 		// Attach metadata to RepoState via unused fields? RepoState does not carry stars; instead,
 		// we will pass back RepoState and later enrich analysis.Repository using a side channel is not available.
 		// As a pragmatic step, we encode stars etc. into the result by updating a map later. Here, just return state.
-		resultChannel <- repoResult{repoURL: repoURL, repoState: repoState, stars: repoInfo.StargazerCount, forks: repoInfo.ForkCount, description: repoInfo.Description, homepage: repoInfo.HomepageURL, license: repoInfo.LicenseInfo, defaultBranch: repoInfo.DefaultBranchRef.Name}
+		resultChannel <- repoResult{
+			repoURL:       repoURL,
+			repoState:     repoState,
+			stars:         repoInfo.StargazerCount,
+			forks:         repoInfo.ForkCount,
+			description:   repoInfo.Description,
+			homepage:      repoInfo.HomepageURL,
+			license:       repoInfo.LicenseInfo,
+			defaultBranch: repoInfo.DefaultBranchRef.Name,
+			topics:        collectTopics(repoInfo.RepositoryTopics),
+		}
 
 		cancel()
 	}
@@ -645,7 +655,7 @@ func (c *Client) executeGraphQLQuery(ctx context.Context, query string, variable
 		return nil, common.NewIOError("failed to marshal GraphQL request", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", "https://api.github.com/graphql", bytes.NewBuffer(reqBody))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", graphqlEndpoint(c.config), bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, common.NewIOError("failed to create HTTP request", err)
 	}
@@ -704,6 +714,50 @@ func (c *Client) executeGraphQLQuery(ctx context.Context, query string, variable
 	c.recordRateLimit(rateLimit.Cost, rateLimit.Remaining, rateLimit.ResetAt)
 
 	return &graphqlResp.Data.Repository, nil
+}
+
+// graphqlEndpoint resolves the GraphQL endpoint from GitHubConfig.BaseURL with the
+// same TrimRight + fallback pattern used by the REST contents.go helpers, so a single
+// configuration knob (BaseURL) controls both REST and GraphQL paths (e.g., for GHES
+// or httptest fixtures). Defaults to api.github.com when BaseURL is unset.
+func graphqlEndpoint(cfg *config.GitHubConfig) string {
+	base := ""
+	if cfg != nil {
+		base = strings.TrimRight(cfg.BaseURL, "/")
+	}
+	if base == "" {
+		base = "https://api.github.com"
+	}
+	return base + "/graphql"
+}
+
+// MaxTopics caps the number of topics retained from a GraphQL response. Matches
+// the `repositoryTopics(first: 20)` GraphQL parameter; enforced defensively in
+// code so a future schema change cannot silently inflate the slice.
+const MaxTopics = 20
+
+// collectTopics extracts topic names from a GraphQL repositoryTopics connection.
+// Returns a non-nil slice (possibly empty) so callers can use nil as the
+// "not fetched" sentinel. Topics are already lowercased by GitHub; we deduplicate
+// defensively while preserving insertion order, and cap the result at MaxTopics.
+func collectTopics(c RepositoryTopicConnection) []string {
+	topics := make([]string, 0, len(c.Nodes))
+	seen := make(map[string]struct{}, len(c.Nodes))
+	for _, n := range c.Nodes {
+		name := strings.TrimSpace(n.Topic.Name)
+		if name == "" {
+			continue
+		}
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		topics = append(topics, name)
+		if len(topics) >= MaxTopics {
+			break
+		}
+	}
+	return topics
 }
 
 // forkSourceFromRepoInfo extracts the parent repository name ("owner/repo") from a

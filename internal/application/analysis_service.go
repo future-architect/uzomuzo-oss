@@ -53,6 +53,10 @@ type AnalysisService struct {
 	// ProcessBatch* methods pass it to eolevaluator.NewEvaluator to share
 	// the same instance (and its 5-min TTL cache) across calls.
 	packagistClient *packagist.Client
+	// pypiClient is shared across IntegrationService (Summary enrichment) and
+	// the per-batch eolevaluator instance so both consumers reuse the same
+	// 10-min in-memory cache and avoid duplicate PyPI fetches per package.
+	pypiClient *pypi.Client
 }
 
 // GitHubClient returns the underlying GitHub client for rate limit inspection.
@@ -83,6 +87,7 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 	githubClient := github.NewClient(cfg)
 	rgClient := rubygems.NewClient()
 	pkgClient := packagist.NewClient()
+	pyClient := pypi.NewClient()
 	depsdevClient := depsdev.NewDepsDevClient(&cfg.DepsDev)
 	// Attach npmjs, RubyGems and Packagist clients to enable repository URL fallbacks
 	depsdevClient = depsdevClient.
@@ -98,17 +103,19 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 		}()).
 		WithRubyGems(rgClient).
 		WithPackagist(pkgClient).
-		WithPyPI(pypi.NewClient())
+		WithPyPI(pyClient)
 	integrationService := integration.NewIntegrationService(githubClient, depsdevClient,
 		integration.WithConfig(cfg),
 		integration.WithRubyGemsClient(rgClient),
 		integration.WithPackagistClient(pkgClient),
+		integration.WithPyPIClient(pyClient),
 	)
 
 	s := &AnalysisService{
 		integrationService: integrationService,
 		cfg:                cfg,
 		packagistClient:    pkgClient,
+		pypiClient:         pyClient,
 	}
 	for _, o := range opts {
 		o(s)
@@ -133,6 +140,11 @@ func (s *AnalysisService) ProcessBatchPURLs(ctx context.Context, purls []string)
 
 	// Phase 1: Evaluate base EOL from primary (non-catalog) deterministic sources
 	eolEvaluator := eolevaluator.NewEvaluator(s.packagistClient)
+	if s.pypiClient != nil {
+		// Reuse the integration-phase PyPI client so the cache populated by
+		// enrichPyPISummary is reused here, eliminating duplicate fetches per package.
+		eolEvaluator.SetPyPIClient(s.pypiClient)
+	}
 	if s.cfg != nil { // mirror alignment
 		if u := s.cfg.Maven.BaseURL; strings.TrimSpace(u) != "" {
 			mv := maven.NewClient()
@@ -244,6 +256,9 @@ func (s *AnalysisService) ProcessBatchGitHubURLs(ctx context.Context, githubURLs
 
 	// Phase 1: Base EOL
 	eolEvaluator := eolevaluator.NewEvaluator(s.packagistClient)
+	if s.pypiClient != nil {
+		eolEvaluator.SetPyPIClient(s.pypiClient)
+	}
 	if s.cfg != nil {
 		if u := s.cfg.Maven.BaseURL; strings.TrimSpace(u) != "" {
 			mv := maven.NewClient()
