@@ -45,8 +45,10 @@ func NormalizeSummary(raw string) string {
 	if utf8.RuneCountInString(collapsed) <= MaxSummaryLen {
 		return collapsed
 	}
-	// Truncate at (MaxSummaryLen - 1) runes and append an ellipsis so the final rune count
-	// is exactly MaxSummaryLen.
+	// Truncate at (MaxSummaryLen - 1) runes and append an ellipsis so the final rune
+	// count is at most MaxSummaryLen — TrimRightFunc may further shorten the prefix
+	// when truncation lands on whitespace, so the result can be a few runes shorter
+	// (the cap is a maximum, not an exact length).
 	runes := []rune(collapsed)
 	return strings.TrimRightFunc(string(runes[:MaxSummaryLen-1]), unicode.IsSpace) + summaryEllipsis
 }

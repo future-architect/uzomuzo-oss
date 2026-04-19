@@ -15,6 +15,13 @@ import (
 // are present. Best-effort: per-package fetch failures are logged at debug level and
 // leave the existing Summary untouched.
 //
+// Precondition: analyses without a populated Repository (e.g., a PyPI package whose
+// deps.dev Project lookup returned no repo URL) are skipped. Summary lives on
+// Repository per the domain model; if we have no Repository to host it, there is
+// nothing to override and we don't synthesise a Repository just for the field.
+// This matches the behavior of Description, which is only written when a Repository
+// already exists.
+//
 // DDD Layer: Infrastructure (parallel best-effort enrichment, mirroring the
 // WaitGroup-only fan-out used by enrichDependentCounts/enrichDependencyCounts).
 // Concurrency is bounded by the underlying httpclient transport limits and the
