@@ -149,7 +149,7 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 		// FetchDependentCount requires a versioned PURL. If the effective PURL
 		// is versionless, inject the stable release version (resolved earlier by
 		// populateReleaseInfo) using purl.WithVersion to handle qualifiers/subpaths safely.
-		if !strings.Contains(ep, "@") {
+		if !purl.HasVersion(ep) {
 			if v := resolvedVersion(a); v != "" {
 				if versioned, err := purl.WithVersion(ep, v); err == nil {
 					ep = versioned
@@ -289,7 +289,7 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 		}
 		// The :dependencies endpoint requires a versioned PURL.
 		// Use the latest release version (stable > maxSemver > prerelease) for catalog consistency.
-		if !strings.Contains(ep, "@") {
+		if !purl.HasVersion(ep) {
 			if v := latestReleaseVersion(a); v != "" {
 				if versioned, err := purl.WithVersion(ep, v); err == nil {
 					ep = versioned
@@ -300,7 +300,7 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 		// endpoint requires a versioned PURL, and an unresolved version would round-trip
 		// through the batch layer only to be silently dropped. Logging here makes the
 		// condition diagnosable (distinguishes "no version" from "API returned empty").
-		if !strings.Contains(ep, "@") {
+		if !purl.HasVersion(ep) {
 			slog.Debug("dependency_count_skipped_versionless", "purl", p, "ecosystem", a.Package.Ecosystem)
 			continue
 		}
