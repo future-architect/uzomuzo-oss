@@ -121,6 +121,52 @@ func TestApplyActionPinCatalog_MixedPinsFlipOnAnyMatch(t *testing.T) {
 	}
 }
 
+func TestApplyActionPinCatalog_DuplicatePURLAcrossSources(t *testing.T) {
+	// A single action can appear as SourceActions (direct) and SourceActionsTransitive
+	// in one scan if a workflow uses it directly AND a composite action also uses it.
+	// Both entries must be flipped independently.
+	entries := []domainaudit.AuditEntry{
+		{
+			PURL:       "https://github.com/actions/upload-artifact",
+			Source:     domainaudit.SourceActions,
+			Verdict:    domainaudit.VerdictOK,
+			Analysis:   &analysis.Analysis{EOL: analysis.EOLStatus{State: analysis.EOLNotEOL}},
+			ActionRefs: []string{"v3"},
+		},
+		{
+			PURL:       "https://github.com/actions/upload-artifact",
+			Source:     domainaudit.SourceActionsTransitive,
+			Verdict:    domainaudit.VerdictOK,
+			Analysis:   &analysis.Analysis{EOL: analysis.EOLStatus{State: analysis.EOLNotEOL}},
+			ActionRefs: []string{"v3"},
+		},
+	}
+	applyActionPinCatalog(entries)
+	for i, e := range entries {
+		if e.Verdict != domainaudit.VerdictReplace {
+			t.Errorf("entries[%d].Verdict = %q, want replace", i, e.Verdict)
+		}
+		if len(e.Analysis.EOL.Evidences) == 0 {
+			t.Errorf("entries[%d] expected ActionPinCatalog evidence", i)
+		}
+	}
+}
+
+func TestApplyActionRefs_IdempotentOnRepeatedInvocation(t *testing.T) {
+	// Calling applyActionRefs twice with the same input must not duplicate refs.
+	entries := []domainaudit.AuditEntry{
+		{PURL: "https://github.com/actions/checkout", Source: domainaudit.SourceActions},
+	}
+	refs := map[string][]string{
+		"https://github.com/actions/checkout": {"v2", "v4"},
+	}
+	applyActionRefs(entries, refs)
+	applyActionRefs(entries, refs)
+	if len(entries[0].ActionRefs) != 2 {
+		t.Errorf("ActionRefs = %v, want exactly [v2 v4] after 2 invocations", entries[0].ActionRefs)
+	}
+}
+
 func TestApplyActionRefs_PopulatesOnlyActionSources(t *testing.T) {
 	entries := []domainaudit.AuditEntry{
 		{PURL: "https://github.com/actions/checkout", Source: domainaudit.SourceActions},

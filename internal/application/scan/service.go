@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 
 	"github.com/future-architect/uzomuzo-oss/internal/application"
 	"github.com/future-architect/uzomuzo-oss/internal/common"
@@ -281,6 +282,11 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 
 // applyActionRefs populates AuditEntry.ActionRefs for every entry whose Source
 // belongs to the actions family. Non-action entries are untouched.
+//
+// Refs are assigned (not appended) so repeated invocations are idempotent:
+// the upstream DiscoveryService already deduplicates refs per URL, and a
+// caller that re-runs this helper (e.g., after promoting transitive entries)
+// should see the same set rather than accumulating duplicates.
 func applyActionRefs(entries []domainaudit.AuditEntry, actionRefs map[string][]string) {
 	if len(actionRefs) == 0 {
 		return
@@ -294,7 +300,7 @@ func applyActionRefs(entries []domainaudit.AuditEntry, actionRefs map[string][]s
 		if !ok || len(refs) == 0 {
 			continue
 		}
-		e.ActionRefs = append(e.ActionRefs, refs...)
+		e.ActionRefs = append([]string(nil), refs...)
 	}
 }
 
@@ -342,9 +348,14 @@ func applyActionPinCatalog(entries []domainaudit.AuditEntry) {
 			if e.Analysis.EOL.Successor == "" {
 				e.Analysis.EOL.Successor = entry.SuggestedVersion
 			}
+			// Strip any trailing period from the catalog reason so the summary
+			// never produces double punctuation (entries like "... replaced by v4."
+			// + fixed suffix would otherwise read "v4. ."). Successor carries the
+			// upgrade target, so the summary does not repeat it.
+			reason := strings.TrimRight(entry.Reason, ".")
 			e.Analysis.EOL.Evidences = append(e.Analysis.EOL.Evidences, analysis.EOLEvidence{
 				Source:     "ActionPinCatalog",
-				Summary:    fmt.Sprintf("Pinned to %s; %s Upgrade to %s.", ref, entry.Reason, entry.SuggestedVersion),
+				Summary:    fmt.Sprintf("Pinned to %s; %s.", ref, reason),
 				Reference:  entry.ReferenceURL,
 				Confidence: 1.0,
 			})
