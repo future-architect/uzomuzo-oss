@@ -520,7 +520,8 @@ func TestEnrichDependencyCounts(t *testing.T) {
 					// no ReleaseInfo -> latestReleaseVersion returns ""
 				},
 			},
-			// stub has data, but a versionless PURL must never reach the batch call.
+			// stub has data, but the unresolved versionless PURL is filtered out before lookup;
+			// FetchDependenciesBatch may still be invoked with an empty slice.
 			stubResults: map[string]*depsdev.DependenciesResponse{
 				"pkg:pypi/unknown": {Nodes: []depsdev.DependencyNode{{Relation: "DIRECT"}}},
 			},
