@@ -254,6 +254,7 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | **Evidence trails** | Every label includes a reason string and decision trace, so security teams can audit *why* a package was flagged. |
 | **Graduated precision** | Works without GitHub token (deps.dev only); adding a token unlocks commit history and Scorecard for high-precision assessment. |
 | **GitHub Actions supply chain scanning** | CI/CD workflows depend on third-party Actions that are themselves OSS. uzomuzo extracts `uses:` directives, recursively resolves composite actions (including local `./` references), and evaluates each Action's lifecycle. |
+| **Pinned-version Action EOL detection** | Repository-level scanning misses force-sunset majors like `actions/upload-artifact@v3` (EOL 2025-01-30) while the action repo is still active. uzomuzo consults a curated, source-cited catalog and flips those pins to `replace` with a dated rationale suitable for upgrade PRs. |
 
 <details>
 <summary><strong>Sample Output — All lifecycle states (detailed format)</strong></summary>

@@ -398,9 +398,11 @@ type enrichedJSONEntry struct {
 	MaxTransitiveAdvisorySeverity string  `json:"max_transitive_advisory_severity,omitempty"`
 	MaxTransitiveCVSS3Score       float64 `json:"max_transitive_cvss3_score,omitempty"`
 
-	Reason      string   `json:"reason,omitempty"`
-	EOLReason   string   `json:"eol_reason,omitempty"`
-	Error       string   `json:"error,omitempty"`
+	Reason string `json:"reason,omitempty"`
+	// EOLReason surfaces the authoritative EOL rationale from EOL.FinalReason(),
+	// covering catalog-based pinned-Action deprecations as well as registry signals.
+	EOLReason string `json:"eol_reason,omitempty"`
+	Error     string `json:"error,omitempty"`
 	Source      string   `json:"source,omitempty"`
 	Via         string   `json:"via,omitempty"`
 	Relation    string   `json:"relation,omitempty"`
