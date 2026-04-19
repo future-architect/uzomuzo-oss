@@ -399,11 +399,15 @@ type enrichedJSONEntry struct {
 	MaxTransitiveCVSS3Score       float64 `json:"max_transitive_cvss3_score,omitempty"`
 
 	Reason      string   `json:"reason,omitempty"`
+	EOLReason   string   `json:"eol_reason,omitempty"`
 	Error       string   `json:"error,omitempty"`
 	Source      string   `json:"source,omitempty"`
 	Via         string   `json:"via,omitempty"`
 	Relation    string   `json:"relation,omitempty"`
 	RelationVia []string `json:"relation_via,omitempty"`
+	// ActionRefs lists the distinct pinned refs (e.g., "v3", a commit SHA) for
+	// action-sourced entries. Omitted when no refs are known.
+	ActionRefs []string `json:"action_refs,omitempty"`
 }
 
 type enrichedJSONOutput struct {
@@ -449,6 +453,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 		Via:         e.Via,
 		Relation:    e.Relation.String(),
 		RelationVia: e.ViaParents,
+		ActionRefs:  e.ActionRefs,
 	}
 
 	a := e.Analysis
@@ -495,6 +500,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	if lr := a.GetLifecycleResult(); lr != nil {
 		je.Reason = lr.Reason
 	}
+	je.EOLReason = a.EOL.FinalReason()
 	if br := a.GetBuildHealthResult(); br != nil && br.Label != "" {
 		je.BuildIntegrity = br.Label
 		if scoreStr, ok := br.Meta["score"]; ok && scoreStr != "" && scoreStr != domain.ScoreUngraded {
@@ -519,7 +525,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	}
 	header = append(header, "lifecycle", "build_integrity", "build_integrity_score", "successor", "advisory_count", "max_advisory_severity", "max_cvss3_score",
 		"direct_advisory_count", "transitive_advisory_count", "max_transitive_advisory_severity", "max_transitive_cvss3_score",
-		"repo_url", "source", "via")
+		"repo_url", "source", "via", "action_refs", "eol_reason")
 	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
@@ -573,9 +579,13 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		if showRelation {
 			row = append(row, e.Relation.String(), strings.Join(e.ViaParents, ";"))
 		}
+		eolReason := ""
+		if a := e.Analysis; a != nil {
+			eolReason = a.EOL.FinalReason()
+		}
 		row = append(row, maintenance, buildIntegrity, buildIntegrityScore, successor, advisoryCount, maxSeverity, maxCVSS3Score,
 			directAdvisoryCount, transitiveAdvisoryCount, maxTransitiveSeverity, maxTransitiveCVSS3Score,
-			repoURL, string(e.Source), e.Via)
+			repoURL, string(e.Source), e.Via, strings.Join(e.ActionRefs, ";"), eolReason)
 		if err := cw.Write(row); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}

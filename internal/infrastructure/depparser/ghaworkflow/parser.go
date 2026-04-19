@@ -78,6 +78,37 @@ func ParseGitHubURLs(data []byte) ([]string, error) {
 // This avoids double-parsing for callers that need both results.
 // Jobs are iterated in sorted key order for deterministic output.
 func ParseWorkflowAll(data []byte) (urls []string, localPaths []string, err error) {
+	refs, localPaths, err := ParseWorkflowAllWithRefs(data)
+	if err != nil {
+		return nil, nil, err
+	}
+	seen := make(map[string]struct{}, len(refs))
+	urls = make([]string, 0, len(refs))
+	for _, r := range refs {
+		u := r.GitHubURL()
+		if _, exists := seen[u]; exists {
+			continue
+		}
+		seen[u] = struct{}{}
+		urls = append(urls, u)
+	}
+	return urls, localPaths, nil
+}
+
+// ParseWorkflowAllWithRefs reads a GitHub Actions workflow YAML file and returns
+// both the parsed ActionRef values (preserving owner/repo/path/ref) and the
+// step-level local action paths.
+//
+// Unlike ParseWorkflowAll, this function does NOT deduplicate by GitHub URL:
+// the same owner/repo pinned to different versions (e.g., actions/checkout@v2
+// and actions/checkout@v4 in different jobs) yields multiple ActionRef entries,
+// one per distinct (URL, Ref) pair. Callers that need URL-level deduplication
+// should aggregate the returned refs themselves.
+//
+// Local action paths are extracted only from step `uses:` values (matching
+// ParseLocalActionPaths); job-level `uses:` values are not included in localPaths.
+// Jobs are iterated in sorted key order for deterministic output.
+func ParseWorkflowAllWithRefs(data []byte) (refs []ActionRef, localPaths []string, err error) {
 	var wf workflowFile
 	if err := yaml.Unmarshal(data, &wf); err != nil {
 		return nil, nil, fmt.Errorf("failed to parse GitHub Actions workflow YAML: %w", err)
@@ -89,25 +120,32 @@ func ParseWorkflowAll(data []byte) (urls []string, localPaths []string, err erro
 	}
 	sort.Strings(jobNames)
 
-	urlSeen := make(map[string]struct{})
+	refSeen := make(map[string]struct{})
 	localSeen := make(map[string]struct{})
+
+	addRef := func(uses string) {
+		ref, ok := ExtractActionRef(uses)
+		if !ok {
+			return
+		}
+		key := ref.GitHubURL()
+		if ref.Path != "" {
+			key += "/" + ref.Path
+		}
+		key += "@" + ref.Ref
+		if _, exists := refSeen[key]; exists {
+			return
+		}
+		refSeen[key] = struct{}{}
+		refs = append(refs, ref)
+	}
 
 	for _, name := range jobNames {
 		j := wf.Jobs[name]
 		// Reusable workflow reference at job level (GitHub URLs only).
-		if u := extractGitHubURL(j.Uses); u != "" {
-			if _, exists := urlSeen[u]; !exists {
-				urlSeen[u] = struct{}{}
-				urls = append(urls, u)
-			}
-		}
+		addRef(j.Uses)
 		for _, s := range j.Steps {
-			if u := extractGitHubURL(s.Uses); u != "" {
-				if _, exists := urlSeen[u]; !exists {
-					urlSeen[u] = struct{}{}
-					urls = append(urls, u)
-				}
-			}
+			addRef(s.Uses)
 			if p := ExtractLocalActionPath(s.Uses); p != "" {
 				if _, exists := localSeen[p]; !exists {
 					localSeen[p] = struct{}{}
@@ -117,7 +155,7 @@ func ParseWorkflowAll(data []byte) (urls []string, localPaths []string, err erro
 		}
 	}
 
-	return urls, localPaths, nil
+	return refs, localPaths, nil
 }
 
 // extractGitHubURL converts a `uses:` value to a GitHub repository URL.

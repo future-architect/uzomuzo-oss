@@ -43,4 +43,10 @@ type AuditEntry struct {
 	// ViaParents lists short names of direct dependencies through which this
 	// transitive dependency is pulled in. Populated when input is an SBOM.
 	ViaParents []string
+	// ActionRefs lists the distinct version refs (e.g., "v3", "v4", a commit SHA)
+	// pinned against this action across the scanned workflow(s). Populated only
+	// when Source is SourceActions, SourceActionsTransitive, or SourceActionsLocal.
+	// Callers use these refs to detect pinned-version deprecations that are not
+	// visible from repository-level evaluation alone.
+	ActionRefs []string
 }

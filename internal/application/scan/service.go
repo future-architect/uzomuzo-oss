@@ -10,6 +10,8 @@ import (
 	"sort"
 
 	"github.com/future-architect/uzomuzo-oss/internal/application"
+	"github.com/future-architect/uzomuzo-oss/internal/common"
+	domainactions "github.com/future-architect/uzomuzo-oss/internal/domain/actions"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
@@ -153,7 +155,9 @@ type ActionsDiscoverer interface {
 	// Direct URLs are Actions referenced in workflow files; local actions (map of URL → local path)
 	// are discovered inside local composite actions (./.github/actions/foo); transitive actions
 	// (map of URL → via parent URL) are discovered by recursively resolving composite action dependencies.
-	DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs []string, localActions map[string]string, transitiveActions map[string]string, errors map[string]error, err error)
+	// actionRefs maps each discovered GitHub URL to the sorted distinct version refs ("v3", "v4", a commit SHA, ...)
+	// pinned against it across the scanned workflows. Absent keys indicate no ref was observed; empty values are not expected.
+	DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs []string, localActions map[string]string, transitiveActions map[string]string, actionRefs map[string][]string, errors map[string]error, err error)
 }
 
 // ActionsConfig configures optional GitHub Actions health scanning.
@@ -210,7 +214,7 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 		return nil, fmt.Errorf("actions discovery is enabled but discoverer is nil")
 	}
 	if actionsCfg.Enabled && len(githubURLs) > 0 {
-		directActionURLs, localActions, transitiveActions, discoveryErrors, err := actionsCfg.Discoverer.DiscoverActions(ctx, githubURLs, actionsCfg.ShowTransitive)
+		directActionURLs, localActions, transitiveActions, actionRefs, discoveryErrors, err := actionsCfg.Discoverer.DiscoverActions(ctx, githubURLs, actionsCfg.ShowTransitive)
 		if err != nil {
 			return nil, fmt.Errorf("actions discovery failed: %w", err)
 		}
@@ -263,10 +267,91 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 			}
 			entries = append(entries, transitiveEntries...)
 		}
+
+		// Attach discovered version refs to every action-sourced entry.
+		applyActionRefs(entries, actionRefs)
+		// Apply the pinned-version deprecation catalog before policy evaluation
+		// so --fail-on can see the catalog-driven EOL verdict.
+		applyActionPinCatalog(entries)
 	}
 
 	hasFailure := policy.Evaluate(entries)
 	return &Result{Entries: entries, HasFailure: hasFailure}, nil
+}
+
+// applyActionRefs populates AuditEntry.ActionRefs for every entry whose Source
+// belongs to the actions family. Non-action entries are untouched.
+func applyActionRefs(entries []domainaudit.AuditEntry, actionRefs map[string][]string) {
+	if len(actionRefs) == 0 {
+		return
+	}
+	for i := range entries {
+		e := &entries[i]
+		if !isActionSource(e.Source) {
+			continue
+		}
+		refs, ok := actionRefs[e.PURL]
+		if !ok || len(refs) == 0 {
+			continue
+		}
+		e.ActionRefs = append(e.ActionRefs, refs...)
+	}
+}
+
+func isActionSource(src domainaudit.EntrySource) bool {
+	switch src {
+	case domainaudit.SourceActions,
+		domainaudit.SourceActionsTransitive,
+		domainaudit.SourceActionsLocal:
+		return true
+	}
+	return false
+}
+
+// applyActionPinCatalog consults the pinned-version deprecation catalog for
+// every action-sourced entry and, when any of its pinned refs matches a
+// deprecated major, flips the entry's analysis to EOL and re-derives its
+// verdict. Non-action entries and entries without pinned refs are untouched.
+//
+// A single entry may carry multiple pins (e.g., checkout@v2 in one job,
+// checkout@v4 in another). One deprecated pin is sufficient to flip the
+// entry; the evidence records only the first matching ref so downstream
+// rendering stays single-valued.
+func applyActionPinCatalog(entries []domainaudit.AuditEntry) {
+	for i := range entries {
+		e := &entries[i]
+		if !isActionSource(e.Source) {
+			continue
+		}
+		if e.Analysis == nil || len(e.ActionRefs) == 0 {
+			continue
+		}
+		owner, repo, err := common.ExtractGitHubOwnerRepo(e.PURL)
+		if err != nil {
+			continue
+		}
+		for _, ref := range e.ActionRefs {
+			entry, ok := domainactions.Lookup(owner, repo, ref)
+			if !ok {
+				continue
+			}
+			// Do not overwrite stronger existing state.
+			if e.Analysis.EOL.State != analysis.EOLEndOfLife {
+				e.Analysis.EOL.State = analysis.EOLEndOfLife
+			}
+			if e.Analysis.EOL.Successor == "" {
+				e.Analysis.EOL.Successor = entry.SuggestedVersion
+			}
+			e.Analysis.EOL.Evidences = append(e.Analysis.EOL.Evidences, analysis.EOLEvidence{
+				Source:     "ActionPinCatalog",
+				Summary:    fmt.Sprintf("Pinned to %s; %s Upgrade to %s.", ref, entry.Reason, entry.SuggestedVersion),
+				Reference:  entry.ReferenceURL,
+				Confidence: 1.0,
+			})
+			e.Verdict = domainaudit.DeriveVerdict(e.Analysis)
+			break
+		}
+	}
 }
 
 // evaluateActionURLs filters, evaluates, and tags action URLs with the given source.

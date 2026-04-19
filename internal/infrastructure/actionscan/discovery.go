@@ -26,6 +26,45 @@ type DiscoveryResult struct {
 	Actions map[string]int
 	// Errors collects non-fatal fetch/parse errors keyed by source URL or path.
 	Errors map[string]error
+	// refsByURL maps GitHub URL → set of distinct version refs (e.g., "v2", "v4", SHA)
+	// observed across all scanned workflows. Used internally for deduplication;
+	// converted to sorted slices when exposed to callers.
+	refsByURL map[string]map[string]struct{}
+}
+
+// addRef records a version ref observed for the given GitHub URL.
+// Empty refs are ignored. Safe for concurrent use only when called under the
+// caller's lock.
+func (r *DiscoveryResult) addRef(ghURL, ref string) {
+	if ref == "" {
+		return
+	}
+	if r.refsByURL == nil {
+		r.refsByURL = make(map[string]map[string]struct{})
+	}
+	set, ok := r.refsByURL[ghURL]
+	if !ok {
+		set = make(map[string]struct{})
+		r.refsByURL[ghURL] = set
+	}
+	set[ref] = struct{}{}
+}
+
+// sortedRefs returns the recorded refs as URL → sorted slice of distinct refs.
+func (r *DiscoveryResult) sortedRefs() map[string][]string {
+	if len(r.refsByURL) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(r.refsByURL))
+	for u, set := range r.refsByURL {
+		refs := make([]string, 0, len(set))
+		for ref := range set {
+			refs = append(refs, ref)
+		}
+		sort.Strings(refs)
+		out[u] = refs
+	}
+	return out
 }
 
 // maxFileFetchConcurrency limits concurrent workflow file fetches within a single repository.
@@ -62,13 +101,16 @@ func NewDiscoveryService(githubClient *github.Client, maxConcurrency int) (*Disc
 //   - directURLs: actions referenced directly in workflow files
 //   - localActions: actions found inside local composite actions (URL → local path)
 //   - transitiveActions: actions found via composite action BFS (URL → parent action URL)
+//   - actionRefs: GitHub URL → sorted distinct version refs ("v3", "v4", SHA, ...) pinned across workflows.
+//     Empty for URLs where no ref was observed (e.g., local composite discovery).
 //
 // The returned slices are sorted lexicographically for deterministic output.
 // This method satisfies scan.ActionsDiscoverer.
-func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs []string, localActions map[string]string, transitiveActions map[string]string, errors map[string]error, err error) {
+func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []string, resolveTransitive bool) (directURLs []string, localActions map[string]string, transitiveActions map[string]string, actionRefs map[string][]string, errors map[string]error, err error) {
 	result := &DiscoveryResult{
-		Actions: make(map[string]int),
-		Errors:  make(map[string]error),
+		Actions:   make(map[string]int),
+		Errors:    make(map[string]error),
+		refsByURL: make(map[string]map[string]struct{}),
 	}
 
 	localActions = make(map[string]string)
@@ -101,13 +143,18 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 				return
 			}
 
-			urls, repoLocalActions, errs := s.discoverFromRepo(ctx, owner, repo)
+			urls, repoLocalActions, repoRefs, errs := s.discoverFromRepo(ctx, owner, repo)
 
 			mu.Lock()
 			for _, u := range urls {
 				if _, exists := result.Actions[u]; !exists {
 					result.Actions[u] = 0
 					directURLs = append(directURLs, u)
+				}
+			}
+			for u, refs := range repoRefs {
+				for _, ref := range refs {
+					result.addRef(u, ref)
 				}
 			}
 			if len(repoLocalActions) > 0 {
@@ -162,7 +209,7 @@ func (s *DiscoveryService) DiscoverActions(ctx context.Context, repoURLs []strin
 		"errors", len(result.Errors),
 	)
 
-	return directURLs, localActions, transitiveActions, result.Errors, nil
+	return directURLs, localActions, transitiveActions, result.sortedRefs(), result.Errors, nil
 }
 
 // actionRefKey returns a dedup key for BFS traversal that includes the subdirectory path.
@@ -271,6 +318,7 @@ func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initial
 					result.Actions[ghURL] = 1
 					transitiveActions[ghURL] = item.via
 				}
+				result.addRef(ghURL, ref.Ref)
 				queue = append(queue, queueItem{ref: ref, url: ghURL, via: item.via})
 			}
 		}
@@ -310,18 +358,19 @@ func (s *DiscoveryService) fetchActionYAML(ctx context.Context, ref ghaworkflow.
 // Returns:
 //   - directURLs: external action URLs referenced directly in workflow files
 //   - localActions: external action URLs found inside local composite actions (URL → local path)
+//   - refs: GitHub URL → distinct version refs observed across this repo's workflows
 //   - errs: non-fatal errors keyed by source path
-func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo string) (directURLs []string, localActions map[string]string, errs map[string]error) {
+func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo string) (directURLs []string, localActions map[string]string, refs map[string][]string, errs map[string]error) {
 	errs = make(map[string]error)
 
 	entries, err := s.githubClient.FetchDirectoryContents(ctx, owner, repo, ".github/workflows")
 	if err != nil {
 		errs[fmt.Sprintf("%s/%s/.github/workflows", owner, repo)] = err
-		return nil, nil, errs
+		return nil, nil, nil, errs
 	}
 	if entries == nil {
 		slog.Debug("no .github/workflows directory", "owner", owner, "repo", repo)
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	// Filter to YAML files only.
@@ -338,7 +387,7 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 
 	if len(yamlFiles) == 0 {
 		slog.Debug("no workflow YAML files found", "owner", owner, "repo", repo)
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	slog.Debug("fetching workflow files", "owner", owner, "repo", repo, "count", len(yamlFiles))
@@ -346,6 +395,7 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 	seen := make(map[string]struct{})
 	var localPaths []string
 	localSeen := make(map[string]struct{})
+	refSets := make(map[string]map[string]struct{}) // URL → set of refs
 
 	// Fetch and parse workflow files concurrently to reduce sequential API latency.
 	var (
@@ -391,7 +441,7 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 				return // 404 — file disappeared between listing and fetch
 			}
 
-			urls, locals, parseErr := ghaworkflow.ParseWorkflowAll(data)
+			parsedRefs, locals, parseErr := ghaworkflow.ParseWorkflowAllWithRefs(data)
 			if parseErr != nil {
 				fileMu.Lock()
 				errs[fmt.Sprintf("%s/%s/%s", owner, repo, yf.Path)] = parseErr
@@ -400,10 +450,19 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 			}
 
 			fileMu.Lock()
-			for _, u := range urls {
+			for _, r := range parsedRefs {
+				u := r.GitHubURL()
 				if _, exists := seen[u]; !exists {
 					seen[u] = struct{}{}
 					directURLs = append(directURLs, u)
+				}
+				if r.Ref != "" {
+					set, ok := refSets[u]
+					if !ok {
+						set = make(map[string]struct{})
+						refSets[u] = set
+					}
+					set[r.Ref] = struct{}{}
 				}
 			}
 			for _, lp := range locals {
@@ -422,17 +481,42 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 	// Sort for deterministic BFS "first-seen wins" Via provenance.
 	if len(localPaths) > 0 {
 		sort.Strings(localPaths)
-		localActions = s.resolveLocalActions(ctx, owner, repo, localPaths, errs)
+		var localRefs map[string][]string
+		localActions, localRefs = s.resolveLocalActions(ctx, owner, repo, localPaths, errs)
+		for u, rs := range localRefs {
+			for _, r := range rs {
+				set, ok := refSets[u]
+				if !ok {
+					set = make(map[string]struct{})
+					refSets[u] = set
+				}
+				set[r] = struct{}{}
+			}
+		}
 	}
 
-	return directURLs, localActions, errs
+	if len(refSets) > 0 {
+		refs = make(map[string][]string, len(refSets))
+		for u, set := range refSets {
+			list := make([]string, 0, len(set))
+			for r := range set {
+				list = append(list, r)
+			}
+			sort.Strings(list)
+			refs[u] = list
+		}
+	}
+
+	return directURLs, localActions, refs, errs
 }
 
 // resolveLocalActions performs BFS over local composite actions within a repository,
 // fetching action.yml for each local path, extracting external action URLs, and
 // following nested local references (uses: ./) with cycle detection.
-// It returns a map of external GitHub URL → local action path that contained it (first-seen wins).
-func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo string, initialPaths []string, errs map[string]error) map[string]string {
+// Returns:
+//   - externalActions: external GitHub URL → local action path that contained it (first-seen wins)
+//   - actionRefs: GitHub URL → distinct version refs pinned in the local composites
+func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo string, initialPaths []string, errs map[string]error) (map[string]string, map[string][]string) {
 	seen := make(map[string]struct{})
 	for _, p := range initialPaths {
 		seen[p] = struct{}{}
@@ -441,6 +525,8 @@ func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo 
 	queue := append([]string(nil), initialPaths...)
 	// external URL → originating local action path (first-seen wins)
 	externalActions := make(map[string]string)
+	// external URL → set of distinct refs pinned across local composites
+	refSets := make(map[string]map[string]struct{})
 
 	for len(queue) > 0 {
 		current := queue
@@ -467,6 +553,14 @@ func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo 
 				if _, exists := externalActions[ghURL]; !exists {
 					externalActions[ghURL] = localPath
 				}
+				if ref.Ref != "" {
+					set, ok := refSets[ghURL]
+					if !ok {
+						set = make(map[string]struct{})
+						refSets[ghURL] = set
+					}
+					set[ref.Ref] = struct{}{}
+				}
 			}
 
 			for _, nested := range nestedLocals {
@@ -486,7 +580,20 @@ func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo 
 		)
 	}
 
-	return externalActions
+	var actionRefs map[string][]string
+	if len(refSets) > 0 {
+		actionRefs = make(map[string][]string, len(refSets))
+		for u, set := range refSets {
+			list := make([]string, 0, len(set))
+			for r := range set {
+				list = append(list, r)
+			}
+			sort.Strings(list)
+			actionRefs[u] = list
+		}
+	}
+
+	return externalActions, actionRefs
 }
 
 // fetchLocalActionYAML fetches action.yml (or action.yaml as fallback) for a local action

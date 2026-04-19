@@ -571,6 +571,105 @@ jobs:
 	}
 }
 
+func TestParseWorkflowAllWithRefs(t *testing.T) {
+	type refExpect struct {
+		owner string
+		repo  string
+		path  string
+		ref   string
+	}
+	tests := []struct {
+		name     string
+		file     string
+		wantRefs []refExpect
+	}{
+		{
+			name: "deprecated pins fixture captures distinct refs per action",
+			file: "deprecated-pins.yml",
+			wantRefs: []refExpect{
+				{owner: "actions", repo: "checkout", ref: "v2"},
+				{owner: "actions", repo: "setup-node", ref: "v2"},
+				{owner: "actions", repo: "upload-artifact", ref: "v3"},
+				{owner: "actions", repo: "checkout", ref: "v4"},
+				{owner: "actions", repo: "setup-python", ref: "v5"},
+				{owner: "actions", repo: "cache", ref: "v3"},
+				{owner: "actions", repo: "cache", ref: "v4"},
+				{owner: "actions", repo: "checkout", ref: "main"},
+				{owner: "actions", repo: "checkout", ref: "de0fac2e4500dabe0009e67214ff5f5447ce83dd"},
+			},
+		},
+		{
+			name: "standard CI workflow (ref preserved)",
+			file: "ci.yml",
+			wantRefs: []refExpect{
+				{owner: "actions", repo: "checkout", ref: "v4"},
+				{owner: "actions", repo: "setup-go", ref: "v5"},
+				{owner: "golangci", repo: "golangci-lint-action", ref: "v6"},
+				{owner: "actions", repo: "checkout", ref: "de0fac2e4500dabe0009e67214ff5f5447ce83dd"},
+				{owner: "github", repo: "codeql-action", path: "init", ref: "v4"},
+				{owner: "github", repo: "codeql-action", path: "analyze", ref: "v4"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := os.ReadFile(filepath.Join("testdata", tt.file))
+			if err != nil {
+				t.Fatalf("failed to read testdata: %v", err)
+			}
+
+			refs, _, err := ghaworkflow.ParseWorkflowAllWithRefs(data)
+			if err != nil {
+				t.Fatalf("ParseWorkflowAllWithRefs() error = %v", err)
+			}
+
+			if len(refs) != len(tt.wantRefs) {
+				t.Fatalf("got %d refs, want %d\ngot:  %+v\nwant: %+v", len(refs), len(tt.wantRefs), refs, tt.wantRefs)
+			}
+
+			seen := make(map[refExpect]bool, len(tt.wantRefs))
+			for _, r := range refs {
+				key := refExpect{owner: r.Owner, repo: r.Repo, path: r.Path, ref: r.Ref}
+				seen[key] = true
+			}
+			for _, want := range tt.wantRefs {
+				if !seen[want] {
+					t.Errorf("missing ref %+v in %+v", want, refs)
+				}
+			}
+		})
+	}
+}
+
+func TestParseWorkflowAllWithRefs_MultiPinSameAction(t *testing.T) {
+	yaml := `
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+  b:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+`
+	refs, _, err := ghaworkflow.ParseWorkflowAllWithRefs([]byte(yaml))
+	if err != nil {
+		t.Fatalf("ParseWorkflowAllWithRefs() error = %v", err)
+	}
+	// job b duplicates v2 — should be deduplicated. v2 and v4 remain as distinct refs.
+	if len(refs) != 2 {
+		t.Fatalf("want 2 distinct refs (v2,v4), got %d: %+v", len(refs), refs)
+	}
+	gotRefs := map[string]bool{refs[0].Ref: true, refs[1].Ref: true}
+	if !gotRefs["v2"] || !gotRefs["v4"] {
+		t.Errorf("expected both v2 and v4, got %+v", refs)
+	}
+}
+
 func TestParseCompositeLocalActionPaths(t *testing.T) {
 	tests := []struct {
 		name          string

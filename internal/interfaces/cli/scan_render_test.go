@@ -132,12 +132,19 @@ func TestRenderScanCSV(t *testing.T) {
 	if !strings.Contains(lines[0], "lifecycle") {
 		t.Errorf("CSV header = %q, want to contain 'lifecycle'", lines[0])
 	}
-	for _, removed := range []string{"eol", "eol_reason"} {
+	for _, removed := range []string{"eol"} {
 		for _, col := range strings.Split(lines[0], ",") {
 			if col == removed {
 				t.Errorf("CSV header should not contain removed column %q, got header: %s", removed, lines[0])
 			}
 		}
+	}
+	// eol_reason is re-added to surface pinned-Action deprecation rationale in machine-readable output.
+	if !strings.Contains(lines[0], "eol_reason") {
+		t.Errorf("CSV header should contain 'eol_reason' column, got: %s", lines[0])
+	}
+	if !strings.Contains(lines[0], "action_refs") {
+		t.Errorf("CSV header should contain 'action_refs' column, got: %s", lines[0])
 	}
 }
 
