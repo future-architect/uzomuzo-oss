@@ -15,17 +15,16 @@ import (
 
 // TestIssue313Reproduction mocks deps.dev at the HTTP layer and runs the exact
 // five PURLs from issue #313 through FetchDependenciesBatch + CountByRelation,
-// then renders the same table the bug reporter produced. This is a temporary
-// verification test for the PR; response shapes mirror what deps.dev returns
-// for each PURL (derived from the upstream package manifests at the time of
-// writing).
+// then renders the same table the bug reporter produced. Node counts mirror the
+// real deps.dev responses captured against api.deps.dev on 2026-04-19 — update
+// both the fixtures and the assertions together if deps.dev data changes.
 func TestIssue313Reproduction(t *testing.T) {
 	fixtures := map[string]string{
-		"/v3alpha/systems/npm/packages/express/versions/4.21.2:dependencies":   relations(1, 28, 39),
+		"/v3alpha/systems/npm/packages/express/versions/4.21.2:dependencies":   relations(1, 31, 40),
 		"/v3alpha/systems/npm/packages/react/versions/19.1.0:dependencies":     relations(1, 0, 0),
 		"/v3alpha/systems/pypi/packages/requests/versions/2.32.3:dependencies": relations(1, 4, 0),
-		"/v3alpha/systems/pypi/packages/django/versions/5.1.0:dependencies":    relations(1, 2, 0),
-		"/v3alpha/systems/cargo/packages/serde/versions/1.0.210:dependencies":  relations(1, 0, 0),
+		"/v3alpha/systems/pypi/packages/django/versions/5.1.0:dependencies":    relations(1, 2, 1),
+		"/v3alpha/systems/cargo/packages/serde/versions/1.0.210:dependencies":  relations(1, 1, 4),
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -53,11 +52,11 @@ func TestIssue313Reproduction(t *testing.T) {
 		wantDirect     int
 		wantTransitive int
 	}{
-		{purl: "pkg:npm/express@4.21.2", wantDirect: 28, wantTransitive: 39},
+		{purl: "pkg:npm/express@4.21.2", wantDirect: 31, wantTransitive: 40},
 		{purl: "pkg:npm/react@19.1.0", wantDirect: 0, wantTransitive: 0},
 		{purl: "pkg:pypi/requests@2.32.3", wantDirect: 4, wantTransitive: 0},
-		{purl: "pkg:pypi/django@5.1.0", wantDirect: 2, wantTransitive: 0},
-		{purl: "pkg:cargo/serde@1.0.210", wantDirect: 0, wantTransitive: 0},
+		{purl: "pkg:pypi/django@5.1.0", wantDirect: 2, wantTransitive: 1},
+		{purl: "pkg:cargo/serde@1.0.210", wantDirect: 1, wantTransitive: 4},
 	}
 
 	inputs := make([]string, 0, len(testCases))
