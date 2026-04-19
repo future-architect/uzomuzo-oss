@@ -719,8 +719,12 @@ func (c *Client) executeGraphQLQuery(ctx context.Context, query string, variable
 // graphqlEndpoint resolves the GraphQL endpoint from GitHubConfig.BaseURL with the
 // same TrimRight + fallback pattern used by the REST contents.go helpers, so a single
 // configuration knob (BaseURL) controls both REST and GraphQL paths (e.g., for GHES
-// or httptest fixtures). GHES REST URLs ending in "/api/v3" are rewritten to
-// "/api/graphql"; public GitHub ("https://api.github.com") gets "/graphql" appended.
+// or httptest fixtures).
+//
+// Suffix translation: a BaseURL ending in "/api/v3" (the canonical GHES REST root)
+// is rewritten to "/api/graphql"; any other base value gets "/graphql" appended.
+// This is a generic suffix rule, not GHES-only — any deployment that exposes a
+// "/api/v3" REST root and "/api/graphql" GraphQL root benefits.
 // Defaults to api.github.com when BaseURL is unset.
 func graphqlEndpoint(cfg *config.GitHubConfig) string {
 	base := ""
