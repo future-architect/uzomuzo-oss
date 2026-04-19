@@ -71,7 +71,7 @@ var deprecatedActions = []DeprecatedEntry{
 }
 
 func init() {
-	// Deterministic lookup order: sort by Owner+Repo+Major.
+	// Deterministic lookup order: sort by Owner+Repo; majors sorted within each entry.
 	sort.SliceStable(deprecatedActions, func(i, j int) bool {
 		a := deprecatedActions[i]
 		b := deprecatedActions[j]

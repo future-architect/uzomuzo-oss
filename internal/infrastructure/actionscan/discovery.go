@@ -307,18 +307,22 @@ func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initial
 			}
 
 			for _, ref := range refs {
+				ghURL := ref.GitHubURL()
+				// Always record the ref even if this action was already visited
+				// at a different version — distinct pins must propagate for
+				// deprecation detection.
+				result.addRef(ghURL, ref.Ref)
+
 				key := actionRefKey(ref)
 				if _, exists := seen[key]; exists {
 					continue
 				}
 				seen[key] = struct{}{}
 
-				ghURL := ref.GitHubURL()
 				if _, exists := result.Actions[ghURL]; !exists {
 					result.Actions[ghURL] = 1
 					transitiveActions[ghURL] = item.via
 				}
-				result.addRef(ghURL, ref.Ref)
 				queue = append(queue, queueItem{ref: ref, url: ghURL, via: item.via})
 			}
 		}

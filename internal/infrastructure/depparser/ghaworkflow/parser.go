@@ -286,6 +286,7 @@ func ParseCompositeActionURLs(data []byte) (refs []ActionRef, isComposite bool, 
 		if ref.Path != "" {
 			key += "/" + ref.Path
 		}
+		key += "@" + ref.Ref
 		if _, exists := seen[key]; exists {
 			continue
 		}
