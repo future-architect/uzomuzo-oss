@@ -102,6 +102,11 @@ pending_patterns:
     pr: 299
     file: "internal/application/diet/service_test.go"
     date: "2026-04-12"
+  - category: "performance"
+    summary: "Cache results of expensive parsing functions (e.g., PURL parser) when the same value is checked multiple times in a loop iteration — avoids redundant allocations in batch processing paths"
+    pr: 315
+    file: "internal/infrastructure/integration/purl_batch.go"
+    date: "2026-04-19"
   - category: "comment-doc-drift"
     summary: "Constant doc comment named only Python but the sentinel was reused for Java wildcard imports — doc comments on shared constants must enumerate all languages/contexts that use them"
     pr: 298
@@ -246,4 +251,5 @@ pending_patterns:
   # testing (PR #283): already covered by "Cover New Control Flow Branches with Tests" and "Verify Tree-Sitter Query Patterns Do Not Overlap" — each tree-sitter query pattern variant (generic vs non-generic scoped constructor) needs its own test case
   # comment-doc-drift (PR #283 round 4): already covered by "Comment-Code Consistency" rule — scoped constructor comment described 2-capture positional behavior but queries only have a single @func capture
   # comment-doc-drift (PR #285): already covered by "Comment-Code Consistency" rule — HasBlankImport comments/docs said "no callable API" but flag covers broader patterns (Python feature-detection) that may have callable APIs; aliasMap comment claimed safety without noting lack of scope resolution
+  # comment-doc-drift (PR #315): already covered by "Comment-Code Consistency" rule — enrichDependentCounts comment said "stable release version" but code uses resolvedVersion() with Package.Version > StableVersion > MaxSemverVersion preference chain
 -->
