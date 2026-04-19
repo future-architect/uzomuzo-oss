@@ -5,6 +5,11 @@ import (
 	"strings"
 )
 
+// EvidenceSource is the EOLEvidence.Source value used for evidence emitted
+// by this catalog. Kept exported so producers and tests reference the same
+// literal and downstream consumers can filter by source.
+const EvidenceSource = "ActionPinCatalog"
+
 // DeprecatedEntry records that specific major versions of a GitHub Action
 // are known to be deprecated or end-of-life by the upstream maintainer.
 //

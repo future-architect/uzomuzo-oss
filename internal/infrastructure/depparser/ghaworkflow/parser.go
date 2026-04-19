@@ -385,6 +385,12 @@ func ParseCompositeAll(data []byte) (refs []ActionRef, localPaths []string, isCo
 			if ref.Path != "" {
 				key += "/" + ref.Path
 			}
+			// Include @ref in the dedup key so a single composite step pinning
+			// the same action at multiple versions (e.g., @v2 and @v4) yields
+			// distinct ActionRef entries. This matches ParseWorkflowAllWithRefs
+			// and ParseCompositeActionURLs, keeping pinned-version deprecation
+			// detection consistent across every discovery path.
+			key += "@" + ref.Ref
 			if _, exists := refSeen[key]; !exists {
 				refSeen[key] = struct{}{}
 				refs = append(refs, ref)

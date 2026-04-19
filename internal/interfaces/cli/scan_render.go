@@ -401,8 +401,8 @@ type enrichedJSONEntry struct {
 	Reason string `json:"reason,omitempty"`
 	// EOLReason surfaces the authoritative EOL rationale from EOL.FinalReason(),
 	// covering catalog-based pinned-Action deprecations as well as registry signals.
-	EOLReason string `json:"eol_reason,omitempty"`
-	Error     string `json:"error,omitempty"`
+	EOLReason   string   `json:"eol_reason,omitempty"`
+	Error       string   `json:"error,omitempty"`
 	Source      string   `json:"source,omitempty"`
 	Via         string   `json:"via,omitempty"`
 	Relation    string   `json:"relation,omitempty"`

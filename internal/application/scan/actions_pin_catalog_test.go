@@ -3,6 +3,7 @@ package scan
 import (
 	"testing"
 
+	domainactions "github.com/future-architect/uzomuzo-oss/internal/domain/actions"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 )
@@ -34,8 +35,8 @@ func TestApplyActionPinCatalog_FlipsDeprecatedPin(t *testing.T) {
 		t.Fatal("expected at least one ActionPinCatalog evidence")
 	}
 	ev := got.Analysis.EOL.Evidences[len(got.Analysis.EOL.Evidences)-1]
-	if ev.Source != "ActionPinCatalog" {
-		t.Errorf("evidence source = %q, want ActionPinCatalog", ev.Source)
+	if ev.Source != domainactions.EvidenceSource {
+		t.Errorf("evidence source = %q, want %q", ev.Source, domainactions.EvidenceSource)
 	}
 	if ev.Reference == "" {
 		t.Error("evidence reference URL must not be empty")

@@ -670,6 +670,34 @@ jobs:
 	}
 }
 
+func TestParseCompositeAll_DistinctRefsForSameAction(t *testing.T) {
+	// A composite action that pins the same upstream action at two versions
+	// must surface both refs so pinned-version deprecation detection sees
+	// both. The dedup key therefore includes @ref.
+	yaml := `
+name: Build
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+`
+	refs, _, isComposite, err := ghaworkflow.ParseCompositeAll([]byte(yaml))
+	if err != nil {
+		t.Fatalf("ParseCompositeAll() error = %v", err)
+	}
+	if !isComposite {
+		t.Fatal("expected composite action")
+	}
+	if len(refs) != 2 {
+		t.Fatalf("want 2 distinct refs (v2,v4), got %d: %+v", len(refs), refs)
+	}
+	got := map[string]bool{refs[0].Ref: true, refs[1].Ref: true}
+	if !got["v2"] || !got["v4"] {
+		t.Errorf("expected both v2 and v4, got %+v", refs)
+	}
+}
+
 func TestParseCompositeLocalActionPaths(t *testing.T) {
 	tests := []struct {
 		name          string

@@ -616,6 +616,14 @@ func writeBoxEOL(ctx *boxContext) error {
 			return err
 		}
 	}
+	// Surface the observed pinned refs for action-sourced entries so PR authors
+	// can see at a glance which @ref triggered the catalog verdict. Machine-
+	// readable formats (JSON/CSV) already carry this field.
+	if len(ctx.entry.ActionRefs) > 0 {
+		if err := writeLine(ctx, "📌 Pinned refs: %s", strings.Join(ctx.entry.ActionRefs, ", ")); err != nil {
+			return err
+		}
+	}
 	if a.EOL.Reason != "" {
 		if err := writeLine(ctx, "Catalog Reason: %s", a.EOL.Reason); err != nil {
 			return err

@@ -354,7 +354,7 @@ func applyActionPinCatalog(entries []domainaudit.AuditEntry) {
 			// upgrade target, so the summary does not repeat it.
 			reason := strings.TrimRight(entry.Reason, ".")
 			e.Analysis.EOL.Evidences = append(e.Analysis.EOL.Evidences, analysis.EOLEvidence{
-				Source:     "ActionPinCatalog",
+				Source:     domainactions.EvidenceSource,
 				Summary:    fmt.Sprintf("Pinned to %s; %s.", ref, reason),
 				Reference:  entry.ReferenceURL,
 				Confidence: 1.0,
