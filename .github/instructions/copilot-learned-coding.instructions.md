@@ -100,6 +100,11 @@ pending_patterns:
     pr: 281
     file: "internal/infrastructure/treesitter/lang_go.go"
     date: "2026-04-11"
+  - category: "defensive-coding"
+    summary: "When deriving a secondary API endpoint from a configurable base URL, handle known suffixes that change between API versions — e.g., GHES REST URLs ending in /api/v3 must rewrite to /api/graphql, not blindly append /graphql"
+    pr: 318
+    file: "internal/infrastructure/github/client.go"
+    date: "2026-04-19"
   - category: "comment-doc-drift"
     summary: "Test case name claimed 'web vs data-jpa' but input PURL was spring-boot-starter-security — test names must match the actual input under test"
     pr: 299
@@ -110,6 +115,11 @@ pending_patterns:
     pr: 298
     file: "internal/infrastructure/treesitter/analyzer.go"
     date: "2026-04-12"
+  - category: "comment-doc-drift"
+    summary: "Godoc said '≤200 chars' but NormalizeSummary enforces a 200-rune cap — use 'runes' (or 'Unicode code points') in docs when the implementation counts runes, not bytes"
+    pr: 318
+    file: "internal/domain/analysis/models.go"
+    date: "2026-04-19"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
@@ -248,4 +258,6 @@ pending_patterns:
   # testing (PR #283): already covered by "Cover New Control Flow Branches with Tests" and "Verify Tree-Sitter Query Patterns Do Not Overlap" — each tree-sitter query pattern variant (generic vs non-generic scoped constructor) needs its own test case
   # comment-doc-drift (PR #283 round 4): already covered by "Comment-Code Consistency" rule — scoped constructor comment described 2-capture positional behavior but queries only have a single @func capture
   # comment-doc-drift (PR #285): already covered by "Comment-Code Consistency" rule — HasBlankImport comments/docs said "no callable API" but flag covers broader patterns (Python feature-detection) that may have callable APIs; aliasMap comment claimed safety without noting lack of scope resolution
+  # comment-doc-drift (PR #318): already covered by "Comment-Code Consistency" rule — godoc said "chars" but NormalizeSummary counts runes; use correct unit in comments for multibyte-aware caps
+  # defensive-coding (PR #318): already covered by "Use Case-Insensitive Comparison for URL Components" and existing URL handling rules — GHES REST /api/v3 suffix must rewrite to /api/graphql for GraphQL endpoint
 -->
