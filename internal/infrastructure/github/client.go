@@ -719,7 +719,9 @@ func (c *Client) executeGraphQLQuery(ctx context.Context, query string, variable
 // graphqlEndpoint resolves the GraphQL endpoint from GitHubConfig.BaseURL with the
 // same TrimRight + fallback pattern used by the REST contents.go helpers, so a single
 // configuration knob (BaseURL) controls both REST and GraphQL paths (e.g., for GHES
-// or httptest fixtures). Defaults to api.github.com when BaseURL is unset.
+// or httptest fixtures). GHES REST URLs ending in "/api/v3" are rewritten to
+// "/api/graphql"; public GitHub ("https://api.github.com") gets "/graphql" appended.
+// Defaults to api.github.com when BaseURL is unset.
 func graphqlEndpoint(cfg *config.GitHubConfig) string {
 	base := ""
 	if cfg != nil {
@@ -727,6 +729,9 @@ func graphqlEndpoint(cfg *config.GitHubConfig) string {
 	}
 	if base == "" {
 		base = "https://api.github.com"
+	}
+	if strings.HasSuffix(base, "/api/v3") {
+		return strings.TrimSuffix(base, "/api/v3") + "/api/graphql"
 	}
 	return base + "/graphql"
 }

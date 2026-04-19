@@ -79,7 +79,7 @@ type Repository struct {
 	// DefaultBranch is the canonical default branch name (e.g. main, master) fetched via GitHub GraphQL.
 	// It enables downstream fetchers (README, go.mod, etc.) to avoid guessing common branch names.
 	DefaultBranch string
-	// Summary is a short, UI-ready, normalized one-line description (≤200 chars).
+	// Summary is a short, UI-ready, normalized one-line description (≤200 runes).
 	// Per-source provenance:
 	//   - GitHub repos:      GraphQL repository.description (already short).
 	//   - deps.dev Project:  project.description (repo-level, short).

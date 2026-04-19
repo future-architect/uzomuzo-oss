@@ -272,3 +272,51 @@ func TestFetchRepositoryStates_NotFoundLeavesTopicsNil(t *testing.T) {
 		t.Errorf("Topics = %v on not-found error; want nil", a.Repository.Topics)
 	}
 }
+
+func TestGraphqlEndpoint(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *config.GitHubConfig
+		want string
+	}{
+		{
+			name: "nil_config_defaults_to_public",
+			cfg:  nil,
+			want: "https://api.github.com/graphql",
+		},
+		{
+			name: "empty_base_url_defaults_to_public",
+			cfg:  &config.GitHubConfig{},
+			want: "https://api.github.com/graphql",
+		},
+		{
+			name: "public_github_api",
+			cfg:  &config.GitHubConfig{BaseURL: "https://api.github.com"},
+			want: "https://api.github.com/graphql",
+		},
+		{
+			name: "ghes_api_v3_rewrites_to_graphql",
+			cfg:  &config.GitHubConfig{BaseURL: "https://ghe.example.com/api/v3"},
+			want: "https://ghe.example.com/api/graphql",
+		},
+		{
+			name: "ghes_api_v3_with_trailing_slash",
+			cfg:  &config.GitHubConfig{BaseURL: "https://ghe.example.com/api/v3/"},
+			want: "https://ghe.example.com/api/graphql",
+		},
+		{
+			name: "custom_base_url_without_api_v3",
+			cfg:  &config.GitHubConfig{BaseURL: "https://custom.host/api"},
+			want: "https://custom.host/api/graphql",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := graphqlEndpoint(tt.cfg)
+			if got != tt.want {
+				t.Errorf("graphqlEndpoint() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
