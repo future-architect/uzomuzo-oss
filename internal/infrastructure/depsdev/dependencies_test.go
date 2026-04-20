@@ -447,6 +447,48 @@ func TestFetchDependenciesBatch_NoFallbackForLeafWithGraph(t *testing.T) {
 	}
 }
 
+// TestFetchDependenciesBatch_VersionFallback_ContextCancelled ensures the
+// retry loop stops issuing HTTP calls once the caller's context is cancelled.
+func TestFetchDependenciesBatch_VersionFallback_ContextCancelled(t *testing.T) {
+	packageVersionsPayload := `{"versions":[
+		{"versionKey":{"version":"2.0.0"},"publishedAt":"2026-04-10T00:00:00Z"},
+		{"versionKey":{"version":"1.0.0"},"publishedAt":"2026-03-10T00:00:00Z"}
+	]}`
+
+	var retryCalls int64
+	ctx, cancel := context.WithCancel(context.Background())
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v3alpha/systems/npm/packages/broken/versions/3.0.0:dependencies":
+			// Primary 404 — triggers fallback. Cancel mid-flight so the retry
+			// loop sees ctx.Err() before issuing the next :dependencies call.
+			cancel()
+			w.WriteHeader(http.StatusNotFound)
+		case "/v3alpha/systems/npm/packages/broken":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(packageVersionsPayload))
+		default:
+			// Any retry :dependencies path should NOT be reached once ctx is cancelled.
+			atomic.AddInt64(&retryCalls, 1)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	client := NewDepsDevClient(&config.DepsDevConfig{
+		BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0, BatchSize: 10,
+	})
+	results := client.FetchDependenciesBatch(ctx, []string{"pkg:npm/broken@3.0.0"})
+	if len(results) != 0 {
+		t.Errorf("expected empty results on cancellation, got %+v", results)
+	}
+	// The /packages/{name} call may still have been in-flight at cancel; the
+	// contract is that no further :dependencies retry calls fire.
+	if got := atomic.LoadInt64(&retryCalls); got != 0 {
+		t.Errorf("expected 0 retry :dependencies calls after ctx cancel, got %d", got)
+	}
+}
+
 func TestDependenciesResponse_CountByRelation(t *testing.T) {
 	tests := []struct {
 		name           string

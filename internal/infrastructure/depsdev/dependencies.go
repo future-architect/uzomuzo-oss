@@ -188,6 +188,7 @@ func (c *DepsDevClient) fetchDependenciesVersionFallback(ctx context.Context, pu
 
 	for _, v := range candidates {
 		if ctx.Err() != nil {
+			slog.Debug("dependencies_version_fallback_ctx_cancelled", "purl", purlStr, "error", ctx.Err())
 			return nil
 		}
 		retryPURL, werr := commonpurl.WithVersion(purlStr, v)
@@ -234,7 +235,7 @@ func (c *DepsDevClient) listFallbackVersions(ctx context.Context, parsed *common
 		return nil, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) // best-effort: surface status code regardless of body read outcome
 		return nil, fmt.Errorf("fallback versions HTTP %d (url=%s): %s", resp.StatusCode, endpoint, truncateString(string(body), 512))
 	}
 
