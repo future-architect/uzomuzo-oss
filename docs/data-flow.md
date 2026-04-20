@@ -94,7 +94,7 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 - Purpose: Evaluate repository state (archived/disabled/fork), recent commit activity, and surface metadata (description → Repository.Summary, topics → Repository.Topics)
 - Code:
   - Basic info query: `Client.FetchBasicRepositoryInfo` (`internal/infrastructure/github/client.go`)
-  - Batch orchestration: `Client.FetchRepositoryStatesBatch`
+  - Batch orchestration: `Client.fetchRepositoryStatesBatch` (package-internal)
   - HTTP + query execution: `Client.executeGraphQLQuery`
 - Docs: <https://docs.github.com/en/graphql>
 

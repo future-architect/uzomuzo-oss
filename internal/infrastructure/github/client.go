@@ -309,7 +309,7 @@ func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]
 		"max_concurrency", c.config.MaxConcurrency)
 
 	// Fetch repository states in parallel
-	repoStates, repoErrors, repoMetas := c.FetchRepositoryStatesBatch(ctx, repoURLs)
+	repoStates, repoErrors, repoMetas := c.fetchRepositoryStatesBatch(ctx, repoURLs)
 
 	// Update analyses with fetched repository states and errors; enrich Repository metadata if available
 	for _, analysis := range analyses {
@@ -379,8 +379,9 @@ func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]
 	return nil
 }
 
-// FetchRepositoryStatesBatch efficiently fetches repository states for multiple URLs
-func (c *Client) FetchRepositoryStatesBatch(ctx context.Context, repoURLs []string) (map[string]*domain.RepoState, map[string]error, map[string]repoMeta) {
+// fetchRepositoryStatesBatch efficiently fetches repository states for multiple URLs.
+// Package-internal: only called by FetchRepositoryStates.
+func (c *Client) fetchRepositoryStatesBatch(ctx context.Context, repoURLs []string) (map[string]*domain.RepoState, map[string]error, map[string]repoMeta) {
 	if len(repoURLs) == 0 {
 		return make(map[string]*domain.RepoState), make(map[string]error), make(map[string]repoMeta)
 	}
@@ -716,10 +717,11 @@ func (c *Client) executeGraphQLQuery(ctx context.Context, query string, variable
 	return &graphqlResp.Data.Repository, nil
 }
 
-// graphqlEndpoint resolves the GraphQL endpoint from GitHubConfig.BaseURL with the
-// same TrimRight + fallback pattern used by the REST contents.go helpers, so a single
-// configuration knob (BaseURL) controls both REST and GraphQL paths (e.g., for GHES
-// or httptest fixtures).
+// graphqlEndpoint resolves the GraphQL endpoint from GitHubConfig.BaseURL using the
+// same TrimRight + fallback pattern used by some REST helpers (e.g., contents.go), so
+// GraphQL requests can be redirected to GHES or httptest fixtures via BaseURL.
+// Note: not all REST callers honor BaseURL yet (e.g., FetchRepoLanguages hardcodes
+// api.github.com); this function only governs the GraphQL path.
 //
 // Suffix translation: a BaseURL ending in "/api/v3" (the canonical GHES REST root)
 // is rewritten to "/api/graphql"; any other base value gets "/graphql" appended.
