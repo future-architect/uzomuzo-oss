@@ -35,6 +35,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Exported API Must Not Leak Unexported Types**: When an exported function or method returns (or accepts) an unexported type, it creates an API that other packages cannot use. Either export the type, unexport the function if all callers are package-internal, or use an exported interface/struct. Similarly, when a JSON struct tag uses `omitempty` on a boolean or always-present slice field, the serialized output becomes ambiguous (absent vs false/empty) for downstream consumers — omit `omitempty` for fields whose zero value is semantically meaningful.
 - **Handle All Valid Input Forms in Format Parsers**: When parsing a structured format (ZIP entries, RECORD files, manifests), handle all valid representations defined by the spec — not just the common case. For example, Python wheel RECORD files contain both package directories (`pkg/__init__.py`) and root-level modules (`six.py`); skipping root-level entries silently drops valid import names for single-module packages.
 - **Explicit Fallback for Unknown Enum Values**: When mapping external values (API responses, YAML fields) to internal enums or display strings, map unrecognized values to an explicit fallback (e.g., `"unknown(X)"`) rather than silently defaulting to a valid enum member. Silent defaults hide data quality issues and make debugging harder.
+- **Enforce HTTP Client Hardening on All Code Paths**: When constructing an HTTP client with security hardening (redirect policies, SSRF guards, timeout caps), ensure the hardening applies uniformly — including on test-injected clients and across all status-code branches. Specifically: (1) when a constructor accepts an injected `*http.Client`, set missing security callbacks (e.g., `CheckRedirect`) to the hardened default rather than relying on callers to attach them manually; (2) classify retryable HTTP statuses (408 Request Timeout, 429 Too Many Requests) as transient alongside 5xx — do not negative-cache them as authoritative failures; (3) verify redirect-counting logic against `net/http`'s `via` slice semantics where `len(via)` counts prior requests, so `len(via) > maxRedirects` allows exactly N hops while `len(via) >= maxRedirects` allows only N-1.
 - **Machine-Readable Columns Must Contain Single Values**: When adding columns to machine-readable output (CSV, JSON), each column must contain exactly one data type — do not combine a label and a number in a single field (e.g., `"HIGH (7.5)"`). Split compound values into separate columns (e.g., `max_advisory_severity` + `max_cvss3_score`). Mixed-format cells break downstream parsing and sorting.
 - **Use Domain Constants for Domain-Defined String Values**: When display or mapping logic switches on string values that are defined as domain constants (e.g., `LicenseSource*`), reference the constants — not duplicated raw strings. Duplicating values causes silent drift when constants are renamed or new values are added.
 - **Branch Output Display on Each Field's Own Availability**: When rendering output fields (CLI text, CSV, JSON), branch display logic on each field's own availability — do not couple display of one field to the presence of an unrelated field. Ensure all output formats use the same data-source fallback chain as domain logic. Use host-agnostic labels (e.g., `Repository:` not `GitHub:`) unless the host is confirmed, and render all populated data fields rather than silently dropping them.
@@ -99,11 +100,6 @@ pending_patterns:
     pr: 276
     file: "internal/infrastructure/pypi/client.go"
     date: "2026-04-11"
-  - category: "defensive-coding"
-    summary: "When deriving a secondary API endpoint from a configurable base URL, handle known suffixes that change between API versions — e.g., GHES REST URLs ending in /api/v3 must rewrite to /api/graphql, not blindly append /graphql"
-    pr: 318
-    file: "internal/infrastructure/github/client.go"
-    date: "2026-04-19"
   - category: "comment-doc-drift"
     summary: "Concurrency comment claimed 'bounded by httpclient transport limits' but implementation starts one goroutine per unique package name with no explicit cap — comments must accurately describe the concurrency model"
     pr: 318
@@ -162,6 +158,8 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #318, #324 — enforce HTTP client hardening on all code paths: CheckRedirect on injected clients, transient 408/429 classification, redirect off-by-one)
+  # defensive-coding (PR #324): already covered by "Use Case-Insensitive Comparison for URL Components" — hostOf used case-sensitive HasPrefix for scheme detection
   # api-consistency: promoted to copilot-learned-coding.instructions.md (PRs #223, #318 — omitempty ambiguity on boolean/slice JSON tags, exported function returning unexported type)
   # performance: promoted to copilot-learned-coding.instructions.md (PRs #315, #318 — cache expensive parsing, avoid full-collection materialization for prefix-only operations)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #281, #315 — preserve original input through heuristic fallback chains, use structured parsers for structured identifier properties)
