@@ -32,6 +32,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Consistent Conditional Columns Across Output Formats**: When a column or field is conditionally shown in one output format (e.g., table omits RELATION when all entries are Unknown), apply the same conditional logic to all other formats (CSV, JSON). Unconditionally including a column in one format while conditionally hiding it in another creates inconsistent API surfaces and confuses downstream consumers.
 - **Nil vs Empty Map Semantics for Sentinel-Checked Maps**: When a function returns a map that callers check for `nil` as a sentinel (e.g., "no data available" vs "data resolved but empty"), return `nil` when the resolved set is empty rather than an empty non-nil map. An empty non-nil map can cause callers to misinterpret "no results found" as "all items excluded", leading to incorrect classification or silent data loss.
 - **Normalize Repo-Scoped Paths with `path.Clean`**: When accepting user- or YAML-supplied paths that are scoped within a repository (e.g., local action `./` references), normalize with `path.Clean` (not `filepath.Clean`) and reject results that equal `"."` or start with `".."`. Also reject backslashes. This prevents traversal beyond the repository root via the Contents API without blocking valid intra-repo `..` segments (e.g., `./foo/../bar` → `bar`).
+- **Preserve Original Input Through Heuristic Fallback Chains**: In chained heuristic pipelines where each step transforms an intermediate result, fallback on empty must return the original input — not the intermediate value from a prior step. Returning an intermediate value violates the documented contract and can produce silently incorrect results when later steps depend on the untransformed original.
 - **Accurate Error Map Keys**: When recording errors in a `map[string]error` keyed by file path, use the actual resolved path — not a hardcoded filename. If a fetch tries `action.yml` then falls back to `action.yaml`, the error key must reflect which file was attempted, or use the parent path without a filename assumption.
 - **Handle All Valid Input Forms in Format Parsers**: When parsing a structured format (ZIP entries, RECORD files, manifests), handle all valid representations defined by the spec — not just the common case. For example, Python wheel RECORD files contain both package directories (`pkg/__init__.py`) and root-level modules (`six.py`); skipping root-level entries silently drops valid import names for single-module packages.
 - **Explicit Fallback for Unknown Enum Values**: When mapping external values (API responses, YAML fields) to internal enums or display strings, map unrecognized values to an explicit fallback (e.g., `"unknown(X)"`) rather than silently defaulting to a valid enum member. Silent defaults hide data quality issues and make debugging harder.
@@ -42,6 +43,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Filter and Normalize IDs Before Batch API Calls**: When building batch API requests from collected IDs, filter empty/whitespace values and deduplicate before processing to prevent invalid HTTP requests and cache pollution. Use `select` on `ctx.Done()` alongside channel operations in batch goroutines to avoid blocking after context cancellation.
 - **Guard Nil Structs Consistently Across Output Formats**: When a struct field may be nil (e.g., `ReleaseInfo`), apply the nil guard in every output renderer that accesses it (text, CSV, JSON). If one renderer has the guard and another does not, the unguarded path will panic on nil input.
 - **Gate Fallback Logic on Error, Not Result Nilness**: When deciding whether to trigger fallback or retry logic, check the error value — not whether the result is nil. A nil result with nil error is a valid success case (e.g., zero matches found), and treating it as a failure triggers unnecessary retries or incorrect fallback paths.
+- **Use Structured Parsers for Structured Identifier Properties**: When checking properties of structured identifiers (PURLs, URIs, import paths), use the appropriate parser rather than naive string operations (`strings.Contains`, `strings.Split`). For example, `strings.Contains(purl, "@")` misclassifies npm scoped packages like `pkg:npm/@scope/name` as versioned because `@` appears in the namespace. Use `packageurl.FromString(p).Version != ""` or an equivalent parser-based check.
 - **Use Case-Insensitive Comparison for URL Components**: When comparing URL components (scheme, host), use case-insensitive comparison per RFC 3986 — schemes (`HTTP://`) and hosts (`GitHub.COM`) are case-insensitive. Normalize with `strings.ToLower` or `strings.EqualFold` before prefix checks or host matching to avoid double-prefixing or missed matches.
 - **Structured Logging Conventions**: When adding `slog` calls: use DEBUG level for routine per-item telemetry (reserve INFO for exceptional events); use `snake_case` for event names (not spaces) for consistency and filterability; choose field key names that accurately describe the data across all call sites (e.g., `"ref"` not `"purl"` when the function handles both PURLs and URLs).
 - **Match Validation Format Strings to Production Format Strings**: When a validation or check function mirrors a production function's output (e.g., marker validation vs. marker replacement), use the exact same format strings and delimiters. Mismatched formats allow invalid input to pass validation silently.
@@ -97,16 +99,16 @@ pending_patterns:
     pr: 276
     file: "internal/infrastructure/pypi/client.go"
     date: "2026-04-11"
-  - category: "defensive-coding"
-    summary: "In chained heuristic pipelines where each step transforms an intermediate result, fallback on empty must return the original input — not the intermediate value from a prior step — to match the documented contract"
-    pr: 281
-    file: "internal/infrastructure/treesitter/lang_go.go"
-    date: "2026-04-11"
   - category: "comment-doc-drift"
     summary: "Test case name claimed 'web vs data-jpa' but input PURL was spring-boot-starter-security — test names must match the actual input under test"
     pr: 299
     file: "internal/application/diet/service_test.go"
     date: "2026-04-12"
+  - category: "performance"
+    summary: "Cache results of expensive parsing functions (e.g., PURL parser) when the same value is checked multiple times in a loop iteration — avoids redundant allocations in batch processing paths"
+    pr: 315
+    file: "internal/infrastructure/integration/purl_batch.go"
+    date: "2026-04-19"
   - category: "comment-doc-drift"
     summary: "Constant doc comment named only Python but the sentinel was reused for Java wildcard imports — doc comments on shared constants must enumerate all languages/contexts that use them"
     pr: 298
@@ -130,6 +132,7 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #281, #315 — preserve original input through heuristic fallback chains, use structured parsers for structured identifier properties)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #276, #280 — rerun analyzers with combined input, gate fallback on error, spec-compliant parsers, AST ancestor walk continuation)
   # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #253, #276 — interface contract doc must match signature semantics)
   # testing: promoted to testing-performance.instructions.md (PRs #276, #282, #298 — nil map merge tests, sibling assertions, test name/code consistency, unconditional test assertions)
@@ -250,4 +253,5 @@ pending_patterns:
   # testing (PR #283): already covered by "Cover New Control Flow Branches with Tests" and "Verify Tree-Sitter Query Patterns Do Not Overlap" — each tree-sitter query pattern variant (generic vs non-generic scoped constructor) needs its own test case
   # comment-doc-drift (PR #283 round 4): already covered by "Comment-Code Consistency" rule — scoped constructor comment described 2-capture positional behavior but queries only have a single @func capture
   # comment-doc-drift (PR #285): already covered by "Comment-Code Consistency" rule — HasBlankImport comments/docs said "no callable API" but flag covers broader patterns (Python feature-detection) that may have callable APIs; aliasMap comment claimed safety without noting lack of scope resolution
+  # comment-doc-drift (PR #315): already covered by "Comment-Code Consistency" rule — enrichDependentCounts comment said "stable release version" but code uses resolvedVersion() with Package.Version > StableVersion > MaxSemverVersion preference chain
 -->
