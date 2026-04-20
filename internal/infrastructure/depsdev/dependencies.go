@@ -17,22 +17,6 @@ import (
 	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
 
-// isStableReleaseForFallback reports whether a version string looks like a
-// stable release for the purpose of ordering fallback candidates. Uses semver
-// prerelease detection first (authoritative for npm/pypi/cargo/maven where
-// tags like "-canary" / "-experimental" are semver prereleases even though
-// the keyword is not listed in the shared purl.IsStableVersion helper), then
-// falls back to the shared keyword heuristic for non-semver versions.
-//
-// Intentionally local to the fallback path: the shared helper has different
-// callers (release-info classification) whose contract must not change.
-func isStableReleaseForFallback(version string) bool {
-	if v, err := semver.NewVersion(version); err == nil {
-		return v.Prerelease() == ""
-	}
-	return commonpurl.IsStableVersion(version)
-}
-
 // maxDependencyFallbackVersions bounds the number of additional :dependencies
 // requests we issue when the primary resolved version returns 404.
 // Rationale (issue #319): 2 retries balances recovery rate against batch
@@ -129,8 +113,12 @@ func (c *DepsDevClient) FetchDependenciesBatch(ctx context.Context, purls []stri
 			// or decode errors take the err branch above. Guard on (resp == nil &&
 			// err == nil) per the "Gate Fallback Logic on Error, Not Result Nilness"
 			// rule — a zero-node response (leaf) has resp != nil and should NOT
-			// trigger the retry.
+			// trigger the retry. Skip the fallback entirely for versionless PURLs
+			// to avoid redundant parsing in the helper.
 			if resp == nil {
+				if !commonpurl.HasVersion(purl) {
+					return
+				}
 				resp = c.fetchDependenciesVersionFallback(ctx, purl)
 				if resp == nil {
 					return
@@ -284,9 +272,15 @@ func (c *DepsDevClient) listFallbackVersions(ctx context.Context, parsed *common
 		if ver == "" || ver == skipVersion || v.IsDeprecated {
 			continue
 		}
-		c := candidate{version: ver, isStable: isStableReleaseForFallback(ver)}
+		// Parse semver once and derive both stability and sort key from the
+		// single result to avoid the overhead of a second NewVersion call
+		// inside isStableReleaseForFallback.
+		c := candidate{version: ver}
 		if sv, perr := semver.NewVersion(ver); perr == nil {
 			c.semver = sv
+			c.isStable = sv.Prerelease() == ""
+		} else {
+			c.isStable = commonpurl.IsStableVersion(ver)
 		}
 		if v.PublishedAt != "" {
 			if t, terr := time.Parse(time.RFC3339, v.PublishedAt); terr == nil {
