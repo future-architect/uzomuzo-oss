@@ -286,9 +286,9 @@ func (c *DepsDevClient) listFallbackVersions(ctx context.Context, parsed *common
 		if ver == "" || ver == skipVersion || v.IsDeprecated {
 			continue
 		}
-		// Parse semver once and derive both stability and sort key from the
-		// single result to avoid the overhead of a second NewVersion call
-		// inside isStableReleaseForFallback.
+		// Parse semver once and derive both stability (prerelease == "") and
+		// the sort key from a single NewVersion call. Non-semver strings fall
+		// through to the keyword heuristic in commonpurl.IsStableVersion.
 		c := candidate{version: ver}
 		if sv, perr := semver.NewVersion(ver); perr == nil {
 			c.semver = sv
