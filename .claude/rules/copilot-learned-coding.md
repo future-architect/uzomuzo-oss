@@ -43,6 +43,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Filter and Normalize IDs Before Batch API Calls**: When building batch API requests from collected IDs, filter empty/whitespace values and deduplicate before processing to prevent invalid HTTP requests and cache pollution. Use `select` on `ctx.Done()` alongside channel operations in batch goroutines to avoid blocking after context cancellation.
 - **Guard Nil Structs Consistently Across Output Formats**: When a struct field may be nil (e.g., `ReleaseInfo`), apply the nil guard in every output renderer that accesses it (text, CSV, JSON). If one renderer has the guard and another does not, the unguarded path will panic on nil input.
 - **Gate Fallback Logic on Error, Not Result Nilness**: When deciding whether to trigger fallback or retry logic, check the error value — not whether the result is nil. A nil result with nil error is a valid success case (e.g., zero matches found), and treating it as a failure triggers unnecessary retries or incorrect fallback paths.
+- **Minimize Allocations in Hot Paths**: In batch-processing or frequently-called functions, avoid unnecessary O(n) allocations when only a subset of data is needed. Cache results of expensive parsing calls when the same value is checked multiple times in a loop iteration, and iterate to a known cutoff point rather than materializing the full collection (e.g., iterate runes up to a count rather than converting the entire string to `[]rune`).
 - **Use Structured Parsers for Structured Identifier Properties**: When checking properties of structured identifiers (PURLs, URIs, import paths), use the appropriate parser rather than naive string operations (`strings.Contains`, `strings.Split`). For example, `strings.Contains(purl, "@")` misclassifies npm scoped packages like `pkg:npm/@scope/name` as versioned because `@` appears in the namespace. Use `packageurl.FromString(p).Version != ""` or an equivalent parser-based check.
 - **Use Case-Insensitive Comparison for URL Components**: When comparing URL components (scheme, host), use case-insensitive comparison per RFC 3986 — schemes (`HTTP://`) and hosts (`GitHub.COM`) are case-insensitive. Normalize with `strings.ToLower` or `strings.EqualFold` before prefix checks or host matching to avoid double-prefixing or missed matches.
 - **Structured Logging Conventions**: When adding `slog` calls: use DEBUG level for routine per-item telemetry (reserve INFO for exceptional events); use `snake_case` for event names (not spaces) for consistency and filterability; choose field key names that accurately describe the data across all call sites (e.g., `"ref"` not `"purl"` when the function handles both PURLs and URLs).
@@ -109,11 +110,16 @@ pending_patterns:
     pr: 299
     file: "internal/application/diet/service_test.go"
     date: "2026-04-12"
-  - category: "performance"
-    summary: "Cache results of expensive parsing functions (e.g., PURL parser) when the same value is checked multiple times in a loop iteration — avoids redundant allocations in batch processing paths"
-    pr: 315
-    file: "internal/infrastructure/integration/purl_batch.go"
-    date: "2026-04-19"
+  - category: "testing"
+    summary: "Unit test using github.com RepoURL triggered normalizeRepoURL redirect path, making a real HTTP GET to github.com — use generic errors or stub transports to keep tests network-independent"
+    pr: 318
+    file: "internal/infrastructure/github/topics_test.go"
+    date: "2026-04-20"
+  - category: "comment-doc-drift"
+    summary: "Precondition comment example said 'deps.dev Project lookup returned no repo URL' but actual condition is when deps.dev returned no Project at all — comment examples must match actual code conditions"
+    pr: 318
+    file: "internal/infrastructure/integration/populate_summary.go"
+    date: "2026-04-20"
   - category: "comment-doc-drift"
     summary: "Constant doc comment named only Python but the sentinel was reused for Java wildcard imports — doc comments on shared constants must enumerate all languages/contexts that use them"
     pr: 298
@@ -142,6 +148,7 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # performance: promoted to copilot-learned-coding.instructions.md (PRs #315, #318 — cache expensive parsing, avoid full-collection materialization for prefix-only operations)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #281, #315 — preserve original input through heuristic fallback chains, use structured parsers for structured identifier properties)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #276, #280 — rerun analyzers with combined input, gate fallback on error, spec-compliant parsers, AST ancestor walk continuation)
   # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #253, #276 — interface contract doc must match signature semantics)
