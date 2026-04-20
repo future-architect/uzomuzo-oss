@@ -176,6 +176,17 @@ func (c *DepsDevClient) fetchDependenciesVersionFallback(ctx context.Context, pu
 	if origVersion == "" {
 		return nil // versionless: the primary call already logged and skipped
 	}
+	// Mirror the Go-module "+incompatible" stripping from FetchDependencies so
+	// the primary version used as the dedup key in listFallbackVersions matches
+	// what deps.dev publishes in the package listing. Defense-in-depth: Go is
+	// not in dependenciesSupportedEcosystem today so this path is dead, but
+	// keep parity to prevent silent re-attempts of the primary if a future
+	// caller invokes FetchDependenciesBatch directly with a Go PURL.
+	if strings.ToLower(parsed.GetEcosystem()) == "golang" {
+		if idx := strings.Index(origVersion, "+"); idx >= 0 {
+			origVersion = origVersion[:idx]
+		}
+	}
 
 	candidates, err := c.listFallbackVersions(ctx, parsed, origVersion)
 	if err != nil {
@@ -213,8 +224,15 @@ func (c *DepsDevClient) fetchDependenciesVersionFallback(ctx context.Context, pu
 }
 
 // listFallbackVersions returns up to maxDependencyFallbackVersions candidate
-// version strings from the deps.dev /packages/{name} endpoint, sorted by
-// publishedAt desc, excluding deprecated releases and skipVersion.
+// version strings from the deps.dev /packages/{name} endpoint, excluding
+// deprecated releases and skipVersion. Sort tiers: stable>prerelease, then
+// highest semver within each tier, then publishedAt desc for non-semver ties.
+//
+// Endpoint URL construction intentionally mirrors fetchLatestRelease in
+// depsdev.go (same system/name mapping, same /packages/{name} shape). We do
+// not extract a shared helper because fetchLatestRelease additionally performs
+// Go-module proxy normalization and computes full ReleaseInfo semantics, which
+// are unused here — the fallback only needs the raw version list.
 func (c *DepsDevClient) listFallbackVersions(ctx context.Context, parsed *commonpurl.ParsedPURL, skipVersion string) ([]string, error) {
 	system, name := toDepsDevSystemAndName(parsed)
 	endpoint := fmt.Sprintf("%s/systems/%s/packages/%s", c.baseURL, system, name)
@@ -232,6 +250,7 @@ func (c *DepsDevClient) listFallbackVersions(ctx context.Context, parsed *common
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
+		slog.Debug("dependencies_version_fallback_package_not_found", "system", system, "name", name)
 		return nil, nil
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -291,8 +310,9 @@ func (c *DepsDevClient) listFallbackVersions(ctx context.Context, parsed *common
 	//     re-indexing can reorder semantically-older patches ahead of newer
 	//     ones. Semver desc on the same package gives the closest version to
 	//     the primary (e.g., for primary=19.2.5, tries 19.2.4 before 19.1.x).
-	//  3. PublishedAt desc as a tie-break for non-semver versions
-	//     (e.g., Maven calendar-style release strings, arbitrary tags).
+	//  3. PublishedAt desc as a tie-break when both candidates are non-semver
+	//     within the same stability tier (e.g., Maven calendar-style release
+	//     strings, arbitrary upstream tags).
 	sort.SliceStable(eligible, func(i, j int) bool {
 		if eligible[i].isStable != eligible[j].isStable {
 			return eligible[i].isStable
@@ -309,10 +329,7 @@ func (c *DepsDevClient) listFallbackVersions(ctx context.Context, parsed *common
 		return eligible[i].publishedAt.After(eligible[j].publishedAt)
 	})
 
-	limit := maxDependencyFallbackVersions
-	if len(eligible) < limit {
-		limit = len(eligible)
-	}
+	limit := min(maxDependencyFallbackVersions, len(eligible))
 	out := make([]string, 0, limit)
 	for i := 0; i < limit; i++ {
 		out = append(out, eligible[i].version)

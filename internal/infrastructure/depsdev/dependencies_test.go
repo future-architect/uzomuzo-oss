@@ -447,8 +447,15 @@ func TestFetchDependenciesBatch_NoFallbackForLeafWithGraph(t *testing.T) {
 	}
 }
 
-// TestFetchDependenciesBatch_VersionFallback_ContextCancelled ensures the
-// retry loop stops issuing HTTP calls once the caller's context is cancelled.
+// TestFetchDependenciesBatch_VersionFallback_ContextCancelled verifies the
+// end-to-end cancellation contract: once the caller cancels mid-workflow, no
+// further retry :dependencies calls fire. Cancellation is triggered inside
+// the primary handler; depending on Go's net/http scheduling the cancellation
+// surfaces either as (a) FetchDependencies returning a ctx-wrapped error (and
+// FetchDependenciesBatch exiting before fallback), or (b) the fallback
+// helper's own `ctx.Err()` guard firing before the retry dispatch. Both are
+// acceptable — the externally observable property under test is "no extra
+// :dependencies calls after cancel".
 func TestFetchDependenciesBatch_VersionFallback_ContextCancelled(t *testing.T) {
 	packageVersionsPayload := `{"versions":[
 		{"versionKey":{"version":"2.0.0"},"publishedAt":"2026-04-10T00:00:00Z"},
@@ -460,15 +467,13 @@ func TestFetchDependenciesBatch_VersionFallback_ContextCancelled(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v3alpha/systems/npm/packages/broken/versions/3.0.0:dependencies":
-			// Primary 404 — triggers fallback. Cancel mid-flight so the retry
-			// loop sees ctx.Err() before issuing the next :dependencies call.
 			cancel()
 			w.WriteHeader(http.StatusNotFound)
 		case "/v3alpha/systems/npm/packages/broken":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(packageVersionsPayload))
 		default:
-			// Any retry :dependencies path should NOT be reached once ctx is cancelled.
+			// Any retry :dependencies path must NOT be reached after cancel.
 			atomic.AddInt64(&retryCalls, 1)
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -482,8 +487,6 @@ func TestFetchDependenciesBatch_VersionFallback_ContextCancelled(t *testing.T) {
 	if len(results) != 0 {
 		t.Errorf("expected empty results on cancellation, got %+v", results)
 	}
-	// The /packages/{name} call may still have been in-flight at cancel; the
-	// contract is that no further :dependencies retry calls fire.
 	if got := atomic.LoadInt64(&retryCalls); got != 0 {
 		t.Errorf("expected 0 retry :dependencies calls after ctx cancel, got %d", got)
 	}
