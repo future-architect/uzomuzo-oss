@@ -116,11 +116,17 @@ func Lookup(owner, repo, pin string) (DeprecatedEntry, bool) {
 	return DeprecatedEntry{}, false
 }
 
-// AllEntries returns a copy of the seed catalog for diagnostic/testing use.
+// AllEntries returns a deep copy of the seed catalog for diagnostic/testing use.
 // The returned slice is sorted deterministically; callers must not assume
 // the order matches the source declaration.
 func AllEntries() []DeprecatedEntry {
 	out := make([]DeprecatedEntry, len(deprecatedActions))
-	copy(out, deprecatedActions)
+	for i, entry := range deprecatedActions {
+		cloned := entry
+		if entry.DeprecatedMajors != nil {
+			cloned.DeprecatedMajors = append([]string(nil), entry.DeprecatedMajors...)
+		}
+		out[i] = cloned
+	}
 	return out
 }

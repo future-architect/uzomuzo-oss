@@ -101,8 +101,8 @@ func NewDiscoveryService(githubClient *github.Client, maxConcurrency int) (*Disc
 //   - directURLs: actions referenced directly in workflow files
 //   - localActions: actions found inside local composite actions (URL → local path)
 //   - transitiveActions: actions found via composite action BFS (URL → parent action URL)
-//   - actionRefs: GitHub URL → sorted distinct version refs ("v3", "v4", SHA, ...) pinned across workflows.
-//     Empty for URLs where no ref was observed (e.g., local composite discovery).
+//   - actionRefs: GitHub URL → sorted distinct version refs ("v3", "v4", SHA, ...) observed across workflows
+//     and resolved local composite actions. URLs are omitted when no ref was observed.
 //
 // The returned slices are sorted lexicographically for deterministic output.
 // This method satisfies scan.ActionsDiscoverer.

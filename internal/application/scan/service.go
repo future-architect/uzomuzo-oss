@@ -322,8 +322,7 @@ func isActionSource(src domainaudit.EntrySource) bool {
 // A single entry may carry multiple pins (e.g., checkout@v2 in one job,
 // checkout@v4 in another). One deprecated pin is sufficient to flip the
 // entry; only the first matching ref in ActionRefs iteration order produces
-// catalog evidence (ActionRefs is sorted ascending, so the lowest deprecated
-// major wins). The full ref list is still surfaced separately via
+// catalog evidence. The full ref list is still surfaced separately via
 // AuditEntry.ActionRefs for text/JSON/CSV rendering.
 //
 // Not idempotent: repeated invocation appends duplicate evidence. The
