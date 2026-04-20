@@ -33,8 +33,8 @@ type DiscoveryResult struct {
 }
 
 // addRef records a version ref observed for the given GitHub URL.
-// Empty refs are ignored. Safe for concurrent use only when called under the
-// caller's lock.
+// Empty refs are ignored. Not goroutine-safe; callers must serialize access
+// (phase-1 callers hold `mu`; the transitive BFS path is single-goroutine).
 func (r *DiscoveryResult) addRef(ghURL, ref string) {
 	if ref == "" {
 		return
@@ -362,7 +362,8 @@ func (s *DiscoveryService) fetchActionYAML(ctx context.Context, ref ghaworkflow.
 // Returns:
 //   - directURLs: external action URLs referenced directly in workflow files
 //   - localActions: external action URLs found inside local composite actions (URL → local path)
-//   - refs: GitHub URL → distinct version refs observed across this repo's workflows
+//   - refs: GitHub URL → distinct sorted version refs observed across this repo's workflows
+//     (direct workflow pins merged with local-composite pins)
 //   - errs: non-fatal errors keyed by source path
 func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo string) (directURLs []string, localActions map[string]string, refs map[string][]string, errs map[string]error) {
 	errs = make(map[string]error)

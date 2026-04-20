@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"strings"
 	"testing"
 
 	domainactions "github.com/future-architect/uzomuzo-oss/internal/domain/actions"
@@ -103,6 +104,43 @@ func TestApplyActionPinCatalog_SkipsSHAAndBranchPins(t *testing.T) {
 				t.Errorf("unresolvable ref %q should not flip verdict; got %q", tt.ref, entries[0].Verdict)
 			}
 		})
+	}
+}
+
+func TestApplyActionPinCatalog_MultipleDeprecatedMajors_SingleEvidence(t *testing.T) {
+	// When an entry pins to two separately-deprecated majors (e.g., v2 and v3
+	// both in the catalog), only one evidence is emitted to keep downstream
+	// rendering single-valued. ActionRefs is sorted ascending by the discovery
+	// layer, so the lowest deprecated major wins.
+	entries := []domainaudit.AuditEntry{
+		{
+			PURL:       "https://github.com/actions/upload-artifact",
+			Source:     domainaudit.SourceActions,
+			Verdict:    domainaudit.VerdictOK,
+			Analysis:   &analysis.Analysis{EOL: analysis.EOLStatus{State: analysis.EOLNotEOL}},
+			ActionRefs: []string{"v2", "v3"},
+		},
+	}
+	applyActionPinCatalog(entries)
+	if entries[0].Verdict != domainaudit.VerdictReplace {
+		t.Errorf("verdict = %q, want replace", entries[0].Verdict)
+	}
+	catalogEvidences := 0
+	var matched string
+	for _, ev := range entries[0].Analysis.EOL.Evidences {
+		if ev.Source == domainactions.EvidenceSource {
+			catalogEvidences++
+			if matched == "" {
+				// Extract the pinned ref from the summary "Pinned to X; ..." prefix.
+				matched = ev.Summary
+			}
+		}
+	}
+	if catalogEvidences != 1 {
+		t.Errorf("got %d ActionPinCatalog evidences, want exactly 1", catalogEvidences)
+	}
+	if !strings.HasPrefix(matched, "Pinned to v2;") {
+		t.Errorf("evidence summary = %q, want to start with 'Pinned to v2;' (lowest deprecated major)", matched)
 	}
 }
 
