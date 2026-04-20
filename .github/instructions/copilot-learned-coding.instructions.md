@@ -109,6 +109,11 @@ pending_patterns:
     pr: 299
     file: "internal/application/diet/service_test.go"
     date: "2026-04-12"
+  - category: "testing"
+    summary: "Test failure branch accessed struct field through potentially-nil pointer in error message — split nil guard (t.Fatalf) from value assertion to prevent panic masking the actual regression"
+    pr: 318
+    file: "internal/infrastructure/integration/populate_project_test.go"
+    date: "2026-04-20"
   - category: "comment-doc-drift"
     summary: "graphqlEndpoint comment claimed BaseURL controls 'both REST and GraphQL paths' but FetchRepoLanguages still hardcodes api.github.com — scope claims to the APIs that actually honor the knob"
     pr: 318
