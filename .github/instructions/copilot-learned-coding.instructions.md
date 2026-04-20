@@ -288,4 +288,8 @@ pending_patterns:
   # comment-doc-drift (PR #315): already covered by "Comment-Code Consistency" rule — enrichDependentCounts comment said "stable release version" but code uses resolvedVersion() with Package.Version > StableVersion > MaxSemverVersion preference chain
   # comment-doc-drift (PR #318): already covered by "Comment-Code Consistency" rule — godoc said "chars" but NormalizeSummary counts runes; use correct unit in comments for multibyte-aware caps
   # defensive-coding (PR #318): already covered by "Use Case-Insensitive Comparison for URL Components" and existing URL handling rules — GHES REST /api/v3 suffix must rewrite to /api/graphql for GraphQL endpoint
+  # comment-doc-drift (PR #323): already covered by "Comment-Code Consistency" rule — listFallbackVersions doc said "sorted by publishedAt desc" but actual sort is stability tier → semver desc → publishedAt tiebreak
+  # defensive-coding (PR #323): already covered by "Preserve Original Input Through Heuristic Fallback Chains" spirit — Go module +incompatible suffix not normalized in origVersion before skipVersion comparison in fallback path
+  # performance (PR #323): already covered by "Minimize Allocations in Hot Paths" — semver.NewVersion called twice per candidate (isStableReleaseForFallback + sort key); parse once and derive both
+  # defensive-coding (PR #323): already covered by "Defensive Coding — Validate Early, Fail Clearly" spirit — add cheap HasVersion guard before calling expensive fallback helper for versionless PURLs
 -->
