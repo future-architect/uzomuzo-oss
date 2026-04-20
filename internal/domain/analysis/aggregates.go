@@ -76,18 +76,34 @@ type Analysis struct {
 	// DirectDepsCount is the number of direct dependencies for the package version
 	// used in the deps.dev query:
 	//   - If EffectivePURL includes a version, that exact version is used.
-	//   - Otherwise, the latest release is used (stable > prerelease).
-	// Zero means unknown, unsupported ecosystem, or no version resolved.
+	//   - Otherwise, the latest release is used (stable > maxSemver > prerelease).
 	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
+	// When HasDependencyGraph is true, zero means the resolved version genuinely
+	// has no direct dependencies (e.g., react@19 declares none). When
+	// HasDependencyGraph is false, zero is uninformative — the graph was not
+	// reached (unsupported ecosystem, no resolvable release, 404, or transport
+	// error). Always consult HasDependencyGraph before interpreting zero.
 	DirectDepsCount int
 
 	// TransitiveDepsCount is the number of transitive (indirect) dependencies for the
 	// package version used in the deps.dev query:
 	//   - If EffectivePURL includes a version, that exact version is used.
-	//   - Otherwise, the latest release is used (stable > prerelease).
-	// Zero means unknown, unsupported ecosystem, or no version resolved.
+	//   - Otherwise, the latest release is used (stable > maxSemver > prerelease).
 	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
+	// When HasDependencyGraph is true, zero means the resolved version genuinely
+	// has no transitive dependencies in the graph (e.g., pypi responses typically
+	// include only direct deps). When HasDependencyGraph is false, zero is
+	// uninformative. Always consult HasDependencyGraph before interpreting zero.
 	TransitiveDepsCount int
+
+	// HasDependencyGraph reports whether a deps.dev dependency-graph response was
+	// successfully retrieved for this analysis. When true, DirectDepsCount and
+	// TransitiveDepsCount reflect the graph contents (zero means the resolved
+	// version genuinely has no dependencies in that relation class). When false,
+	// the graph was unavailable — typical reasons are an unsupported ecosystem,
+	// a versionless analysis with no resolvable release, a 404 from deps.dev, or
+	// a transport error — so the counts carry no positive information.
+	HasDependencyGraph bool
 
 	// Canonical package links (homepage, registry, docs, changelog)
 	PackageLinks *PackageLinks

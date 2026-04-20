@@ -311,9 +311,29 @@ func TestLatestReleaseVersion(t *testing.T) {
 			want:     "2.0.0",
 		},
 		{
-			name:     "fallback to prerelease",
+			name:     "max semver preferred over prerelease when stable missing",
+			analysis: &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{MaxSemverVersion: &domain.VersionDetail{Version: "4.5.0"}, PreReleaseVersion: &domain.VersionDetail{Version: "1.0.0-beta.1"}}},
+			want:     "4.5.0",
+		},
+		{
+			name:     "fallback to prerelease when no stable or max semver",
 			analysis: &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{PreReleaseVersion: &domain.VersionDetail{Version: "1.0.0-beta.1"}}},
 			want:     "1.0.0-beta.1",
+		},
+		{
+			name:     "requested version not used (pinned-version semantics belong to resolvedVersion)",
+			analysis: &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{RequestedVersion: &domain.VersionDetail{Version: "0.9.0"}}},
+			want:     "",
+		},
+		{
+			name:     "package version not used (pinned-version semantics belong to resolvedVersion)",
+			analysis: &domain.Analysis{Package: &domain.Package{Version: "7.2.1"}},
+			want:     "",
+		},
+		{
+			name:     "nil analysis",
+			analysis: nil,
+			want:     "",
 		},
 		{
 			name:     "nil release info",
@@ -321,7 +341,7 @@ func TestLatestReleaseVersion(t *testing.T) {
 			want:     "",
 		},
 		{
-			name:     "empty versions",
+			name:     "empty stable version",
 			analysis: &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Version: ""}}},
 			want:     "",
 		},
@@ -339,12 +359,13 @@ func TestLatestReleaseVersion(t *testing.T) {
 
 func TestEnrichDependencyCounts(t *testing.T) {
 	tests := []struct {
-		name           string
-		purls          []string
-		analyses       map[string]*domain.Analysis
-		stubResults    map[string]*depsdev.DependenciesResponse
-		wantDirect     map[string]int
-		wantTransitive map[string]int
+		name                   string
+		purls                  []string
+		analyses               map[string]*domain.Analysis
+		stubResults            map[string]*depsdev.DependenciesResponse
+		wantDirect             map[string]int
+		wantTransitive         map[string]int
+		wantHasDependencyGraph map[string]bool
 	}{
 		{
 			name:  "versioned PURL populates counts",
@@ -367,8 +388,9 @@ func TestEnrichDependencyCounts(t *testing.T) {
 					},
 				},
 			},
-			wantDirect:     map[string]int{"pkg:npm/express@4.21.2": 2},
-			wantTransitive: map[string]int{"pkg:npm/express@4.21.2": 3},
+			wantDirect:             map[string]int{"pkg:npm/express@4.21.2": 2},
+			wantTransitive:         map[string]int{"pkg:npm/express@4.21.2": 3},
+			wantHasDependencyGraph: map[string]bool{"pkg:npm/express@4.21.2": true},
 		},
 		{
 			name:  "versionless PURL resolved via stable release",
@@ -388,8 +410,9 @@ func TestEnrichDependencyCounts(t *testing.T) {
 					},
 				},
 			},
-			wantDirect:     map[string]int{"pkg:cargo/serde": 1},
-			wantTransitive: map[string]int{"pkg:cargo/serde": 0},
+			wantDirect:             map[string]int{"pkg:cargo/serde": 1},
+			wantTransitive:         map[string]int{"pkg:cargo/serde": 0},
+			wantHasDependencyGraph: map[string]bool{"pkg:cargo/serde": true},
 		},
 		{
 			name:  "versionless PURL falls back to prerelease",
@@ -410,21 +433,101 @@ func TestEnrichDependencyCounts(t *testing.T) {
 					},
 				},
 			},
-			wantDirect:     map[string]int{"pkg:npm/beta-only": 1},
-			wantTransitive: map[string]int{"pkg:npm/beta-only": 1},
+			wantDirect:             map[string]int{"pkg:npm/beta-only": 1},
+			wantTransitive:         map[string]int{"pkg:npm/beta-only": 1},
+			wantHasDependencyGraph: map[string]bool{"pkg:npm/beta-only": true},
 		},
 		{
-			name:  "no match leaves counts at zero",
+			name:  "versionless PURL falls back to max semver when stable missing",
+			purls: []string{"pkg:pypi/django"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:pypi/django": {
+					EffectivePURL: "pkg:pypi/django",
+					Package:       &domain.Package{Ecosystem: "pypi"},
+					// Upstream release metadata missing stable but has MaxSemver —
+					// the deps query should still succeed using the semver fallback.
+					ReleaseInfo: &domain.ReleaseInfo{MaxSemverVersion: &domain.VersionDetail{Version: "5.1.0"}},
+				},
+			},
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:pypi/django": {
+					Nodes: []depsdev.DependencyNode{
+						{Relation: "SELF"},
+						{Relation: "DIRECT"},
+						{Relation: "DIRECT"},
+					},
+				},
+			},
+			wantDirect:             map[string]int{"pkg:pypi/django": 2},
+			wantTransitive:         map[string]int{"pkg:pypi/django": 0},
+			wantHasDependencyGraph: map[string]bool{"pkg:pypi/django": true},
+		},
+		{
+			name:  "nil response from deps.dev marks graph absent",
+			purls: []string{"pkg:cargo/serde@1.0.210"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:cargo/serde@1.0.210": {
+					EffectivePURL: "pkg:cargo/serde@1.0.210",
+					Package:       &domain.Package{Ecosystem: "cargo", Version: "1.0.210"},
+				},
+			},
+			// Explicit nil entry exercises the resp == nil branch distinct from "key missing".
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:cargo/serde": nil,
+			},
+			wantDirect:             map[string]int{"pkg:cargo/serde@1.0.210": 0},
+			wantTransitive:         map[string]int{"pkg:cargo/serde@1.0.210": 0},
+			wantHasDependencyGraph: map[string]bool{"pkg:cargo/serde@1.0.210": false},
+		},
+		{
+			name:  "leaf package with zero deps still marks graph as present",
+			purls: []string{"pkg:npm/react@19.1.0"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:npm/react@19.1.0": {
+					EffectivePURL: "pkg:npm/react@19.1.0",
+					Package:       &domain.Package{Ecosystem: "npm", Version: "19.1.0"},
+				},
+			},
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				// Genuine leaf: deps.dev returned a response, but only the SELF node.
+				"pkg:npm/react": {Nodes: []depsdev.DependencyNode{{Relation: "SELF"}}},
+			},
+			wantDirect:             map[string]int{"pkg:npm/react@19.1.0": 0},
+			wantTransitive:         map[string]int{"pkg:npm/react@19.1.0": 0},
+			wantHasDependencyGraph: map[string]bool{"pkg:npm/react@19.1.0": true},
+		},
+		{
+			name:  "no match leaves counts at zero and graph absent",
+			purls: []string{"pkg:pypi/unknown@1.0.0"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:pypi/unknown@1.0.0": {
+					EffectivePURL: "pkg:pypi/unknown@1.0.0",
+					Package:       &domain.Package{Ecosystem: "pypi", Version: "1.0.0"},
+				},
+			},
+			stubResults:            map[string]*depsdev.DependenciesResponse{},
+			wantDirect:             map[string]int{"pkg:pypi/unknown@1.0.0": 0},
+			wantTransitive:         map[string]int{"pkg:pypi/unknown@1.0.0": 0},
+			wantHasDependencyGraph: map[string]bool{"pkg:pypi/unknown@1.0.0": false},
+		},
+		{
+			name:  "versionless with no resolvable release marks graph absent",
 			purls: []string{"pkg:pypi/unknown"},
 			analyses: map[string]*domain.Analysis{
 				"pkg:pypi/unknown": {
 					EffectivePURL: "pkg:pypi/unknown",
 					Package:       &domain.Package{Ecosystem: "pypi"},
+					// no ReleaseInfo -> latestReleaseVersion returns ""
 				},
 			},
-			stubResults:    map[string]*depsdev.DependenciesResponse{},
-			wantDirect:     map[string]int{"pkg:pypi/unknown": 0},
-			wantTransitive: map[string]int{"pkg:pypi/unknown": 0},
+			// stub has data, but the unresolved versionless PURL is filtered out before lookup;
+			// FetchDependenciesBatch may still be invoked with an empty slice.
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:pypi/unknown": {Nodes: []depsdev.DependencyNode{{Relation: "DIRECT"}}},
+			},
+			wantDirect:             map[string]int{"pkg:pypi/unknown": 0},
+			wantTransitive:         map[string]int{"pkg:pypi/unknown": 0},
+			wantHasDependencyGraph: map[string]bool{"pkg:pypi/unknown": false},
 		},
 		{
 			name:  "unsupported ecosystem skipped without API call",
@@ -441,8 +544,9 @@ func TestEnrichDependencyCounts(t *testing.T) {
 					Nodes: []depsdev.DependencyNode{{Relation: "DIRECT"}},
 				},
 			},
-			wantDirect:     map[string]int{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": 0},
-			wantTransitive: map[string]int{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": 0},
+			wantDirect:             map[string]int{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": 0},
+			wantTransitive:         map[string]int{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": 0},
+			wantHasDependencyGraph: map[string]bool{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": false},
 		},
 	}
 
@@ -468,6 +572,15 @@ func TestEnrichDependencyCounts(t *testing.T) {
 				}
 				if a.TransitiveDepsCount != wantTransitive {
 					t.Errorf("TransitiveDepsCount for %s = %d, want %d", purl, a.TransitiveDepsCount, wantTransitive)
+				}
+			}
+			for purl, wantHas := range tt.wantHasDependencyGraph {
+				a := tt.analyses[purl]
+				if a == nil {
+					t.Fatalf("analysis not found for %s", purl)
+				}
+				if a.HasDependencyGraph != wantHas {
+					t.Errorf("HasDependencyGraph for %s = %v, want %v", purl, a.HasDependencyGraph, wantHas)
 				}
 			}
 		})

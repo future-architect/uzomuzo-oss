@@ -103,9 +103,10 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	}()
 	go func() {
 		defer enrichWg.Done()
-		// Uses latestReleaseVersion (stable > prerelease) instead of resolvedVersion
-		// because catalog DB stores version-agnostic package data; the latest release
-		// best represents the current dependency surface for OSS selection.
+		// Uses latestReleaseVersion (stable > maxSemver > prerelease) instead of
+		// resolvedVersion because catalog DB stores version-agnostic package data;
+		// the latest release best represents the current dependency surface for
+		// OSS selection.
 		depsGraphResults = s.enrichDependencyCounts(ctx, purls, analyses)
 	}()
 	enrichWg.Wait()
@@ -156,9 +157,10 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 			ep = p
 		}
 		// FetchDependentCount requires a versioned PURL. If the effective PURL
-		// is versionless, inject the stable release version (resolved earlier by
-		// populateReleaseInfo) using purl.WithVersion to handle qualifiers/subpaths safely.
-		if !strings.Contains(ep, "@") {
+		// is versionless, inject the resolved version selected earlier by
+		// populateReleaseInfo (Package.Version > StableVersion > MaxSemverVersion)
+		// using purl.WithVersion to handle qualifiers/subpaths safely.
+		if !purl.HasVersion(ep) {
 			if v := resolvedVersion(a); v != "" {
 				if versioned, err := purl.WithVersion(ep, v); err == nil {
 					ep = versioned
@@ -261,10 +263,16 @@ func dependenciesSupportedEcosystem(eco string) bool {
 }
 
 // enrichDependencyCounts fetches dependency counts (direct + transitive) from deps.dev
-// and populates Analysis.DirectDepsCount and Analysis.TransitiveDepsCount.
+// and populates Analysis.DirectDepsCount, Analysis.TransitiveDepsCount, and
+// Analysis.HasDependencyGraph.
 // Returns the raw DependenciesResponse map for downstream use (e.g., transitive advisory enrichment).
 //
-// Version selection: StableVersion > PrereleaseVersion (latest release for catalog DB).
+// Version selection: delegated to latestReleaseVersion (StableVersion >
+// MaxSemverVersion > PreReleaseVersion). This intentionally differs from
+// enrichDependentCounts / resolvedVersion (which prefers Package.Version) —
+// DependentCount asks "who depends on this exact version" while DirectDepsCount
+// asks "what does the current release of this package depend on". Keep the two
+// helpers distinct; do not unify them.
 // Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
 // Unsupported ecosystems are filtered out before making API requests to avoid
 // wasting HTTP round-trips on guaranteed 404 responses (important for large batches).
@@ -291,13 +299,23 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 			ep = p
 		}
 		// The :dependencies endpoint requires a versioned PURL.
-		// Use the latest release version (stable > prerelease) for catalog consistency.
-		if !strings.Contains(ep, "@") {
+		// Use the latest release version (stable > maxSemver > prerelease) for catalog consistency.
+		hasVer := purl.HasVersion(ep)
+		if !hasVer {
 			if v := latestReleaseVersion(a); v != "" {
 				if versioned, err := purl.WithVersion(ep, v); err == nil {
 					ep = versioned
+					hasVer = true
 				}
 			}
+		}
+		// Skip entries where version could not be resolved: the deps.dev :dependencies
+		// endpoint requires a versioned PURL, and an unresolved version would round-trip
+		// through the batch layer only to be silently dropped. Logging here makes the
+		// condition diagnosable (distinguishes "no version" from "API returned empty").
+		if !hasVer {
+			slog.Debug("dependency_count_skipped_versionless", "purl", p, "ecosystem", a.Package.Ecosystem)
+			continue
 		}
 		// Deduplicate effective PURLs to avoid redundant API calls.
 		if !seen[ep] {
@@ -313,6 +331,9 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 
 	// Map results back to original PURLs and populate counts.
 	// Also build a per-original-PURL map for downstream transitive advisory enrichment.
+	// HasDependencyGraph is set whenever deps.dev returned a response, even when the
+	// counts are zero — this lets callers distinguish "genuine leaf package" (e.g.,
+	// react@19) from "graph not collected" (unsupported ecosystem, 404, etc.).
 	perPURL := make(map[string]*depsdev.DependenciesResponse, len(purls))
 	for ep, originalKeys := range effectiveToOriginals {
 		key := purl.CanonicalKey(ep)
@@ -330,23 +351,37 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 				continue
 			}
 			a.DirectDepsCount, a.TransitiveDepsCount = direct, transitive
+			a.HasDependencyGraph = true
 			perPURL[originalKey] = resp
 		}
 	}
 	return perPURL
 }
 
-// latestReleaseVersion returns the latest release version for dependency count queries.
-// Preference: StableVersion > PrereleaseVersion.
+// latestReleaseVersion returns the best version string for dependency count queries.
+// Preference order:
+//  1. StableVersion     — latest stable release (best representation of the current dependency surface)
+//  2. MaxSemverVersion  — highest semver across published versions (often matches stable; useful when deps.dev data lacks IsDefault/stable flags)
+//  3. PreReleaseVersion — latest non-stable release, for ecosystems/packages where no stable exists yet
+//
+// Intentionally does NOT fall back to RequestedVersion or Package.Version:
+// the contract is "current dependency surface", not "whatever version happens
+// to be pinned". Callers that want version-specific semantics (as in
+// DependentCount) use resolvedVersion instead, which has the opposite
+// ordering (Package.Version first). Keeping the two helpers distinct prevents
+// silent drift between "latest release" and "pinned version" queries.
 func latestReleaseVersion(a *domain.Analysis) string {
-	if a.ReleaseInfo == nil {
+	if a == nil || a.ReleaseInfo == nil {
 		return ""
 	}
-	if a.ReleaseInfo.StableVersion != nil && a.ReleaseInfo.StableVersion.Version != "" {
-		return a.ReleaseInfo.StableVersion.Version
+	if v := a.ReleaseInfo.StableVersion; v != nil && v.Version != "" {
+		return v.Version
 	}
-	if a.ReleaseInfo.PreReleaseVersion != nil && a.ReleaseInfo.PreReleaseVersion.Version != "" {
-		return a.ReleaseInfo.PreReleaseVersion.Version
+	if v := a.ReleaseInfo.MaxSemverVersion; v != nil && v.Version != "" {
+		return v.Version
+	}
+	if v := a.ReleaseInfo.PreReleaseVersion; v != nil && v.Version != "" {
+		return v.Version
 	}
 	return ""
 }
