@@ -17,6 +17,21 @@ import (
 	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
 
+// stripGoIncompatibleSuffix returns the version with any trailing
+// "+incompatible" / "+<anything>" marker removed for Go modules. deps.dev's
+// version paths don't recognize these suffixes. No-op for non-Go ecosystems.
+// Called from both FetchDependencies and fetchDependenciesVersionFallback —
+// kept in one place so future suffix rules (e.g., "+dirty") land once.
+func stripGoIncompatibleSuffix(ecosystem, version string) string {
+	if strings.ToLower(ecosystem) != "golang" {
+		return version
+	}
+	if idx := strings.Index(version, "+"); idx >= 0 {
+		return version[:idx]
+	}
+	return version
+}
+
 // maxDependencyFallbackVersions bounds the number of additional :dependencies
 // requests we issue when the primary resolved version returns 404.
 // Rationale (issue #319): 2 retries balances recovery rate against batch
@@ -41,11 +56,10 @@ func (c *DepsDevClient) FetchDependencies(ctx context.Context, purlStr string) (
 		slog.Debug("dependencies: skipping versionless PURL", "purl", purlStr)
 		return nil, nil
 	}
-	// Go modules may have "+incompatible" suffix that deps.dev doesn't recognize in the version path.
-	if strings.ToLower(parsed.GetEcosystem()) == "golang" {
-		if idx := strings.Index(version, "+"); idx >= 0 {
-			version = version[:idx]
-		}
+	version = stripGoIncompatibleSuffix(parsed.GetEcosystem(), version)
+	if version == "" {
+		slog.Debug("dependencies: skipping empty version after suffix strip", "purl", purlStr)
+		return nil, nil
 	}
 
 	system, name := toDepsDevSystemAndName(parsed)
@@ -164,16 +178,16 @@ func (c *DepsDevClient) fetchDependenciesVersionFallback(ctx context.Context, pu
 	if origVersion == "" {
 		return nil // versionless: the primary call already logged and skipped
 	}
-	// Mirror the Go-module "+incompatible" stripping from FetchDependencies so
-	// the primary version used as the dedup key in listFallbackVersions matches
-	// what deps.dev publishes in the package listing. Defense-in-depth: Go is
-	// not in dependenciesSupportedEcosystem today so this path is dead, but
-	// keep parity to prevent silent re-attempts of the primary if a future
-	// caller invokes FetchDependenciesBatch directly with a Go PURL.
-	if strings.ToLower(parsed.GetEcosystem()) == "golang" {
-		if idx := strings.Index(origVersion, "+"); idx >= 0 {
-			origVersion = origVersion[:idx]
-		}
+	// Normalize the primary version via the same rules FetchDependencies uses
+	// so the skipVersion dedup key matches what deps.dev publishes in the
+	// package listing. This is defense-in-depth: the current integration
+	// pipeline (enrichDependencyCounts) filters Go PURLs out before they
+	// reach FetchDependenciesBatch, but callers that invoke the exported
+	// FetchDependenciesBatch directly (tests, library consumers) would
+	// otherwise silently re-attempt the primary through the retry loop.
+	origVersion = stripGoIncompatibleSuffix(parsed.GetEcosystem(), origVersion)
+	if origVersion == "" {
+		return nil
 	}
 
 	candidates, err := c.listFallbackVersions(ctx, parsed, origVersion)
