@@ -105,6 +105,11 @@ pending_patterns:
     file: "internal/infrastructure/github/client.go"
     date: "2026-04-19"
   - category: "comment-doc-drift"
+    summary: "Concurrency comment claimed 'bounded by httpclient transport limits' but implementation starts one goroutine per unique package name with no explicit cap — comments must accurately describe the concurrency model"
+    pr: 318
+    file: "internal/infrastructure/integration/populate_summary.go"
+    date: "2026-04-20"
+  - category: "comment-doc-drift"
     summary: "Test case name claimed 'web vs data-jpa' but input PURL was spring-boot-starter-security — test names must match the actual input under test"
     pr: 299
     file: "internal/application/diet/service_test.go"
@@ -139,6 +144,11 @@ pending_patterns:
     pr: 318
     file: "internal/domain/analysis/models.go"
     date: "2026-04-19"
+  - category: "comment-doc-drift"
+    summary: "Test helper comment claimed 'REST and GraphQL endpoints both target' the httptest server but some REST callers hardcode api.github.com — scope claims to APIs that actually honor the configuration knob"
+    pr: 318
+    file: "internal/infrastructure/github/topics_test.go"
+    date: "2026-04-20"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
