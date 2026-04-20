@@ -62,9 +62,9 @@ func WithPyPIClient(c *pypi.Client) IntegrationOption {
 	return func(s *IntegrationService) { s.pypiClient = c }
 }
 
-// WithVanityResolver injects a Go vanity-URL resolver. When unset, a default
-// resolver with a shared in-process cache is constructed on first use.
-// Tests use this option to inject a stubbed resolver backed by httptest.
+// WithVanityResolver overrides the default Go vanity-URL resolver that
+// NewIntegrationService installs eagerly. Tests use this option to inject
+// a stubbed resolver backed by httptest; production callers rarely need it.
 func WithVanityResolver(r *govanityresolve.Resolver) IntegrationOption {
 	return func(s *IntegrationService) { s.vanityResolver = r }
 }

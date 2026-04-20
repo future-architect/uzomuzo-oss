@@ -41,6 +41,11 @@ const defaultTimeout = 8 * time.Second
 // destination through the resolver.
 const maxRedirects = 3
 
+// drainLimitBytes caps how much of an unused response body we consume
+// before closing the connection, to keep it reusable by the HTTP
+// transport's keep-alive pool without reading megabytes of error pages.
+const drainLimitBytes = 1024
+
 // Resolver resolves Go vanity import URLs to canonical GitHub URLs.
 // Safe for concurrent use. Successful lookups and authoritative negative
 // results are cached in-process for the lifetime of the Resolver.
@@ -162,13 +167,13 @@ func (r *Resolver) fetchAndParse(ctx context.Context, canonicalURL string) (stri
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode >= 500 {
-		_, _ = io.CopyN(io.Discard, resp.Body, 1024)
+	if resp.StatusCode >= http.StatusInternalServerError {
+		_, _ = io.CopyN(io.Discard, resp.Body, drainLimitBytes)
 		slog.Debug("vanity_resolve_server_error", "url", requestURL, "status", resp.StatusCode)
 		return "", false
 	}
 	if resp.StatusCode != http.StatusOK {
-		_, _ = io.CopyN(io.Discard, resp.Body, 1024)
+		_, _ = io.CopyN(io.Discard, resp.Body, drainLimitBytes)
 		slog.Debug("vanity_resolve_non_200", "url", requestURL, "status", resp.StatusCode)
 		return "", true
 	}
