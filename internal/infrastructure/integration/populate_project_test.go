@@ -123,7 +123,10 @@ func TestPopulateProjectScorecard_EmptyDescription(t *testing.T) {
 
 	svc.populateProjectScorecard(analysis, batch)
 
-	if analysis.Repository == nil || analysis.Repository.Summary != "" {
+	if analysis.Repository == nil {
+		t.Fatalf("expected Repository to be initialized")
+	}
+	if analysis.Repository.Summary != "" {
 		t.Errorf("expected empty Summary for empty Description, got %q", analysis.Repository.Summary)
 	}
 }
