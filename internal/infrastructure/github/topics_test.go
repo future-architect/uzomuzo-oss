@@ -250,12 +250,13 @@ func TestFetchRepositoryStates_NoTokenLeavesTopicsNil(t *testing.T) {
 	}
 }
 
-// TestFetchRepositoryStates_NotFoundLeavesTopicsNil simulates a private/not-found
-// repository (GraphQL returns "Could not resolve to a Repository") and verifies
-// Topics stays nil.
-func TestFetchRepositoryStates_NotFoundLeavesTopicsNil(t *testing.T) {
+// TestFetchRepositoryStates_GraphQLErrorLeavesTopicsNil simulates a GraphQL error
+// (e.g. transient server error) and verifies Topics stays nil. Uses a generic error
+// instead of "Could not resolve to a Repository" to avoid triggering the
+// normalizeRepoURL redirect path, which would make a real HTTP GET to github.com.
+func TestFetchRepositoryStates_GraphQLErrorLeavesTopicsNil(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = fmt.Fprint(w, `{"data":{},"errors":[{"message":"Could not resolve to a Repository with the name 'owner/private'."}]}`)
+		_, _ = fmt.Fprint(w, `{"data":{},"errors":[{"message":"Something went wrong. Please try again."}]}`)
 	}))
 	defer srv.Close()
 
@@ -269,7 +270,7 @@ func TestFetchRepositoryStates_NotFoundLeavesTopicsNil(t *testing.T) {
 
 	a := analyses[repoURL]
 	if a.Repository != nil && a.Repository.Topics != nil {
-		t.Errorf("Topics = %v on not-found error; want nil", a.Repository.Topics)
+		t.Errorf("Topics = %v on GraphQL error; want nil", a.Repository.Topics)
 	}
 }
 
