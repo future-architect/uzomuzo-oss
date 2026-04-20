@@ -8,11 +8,38 @@ import (
 	"log/slog"
 	"net/http"
 	neturl "net/url"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/Masterminds/semver/v3"
 	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
+
+// isStableReleaseForFallback reports whether a version string looks like a
+// stable release for the purpose of ordering fallback candidates. Uses semver
+// prerelease detection first (authoritative for npm/pypi/cargo/maven where
+// tags like "-canary" / "-experimental" are semver prereleases even though
+// the keyword is not listed in the shared purl.IsStableVersion helper), then
+// falls back to the shared keyword heuristic for non-semver versions.
+//
+// Intentionally local to the fallback path: the shared helper has different
+// callers (release-info classification) whose contract must not change.
+func isStableReleaseForFallback(version string) bool {
+	if v, err := semver.NewVersion(version); err == nil {
+		return v.Prerelease() == ""
+	}
+	return commonpurl.IsStableVersion(version)
+}
+
+// maxDependencyFallbackVersions bounds the number of additional :dependencies
+// requests we issue when the primary resolved version returns 404.
+// Rationale (issue #319): 2 retries balances recovery rate against batch
+// wall-clock — one extra /packages/{name} lookup plus up to two /dependencies
+// calls per affected PURL. Keep this small; a larger window risks masking real
+// "package genuinely has no published graph" signals behind noisy success.
+const maxDependencyFallbackVersions = 2
 
 // FetchDependencies fetches the dependency graph for a single versioned PURL.
 // Returns nil, nil for unsupported ecosystems or 404 responses.
@@ -98,8 +125,16 @@ func (c *DepsDevClient) FetchDependenciesBatch(ctx context.Context, purls []stri
 				slog.Debug("Failed to fetch dependencies", "purl", purl, "error", err)
 				return
 			}
+			// Only the 404 / versionless path returns (nil, nil); genuine transport
+			// or decode errors take the err branch above. Guard on (resp == nil &&
+			// err == nil) per the "Gate Fallback Logic on Error, Not Result Nilness"
+			// rule — a zero-node response (leaf) has resp != nil and should NOT
+			// trigger the retry.
 			if resp == nil {
-				return
+				resp = c.fetchDependenciesVersionFallback(ctx, purl)
+				if resp == nil {
+					return
+				}
 			}
 
 			// Normalize to versionless canonical key for map consistency
@@ -117,4 +152,169 @@ func (c *DepsDevClient) FetchDependenciesBatch(ctx context.Context, purls []stri
 	wg.Wait()
 	slog.Debug("Dependencies batch completed", "requested", len(purls), "successful", len(results))
 	return results
+}
+
+// fetchDependenciesVersionFallback attempts to recover a dependency graph when
+// the primary version returned 404. It lists published versions from
+// /systems/{system}/packages/{name}, picks the most recent non-deprecated
+// releases other than the one already tried, and issues up to
+// maxDependencyFallbackVersions additional :dependencies calls.
+//
+// Returns nil if: the input is versionless, the package-versions endpoint
+// fails, no fallback candidates exist, or every retry also returns 404. In
+// all cases the caller preserves the "HasDependencyGraph=false" semantics from
+// PR #315 because this helper only overrides nil when a retry succeeds.
+//
+// DDD Layer: Infrastructure (external API call + bounded retry)
+func (c *DepsDevClient) fetchDependenciesVersionFallback(ctx context.Context, purlStr string) *DependenciesResponse {
+	parser := commonpurl.NewParser()
+	parsed, err := parser.Parse(purlStr)
+	if err != nil {
+		return nil
+	}
+	origVersion := strings.TrimSpace(parsed.Version())
+	if origVersion == "" {
+		return nil // versionless: the primary call already logged and skipped
+	}
+
+	candidates, err := c.listFallbackVersions(ctx, parsed, origVersion)
+	if err != nil {
+		slog.Debug("dependencies_version_fallback_list_failed", "purl", purlStr, "error", err)
+		return nil
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	for _, v := range candidates {
+		if ctx.Err() != nil {
+			return nil
+		}
+		retryPURL, werr := commonpurl.WithVersion(purlStr, v)
+		if werr != nil {
+			slog.Debug("dependencies_version_fallback_rewrite_failed", "purl", purlStr, "candidate", v, "error", werr)
+			continue
+		}
+		resp, rerr := c.FetchDependencies(ctx, retryPURL)
+		if rerr != nil {
+			slog.Debug("dependencies_version_fallback_request_failed", "purl", purlStr, "candidate", v, "error", rerr)
+			continue
+		}
+		if resp == nil {
+			slog.Debug("dependencies_version_fallback_candidate_404", "purl", purlStr, "candidate", v)
+			continue
+		}
+		slog.Debug("dependencies_version_fallback_recovered",
+			"purl", purlStr, "primary_version", origVersion, "fallback_version", v)
+		return resp
+	}
+	return nil
+}
+
+// listFallbackVersions returns up to maxDependencyFallbackVersions candidate
+// version strings from the deps.dev /packages/{name} endpoint, sorted by
+// publishedAt desc, excluding deprecated releases and skipVersion.
+func (c *DepsDevClient) listFallbackVersions(ctx context.Context, parsed *commonpurl.ParsedPURL, skipVersion string) ([]string, error) {
+	system, name := toDepsDevSystemAndName(parsed)
+	endpoint := fmt.Sprintf("%s/systems/%s/packages/%s", c.baseURL, system, name)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create fallback versions request (url=%s): %w", endpoint, err)
+	}
+	req.Header.Set("User-Agent", "uzomuzo-depsdev-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
+
+	resp, err := c.client.Do(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("fallback versions HTTP request failed (url=%s): %w", endpoint, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("fallback versions HTTP %d (url=%s): %s", resp.StatusCode, endpoint, truncateString(string(body), 512))
+	}
+
+	var payload struct {
+		Versions []struct {
+			VersionKey struct {
+				Version string `json:"version"`
+			} `json:"versionKey"`
+			PublishedAt  string `json:"publishedAt"`
+			IsDeprecated bool   `json:"isDeprecated"`
+		} `json:"versions"`
+	}
+	if derr := json.NewDecoder(resp.Body).Decode(&payload); derr != nil {
+		return nil, fmt.Errorf("fallback versions JSON decode failed (url=%s): %w", endpoint, derr)
+	}
+
+	type candidate struct {
+		version     string
+		publishedAt time.Time
+		hasDate     bool
+		isStable    bool
+		semver      *semver.Version // nil when the version is not semver-parseable
+	}
+	eligible := make([]candidate, 0, len(payload.Versions))
+	for _, v := range payload.Versions {
+		ver := strings.TrimSpace(v.VersionKey.Version)
+		if ver == "" || ver == skipVersion || v.IsDeprecated {
+			continue
+		}
+		c := candidate{version: ver, isStable: isStableReleaseForFallback(ver)}
+		if sv, perr := semver.NewVersion(ver); perr == nil {
+			c.semver = sv
+		}
+		if v.PublishedAt != "" {
+			if t, terr := time.Parse(time.RFC3339, v.PublishedAt); terr == nil {
+				c.publishedAt = t
+				c.hasDate = true
+			}
+		}
+		eligible = append(eligible, c)
+	}
+	// Sort order:
+	//  1. Stable releases before pre-release / canary / beta tags. deps.dev's
+	//     :dependencies endpoint is consistently populated for stable
+	//     releases in npm/pypi/cargo/maven — pre-release tags very often 404
+	//     (observed on npm react canary/experimental tags), so preferring
+	//     stable maximizes fallback recovery rate within the tight call
+	//     budget.
+	//  2. Highest semver first within each stability tier. This is a better
+	//     neighbor for "current dependency surface" than publishedAt-desc
+	//     because deps.dev's publishedAt is the index time (when deps.dev
+	//     crawled the version), not the upstream release time — batch
+	//     re-indexing can reorder semantically-older patches ahead of newer
+	//     ones. Semver desc on the same package gives the closest version to
+	//     the primary (e.g., for primary=19.2.5, tries 19.2.4 before 19.1.x).
+	//  3. PublishedAt desc as a tie-break for non-semver versions
+	//     (e.g., Maven calendar-style release strings, arbitrary tags).
+	sort.SliceStable(eligible, func(i, j int) bool {
+		if eligible[i].isStable != eligible[j].isStable {
+			return eligible[i].isStable
+		}
+		if (eligible[i].semver != nil) != (eligible[j].semver != nil) {
+			return eligible[i].semver != nil
+		}
+		if eligible[i].semver != nil && eligible[j].semver != nil {
+			return eligible[i].semver.GreaterThan(eligible[j].semver)
+		}
+		if eligible[i].hasDate != eligible[j].hasDate {
+			return eligible[i].hasDate
+		}
+		return eligible[i].publishedAt.After(eligible[j].publishedAt)
+	})
+
+	limit := maxDependencyFallbackVersions
+	if len(eligible) < limit {
+		limit = len(eligible)
+	}
+	out := make([]string, 0, limit)
+	for i := 0; i < limit; i++ {
+		out = append(out, eligible[i].version)
+	}
+	return out, nil
 }
