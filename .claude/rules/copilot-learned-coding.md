@@ -99,6 +99,11 @@ pending_patterns:
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
+  - category: "defensive-coding"
+    summary: "Deep-copy slice fields in public getter functions that return copies of package-global data — shallow copy via copy() still aliases inner slice backing arrays, allowing callers to mutate the global state"
+    pr: 320
+    file: "internal/domain/actions/catalog.go"
+    date: "2026-04-20"
   - category: "security"
     summary: "Validate URL host non-empty alongside scheme check — hostless URLs like https:///path pass scheme validation but fail later in uncontrolled ways"
     pr: 276
@@ -113,7 +118,7 @@ pending_patterns:
 
 <!-- Promotion history (kept for audit trail):
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #281, #320 — chained heuristic fallback must preserve original input, include all distinguishing fields in dedup keys)
-  # comment-doc-drift: already covered by "Comment-Code Consistency" and "Match Test Case Names to Exercised Code" (PRs #298, #299, #320 — sort comment overstated sort key set, test name/input mismatch, shared constant doc omitted usage contexts)
+  # comment-doc-drift: already covered by "Comment-Code Consistency" and "Match Test Case Names to Exercised Code" (PRs #298, #299, #320 — sort comment overstated sort key set, test name/input mismatch, shared constant doc omitted usage contexts, discovery doc comment stale after refactor, lexicographic sort comment overstated semantics)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #276, #280 — rerun analyzers with combined input, gate fallback on error, spec-compliant parsers, AST ancestor walk continuation)
   # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #253, #276 — interface contract doc must match signature semantics)
   # testing: promoted to testing-performance.instructions.md (PRs #276, #282, #298 — nil map merge tests, sibling assertions, test name/code consistency, unconditional test assertions)
