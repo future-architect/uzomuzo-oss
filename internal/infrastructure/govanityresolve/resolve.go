@@ -71,20 +71,28 @@ func NewResolver() *Resolver {
 	return r
 }
 
-// NewResolverWithClient constructs a Resolver using the provided HTTP client
-// and relaxes the public-host restriction so tests can stub the network via
-// httptest (which binds to 127.0.0.1). This constructor is intended for tests
-// only; production callers must use NewResolver, whose hardened HTTP client
-// refuses private-range destinations.
-func NewResolverWithClient(c *http.Client) *Resolver {
-	r := &Resolver{allowNonPublic: true}
+// NewResolverForTest constructs a Resolver using the provided HTTP client and
+// relaxes the public-host / https-only restrictions so tests can stub the
+// network via httptest (which binds to 127.0.0.1 over HTTP). The name makes
+// the relaxation explicit so it cannot be mistaken for a generic "inject a
+// custom transport" constructor — production callers MUST use NewResolver.
+//
+// The resolver's hardened CheckRedirect is installed onto the client if the
+// client does not already have one set, so test code gets production-parity
+// redirect handling (bounded hops, host re-validation) without needing to
+// reach into internal fields.
+//
+// Panics if c is nil: an unconstrained default client here would silently
+// grant Internet access to a test-mode resolver, which is exactly the
+// surprise the name change is designed to prevent.
+func NewResolverForTest(c *http.Client) *Resolver {
 	if c == nil {
-		c = &http.Client{Timeout: defaultTimeout}
+		panic("govanityresolve: NewResolverForTest requires a non-nil http.Client")
 	}
-	if c.CheckRedirect == nil {
-		c.CheckRedirect = r.checkRedirect
+	r := &Resolver{allowNonPublic: true, http: c}
+	if r.http.CheckRedirect == nil {
+		r.http.CheckRedirect = r.checkRedirect
 	}
-	r.http = c
 	return r
 }
 
@@ -158,7 +166,7 @@ func (r *Resolver) fetchAndParse(ctx context.Context, canonicalURL string) (stri
 	req.Header.Set("User-Agent", "uzomuzo-govanityresolve/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := r.http.Do(req)
 	if err != nil {
-		// errUnsafeRedirect is returned from safeCheckRedirect for untrusted
+		// errUnsafeRedirect is returned from checkRedirect for untrusted
 		// hops. Treat it as an authoritative negative so attackers cannot
 		// force us to retry the same SSRF attempt on every batch.
 		if errors.Is(err, errUnsafeRedirect) {
@@ -219,13 +227,14 @@ func (r *Resolver) fetchAndParse(ctx context.Context, canonicalURL string) (stri
 //   - Empty or unparseable inputs.
 //   - Hostless URLs (`https:///path`).
 //   - Non-HTTPS schemes. Plain HTTP to attacker-influenced hosts on an
-//     internal network is an SSRF vector.
+//     internal network is an SSRF vector. Relaxed in test mode.
 //   - URLs carrying userinfo (`https://user@host/...`). A valid vanity
 //     repo URL never has credentials; a userinfo component is almost
-//     always an attempt to visually disguise the real host.
+//     always an attempt to visually disguise the real host. This check
+//     is NOT relaxed in test mode.
 //   - URLs whose host resolves to a loopback / link-local / private-
-//     range address (see isPublicHost), unless allowNonPublic is true
-//     — which is only set by the test-only constructor.
+//     range address (see isPublicHost). Relaxed in test mode so
+//     httptest servers (bound to 127.0.0.1) are dial-able.
 func normalizeVanityURL(repoURL string, allowNonPublic bool) (canonical, host string, ok bool) {
 	s := strings.TrimSpace(repoURL)
 	if s == "" {
@@ -267,7 +276,7 @@ var errUnsafeRedirect = errors.New("unsafe redirect rejected")
 //
 //   - At most maxRedirects hops are followed.
 //   - Each hop must target an HTTPS URL with no userinfo (relaxed in
-//     test mode; see NewResolverWithClient).
+//     test mode; see NewResolverForTest).
 //   - The resolved host must not be a loopback / link-local / private-
 //     range address, which would expose internal services via SSRF
 //     (relaxed in test mode).

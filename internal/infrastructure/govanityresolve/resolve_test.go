@@ -41,6 +41,14 @@ const googleGRPCHTML = `<html><head>
 <meta name="go-import" content="google.golang.org/grpc git https://github.com/grpc/grpc-go">
 </head></html>`
 
+// goSourceHomeHTML exercises parseGoSource shape 1: the `<home>` field is an
+// explicit https://github.com/... URL (not the `_` sentinel). go-import is
+// deliberately non-GitHub so the go-source code path is actually taken.
+const goSourceHomeHTML = `<html><head>
+<meta name="go-import" content="example.com/pkg git https://example.com/pkg">
+<meta name="go-source" content="example.com/pkg https://github.com/example-org/pkg https://github.com/example-org/pkg/tree/main{/dir} https://github.com/example-org/pkg/blob/main{/dir}/{file}#L{line}">
+</head></html>`
+
 // nonGitHubHTML emits a go-import pointing at a non-GitHub git host —
 // we must refuse to resolve it so downstream GitHub-specific consumers
 // are not fed URLs they cannot parse.
@@ -60,12 +68,13 @@ func TestResolveRepoURL(t *testing.T) {
 	mux.HandleFunc("/zap", handleGoGet(t, goUberZapHTML))
 	mux.HandleFunc("/api", handleGoGet(t, k8sAPIHTML))
 	mux.HandleFunc("/grpc", handleGoGet(t, googleGRPCHTML))
+	mux.HandleFunc("/gosourcehome", handleGoGet(t, goSourceHomeHTML))
 	mux.HandleFunc("/nongithub", handleGoGet(t, nonGitHubHTML))
 	mux.HandleFunc("/nongit", handleGoGet(t, nonGitVCSHTML))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	r := NewResolverWithClient(srv.Client())
+	r := NewResolverForTest(srv.Client())
 
 	tests := []struct {
 		name  string
@@ -95,6 +104,12 @@ func TestResolveRepoURL(t *testing.T) {
 			name:  "google.golang.org go-import points directly to GitHub",
 			input: srv.URL + "/grpc",
 			want:  "https://github.com/grpc/grpc-go",
+			wOK:   true,
+		},
+		{
+			name:  "go-source home URL fallback when go-import is non-GitHub",
+			input: srv.URL + "/gosourcehome",
+			want:  "https://github.com/example-org/pkg",
 			wOK:   true,
 		},
 		{
@@ -175,7 +190,7 @@ func TestResolveRepoURLDoesNotCacheCanceledContext(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	r := NewResolverWithClient(srv.Client())
+	r := NewResolverForTest(srv.Client())
 	input := srv.URL + "/zap"
 
 	canceled, cancel := context.WithCancel(context.Background())
@@ -209,12 +224,19 @@ func TestResolveRepoURLHonorsRedirectCap(t *testing.T) {
 	srv.Start()
 	t.Cleanup(srv.Close)
 
-	r := NewResolverWithClient(srv.Client())
+	// NewResolverForTest installs the redirect-capping CheckRedirect onto
+	// the httptest client for us (the loopback-host bypass is handled via
+	// allowNonPublic), so we do not need to reach into internal fields.
+	r := NewResolverForTest(srv.Client())
 
 	if _, ok := r.ResolveRepoURL(context.Background(), srv.URL+"/loop"); ok {
 		t.Fatalf("expected unbounded redirect chain to be refused")
 	}
-	if got := atomic.LoadInt32(&hits); got > maxRedirects+1 {
+	got := atomic.LoadInt32(&hits)
+	if got < 1 {
+		t.Fatalf("expected at least 1 HTTP hit (first request), got %d — redirect cap short-circuited before dispatch", got)
+	}
+	if got > maxRedirects+1 {
 		t.Fatalf("expected at most %d HTTP hits, got %d", maxRedirects+1, got)
 	}
 }
@@ -227,7 +249,7 @@ func TestResolveRepoURLCachesRepeatedLookups(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	r := NewResolverWithClient(srv.Client())
+	r := NewResolverForTest(srv.Client())
 	input := srv.URL + "/zap"
 
 	for i := 0; i < 3; i++ {
@@ -252,7 +274,7 @@ func TestResolveRepoURLCachesNegativeResults(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	r := NewResolverWithClient(srv.Client())
+	r := NewResolverForTest(srv.Client())
 	input := srv.URL + "/dead"
 
 	for i := 0; i < 3; i++ {

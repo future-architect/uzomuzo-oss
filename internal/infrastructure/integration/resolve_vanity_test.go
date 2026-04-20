@@ -41,7 +41,7 @@ func TestResolveVanityRepoURLs(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	svc := &IntegrationService{
-		vanityResolver: govanityresolve.NewResolverWithClient(srv.Client()),
+		vanityResolver: govanityresolve.NewResolverForTest(srv.Client()),
 	}
 
 	zapURL := srv.URL + "/zap"
@@ -146,18 +146,28 @@ func TestResolveVanityRepoURLsNoOpWithoutResolver(t *testing.T) {
 }
 
 func TestResolveVanityRepoURLsContextCanceled(t *testing.T) {
-	// Handler blocks until the test's per-request context is canceled,
-	// simulating a slow vanity host. Resolution must return promptly and
-	// leave RepoURL untouched.
-	handlerReleased := make(chan struct{})
+	// Block the vanity host handler until the test signals, then cancel
+	// the resolver's context while it is mid-flight. The resolver must
+	// observe the cancellation, return promptly, and leave RepoURL
+	// untouched (ctx-cancel is explicitly not cached).
+	handlerStarted := make(chan struct{})
+	handlerRelease := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		<-req.Context().Done()
-		close(handlerReleased)
+		select {
+		case handlerStarted <- struct{}{}:
+		case <-req.Context().Done():
+			return
+		}
+		select {
+		case <-handlerRelease:
+		case <-req.Context().Done():
+		}
 	}))
 	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(handlerRelease) })
 
 	svc := &IntegrationService{
-		vanityResolver: govanityresolve.NewResolverWithClient(srv.Client()),
+		vanityResolver: govanityresolve.NewResolverForTest(srv.Client()),
 	}
 	original := srv.URL + "/slow"
 	a := &domain.Analysis{
@@ -166,22 +176,26 @@ func TestResolveVanityRepoURLsContextCanceled(t *testing.T) {
 		Repository: &domain.Repository{URL: original},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		svc.resolveVanityRepoURLs(ctx, map[string]*domain.Analysis{"k": a})
 	}()
+
+	// Wait until the resolver's HTTP request actually reaches the handler,
+	// so we are certain cancellation interrupts a real in-flight call.
+	select {
+	case <-handlerStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("handler was never entered")
+	}
+	cancel()
+
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatalf("resolveVanityRepoURLs did not return after ctx cancel")
-	}
-	// Drain the handler so the test server shuts down cleanly.
-	select {
-	case <-handlerReleased:
-	default:
 	}
 	if a.RepoURL != original {
 		t.Fatalf("RepoURL changed on canceled ctx: %q", a.RepoURL)
@@ -248,6 +262,28 @@ func TestIsVanityCandidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := isVanityCandidate(tc.a); got != tc.want {
 				t.Fatalf("isVanityCandidate = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestVanityDedupKey(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", ""},
+		{"plain https", "https://gopkg.in/yaml.v3", "https://gopkg.in/yaml.v3"},
+		{"mixed-case host collapses to lower", "https://GOPKG.IN/yaml.v3", "https://gopkg.in/yaml.v3"},
+		{"mixed-case scheme collapses", "HTTPS://gopkg.in/yaml.v3", "https://gopkg.in/yaml.v3"},
+		{"scheme-less input gets https", "gopkg.in/yaml.v3", "https://gopkg.in/yaml.v3"},
+		{"trailing slash preserved (resolver cache dedups)", "https://gopkg.in/yaml.v3/", "https://gopkg.in/yaml.v3/"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := vanityDedupKey(tc.in); got != tc.want {
+				t.Fatalf("vanityDedupKey(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}

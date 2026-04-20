@@ -47,13 +47,17 @@ func (s *IntegrationService) resolveVanityRepoURLs(ctx context.Context, analyses
 	// Collect unique vanity URLs mapped to the analyses that share each URL.
 	// A single gopkg.in path often appears across many versions/consumers,
 	// so deduplicating here avoids redundant HTTP lookups even before the
-	// resolver's own cache kicks in.
+	// resolver's own cache kicks in. Keys are normalized so case-variant
+	// inputs (`GOPKG.IN/...` vs `gopkg.in/...`) collapse into one group;
+	// any remaining mismatch (trailing slash, path-case differences) is
+	// still caught by the resolver's internal cache.
 	jobs := make(map[string][]*domain.Analysis)
 	for _, a := range analyses {
 		if !isVanityCandidate(a) {
 			continue
 		}
-		jobs[a.RepoURL] = append(jobs[a.RepoURL], a)
+		key := vanityDedupKey(a.RepoURL)
+		jobs[key] = append(jobs[key], a)
 	}
 	if len(jobs) == 0 {
 		return
@@ -61,7 +65,15 @@ func (s *IntegrationService) resolveVanityRepoURLs(ctx context.Context, analyses
 
 	sem := make(chan struct{}, vanityResolveConcurrency)
 	var wg sync.WaitGroup
-	for vanityURL, targets := range jobs {
+	for _, targets := range jobs {
+		// Every target in this group carries the same RepoURL modulo case
+		// normalization; any representative is fetch-equivalent because the
+		// resolver normalizes internally before hitting the wire. Which
+		// one we pick for logging is intentionally non-deterministic
+		// (Go map iteration order); the resolver's normalized URL is
+		// logged in the `canonical`/`original` slog fields of
+		// vanity_resolve_success, which is the stable identifier.
+		vanityURL := targets[0].RepoURL
 		// Select on both the semaphore acquire and ctx.Done so early
 		// cancellation does not block forever when every slot is in use.
 		// Already-launched goroutines observe the same ctx and unwind
@@ -104,14 +116,39 @@ func isVanityCandidate(a *domain.Analysis) bool {
 	if !strings.EqualFold(strings.TrimSpace(a.Package.Ecosystem), "golang") {
 		return false
 	}
-	if strings.TrimSpace(a.RepoURL) == "" {
-		return false
-	}
 	host := hostOf(a.RepoURL)
 	if host == "" {
 		return false
 	}
+	// Exact-match host comparison is deliberate: common.IsValidGitHubURL
+	// uses `strings.Contains(host, "github.com")` which would also match
+	// decoy hosts like `not-github.com` and silently skip them as
+	// "already GitHub", robbing them of vanity resolution.
 	return !strings.EqualFold(host, "github.com")
+}
+
+// vanityDedupKey returns a canonical form of raw that collapses case-variant
+// inputs into a single map key. Host is lowercased; path/query are preserved
+// as-is. Not a full URL normalizer — the resolver's internal cache is the
+// authoritative dedup layer; this helper is only defense-in-depth against
+// the most common variance (host casing) observed in deps.dev output.
+func vanityDedupKey(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return ""
+	}
+	probe := s
+	lower := strings.ToLower(probe)
+	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+		probe = "https://" + probe
+	}
+	u, err := url.Parse(probe)
+	if err != nil || u.Host == "" {
+		return s
+	}
+	u.Host = strings.ToLower(u.Host)
+	u.Scheme = strings.ToLower(u.Scheme)
+	return u.String()
 }
 
 // hostOf returns the lowercase host of raw, adding https:// if raw has no
