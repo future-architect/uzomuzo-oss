@@ -86,9 +86,9 @@ func TestCollectTopics(t *testing.T) {
 	}
 }
 
-// newTestClient builds a Client whose REST and GraphQL endpoints both target the
-// given httptest server. Sets cfg.GitHub.BaseURL so the same configuration knob
-// drives both code paths.
+// newTestClient builds a Client whose GraphQL endpoint, and any REST callers that
+// honor BaseURL, target the given httptest server. Sets cfg.GitHub.BaseURL so the
+// same configuration knob drives those code paths.
 func newTestClient(t *testing.T, baseURL string) *Client {
 	t.Helper()
 	cfg := &config.Config{GitHub: config.GetDefaultGitHub()}

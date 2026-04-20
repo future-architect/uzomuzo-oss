@@ -24,9 +24,10 @@ import (
 //
 // DDD Layer: Infrastructure (parallel best-effort enrichment, mirroring the
 // WaitGroup-only fan-out used by enrichDependentCounts/enrichDependencyCounts).
-// Concurrency is bounded by the underlying httpclient transport limits and the
-// pypi.Client in-memory cache; we do not impose an additional in-process cap to
-// stay consistent with sibling enrichers.
+// Concurrency is unbounded (one goroutine per unique PyPI package name),
+// consistent with sibling enrichers. In practice the pypi.Client in-memory
+// cache and the underlying http.Transport's MaxIdleConnsPerHost limit
+// simultaneous outbound requests, but no explicit in-process cap is imposed.
 //
 // Ordering: must run AFTER deps.dev populate and GitHub enrichment, so PyPI's
 // canonical short summary takes precedence over the repo-level fallback.
