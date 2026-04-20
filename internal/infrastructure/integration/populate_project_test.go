@@ -49,8 +49,8 @@ func TestPopulateProjectScorecard_ArchivedDetection(t *testing.T) {
 			wantIsArchived: false,
 		},
 		{
-			name: "empty checks",
-			checks: nil,
+			name:           "empty checks",
+			checks:         nil,
 			wantIsArchived: false,
 		},
 	}
@@ -78,5 +78,55 @@ func TestPopulateProjectScorecard_ArchivedDetection(t *testing.T) {
 				t.Errorf("IsArchived = %v, want %v", gotArchived, tt.wantIsArchived)
 			}
 		})
+	}
+}
+
+// TestPopulateProjectScorecard_PopulatesSummary verifies that the deps.dev project
+// description flows into both Description (raw) and Summary (normalized) on Repository.
+func TestPopulateProjectScorecard_PopulatesSummary(t *testing.T) {
+	svc := &IntegrationService{}
+	analysis := &domain.Analysis{
+		OriginalPURL:  "pkg:npm/lodash@4.17.21",
+		EffectivePURL: "pkg:npm/lodash@4.17.21",
+		RepoURL:       "https://github.com/lodash/lodash",
+	}
+	batch := &depsdev.BatchResult{
+		Project: &depsdev.Project{
+			Description: "  A modern  JavaScript utility library\nwith modular methods.  ",
+		},
+	}
+
+	svc.populateProjectScorecard(analysis, batch)
+
+	if analysis.Repository == nil {
+		t.Fatalf("expected Repository to be initialized")
+	}
+	wantDesc := "  A modern  JavaScript utility library\nwith modular methods.  "
+	if analysis.Repository.Description != wantDesc {
+		t.Errorf("Description = %q, want %q (raw upstream value preserved)", analysis.Repository.Description, wantDesc)
+	}
+	wantSummary := "A modern JavaScript utility library with modular methods."
+	if analysis.Repository.Summary != wantSummary {
+		t.Errorf("Summary = %q, want %q", analysis.Repository.Summary, wantSummary)
+	}
+}
+
+// TestPopulateProjectScorecard_EmptyDescription ensures an empty project description
+// leaves Summary as empty string (no spurious ellipsis or whitespace).
+func TestPopulateProjectScorecard_EmptyDescription(t *testing.T) {
+	svc := &IntegrationService{}
+	analysis := &domain.Analysis{
+		OriginalPURL: "pkg:npm/empty@1.0.0", EffectivePURL: "pkg:npm/empty@1.0.0",
+		RepoURL: "https://github.com/owner/empty",
+	}
+	batch := &depsdev.BatchResult{Project: &depsdev.Project{Description: ""}}
+
+	svc.populateProjectScorecard(analysis, batch)
+
+	if analysis.Repository == nil {
+		t.Fatalf("expected Repository to be initialized")
+	}
+	if analysis.Repository.Summary != "" {
+		t.Errorf("expected empty Summary for empty Description, got %q", analysis.Repository.Summary)
 	}
 }

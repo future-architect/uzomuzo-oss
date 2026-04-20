@@ -20,6 +20,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/links"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
 )
 
@@ -31,6 +32,7 @@ type IntegrationService struct {
 	goProxy         *goproxy.Client
 	rubygemsClient  *rubygems.Client
 	packagistClient *packagist.Client
+	pypiClient      *pypi.Client
 }
 
 // IntegrationOption configures an IntegrationService.
@@ -49,6 +51,13 @@ func WithRubyGemsClient(c *rubygems.Client) IntegrationOption {
 // WithPackagistClient injects a Packagist client for dependent count lookups.
 func WithPackagistClient(c *packagist.Client) IntegrationOption {
 	return func(s *IntegrationService) { s.packagistClient = c }
+}
+
+// WithPyPIClient injects a PyPI client used to override Repository.Summary with
+// info.summary for PyPI-ecosystem analyses. Optional — when unset, Summary keeps
+// the deps.dev / GitHub-derived value.
+func WithPyPIClient(c *pypi.Client) IntegrationOption {
+	return func(s *IntegrationService) { s.pypiClient = c }
 }
 
 // NewIntegrationService creates a new integration service with optional configuration.

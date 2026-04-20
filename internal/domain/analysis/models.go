@@ -79,6 +79,20 @@ type Repository struct {
 	// DefaultBranch is the canonical default branch name (e.g. main, master) fetched via GitHub GraphQL.
 	// It enables downstream fetchers (README, go.mod, etc.) to avoid guessing common branch names.
 	DefaultBranch string
+	// Summary is a short, UI-ready, normalized one-line description (≤200 runes).
+	// Per-source provenance:
+	//   - GitHub repos:      GraphQL repository.description (already short).
+	//   - deps.dev Project:  project.description (repo-level, short).
+	//   - PyPI packages:     info.summary from PyPI JSON API (overrides above for ecosystem=pypi).
+	// Empty when no source provided a usable value. Description (above) is preserved unchanged
+	// for consumers that want the raw upstream value; see NormalizeSummary for the rules.
+	Summary string
+	// Topics holds GitHub repository topics (already-lowercased tags) returned by the
+	// repositoryTopics GraphQL connection (capped at 20). Sentinel values:
+	//   - nil       : not fetched (no GitHub token, non-GitHub host, or fetch failed)
+	//   - []string{}: fetched successfully, repository has zero topics configured
+	//   - non-empty : fetched topics in GitHub-returned order, deduplicated
+	Topics []string
 }
 
 // Package represents a package being analyzed

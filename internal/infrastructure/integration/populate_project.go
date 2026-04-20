@@ -30,6 +30,15 @@ func (s *IntegrationService) populateProjectScorecard(analysis *domain.Analysis,
 	analysis.Repository.StarsCount = project.StarsCount
 	analysis.Repository.ForksCount = project.ForksCount
 	analysis.Repository.Description = project.Description
+	// Summary baseline from the deps.dev Project (repo-level) description. Later
+	// pipeline stages may overwrite for higher-precedence sources:
+	//   1. github.Client.FetchRepositoryStates  (overwrites with repo.description)
+	//   2. enrichPyPISummary                    (overwrites with PyPI info.summary
+	//                                            for ecosystem == "pypi")
+	// Per-ecosystem package-level wiring (npm package.json, Maven POM
+	// <description>, Cargo.toml) is deferred from issue #316 — see
+	// domain.FirstSentence which exists for the Maven path.
+	analysis.Repository.Summary = domain.NormalizeSummary(project.Description)
 	analysis.OverallScore = project.Scorecard.OverallScore
 	projectKey := project.ProjectKey.ID
 	if projectKey != "" {
