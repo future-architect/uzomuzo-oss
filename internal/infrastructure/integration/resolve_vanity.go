@@ -122,7 +122,8 @@ func hostOf(raw string) string {
 	if s == "" {
 		return ""
 	}
-	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
+	lower := strings.ToLower(s)
+	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
 		s = "https://" + s
 	}
 	u, err := url.Parse(s)

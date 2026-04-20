@@ -210,10 +210,6 @@ func TestResolveRepoURLHonorsRedirectCap(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	r := NewResolverWithClient(srv.Client())
-	// The stdlib httptest client has no CheckRedirect set; inject one
-	// that applies the resolver's redirect cap while still permitting
-	// the loopback address used by the test server.
-	r.http.CheckRedirect = r.checkRedirect
 
 	if _, ok := r.ResolveRepoURL(context.Background(), srv.URL+"/loop"); ok {
 		t.Fatalf("expected unbounded redirect chain to be refused")

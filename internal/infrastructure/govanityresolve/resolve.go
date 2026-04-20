@@ -79,7 +79,10 @@ func NewResolver() *Resolver {
 func NewResolverWithClient(c *http.Client) *Resolver {
 	r := &Resolver{allowNonPublic: true}
 	if c == nil {
-		c = &http.Client{Timeout: defaultTimeout, CheckRedirect: r.checkRedirect}
+		c = &http.Client{Timeout: defaultTimeout}
+	}
+	if c.CheckRedirect == nil {
+		c.CheckRedirect = r.checkRedirect
 	}
 	r.http = c
 	return r
@@ -172,6 +175,13 @@ func (r *Resolver) fetchAndParse(ctx context.Context, canonicalURL string) (stri
 		slog.Debug("vanity_resolve_server_error", "url", requestURL, "status", resp.StatusCode)
 		return "", false
 	}
+	// HTTP 408 (Request Timeout) and 429 (Too Many Requests) are transient
+	// conditions — treat them the same as 5xx so they are not negative-cached.
+	if resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests {
+		_, _ = io.CopyN(io.Discard, resp.Body, drainLimitBytes)
+		slog.Debug("vanity_resolve_transient_status", "url", requestURL, "status", resp.StatusCode)
+		return "", false
+	}
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.CopyN(io.Discard, resp.Body, drainLimitBytes)
 		slog.Debug("vanity_resolve_non_200", "url", requestURL, "status", resp.StatusCode)
@@ -262,7 +272,7 @@ var errUnsafeRedirect = errors.New("unsafe redirect rejected")
 //     range address, which would expose internal services via SSRF
 //     (relaxed in test mode).
 func (r *Resolver) checkRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) >= maxRedirects {
+	if len(via) > maxRedirects {
 		return fmt.Errorf("%w: exceeded %d hops", errUnsafeRedirect, maxRedirects)
 	}
 	if req.URL == nil {
