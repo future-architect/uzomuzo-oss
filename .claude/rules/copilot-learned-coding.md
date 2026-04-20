@@ -34,6 +34,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Normalize Repo-Scoped Paths with `path.Clean`**: When accepting user- or YAML-supplied paths that are scoped within a repository (e.g., local action `./` references), normalize with `path.Clean` (not `filepath.Clean`) and reject results that equal `"."` or start with `".."`. Also reject backslashes. This prevents traversal beyond the repository root via the Contents API without blocking valid intra-repo `..` segments (e.g., `./foo/../bar` → `bar`).
 - **Preserve Original Input Through Heuristic Fallback Chains**: In chained heuristic pipelines where each step transforms an intermediate result, fallback on empty must return the original input — not the intermediate value from a prior step. Returning an intermediate value violates the documented contract and can produce silently incorrect results when later steps depend on the untransformed original.
 - **Accurate Error Map Keys**: When recording errors in a `map[string]error` keyed by file path, use the actual resolved path — not a hardcoded filename. If a fetch tries `action.yml` then falls back to `action.yaml`, the error key must reflect which file was attempted, or use the parent path without a filename assumption.
+- **Exported API Must Not Leak Unexported Types**: When an exported function or method returns (or accepts) an unexported type, it creates an API that other packages cannot use. Either export the type, unexport the function if all callers are package-internal, or use an exported interface/struct. Similarly, when a JSON struct tag uses `omitempty` on a boolean or always-present slice field, the serialized output becomes ambiguous (absent vs false/empty) for downstream consumers — omit `omitempty` for fields whose zero value is semantically meaningful.
 - **Handle All Valid Input Forms in Format Parsers**: When parsing a structured format (ZIP entries, RECORD files, manifests), handle all valid representations defined by the spec — not just the common case. For example, Python wheel RECORD files contain both package directories (`pkg/__init__.py`) and root-level modules (`six.py`); skipping root-level entries silently drops valid import names for single-module packages.
 - **Explicit Fallback for Unknown Enum Values**: When mapping external values (API responses, YAML fields) to internal enums or display strings, map unrecognized values to an explicit fallback (e.g., `"unknown(X)"`) rather than silently defaulting to a valid enum member. Silent defaults hide data quality issues and make debugging harder.
 - **Machine-Readable Columns Must Contain Single Values**: When adding columns to machine-readable output (CSV, JSON), each column must contain exactly one data type — do not combine a label and a number in a single field (e.g., `"HIGH (7.5)"`). Split compound values into separate columns (e.g., `max_advisory_severity` + `max_cvss3_score`). Mixed-format cells break downstream parsing and sorting.
@@ -110,6 +111,11 @@ pending_patterns:
     pr: 299
     file: "internal/application/diet/service_test.go"
     date: "2026-04-12"
+  - category: "comment-doc-drift"
+    summary: "graphqlEndpoint comment claimed BaseURL controls 'both REST and GraphQL paths' but FetchRepoLanguages still hardcodes api.github.com — scope claims to the APIs that actually honor the knob"
+    pr: 318
+    file: "internal/infrastructure/github/client.go"
+    date: "2026-04-20"
   - category: "testing"
     summary: "Unit test using github.com RepoURL triggered normalizeRepoURL redirect path, making a real HTTP GET to github.com — use generic errors or stub transports to keep tests network-independent"
     pr: 318
@@ -140,14 +146,10 @@ pending_patterns:
     pr: 276
     file: "internal/infrastructure/pypi/wheel.go"
     date: "2026-04-11"
-  - category: "api-consistency"
-    summary: "Remove omitempty from boolean and always-present slice JSON tags — omitempty makes absent-vs-false/empty ambiguous for downstream schema consumers"
-    pr: 223
-    file: "internal/interfaces/cli/diet_render.go"
-    date: "2026-04-07"
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # api-consistency: promoted to copilot-learned-coding.instructions.md (PRs #223, #318 — omitempty ambiguity on boolean/slice JSON tags, exported function returning unexported type)
   # performance: promoted to copilot-learned-coding.instructions.md (PRs #315, #318 — cache expensive parsing, avoid full-collection materialization for prefix-only operations)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #281, #315 — preserve original input through heuristic fallback chains, use structured parsers for structured identifier properties)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #276, #280 — rerun analyzers with combined input, gate fallback on error, spec-compliant parsers, AST ancestor walk continuation)
