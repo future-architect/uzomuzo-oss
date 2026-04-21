@@ -155,7 +155,7 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
-  # security: promoted to security.instructions.md (PRs #276, #324 — normalize hostnames in SSRF denylists/cache keys: strip trailing dots + lowercase before denylist checks and cache-key construction)
+  # security: promoted to security.instructions.md (PRs #276, #324 — normalize hostnames in SSRF denylists/cache keys: strip trailing dots + lowercase + IPv6 zone IDs before denylist checks and cache-key construction)
   # defensive-coding (PR #324): pending — u.Hostname() vs u.Host for port-safe host comparison (first occurrence, flagged twice in same PR: resolve_vanity.go and resolve.go)
   # defensive-coding (PR #324): pending — go-import prefix matching per Go module spec for multi-entry vanity pages (first occurrence)
   # comment-doc-drift (PR #324): already covered by promoted rule — dedup comment overstated resolver cache normalization scope (trailing slash/path casing)
