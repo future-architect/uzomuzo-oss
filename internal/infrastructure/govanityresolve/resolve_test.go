@@ -309,6 +309,7 @@ func TestGithubRepoFromURL(t *testing.T) {
 		{"strips .git suffix", "https://github.com/owner/repo.git", "https://github.com/owner/repo"},
 		{"case-insensitive host", "https://GitHub.COM/owner/repo", "https://github.com/owner/repo"},
 		{"deep path truncated to owner/repo", "https://github.com/owner/repo/tree/main", "https://github.com/owner/repo"},
+		{"explicit port 443", "https://github.com:443/owner/repo", "https://github.com/owner/repo"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

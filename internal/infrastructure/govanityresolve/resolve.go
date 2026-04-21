@@ -467,7 +467,7 @@ func githubRepoFromURL(raw string) string {
 	if err != nil || u.Host == "" {
 		return ""
 	}
-	if !strings.EqualFold(u.Host, "github.com") {
+	if !strings.EqualFold(u.Hostname(), "github.com") {
 		return ""
 	}
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")

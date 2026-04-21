@@ -48,9 +48,11 @@ func (s *IntegrationService) resolveVanityRepoURLs(ctx context.Context, analyses
 	// A single gopkg.in path often appears across many versions/consumers,
 	// so deduplicating here avoids redundant HTTP lookups even before the
 	// resolver's own cache kicks in. Keys are normalized so case-variant
-	// inputs (`GOPKG.IN/...` vs `gopkg.in/...`) collapse into one group;
-	// any remaining mismatch (trailing slash, path-case differences) is
-	// still caught by the resolver's internal cache.
+	// inputs (`GOPKG.IN/...` vs `gopkg.in/...`) collapse into one group.
+	// Note: the resolver's internal cache keys preserve trailing slashes and
+	// path casing, so near-duplicate URLs (e.g. with/without trailing slash)
+	// may still produce separate HTTP lookups — acceptable given the small
+	// cardinality of vanity URLs in practice.
 	jobs := make(map[string][]*domain.Analysis)
 	for _, a := range analyses {
 		if !isVanityCandidate(a) {
