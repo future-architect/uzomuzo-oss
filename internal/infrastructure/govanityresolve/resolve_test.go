@@ -170,6 +170,8 @@ func TestResolveRepoURLRejectsUnsafeInputs(t *testing.T) {
 		"https://metadata.google.internal/p",  // known metadata host rejected
 		"https://localhost./pkg",              // trailing-dot SSRF bypass rejected
 		"https://metadata.google.internal./p", // trailing-dot metadata bypass rejected
+		"https://[fe80::1%25lo0]/pkg",         // IPv6 zone ID link-local bypass rejected
+		"https://[::1%25eth0]/pkg",            // IPv6 zone ID loopback bypass rejected
 	}
 	for _, in := range inputs {
 		t.Run(in, func(t *testing.T) {
@@ -425,6 +427,33 @@ func TestIsPublicHostTrailingDot(t *testing.T) {
 		{"empty", "", false},
 		{"public host trailing dot", "gopkg.in.", true},
 		{"public host no dot", "gopkg.in", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isPublicHost(tc.host)
+			if got != tc.want {
+				t.Errorf("isPublicHost(%q) = %v, want %v", tc.host, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsPublicHostIPv6ZoneID(t *testing.T) {
+	// IPv6 literals with zone identifiers (e.g., "fe80::1%lo0") must be
+	// rejected. net.ParseIP does not parse zone IDs, so without explicit
+	// stripping they bypass the IP classification — an SSRF bypass vector.
+	cases := []struct {
+		name string
+		host string
+		want bool
+	}{
+		{"link-local with zone", "fe80::1%lo0", false},
+		{"loopback with zone", "::1%eth0", false},
+		{"private with zone", "10.0.0.1%zone", false},
+		{"link-local no zone", "fe80::1", false},
+		{"loopback no zone", "::1", false},
+		{"public IPv6 with zone", "2607:f8b0:4004:800::200e%eth0", true},
+		{"public IPv6 no zone", "2607:f8b0:4004:800::200e", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

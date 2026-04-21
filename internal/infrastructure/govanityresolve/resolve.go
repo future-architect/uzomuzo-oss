@@ -331,7 +331,15 @@ func isPublicHost(host string) bool {
 		"metadata.google.internal":
 		return false
 	}
-	if ip := net.ParseIP(host); ip != nil {
+	// Strip IPv6 zone identifiers (e.g., "fe80::1%lo0") before parsing.
+	// net.ParseIP does not handle zone IDs, so a zone-bearing link-local
+	// or loopback literal would bypass the IP classification checks below,
+	// creating an SSRF bypass path.
+	ipStr := host
+	if idx := strings.Index(host, "%"); idx != -1 {
+		ipStr = host[:idx]
+	}
+	if ip := net.ParseIP(ipStr); ip != nil {
 		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
 			ip.IsPrivate() || ip.IsUnspecified() || ip.IsMulticast() {
 			return false
