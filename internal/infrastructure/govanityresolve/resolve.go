@@ -269,6 +269,7 @@ func normalizeVanityURL(repoURL string, allowNonPublic bool) (canonical, host st
 	u.Fragment = ""
 	u.RawQuery = ""
 	u.Scheme = strings.ToLower(u.Scheme)
+	u.Host = strings.ToLower(u.Host) // canonicalize host for cache-key dedup
 	return u.String(), h, true
 }
 
@@ -313,6 +314,13 @@ func (r *Resolver) checkRedirect(req *http.Request, via []*http.Request) error {
 // Common hostnames that trivially map to loopback (`localhost` and the
 // cloud metadata service) are also refused by name.
 func isPublicHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	// Strip trailing dot (FQDN form) so that "localhost." and
+	// "metadata.google.internal." are rejected the same as their
+	// non-FQDN equivalents — a common SSRF bypass vector.
+	host = strings.TrimRight(host, ".")
 	if host == "" {
 		return false
 	}

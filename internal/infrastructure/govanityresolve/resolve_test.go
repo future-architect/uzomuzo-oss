@@ -160,14 +160,16 @@ func TestResolveRepoURL(t *testing.T) {
 func TestResolveRepoURLRejectsUnsafeInputs(t *testing.T) {
 	r := NewResolver()
 	inputs := []string{
-		"http://gopkg.in/yaml.v3",            // plain HTTP rejected
-		"https://user@gopkg.in/yaml.v3",      // userinfo rejected
-		"https://127.0.0.1/pkg",              // loopback literal rejected
-		"https://[::1]/pkg",                  // loopback v6 rejected
-		"https://169.254.169.254/pkg",        // link-local (cloud metadata) rejected
-		"https://10.0.0.5/pkg",               // RFC1918 rejected
-		"https://localhost/pkg",              // loopback by name rejected
-		"https://metadata.google.internal/p", // known metadata host rejected
+		"http://gopkg.in/yaml.v3",             // plain HTTP rejected
+		"https://user@gopkg.in/yaml.v3",       // userinfo rejected
+		"https://127.0.0.1/pkg",               // loopback literal rejected
+		"https://[::1]/pkg",                   // loopback v6 rejected
+		"https://169.254.169.254/pkg",         // link-local (cloud metadata) rejected
+		"https://10.0.0.5/pkg",                // RFC1918 rejected
+		"https://localhost/pkg",               // loopback by name rejected
+		"https://metadata.google.internal/p",  // known metadata host rejected
+		"https://localhost./pkg",              // trailing-dot SSRF bypass rejected
+		"https://metadata.google.internal./p", // trailing-dot metadata bypass rejected
 	}
 	for _, in := range inputs {
 		t.Run(in, func(t *testing.T) {
@@ -405,5 +407,43 @@ func handleGoGet(t *testing.T, body string) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(body))
+	}
+}
+
+func TestIsPublicHostTrailingDot(t *testing.T) {
+	// FQDN-form hostnames (trailing dot) must be rejected just like their
+	// non-FQDN equivalents — a common SSRF bypass vector.
+	cases := []struct {
+		name string
+		host string
+		want bool
+	}{
+		{"localhost trailing dot", "localhost.", false},
+		{"metadata trailing dot", "metadata.google.internal.", false},
+		{"ip6-localhost trailing dot", "ip6-localhost.", false},
+		{"only dots", "...", false},
+		{"empty", "", false},
+		{"public host trailing dot", "gopkg.in.", true},
+		{"public host no dot", "gopkg.in", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isPublicHost(tc.host)
+			if got != tc.want {
+				t.Errorf("isPublicHost(%q) = %v, want %v", tc.host, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeVanityURLCanonicalizesHostCase(t *testing.T) {
+	// Mixed-case hosts must produce the same cache key as lowercase hosts.
+	url1, _, ok1 := normalizeVanityURL("https://GOPKG.IN/yaml.v3", false)
+	url2, _, ok2 := normalizeVanityURL("https://gopkg.in/yaml.v3", false)
+	if !ok1 || !ok2 {
+		t.Fatalf("expected both URLs to normalize successfully, got ok1=%v ok2=%v", ok1, ok2)
+	}
+	if url1 != url2 {
+		t.Errorf("host casing produced different cache keys:\n  %q\n  %q", url1, url2)
 	}
 }
