@@ -168,8 +168,9 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
-  # defensive-coding (PR #324): pending — u.Hostname() vs u.Host for port-safe host comparison (first occurrence)
+  # defensive-coding (PR #324): pending — u.Hostname() vs u.Host for port-safe host comparison (first occurrence, flagged twice in same PR: resolve_vanity.go and resolve.go)
   # defensive-coding (PR #324): pending — go-import prefix matching per Go module spec for multi-entry vanity pages (first occurrence)
+  # comment-doc-drift (PR #324): already covered by promoted rule — dedup comment overstated resolver cache normalization scope (trailing slash/path casing)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #318, #324 — enforce HTTP client hardening on all code paths: CheckRedirect on injected clients, transient 408/429 classification, redirect off-by-one)
   # defensive-coding (PR #324): already covered by "Use Case-Insensitive Comparison for URL Components" — hostOf used case-sensitive HasPrefix for scheme detection
   # api-consistency: promoted to copilot-learned-coding.instructions.md (PRs #223, #318 — omitempty ambiguity on boolean/slice JSON tags, exported function returning unexported type)
