@@ -155,9 +155,21 @@ pending_patterns:
     pr: 276
     file: "internal/infrastructure/pypi/wheel.go"
     date: "2026-04-11"
+  - category: "defensive-coding"
+    summary: "Use u.Hostname() instead of u.Host when comparing hostnames — u.Host includes the port component, so github.com:443 != github.com misclassifies URLs and triggers unnecessary processing"
+    pr: 324
+    file: "internal/infrastructure/integration/resolve_vanity.go"
+    date: "2026-04-21"
+  - category: "defensive-coding"
+    summary: "When parsing multi-entry go-import/go-source meta tags, select the most specific prefix matching the requested import path per the Go module spec — blindly taking the first match can resolve to the wrong repository on monorepo vanity pages"
+    pr: 324
+    file: "internal/infrastructure/govanityresolve/resolve.go"
+    date: "2026-04-21"
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # defensive-coding (PR #324): pending — u.Hostname() vs u.Host for port-safe host comparison (first occurrence)
+  # defensive-coding (PR #324): pending — go-import prefix matching per Go module spec for multi-entry vanity pages (first occurrence)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #318, #324 — enforce HTTP client hardening on all code paths: CheckRedirect on injected clients, transient 408/429 classification, redirect off-by-one)
   # defensive-coding (PR #324): already covered by "Use Case-Insensitive Comparison for URL Components" — hostOf used case-sensitive HasPrefix for scheme detection
   # api-consistency: promoted to copilot-learned-coding.instructions.md (PRs #223, #318 — omitempty ambiguity on boolean/slice JSON tags, exported function returning unexported type)
