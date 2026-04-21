@@ -87,21 +87,11 @@ Schema (YAML-in-Markdown):
 
 ```yaml
 pending_patterns:
-  - category: "security"
-    summary: "When using io.LimitReader to cap entry reads, read maxSize+1 and reject if oversized — plain LimitReader silently truncates, causing downstream parsers to operate on partial/corrupt data"
-    pr: 276
-    file: "internal/infrastructure/pypi/wheel.go"
-    date: "2026-04-11"
   - category: "comment-doc-drift"
     summary: "Test header comment claimed 'no code changes needed' but test relied on newly added bare-decorator capture — comments must reflect current implementation scope"
     pr: 298
     file: "internal/infrastructure/treesitter/lang_python_test.go"
     date: "2026-04-12"
-  - category: "security"
-    summary: "Cap HTTP response body sizes with io.LimitReader before decoding — uncapped reads from overridden base URLs or mirrors can cause excessive memory usage"
-    pr: 276
-    file: "internal/infrastructure/pypi/client.go"
-    date: "2026-04-11"
   - category: "comment-doc-drift"
     summary: "Concurrency comment claimed 'bounded by httpclient transport limits' but implementation starts one goroutine per unique package name with no explicit cap — comments must accurately describe the concurrency model"
     pr: 318
@@ -152,11 +142,6 @@ pending_patterns:
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
-  - category: "security"
-    summary: "Validate URL host non-empty alongside scheme check — hostless URLs like https:///path pass scheme validation but fail later in uncontrolled ways"
-    pr: 276
-    file: "internal/infrastructure/pypi/wheel.go"
-    date: "2026-04-11"
   - category: "defensive-coding"
     summary: "Use u.Hostname() instead of u.Host when comparing hostnames — u.Host includes the port component, so github.com:443 != github.com misclassifies URLs and triggers unnecessary processing"
     pr: 324
@@ -170,6 +155,7 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # security: promoted to security.instructions.md (PRs #276, #324 — normalize hostnames in SSRF denylists/cache keys: strip trailing dots + lowercase before denylist checks and cache-key construction)
   # defensive-coding (PR #324): pending — u.Hostname() vs u.Host for port-safe host comparison (first occurrence, flagged twice in same PR: resolve_vanity.go and resolve.go)
   # defensive-coding (PR #324): pending — go-import prefix matching per Go module spec for multi-entry vanity pages (first occurrence)
   # comment-doc-drift (PR #324): already covered by promoted rule — dedup comment overstated resolver cache normalization scope (trailing slash/path casing)
