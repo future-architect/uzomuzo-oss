@@ -319,6 +319,53 @@ func TestGithubRepoFromURL(t *testing.T) {
 	}
 }
 
+func TestParseGoImportPrefixMatching(t *testing.T) {
+	html := `<html><head>
+<meta name="go-import" content="example.com git https://github.com/example/root">
+<meta name="go-import" content="example.com/sub git https://github.com/example/sub">
+</head></html>`
+
+	tests := []struct {
+		name       string
+		importPath string
+		want       string
+	}{
+		{
+			name:       "root prefix matches root import path",
+			importPath: "example.com",
+			want:       "https://github.com/example/root",
+		},
+		{
+			name:       "sub prefix wins for sub import path",
+			importPath: "example.com/sub",
+			want:       "https://github.com/example/sub",
+		},
+		{
+			name:       "deep sub path matches sub prefix",
+			importPath: "example.com/sub/deep",
+			want:       "https://github.com/example/sub",
+		},
+		{
+			name:       "empty importPath falls back to first match",
+			importPath: "",
+			want:       "https://github.com/example/root",
+		},
+		{
+			name:       "unrelated importPath falls back to first match",
+			importPath: "other.com/pkg",
+			want:       "https://github.com/example/root",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseGoImport(html, tc.importPath)
+			if got != tc.want {
+				t.Fatalf("parseGoImport(importPath=%q) = %q, want %q", tc.importPath, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestTrimTemplateTail(t *testing.T) {
 	tests := []struct {
 		in, want string

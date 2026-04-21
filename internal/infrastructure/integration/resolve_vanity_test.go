@@ -242,6 +242,14 @@ func TestIsVanityCandidate(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "github.com host with explicit port",
+			a: &domain.Analysis{
+				Package: &domain.Package{Ecosystem: "golang"},
+				RepoURL: "https://github.com:443/a/b",
+			},
+			want: false,
+		},
+		{
 			name: "gopkg.in vanity host",
 			a: &domain.Analysis{
 				Package: &domain.Package{Ecosystem: "golang"},

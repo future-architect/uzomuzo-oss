@@ -207,11 +207,16 @@ func (r *Resolver) fetchAndParse(ctx context.Context, canonicalURL string) (stri
 	}
 	html := string(body)
 
-	canonical := parseGoImport(html)
+	// Extract the import-path prefix from the vanity URL (host + path) so
+	// we can select the most specific matching go-import / go-source entry,
+	// as required by https://go.dev/ref/mod#vcs-find.
+	importPath := importPathFromURL(canonicalURL)
+
+	canonical := parseGoImport(html, importPath)
 	if canonical == "" {
 		// Some hosts (notably gopkg.in) emit `go-import` pointing back at
 		// themselves and expose the canonical GitHub URL only via `go-source`.
-		canonical = parseGoSource(html)
+		canonical = parseGoSource(html, importPath)
 	}
 	if canonical == "" {
 		slog.Debug("vanity_resolve_no_github_target", "url", requestURL)
@@ -340,23 +345,40 @@ var attrRE = regexp.MustCompile(`([a-zA-Z][\w-]*)\s*=\s*"([^"]*)"`)
 // the target host is not github.com.
 //
 // Spec: https://go.dev/ref/mod#vcs-find — content is whitespace-separated
-// "<prefix> <vcs> <url>". Multiple prefixes matching the import path may
-// be present; the first github.com/git match wins.
-func parseGoImport(html string) string {
+// "<prefix> <vcs> <url>". When importPath is non-empty and multiple entries
+// are present, the most specific prefix that matches the import path wins.
+// When importPath is empty or no prefix matches, the first github.com/git
+// entry wins (best-effort fallback for single-entry pages).
+func parseGoImport(html, importPath string) string {
+	var firstCanonical string
+	var bestCanonical string
+	var bestPrefix string
 	for _, content := range metaContents(html, "go-import") {
 		fields := strings.Fields(content)
 		if len(fields) < 3 {
 			continue
 		}
+		prefix := fields[0]
 		vcs := strings.ToLower(fields[1])
 		if vcs != "git" {
 			continue
 		}
-		if canonical := githubRepoFromURL(fields[2]); canonical != "" {
-			return canonical
+		canonical := githubRepoFromURL(fields[2])
+		if canonical == "" {
+			continue
+		}
+		if firstCanonical == "" {
+			firstCanonical = canonical
+		}
+		if importPath != "" && prefixMatches(importPath, prefix) && len(prefix) > len(bestPrefix) {
+			bestCanonical = canonical
+			bestPrefix = prefix
 		}
 	}
-	return ""
+	if bestCanonical != "" {
+		return bestCanonical
+	}
+	return firstCanonical
 }
 
 // parseGoSource extracts the canonical GitHub URL from the `go-source`
@@ -367,23 +389,41 @@ func parseGoImport(html string) string {
 //  2. `<prefix> _ <dir> <file>` where `<home>` is `_` (unset) and the
 //     `<dir>` template embeds `https://github.com/owner/repo/tree/...` —
 //     this is how gopkg.in advertises the canonical source location.
-func parseGoSource(html string) string {
+//
+// When importPath is non-empty and multiple entries are present, the most
+// specific prefix that matches the import path wins (same as parseGoImport).
+func parseGoSource(html, importPath string) string {
+	var firstCanonical string
+	var bestCanonical string
+	var bestPrefix string
 	for _, content := range metaContents(html, "go-source") {
 		fields := strings.Fields(content)
 		if len(fields) < 3 {
 			continue
 		}
-		if canonical := githubRepoFromURL(fields[1]); canonical != "" {
-			return canonical
+		prefix := fields[0]
+		canonical := githubRepoFromURL(fields[1])
+		if canonical == "" {
+			// Extract owner/repo from the dir template (field index 2) by
+			// trimming everything from `/tree/` or `/blob/` onward, which
+			// are the two GitHub URL shapes used in go-source templates.
+			canonical = githubRepoFromURL(trimTemplateTail(fields[2]))
 		}
-		// Extract owner/repo from the dir template (field index 2) by
-		// trimming everything from `/tree/` or `/blob/` onward, which
-		// are the two GitHub URL shapes used in go-source templates.
-		if canonical := githubRepoFromURL(trimTemplateTail(fields[2])); canonical != "" {
-			return canonical
+		if canonical == "" {
+			continue
+		}
+		if firstCanonical == "" {
+			firstCanonical = canonical
+		}
+		if importPath != "" && prefixMatches(importPath, prefix) && len(prefix) > len(bestPrefix) {
+			bestCanonical = canonical
+			bestPrefix = prefix
 		}
 	}
-	return ""
+	if bestCanonical != "" {
+		return bestCanonical
+	}
+	return firstCanonical
 }
 
 // metaContents returns the `content` attribute value of every `<meta>` tag
@@ -437,6 +477,32 @@ func githubRepoFromURL(raw string) string {
 	owner := parts[0]
 	repo := strings.TrimSuffix(parts[1], ".git")
 	return fmt.Sprintf("https://github.com/%s/%s", owner, repo)
+}
+
+// importPathFromURL extracts the Go import path (host + path) from a
+// canonical vanity URL like "https://go.uber.org/zap" → "go.uber.org/zap".
+// Returns "" if the URL is unparseable.
+func importPathFromURL(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return strings.ToLower(u.Hostname()) + strings.TrimRight(u.Path, "/")
+}
+
+// prefixMatches reports whether prefix is an exact match or a path-element
+// prefix of importPath, per the go-import spec: the client selects the
+// entry whose prefix matches the import path or is a path-element prefix
+// of it, preferring the longest match.
+// Both values are compared case-insensitively (hosts are case-insensitive
+// per RFC 3986, and Go module paths are conventionally lowercase).
+func prefixMatches(importPath, prefix string) bool {
+	ip := strings.ToLower(importPath)
+	p := strings.ToLower(prefix)
+	if ip == p {
+		return true
+	}
+	return strings.HasPrefix(ip, p+"/")
 }
 
 // trimTemplateTail strips `/tree/...` or `/blob/...` suffixes from a

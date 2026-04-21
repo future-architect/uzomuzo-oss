@@ -167,5 +167,5 @@ func hostOf(raw string) string {
 	if err != nil {
 		return ""
 	}
-	return strings.ToLower(u.Host)
+	return strings.ToLower(u.Hostname())
 }
