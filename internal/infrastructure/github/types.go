@@ -41,6 +41,7 @@ type RepositoryInfo struct {
 
 // PrimaryLanguage carries the GitHub-reported primary language for a repository.
 type PrimaryLanguage struct {
+	// Name is the language display name as reported by GitHub (e.g., "Go", "Python").
 	Name string `json:"name"`
 }
 
