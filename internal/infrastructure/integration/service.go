@@ -18,6 +18,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/golangresolve"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/govanityresolve"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/links"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
@@ -33,6 +34,7 @@ type IntegrationService struct {
 	rubygemsClient  *rubygems.Client
 	packagistClient *packagist.Client
 	pypiClient      *pypi.Client
+	vanityResolver  *govanityresolve.Resolver
 }
 
 // IntegrationOption configures an IntegrationService.
@@ -60,9 +62,21 @@ func WithPyPIClient(c *pypi.Client) IntegrationOption {
 	return func(s *IntegrationService) { s.pypiClient = c }
 }
 
+// WithVanityResolver overrides the default Go vanity-URL resolver that
+// NewIntegrationService installs eagerly. Tests use this option to inject
+// a stubbed resolver backed by httptest; production callers rarely need it.
+func WithVanityResolver(r *govanityresolve.Resolver) IntegrationOption {
+	return func(s *IntegrationService) { s.vanityResolver = r }
+}
+
 // NewIntegrationService creates a new integration service with optional configuration.
 func NewIntegrationService(githubClient *github.Client, depsdevClient depsdev.Client, opts ...IntegrationOption) *IntegrationService {
-	s := &IntegrationService{githubClient: githubClient, depsdevClient: depsdevClient, goProxy: goproxy.NewClient()}
+	s := &IntegrationService{
+		githubClient:   githubClient,
+		depsdevClient:  depsdevClient,
+		goProxy:        goproxy.NewClient(),
+		vanityResolver: govanityresolve.NewResolver(),
+	}
 	for _, o := range opts {
 		o(s)
 	}

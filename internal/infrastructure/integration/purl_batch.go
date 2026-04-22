@@ -74,6 +74,13 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 		analyses[p] = analysis
 	}
 
+	// Go vanity repo URL rewrite (best-effort, golang-only).
+	// Must run BEFORE GitHub enrichment — the GitHub GraphQL path gates on
+	// `github.com` host and silently skips gopkg.in / go.uber.org / k8s.io
+	// URLs unless they are first rewritten to their canonical GitHub form.
+	// See issue #322.
+	s.resolveVanityRepoURLs(ctx, analyses)
+
 	// GitHub enrichment (best-effort)
 	if err := s.enhanceAnalysesWithGitHubBatch(ctx, analyses); err != nil {
 		slog.Debug("github_enhancement_failed", "error", err)

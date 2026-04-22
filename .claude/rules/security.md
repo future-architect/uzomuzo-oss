@@ -102,6 +102,7 @@ defer os.Remove(f.Name())
 
 ## Learned from Copilot Reviews
 
+- **Normalize Hostnames in SSRF Denylists and Cache Keys**: When checking hostnames against a denylist (loopback, metadata endpoints) or using them as cache/map keys, normalize before comparison: strip trailing dots (FQDN form), strip IPv6 zone identifiers (`%zone` suffix — `net.ParseIP` does not parse zones, so `fe80::1%lo0` bypasses IP classification), and lowercase the host. `localhost.` and `metadata.google.internal.` are equivalent to their non-dot forms but bypass naive string switches; `[fe80::1%25lo0]` bypasses `net.ParseIP`-based loopback/link-local checks; mixed-case hosts like `GOPKG.IN` produce distinct cache keys from `gopkg.in`, causing redundant fetches. Apply zone stripping + `strings.TrimRight(host, ".")` + `strings.ToLower` before denylist checks and cache-key construction.
 - **Validate Config-Sourced Paths, Not Just User Input**: Path traversal prevention applies to **all** externally-defined paths — including those read from configuration files, embedded JSON, or YAML — not only direct user input. Normalize with `path.Clean`, reject results that equal `"."` or start with `".."`, reject backslashes, and reject absolute paths (`path.IsAbs`). Even trusted-at-compile-time data can be changed by a future edit, so enforce repo-root constraints defensively. Apply this validation consistently to **all** config-sourced paths in the same program (binary output paths, target file paths, output file paths) — not just the one that was flagged.
 
 ## Security Response Protocol
