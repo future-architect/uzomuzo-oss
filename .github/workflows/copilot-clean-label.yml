@@ -1,0 +1,265 @@
+name: Copilot Clean Label
+
+# Apply the `copilot-clean` label to a PR when its latest Copilot review on the
+# current HEAD reports no (new) comments, matching `generated no( new)? comments`
+# (case-insensitive). Remove the label otherwise. Driven by cron (every 10 min)
+# because `pull_request_review` (submitted) does not fire for Copilot since the
+# 2026-03-05 agentic-architecture migration. The `synchronize` event handles
+# instant label removal on new commits.
+#
+# Labels owned by this workflow: `copilot-clean` (read+write).
+# Other Copilot-related labels (e.g. `copilot-review` consumed by
+# copilot-review-fix.yml) are NOT touched here.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'PR number (optional; default: scan all open kotakanbe PRs)'
+        required: false
+        type: string
+
+permissions: {}
+
+# Per-PR groups let synchronize/cron run in parallel across different PRs.
+# Targeted workflow_dispatch (with `inputs.pr`) joins its own per-PR bucket so
+# manual single-PR runs aren't blocked by a global scan. Schedule and untargeted
+# dispatch share the `'cron'` bucket to serialize global scans against each
+# other (avoids racing label edits on the same PR set).
+concurrency:
+  group: copilot-clean-label-${{ github.event.pull_request.number || inputs.pr || 'cron' }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    # Same-repo, kotakanbe-authored PRs only. Fork PRs cannot access
+    # `GH_ACTIONS_TOKEN`. Schedule and workflow_dispatch reach this job
+    # without a `pull_request` context — both are allowed.
+    if: >-
+      github.event_name == 'schedule'
+      || github.event_name == 'workflow_dispatch'
+      || (
+        github.event.pull_request.user.login == 'kotakanbe'
+        && github.event.pull_request.head.repo.full_name == github.repository
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    env:
+      # PAT (kotakanbe), not GITHUB_TOKEN: GraphQL `requestReviews` for the
+      # Copilot bot silently no-ops under GITHUB_TOKEN (200 OK with data, no
+      # `review_requested` event). The cron stuck detector below depends on
+      # the mutation actually taking effect. Same secret as copilot-review-fix.yml.
+      GH_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}
+      REPO: ${{ github.repository }}
+      LABEL: copilot-clean
+      # The bot login as it appears in the REST `/pulls/.../reviews` payload.
+      # GitHub uses three different forms for the same Copilot bot across
+      # APIs and we MUST match each precisely:
+      #   REST review.user.login            = 'copilot-pull-request-reviewer[bot]'  (used here)
+      #   GraphQL Bot.login (node lookup)   = 'copilot-pull-request-reviewer'       (no [bot])
+      #   Timeline requested_reviewer.login = 'Copilot'                             (display form)
+      # Do not "unify" them — each form is correct only for its own API.
+      COPILOT_BOT: 'copilot-pull-request-reviewer[bot]'
+      # GraphQL node ID for the Copilot bot. Used by the stuck-PR detector
+      # below to re-fire requestReviews when the push-event mutation was
+      # deduped. See `copilot-rereview-on-push.yml` for full discovery context.
+      COPILOT_BOT_ID: 'BOT_kgDOCnlnWA'
+      # The exact Copilot summary phrases that mean "no findings" — both
+      # `generated no comments` (initial review) and `generated no new comments`
+      # (re-review). Case-insensitive in the matcher below as a safety net.
+      CLEAN_PHRASE_ERE: 'generated no( new)? comments'
+      # Stuck-PR detector threshold. If the latest `review_requested` event
+      # for Copilot is older than this (and HEAD has no Copilot review yet),
+      # re-fire the mutation. 5 min sits comfortably outside the observed
+      # short-lived dedup window when paired with the cron's 10 min period.
+      STUCK_THRESHOLD_MIN: '5'
+    steps:
+      - name: Resolve target PR list
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+          INPUT_PR: ${{ inputs.pr }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request)
+              printf '%s\n' "$EVENT_PR" > prs.txt
+              ;;
+            workflow_dispatch)
+              if [ -n "${INPUT_PR:-}" ]; then
+                # Reject non-numeric input to prevent path traversal in
+                # subsequent `gh api repos/.../pulls/$pr` calls.
+                case "$INPUT_PR" in
+                  ''|*[!0-9]*)
+                    echo "invalid pr input: '$INPUT_PR' (must be numeric)" >&2
+                    exit 1
+                    ;;
+                esac
+                printf '%s\n' "$INPUT_PR" > prs.txt
+              else
+                gh pr list --repo "$REPO" --state open --author kotakanbe \
+                  --json number --jq '.[].number' > prs.txt
+              fi
+              ;;
+            schedule)
+              gh pr list --repo "$REPO" --state open --author kotakanbe \
+                --json number --jq '.[].number' > prs.txt
+              ;;
+            *)
+              echo "unknown event: $EVENT_NAME" >&2
+              exit 1
+              ;;
+          esac
+          echo "Target PRs:"
+          cat prs.txt
+
+      - name: Apply or remove label
+        run: |
+          set -euo pipefail
+          while IFS= read -r pr; do
+            [ -z "$pr" ] && continue
+            echo "::group::PR #$pr"
+
+            # Single fetch of PR metadata: author + head SHA in one call.
+            if ! pr_json=$(gh api "repos/$REPO/pulls/$pr" 2>&1); then
+              echo "::warning::failed to fetch PR metadata: $pr_json"
+              echo "::endgroup::"
+              continue
+            fi
+            author=$(printf '%s' "$pr_json" | jq -r '.user.login')
+            head_sha=$(printf '%s' "$pr_json" | jq -r '.head.sha')
+
+            # Defensive author check — schedule/workflow_dispatch reach here
+            # without the job-level `if:` guard.
+            if [ "$author" != "kotakanbe" ]; then
+              echo "skip: author=$author"
+              echo "::endgroup::"
+              continue
+            fi
+
+            # Aggregate paginated reviews into one array, then sort+last.
+            # `gh api --paginate --jq` evaluates per-page, which would return
+            # the per-page last instead of the global last.
+            if ! reviews_json=$(gh api --paginate "repos/$REPO/pulls/$pr/reviews" 2>&1); then
+              echo "::warning::failed to fetch reviews: $reviews_json"
+              echo "::endgroup::"
+              continue
+            fi
+            latest=$(printf '%s' "$reviews_json" | jq -s --arg bot "$COPILOT_BOT" '
+              add | [.[] | select(.user.login == $bot)] | sort_by(.submitted_at) | last
+            ')
+
+            review_state="pending"  # pending / clean / dirty
+            if [ -n "$latest" ] && [ "$latest" != "null" ]; then
+              review_commit=$(printf '%s' "$latest" | jq -r '.commit_id // ""')
+              review_body=$(printf '%s' "$latest" | jq -r '.body // ""')
+              if [ "$review_commit" = "$head_sha" ]; then
+                if printf '%s' "$review_body" | grep -qiE "$CLEAN_PHRASE_ERE"; then
+                  review_state="clean"
+                else
+                  review_state="dirty"
+                  # Drift signal: review IS on HEAD but the phrase did not
+                  # match. Most often means Copilot found comments; could also
+                  # mean the summary phrasing changed.
+                  echo "::warning::PR #$pr: latest Copilot review on HEAD did not match clean phrase. Body head: $(printf '%s' "$review_body" | head -c 200)"
+                fi
+              fi
+            fi
+
+            if ! current_labels=$(gh pr view "$pr" --repo "$REPO" --json labels --jq '.labels[].name' 2>&1); then
+              echo "::warning::failed to fetch labels: $current_labels"
+              echo "::endgroup::"
+              continue
+            fi
+            has_label=0
+            if printf '%s\n' "$current_labels" | grep -qFx "$LABEL"; then
+              has_label=1
+            fi
+
+            # Label-edit failures are isolated per-PR: log a warning and
+            # continue so a single transient API error does not starve the
+            # remaining PRs in this run.
+            case "$review_state" in
+              clean)
+                if [ "$has_label" = "0" ]; then
+                  echo "ADD label '$LABEL' (review.commit_id == HEAD, body matched clean phrase)"
+                  if ! gh pr edit "$pr" --repo "$REPO" --add-label "$LABEL" 2>&1; then
+                    echo "::warning::PR #$pr: failed to add label '$LABEL'"
+                  fi
+                else
+                  echo "no change (already labeled clean)"
+                fi
+                ;;
+              dirty)
+                if [ "$has_label" = "1" ]; then
+                  echo "REMOVE label '$LABEL' (review on HEAD has comments)"
+                  if ! gh pr edit "$pr" --repo "$REPO" --remove-label "$LABEL" 2>&1; then
+                    echo "::warning::PR #$pr: failed to remove label '$LABEL'"
+                  fi
+                else
+                  echo "no change (already unlabeled, review has comments)"
+                fi
+                ;;
+              pending)
+                # No review yet, or latest review is for an older HEAD.
+                # We still strip the label because a stale clean signal must
+                # not survive a new commit; Copilot is expected to re-review
+                # (forced by copilot-rereview-on-push.yml).
+                if [ "$has_label" = "1" ]; then
+                  echo "REMOVE label '$LABEL' (review pending for current HEAD)"
+                  if ! gh pr edit "$pr" --repo "$REPO" --remove-label "$LABEL" 2>&1; then
+                    echo "::warning::PR #$pr: failed to remove label '$LABEL'"
+                  fi
+                else
+                  echo "no change (review pending, no stale label)"
+                fi
+
+                # Stuck-PR detector: re-fire requestReviews if Copilot was not
+                # pinged recently. Recovers from cases where the push-event
+                # mutation in copilot-rereview-on-push.yml was silently
+                # deduped (200 OK but no `review_requested` event).
+                if ! timeline=$(gh api --paginate "repos/$REPO/issues/$pr/timeline" 2>&1); then
+                  echo "::warning::PR #$pr: failed to fetch timeline for stuck detection: $timeline"
+                else
+                  # Note: timeline events use yet a third login form for Copilot
+                  # ("Copilot", capitalized) — distinct from REST's
+                  # `copilot-pull-request-reviewer[bot]` and GraphQL's
+                  # `copilot-pull-request-reviewer`.
+                  last_request=$(printf '%s' "$timeline" | jq -s -r '
+                    add
+                    | [.[] | select(.event == "review_requested"
+                        and .requested_reviewer.login == "Copilot")]
+                    | sort_by(.created_at) | last
+                    | .created_at // ""
+                  ')
+                  if [ -z "$last_request" ]; then
+                    age_min=99999
+                  else
+                    age_min=$(( ($(date +%s) - $(date -d "$last_request" +%s)) / 60 ))
+                  fi
+                  if [ "$age_min" -ge "$STUCK_THRESHOLD_MIN" ]; then
+                    pr_node_id=$(printf '%s' "$pr_json" | jq -r '.node_id')
+                    echo "stuck detector: last review_requested was ${age_min}min ago — refiring requestReviews"
+                    if ! refire=$(gh api graphql \
+                      -f query='mutation($pr:ID!,$bot:ID!){requestReviews(input:{pullRequestId:$pr, botIds:[$bot]}){pullRequest{id}}}' \
+                      -f pr="$pr_node_id" \
+                      -f bot="$COPILOT_BOT_ID" 2>&1); then
+                      echo "::warning::PR #$pr: stuck-detector refire failed: $refire"
+                    else
+                      echo "stuck detector: refire ok"
+                    fi
+                  else
+                    echo "stuck detector: last review_requested was ${age_min}min ago (< ${STUCK_THRESHOLD_MIN}min) — skipping refire"
+                  fi
+                fi
+                ;;
+            esac
+
+            echo "::endgroup::"
+          done < prs.txt
