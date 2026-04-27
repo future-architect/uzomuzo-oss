@@ -99,10 +99,11 @@ func newTestClient(t *testing.T, baseURL string) *Client {
 }
 
 // graphqlResponse encodes a minimal GraphQL response carrying the fields exercised
-// by the topics tests.
+// by the topics and language tests.
 type graphqlTestRepo struct {
-	Description string
-	Topics      []string
+	Description     string
+	Topics          []string
+	PrimaryLanguage string // empty string serializes the GraphQL field as null
 }
 
 func graphqlResponseBody(repo graphqlTestRepo) string {
@@ -112,6 +113,10 @@ func graphqlResponseBody(repo graphqlTestRepo) string {
 			topicNodes += ","
 		}
 		topicNodes += fmt.Sprintf(`{"topic":{"name":%q}}`, name)
+	}
+	primaryLanguage := "null"
+	if repo.PrimaryLanguage != "" {
+		primaryLanguage = fmt.Sprintf(`{"name":%q}`, repo.PrimaryLanguage)
 	}
 	return fmt.Sprintf(`{
 	  "data": {
@@ -123,6 +128,7 @@ func graphqlResponseBody(repo graphqlTestRepo) string {
 	      "forkCount": 1,
 	      "description": %q,
 	      "homepageUrl": "",
+	      "primaryLanguage": %s,
 	      "licenseInfo": null,
 	      "repositoryTopics": {"nodes": [%s]},
 	      "parent": null,
@@ -130,7 +136,7 @@ func graphqlResponseBody(repo graphqlTestRepo) string {
 	    },
 	    "rateLimit": {"cost":1,"remaining":4999,"resetAt":"2099-01-01T00:00:00Z"}
 	  }
-	}`, repo.Description, topicNodes)
+	}`, repo.Description, primaryLanguage, topicNodes)
 }
 
 func TestFetchRepositoryStates_PopulatesTopicsWhenPresent(t *testing.T) {

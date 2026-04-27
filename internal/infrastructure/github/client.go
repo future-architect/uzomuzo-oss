@@ -49,6 +49,9 @@ type repoResult struct {
 	homepage      string
 	license       *LicenseInfo // newly captured licenseInfo (spdxId/name) to avoid extra query
 	defaultBranch string
+	// language is the GitHub-reported primary language (e.g., "Go", "Python").
+	// Empty when the repository has no detected language.
+	language string
 	// topics is non-nil (possibly empty) on a successful fetch. Stays nil when
 	// the result represents an error so downstream callers can distinguish
 	// "fetched, none" from "not fetched". See domain.Repository.Topics.
@@ -136,6 +139,7 @@ func (c *Client) FetchBasicRepositoryInfo(ctx context.Context, owner, repo strin
 		    forkCount
 		    description
 		    homepageUrl
+		    primaryLanguage { name }
 		    licenseInfo { spdxId name }
 		    repositoryTopics(first: 20) { nodes { topic { name } } }
 		    parent { nameWithOwner }
@@ -200,6 +204,7 @@ func (c *Client) FetchDetailedRepositoryInfo(ctx context.Context, owner, repo st
 		    forkCount
 		    description
 		    homepageUrl
+		    primaryLanguage { name }
 		    licenseInfo { spdxId name }
 		    repositoryTopics(first: 20) { nodes { topic { name } } }
 		    parent { nameWithOwner }
@@ -362,6 +367,9 @@ func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]
 			if analysis.Repository.DefaultBranch == "" && meta.defaultBranch != "" {
 				analysis.Repository.DefaultBranch = meta.defaultBranch
 			}
+			if analysis.Repository.Language == "" && meta.language != "" {
+				analysis.Repository.Language = meta.language
+			}
 			// License enrichment: fallback only (do not override canonical deps.dev SPDX values).
 			if meta.license != nil {
 				if updated, changed := enrichProjectLicenseFromGitHub(analysis.ProjectLicense, meta.license); changed {
@@ -478,6 +486,7 @@ func (c *Client) fetchRepositoryStatesBatch(ctx context.Context, repoURLs []stri
 				homepage:      result.homepage,
 				license:       result.license,
 				defaultBranch: result.defaultBranch,
+				language:      result.language,
 				topics:        result.topics,
 			}
 		}
@@ -637,6 +646,7 @@ func (c *Client) githubWorker(ctx context.Context, batchCancel context.CancelFun
 			homepage:      repoInfo.HomepageURL,
 			license:       repoInfo.LicenseInfo,
 			defaultBranch: repoInfo.DefaultBranchRef.Name,
+			language:      primaryLanguageName(repoInfo.PrimaryLanguage),
 			topics:        collectTopics(repoInfo.RepositoryTopics),
 		}
 
@@ -769,6 +779,16 @@ func collectTopics(c RepositoryTopicConnection) []string {
 		}
 	}
 	return topics
+}
+
+// primaryLanguageName returns the GitHub-reported primary language name, or "" when
+// the GraphQL primaryLanguage field is null (e.g. empty repos, docs-only repos) or
+// when the returned name is blank/whitespace-only.
+func primaryLanguageName(p *PrimaryLanguage) string {
+	if p == nil {
+		return ""
+	}
+	return strings.TrimSpace(p.Name)
 }
 
 // forkSourceFromRepoInfo extracts the parent repository name ("owner/repo") from a

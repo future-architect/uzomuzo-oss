@@ -90,8 +90,8 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 
 #### GitHub — GraphQL (POST https://api.github.com/graphql)
 
-- Query repository(owner, name) fields: `isArchived`, `isDisabled`, `isFork`, `stargazerCount`, `forkCount`, `description`, `homepageUrl`, `licenseInfo{spdxId, name}`, `repositoryTopics(first:20){nodes{topic{name}}}`, `defaultBranchRef{name, target{... on Commit { history(first:N){nodes{committedDate, author{user{login}}}}}}}`, `rateLimit{cost, remaining, resetAt}`
-- Purpose: Evaluate repository state (archived/disabled/fork), recent commit activity, and surface metadata (description → Repository.Summary, topics → Repository.Topics)
+- Query repository(owner, name) fields: `isArchived`, `isDisabled`, `isFork`, `stargazerCount`, `forkCount`, `description`, `homepageUrl`, `primaryLanguage{name}`, `licenseInfo{spdxId, name}`, `repositoryTopics(first:20){nodes{topic{name}}}`, `defaultBranchRef{name, target{... on Commit { history(first:N){nodes{committedDate, author{user{login}}}}}}}`, `rateLimit{cost, remaining, resetAt}`
+- Purpose: Evaluate repository state (archived/disabled/fork), recent commit activity, and surface metadata (description → Repository.Summary, topics → Repository.Topics, primaryLanguage → Repository.Language)
 - Code:
   - Basic info query: `Client.FetchBasicRepositoryInfo` (`internal/infrastructure/github/client.go`)
   - Batch orchestration: `Client.fetchRepositoryStatesBatch` (package-internal)
