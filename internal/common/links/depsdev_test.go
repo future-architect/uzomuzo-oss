@@ -3,6 +3,7 @@ package links
 import (
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -10,9 +11,9 @@ import (
 
 func TestBuildDepsDevURL(t *testing.T) {
 	tests := []struct {
-		name     string
-		eco, in  string // in = the canonical single-segment package name
-		want     string
+		name    string
+		eco, in string // in = the canonical single-segment package name
+		want    string
 	}{
 		// Single-name ecosystems
 		{"npm simple", "npm", "express", "https://deps.dev/npm/express"},
@@ -118,7 +119,10 @@ func TestNormalizeDepsDevEcosystem(t *testing.T) {
 }
 
 // TestBuildDepsDevURL_LiveProbe verifies that every URL the helper produces
-// for a known-real package resolves on deps.dev's SPA (skipped with -short).
+// for a known-real package resolves on deps.dev's SPA.
+//
+// Opt-in only: set UZOMUZO_LIVE_PROBE=1 to run. This keeps `go test ./...`
+// hermetic in CI and restricted-network environments.
 //
 // deps.dev's frontend is a React Router v5 SPA whose package route pattern
 // is `/:system/:name/:version?` — :name matches a single path segment
@@ -126,8 +130,8 @@ func TestNormalizeDepsDevEcosystem(t *testing.T) {
 // namespaces (Go modules, npm scopes, Maven groupId+artifactId) into one
 // URL-encoded segment.
 func TestBuildDepsDevURL_LiveProbe(t *testing.T) {
-	if testing.Short() {
-		t.Skip("network probe — skip with -short")
+	if os.Getenv("UZOMUZO_LIVE_PROBE") == "" {
+		t.Skip("network probe — set UZOMUZO_LIVE_PROBE=1 to enable")
 	}
 	client := &http.Client{Timeout: 15 * time.Second}
 	cases := []struct {
@@ -159,9 +163,15 @@ func TestBuildDepsDevURL_LiveProbe(t *testing.T) {
 			if strings.Contains(after, "/") {
 				t.Fatalf("helper output %q has unencoded '/' in :name segment", helper)
 			}
-			decoded, _ := url.QueryUnescape(after)
-			api := "https://deps.dev/_/s/" + strings.ToUpper(system) + "/p/" + url.QueryEscape(decoded)
-			req, _ := http.NewRequest(http.MethodGet, api, nil)
+			decoded, err := url.PathUnescape(after)
+			if err != nil {
+				t.Fatalf("unescape helper path segment %q: %v", after, err)
+			}
+			api := "https://deps.dev/_/s/" + strings.ToUpper(system) + "/p/" + url.PathEscape(decoded)
+			req, err := http.NewRequest(http.MethodGet, api, nil)
+			if err != nil {
+				t.Fatalf("create request for %q: %v", api, err)
+			}
 			req.Header.Set("User-Agent", "uzomuzo-oss test/0.1")
 			resp, err := client.Do(req)
 			if err != nil {
