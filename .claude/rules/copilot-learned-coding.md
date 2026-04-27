@@ -15,6 +15,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Reject Flags That Silently Have No Effect**: When a CLI flag only applies to a specific input mode (e.g., `--sample` for PURL list files), explicitly reject it with a clear error when the input is a different mode (e.g., go.mod or SBOM). Do not silently ignore the flag — users assume their flags take effect.
 - **Deduplicate Inputs Before Batch API Calls**: When accepting user-provided input lists (PURLs, URLs) that feed into batch API calls, deduplicate them while preserving first-seen order before processing. Duplicates cause redundant external calls, skew logging/counts, and waste resources.
 - **Normalize User-Provided Enum Values**: When accepting string values for format selectors, mode switches, or other enums from CLI flags, normalize with `strings.TrimSpace(strings.ToLower(...))` before validation. Case-sensitive matching rejects common inputs like `--format JSON` or `--format "json "`.
+- **Match `net/url` Function to Semantic Context**: When manipulating URL components, select the `net/url` function that matches the component's semantics — `u.Hostname()` (not `u.Host`) when only the hostname is needed (avoids including the port), `url.PathUnescape`/`url.PathEscape` (not `url.QueryUnescape`/`url.QueryEscape`) for URL path segments (avoids `+`-as-space misinterpretation). Mismatched functions silently corrupt values containing reserved characters like `:`, `+`, or `@`.
 - **Interface Contract Documentation Must Match Signature Semantics**: When documenting an interface method, the doc comment must accurately reflect the method's full signature — including error returns, nil semantics, and parameter constraints. If the signature returns `(T, error)`, do not document it as "returns nil/empty on failure" — state that errors may be returned and describe the caller's expected handling (e.g., non-fatal/graceful degradation). Mismatched contract documentation misleads implementers and callers.
 - **GitHub Actions `||` Treats Empty as Falsy**: When a workflow input documents "empty = X behavior", do not use `${{ inputs.foo || 'default' }}` — the `||` operator treats empty string as falsy and applies the default, preventing users from intentionally selecting the empty option. Instead, pass the raw input via an env var and apply defaults conditionally (e.g., only for scheduled triggers).
 - **Guard Downstream Jobs Against Missing Outputs**: When a CI job produces outputs that downstream jobs depend on (exit codes, flags), gate downstream jobs on `needs.<job>.outputs.<key> != ''` to prevent execution when the upstream job fails before setting outputs. Otherwise, empty values may be misinterpreted (e.g., empty exit code `""` compared with `!= "0"` evaluates to true, creating misleading reports).
@@ -102,20 +103,10 @@ pending_patterns:
     pr: 299
     file: "internal/application/diet/service_test.go"
     date: "2026-04-12"
-  - category: "testing"
-    summary: "Test failure branch accessed struct field through potentially-nil pointer in error message — split nil guard (t.Fatalf) from value assertion to prevent panic masking the actual regression"
-    pr: 318
-    file: "internal/infrastructure/integration/populate_project_test.go"
-    date: "2026-04-20"
   - category: "comment-doc-drift"
     summary: "graphqlEndpoint comment claimed BaseURL controls 'both REST and GraphQL paths' but FetchRepoLanguages still hardcodes api.github.com — scope claims to the APIs that actually honor the knob"
     pr: 318
     file: "internal/infrastructure/github/client.go"
-    date: "2026-04-20"
-  - category: "testing"
-    summary: "Unit test using github.com RepoURL triggered normalizeRepoURL redirect path, making a real HTTP GET to github.com — use generic errors or stub transports to keep tests network-independent"
-    pr: 318
-    file: "internal/infrastructure/github/topics_test.go"
     date: "2026-04-20"
   - category: "comment-doc-drift"
     summary: "Precondition comment example said 'deps.dev Project lookup returned no repo URL' but actual condition is when deps.dev returned no Project at all — comment examples must match actual code conditions"
@@ -142,19 +133,11 @@ pending_patterns:
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
-  - category: "defensive-coding"
-    summary: "Use u.Hostname() instead of u.Host when comparing hostnames — u.Host includes the port component, so github.com:443 != github.com misclassifies URLs and triggers unnecessary processing"
-    pr: 324
-    file: "internal/infrastructure/integration/resolve_vanity.go"
-    date: "2026-04-21"
-  - category: "defensive-coding"
-    summary: "When parsing multi-entry go-import/go-source meta tags, select the most specific prefix matching the requested import path per the Go module spec — blindly taking the first match can resolve to the wrong repository on monorepo vanity pages"
-    pr: 324
-    file: "internal/infrastructure/govanityresolve/resolve.go"
-    date: "2026-04-21"
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # testing: promoted to testing-performance.instructions.md (PRs #318, #336 — keep tests network-independent by default: env-var opt-in for live probes, stub transports to avoid real HTTP calls)
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #324, #336 — match net/url function to semantic context: u.Hostname() not u.Host, PathEscape not QueryEscape for path segments)
   # security: promoted to security.instructions.md (PRs #276, #324 — normalize hostnames in SSRF denylists/cache keys: strip trailing dots + lowercase + IPv6 zone IDs before denylist checks and cache-key construction)
   # defensive-coding (PR #324): pending — u.Hostname() vs u.Host for port-safe host comparison (first occurrence, flagged twice in same PR: resolve_vanity.go and resolve.go)
   # defensive-coding (PR #324): pending — go-import prefix matching per Go module spec for multi-entry vanity pages (first occurrence)
