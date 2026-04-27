@@ -17,13 +17,14 @@ import (
 // mapping (composer→packagist) that produces 404s the client handles
 // gracefully; consolidation is tracked as follow-up work.
 func normalizeDepsDevEcosystem(ecosystem string) string {
-	switch strings.ToLower(strings.TrimSpace(ecosystem)) {
+	eco := strings.ToLower(strings.TrimSpace(ecosystem))
+	switch eco {
 	case "go", "golang":
 		return "go"
 	case "rubygems", "gem":
 		return "rubygems"
 	case "npm", "cargo", "maven", "pypi", "nuget":
-		return strings.ToLower(strings.TrimSpace(ecosystem))
+		return eco
 	default:
 		return ""
 	}
