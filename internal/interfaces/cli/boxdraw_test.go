@@ -1226,3 +1226,51 @@ func TestWriteBoxBuildIntegrity_NilAnalysis(t *testing.T) {
 // NOTE: Unit tests for BuildDepsDevURL/BuildDepsDevVersionURL live in
 // internal/common/links/depsdev_test.go. The CLI tests above verify that
 // box output renders deps.dev links correctly (integration-level coverage).
+
+// TestPackageEcoName verifies that packageurl.FromString-based decoding plus
+// the Maven ":" / others "/" separator produce the canonical, unescaped name
+// that BuildDepsDevURL is contracted to receive — including PURLs whose
+// namespace or name carry percent-encoded characters per the PURL spec.
+func TestPackageEcoName(t *testing.T) {
+	tests := []struct {
+		name        string
+		effective   string
+		wantEco     string
+		wantPkgName string
+	}{
+		{
+			name:        "maven simple",
+			effective:   "pkg:maven/org.springframework/spring-core@5.3.30",
+			wantEco:     "maven",
+			wantPkgName: "org.springframework:spring-core",
+		},
+		{
+			name:        "go multi-segment namespace decoded",
+			effective:   "pkg:golang/github.com/spf13/cobra@v1.8.0",
+			wantEco:     "golang",
+			wantPkgName: "github.com/spf13/cobra",
+		},
+		{
+			name:        "npm scoped namespace",
+			effective:   "pkg:npm/%40types/node@20.11.0",
+			wantEco:     "npm",
+			wantPkgName: "@types/node",
+		},
+		{
+			name:        "maven with percent-encoded space in namespace",
+			effective:   "pkg:maven/org.example%20group/artifact@1.0.0",
+			wantEco:     "maven",
+			wantPkgName: "org.example group:artifact",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &analysis.Analysis{EffectivePURL: tt.effective}
+			eco, pkg := packageEcoName(a)
+			if eco != tt.wantEco || pkg != tt.wantPkgName {
+				t.Errorf("packageEcoName(%q) = (%q, %q), want (%q, %q)",
+					tt.effective, eco, pkg, tt.wantEco, tt.wantPkgName)
+			}
+		})
+	}
+}

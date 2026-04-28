@@ -36,6 +36,13 @@ func TestBuildDepsDevURL(t *testing.T) {
 		{"maven groupId:artifactId", "maven", "org.springframework:spring-core", "https://deps.dev/maven/org.springframework:spring-core"},
 		{"maven dotted groupId", "maven", "org.springframework.boot:spring-boot-starter-json", "https://deps.dev/maven/org.springframework.boot:spring-boot-starter-json"},
 
+		// Decoded PURL components carrying special characters re-encode once
+		// (callers receive the unescaped form from packageurl.FromString;
+		// PathEscape — not QueryEscape — preserves "+" and encodes " " as %20).
+		{"name with space encodes as %20", "npm", "weird name", "https://deps.dev/npm/weird%20name"},
+		{"name with plus preserved", "cargo", "a+b", "https://deps.dev/cargo/a+b"},
+		{"name with literal percent escapes to %25", "npm", "100%pkg", "https://deps.dev/npm/100%25pkg"},
+
 		// Unsupported ecosystems return ""
 		{"composer not hosted", "composer", "laravel/framework", ""},
 		{"hex not hosted", "hex", "phoenix", ""},
