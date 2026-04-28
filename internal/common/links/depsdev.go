@@ -39,8 +39,8 @@ func normalizeDepsDevEcosystem(ecosystem string) string {
 // pattern `/:system/:name/:version?`, which matches `:name` against `[^/]+`
 // only.
 //
-// Returns "" for a nil/empty input or an ecosystem deps.dev does not host
-// (e.g., Composer / Hex / Swift) so callers can skip rendering.
+// Returns "" for an empty ecosystem/name or an ecosystem deps.dev does not
+// host (e.g., Composer / Hex / Swift) so callers can skip rendering.
 func BuildDepsDevURL(ecosystem, name string) string {
 	eco := normalizeDepsDevEcosystem(ecosystem)
 	if eco == "" || name == "" {
