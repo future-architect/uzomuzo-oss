@@ -97,47 +97,6 @@ func parseNuGetIDFromPURL(purl string) string {
 	return id
 }
 
-// parseCargoNameVersionFromPURL extracts (name, version) from a Cargo PURL like:
-//
-//	pkg:cargo/serde@1.0.197
-//
-// Returns empty strings when not a Cargo PURL or when components are missing.
-func parseCargoNameVersionFromPURL(purl string) (string, string) {
-	s := strings.TrimSpace(purl)
-	if s == "" || !strings.HasPrefix(s, "pkg:") {
-		return "", ""
-	}
-	s = strings.TrimPrefix(s, "pkg:")
-	slash := strings.IndexByte(s, '/')
-	if slash < 0 {
-		return "", ""
-	}
-	typ := s[:slash]
-	rest := s[slash+1:]
-	if !strings.EqualFold(typ, "cargo") {
-		return "", ""
-	}
-	at := strings.IndexByte(rest, '@')
-	if at < 0 {
-		return "", ""
-	}
-	name := rest[:at]
-	verRest := rest[at+1:]
-	cut := len(verRest)
-	if i := strings.IndexByte(verRest, '?'); i >= 0 && i < cut {
-		cut = i
-	}
-	if i := strings.IndexByte(verRest, '#'); i >= 0 && i < cut {
-		cut = i
-	}
-	version := strings.TrimSpace(verRest[:cut])
-	name = strings.TrimSpace(name)
-	if name == "" || version == "" {
-		return "", ""
-	}
-	return name, version
-}
-
 // parseMavenFromPURL extracts (groupId, artifactId, version) from a PURL like:
 //
 //	pkg:maven/group.id/artifact-id@1.2.3

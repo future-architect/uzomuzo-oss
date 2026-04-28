@@ -3,10 +3,12 @@ package eolevaluator
 import (
 	"context"
 	"log/slog"
+	"net/url"
 	"reflect"
 	"strings"
 	"sync"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common/links"
 	purl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/crates"
@@ -366,8 +368,12 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 	return false
 }
 
-// applyPyPIYanked checks if the PyPI stable version (or PURL version if stable
-// is unavailable) is yanked on PyPI and promotes to EOL on confirmation.
+// applyPyPIYanked checks if the PyPI version requested by the user (PURL version,
+// falling back to StableVersion when PURL is unversioned) is yanked on PyPI and
+// promotes to EOL on confirmation. PURL version is preferred because yanking is a
+// version-specific signal — checking the latest stable version would silently miss
+// a user's pinned-to-yanked dependency.
+//
 // Yanked semantics: see pypi.Client.GetVersion (info.yanked OR all urls[].yanked).
 func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
 	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" || e.pypi == nil {
@@ -379,14 +385,11 @@ func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, sta
 		return false
 	}
 	name := strings.ToLower(parsed.Name())
-	version := ""
-	if a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
+	version := parsed.Version()
+	if version == "" && a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
 		version = a.ReleaseInfo.StableVersion.Version
 	}
-	if version == "" {
-		version = parsed.Version()
-	}
-	if version == "" {
+	if name == "" || version == "" {
 		return false
 	}
 	info, found, err := e.pypi.GetVersion(ctx, name, version)
@@ -405,14 +408,17 @@ func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, sta
 	status.Evidences = append(status.Evidences, domain.EOLEvidence{
 		Source:     "PyPI",
 		Summary:    summary,
-		Reference:  "https://pypi.org/project/" + info.Name + "/" + info.Version + "/",
+		Reference:  "https://pypi.org/project/" + url.PathEscape(info.Name) + "/" + url.PathEscape(info.Version) + "/",
 		Confidence: 0.95,
 	})
 	slog.Debug("eol: pypi version yanked", "name", name, "version", version)
 	return true
 }
 
-// applyCargoYanked checks if the Cargo PURL version is yanked on crates.io.
+// applyCargoYanked checks if the Cargo PURL version (falling back to StableVersion
+// when PURL is unversioned) is yanked on crates.io. Same precedence rationale as
+// applyPyPIYanked. crates.io yanks have no upstream successor, so status.Successor
+// is left untouched.
 func (e *Evaluator) applyCargoYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
 	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" || e.crates == nil {
 		return false
@@ -422,7 +428,11 @@ func (e *Evaluator) applyCargoYanked(ctx context.Context, a *domain.Analysis, st
 	if err != nil || parsed.GetEcosystem() != "cargo" {
 		return false
 	}
-	name, version := parseCargoNameVersionFromPURL(a.Package.PURL)
+	name := parsed.Name()
+	version := parsed.Version()
+	if version == "" && a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
+		version = a.ReleaseInfo.StableVersion.Version
+	}
 	if name == "" || version == "" {
 		return false
 	}
@@ -438,37 +448,47 @@ func (e *Evaluator) applyCargoYanked(ctx context.Context, a *domain.Analysis, st
 	status.Evidences = append(status.Evidences, domain.EOLEvidence{
 		Source:     "crates.io",
 		Summary:    "Version yanked on crates.io",
-		Reference:  "https://crates.io/crates/" + name + "/" + version,
+		Reference:  "https://crates.io/crates/" + url.PathEscape(name) + "/" + url.PathEscape(version),
 		Confidence: 1.0,
 	})
 	slog.Debug("eol: cargo version yanked", "name", name, "version", version)
 	return true
 }
 
-// depsDevFallbackEcosystems are the PURL ecosystems where deps.dev's
-// Version.IsDeprecated is the only EOL signal we currently consume.
-// Ecosystems with authoritative ecosystem-specific rules (npm, NuGet, Packagist,
-// Maven, PyPI, cargo) are intentionally excluded so that authoritative-vs-stale
-// discrepancies fall to the authoritative side.
-var depsDevFallbackEcosystems = map[string]struct{}{
-	"golang": {},
-	"gem":    {},
-	"pub":    {},
-	"hex":    {},
-	"conan":  {},
+// ecosystemsWithAuthoritativeRules enumerates PURL ecosystems for which an
+// ecosystem-specific terminal rule already runs earlier in the rule chain.
+// applyDepsDevDeprecated skips these ecosystems so deps.dev's aggregated signal
+// never overrides an authoritative source.
+//
+// IMPORTANT: When adding a new ecosystem-specific authoritative rule, add the
+// PURL ecosystem to this set so the deps.dev fallback yields to it.
+var ecosystemsWithAuthoritativeRules = map[string]struct{}{
+	"npm":       {}, // applyNpmStableDeprecation / applyNpmPURLDeprecation
+	"nuget":     {}, // applyNuGetDeprecation
+	"composer":  {}, // applyPackagistAbandoned
+	"packagist": {}, // applyPackagistAbandoned (alias)
+	"maven":     {}, // applyMavenRelocation
+	"pypi":      {}, // applyPyPIClassifier / applyPyPIYanked
+	"cargo":     {}, // applyCargoYanked
 }
 
 // applyDepsDevDeprecated is a fallback rule that promotes to EOL when deps.dev
-// reports Version.IsDeprecated for ecosystems lacking an authoritative
-// ecosystem-specific rule. deps.dev aggregates from each registry's upstream
-// metadata for these ecosystems, so confidence is set to 0.95 (authoritative
-// aggregator). Placed LAST in the rule chain so any ecosystem-specific rule
-// short-circuits before this fallback runs.
+// reports Version.IsDeprecated for ecosystems lacking an ecosystem-specific
+// authoritative rule. Confidence is 0.95 (deps.dev aggregates from each
+// registry's upstream metadata for ecosystems it hosts). Placed LAST in the
+// rule chain so any ecosystem-specific rule short-circuits before this runs.
+//
+// Fires only when:
+//  1. The ecosystem is NOT in ecosystemsWithAuthoritativeRules, AND
+//  2. deps.dev hosts the ecosystem (links.BuildDepsDevVersionURL returns a non-empty URL).
+//
+// In effect this currently means Go modules and RubyGems (deps.dev hosts both
+// without us having authoritative rules for them).
 func (e *Evaluator) applyDepsDevDeprecated(_ context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
 	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" {
 		return false
 	}
-	if a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || !a.ReleaseInfo.StableVersion.IsDeprecated {
+	if a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || a.ReleaseInfo.StableVersion.Version == "" || !a.ReleaseInfo.StableVersion.IsDeprecated {
 		return false
 	}
 	pp := purl.NewParser()
@@ -477,14 +497,19 @@ func (e *Evaluator) applyDepsDevDeprecated(_ context.Context, a *domain.Analysis
 		return false
 	}
 	eco := strings.ToLower(parsed.GetEcosystem())
-	if _, ok := depsDevFallbackEcosystems[eco]; !ok {
+	if _, hasAuthRule := ecosystemsWithAuthoritativeRules[eco]; hasAuthRule {
+		return false
+	}
+	ref := links.BuildDepsDevVersionURL(eco, parsed.Name(), a.ReleaseInfo.StableVersion.Version)
+	if ref == "" {
+		// deps.dev does not host this ecosystem; no useful evidence URL to emit.
 		return false
 	}
 	status.State = domain.EOLEndOfLife
 	status.Evidences = append(status.Evidences, domain.EOLEvidence{
 		Source:     "deps.dev",
 		Summary:    "Marked deprecated in deps.dev",
-		Reference:  "https://deps.dev/" + eco + "/" + parsed.Name() + "/" + a.ReleaseInfo.StableVersion.Version,
+		Reference:  ref,
 		Confidence: 0.95,
 	})
 	slog.Debug("eol: deps.dev deprecated fallback", "ecosystem", eco, "name", parsed.Name(), "version", a.ReleaseInfo.StableVersion.Version)
