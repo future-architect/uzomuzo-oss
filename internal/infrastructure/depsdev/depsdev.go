@@ -244,11 +244,12 @@ func (c *DepsDevClient) fetchLatestRelease(ctx context.Context, purlStr string) 
 	// Map PURL ecosystem and package name to deps.dev expectations (breaking simplified API)
 	system, name, err := toDepsDevSystemAndName(parsed)
 	if err != nil {
+		wrappedErr := fmt.Errorf("fetchLatestRelease: normalize PURL: %w", err)
 		if errors.Is(err, links.ErrUnsupportedEcosystem) {
 			slog.Debug("fetchLatestRelease: skipping unsupported ecosystem", "purl", purlStr, "error", err)
-			return ReleaseInfo{}, nil
+			return ReleaseInfo{Error: wrappedErr}, nil
 		}
-		return ReleaseInfo{Error: err}, fmt.Errorf("fetchLatestRelease: normalize PURL: %w", err)
+		return ReleaseInfo{Error: wrappedErr}, wrappedErr
 	}
 	origSystem, origName := system, name // capture before any normalization so we can log only when changed
 
