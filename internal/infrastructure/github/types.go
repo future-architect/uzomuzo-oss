@@ -31,9 +31,18 @@ type RepositoryInfo struct {
 	DependencyGraphManifests DependencyGraphManifests  `json:"dependencyGraphManifests"`
 	LicenseInfo              *LicenseInfo              `json:"licenseInfo"`
 	RepositoryTopics         RepositoryTopicConnection `json:"repositoryTopics"`
+	// PrimaryLanguage is GitHub's GraphQL repository.primaryLanguage. Nil when the
+	// repository has no detected language (e.g., empty repos or markdown-only docs).
+	PrimaryLanguage *PrimaryLanguage `json:"primaryLanguage,omitempty"`
 	// Parent is the immediate parent repository from which this repo was forked (GitHub GraphQL "parent" field).
 	// Nil when the repository is not a fork, or when the parent is private/inaccessible.
 	Parent *ParentInfo `json:"parent,omitempty"`
+}
+
+// PrimaryLanguage carries the GitHub-reported primary language for a repository.
+type PrimaryLanguage struct {
+	// Name is the language display name as reported by GitHub (e.g., "Go", "Python").
+	Name string `json:"name"`
 }
 
 // RepositoryTopicConnection mirrors the GraphQL repositoryTopics connection.
@@ -61,6 +70,7 @@ type repoMeta struct {
 	homepage      string
 	license       *LicenseInfo
 	defaultBranch string
+	language      string
 	topics        []string
 }
 
