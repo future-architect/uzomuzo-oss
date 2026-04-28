@@ -368,7 +368,27 @@ If `--dry-run` is active, skip this step entirely — do not write files or comm
 Write the updated `.github/instructions/copilot-learned-coding.instructions.md`
 (with new pending entries added and promoted entries moved to the rules section).
 
-Commit all Phase 3 changes together:
+**Pre-commit verification — Phase 3 commit must contain rule-doc changes only.**
+
+Phase 3 is pushed *after* the Phase 2 re-review request, so its commit may land outside
+the Copilot review boundary. To keep that safe, the commit MUST be limited to rule-log
+files that don't need code review. Before committing, verify the staged paths:
+
+```bash
+git diff --cached --name-only | grep -vE '^(\.github/instructions/.*\.instructions\.md|\.claude/rules/.*\.md)$' && {
+  echo "ERROR: Phase 3 commit contains non-rule-doc files." >&2
+  echo "Phase 3 must only modify .github/instructions/*.instructions.md and .claude/rules/*.md." >&2
+  echo "If a code change is genuinely needed, abort Phase 3 and report — do not push." >&2
+  exit 1
+} || true
+```
+
+If the check fails, **abort Phase 3** (do not commit, do not push) and surface the
+unexpected paths in the Phase 4 summary. A code change discovered during Phase 3
+indicates a Phase 2 gap and must be handled in a separate review cycle, not bundled
+into the pattern-log commit.
+
+If the check passes, commit all Phase 3 changes together:
 
 ```
 chore: update Copilot pattern log and coding rules
@@ -417,6 +437,7 @@ Threads resolved: N/N
 - During Phase 1 fixes, only fix issues found in the diff under review; do not refactor unrelated code
 - During Phase 2 fixes, you may reply to existing Copilot review threads as needed to resolve them, but do NOT start new review threads
 - During Phase 2 fixes, NEVER modify files outside the scope of Copilot's comments; the only exceptions are Phase 3 updates to `.github/instructions/*` for pattern tracking and confirmed recurring patterns
+- Phase 3 commits MUST contain rule-doc changes only (`.github/instructions/*.instructions.md` and `.claude/rules/*.md`). Phase 3 is pushed after the Phase 2 re-review request, so any code/test/build changes bundled into it would land outside Copilot's review boundary. If Phase 3 surfaces a code change, abort Phase 3 and surface it in the Phase 4 report — never bundle code with the pattern-log commit
 - Always verify `go build` passes before committing
 - If `go test` fails after fixes, revert the failing change and classify as WONT_FIX
 - If the PR branch has merge conflicts, skip that PR and report it
