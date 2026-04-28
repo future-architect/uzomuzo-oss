@@ -1089,10 +1089,14 @@ func renderBoxEntryError(ctx *boxContext) error {
 // Helpers
 // ---------------------------------------------------------------------------
 
-// packageEcoName extracts ecosystem and package name suitable for deps.dev URLs.
-// It uses Namespace()+Name() (not GetPackageName()) so that scoped npm packages,
-// composer vendor/name, and golang module paths are preserved without URL-escaping.
-// Uses the EffectivePURL (resolved PURL) to parse ecosystem and API-compatible name.
+// packageEcoName extracts ecosystem and the canonical single-segment package
+// name suitable for deps.dev (and other registry) URLs. Maven joins groupId
+// and artifactId with `:` (deps.dev / Maven Central convention); other
+// namespaced ecosystems join with `/`. The returned `name` is unescaped —
+// the URL builder is responsible for percent-encoding.
+//
+// Uses the EffectivePURL (resolved PURL) when available, falling back to
+// the original PURL.
 func packageEcoName(a *analysispkg.Analysis) (ecosystem, name string) {
 	if a == nil {
 		return "", ""
@@ -1109,10 +1113,15 @@ func packageEcoName(a *analysispkg.Analysis) (ecosystem, name string) {
 	if err != nil {
 		return "", ""
 	}
+	eco := parsed.GetEcosystem()
 	ns := parsed.Namespace()
 	name = parsed.Name()
 	if ns != "" {
-		name = ns + "/" + name
+		sep := "/"
+		if strings.EqualFold(eco, "maven") {
+			sep = ":"
+		}
+		name = ns + sep + name
 	}
-	return parsed.GetEcosystem(), name
+	return eco, name
 }
