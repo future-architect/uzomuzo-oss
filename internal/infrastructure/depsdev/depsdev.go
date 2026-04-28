@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/common/links"
 	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
@@ -241,7 +242,14 @@ func (c *DepsDevClient) fetchLatestRelease(ctx context.Context, purlStr string) 
 	}
 
 	// Map PURL ecosystem and package name to deps.dev expectations (breaking simplified API)
-	system, name := toDepsDevSystemAndName(parsed)
+	system, name, err := toDepsDevSystemAndName(parsed)
+	if err != nil {
+		if errors.Is(err, links.ErrUnsupportedEcosystem) {
+			slog.Debug("fetchLatestRelease: skipping unsupported ecosystem", "purl", purlStr, "error", err)
+			return ReleaseInfo{}, nil
+		}
+		return ReleaseInfo{Error: err}, fmt.Errorf("fetchLatestRelease: normalize PURL: %w", err)
+	}
 	origSystem, origName := system, name // capture before any normalization so we can log only when changed
 
 	// Track normalized module name locally (avoid context misuse for intra-function data)
@@ -1134,7 +1142,14 @@ func (c *DepsDevClient) FetchDependentCount(ctx context.Context, purlStr string)
 		}
 	}
 
-	system, name := toDepsDevSystemAndName(parsed)
+	system, name, err := toDepsDevSystemAndName(parsed)
+	if err != nil {
+		if errors.Is(err, links.ErrUnsupportedEcosystem) {
+			slog.Debug("dependents: skipping unsupported ecosystem", "purl", purlStr, "error", err)
+			return nil, nil
+		}
+		return nil, fmt.Errorf("dependents: normalize PURL: %w", err)
+	}
 	escapedVersion := neturl.PathEscape(version)
 	endpoint := fmt.Sprintf("%s/systems/%s/packages/%s/versions/%s:dependents", c.baseURL, system, name, escapedVersion)
 

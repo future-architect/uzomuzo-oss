@@ -3,6 +3,7 @@ package depsdev
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/future-architect/uzomuzo-oss/internal/common/links"
 	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
 
@@ -62,7 +64,14 @@ func (c *DepsDevClient) FetchDependencies(ctx context.Context, purlStr string) (
 		return nil, nil
 	}
 
-	system, name := toDepsDevSystemAndName(parsed)
+	system, name, err := toDepsDevSystemAndName(parsed)
+	if err != nil {
+		if errors.Is(err, links.ErrUnsupportedEcosystem) {
+			slog.Debug("dependencies: skipping unsupported ecosystem", "purl", purlStr, "error", err)
+			return nil, nil
+		}
+		return nil, fmt.Errorf("dependencies: normalize PURL: %w", err)
+	}
 	escapedVersion := neturl.PathEscape(version)
 	endpoint := fmt.Sprintf("%s/systems/%s/packages/%s/versions/%s:dependencies", c.baseURL, system, name, escapedVersion)
 
@@ -230,13 +239,21 @@ func (c *DepsDevClient) fetchDependenciesVersionFallback(ctx context.Context, pu
 // deprecated releases and skipVersion. Sort tiers: stable>prerelease, then
 // highest semver within each tier, then publishedAt desc for non-semver ties.
 //
-// Endpoint URL construction intentionally mirrors fetchLatestRelease in
-// depsdev.go (same system/name mapping, same /packages/{name} shape). We do
-// not extract a shared helper because fetchLatestRelease additionally performs
-// Go-module proxy normalization and computes full ReleaseInfo semantics, which
-// are unused here — the fallback only needs the raw version list.
+// Endpoint URL construction shares the system/name normalization with
+// fetchLatestRelease in depsdev.go via toDepsDevSystemAndName. The endpoint
+// shape (`/packages/{name}` without the version suffix) is the same, but
+// fetchLatestRelease additionally performs Go-module proxy normalization and
+// computes full ReleaseInfo semantics, which are unused here — the fallback
+// only needs the raw version list, so it stops at the system/name mapping.
 func (c *DepsDevClient) listFallbackVersions(ctx context.Context, parsed *commonpurl.ParsedPURL, skipVersion string) ([]string, error) {
-	system, name := toDepsDevSystemAndName(parsed)
+	system, name, err := toDepsDevSystemAndName(parsed)
+	if err != nil {
+		if errors.Is(err, links.ErrUnsupportedEcosystem) {
+			slog.Debug("dependencies_version_fallback: skipping unsupported ecosystem", "purl", parsed.Raw, "error", err)
+			return nil, nil
+		}
+		return nil, fmt.Errorf("fallback versions: normalize PURL: %w", err)
+	}
 	endpoint := fmt.Sprintf("%s/systems/%s/packages/%s", c.baseURL, system, name)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)

@@ -1,57 +1,47 @@
 package depsdev
 
 import (
-	"net/url"
+	"fmt"
 	"strings"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common/links"
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
 
-// toDepsDevSystemAndName normalizes a parsed PURL into deps.dev system and package name
-// components suitable for the systems/{system}/packages/{name} endpoint.
+// toDepsDevSystemAndName normalizes a parsed PURL into deps.dev system and
+// path-escaped package name components for the
+// `systems/{system}/packages/{name}` endpoint.
 //
-// Rules:
-//   - system mapping:
-//     golang -> go
-//     gem    -> rubygems
-//     others -> lowercased ecosystem
-//   - name construction:
-//     npm:   include scope when present ("@scope/name"), URL-escape when scoped; unscoped uses raw name
-//     maven: use "groupId:artifactId" URL-escaped (group may be empty)
-//     golang: use full path (namespace/name) URL-escaped via ParsedPURL.GetPackageName()
-//     others: use ParsedPURL.GetPackageName()
-func toDepsDevSystemAndName(p *purl.ParsedPURL) (system string, name string) {
-	ec := strings.ToLower(strings.TrimSpace(p.GetEcosystem()))
-	switch ec {
-	case "golang":
-		system = "go"
-		// GetPackageName() already returns URL-escaped namespace/name for golang
-		name = p.GetPackageName()
-		return
-	case "gem":
-		system = "rubygems"
-	case "composer":
-		// deps.dev uses "packagist" for composer ecosystem
-		system = "packagist"
-	default:
-		system = ec
+// It is a thin adapter over [links.EncodeDepsDevPath]: build the canonical
+// unescaped name from PURL components (Maven `groupId:artifactId`, npm
+// `@scope/name`, Go full module path) and let the shared helper handle the
+// allowlist + path encoding. Returns [links.ErrUnsupportedEcosystem] when
+// the PURL ecosystem is outside deps.dev's documented allowlist (composer,
+// hex, swift, …); callers should treat that as a graceful skip rather than
+// firing a request that 404s.
+func toDepsDevSystemAndName(p *purl.ParsedPURL) (system, name string, err error) {
+	if p == nil {
+		return "", "", fmt.Errorf("toDepsDevSystemAndName: nil PURL")
 	}
 
-	switch ec {
-	case "npm":
-		if ns := strings.TrimSpace(p.Namespace()); ns != "" {
-			name = url.QueryEscape(ns + "/" + p.Name())
-		} else {
-			name = p.Name()
-		}
+	eco := strings.ToLower(strings.TrimSpace(p.GetEcosystem()))
+
+	var raw string
+	switch eco {
 	case "maven":
-		if g := strings.TrimSpace(p.Namespace()); g != "" {
-			name = url.QueryEscape(g + ":" + p.Name())
-		} else {
-			name = url.QueryEscape(p.Name())
-		}
+		raw = links.JoinMavenName(p.Namespace(), p.Name())
+	case "npm":
+		raw = links.JoinNpmName(p.Namespace(), p.Name())
 	default:
-		name = p.GetPackageName()
+		// For golang, ParsedPURL.Name() already returns the full
+		// "namespace/name" path unescaped; for other ecosystems Name()
+		// is the bare package name.
+		raw = p.Name()
 	}
-	return
+
+	sys, encoded := links.EncodeDepsDevPath(eco, raw)
+	if sys == "" {
+		return "", "", fmt.Errorf("%w: %q (purl=%s)", links.ErrUnsupportedEcosystem, eco, p.Raw)
+	}
+	return sys, encoded, nil
 }
