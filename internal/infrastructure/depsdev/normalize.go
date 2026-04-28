@@ -15,10 +15,14 @@ import (
 // It is a thin adapter over [links.EncodeDepsDevPath]: build the canonical
 // unescaped name from PURL components (Maven `groupId:artifactId`, npm
 // `@scope/name`, Go full module path) and let the shared helper handle the
-// allowlist + path encoding. Returns [links.ErrUnsupportedEcosystem] when
-// the PURL ecosystem is outside deps.dev's documented allowlist (composer,
-// hex, swift, …); callers should treat that as a graceful skip rather than
-// firing a request that 404s.
+// allowlist + path encoding.
+//
+// Errors:
+//   - [links.ErrUnsupportedEcosystem] (wrapped): the PURL ecosystem is
+//     outside deps.dev's documented allowlist (composer, hex, swift, …);
+//     callers should treat this as a graceful skip.
+//   - Plain error (no sentinel): nil PURL or empty derived package name;
+//     callers should propagate as a hard error.
 func toDepsDevSystemAndName(p *purl.ParsedPURL) (system, name string, err error) {
 	if p == nil {
 		return "", "", fmt.Errorf("toDepsDevSystemAndName: nil PURL")
@@ -37,6 +41,10 @@ func toDepsDevSystemAndName(p *purl.ParsedPURL) (system, name string, err error)
 		// "namespace/name" path unescaped; for other ecosystems Name()
 		// is the bare package name.
 		raw = p.Name()
+	}
+
+	if raw == "" {
+		return "", "", fmt.Errorf("toDepsDevSystemAndName: empty package name (purl=%s)", p.Raw)
 	}
 
 	sys, encoded := links.EncodeDepsDevPath(eco, raw)

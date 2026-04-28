@@ -81,3 +81,22 @@ func TestToDepsDevSystemAndName_NilPURL(t *testing.T) {
 		t.Fatalf("expected empty system/name on error, got (%q, %q)", sys, name)
 	}
 }
+
+func TestToDepsDevSystemAndName_EmptyName(t *testing.T) {
+	// A failed Parse returns a ParsedPURL with a zero-value packageURL
+	// (empty ecosystem and name). The adapter must return a plain error —
+	// not ErrUnsupportedEcosystem — so callers propagate it as a hard
+	// error rather than a graceful skip.
+	parser := purl.NewParser()
+	parsed, _ := parser.Parse("pkg:npm/")
+	sys, name, err := toDepsDevSystemAndName(parsed)
+	if err == nil {
+		t.Fatalf("expected error for empty-name PURL")
+	}
+	if errors.Is(err, links.ErrUnsupportedEcosystem) {
+		t.Fatalf("empty-name error should NOT be ErrUnsupportedEcosystem, got: %v", err)
+	}
+	if sys != "" || name != "" {
+		t.Fatalf("expected empty system/name on error, got (%q, %q)", sys, name)
+	}
+}
