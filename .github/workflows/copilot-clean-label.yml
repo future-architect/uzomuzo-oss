@@ -126,19 +126,26 @@ jobs:
             [ -z "$pr" ] && continue
             echo "::group::PR #$pr"
 
-            # Single fetch of PR metadata: author + head SHA in one call.
+            # Single fetch of PR metadata: author + head SHA + labels + node_id.
             if ! pr_json=$(gh api "repos/$REPO/pulls/$pr" 2>&1); then
-              echo "::warning::failed to fetch PR metadata: $pr_json"
+              echo "::warning::PR #$pr: failed to fetch PR metadata: $pr_json"
               echo "::endgroup::"
               continue
             fi
             author=$(printf '%s' "$pr_json" | jq -r '.user.login')
             head_sha=$(printf '%s' "$pr_json" | jq -r '.head.sha')
+            head_repo=$(printf '%s' "$pr_json" | jq -r '.head.repo.full_name // ""')
 
-            # Defensive author check — schedule/workflow_dispatch reach here
-            # without the job-level `if:` guard.
+            # Defensive author + same-repo check — schedule/workflow_dispatch
+            # reach here without the job-level `if:` guard. Fork PRs cannot
+            # access GH_ACTIONS_TOKEN, so we skip them to avoid spurious 401s.
             if [ "$author" != "kotakanbe" ]; then
               echo "skip: author=$author"
+              echo "::endgroup::"
+              continue
+            fi
+            if [ "$head_repo" != "$REPO" ]; then
+              echo "skip: head_repo=$head_repo (not same-repo)"
               echo "::endgroup::"
               continue
             fi
@@ -147,7 +154,7 @@ jobs:
             # `gh api --paginate --jq` evaluates per-page, which would return
             # the per-page last instead of the global last.
             if ! reviews_json=$(gh api --paginate "repos/$REPO/pulls/$pr/reviews" 2>&1); then
-              echo "::warning::failed to fetch reviews: $reviews_json"
+              echo "::warning::PR #$pr: failed to fetch reviews: $reviews_json"
               echo "::endgroup::"
               continue
             fi
@@ -172,11 +179,9 @@ jobs:
               fi
             fi
 
-            if ! current_labels=$(gh pr view "$pr" --repo "$REPO" --json labels --jq '.labels[].name' 2>&1); then
-              echo "::warning::failed to fetch labels: $current_labels"
-              echo "::endgroup::"
-              continue
-            fi
+            # Reuse the labels already returned by the pulls/$pr fetch above
+            # rather than making a second API call (gh pr view --json labels).
+            current_labels=$(printf '%s' "$pr_json" | jq -r '.labels[].name')
             has_label=0
             if printf '%s\n' "$current_labels" | grep -qFx "$LABEL"; then
               has_label=1
@@ -238,14 +243,28 @@ jobs:
                     | sort_by(.created_at) | last
                     | .created_at // ""
                   ')
+                  # Compute age in minutes; treat both "no event ever" and
+                  # "unparseable timestamp" as definitely-stuck. `date -d` is
+                  # split out so a parse failure does not kill the arithmetic
+                  # under `set -euo pipefail`.
+                  refire_stuck=0
                   if [ -z "$last_request" ]; then
-                    age_min=99999
+                    echo "stuck detector: no prior review_requested event for Copilot"
+                    refire_stuck=1
+                  elif ! last_epoch=$(date -d "$last_request" +%s 2>/dev/null); then
+                    echo "::warning::PR #$pr: cannot parse last_request timestamp '$last_request' — treating as stuck"
+                    refire_stuck=1
                   else
-                    age_min=$(( ($(date +%s) - $(date -d "$last_request" +%s)) / 60 ))
+                    age_min=$(( ($(date +%s) - last_epoch) / 60 ))
+                    if [ "$age_min" -ge "$STUCK_THRESHOLD_MIN" ]; then
+                      refire_stuck=1
+                    else
+                      echo "stuck detector: last review_requested was ${age_min}min ago (< ${STUCK_THRESHOLD_MIN}min) — skipping refire"
+                    fi
                   fi
-                  if [ "$age_min" -ge "$STUCK_THRESHOLD_MIN" ]; then
+                  if [ "$refire_stuck" = "1" ]; then
                     pr_node_id=$(printf '%s' "$pr_json" | jq -r '.node_id')
-                    echo "stuck detector: last review_requested was ${age_min}min ago — refiring requestReviews"
+                    echo "stuck detector: refiring requestReviews"
                     if ! refire=$(gh api graphql \
                       -f query='mutation($pr:ID!,$bot:ID!){requestReviews(input:{pullRequestId:$pr, botIds:[$bot]}){pullRequest{id}}}' \
                       -f pr="$pr_node_id" \
@@ -254,8 +273,6 @@ jobs:
                     else
                       echo "stuck detector: refire ok"
                     fi
-                  else
-                    echo "stuck detector: last review_requested was ${age_min}min ago (< ${STUCK_THRESHOLD_MIN}min) — skipping refire"
                   fi
                 fi
                 ;;

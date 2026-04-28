@@ -152,10 +152,9 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
-  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #324, #338 — u.Hostname() for port-safe host comparison + go-import prefix matching + CI trigger path constraint enforcement + generous pagination page sizes)
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #324, #338 — u.Hostname() for port-safe host comparison + go-import prefix matching per Go module spec)
+  # defensive-coding: newly authored in copilot-learned-coding.instructions.md (PR #338 — Enforce Access Constraints on All CI Trigger Paths + generous pagination page sizes in verification queries)
   # security: promoted to security.instructions.md (PRs #276, #324 — normalize hostnames in SSRF denylists/cache keys: strip trailing dots + lowercase + IPv6 zone IDs before denylist checks and cache-key construction)
-  # defensive-coding (PR #324): pending — u.Hostname() vs u.Host for port-safe host comparison (first occurrence, flagged twice in same PR: resolve_vanity.go and resolve.go)
-  # defensive-coding (PR #324): pending — go-import prefix matching per Go module spec for multi-entry vanity pages (first occurrence)
   # comment-doc-drift (PR #324): already covered by promoted rule — dedup comment overstated resolver cache normalization scope (trailing slash/path casing)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #318, #324 — enforce HTTP client hardening on all code paths: CheckRedirect on injected clients, transient 408/429 classification, redirect off-by-one)
   # defensive-coding (PR #324): already covered by "Use Case-Insensitive Comparison for URL Components" — hostOf used case-sensitive HasPrefix for scheme detection
