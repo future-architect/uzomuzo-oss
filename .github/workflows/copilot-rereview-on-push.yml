@@ -1,0 +1,106 @@
+name: Copilot Re-review on Push
+
+# Force a Copilot re-review on every push to a PR. GitHub's auto-review-on-push
+# (the `copilot_code_review` ruleset rule) fires inconsistently in practice, so
+# we drive it explicitly. The standard `requested_reviewers` REST endpoint and
+# `gh pr edit --add-reviewer @copilot` only trigger an INITIAL request — once
+# Copilot has already reviewed, neither re-fires. The undocumented GraphQL
+# `requestReviews` mutation with `botIds` is the only call that re-triggers
+# Copilot after a previous review submission. See community discussion
+# github/community#186152.
+#
+# IMPORTANT — token choice: GITHUB_TOKEN can call this mutation and gets
+# `200 OK` back, but the mutation is **silently a no-op** for the Copilot
+# bot — the response carries valid data but no `review_requested` event
+# fires and Copilot never reviews. A user PAT (`GH_ACTIONS_TOKEN`) is
+# required for the mutation to actually take effect.
+#
+# When @claude pushes a fix immediately after Copilot has just submitted a
+# review, the mutation may also be silently deduped by Copilot's own
+# debouncing (mutation succeeds but no event). This workflow verifies the
+# mutation took effect and retries once with a 90s backoff. If both attempts
+# fail, the workflow emits a warning and exits successfully; the cron-based
+# stuck-PR detector in `copilot-clean-label.yml` will retry within ~10 min.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions: {}
+
+concurrency:
+  group: copilot-rereview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  request:
+    # Same-repo PRs by the maintainer only. Fork PRs cannot access
+    # `GH_ACTIONS_TOKEN`, and only kotakanbe-authored PRs participate in
+    # the Copilot/@claude automation pipeline (matches `copilot-review-fix.yml`).
+    if: >-
+      github.event.pull_request.user.login == 'kotakanbe'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Request Copilot review via GraphQL
+        env:
+          # PAT (kotakanbe). See the workflow header for why GITHUB_TOKEN
+          # cannot be used here. Same secret as `copilot-review-fix.yml`.
+          GH_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}
+          PR_NODE_ID: ${{ github.event.pull_request.node_id }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          # Copilot bot's GraphQL node ID. Globally stable; verified via
+          # `gh api graphql -f query='query{node(id:"BOT_kgDOCnlnWA"){__typename ... on Bot{login createdAt}}}'`
+          # (login: copilot-pull-request-reviewer, createdAt: 2024-07-16).
+          COPILOT_BOT_ID: BOT_kgDOCnlnWA
+        run: |
+          set -euo pipefail
+
+          echo "Requesting Copilot re-review for PR #$PR_NUMBER (node: $PR_NODE_ID)"
+
+          # Try up to 2 times with backoff. The first attempt fires immediately;
+          # if Copilot deduped (mutation returned OK but Copilot was not added
+          # to reviewRequests), wait 90s and try again to escape the dedup
+          # window. If the second attempt also fails, emit a warning and exit
+          # successfully — the cron detector will recover.
+          for attempt in 1 2; do
+            if ! response=$(gh api graphql \
+              -f query='mutation($pr:ID!,$bot:ID!){requestReviews(input:{pullRequestId:$pr, botIds:[$bot]}){pullRequest{id}}}' \
+              -f pr="$PR_NODE_ID" \
+              -f bot="$COPILOT_BOT_ID" 2>&1); then
+              echo "GraphQL requestReviews failed (attempt $attempt):"
+              echo "$response"
+              exit 1
+            fi
+            echo "attempt $attempt mutation response: $response"
+
+            # Allow propagation, then verify Copilot is actually pending review.
+            sleep 15
+            pending=$(gh api graphql \
+              -f query='query($o:String!,$n:String!,$pr:Int!){repository(owner:$o,name:$n){pullRequest(number:$pr){reviewRequests(first:100){nodes{requestedReviewer{__typename ... on Bot{login}}}}}}}' \
+              -f o="$REPO_OWNER" -f n="$REPO_NAME" -F pr="$PR_NUMBER" \
+              --jq '[.data.repository.pullRequest.reviewRequests.nodes[]?.requestedReviewer | select(.login == "copilot-pull-request-reviewer")] | length')
+
+            if [ "$pending" -gt 0 ]; then
+              echo "Verified: Copilot is in reviewRequests (attempt $attempt)."
+              exit 0
+            fi
+
+            echo "::warning::PR #$PR_NUMBER: mutation succeeded but Copilot not in reviewRequests (attempt $attempt) — likely dedup window"
+            if [ "$attempt" = "1" ]; then
+              echo "Waiting 90s before retry..."
+              sleep 90
+            fi
+          done
+
+          # Dedup detected on both attempts — emit a warning and exit 0.
+          # Marking the job as failed would put a permanent red X on the PR
+          # check list, which conflicts with the "fully automatic loop"
+          # contract. The cron detector in copilot-clean-label.yml is
+          # authoritative for recovery and will retry within ~10 min.
+          echo "::warning::PR #$PR_NUMBER: Copilot did not enter reviewRequests after 2 attempts (likely dedup window). The cron detector in copilot-clean-label.yml will retry within ~10 min."

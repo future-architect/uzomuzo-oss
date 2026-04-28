@@ -15,6 +15,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Reject Flags That Silently Have No Effect**: When a CLI flag only applies to a specific input mode (e.g., `--sample` for PURL list files), explicitly reject it with a clear error when the input is a different mode (e.g., go.mod or SBOM). Do not silently ignore the flag — users assume their flags take effect.
 - **Deduplicate Inputs Before Batch API Calls**: When accepting user-provided input lists (PURLs, URLs) that feed into batch API calls, deduplicate them while preserving first-seen order before processing. Duplicates cause redundant external calls, skew logging/counts, and waste resources.
 - **Normalize User-Provided Enum Values**: When accepting string values for format selectors, mode switches, or other enums from CLI flags, normalize with `strings.TrimSpace(strings.ToLower(...))` before validation. Case-sensitive matching rejects common inputs like `--format JSON` or `--format "json "`.
+- **Enforce Access Constraints on All CI Trigger Paths**: When a CI workflow guards against cross-repository or fork PRs on the `pull_request` trigger (e.g., `head.repo.full_name == github.repository`), enforce the same constraint in code paths reachable by other triggers (`schedule`, `workflow_dispatch`) that bypass the trigger-level guard. Unguarded paths can fire privileged operations (e.g., GraphQL mutations with a PAT) on fork PRs, causing auth failures or unintended side effects. Similarly, use generous page sizes (e.g., `first:100` instead of `first:20`) in paginated API verification queries to avoid false negatives that trigger unnecessary retries.
 - **Interface Contract Documentation Must Match Signature Semantics**: When documenting an interface method, the doc comment must accurately reflect the method's full signature — including error returns, nil semantics, and parameter constraints. If the signature returns `(T, error)`, do not document it as "returns nil/empty on failure" — state that errors may be returned and describe the caller's expected handling (e.g., non-fatal/graceful degradation). Mismatched contract documentation misleads implementers and callers.
 - **GitHub Actions `||` Treats Empty as Falsy**: When a workflow input documents "empty = X behavior", do not use `${{ inputs.foo || 'default' }}` — the `||` operator treats empty string as falsy and applies the default, preventing users from intentionally selecting the empty option. Instead, pass the raw input via an env var and apply defaults conditionally (e.g., only for scheduled triggers).
 - **Guard Downstream Jobs Against Missing Outputs**: When a CI job produces outputs that downstream jobs depend on (exit codes, flags), gate downstream jobs on `needs.<job>.outputs.<key> != ''` to prevent execution when the upstream job fails before setting outputs. Otherwise, empty values may be misinterpreted (e.g., empty exit code `""` compared with `!= "0"` evaluates to true, creating misleading reports).
@@ -47,6 +48,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Gate Fallback Logic on Error, Not Result Nilness**: When deciding whether to trigger fallback or retry logic, check the error value — not whether the result is nil. A nil result with nil error is a valid success case (e.g., zero matches found), and treating it as a failure triggers unnecessary retries or incorrect fallback paths.
 - **Minimize Allocations in Hot Paths**: In batch-processing or frequently-called functions, avoid unnecessary O(n) allocations when only a subset of data is needed. Cache results of expensive parsing calls when the same value is checked multiple times in a loop iteration, and iterate to a known cutoff point rather than materializing the full collection (e.g., iterate runes up to a count rather than converting the entire string to `[]rune`).
 - **Use Structured Parsers for Structured Identifier Properties**: When checking properties of structured identifiers (PURLs, URIs, import paths), use the appropriate parser rather than naive string operations (`strings.Contains`, `strings.Split`). For example, `strings.Contains(purl, "@")` misclassifies npm scoped packages like `pkg:npm/@scope/name` as versioned because `@` appears in the namespace. Use `packageurl.FromString(p).Version != ""` or an equivalent parser-based check.
+- **Use `u.Hostname()` for Port-Safe Host Comparison**: When comparing URL hostnames, use `u.Hostname()` instead of `u.Host`. The `Host` field includes the port component (e.g., `github.com:443`), so direct string comparison against a bare hostname fails silently, misclassifying URLs and triggering unnecessary fallback processing. Similarly, when parsing multi-entry `go-import`/`go-source` meta tags, select the entry whose import prefix most specifically matches the requested path per the Go module spec — blindly taking the first match can resolve to the wrong repository on monorepo vanity pages.
 - **Use Case-Insensitive Comparison for URL Components**: When comparing URL components (scheme, host), use case-insensitive comparison per RFC 3986 — schemes (`HTTP://`) and hosts (`GitHub.COM`) are case-insensitive. Normalize with `strings.ToLower` or `strings.EqualFold` before prefix checks or host matching to avoid double-prefixing or missed matches.
 - **Structured Logging Conventions**: When adding `slog` calls: use DEBUG level for routine per-item telemetry (reserve INFO for exceptional events); use `snake_case` for event names (not spaces) for consistency and filterability; choose field key names that accurately describe the data across all call sites (e.g., `"ref"` not `"purl"` when the function handles both PURLs and URLs).
 - **Match Validation Format Strings to Production Format Strings**: When a validation or check function mirrors a production function's output (e.g., marker validation vs. marker replacement), use the exact same format strings and delimiters. Mismatched formats allow invalid input to pass validation silently.
@@ -107,6 +109,11 @@ pending_patterns:
     pr: 318
     file: "internal/infrastructure/integration/populate_project_test.go"
     date: "2026-04-20"
+  - category: "defensive-coding"
+    summary: "Sanitize shell variables before embedding in GitHub Actions ::warning:: workflow commands — multi-line content or :: sequences break command parsing and can inject accidental workflow commands; emit a short single-line warning and log the full payload separately"
+    pr: 338
+    file: ".github/workflows/copilot-clean-label.yml"
+    date: "2026-04-28"
   - category: "comment-doc-drift"
     summary: "graphqlEndpoint comment claimed BaseURL controls 'both REST and GraphQL paths' but FetchRepoLanguages still hardcodes api.github.com — scope claims to the APIs that actually honor the knob"
     pr: 318
@@ -142,22 +149,17 @@ pending_patterns:
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
-  - category: "defensive-coding"
-    summary: "Use u.Hostname() instead of u.Host when comparing hostnames — u.Host includes the port component, so github.com:443 != github.com misclassifies URLs and triggers unnecessary processing"
-    pr: 324
-    file: "internal/infrastructure/integration/resolve_vanity.go"
-    date: "2026-04-21"
-  - category: "defensive-coding"
-    summary: "When parsing multi-entry go-import/go-source meta tags, select the most specific prefix matching the requested import path per the Go module spec — blindly taking the first match can resolve to the wrong repository on monorepo vanity pages"
-    pr: 324
-    file: "internal/infrastructure/govanityresolve/resolve.go"
-    date: "2026-04-21"
+  - category: "api-consistency"
+    summary: "Redundant gh pr view API call to fetch labels when pr_json from repos/.../pulls already contains label data — reuse already-fetched API response data instead of making redundant calls for a subset of the same information"
+    pr: 338
+    file: ".github/workflows/copilot-clean-label.yml"
+    date: "2026-04-27"
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #324, #338 — u.Hostname() for port-safe host comparison + go-import prefix matching per Go module spec)
+  # defensive-coding: newly authored in copilot-learned-coding.instructions.md (PR #338 — Enforce Access Constraints on All CI Trigger Paths + generous pagination page sizes in verification queries)
   # security: promoted to security.instructions.md (PRs #276, #324 — normalize hostnames in SSRF denylists/cache keys: strip trailing dots + lowercase + IPv6 zone IDs before denylist checks and cache-key construction)
-  # defensive-coding (PR #324): pending — u.Hostname() vs u.Host for port-safe host comparison (first occurrence, flagged twice in same PR: resolve_vanity.go and resolve.go)
-  # defensive-coding (PR #324): pending — go-import prefix matching per Go module spec for multi-entry vanity pages (first occurrence)
   # comment-doc-drift (PR #324): already covered by promoted rule — dedup comment overstated resolver cache normalization scope (trailing slash/path casing)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #318, #324 — enforce HTTP client hardening on all code paths: CheckRedirect on injected clients, transient 408/429 classification, redirect off-by-one)
   # defensive-coding (PR #324): already covered by "Use Case-Insensitive Comparison for URL Components" — hostOf used case-sensitive HasPrefix for scheme detection
