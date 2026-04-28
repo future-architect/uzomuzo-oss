@@ -176,6 +176,8 @@ func TestJoinNpmName(t *testing.T) {
 		{"unscoped", "", "lodash", "lodash"},
 		{"whitespace scope treated as empty", "  ", "lodash", "lodash"},
 		{"bare @ scope treated as empty", "@", "lodash", "lodash"},
+		{"double @ collapsed to single", "@@", "lodash", "lodash"},
+		{"triple @ scope collapsed to single", "@@@vue", "runtime-dom", "@vue/runtime-dom"},
 		{"empty name", "@types", "", ""},
 		{"both empty", "", "", ""},
 		{"trims surrounding whitespace", "  @types  ", "  node  ", "@types/node"},

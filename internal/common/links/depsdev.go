@@ -15,29 +15,12 @@ import (
 // 404 for these inputs.
 var ErrUnsupportedEcosystem = errors.New("ecosystem not supported by deps.dev")
 
-// normalizeDepsDevEcosystem maps a PURL ecosystem name to deps.dev's system
-// name, returning "" for ecosystems deps.dev does not host. The supported
-// list (Go, RubyGems, npm, Cargo, Maven, PyPI, NuGet) is documented at
-// https://docs.deps.dev/api/v3/.
-func normalizeDepsDevEcosystem(ecosystem string) string {
-	eco := strings.ToLower(strings.TrimSpace(ecosystem))
-	switch eco {
-	case "go", "golang":
-		return "go"
-	case "rubygems", "gem":
-		return "rubygems"
-	case "npm", "cargo", "maven", "pypi", "nuget":
-		return eco
-	default:
-		return ""
-	}
-}
-
 // EncodeDepsDevPath returns the deps.dev system identifier and a path-escaped
 // single-segment package name for `<system>/<encoded>`-style URLs and API
 // paths. Both values are "" when the ecosystem is outside deps.dev's
-// allowlist or when name is empty; callers that want a typed error rather
-// than a sentinel pair should wrap with [ErrUnsupportedEcosystem] (see
+// allowlist or when name is empty; callers that want a typed error should
+// wrap [ErrUnsupportedEcosystem] as the cause via
+// `fmt.Errorf("%w: ...", ErrUnsupportedEcosystem, ...)` (see
 // `internal/infrastructure/depsdev/normalize.go` for an example adapter).
 //
 // `name` MUST be the canonical, unescaped package identifier for the
@@ -75,21 +58,21 @@ func JoinMavenName(group, artifact string) string {
 }
 
 // JoinNpmName builds the canonical npm package name "@scope/name" (or just
-// "name" when scope is empty or "@" alone). The scope may be passed with or
-// without the leading "@" — both forms are accepted and the result always
-// starts with "@" when a non-empty scope is present. Returns "" when name
-// is empty.
+// "name" when scope is empty or made up only of "@" characters). The scope
+// may be passed with or without the leading "@" — leading "@" runs are
+// collapsed to exactly one, so callers passing PURL namespaces verbatim
+// (which always include "@") and callers passing bare scope names both
+// produce the same canonical form. Returns "" when name is empty.
 func JoinNpmName(scope, name string) string {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return ""
 	}
-	scope = strings.TrimSpace(scope)
-	if scope == "" || scope == "@" {
+	// Normalize to exactly one leading "@". Handles "scope" → "@scope",
+	// "@scope" → "@scope", and accidental "@@scope" / "@" → "@scope" / "".
+	scope = "@" + strings.TrimLeft(strings.TrimSpace(scope), "@")
+	if scope == "@" {
 		return name
-	}
-	if !strings.HasPrefix(scope, "@") {
-		scope = "@" + scope
 	}
 	return scope + "/" + name
 }
@@ -125,4 +108,22 @@ func BuildDepsDevVersionURL(ecosystem, name, version string) string {
 		return ""
 	}
 	return "https://deps.dev/" + system + "/" + encoded + "/" + url.PathEscape(version)
+}
+
+// normalizeDepsDevEcosystem maps a PURL ecosystem name to deps.dev's system
+// name, returning "" for ecosystems deps.dev does not host. The supported
+// list (Go, RubyGems, npm, Cargo, Maven, PyPI, NuGet) is documented at
+// https://docs.deps.dev/api/v3/.
+func normalizeDepsDevEcosystem(ecosystem string) string {
+	eco := strings.ToLower(strings.TrimSpace(ecosystem))
+	switch eco {
+	case "go", "golang":
+		return "go"
+	case "rubygems", "gem":
+		return "rubygems"
+	case "npm", "cargo", "maven", "pypi", "nuget":
+		return eco
+	default:
+		return ""
+	}
 }
