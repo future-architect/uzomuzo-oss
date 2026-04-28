@@ -109,6 +109,11 @@ pending_patterns:
     pr: 318
     file: "internal/infrastructure/integration/populate_project_test.go"
     date: "2026-04-20"
+  - category: "defensive-coding"
+    summary: "Sanitize shell variables before embedding in GitHub Actions ::warning:: workflow commands — multi-line content or :: sequences break command parsing and can inject accidental workflow commands; emit a short single-line warning and log the full payload separately"
+    pr: 338
+    file: ".github/workflows/copilot-clean-label.yml"
+    date: "2026-04-28"
   - category: "comment-doc-drift"
     summary: "graphqlEndpoint comment claimed BaseURL controls 'both REST and GraphQL paths' but FetchRepoLanguages still hardcodes api.github.com — scope claims to the APIs that actually honor the knob"
     pr: 318
