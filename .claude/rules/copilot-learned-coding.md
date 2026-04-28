@@ -15,6 +15,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Reject Flags That Silently Have No Effect**: When a CLI flag only applies to a specific input mode (e.g., `--sample` for PURL list files), explicitly reject it with a clear error when the input is a different mode (e.g., go.mod or SBOM). Do not silently ignore the flag — users assume their flags take effect.
 - **Deduplicate Inputs Before Batch API Calls**: When accepting user-provided input lists (PURLs, URLs) that feed into batch API calls, deduplicate them while preserving first-seen order before processing. Duplicates cause redundant external calls, skew logging/counts, and waste resources.
 - **Normalize User-Provided Enum Values**: When accepting string values for format selectors, mode switches, or other enums from CLI flags, normalize with `strings.TrimSpace(strings.ToLower(...))` before validation. Case-sensitive matching rejects common inputs like `--format JSON` or `--format "json "`.
+- **Doc Comments Must Match Type-Level Constraints**: When writing doc comments, ensure stated conditions are possible for the parameter types — do not document "nil" for non-pointer types (e.g., `string`, `int`), do not claim a knob controls APIs it does not actually affect, and do not name only a subset of the languages/contexts that use a shared constant. When test names or comment examples reference specific inputs, they must match the actual values under test. Comments that describe impossible states or overstate scope create false confidence and mislead future maintainers.
 - **Match `net/url` Function to Semantic Context**: When manipulating URL components, select the `net/url` function that matches the component's semantics — `u.Hostname()` (not `u.Host`) when only the hostname is needed (avoids including the port), `url.PathUnescape`/`url.PathEscape` (not `url.QueryUnescape`/`url.QueryEscape`) for URL path segments (avoids `+`-as-space misinterpretation). Mismatched functions silently corrupt values containing reserved characters like `:`, `+`, or `@`.
 - **Enforce Access Constraints on All CI Trigger Paths**: When a CI workflow guards against cross-repository or fork PRs on the `pull_request` trigger (e.g., `head.repo.full_name == github.repository`), enforce the same constraint in code paths reachable by other triggers (`schedule`, `workflow_dispatch`) that bypass the trigger-level guard. Unguarded paths can fire privileged operations (e.g., GraphQL mutations with a PAT) on fork PRs, causing auth failures or unintended side effects. Similarly, use generous page sizes (e.g., `first:100` instead of `first:20`) in paginated API verification queries to avoid false negatives that trigger unnecessary retries.
 - **Interface Contract Documentation Must Match Signature Semantics**: When documenting an interface method, the doc comment must accurately reflect the method's full signature — including error returns, nil semantics, and parameter constraints. If the signature returns `(T, error)`, do not document it as "returns nil/empty on failure" — state that errors may be returned and describe the caller's expected handling (e.g., non-fatal/graceful degradation). Mismatched contract documentation misleads implementers and callers.
@@ -91,21 +92,6 @@ Schema (YAML-in-Markdown):
 
 ```yaml
 pending_patterns:
-  - category: "comment-doc-drift"
-    summary: "Test header comment claimed 'no code changes needed' but test relied on newly added bare-decorator capture — comments must reflect current implementation scope"
-    pr: 298
-    file: "internal/infrastructure/treesitter/lang_python_test.go"
-    date: "2026-04-12"
-  - category: "comment-doc-drift"
-    summary: "Concurrency comment claimed 'bounded by httpclient transport limits' but implementation starts one goroutine per unique package name with no explicit cap — comments must accurately describe the concurrency model"
-    pr: 318
-    file: "internal/infrastructure/integration/populate_summary.go"
-    date: "2026-04-20"
-  - category: "comment-doc-drift"
-    summary: "Test case name claimed 'web vs data-jpa' but input PURL was spring-boot-starter-security — test names must match the actual input under test"
-    pr: 299
-    file: "internal/application/diet/service_test.go"
-    date: "2026-04-12"
   - category: "testing"
     summary: "Test failure branch accessed struct field through potentially-nil pointer in error message — split nil guard (t.Fatalf) from value assertion to prevent panic masking the actual regression"
     pr: 318
@@ -116,31 +102,6 @@ pending_patterns:
     pr: 338
     file: ".github/workflows/copilot-clean-label.yml"
     date: "2026-04-28"
-  - category: "comment-doc-drift"
-    summary: "graphqlEndpoint comment claimed BaseURL controls 'both REST and GraphQL paths' but FetchRepoLanguages still hardcodes api.github.com — scope claims to the APIs that actually honor the knob"
-    pr: 318
-    file: "internal/infrastructure/github/client.go"
-    date: "2026-04-20"
-  - category: "comment-doc-drift"
-    summary: "Precondition comment example said 'deps.dev Project lookup returned no repo URL' but actual condition is when deps.dev returned no Project at all — comment examples must match actual code conditions"
-    pr: 318
-    file: "internal/infrastructure/integration/populate_summary.go"
-    date: "2026-04-20"
-  - category: "comment-doc-drift"
-    summary: "Constant doc comment named only Python but the sentinel was reused for Java wildcard imports — doc comments on shared constants must enumerate all languages/contexts that use them"
-    pr: 298
-    file: "internal/infrastructure/treesitter/analyzer.go"
-    date: "2026-04-12"
-  - category: "comment-doc-drift"
-    summary: "Godoc said '≤200 chars' but NormalizeSummary enforces a 200-rune cap — use 'runes' (or 'Unicode code points') in docs when the implementation counts runes, not bytes"
-    pr: 318
-    file: "internal/domain/analysis/models.go"
-    date: "2026-04-19"
-  - category: "comment-doc-drift"
-    summary: "Test helper comment claimed 'REST and GraphQL endpoints both target' the httptest server but some REST callers hardcode api.github.com — scope claims to APIs that actually honor the configuration knob"
-    pr: 318
-    file: "internal/infrastructure/github/topics_test.go"
-    date: "2026-04-20"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
@@ -154,6 +115,7 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #298, #299, #318, #336 — doc comments must match type-level constraints: no "nil" for non-pointer types, scope claims must match actual implementation, test names/examples must match exercised code)
   # testing: promoted to testing-performance.instructions.md (PRs #318, #336 — keep tests network-independent by default: env-var opt-in for live probes, stub transports to avoid real HTTP calls)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #324, #336 — match net/url function to semantic context: u.Hostname() not u.Host, PathEscape not QueryEscape for path segments)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #324, #338 — u.Hostname() for port-safe host comparison + go-import prefix matching per Go module spec)
