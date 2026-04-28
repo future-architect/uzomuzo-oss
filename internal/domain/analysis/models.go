@@ -123,7 +123,13 @@ type VersionDetail struct {
 	PublishedAt  time.Time
 	IsPrerelease bool
 	// IsDeprecated indicates the upstream has deprecated / retracted / yanked this specific version.
-	// This is metadata-only (no automatic lifecycle assessment effect) and is propagated from deps.dev API Version.IsDeprecated.
+	// Propagated from deps.dev API Version.IsDeprecated.
+	//
+	// Consumed as a fallback EOL signal by eolevaluator's applyDepsDevDeprecated rule
+	// for ecosystems without authoritative ecosystem-specific rules (golang, gem, pub,
+	// hex, conan). For ecosystems with authoritative rules (npm, NuGet, Packagist,
+	// Maven, PyPI, cargo), this field remains informational and the ecosystem-specific
+	// rule's verdict takes precedence via short-circuiting in the rule chain.
 	IsDeprecated bool
 	// RegistryURL points to the registry page specific to this version (flattened from former VersionLinks)
 	RegistryURL string

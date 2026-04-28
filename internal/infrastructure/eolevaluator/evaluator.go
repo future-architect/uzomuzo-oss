@@ -9,6 +9,7 @@ import (
 
 	purl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/crates"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/nuget"
@@ -34,11 +35,12 @@ type npmDeprecationClient interface {
 }
 
 type Evaluator struct {
-	pg   packagistAbandonedClient
-	ng   nugetDeprecationClient
-	mvn  mavenRelocationClient
-	npm  npmDeprecationClient
-	pypi *pypi.Client
+	pg     packagistAbandonedClient
+	ng     nugetDeprecationClient
+	mvn    mavenRelocationClient
+	npm    npmDeprecationClient
+	pypi   *pypi.Client
+	crates *crates.Client
 	// rule chain (rebuilt each EvaluateBatch)
 	rules      []eolRuleFunc
 	maxWorkers int
@@ -58,6 +60,7 @@ func NewEvaluator(pg *packagist.Client) *Evaluator {
 		mvn:        maven.NewClient(),
 		npm:        npmjs.NewClient(),
 		pypi:       pypi.NewClient(),
+		crates:     crates.NewClient(),
 		maxWorkers: 12,
 	}
 }
@@ -76,6 +79,9 @@ func (e *Evaluator) SetNpmClient(npm npmDeprecationClient) { e.npm = npm }
 
 // SetPyPIClient overrides the default PyPI client (useful for tests).
 func (e *Evaluator) SetPyPIClient(pc *pypi.Client) { e.pypi = pc }
+
+// SetCratesClient overrides the default crates.io client (useful for tests).
+func (e *Evaluator) SetCratesClient(cc *crates.Client) { e.crates = cc }
 
 // (Removed) suppressions support eliminated; heuristic-based evidence gathering removed.
 
@@ -99,8 +105,17 @@ func (e *Evaluator) ensureRuleChain() {
 		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool { // PyPI classifier explicit inactivity
 			return e.applyPyPIClassifier(ctx, a, st)
 		},
+		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool { // PyPI version yanked
+			return e.applyPyPIYanked(ctx, a, st)
+		},
+		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool { // Cargo version yanked
+			return e.applyCargoYanked(ctx, a, st)
+		},
 		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool {
 			return e.applyMavenRelocation(ctx, a, st)
+		},
+		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool { // deps.dev IsDeprecated fallback (LAST: only fires when no authoritative rule fired)
+			return e.applyDepsDevDeprecated(ctx, a, st)
 		},
 	}
 }
@@ -349,6 +364,131 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 		return true
 	}
 	return false
+}
+
+// applyPyPIYanked checks if the PyPI stable version (or PURL version if stable
+// is unavailable) is yanked on PyPI and promotes to EOL on confirmation.
+// Yanked semantics: see pypi.Client.GetVersion (info.yanked OR all urls[].yanked).
+func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
+	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" || e.pypi == nil {
+		return false
+	}
+	pp := purl.NewParser()
+	parsed, err := pp.Parse(a.Package.PURL)
+	if err != nil || parsed.GetEcosystem() != "pypi" {
+		return false
+	}
+	name := strings.ToLower(parsed.Name())
+	version := ""
+	if a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
+		version = a.ReleaseInfo.StableVersion.Version
+	}
+	if version == "" {
+		version = parsed.Version()
+	}
+	if version == "" {
+		return false
+	}
+	info, found, err := e.pypi.GetVersion(ctx, name, version)
+	if err != nil {
+		slog.Error("eol: pypi version fetch failed", "name", name, "version", version, "error", err)
+		return false
+	}
+	if !found || info == nil || !info.Yanked {
+		return false
+	}
+	summary := "Version yanked on PyPI"
+	if info.YankedReason != "" {
+		summary = summary + ": " + info.YankedReason
+	}
+	status.State = domain.EOLEndOfLife
+	status.Evidences = append(status.Evidences, domain.EOLEvidence{
+		Source:     "PyPI",
+		Summary:    summary,
+		Reference:  "https://pypi.org/project/" + info.Name + "/" + info.Version + "/",
+		Confidence: 0.95,
+	})
+	slog.Debug("eol: pypi version yanked", "name", name, "version", version)
+	return true
+}
+
+// applyCargoYanked checks if the Cargo PURL version is yanked on crates.io.
+func (e *Evaluator) applyCargoYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
+	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" || e.crates == nil {
+		return false
+	}
+	pp := purl.NewParser()
+	parsed, err := pp.Parse(a.Package.PURL)
+	if err != nil || parsed.GetEcosystem() != "cargo" {
+		return false
+	}
+	name, version := parseCargoNameVersionFromPURL(a.Package.PURL)
+	if name == "" || version == "" {
+		return false
+	}
+	info, found, err := e.crates.GetVersion(ctx, name, version)
+	if err != nil {
+		slog.Error("eol: crates fetch failed", "name", name, "version", version, "error", err)
+		return false
+	}
+	if !found || info == nil || !info.Yanked {
+		return false
+	}
+	status.State = domain.EOLEndOfLife
+	status.Evidences = append(status.Evidences, domain.EOLEvidence{
+		Source:     "crates.io",
+		Summary:    "Version yanked on crates.io",
+		Reference:  "https://crates.io/crates/" + name + "/" + version,
+		Confidence: 1.0,
+	})
+	slog.Debug("eol: cargo version yanked", "name", name, "version", version)
+	return true
+}
+
+// depsDevFallbackEcosystems are the PURL ecosystems where deps.dev's
+// Version.IsDeprecated is the only EOL signal we currently consume.
+// Ecosystems with authoritative ecosystem-specific rules (npm, NuGet, Packagist,
+// Maven, PyPI, cargo) are intentionally excluded so that authoritative-vs-stale
+// discrepancies fall to the authoritative side.
+var depsDevFallbackEcosystems = map[string]struct{}{
+	"golang": {},
+	"gem":    {},
+	"pub":    {},
+	"hex":    {},
+	"conan":  {},
+}
+
+// applyDepsDevDeprecated is a fallback rule that promotes to EOL when deps.dev
+// reports Version.IsDeprecated for ecosystems lacking an authoritative
+// ecosystem-specific rule. deps.dev aggregates from each registry's upstream
+// metadata for these ecosystems, so confidence is set to 0.95 (authoritative
+// aggregator). Placed LAST in the rule chain so any ecosystem-specific rule
+// short-circuits before this fallback runs.
+func (e *Evaluator) applyDepsDevDeprecated(_ context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
+	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" {
+		return false
+	}
+	if a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || !a.ReleaseInfo.StableVersion.IsDeprecated {
+		return false
+	}
+	pp := purl.NewParser()
+	parsed, err := pp.Parse(a.Package.PURL)
+	if err != nil {
+		return false
+	}
+	eco := strings.ToLower(parsed.GetEcosystem())
+	if _, ok := depsDevFallbackEcosystems[eco]; !ok {
+		return false
+	}
+	status.State = domain.EOLEndOfLife
+	status.Evidences = append(status.Evidences, domain.EOLEvidence{
+		Source:     "deps.dev",
+		Summary:    "Marked deprecated in deps.dev",
+		Reference:  "https://deps.dev/" + eco + "/" + parsed.Name() + "/" + a.ReleaseInfo.StableVersion.Version,
+		Confidence: 0.95,
+	})
+	slog.Debug("eol: deps.dev deprecated fallback", "ecosystem", eco, "name", parsed.Name(), "version", a.ReleaseInfo.StableVersion.Version)
+	return true
 }
 
 // EvaluateBatch computes EOL status for the given analyses keyed by input key.
