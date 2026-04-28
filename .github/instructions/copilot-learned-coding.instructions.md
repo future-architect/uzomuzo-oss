@@ -110,6 +110,11 @@ pending_patterns:
     pr: 338
     file: ".github/workflows/copilot-clean-label.yml"
     date: "2026-04-27"
+  - category: "defensive-coding"
+    summary: "When short-circuiting a function that returns a result struct whose Error field is inspected downstream as a sentinel (e.g., batch assembly 'mark not found' logic), populate Error even on graceful skip paths — a zero-value struct with nil Error breaks sentinel checks and silently omits the entry from result maps"
+    pr: 340
+    file: "internal/infrastructure/depsdev/depsdev.go"
+    date: "2026-04-28"
 ```
 
 <!-- Promotion history (kept for audit trail):
