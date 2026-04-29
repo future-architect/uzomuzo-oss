@@ -67,7 +67,8 @@ var trailingEdgeOperator = regexp.MustCompile(`(?i)\s*\b(?:OR|AND)$`)
 //     "license-id WITH exception-id" string is normalized as a unit and will
 //     typically be reported as non-SPDX since no exception table exists yet.
 //   - The "+" suffix on a license-id (e.g., "Apache-2.0+") is preserved in Raw;
-//     normalization falls through to the heuristic, so the result is non-SPDX.
+//     normalization resolves it to the base SPDX ID via the generated alias table
+//     (e.g., "Apache-2.0+" → "Apache-2.0").
 func ParseExpression(raw string) ExpressionResult {
 	res := ExpressionResult{Raw: raw}
 	parts := splitFlatten(raw)
