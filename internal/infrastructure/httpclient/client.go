@@ -20,8 +20,8 @@ import (
 // 429 Too Many Requests responses are always retried up to MaxRetries —
 // independently of RetryOn5xx — because rate-limiting is a transient condition
 // and the server's Retry-After header carries the only timing signal we have.
-// Callers that need 429 to fail fast must construct their own retry policy via
-// DoWithRetryFunc.
+// This behavior is built into the retrying client, including DoWithRetryFunc, so
+// callers that need 429 to fail fast must set MaxRetries to 0 or bypass this client.
 type RetryConfig struct {
 	MaxRetries        int           // Maximum number of retries
 	BaseBackoff       time.Duration // Base backoff time
@@ -140,7 +140,7 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 		} // success
 
 		if resp.StatusCode == http.StatusTooManyRequests { // rate limit
-			body, _ := io.ReadAll(resp.Body)
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 			retryAfter := resp.Header.Get("Retry-After")
 			_ = resp.Body.Close() // best-effort cleanup
 			if attempt < c.config.MaxRetries {
@@ -182,7 +182,7 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 		} // non-retryable 4xx
 
 		if resp.StatusCode >= 500 && c.config.RetryOn5xx { // server error retry
-			body, _ := io.ReadAll(resp.Body)
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 			_ = resp.Body.Close() // best-effort cleanup
 			if attempt < c.config.MaxRetries {
 				backoff := c.calculateBackoff(attempt)
@@ -239,6 +239,12 @@ func (c *Client) rateLimitBackoff(retryAfter string, attempt int) time.Duration 
 	}
 	return c.calculateBackoff(attempt)
 }
+
+// maxErrorBodyBytes caps how much of a 429/5xx response body we read and
+// log/attach to errors. Rate-limited responses are retried, so an uncapped
+// read would accumulate memory and log volume across attempts. 64 KiB is
+// enough for diagnostic messages without risking large HTML error pages.
+const maxErrorBodyBytes = 64 << 10
 
 // maxRetryAfterSeconds caps a server-supplied delay-seconds value so that
 // pathological inputs (e.g., a header like "999999999999") cannot overflow
