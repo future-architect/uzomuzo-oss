@@ -11,7 +11,13 @@ import (
 // ExprNode is invalid and will panic in String / Leaves operations to surface
 // programmer errors early.
 type ExprNode struct {
-	License  *ExprLicense
+	// License is the leaf payload when this node represents a simple SPDX
+	// expression (license-id with optional "+" / WITH). Non-nil iff Compound
+	// is nil.
+	License *ExprLicense
+	// Compound is the operator-and-operands payload when this node represents
+	// "A OR B" / "A AND B" with two or more operands. Non-nil iff License is
+	// nil.
 	Compound *ExprCompound
 }
 
