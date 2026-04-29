@@ -32,7 +32,11 @@ type Client struct {
 
 	mu    sync.RWMutex
 	cache map[string]cacheEntry
-	ttl   time.Duration
+
+	versionMu    sync.RWMutex
+	versionCache map[string]versionCacheEntry // key: "name@version" (lowercased name)
+
+	ttl time.Duration
 
 	importCacheFields // wheel-based import name cache (lazily initialised)
 }
@@ -42,14 +46,20 @@ type cacheEntry struct {
 	ts   time.Time
 }
 
+type versionCacheEntry struct {
+	info *VersionInfo
+	ts   time.Time
+}
+
 // NewClient returns a PyPI client with sensible HTTP defaults.
 func NewClient() *Client { // nolint: revive
 	hc := &http.Client{Timeout: 5 * time.Second}
 	return &Client{
-		http:    httpclient.NewClient(hc, httpclient.RetryConfig{MaxRetries: 2, BaseBackoff: 400 * time.Millisecond, MaxBackoff: 2 * time.Second, RetryOn5xx: true, RetryOnNetworkErr: true}),
-		baseURL: "https://pypi.org",
-		cache:   make(map[string]cacheEntry),
-		ttl:     10 * time.Minute,
+		http:         httpclient.NewClient(hc, httpclient.RetryConfig{MaxRetries: 2, BaseBackoff: 400 * time.Millisecond, MaxBackoff: 2 * time.Second, RetryOn5xx: true, RetryOnNetworkErr: true}),
+		baseURL:      "https://pypi.org",
+		cache:        make(map[string]cacheEntry),
+		versionCache: make(map[string]versionCacheEntry),
+		ttl:          10 * time.Minute,
 	}
 }
 
@@ -121,6 +131,110 @@ type ProjectInfo struct {
 	Classifiers []string
 	ProjectURLs map[string]string // e.g. "Repository" -> "https://github.com/..."
 	HomePage    string
+}
+
+// VersionInfo is the minimal subset of PyPI version-level metadata we need.
+// Currently used for yanked-version detection during EOL evaluation.
+type VersionInfo struct {
+	Name         string
+	Version      string
+	Yanked       bool
+	YankedReason string // info.yanked_reason; optional
+}
+
+func (c *Client) getVersionCached(key string) (*VersionInfo, bool) {
+	if c.ttl <= 0 {
+		return nil, false
+	}
+	c.versionMu.RLock()
+	ent, ok := c.versionCache[key]
+	c.versionMu.RUnlock()
+	if !ok {
+		return nil, false
+	}
+	if time.Since(ent.ts) > c.ttl {
+		return nil, false
+	}
+	return ent.info, true
+}
+
+func (c *Client) setVersionCache(key string, info *VersionInfo) {
+	if c.ttl <= 0 || info == nil {
+		return
+	}
+	c.versionMu.Lock()
+	c.versionCache[key] = versionCacheEntry{info: info, ts: time.Now()}
+	c.versionMu.Unlock()
+}
+
+// GetVersion retrieves PyPI version-level metadata. Returns (info, found, err).
+// On 404 -> (nil, false, nil). Other non-200 -> error.
+//
+// Yanked is true when info.yanked is true OR every entry in urls[] is yanked.
+// Partial yanks (some distributions yanked, others not) are not considered
+// project-level EOL and yield Yanked = false.
+func (c *Client) GetVersion(ctx context.Context, name, version string) (*VersionInfo, bool, error) {
+	n := strings.TrimSpace(name)
+	v := strings.TrimSpace(version)
+	if n == "" || v == "" {
+		return nil, false, nil
+	}
+	lower := strings.ToLower(n)
+	key := lower + "@" + v
+	if info, ok := c.getVersionCached(key); ok {
+		slog.Debug("pypi: version cache hit", "name", lower, "version", v)
+		return info, true, nil
+	}
+	apiURL := fmt.Sprintf("%s/pypi/%s/%s/json", c.resolvedBaseURL(), url.PathEscape(n), url.PathEscape(v))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, false, fmt.Errorf("pypi version request build failed: %w", err)
+	}
+	req.Header.Set("User-Agent", pypiUserAgent)
+	resp, err := c.http.Do(ctx, req)
+	if err != nil {
+		return nil, false, fmt.Errorf("pypi version http failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, false, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, fmt.Errorf("pypi version http status %d", resp.StatusCode)
+	}
+	var raw struct {
+		Info struct {
+			Name         string `json:"name"`
+			Version      string `json:"version"`
+			Yanked       bool   `json:"yanked"`
+			YankedReason string `json:"yanked_reason"`
+		} `json:"info"`
+		URLs []struct {
+			Yanked bool `json:"yanked"`
+		} `json:"urls"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&raw); err != nil {
+		return nil, false, fmt.Errorf("pypi version decode failed: %w", err)
+	}
+	yanked := raw.Info.Yanked
+	if !yanked && len(raw.URLs) > 0 {
+		allYanked := true
+		for _, u := range raw.URLs {
+			if !u.Yanked {
+				allYanked = false
+				break
+			}
+		}
+		yanked = allYanked
+	}
+	info := &VersionInfo{
+		Name:         raw.Info.Name,
+		Version:      raw.Info.Version,
+		Yanked:       yanked,
+		YankedReason: raw.Info.YankedReason,
+	}
+	c.setVersionCache(key, info)
+	return info, true, nil
 }
 
 // GetProject retrieves project info. Returns (info, found, err).

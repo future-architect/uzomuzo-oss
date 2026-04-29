@@ -277,3 +277,145 @@ func TestExtractRepoURL(t *testing.T) {
 		})
 	}
 }
+
+func TestGetVersion_InfoYanked(t *testing.T) {
+	t.Parallel()
+	var capturedPath atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath.Store(r.URL.Path)
+		_, _ = fmt.Fprintln(w, `{"info":{"name":"requests","version":"2.30.0","yanked":true,"yanked_reason":"security"},"urls":[{"yanked":true}]}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient()
+	c.SetBaseURL(srv.URL)
+	c.SetCacheTTL(0)
+
+	info, found, err := c.GetVersion(context.Background(), "requests", "2.30.0")
+	if err != nil {
+		t.Fatalf("GetVersion failed: %v", err)
+	}
+	if !found || info == nil {
+		t.Fatalf("expected found=true with non-nil info")
+	}
+	if !info.Yanked {
+		t.Errorf("expected Yanked=true (info.yanked)")
+	}
+	if info.YankedReason != "security" {
+		t.Errorf("expected YankedReason=security, got %q", info.YankedReason)
+	}
+	if got := capturedPath.Load(); got != "/pypi/requests/2.30.0/json" {
+		t.Errorf("unexpected path: got %q, want /pypi/requests/2.30.0/json", got)
+	}
+}
+
+func TestGetVersion_AllUrlsYanked(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// info.yanked is false, but every distribution URL is yanked.
+		_, _ = fmt.Fprintln(w, `{"info":{"name":"pkg","version":"1.0.0","yanked":false},"urls":[{"yanked":true},{"yanked":true}]}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient()
+	c.SetBaseURL(srv.URL)
+	c.SetCacheTTL(0)
+
+	info, _, err := c.GetVersion(context.Background(), "pkg", "1.0.0")
+	if err != nil {
+		t.Fatalf("GetVersion failed: %v", err)
+	}
+	if !info.Yanked {
+		t.Errorf("expected Yanked=true when all urls[].yanked=true")
+	}
+}
+
+func TestGetVersion_PartialYank(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// One distribution yanked, others not. Project-level yanked=false expected.
+		_, _ = fmt.Fprintln(w, `{"info":{"name":"pkg","version":"1.0.0","yanked":false},"urls":[{"yanked":true},{"yanked":false}]}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient()
+	c.SetBaseURL(srv.URL)
+	c.SetCacheTTL(0)
+
+	info, _, err := c.GetVersion(context.Background(), "pkg", "1.0.0")
+	if err != nil {
+		t.Fatalf("GetVersion failed: %v", err)
+	}
+	if info.Yanked {
+		t.Errorf("expected Yanked=false on partial yank (one of two distributions)")
+	}
+}
+
+func TestGetVersion_NotFound(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	c := NewClient()
+	c.SetBaseURL(srv.URL)
+	c.SetCacheTTL(0)
+
+	info, found, err := c.GetVersion(context.Background(), "nope", "9.9.9")
+	if err != nil {
+		t.Fatalf("expected nil err on 404, got %v", err)
+	}
+	if found || info != nil {
+		t.Errorf("expected (nil,false,nil) on 404")
+	}
+}
+
+func TestGetVersion_Cache(t *testing.T) {
+	t.Parallel()
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		_, _ = fmt.Fprintln(w, `{"info":{"name":"x","version":"1.0.0","yanked":false},"urls":[]}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient()
+	c.SetBaseURL(srv.URL)
+	c.SetCacheTTL(5 * time.Minute)
+
+	ctx := context.Background()
+	if _, _, err := c.GetVersion(ctx, "x", "1.0.0"); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if _, _, err := c.GetVersion(ctx, "x", "1.0.0"); err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Errorf("expected single network hit, got %d", got)
+	}
+	// Different version → cache miss.
+	if _, _, err := c.GetVersion(ctx, "x", "2.0.0"); err != nil {
+		t.Fatalf("third call: %v", err)
+	}
+	if got := atomic.LoadInt32(&hits); got != 2 {
+		t.Errorf("expected new hit for different version, got %d", got)
+	}
+}
+
+func TestGetVersion_EmptyArgs(t *testing.T) {
+	t.Parallel()
+	c := NewClient()
+	c.SetBaseURL("http://invalid.example.invalid")
+
+	for _, tc := range []struct{ name, ver string }{
+		{"", "1.0.0"},
+		{"pkg", ""},
+		{"   ", "1.0.0"},
+	} {
+		info, found, err := c.GetVersion(context.Background(), tc.name, tc.ver)
+		if err != nil || found || info != nil {
+			t.Errorf("expected (nil,false,nil) for empty args (%q,%q); got (%+v,%v,%v)", tc.name, tc.ver, info, found, err)
+		}
+	}
+}
