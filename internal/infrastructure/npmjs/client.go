@@ -278,8 +278,7 @@ func (c *Client) GetDeprecation(ctx context.Context, namespace, name, version st
 				info.Message = msg
 				if succ := extractNpmSuccessor(msg); succ != "" {
 					// Self-reference suppression: compare normalized tokens ignoring case.
-					fullName := links.JoinNpmName(ns, pkg)
-					if !strings.EqualFold(succ, pkg) && !strings.EqualFold(succ, fullName) {
+					if !strings.EqualFold(succ, pkg) && !strings.EqualFold(succ, full) {
 						info.Successor = succ
 					}
 				}
