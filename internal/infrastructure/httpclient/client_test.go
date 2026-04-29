@@ -168,6 +168,28 @@ func TestDo_RateLimitRetriesExhaustedReturnsRateLimitError(t *testing.T) {
 	if !errors.As(err, &sErr) || sErr.Type != common.ErrorTypeRateLimit {
 		t.Fatalf("err type = %T %v, want RateLimitError", err, err)
 	}
+
+	// Assert diagnostic context fields are present so regressions that strip
+	// them are caught (Copilot review feedback).
+	wantCtx := map[string]interface{}{
+		"retry_after_header": "0",
+		"max_attempts":       c.config.MaxRetries + 1,
+		"status_code":        http.StatusTooManyRequests,
+	}
+	for k, want := range wantCtx {
+		got, ok := sErr.Context[k]
+		if !ok {
+			t.Errorf("ScorecardError.Context missing key %q", k)
+			continue
+		}
+		if got != want {
+			t.Errorf("ScorecardError.Context[%q] = %v (%T), want %v (%T)", k, got, got, want, want)
+		}
+	}
+	if _, ok := sErr.Context["request_url"]; !ok {
+		t.Error("ScorecardError.Context missing key \"request_url\"")
+	}
+
 	wantCalls := int32(c.config.MaxRetries + 1)
 	if got := atomic.LoadInt32(&calls); got != wantCalls {
 		t.Errorf("server call count = %d, want %d", got, wantCalls)
