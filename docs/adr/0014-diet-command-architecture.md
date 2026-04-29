@@ -102,7 +102,7 @@ diet takes a CycloneDX (or SPDX) SBOM as input rather than parsing ecosystem-spe
 
 ### tree-sitter for Multi-Language Static Analysis
 
-All languages use tree-sitter for coupling analysis via CGo (`smacker/go-tree-sitter` or `tree-sitter/go-tree-sitter`). No per-language special casing.
+All languages use tree-sitter for coupling analysis via CGo (`tree-sitter/go-tree-sitter`, the official binding maintained by the tree-sitter organization). No per-language special casing.
 
 **v0.1 languages:** Go, Python, JavaScript/TypeScript, Java
 
