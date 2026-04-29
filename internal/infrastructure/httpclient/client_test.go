@@ -235,17 +235,18 @@ func TestDo_RateLimitContextCancellationDuringWait(t *testing.T) {
 }
 
 // TestDo_RateLimitHTTPDateHeader verifies the end-to-end HTTP-date branch:
-// the server emits Retry-After as an IMF-fixdate, the client computes a
-// duration via time.Sub, and the retry succeeds.
+// the server emits Retry-After as an IMF-fixdate, the client parses it,
+// computes a non-positive wait via time.Sub, and the retry succeeds
+// without incurring a real wall-clock sleep.
 func TestDo_RateLimitHTTPDateHeader(t *testing.T) {
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := atomic.AddInt32(&calls, 1)
 		if n == 1 {
-			// http.TimeFormat has 1-second granularity, so construct a timestamp
-			// on a whole-second boundary and move it far enough into the future
-			// that formatting cannot collapse it back to the current second.
-			retryAt := time.Now().UTC().Truncate(time.Second).Add(2 * time.Second)
+			// Use a valid HTTP-date that is already in the past so this test
+			// still exercises the HTTP-date parsing branch end-to-end without
+			// slowing the test suite with a real sleep.
+			retryAt := time.Now().UTC().Add(-1 * time.Second)
 			w.Header().Set("Retry-After", retryAt.Format(http.TimeFormat))
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
@@ -257,7 +258,7 @@ func TestDo_RateLimitHTTPDateHeader(t *testing.T) {
 	c := NewClient(nil, RetryConfig{
 		MaxRetries:  3,
 		BaseBackoff: 1 * time.Millisecond,
-		MaxBackoff:  5 * time.Second, // generous so the HTTP-date is honored
+		MaxBackoff:  5 * time.Second,
 	})
 	req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
 	if err != nil {

@@ -222,8 +222,9 @@ func (c *Client) calculateBackoff(attempt int) time.Duration { // exponential ba
 // Honors the server's Retry-After header (per RFC 9110 §10.2.3) according to
 // the following precedence:
 //
-//  1. Header parses to a past or present HTTP-date (non-positive duration) →
-//     return 0 ("retry immediately"); do not fall through to exponential backoff.
+//  1. Header parses to a non-positive duration (for example, a past or present
+//     HTTP-date or delay-seconds=0) → return 0 ("retry immediately"); do not
+//     fall through to exponential backoff.
 //  2. Header parses and the resulting duration fits within MaxBackoff →
 //     return the exact duration.
 //  3. Header is missing, unparseable, or its duration exceeds MaxBackoff →
