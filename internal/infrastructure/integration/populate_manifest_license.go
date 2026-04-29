@@ -62,6 +62,9 @@ func (s *IntegrationService) enrichLicenseFromManifest(ctx context.Context, anal
 		group := strings.TrimSpace(parsed.Namespace())
 		artifact := strings.TrimSpace(parsed.Name())
 		version := strings.TrimSpace(parsed.Version())
+		if version == "" {
+			version = strings.TrimSpace(resolvedVersion(a))
+		}
 		if group == "" || artifact == "" || version == "" {
 			continue
 		}

@@ -311,6 +311,56 @@ func TestEnrichLicenseFromManifest_UnparseablePURL(t *testing.T) {
 	}
 }
 
+// TestEnrichLicenseFromManifest_VersionlessPURL verifies that a Maven analysis
+// whose PURL has no version is still enriched when ReleaseInfo provides a
+// usable version via resolvedVersion().
+func TestEnrichLicenseFromManifest_VersionlessPURL(t *testing.T) {
+	const pom = `<?xml version="1.0"?><project><licenses><license><name>MIT</name></license></licenses></project>`
+
+	var hits int
+	var hitsMu sync.Mutex
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitsMu.Lock()
+		hits++
+		hitsMu.Unlock()
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(pom))
+	}))
+	defer ts.Close()
+
+	mv := maven.NewClient()
+	mv.SetBaseURL(ts.URL)
+	svc := &IntegrationService{mavenClient: mv}
+
+	versionless := &domain.Analysis{
+		Package:        &domain.Package{PURL: "pkg:maven/com.example/widget", Ecosystem: "maven"},
+		ProjectLicense: domain.ResolvedLicense{Source: domain.LicenseSourceDepsDevProjectNonStandard, Raw: "Custom"},
+		ReleaseInfo:    &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Version: "2.0.0"}},
+	}
+	noVersion := &domain.Analysis{
+		Package:        &domain.Package{PURL: "pkg:maven/com.example/noversion", Ecosystem: "maven"},
+		ProjectLicense: domain.ResolvedLicense{Source: domain.LicenseSourceDepsDevProjectNonStandard, Raw: "x"},
+	}
+
+	svc.enrichLicenseFromManifest(context.Background(), map[string]*domain.Analysis{
+		"versionless": versionless,
+		"noversion":   noVersion,
+	})
+
+	if versionless.ProjectLicense.Identifier != "MIT" {
+		t.Errorf("versionless analysis should be enriched to MIT; got %+v", versionless.ProjectLicense)
+	}
+	if noVersion.ProjectLicense.Source != domain.LicenseSourceDepsDevProjectNonStandard {
+		t.Errorf("noversion analysis should be untouched; got source=%q", noVersion.ProjectLicense.Source)
+	}
+
+	hitsMu.Lock()
+	defer hitsMu.Unlock()
+	if hits != 1 {
+		t.Fatalf("expected exactly 1 POM fetch (versionless only), got %d", hits)
+	}
+}
+
 // TestApplyManifestLicenses_DisagreementLogged installs a structured slog
 // handler and asserts that a manifest disagreeing with an existing canonical
 // SPDX produces a "license_disagreement" record carrying both sources.
