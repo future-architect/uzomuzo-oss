@@ -88,19 +88,17 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 	rgClient := rubygems.NewClient()
 	pkgClient := packagist.NewClient()
 	pyClient := pypi.NewClient()
+	mvClient := maven.NewClient()
+	if u := cfg.Maven.BaseURL; strings.TrimSpace(u) != "" {
+		mvClient.SetBaseURL(u)
+		slog.Debug("Maven base URL configured", "base_url", u)
+	}
 	depsdevClient := depsdev.NewDepsDevClient(&cfg.DepsDev)
 	// Attach npmjs, RubyGems and Packagist clients to enable repository URL fallbacks
 	depsdevClient = depsdevClient.
 		WithNPM(npmjs.NewClient()).
 		WithNuGet(nuget.NewClient()).
-		WithMaven(func() *maven.Client {
-			mv := maven.NewClient()
-			if u := cfg.Maven.BaseURL; strings.TrimSpace(u) != "" {
-				mv.SetBaseURL(u)
-				slog.Debug("Maven base URL configured", "base_url", u)
-			}
-			return mv
-		}()).
+		WithMaven(mvClient).
 		WithRubyGems(rgClient).
 		WithPackagist(pkgClient).
 		WithPyPI(pyClient)
@@ -109,6 +107,7 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 		integration.WithRubyGemsClient(rgClient),
 		integration.WithPackagistClient(pkgClient),
 		integration.WithPyPIClient(pyClient),
+		integration.WithMavenClient(mvClient),
 	)
 
 	s := &AnalysisService{

@@ -96,6 +96,13 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// over the repo-level value, and they should be ecosystem-gated like enrichPyPISummary.
 	s.enrichPyPISummary(ctx, analyses)
 
+	// Manifest-level license fallback (best-effort): when deps.dev and GitHub
+	// `licenseInfo` left ProjectLicense or RequestedVersionLicenses missing /
+	// non-SPDX, consult the package's own ecosystem manifest. Currently wires
+	// Maven pom.xml; NuGet .nuspec and PyPI metadata land in follow-up PRs.
+	// Runs after enrichPyPISummary so all upstream license writes are visible.
+	s.enrichLicenseFromManifest(ctx, analyses)
+
 	// Dependent count + dependency count enrichment (best-effort, parallel).
 	// These are independent enrichment steps hitting different deps.dev endpoints,
 	// so running them concurrently halves wall-clock time for large batches (30k+ PURLs).

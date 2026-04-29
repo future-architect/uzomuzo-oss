@@ -473,6 +473,8 @@ func TestResolvedLicense_IsNonStandard(t *testing.T) {
 		{name: "project_nonstandard", in: ResolvedLicense{Identifier: "", Raw: "Custom License", Source: LicenseSourceDepsDevProjectNonStandard}, want: true},
 		{name: "github_nonstandard", in: ResolvedLicense{Identifier: "", Raw: "See LICENSE", Source: LicenseSourceGitHubProjectNonStandard}, want: true},
 		{name: "version_raw", in: ResolvedLicense{Identifier: "Proprietary", Raw: "Proprietary", Source: LicenseSourceDepsDevVersionRaw}, want: true},
+		{name: "maven_pom_nonstandard", in: ResolvedLicense{Identifier: "", Raw: "Custom Internal License", Source: LicenseSourceMavenPOMNonStandard}, want: true},
+		{name: "maven_pom_spdx", in: ResolvedLicense{Identifier: "Apache-2.0", Raw: "Apache-2.0", IsSPDX: true, Source: LicenseSourceMavenPOMSPDX}, want: false},
 		{name: "fallback_from_project", in: ResolvedLicense{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: LicenseSourceProjectFallback}, want: false},
 		{name: "derived_from_version", in: ResolvedLicense{Identifier: "BSD-3-Clause", Raw: "BSD-3-Clause", IsSPDX: true, Source: LicenseSourceDerivedFromVersion}, want: false},
 	}

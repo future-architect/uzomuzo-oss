@@ -39,6 +39,12 @@ const (
 	// GitHub detected version-level non-SPDX raw (reserved / future use)
 	LicenseSourceGitHubVersionRaw = "github-version-raw"
 
+	// Maven Central pom.xml <licenses> entry resolved to a canonical SPDX identifier
+	// (matched via license <name> normalization or <url> via SPDX seeAlso/aliases).
+	LicenseSourceMavenPOMSPDX = "maven-pom-spdx"
+	// Maven Central pom.xml <licenses> entry that yielded a non-SPDX value (raw <name> or <url> kept; Identifier empty).
+	LicenseSourceMavenPOMNonStandard = "maven-pom-nonstandard"
+
 	// Project → Version fallback: apply known project SPDX license to versions that only had non-SPDX / no data.
 	LicenseSourceProjectFallback = "project-fallback"
 	// Version → Project promotion: single version SPDX license elevated to project when project license unknown/non-standard.

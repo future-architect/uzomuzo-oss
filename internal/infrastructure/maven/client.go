@@ -108,6 +108,12 @@ type pomModel struct {
 			Message    string `xml:"message"`
 		} `xml:"relocation"`
 	} `xml:"distributionManagement"`
+	Licenses struct {
+		License []struct {
+			Name string `xml:"name"`
+			URL  string `xml:"url"`
+		} `xml:"license"`
+	} `xml:"licenses"`
 	Properties pomProperties `xml:"properties"`
 }
 
