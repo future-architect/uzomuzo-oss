@@ -2,6 +2,7 @@ package licenses
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -57,6 +58,18 @@ func TestParseExpression(t *testing.T) {
 		{
 			name:        "and_mixed_case",
 			input:       "MIT And Apache-2.0",
+			wantRaws:    []string{"MIT", "Apache-2.0"},
+			wantSPDXIDs: []string{"MIT", "Apache-2.0"},
+		},
+		{
+			name:        "and_lowercase",
+			input:       "MIT and Apache-2.0",
+			wantRaws:    []string{"MIT", "Apache-2.0"},
+			wantSPDXIDs: []string{"MIT", "Apache-2.0"},
+		},
+		{
+			name:        "multiple_spaces_around_operator",
+			input:       "MIT   OR   Apache-2.0",
 			wantRaws:    []string{"MIT", "Apache-2.0"},
 			wantSPDXIDs: []string{"MIT", "Apache-2.0"},
 		},
@@ -123,7 +136,9 @@ func TestParseExpression(t *testing.T) {
 			wantSPDXIDs: []string{"Apache-2.0"},
 		},
 		{
-			name:        "consecutive_operators_skip_empty_segments",
+			// The first " OR " is the matched operator; the residual "OR MIT"
+			// segment then has its leading "OR " stripped by trimEdgeOperators.
+			name:        "operator_after_split_is_trimmed_as_edge",
 			input:       "Apache-2.0 OR OR MIT",
 			wantRaws:    []string{"Apache-2.0", "MIT"},
 			wantSPDXIDs: []string{"Apache-2.0", "MIT"},
@@ -152,6 +167,56 @@ func TestParseExpression(t *testing.T) {
 			wantRaws:    []string{"MIT", "Apache-2.0", "BSD-3-Clause"},
 			wantSPDXIDs: []string{"MIT", "Apache-2.0", "BSD-3-Clause"},
 		},
+		{
+			// Asymmetric handling pinned: open-only paren keeps the prefix
+			// attached because no top-level OR/AND can match at depth 0.
+			// Acceptable for v1; reconsider if real-world data shows demand.
+			name:        "unbalanced_open_paren_collapses_to_one_operand",
+			input:       "(MIT OR Apache-2.0",
+			wantRaws:    []string{"(MIT OR Apache-2.0"},
+			wantSPDXIDs: []string{""},
+		},
+		{
+			// Asymmetric handling pinned: close-only paren is treated as part
+			// of the trailing operand because depth never goes positive.
+			name:        "unbalanced_close_paren_kept_on_trailing_operand",
+			input:       "MIT OR Apache-2.0)",
+			wantRaws:    []string{"MIT", "Apache-2.0)"},
+			wantSPDXIDs: []string{"MIT", ""},
+		},
+		{
+			// Defensive: hyphenated identifiers starting with OR-/AND- must
+			// not be stripped by trimEdgeOperators. SPDX has no current entry
+			// like this, but a future custom alias could.
+			name:        "or_prefixed_identifier_not_stripped",
+			input:       "OR-tools",
+			wantRaws:    []string{"OR-tools"},
+			wantSPDXIDs: []string{""},
+		},
+		{
+			name:        "and_prefixed_identifier_not_stripped",
+			input:       "AND-license",
+			wantRaws:    []string{"AND-license"},
+			wantSPDXIDs: []string{""},
+		},
+		{
+			// Pathological input over the length cap returns no operands so
+			// recursion / regex passes cannot be amplified.
+			name:        "oversized_input_yields_no_operands",
+			input:       strings.Repeat("X", maxExpressionLength+1),
+			wantRaws:    nil,
+			wantSPDXIDs: nil,
+		},
+		{
+			// Boundary: input of exactly maxExpressionLength must still parse.
+			// Pads "MIT" to the cap so the parser produces a single operand
+			// (heuristic, non-SPDX) rather than tripping the guard. Locks in
+			// the strict ">" comparison against future "≥" regressions.
+			name:        "input_at_cap_is_accepted",
+			input:       "MIT" + strings.Repeat("X", maxExpressionLength-3),
+			wantRaws:    []string{"MIT" + strings.Repeat("X", maxExpressionLength-3)},
+			wantSPDXIDs: []string{""},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -179,13 +244,65 @@ func TestParseExpression(t *testing.T) {
 	}
 }
 
-func TestParseExpression_NoassertionMatchType(t *testing.T) {
-	got := ParseExpression("NOASSERTION")
-	if len(got.Operands) != 1 {
-		t.Fatalf("expected 1 operand, got %d", len(got.Operands))
+func TestParseExpression_OperandMatchType(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantTypes []LicenseMatchType
+	}{
+		{name: "noassertion", input: "NOASSERTION", wantTypes: []LicenseMatchType{MatchNoAssertion}},
+		{name: "exact_canonical", input: "Apache-2.0", wantTypes: []LicenseMatchType{MatchCanonicalExact}},
+		{name: "casefold_canonical", input: "apache-2.0", wantTypes: []LicenseMatchType{MatchCanonicalCaseFold}},
+		{name: "alias_full_name", input: "Apache License 2.0", wantTypes: []LicenseMatchType{MatchAlias}},
+		{name: "heuristic_unknown_with_clause", input: "GPL-2.0-only WITH Classpath-exception-2.0", wantTypes: []LicenseMatchType{MatchHeuristic}},
+		{name: "compound_mixed_match_types", input: "Apache-2.0 OR Apache License 2.0", wantTypes: []LicenseMatchType{MatchCanonicalExact, MatchAlias}},
 	}
-	if got.Operands[0].Normalization.MatchType != MatchNoAssertion {
-		t.Errorf("MatchType = %v, want MatchNoAssertion", got.Operands[0].Normalization.MatchType)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseExpression(tt.input)
+			if len(got.Operands) != len(tt.wantTypes) {
+				t.Fatalf("operand count = %d, want %d (operands=%+v)", len(got.Operands), len(tt.wantTypes), got.Operands)
+			}
+			for i, want := range tt.wantTypes {
+				if got.Operands[i].Normalization.MatchType != want {
+					t.Errorf("operand[%d].MatchType = %v, want %v", i, got.Operands[i].Normalization.MatchType, want)
+				}
+			}
+		})
+	}
+}
+
+// TestParseExpression_LongChainTerminates locks in that a long flat OR chain
+// completes without panic and yields the expected operand count. Recursion
+// depth on a flat chain is shallow (operators are found in a single pass),
+// so this guards regex-pass work and operand accumulation rather than stack
+// growth from nesting.
+func TestParseExpression_LongChainTerminates(t *testing.T) {
+	const operandCount = 1024
+	parts := make([]string, operandCount)
+	for i := range parts {
+		parts[i] = "MIT"
+	}
+	got := ParseExpression(strings.Join(parts, " OR "))
+	if len(got.Operands) != operandCount {
+		t.Fatalf("operand count = %d, want %d", len(got.Operands), operandCount)
+	}
+}
+
+// TestParseExpression_DeepNestingTerminates drives the iterative paren-strip
+// loop inside splitFlatten with deeply nested but well-formed input. Each
+// loop pass peels one paren pair until the inner identifier is exposed; no
+// top-level operators are present, so this complements the flat-chain test
+// (which exercises operator-found recursion) rather than duplicating it.
+func TestParseExpression_DeepNestingTerminates(t *testing.T) {
+	const depth = 512
+	input := strings.Repeat("(", depth) + "MIT" + strings.Repeat(")", depth)
+	got := ParseExpression(input)
+	if len(got.Operands) != 1 {
+		t.Fatalf("operand count = %d, want 1 (operands=%+v)", len(got.Operands), got.Operands)
+	}
+	if got.Operands[0].Raw != "MIT" {
+		t.Errorf("operand[0].Raw = %q, want %q", got.Operands[0].Raw, "MIT")
 	}
 }
 

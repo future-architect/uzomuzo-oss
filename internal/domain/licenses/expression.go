@@ -32,45 +32,71 @@ type ExpressionResult struct {
 	Operands []ExpressionOperand
 }
 
-// expressionSplitter matches SPDX OR/AND operators bounded by whitespace.
-// The (?i) flag makes the match case-insensitive per SPDX spec; \s+ on both
-// sides ensures literal substrings within identifiers are not split (e.g.,
-// no SPDX ID currently contains " OR " or " AND " as a substring).
+// expressionSplitter matches SPDX OR/AND operators (case-insensitive) bounded
+// by ASCII whitespace on both sides. Identifiers without surrounding whitespace
+// are never split, so substrings like "FOR-MIT" or "LICENSE-OR-FREE" stay
+// intact. Unicode whitespace (e.g. NBSP) is not recognized as a separator —
+// SPDX expressions in practice use ASCII whitespace only.
 var expressionSplitter = regexp.MustCompile(`(?i)\s+(?:OR|AND)\s+`)
 
-// leadingEdgeOperator matches a stray OR/AND token at the start of a segment
-// (with any trailing whitespace), so that malformed inputs like "OR Apache-2.0"
-// or recursion segments like "OR MIT" (left over after splitting) yield a
-// clean operand.
-var leadingEdgeOperator = regexp.MustCompile(`(?i)^(?:OR|AND)\b\s*`)
+// leadingEdgeOperator matches a stray OR/AND token at the start of a segment,
+// requiring trailing whitespace or end-of-string after the operator so that
+// hyphenated identifiers like "OR-tools" or "AND-license" are not stripped.
+var leadingEdgeOperator = regexp.MustCompile(`(?i)^(?:OR|AND)(?:\s+|$)`)
 
-// trailingEdgeOperator matches a stray OR/AND token at the end of a segment.
-var trailingEdgeOperator = regexp.MustCompile(`(?i)\s*\b(?:OR|AND)$`)
+// trailingEdgeOperator matches a stray OR/AND token at the end of a segment,
+// requiring leading whitespace or start-of-string before the operator (mirror
+// of leadingEdgeOperator).
+var trailingEdgeOperator = regexp.MustCompile(`(?i)(?:^|\s+)(?:OR|AND)$`)
+
+// maxExpressionLength caps the input size accepted by ParseExpression. SPDX
+// license expressions in practice are at most a few hundred characters (the
+// longest common form is a 4-license dual/triple compound). Anything larger
+// is treated as untrusted input and returns no operands so that quadratic
+// recursion / regex passes cannot be amplified by adversarial metadata
+// (e.g., a malformed ClearlyDefined.io response).
+const maxExpressionLength = 64 * 1024
 
 // ParseExpression parses an SPDX license expression and normalizes each operand.
 //
 // Algorithm (v1):
-//  1. Trim outer whitespace.
-//  2. Strip outer-paren wrapping repeatedly (handles "((MIT))" → "MIT") when the
-//     parens balance correctly across the entire string.
-//  3. Find OR/AND operator positions at paren depth 0.
-//  4. Split into segments; recurse on each segment to flatten nested expressions
-//     such as "EPL-1.0 OR (LGPL-2.1 OR LGPL-3.0)" into a single 3-operand list.
+//  1. Reject inputs longer than maxExpressionLength: Operands is nil and Raw
+//     holds the original input verbatim. Callers that ingest untrusted data
+//     should treat the raw oversized payload accordingly (log truncated).
+//  2. Trim outer whitespace, then repeatedly strip outer-paren wrapping and
+//     trim stray edge OR/AND tokens until both reach a fixed point.
+//     "((MIT))" → "MIT"; "OR MIT" → "MIT".
+//  3. Find OR/AND operator matches via expressionSplitter, then keep only
+//     those whose start position is at paren depth 0.
+//  4. Split into segments at the surviving operator positions; recurse on
+//     each segment so nested expressions such as
+//     "EPL-1.0 OR (LGPL-2.1 OR LGPL-3.0)" flatten to a 3-operand list.
 //  5. For each operand, run Normalize.
+//
+// The order of returned operands matches the input. Future versions may add
+// operator-kind metadata as additional fields; existing callers will not
+// break.
 //
 // Limitations (v1):
 //   - Mixed AND/OR is flattened into a single operand list. Operator structure
 //     and precedence are not preserved (no AST). Consumers that need to
 //     distinguish AND vs OR semantics for legal compliance must not rely on
 //     this parser alone.
-//   - "WITH" clauses stay attached to the preceding license-id; the combined
-//     "license-id WITH exception-id" string is normalized as a unit and will
-//     typically be reported as non-SPDX since no exception table exists yet.
-//   - The "+" suffix on a license-id (e.g., "Apache-2.0+") is preserved in Raw;
-//     normalization resolves it to the base SPDX ID via the generated alias table
-//     (e.g., "Apache-2.0+" → "Apache-2.0").
+//   - "WITH" clauses currently stay attached to the preceding license-id; the
+//     combined "license-id WITH exception-id" string is normalized as a unit.
+//     SPDX matching of license/exception pairs is out of scope for v1.
+//   - The "+" suffix on a license-id is preserved in operand Raw. Whether the
+//     operand normalizes to SPDX depends on the generated SPDX table — e.g.,
+//     "Apache-2.0+" is mapped back to "Apache-2.0" while "GPL-2.0+" is itself
+//     a canonical SPDX ID. The parser does not interpret "+" as "or-later"
+//     semantically; consumers needing that semantic must inspect Raw.
+//   - Operator boundaries require ASCII whitespace; Unicode whitespace
+//     (NBSP, ideographic space) is not recognized as a separator.
 func ParseExpression(raw string) ExpressionResult {
 	res := ExpressionResult{Raw: raw}
+	if len(raw) > maxExpressionLength {
+		return res
+	}
 	parts := splitFlatten(raw)
 	if len(parts) == 0 {
 		return res
