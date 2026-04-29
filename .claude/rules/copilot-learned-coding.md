@@ -115,6 +115,11 @@ pending_patterns:
     file: "internal/infrastructure/treesitter/analyzer.go"
     date: "2026-04-29"
   - category: "testing"
+    summary: "When generating time-based test fixtures with coarse-grained formatters (e.g., http.TimeFormat at 1-second granularity), truncate to the format boundary and add enough offset (e.g., 2s) so the formatted value is deterministically in the expected range — sub-granularity offsets (50ms) can collapse to the current or past second"
+    pr: 359
+    file: "internal/infrastructure/httpclient/client_test.go"
+    date: "2026-04-29"
+  - category: "testing"
     summary: "Assert diagnostic context fields on typed error structs (e.g., ScorecardError.Context) in tests — checking only error type and call count misses regressions that silently strip diagnostic metadata"
     pr: 359
     file: "internal/infrastructure/httpclient/client_test.go"
