@@ -115,6 +115,11 @@ pending_patterns:
     instances: 2
     file: "internal/infrastructure/integration/populate_manifest_license.go"
     date: "2026-04-29"
+  - category: "defensive-coding"
+    summary: "When a conditional replacement function overwrites low-quality data (non-SPDX) with a new source, guard the write on the new source being strictly higher quality (e.g., contains at least one SPDX entry) — replacing non-standard with non-standard is a no-op that wastes provenance"
+    pr: 345
+    file: "internal/infrastructure/integration/populate_manifest_license.go"
+    date: "2026-04-29"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
