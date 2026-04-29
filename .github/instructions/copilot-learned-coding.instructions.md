@@ -110,8 +110,9 @@ pending_patterns:
     file: "internal/infrastructure/maven/license.go"
     date: "2026-04-29"
   - category: "concurrency"
-    summary: "Bound best-effort fan-out goroutines with a semaphore to prevent unbounded outbound HTTP concurrency on large batches — caps FD/memory pressure and reduces 429 risk"
-    pr: 345
+    summary: "Acquire bounded-concurrency semaphore before launching goroutine (not inside it) and select on ctx.Done to stop dispatch on cancellation — avoids spawning thousands of parked goroutines and respects context lifecycle"
+    prs: [345]
+    instances: 2
     file: "internal/infrastructure/integration/populate_manifest_license.go"
     date: "2026-04-29"
   - category: "whitespace-agnostic-matching"
@@ -137,7 +138,8 @@ pending_patterns:
   # naming-consistency (PR #345): trivial spelling fix ("licence" → "license"), not recorded as pattern
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PR #345 round 2 — normalize config values once before guard and use: TrimSpace in guard but passing untrimmed value to SetBaseURL)
   # testing (PR #345 round 2): already covered by "Assert Exact Computed Values, Not Just Thresholds" in testing-performance.instructions.md — assert exact POM fetch count, not minimum
-  # concurrency (PR #345 round 2): accumulated (1 instance) — bound fan-out goroutines with semaphore to prevent unbounded HTTP concurrency
+  # concurrency (PR #345 rounds 2+3): accumulated (2 instances) — bound fan-out with semaphore before goroutine launch + ctx.Done select
+  # comment-doc-drift (PR #345 round 3): already covered by "Comment-Code Consistency" rule — Raw precedence comment inconsistent with implementation
   # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #298, #299, #318, #336 — doc comments must match type-level constraints: no "nil" for non-pointer types, scope claims must match actual implementation, test names/examples must match exercised code)
   # testing: promoted to testing-performance.instructions.md (PRs #318, #336 — keep tests network-independent by default: env-var opt-in for live probes, stub transports to avoid real HTTP calls)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #324, #336 — match net/url function to semantic context: u.Hostname() not u.Host, PathEscape not QueryEscape for path segments)
