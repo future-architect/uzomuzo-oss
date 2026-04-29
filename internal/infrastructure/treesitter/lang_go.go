@@ -5,14 +5,14 @@ package treesitter
 import (
 	"strings"
 
-	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/golang"
+	sitter "github.com/tree-sitter/go-tree-sitter"
+	tree_sitter_go "github.com/tree-sitter/tree-sitter-go/bindings/go"
 )
 
 // registerGoConfig registers the Go language configuration on the Analyzer.
 func registerGoConfig(a *Analyzer) {
 	a.configs[langGo] = &langConfig{
-		language:    golang.GetLanguage(),
+		language:    loadLanguage(tree_sitter_go.Language()),
 		importQuery: `(import_spec path: (interpreted_string_literal) @import)`,
 		callQuery: strings.Join([]string{
 			`(selector_expression operand: (identifier) @pkg field: (field_identifier) @field)`,
@@ -87,10 +87,10 @@ func (a *Analyzer) handleGoImport(
 	// Check for explicit alias: parent node is import_spec with a name child.
 	parent := node.Parent()
 	alias := ""
-	if parent != nil && parent.Type() == "import_spec" {
+	if parent != nil && parent.Kind() == "import_spec" {
 		nameNode := parent.ChildByFieldName("name")
 		if nameNode != nil {
-			alias = nameNode.Content(src)
+			alias = nameNode.Utf8Text(src)
 		}
 	}
 

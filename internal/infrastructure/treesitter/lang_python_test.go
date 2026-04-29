@@ -9,6 +9,49 @@ import (
 	"testing"
 )
 
+// TestAnalyzer_PythonMultiByteSource verifies that non-ASCII characters in the
+// source file (comments, string literals) do not corrupt byte-range extraction
+// for surrounding identifiers. The official binding's Utf8Text computes node
+// text from byte ranges, so a non-ASCII string adjacent to an import statement
+// could in principle shift offsets for downstream nodes — this test pins the
+// behavior to "exactly one import, exactly one call site" so any regression
+// surfaces immediately.
+func TestAnalyzer_PythonMultiByteSource(t *testing.T) {
+	dir := t.TempDir()
+	src := []byte(`# 日本語コメント — references requests but is not an import
+description = "リクエストを送る"
+import requests
+
+requests.get("https://example.com/" + description)
+`)
+	if err := os.WriteFile(filepath.Join(dir, "main.py"), src, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	importPaths := map[string][]string{
+		"pkg:pypi/requests@2.31.0": {"requests"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:pypi/requests@2.31.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for requests")
+	}
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 1 {
+		t.Errorf("APIBreadth = %d, want 1", ca.APIBreadth)
+	}
+}
+
 func TestAnalyzer_Python(t *testing.T) {
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "main.py"), []byte(`import requests

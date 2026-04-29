@@ -7,14 +7,14 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/java"
+	sitter "github.com/tree-sitter/go-tree-sitter"
+	tree_sitter_java "github.com/tree-sitter/tree-sitter-java/bindings/go"
 )
 
 // registerJavaConfig registers the Java language configuration on the Analyzer.
 func registerJavaConfig(a *Analyzer) {
 	a.configs[langJava] = &langConfig{
-		language:    java.GetLanguage(),
+		language:    loadLanguage(tree_sitter_java.Language()),
 		importQuery: `(import_declaration (scoped_identifier) @import)`,
 		callQuery: strings.Join([]string{
 			// --- Method calls ---
@@ -217,11 +217,11 @@ func (a *Analyzer) handleJavaImport(
 // The asterisk is a separate child of import_declaration, not part of scoped_identifier.
 func isJavaWildcardImport(node *sitter.Node) bool {
 	parent := node.Parent()
-	if parent == nil || parent.Type() != "import_declaration" {
+	if parent == nil || parent.Kind() != "import_declaration" {
 		return false
 	}
-	for i := 0; i < int(parent.ChildCount()); i++ {
-		if parent.Child(i).Type() == "asterisk" {
+	for i := uint(0); i < parent.ChildCount(); i++ {
+		if parent.Child(i).Kind() == "asterisk" {
 			return true
 		}
 	}
@@ -232,11 +232,11 @@ func isJavaWildcardImport(node *sitter.Node) bool {
 // The AST structure is: import_declaration -> ["import", "static", scoped_identifier, ";"]
 func isJavaStaticImport(node *sitter.Node) bool {
 	parent := node.Parent()
-	if parent == nil || parent.Type() != "import_declaration" {
+	if parent == nil || parent.Kind() != "import_declaration" {
 		return false
 	}
-	for i := 0; i < int(parent.ChildCount()); i++ {
-		if parent.Child(i).Type() == "static" {
+	for i := uint(0); i < parent.ChildCount(); i++ {
+		if parent.Child(i).Kind() == "static" {
 			return true
 		}
 	}

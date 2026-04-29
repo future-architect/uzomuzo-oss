@@ -12,10 +12,19 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unsafe"
 
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
-	sitter "github.com/smacker/go-tree-sitter"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 )
+
+// loadLanguage wraps a grammar package's `Language() unsafe.Pointer` call
+// in `sitter.NewLanguage`, producing a *sitter.Language usable by Parser/Query.
+// Centralized here so each lang_*.go file can call it without repeating the
+// `sitter.NewLanguage(...)` import.
+func loadLanguage(ptr unsafe.Pointer) *sitter.Language {
+	return sitter.NewLanguage(ptr)
+}
 
 // skipDirs contains directory names that should be skipped during walking.
 var skipDirs = map[string]bool{
@@ -59,13 +68,15 @@ const wildcardImportAlias = "\x00wildcard"
 
 // langConfig holds the tree-sitter language and query patterns.
 type langConfig struct {
-	language       *sitter.Language
-	importQuery    string
-	callQuery      string
-	compiledImport *sitter.Query // compiled once in NewAnalyzer
-	compiledCall   *sitter.Query // compiled once in NewAnalyzer
-	stripQuotes    bool
-	aliasFromPkg   func(importPath string) string
+	language           *sitter.Language
+	importQuery        string
+	callQuery          string
+	compiledImport     *sitter.Query // compiled once in NewAnalyzer
+	compiledCall       *sitter.Query // compiled once in NewAnalyzer
+	importCaptureNames []string      // cached compiledImport.CaptureNames() to avoid per-match recomputation
+	callCaptureNames   []string      // cached compiledCall.CaptureNames()
+	stripQuotes        bool
+	aliasFromPkg       func(importPath string) string
 }
 
 // Analyzer implements SourceAnalyzer using tree-sitter for multi-language parsing.
@@ -74,19 +85,53 @@ type Analyzer struct {
 }
 
 // compileQueries compiles import and call queries for a langConfig.
-// Call this after setting importQuery and callQuery.
+// Call this after setting importQuery and callQuery. Capture-name lookup
+// tables are cached on the config so per-match access is an O(1) slice index
+// instead of a per-call traversal of the query's capture metadata.
+//
+// Argument order in tree_sitter.NewQuery is (language, source string) — the
+// inverse of smacker/go-tree-sitter, which took ([]byte, language). Source is
+// also string (not []byte). The error type is *QueryError, distinct from the
+// builtin error interface; we render it via Error() for slog.
 func compileQueries(cfg *langConfig) {
-	q, err := sitter.NewQuery([]byte(cfg.importQuery), cfg.language)
-	if err != nil {
-		slog.Warn("failed to compile import query", "error", err)
+	q, qErr := sitter.NewQuery(cfg.language, cfg.importQuery)
+	if qErr != nil {
+		slog.Warn("failed to compile import query", "error", qErr.Error())
 	}
 	cfg.compiledImport = q
+	if q != nil {
+		cfg.importCaptureNames = q.CaptureNames()
+	}
 
-	q2, err := sitter.NewQuery([]byte(cfg.callQuery), cfg.language)
-	if err != nil {
-		slog.Warn("failed to compile call query", "error", err)
+	q2, qErr2 := sitter.NewQuery(cfg.language, cfg.callQuery)
+	if qErr2 != nil {
+		slog.Warn("failed to compile call query", "error", qErr2.Error())
 	}
 	cfg.compiledCall = q2
+	if q2 != nil {
+		cfg.callCaptureNames = q2.CaptureNames()
+	}
+}
+
+// Close releases the C-side resources held by compiled queries. Callers must
+// invoke Close exactly once when the Analyzer is no longer needed; the
+// official tree-sitter Go bindings do not use runtime finalizers due to
+// known CGO interactions, so explicit cleanup is required.
+//
+// Close is idempotent: a nil compiledImport/compiledCall (compilation failure
+// at NewAnalyzer time) is treated as already-released, and calling Close
+// twice is safe because each compiled query is set to nil after release.
+func (a *Analyzer) Close() {
+	for _, cfg := range a.configs {
+		if cfg.compiledImport != nil {
+			cfg.compiledImport.Close()
+			cfg.compiledImport = nil
+		}
+		if cfg.compiledCall != nil {
+			cfg.compiledCall.Close()
+			cfg.compiledCall = nil
+		}
+	}
 }
 
 // NewAnalyzer creates a new tree-sitter based Analyzer.
@@ -156,6 +201,7 @@ func (a *Analyzer) AnalyzeCoupling(
 	accum := make(map[string]*accumulator)
 
 	parser := sitter.NewParser()
+	defer parser.Close()
 
 	err := filepath.WalkDir(sourceRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -199,10 +245,19 @@ func (a *Analyzer) AnalyzeCoupling(
 			return nil
 		}
 
-		parser.SetLanguage(cfg.language)
-		tree, err := parser.ParseCtx(ctx, nil, src)
-		if err != nil {
-			slog.Debug("failed to parse file", "path", path, "error", err)
+		if err := parser.SetLanguage(cfg.language); err != nil {
+			slog.Debug("failed to set language", "path", path, "error", err)
+			return nil
+		}
+		// Parse returns *Tree directly (no error). A nil tree indicates parse
+		// failure; we skip the file. The official binding's ParseCtx is
+		// deprecated and will be removed in v0.26 — file-level context
+		// cancellation is already enforced above (line 172-174 of this
+		// callback), and per-file parsing is bounded (1 MB cap above), so
+		// dropping mid-parse cancellation here is safe.
+		tree := parser.Parse(src, nil)
+		if tree == nil {
+			slog.Debug("failed to parse file", "path", path)
 			return nil
 		}
 
@@ -308,6 +363,14 @@ func (a *Analyzer) AnalyzeCoupling(
 
 // extractImports finds import statements in the AST and returns alias->[]PURL mapping.
 // Multiple PURLs per alias can occur when two versions of the same library are present.
+//
+// The official binding exposes query results via the iterator returned from
+// QueryCursor.Matches. Matches.Next() applies text predicates (e.g.,
+// `#eq? @func "require"`) internally and returns nil at end-of-stream, so an
+// explicit FilterPredicates call is not needed — only matches that satisfy
+// every predicate are surfaced. QueryCapture.Node is a value (not *Node) in
+// the official API; helper functions still accept *sitter.Node, so we take the
+// capture's address per iteration.
 func (a *Analyzer) extractImports(
 	cfg *langConfig,
 	root *sitter.Node,
@@ -323,22 +386,21 @@ func (a *Analyzer) extractImports(
 		slog.Debug("import query not compiled")
 		return aliasMap
 	}
+	names := cfg.importCaptureNames
 
-	cursor.Exec(query, root)
-
+	matches := cursor.Matches(query, root, src)
 	for {
-		match, ok := cursor.NextMatch()
-		if !ok {
+		match := matches.Next()
+		if match == nil {
 			break
 		}
-		// Apply tree-sitter predicates (e.g., #eq? @func "require") to filter matches.
-		match = cursor.FilterPredicates(match, src)
 		for _, capture := range match.Captures {
 			// Only process @import captures; skip auxiliary captures like @func.
-			if query.CaptureNameForId(capture.Index) != "import" {
+			if int(capture.Index) >= len(names) || names[capture.Index] != "import" {
 				continue
 			}
-			value := capture.Node.Content(src)
+			node := &capture.Node
+			value := node.Utf8Text(src)
 
 			if cfg.stripQuotes {
 				value = strings.Trim(value, `"'`+"`")
@@ -350,30 +412,30 @@ func (a *Analyzer) extractImports(
 
 			// For Go, check for explicit alias.
 			if lid == langGo {
-				a.handleGoImport(capture.Node, src, value, importToPURL, aliasMap)
+				a.handleGoImport(node, src, value, importToPURL, aliasMap)
 				continue
 			}
 
 			// For Python: match against top-level module or full dotted name.
 			if lid == langPython {
-				a.handlePythonImport(capture.Node, src, value, importToPURL, aliasMap, cfg)
+				a.handlePythonImport(node, src, value, importToPURL, aliasMap, cfg)
 				continue
 			}
 
 			// For Java: match as prefix of the full import path.
 			if lid == langJava {
-				a.handleJavaImport(capture.Node, value, importToPURL, aliasMap)
+				a.handleJavaImport(node, value, importToPURL, aliasMap)
 				continue
 			}
 
 			// Skip TypeScript `import type` statements (no runtime coupling).
 			if lid == langTypeScript || lid == langTSX {
-				if isTypeOnlyImport(capture.Node) {
+				if isTypeOnlyImport(node) {
 					continue
 				}
 			}
 			// For JS/TS: exact match or subpath prefix match (e.g., "lodash/fp" → "lodash").
-			a.handleJSImport(capture.Node, src, value, importToPURL, aliasMap, cfg)
+			a.handleJSImport(node, src, value, importToPURL, aliasMap, cfg)
 		}
 	}
 
@@ -401,6 +463,10 @@ var callSiteCaptureNames = map[string]bool{
 }
 
 // countCallSites counts selector/member expressions matching known aliases.
+//
+// Uses the same iterator pattern as extractImports: Matches.Next() returns
+// only matches whose text predicates are satisfied, so we can iterate
+// captures directly without invoking FilterPredicates explicitly.
 func (a *Analyzer) countCallSites(
 	cfg *langConfig,
 	root *sitter.Node,
@@ -418,16 +484,14 @@ func (a *Analyzer) countCallSites(
 		slog.Debug("call query not compiled")
 		return
 	}
+	names := cfg.callCaptureNames
 
-	cursor.Exec(query, root)
-
+	matches := cursor.Matches(query, root, src)
 	for {
-		match, ok := cursor.NextMatch()
-		if !ok {
+		match := matches.Next()
+		if match == nil {
 			break
 		}
-		// Apply tree-sitter predicates (e.g., #eq?, #match?) to filter matches.
-		match = cursor.FilterPredicates(match, src)
 
 		// Extract only the captures relevant to call-site counting, skipping
 		// auxiliary captures used solely for predicate filtering (e.g., @decorator, @metaKey).
@@ -435,7 +499,10 @@ func (a *Analyzer) countCallSites(
 		var relevant [2]sitter.QueryCapture
 		nRelevant := 0
 		for _, c := range match.Captures {
-			if callSiteCaptureNames[query.CaptureNameForId(c.Index)] {
+			if int(c.Index) >= len(names) {
+				continue
+			}
+			if callSiteCaptureNames[names[c.Index]] {
 				if nRelevant < len(relevant) {
 					relevant[nRelevant] = c
 				}
@@ -445,8 +512,8 @@ func (a *Analyzer) countCallSites(
 
 		if nRelevant >= 2 {
 			// Two-capture match: pkg.field pattern (e.g., requests.get)
-			pkg := relevant[0].Node.Content(src)
-			field := relevant[1].Node.Content(src)
+			pkg := relevant[0].Node.Utf8Text(src)
+			field := relevant[1].Node.Utf8Text(src)
 
 			purls, ok := aliasMap[pkg]
 			if !ok {
@@ -462,7 +529,7 @@ func (a *Analyzer) countCallSites(
 			}
 		} else if nRelevant == 1 {
 			// Single-capture match: bare identifier call (e.g., get() from "from x import get")
-			funcName := relevant[0].Node.Content(src)
+			funcName := relevant[0].Node.Utf8Text(src)
 
 			purls, ok := aliasMap[funcName]
 			if !ok {

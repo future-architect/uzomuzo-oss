@@ -9,6 +9,18 @@ import (
 	"testing"
 )
 
+// TestAnalyzer_CloseIdempotent verifies that Analyzer.Close can be called
+// multiple times without panic. The official tree-sitter Go bindings require
+// explicit Close on Parser/Tree/Query/QueryCursor, so callers may add
+// `defer analyzer.Close()` and a test cleanup may call it again — both must
+// be safe.
+func TestAnalyzer_CloseIdempotent(t *testing.T) {
+	analyzer := NewAnalyzer()
+	analyzer.Close()
+	// Second Close must not panic — the implementation nils released queries.
+	analyzer.Close()
+}
+
 func TestAnalyzer_SkipsDirs(t *testing.T) {
 	dir := t.TempDir()
 	vendorDir := filepath.Join(dir, "vendor")

@@ -5,25 +5,27 @@ package treesitter
 import (
 	"strings"
 
-	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/javascript"
-	"github.com/smacker/go-tree-sitter/typescript/tsx"
-	"github.com/smacker/go-tree-sitter/typescript/typescript"
+	sitter "github.com/tree-sitter/go-tree-sitter"
+	tree_sitter_javascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
+	tree_sitter_typescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 )
 
 // registerJavaScriptConfig registers the JavaScript language configuration on the Analyzer.
 func registerJavaScriptConfig(a *Analyzer) {
-	a.configs[langJavaScript] = newJSLikeConfig(javascript.GetLanguage(), true)
+	a.configs[langJavaScript] = newJSLikeConfig(loadLanguage(tree_sitter_javascript.Language()), true)
 }
 
 // registerTypeScriptConfig registers the TypeScript language configuration on the Analyzer.
+// The official tree-sitter-typescript package exports two grammars from one
+// module: LanguageTypescript and LanguageTSX, so each registrar selects the
+// matching binding.
 func registerTypeScriptConfig(a *Analyzer) {
-	a.configs[langTypeScript] = newJSLikeConfig(typescript.GetLanguage(), false)
+	a.configs[langTypeScript] = newJSLikeConfig(loadLanguage(tree_sitter_typescript.LanguageTypescript()), false)
 }
 
 // registerTSXConfig registers the TSX language configuration on the Analyzer.
 func registerTSXConfig(a *Analyzer) {
-	a.configs[langTSX] = newJSLikeConfig(tsx.GetLanguage(), true)
+	a.configs[langTSX] = newJSLikeConfig(loadLanguage(tree_sitter_typescript.LanguageTSX()), true)
 }
 
 // newJSLikeConfig creates a langConfig for JS-family languages (JS, TS, TSX).
@@ -235,7 +237,7 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 	}
 
 	// ESM: node is `source: (string)` inside `import_statement`
-	if parent.Type() == "import_statement" {
+	if parent.Kind() == "import_statement" {
 		return extractESMBindings(parent, src)
 	}
 
@@ -243,9 +245,9 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 	// Pattern: const pkg = require('@scope/pkg')
 	// Also handles compound patterns like: var X = root.X || require('pkg')
 	// where binary_expression sits between call_expression and variable_declarator.
-	if parent.Type() == "arguments" {
+	if parent.Kind() == "arguments" {
 		callExpr := parent.Parent()
-		if callExpr != nil && callExpr.Type() == "call_expression" {
+		if callExpr != nil && callExpr.Kind() == "call_expression" {
 			// Check for variable declarator: const x = require('pkg')
 			declarator := findAncestorVariableDeclarator(callExpr)
 			if declarator != nil {
@@ -253,9 +255,9 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 				if nameNode == nil {
 					return nil
 				}
-				switch nameNode.Type() {
+				switch nameNode.Kind() {
 				case "identifier":
-					return []string{nameNode.Content(src)}
+					return []string{nameNode.Utf8Text(src)}
 				case "object_pattern":
 					// Destructured: const { X, Y } = require('pkg')
 					return extractCJSDestructuredBindings(nameNode, src)
@@ -291,12 +293,12 @@ func isInlineRequireUsage(node *sitter.Node) bool {
 	}
 	// node is the string literal; its parent should be arguments.
 	args := node.Parent()
-	if args == nil || args.Type() != "arguments" {
+	if args == nil || args.Kind() != "arguments" {
 		return false
 	}
 	// arguments' parent should be the require() call_expression.
 	requireCall := args.Parent()
-	if requireCall == nil || requireCall.Type() != "call_expression" {
+	if requireCall == nil || requireCall.Kind() != "call_expression" {
 		return false
 	}
 	// Check what uses the require() call_expression.
@@ -304,7 +306,7 @@ func isInlineRequireUsage(node *sitter.Node) bool {
 	if parent == nil {
 		return false
 	}
-	switch parent.Type() {
+	switch parent.Kind() {
 	case "call_expression":
 		// require('x')() or require('x')('arg') — the require call is the function of an outer call.
 		return true
@@ -338,10 +340,10 @@ var jsExpressionTypes = map[string]bool{
 func findAncestorVariableDeclarator(node *sitter.Node) *sitter.Node {
 	current := node.Parent()
 	for depth := 0; current != nil && depth < maxAncestorWalkDepth; depth++ {
-		if current.Type() == "variable_declarator" {
+		if current.Kind() == "variable_declarator" {
 			return current
 		}
-		if !jsExpressionTypes[current.Type()] {
+		if !jsExpressionTypes[current.Kind()] {
 			// Reached a non-expression node without finding a variable_declarator.
 			return nil
 		}
@@ -355,27 +357,27 @@ func findAncestorVariableDeclarator(node *sitter.Node) *sitter.Node {
 // so that call sites via either identifier are counted.
 func extractESMBindings(importStmt *sitter.Node, src []byte) []string {
 	var bindings []string
-	for i := 0; i < int(importStmt.ChildCount()); i++ {
+	for i := uint(0); i < importStmt.ChildCount(); i++ {
 		child := importStmt.Child(i)
-		if child == nil || child.Type() != "import_clause" {
+		if child == nil || child.Kind() != "import_clause" {
 			continue
 		}
 		// import_clause children: identifier (default), namespace_import (* as foo), named_imports ({ foo })
-		for j := 0; j < int(child.ChildCount()); j++ {
+		for j := uint(0); j < child.ChildCount(); j++ {
 			gc := child.Child(j)
 			if gc == nil {
 				continue
 			}
-			switch gc.Type() {
+			switch gc.Kind() {
 			case "identifier":
 				// Default import: import foo from "pkg" → "foo"
-				bindings = append(bindings, gc.Content(src))
+				bindings = append(bindings, gc.Utf8Text(src))
 			case "namespace_import":
 				// import * as foo from "pkg" → "foo"
-				for k := 0; k < int(gc.ChildCount()); k++ {
+				for k := uint(0); k < gc.ChildCount(); k++ {
 					n := gc.Child(k)
-					if n != nil && n.Type() == "identifier" {
-						bindings = append(bindings, n.Content(src))
+					if n != nil && n.Kind() == "identifier" {
+						bindings = append(bindings, n.Utf8Text(src))
 					}
 				}
 			case "named_imports":
@@ -393,20 +395,20 @@ func extractESMBindings(importStmt *sitter.Node, src []byte) []string {
 // If an alias is present, the alias is used (that is the local binding name).
 func extractNamedImportBindings(namedImports *sitter.Node, src []byte) []string {
 	var bindings []string
-	for k := 0; k < int(namedImports.ChildCount()); k++ {
+	for k := uint(0); k < namedImports.ChildCount(); k++ {
 		spec := namedImports.Child(k)
-		if spec == nil || spec.Type() != "import_specifier" {
+		if spec == nil || spec.Kind() != "import_specifier" {
 			continue
 		}
 		// Use alias if present (import { x as y } → "y"), otherwise name.
 		aliasNode := spec.ChildByFieldName("alias")
 		if aliasNode != nil {
-			bindings = append(bindings, aliasNode.Content(src))
+			bindings = append(bindings, aliasNode.Utf8Text(src))
 			continue
 		}
 		nameNode := spec.ChildByFieldName("name")
 		if nameNode != nil {
-			bindings = append(bindings, nameNode.Content(src))
+			bindings = append(bindings, nameNode.Utf8Text(src))
 		}
 	}
 	return bindings
@@ -421,20 +423,20 @@ func extractNamedImportBindings(namedImports *sitter.Node, src []byte) []string 
 // This mirrors extractNamedImportBindings for ESM named imports.
 func extractCJSDestructuredBindings(objectPattern *sitter.Node, src []byte) []string {
 	var bindings []string
-	for i := 0; i < int(objectPattern.ChildCount()); i++ {
+	for i := uint(0); i < objectPattern.ChildCount(); i++ {
 		child := objectPattern.Child(i)
 		if child == nil {
 			continue
 		}
-		switch child.Type() {
+		switch child.Kind() {
 		case "shorthand_property_identifier_pattern":
 			// { X } — the identifier itself is the local binding.
-			bindings = append(bindings, child.Content(src))
+			bindings = append(bindings, child.Utf8Text(src))
 		case "pair_pattern":
 			// { X: alias } — the value side is the local binding.
 			valueNode := child.ChildByFieldName("value")
-			if valueNode != nil && valueNode.Type() == "identifier" {
-				bindings = append(bindings, valueNode.Content(src))
+			if valueNode != nil && valueNode.Kind() == "identifier" {
+				bindings = append(bindings, valueNode.Utf8Text(src))
 			}
 		}
 	}
@@ -459,14 +461,14 @@ func extractCJSDestructuredBindings(objectPattern *sitter.Node, src []byte) []st
 func extractPropertyAssignBinding(callExpr *sitter.Node, src []byte) string {
 	current := callExpr.Parent()
 	for depth := 0; current != nil && depth < maxAncestorWalkDepth; depth++ {
-		if current.Type() == "assignment_expression" {
+		if current.Kind() == "assignment_expression" {
 			left := current.ChildByFieldName("left")
-			if left != nil && left.Type() == "member_expression" {
-				return left.Content(src)
+			if left != nil && left.Kind() == "member_expression" {
+				return left.Utf8Text(src)
 			}
 			return ""
 		}
-		if !jsExpressionTypes[current.Type()] {
+		if !jsExpressionTypes[current.Kind()] {
 			return ""
 		}
 		current = current.Parent()
@@ -478,11 +480,11 @@ func extractPropertyAssignBinding(callExpr *sitter.Node, src []byte) string {
 // `import type` (no runtime coupling).
 func isTypeOnlyImport(node *sitter.Node) bool {
 	parent := node.Parent()
-	if parent == nil || parent.Type() != "import_statement" {
+	if parent == nil || parent.Kind() != "import_statement" {
 		return false
 	}
-	for i := 0; i < int(parent.ChildCount()); i++ {
-		if parent.Child(i).Type() == "type" {
+	for i := uint(0); i < parent.ChildCount(); i++ {
+		if parent.Child(i).Kind() == "type" {
 			return true
 		}
 	}
@@ -495,7 +497,7 @@ func isTypeOnlyImport(node *sitter.Node) bool {
 // and will not be captured by the import query.
 func isReExport(node *sitter.Node) bool {
 	parent := node.Parent()
-	return parent != nil && parent.Type() == "export_statement"
+	return parent != nil && parent.Kind() == "export_statement"
 }
 
 // isTypeOnlyReExport checks if a re-export is a TypeScript type-only re-export
@@ -503,11 +505,11 @@ func isReExport(node *sitter.Node) bool {
 // appears as a direct child of the export_statement node.
 func isTypeOnlyReExport(node *sitter.Node) bool {
 	parent := node.Parent()
-	if parent == nil || parent.Type() != "export_statement" {
+	if parent == nil || parent.Kind() != "export_statement" {
 		return false
 	}
-	for i := 0; i < int(parent.ChildCount()); i++ {
-		if parent.Child(i).Type() == "type" {
+	for i := uint(0); i < parent.ChildCount(); i++ {
+		if parent.Child(i).Kind() == "type" {
 			return true
 		}
 	}
@@ -519,15 +521,15 @@ func isTypeOnlyReExport(node *sitter.Node) bool {
 // AST: string -> arguments -> call_expression(function: import).
 func isDynamicImport(node *sitter.Node) bool {
 	args := node.Parent()
-	if args == nil || args.Type() != "arguments" {
+	if args == nil || args.Kind() != "arguments" {
 		return false
 	}
 	callExpr := args.Parent()
-	if callExpr == nil || callExpr.Type() != "call_expression" {
+	if callExpr == nil || callExpr.Kind() != "call_expression" {
 		return false
 	}
 	fnNode := callExpr.ChildByFieldName("function")
-	return fnNode != nil && fnNode.Type() == "import"
+	return fnNode != nil && fnNode.Kind() == "import"
 }
 
 // isSideEffectImport checks if a JS/TS import is a bare side-effect import
@@ -537,11 +539,11 @@ func isDynamicImport(node *sitter.Node) bool {
 // imports; it does not attempt to classify CommonJS `require()` usage.
 func isSideEffectImport(node *sitter.Node) bool {
 	parent := node.Parent()
-	if parent == nil || parent.Type() != "import_statement" {
+	if parent == nil || parent.Kind() != "import_statement" {
 		return false
 	}
-	for i := 0; i < int(parent.ChildCount()); i++ {
-		if parent.Child(i).Type() == "import_clause" {
+	for i := uint(0); i < parent.ChildCount(); i++ {
+		if parent.Child(i).Kind() == "import_clause" {
 			return false
 		}
 	}
