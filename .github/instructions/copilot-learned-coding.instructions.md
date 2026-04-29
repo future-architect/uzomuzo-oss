@@ -98,12 +98,12 @@ pending_patterns:
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
   - category: "comment-doc-drift"
-    summary: "RetryConfig doc comment claimed DoWithRetryFunc could opt out of 429 retries via retryDecider, but 429 retry is hardcoded and retryDecider is not consulted — fix comment to match actual behavior"
+    summary: "Doc comments must match implementation boundary conditions — RetryConfig said retryDecider controls 429 retries (it doesn't); rateLimitBackoff comment said 'negative' for a zero-inclusive guard (should say 'non-positive')"
     pr: 359
     file: "internal/infrastructure/httpclient/client.go"
     date: "2026-04-29"
   - category: "defensive-coding"
-    summary: "Guard time.Duration arithmetic against integer overflow when converting parsed delay-seconds — use strconv.ParseInt and reject values exceeding math.MaxInt64/time.Second before multiplying"
+    summary: "Guard time.Duration arithmetic against integer overflow — use strconv.ParseInt, reject values exceeding math.MaxInt64/time.Second, and do not clamp to an arbitrary policy constant (let the caller's configured cap decide)"
     pr: 359
     file: "internal/infrastructure/httpclient/client.go"
     date: "2026-04-29"
@@ -118,7 +118,7 @@ pending_patterns:
     file: "internal/infrastructure/httpclient/client_test.go"
     date: "2026-04-29"
   - category: "testing"
-    summary: "Assert diagnostic context fields on typed error structs (e.g., ScorecardError.Context) in tests — checking only error type and call count misses regressions that silently strip diagnostic metadata"
+    summary: "Assert diagnostic context fields on typed error structs; match context-error assertions to the specific context constructor (WithCancel → Canceled only, WithTimeout → DeadlineExceeded only) — permissive OR hides misrouted error paths"
     pr: 359
     file: "internal/infrastructure/httpclient/client_test.go"
     date: "2026-04-29"
