@@ -13,6 +13,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Reject Flags That Silently Have No Effect**: When a CLI flag only applies to a specific input mode (e.g., `--sample` for PURL list files), explicitly reject it with a clear error when the input is a different mode (e.g., go.mod or SBOM). Do not silently ignore the flag — users assume their flags take effect.
 - **Deduplicate Inputs Before Batch API Calls**: When accepting user-provided input lists (PURLs, URLs) that feed into batch API calls, deduplicate them while preserving first-seen order before processing. Duplicates cause redundant external calls, skew logging/counts, and waste resources.
 - **Normalize User-Provided Enum Values**: When accepting string values for format selectors, mode switches, or other enums from CLI flags, normalize with `strings.TrimSpace(strings.ToLower(...))` before validation. Case-sensitive matching rejects common inputs like `--format JSON` or `--format "json "`.
+- **Normalize Config Values Once Before Guard and Use**: When a config-sourced value is validated (e.g., `strings.TrimSpace(v) != ""`) and then used, assign the normalized result to a variable and use that variable for both the guard and subsequent operations (`SetBaseURL`, logging). Checking `TrimSpace(v)` in the guard but passing the original `v` to the consumer silently passes whitespace-padded values, producing invalid URLs or config entries.
 - **Doc Comments Must Match Type-Level Constraints**: When writing doc comments, ensure stated conditions are possible for the parameter types — do not document "nil" for non-pointer types (e.g., `string`, `int`), do not claim a knob controls APIs it does not actually affect, and do not name only a subset of the languages/contexts that use a shared constant. When test names or comment examples reference specific inputs, they must match the actual values under test. Comments that describe impossible states or overstate scope create false confidence and mislead future maintainers.
 - **Match `net/url` Function to Semantic Context**: When manipulating URL components, select the `net/url` function that matches the component's semantics — `u.Hostname()` (not `u.Host`) when only the hostname is needed (avoids including the port), `url.PathUnescape`/`url.PathEscape` (not `url.QueryUnescape`/`url.QueryEscape`) for URL path segments (avoids `+`-as-space misinterpretation). Mismatched functions silently corrupt values containing reserved characters like `:`, `+`, or `@`.
 - **Enforce Access Constraints on All CI Trigger Paths**: When a CI workflow guards against cross-repository or fork PRs on the `pull_request` trigger (e.g., `head.repo.full_name == github.repository`), enforce the same constraint in code paths reachable by other triggers (`schedule`, `workflow_dispatch`) that bypass the trigger-level guard. Unguarded paths can fire privileged operations (e.g., GraphQL mutations with a PAT) on fork PRs, causing auth failures or unintended side effects. Similarly, use generous page sizes (e.g., `first:100` instead of `first:20`) in paginated API verification queries to avoid false negatives that trigger unnecessary retries.
@@ -108,6 +109,11 @@ pending_patterns:
     pr: 345
     file: "internal/infrastructure/maven/license.go"
     date: "2026-04-29"
+  - category: "concurrency"
+    summary: "Bound best-effort fan-out goroutines with a semaphore to prevent unbounded outbound HTTP concurrency on large batches — caps FD/memory pressure and reduces 429 risk"
+    pr: 345
+    file: "internal/infrastructure/integration/populate_manifest_license.go"
+    date: "2026-04-29"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
@@ -129,6 +135,9 @@ pending_patterns:
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #340, #345 — align gating predicates with gated function semantics: predicate conditions must mirror downstream write/replace rules; populate sentinel fields on graceful skip paths)
   # comment-doc-drift (PR #345): already covered by "Comment-Code Consistency" rule — doc comment described non-existent debug-level logging, rate-limit signal, and per-client caching
   # naming-consistency (PR #345): trivial spelling fix ("licence" → "license"), not recorded as pattern
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PR #345 round 2 — normalize config values once before guard and use: TrimSpace in guard but passing untrimmed value to SetBaseURL)
+  # testing (PR #345 round 2): already covered by "Assert Exact Computed Values, Not Just Thresholds" in testing-performance.instructions.md — assert exact POM fetch count, not minimum
+  # concurrency (PR #345 round 2): accumulated (1 instance) — bound fan-out goroutines with semaphore to prevent unbounded HTTP concurrency
   # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #298, #299, #318, #336 — doc comments must match type-level constraints: no "nil" for non-pointer types, scope claims must match actual implementation, test names/examples must match exercised code)
   # testing: promoted to testing-performance.instructions.md (PRs #318, #336 — keep tests network-independent by default: env-var opt-in for live probes, stub transports to avoid real HTTP calls)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #324, #336 — match net/url function to semantic context: u.Hostname() not u.Host, PathEscape not QueryEscape for path segments)
