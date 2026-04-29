@@ -87,18 +87,18 @@ type Analyzer struct {
 //
 // Argument order in tree_sitter.NewQuery is (language, source string) — the
 // inverse of smacker/go-tree-sitter, which took ([]byte, language). Source is
-// also string (not []byte). The error type is *QueryError, distinct from the
-// builtin error interface; we render it via Error() for slog.
+// also string (not []byte). The error type is *QueryError, which implements
+// the error interface; slog renders it via its Error() method automatically.
 func compileQueries(cfg *langConfig) {
 	q, qErr := sitter.NewQuery(cfg.language, cfg.importQuery)
 	if qErr != nil {
-		slog.Warn("failed to compile import query", "error", qErr.Error())
+		slog.Warn("failed to compile import query", "error", qErr)
 	}
 	cfg.compiledImport = q
 
 	q2, qErr2 := sitter.NewQuery(cfg.language, cfg.callQuery)
 	if qErr2 != nil {
-		slog.Warn("failed to compile call query", "error", qErr2.Error())
+		slog.Warn("failed to compile call query", "error", qErr2)
 	}
 	cfg.compiledCall = q2
 }
