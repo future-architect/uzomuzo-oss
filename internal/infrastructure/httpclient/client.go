@@ -16,6 +16,12 @@ import (
 
 // RetryConfig defines retry configuration.
 // NOTE: Moved from pkg/httpclient (now internal) to avoid exposing infrastructure concerns publicly.
+//
+// 429 Too Many Requests responses are always retried up to MaxRetries —
+// independently of RetryOn5xx — because rate-limiting is a transient condition
+// and the server's Retry-After header carries the only timing signal we have.
+// Callers that need 429 to fail fast must construct their own retry policy via
+// DoWithRetryFunc.
 type RetryConfig struct {
 	MaxRetries        int           // Maximum number of retries
 	BaseBackoff       time.Duration // Base backoff time
@@ -213,27 +219,42 @@ func (c *Client) calculateBackoff(attempt int) time.Duration { // exponential ba
 }
 
 // rateLimitBackoff returns the wait duration before retrying a 429 response.
-// Honors the server's Retry-After header (per RFC 9110 §10.2.3) when present
-// and within the configured MaxBackoff cap; otherwise falls back to the same
-// exponential backoff used for 5xx retries.
+// Honors the server's Retry-After header (per RFC 9110 §10.2.3) according to
+// the following precedence:
+//
+//  1. Header parses to a past HTTP-date (negative duration) → return 0
+//     ("retry immediately"); do not fall through to exponential backoff.
+//  2. Header parses and the resulting duration fits within MaxBackoff →
+//     return the exact duration.
+//  3. Header is missing, unparseable, or its duration exceeds MaxBackoff →
+//     fall back to the same exponential backoff used for 5xx retries.
 func (c *Client) rateLimitBackoff(retryAfter string, attempt int) time.Duration {
-	if d, ok := parseRetryAfter(retryAfter, time.Now()); ok && d <= c.config.MaxBackoff {
+	if d, ok := parseRetryAfter(retryAfter, time.Now()); ok {
 		if d < 0 {
 			return 0
 		}
-		return d
+		if d <= c.config.MaxBackoff {
+			return d
+		}
 	}
 	return c.calculateBackoff(attempt)
 }
+
+// maxRetryAfterSeconds caps a server-supplied delay-seconds value so that
+// pathological inputs (e.g., a header like "999999999999") cannot overflow
+// the time.Duration multiplication and produce a negative or absurd wait.
+// One day is well past any realistic rate-limit window.
+const maxRetryAfterSeconds = 24 * 60 * 60
 
 // parseRetryAfter parses an RFC 9110 Retry-After header value. The header
 // can be either a delay-seconds integer (e.g., "30") or an HTTP-date. Returns
 // the resolved duration and true when the header was parseable, otherwise
 // (0, false). The "now" parameter is injected so tests can pin time.
 //
-// Per RFC, delay-seconds must be a non-negative integer; HTTP-date in the
-// past resolves to a non-positive duration which the caller should treat as
-// "retry immediately".
+// Per RFC, delay-seconds must be a non-negative integer; values exceeding
+// maxRetryAfterSeconds are clamped to that cap to avoid overflow on absurd
+// inputs. HTTP-date in the past resolves to a non-positive duration which
+// the caller should treat as "retry immediately".
 func parseRetryAfter(header string, now time.Time) (time.Duration, bool) {
 	s := strings.TrimSpace(header)
 	if s == "" {
@@ -243,11 +264,8 @@ func parseRetryAfter(header string, now time.Time) (time.Duration, bool) {
 		if secs < 0 {
 			return 0, false
 		}
-		// Guard against duration overflow: time.Duration is int64 nanoseconds,
-		// so max representable seconds is math.MaxInt64 / 1e9 ≈ 9.2e9 (~292 years).
-		const maxSafeSeconds = int64(math.MaxInt64 / int64(time.Second))
-		if secs > maxSafeSeconds {
-			return 0, false
+		if secs > maxRetryAfterSeconds {
+			secs = maxRetryAfterSeconds
 		}
 		return time.Duration(secs) * time.Second, true
 	}

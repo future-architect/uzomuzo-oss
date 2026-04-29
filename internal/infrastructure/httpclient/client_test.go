@@ -27,6 +27,7 @@ func TestParseRetryAfter(t *testing.T) {
 		{name: "delay_seconds_with_padding", header: "  30  ", wantOK: true, wantSeconds: 30},
 		{name: "delay_seconds_negative_rejected", header: "-1", wantOK: false},
 		{name: "delay_seconds_invalid_text", header: "soon", wantOK: false},
+		{name: "delay_seconds_overflow_clamped", header: "999999999999", wantOK: true, wantSeconds: maxRetryAfterSeconds},
 		{name: "http_date_imf_fixdate_future", header: "Wed, 29 Apr 2026 12:00:30 GMT", wantOK: true, wantSeconds: 30},
 		{name: "http_date_imf_fixdate_past_negative", header: "Wed, 29 Apr 2026 11:59:30 GMT", wantOK: true, wantSeconds: -30},
 		{name: "http_date_invalid_format", header: "not a date", wantOK: false},
@@ -208,6 +209,79 @@ func TestDo_RateLimitContextCancellationDuringWait(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Errorf("Do took %v after cancel; expected prompt return", elapsed)
+	}
+}
+
+// TestDo_RateLimitHTTPDateHeader verifies the end-to-end HTTP-date branch:
+// the server emits Retry-After as an IMF-fixdate, the client computes a
+// duration via time.Sub, and the retry succeeds.
+func TestDo_RateLimitHTTPDateHeader(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&calls, 1)
+		if n == 1 {
+			// 50ms in the future — short enough to keep the test fast,
+			// long enough to be unambiguously a future date.
+			w.Header().Set("Retry-After", time.Now().Add(50*time.Millisecond).UTC().Format(http.TimeFormat))
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewClient(nil, RetryConfig{
+		MaxRetries:  3,
+		BaseBackoff: 1 * time.Millisecond,
+		MaxBackoff:  5 * time.Second, // generous so the HTTP-date is honored
+	})
+	req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	resp, err := c.Do(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Do error: %v", err)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Errorf("server call count = %d, want 2", got)
+	}
+}
+
+// TestDo_RateLimitDeadlineExceededDuringWait covers the DeadlineExceeded
+// branch in the retry loop, which wraps ctx.Err into a TimeoutError. Pairs
+// with TestDo_RateLimitContextCancellationDuringWait (Canceled branch).
+func TestDo_RateLimitDeadlineExceededDuringWait(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewClient(nil, RetryConfig{
+		MaxRetries:  3,
+		BaseBackoff: 1 * time.Millisecond,
+		MaxBackoff:  120 * time.Second,
+	})
+	req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+
+	resp, err := c.Do(ctx, req)
+	if err == nil {
+		_ = resp.Body.Close()
+		t.Fatal("Do returned nil error, want TimeoutError")
+	}
+	var sErr *common.ScorecardError
+	if !errors.As(err, &sErr) || sErr.Type != common.ErrorTypeTimeout {
+		t.Fatalf("err type = %v %v, want TimeoutError", err, err)
 	}
 }
 
