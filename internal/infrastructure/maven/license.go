@@ -49,6 +49,9 @@ func (c *Client) FetchLicenses(ctx context.Context, groupID, artifactID, version
 	}
 	props := c.mergeProps(pom, nil, g, a, v)
 	out := make([]domain.ResolvedLicense, 0, len(pom.Licenses.License))
+	// Track keys to deduplicate same-license-twice declarations. Identifier is
+	// the natural key for SPDX entries; non-standard entries fall back to Raw.
+	seen := make(map[string]struct{}, len(pom.Licenses.License))
 	for _, lic := range pom.Licenses.License {
 		name := strings.TrimSpace(expand(props, lic.Name))
 		urlStr := strings.TrimSpace(expand(props, lic.URL))
@@ -56,6 +59,14 @@ func (c *Client) FetchLicenses(ctx context.Context, groupID, artifactID, version
 		if rl.IsZero() {
 			continue
 		}
+		key := rl.Identifier
+		if key == "" {
+			key = "raw:" + rl.Raw
+		}
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
 		out = append(out, rl)
 	}
 	if len(out) == 0 {
@@ -66,6 +77,10 @@ func (c *Client) FetchLicenses(ctx context.Context, groupID, artifactID, version
 
 // resolvePOMLicense applies the per-<license> decision tree.
 // name and urlStr must already be trimmed and have property placeholders expanded.
+//
+// Raw precedence: when <name> is present the human-readable name is preserved
+// in Raw (even when SPDX resolution succeeded via the URL fallback path); the
+// URL is only stored as Raw for url-only entries.
 func resolvePOMLicense(name, urlStr string) domain.ResolvedLicense {
 	raw := name
 	if raw == "" {

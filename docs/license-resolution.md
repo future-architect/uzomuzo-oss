@@ -188,7 +188,7 @@ Pre-fetch short-circuit: if `ProjectLicense.IsSPDX` AND every `RequestedVersionL
 
 ### Best-effort + rate-limit policy
 
-The enricher is **best-effort**: per-coordinate fetch failures (transport, 5xx, 429, decode errors) are logged at WARN level (`license_manifest_fetch_failed`) and the analysis is left untouched — affected packages remain `*-nonstandard` rather than being lost. Per-client in-memory caches deduplicate within a single scan.
+The enricher is **best-effort**: per-coordinate fetch failures (transport, 5xx, decode errors) are logged at WARN level as `license_manifest_fetch_failed`; HTTP 429 responses log as `license_manifest_rate_limited` so they can be monitored independently. The analysis is left untouched in all cases — affected packages remain `*-nonstandard` rather than being lost. Within a single batch the dispatcher deduplicates by (groupId, artifactId, version) so identical coordinates issue exactly one HTTP request.
 
 Maven Central applies CDN-layer rate limits to anonymous traffic. If 429s become frequent in production, follow-up work can add `MaxConcurrency` / `RequestInterval` controls to the Maven client (mirroring the GitHub client). For now the bounded fan-out of `enrichPyPISummary` provides equivalent shape without explicit caps.
 

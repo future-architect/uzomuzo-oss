@@ -6,19 +6,23 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common"
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 // enrichLicenseFromManifest is the third-tier license fallback: when deps.dev
 // (Project + Version) and GitHub `licenseInfo` have both failed to yield a
-// canonical SPDX, it consults the package's own ecosystem manifest (Maven POM
-// in this PR; .nuspec / PyPI metadata wired in follow-up PRs).
+// canonical SPDX, it consults the package's own ecosystem manifest. This PR
+// wires Maven only; NuGet `.nuspec` and PyPI metadata fallbacks land in
+// follow-up PRs and will extend this dispatcher with a per-ecosystem switch.
 //
 // DDD Layer: Infrastructure (parallel best-effort enrichment, mirroring the
 // WaitGroup-only fan-out used by enrichPyPISummary). Concurrency is unbounded
-// (one goroutine per unique manifest coordinate); deduplication within a single
-// scan comes from the jobs map that groups analyses by Maven coordinate.
+// (one goroutine per unique manifest coordinate). Within a single batch, the
+// jobs map deduplicates by (groupId, artifactId, version) so identical
+// coordinates issue exactly one POM lookup even when multiple analyses share
+// them.
 //
 // Override rules:
 //   - Skip an analysis entirely when ProjectLicense is already canonical SPDX
@@ -26,13 +30,15 @@ import (
 //     before any HTTP).
 //   - For each manifest license, write to RequestedVersionLicenses when the slice
 //     is empty or composed entirely of non-SPDX entries.
-//   - Promote the first SPDX manifest license to ProjectLicense when the current
-//     ProjectLicense is zero or non-standard.
+//   - Promote the first SPDX manifest license (in <licenses> document order) to
+//     ProjectLicense when the current ProjectLicense is zero or non-standard.
 //   - Never overwrite a current canonical SPDX in either field; log a WARN with
 //     "license_disagreement" when the manifest disagrees so we can audit later.
 //
-// Best-effort: per-coordinate fetch failures are logged at WARN level
-// ("license_manifest_fetch_failed") and the analysis is left untouched.
+// Best-effort: per-coordinate fetch failures are logged at WARN as
+// "license_manifest_fetch_failed" and the analysis is left untouched. HTTP 429
+// responses surface as "license_manifest_rate_limited" (distinct event name) so
+// production telemetry can monitor rate-limit pressure separately.
 func (s *IntegrationService) enrichLicenseFromManifest(ctx context.Context, analyses map[string]*domain.Analysis) {
 	if s.mavenClient == nil || len(analyses) == 0 {
 		return
@@ -50,6 +56,7 @@ func (s *IntegrationService) enrichLicenseFromManifest(ctx context.Context, anal
 		}
 		parsed, err := parser.Parse(a.Package.PURL)
 		if err != nil {
+			slog.Debug("license_manifest_purl_parse_failed", "purl", a.Package.PURL, "error", err)
 			continue
 		}
 		group := strings.TrimSpace(parsed.Namespace())
@@ -72,7 +79,11 @@ func (s *IntegrationService) enrichLicenseFromManifest(ctx context.Context, anal
 			defer wg.Done()
 			lics, found, err := s.mavenClient.FetchLicenses(ctx, k.group, k.artifact, k.version)
 			if err != nil {
-				slog.Warn("license_manifest_fetch_failed",
+				event := "license_manifest_fetch_failed"
+				if common.IsRateLimitError(err) {
+					event = "license_manifest_rate_limited"
+				}
+				slog.Warn(event,
 					"ecosystem", "maven",
 					"group_id", k.group,
 					"artifact_id", k.artifact,
@@ -113,13 +124,18 @@ func needsManifestLicense(a *domain.Analysis) bool {
 
 // applyManifestLicenses merges manifest-derived licenses into the analysis,
 // applying the override rules documented on enrichLicenseFromManifest.
+//
+// When the manifest reports multiple SPDX entries (multi-licensed POMs), the
+// first entry in <licenses> document order is promoted to ProjectLicense. The
+// full list — including any subsequent SPDX entries — is written to
+// RequestedVersionLicenses when that slice is empty or entirely non-SPDX.
+// Document order is treated as authoritative because Maven publishers list
+// the primary license first by convention.
 func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) {
 	if a == nil || len(lics) == 0 {
 		return
 	}
 
-	// Pick the best entry: prefer SPDX over non-standard, taking the first match
-	// in either case. Order in the manifest is treated as authoritative.
 	var bestSPDX *domain.ResolvedLicense
 	for i := range lics {
 		if lics[i].IsSPDX {
@@ -139,7 +155,7 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) {
 				"existing", a.ProjectLicense.Identifier,
 				"manifest_source", bestSPDX.Source,
 				"manifest", bestSPDX.Identifier,
-				"purl", purlForLog(a))
+				"purl", a.Package.PURL)
 		}
 	} else if a.ProjectLicense.IsZero() {
 		// Manifest had no SPDX but did report something — record the first non-standard.
@@ -152,19 +168,4 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) {
 	if len(a.RequestedVersionLicenses) == 0 || allVersionLicensesNonSPDX(a.RequestedVersionLicenses) {
 		a.RequestedVersionLicenses = append([]domain.ResolvedLicense(nil), lics...)
 	}
-}
-
-// purlForLog returns a best-effort PURL string for log evidence. Falls back to
-// EffectivePURL or OriginalPURL when Package.PURL is empty.
-func purlForLog(a *domain.Analysis) string {
-	if a == nil {
-		return ""
-	}
-	if a.Package != nil && a.Package.PURL != "" {
-		return a.Package.PURL
-	}
-	if a.EffectivePURL != "" {
-		return a.EffectivePURL
-	}
-	return a.OriginalPURL
 }

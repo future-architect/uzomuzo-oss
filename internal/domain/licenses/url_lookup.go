@@ -11,10 +11,11 @@ import (
 // URL is not recognized.
 //
 // Comparison is case-insensitive on host and path. Scheme, query, fragment,
-// userinfo, port, and trailing ".txt"/".html"/"/" are ignored. Recognized
-// hosts include the canonical license publishers (apache.org, opensource.org,
-// gnu.org, mozilla.org, eclipse.org, creativecommons.org, unlicense.org,
-// mit-license.org, www.gnu.org variants, etc.).
+// userinfo (user:pass@), port, IPv6 zone identifiers, and trailing
+// ".txt"/".html"/"/" are ignored. Recognized hosts include the canonical
+// license publishers (apache.org, opensource.org, gnu.org, mozilla.org,
+// eclipse.org, creativecommons.org, unlicense.org, mit-license.org,
+// www.gnu.org variants, etc.).
 //
 // The table is intentionally small and hand-curated. Coverage targets the
 // long tail of legacy Maven <license><url>-only entries and pre-2019 NuGet
@@ -46,6 +47,11 @@ func normalizeLicenseURL(raw string) string {
 	if host == "" {
 		return ""
 	}
+	// Strip IPv6 zone identifier (e.g. "fe80::1%lo0" → "fe80::1") so callers do
+	// not produce distinct keys for hosts that differ only in zone scope.
+	if i := strings.IndexByte(host, '%'); i >= 0 {
+		host = host[:i]
+	}
 	host = strings.TrimPrefix(host, "www.")
 	path := strings.ToLower(u.EscapedPath())
 	// Strip trailing /, .txt, .html, .htm extensions which are interchangeable.
@@ -67,11 +73,10 @@ func normalizeLicenseURL(raw string) string {
 // with trailing slash and .txt/.html/.htm stripped.
 var licenseURLToSPDX = map[string]string{
 	// Apache
-	"apache.org/licenses/license-2.0":      "Apache-2.0",
-	"apache.org/licenses":                  "Apache-2.0",
-	"opensource.org/licenses/apache-2.0":   "Apache-2.0",
-	"opensource.org/licenses/apache2.0":    "Apache-2.0",
-	"opensource.org/licenses/apachepl-1.1": "Apache-1.1",
+	"apache.org/licenses/license-2.0":    "Apache-2.0",
+	"apache.org/licenses":                "Apache-2.0",
+	"opensource.org/licenses/apache-2.0": "Apache-2.0",
+	"opensource.org/licenses/apache2.0":  "Apache-2.0",
 
 	// MIT
 	"opensource.org/licenses/mit":             "MIT",

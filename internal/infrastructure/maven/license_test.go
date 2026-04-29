@@ -85,6 +85,21 @@ const (
     </license>
   </licenses>
 </project>`
+
+	pomDuplicateLicense = `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+  <groupId>com.example</groupId>
+  <artifactId>dupe</artifactId>
+  <version>1.0</version>
+  <licenses>
+    <license>
+      <name>Apache License 2.0</name>
+    </license>
+    <license>
+      <name>Apache-2.0</name>
+    </license>
+  </licenses>
+</project>`
 )
 
 func TestFetchLicenses(t *testing.T) {
@@ -175,6 +190,18 @@ func TestFetchLicenses(t *testing.T) {
 			name:      "pom_404_returns_not_found",
 			statusGet: http.StatusNotFound,
 			wantFound: false,
+		},
+		{
+			name:      "duplicate_license_entries_deduplicated_by_canonical_id",
+			pomBody:   pomDuplicateLicense,
+			statusGet: http.StatusOK,
+			wantFound: true,
+			want: []domain.ResolvedLicense{{
+				Identifier: "Apache-2.0",
+				Source:     domain.LicenseSourceMavenPOMSPDX,
+				Raw:        "Apache License 2.0",
+				IsSPDX:     true,
+			}},
 		},
 	}
 

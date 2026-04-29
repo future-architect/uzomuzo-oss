@@ -36,6 +36,8 @@ func TestLookupLicenseURL(t *testing.T) {
 		{name: "empty", in: "", want: ""},
 		{name: "whitespace", in: "   ", want: ""},
 		{name: "github_raw_unknown", in: "https://raw.githubusercontent.com/foo/bar/main/LICENSE", want: ""},
+		{name: "userinfo_ignored", in: "https://user:pass@www.apache.org/licenses/LICENSE-2.0", want: "Apache-2.0"},
+		{name: "explicit_port_ignored", in: "https://www.apache.org:443/licenses/LICENSE-2.0", want: "Apache-2.0"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

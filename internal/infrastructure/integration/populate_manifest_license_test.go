@@ -1,7 +1,9 @@
 package integration
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -262,5 +264,84 @@ func TestEnrichLicenseFromManifest_NilClient(t *testing.T) {
 	svc.enrichLicenseFromManifest(context.Background(), map[string]*domain.Analysis{"a": a})
 	if a.ProjectLicense.Source != domain.LicenseSourceDepsDevProjectNonStandard {
 		t.Errorf("expected analysis untouched when mavenClient is nil; got source=%q", a.ProjectLicense.Source)
+	}
+}
+
+// TestEnrichLicenseFromManifest_UnparseablePURL exercises the parse-failure
+// branch in the dispatcher: an analysis with a malformed PURL must be skipped
+// without affecting siblings or panicking.
+func TestEnrichLicenseFromManifest_UnparseablePURL(t *testing.T) {
+	const pom = `<?xml version="1.0"?><project><licenses><license><name>MIT</name></license></licenses></project>`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(pom))
+	}))
+	defer ts.Close()
+
+	mv := maven.NewClient()
+	mv.SetBaseURL(ts.URL)
+	svc := &IntegrationService{mavenClient: mv}
+
+	bad := &domain.Analysis{
+		Package:        &domain.Package{PURL: "not-a-valid-purl", Ecosystem: "maven", Version: "1"},
+		ProjectLicense: domain.ResolvedLicense{Source: domain.LicenseSourceDepsDevProjectNonStandard, Raw: "x"},
+	}
+	good := &domain.Analysis{
+		Package:        &domain.Package{PURL: "pkg:maven/com.example/widget@1.0", Ecosystem: "maven", Version: "1.0"},
+		ProjectLicense: domain.ResolvedLicense{Source: domain.LicenseSourceDepsDevProjectNonStandard, Raw: "y"},
+	}
+	svc.enrichLicenseFromManifest(context.Background(), map[string]*domain.Analysis{"bad": bad, "good": good})
+
+	if bad.ProjectLicense.Source != domain.LicenseSourceDepsDevProjectNonStandard {
+		t.Errorf("bad analysis should be untouched; got source=%q", bad.ProjectLicense.Source)
+	}
+	if good.ProjectLicense.Identifier != "MIT" {
+		t.Errorf("good analysis should be enriched to MIT; got %+v", good.ProjectLicense)
+	}
+	if len(good.RequestedVersionLicenses) != 1 || good.RequestedVersionLicenses[0].Identifier != "MIT" {
+		t.Errorf("good analysis should have RequestedVersionLicenses populated to [MIT]; got %+v", good.RequestedVersionLicenses)
+	}
+}
+
+// TestApplyManifestLicenses_DisagreementLogged installs a structured slog
+// handler and asserts that a manifest disagreeing with an existing canonical
+// SPDX produces a "license_disagreement" record carrying both sources.
+func TestApplyManifestLicenses_DisagreementLogged(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	a := &domain.Analysis{
+		Package:        &domain.Package{PURL: "pkg:maven/com.example/widget@1.0"},
+		ProjectLicense: domain.ResolvedLicense{Identifier: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX, Raw: "MIT"},
+	}
+	manifest := []domain.ResolvedLicense{{
+		Identifier: "Apache-2.0",
+		IsSPDX:     true,
+		Source:     domain.LicenseSourceMavenPOMSPDX,
+		Raw:        "Apache-2.0",
+	}}
+	applyManifestLicenses(a, manifest)
+
+	if a.ProjectLicense.Identifier != "MIT" {
+		t.Fatalf("canonical SPDX must not be overwritten; got %q", a.ProjectLicense.Identifier)
+	}
+	out := buf.String()
+	if !strings.Contains(out, `"msg":"license_disagreement"`) {
+		t.Fatalf("expected license_disagreement log; got: %s", out)
+	}
+	if !strings.Contains(out, `"existing":"MIT"`) || !strings.Contains(out, `"manifest":"Apache-2.0"`) {
+		t.Fatalf("log missing existing/manifest identifiers: %s", out)
+	}
+	// Lock the slog field names so a silent rename triggers a test failure
+	// (per the "Use Domain Constants for Domain-Defined String Values" rule).
+	if !strings.Contains(out, `"existing_source":"`+domain.LicenseSourceDepsDevProjectSPDX+`"`) {
+		t.Fatalf("log missing existing_source field: %s", out)
+	}
+	if !strings.Contains(out, `"manifest_source":"`+domain.LicenseSourceMavenPOMSPDX+`"`) {
+		t.Fatalf("log missing manifest_source field: %s", out)
+	}
+	if !strings.Contains(out, `"purl":"pkg:maven/com.example/widget@1.0"`) {
+		t.Fatalf("log missing purl evidence: %s", out)
 	}
 }

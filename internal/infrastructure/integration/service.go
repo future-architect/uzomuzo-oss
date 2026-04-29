@@ -67,8 +67,13 @@ func WithPyPIClient(c *pypi.Client) IntegrationOption {
 
 // WithMavenClient injects a Maven client used by enrichLicenseFromManifest to
 // fall back to pom.xml <licenses> when deps.dev and GitHub fail to yield a
-// canonical SPDX license. Optional — when unset, the manifest fallback is
-// skipped and Maven licenses remain as resolved by upstream sources.
+// canonical SPDX license.
+//
+// Optional in the strict sense: when unset the manifest fallback is skipped
+// and Maven licenses remain as resolved by upstream sources. In production
+// this materially reduces Maven license coverage (~38% baseline per issue
+// #327), so library users wiring their own IntegrationService should opt in.
+// NewAnalysisServiceFromConfig and NewFetchServiceFromConfig wire it eagerly.
 func WithMavenClient(c *maven.Client) IntegrationOption {
 	return func(s *IntegrationService) { s.mavenClient = c }
 }

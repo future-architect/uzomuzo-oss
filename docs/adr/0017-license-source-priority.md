@@ -53,7 +53,7 @@ This keeps the marginal HTTP cost proportional to actual coverage gaps.
 
 ### Best-effort + rate-limit policy
 
-Manifest fetches are best-effort. Per-coordinate failures (transport, 5xx, 429, decode) are logged at WARN as `license_manifest_fetch_failed` and the analysis is left untouched — affected packages remain `*-nonstandard` rather than being lost. Per-client in-memory caches deduplicate within a single scan.
+Manifest fetches are best-effort. Per-coordinate failures (transport, 5xx, decode) are logged at WARN as `license_manifest_fetch_failed`; HTTP 429 responses log as `license_manifest_rate_limited` so production telemetry can monitor rate-limit pressure separately. In all cases the analysis is left untouched — affected packages remain `*-nonstandard` rather than being lost. Within a single batch the dispatcher deduplicates by (groupId, artifactId, version) so identical coordinates issue exactly one POM lookup.
 
 The shared `httpclient` package currently fails fast on HTTP 429 without honoring `Retry-After`. Maven Central applies CDN-layer rate limits to anonymous traffic. If 429 becomes frequent in production, follow-up work will:
 
