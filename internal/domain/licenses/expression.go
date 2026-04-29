@@ -20,11 +20,15 @@ type ExprNode struct {
 // clause, or a free-text license name normalized via Normalize.
 type ExprLicense struct {
 	// Raw is the source substring this leaf was built from, including any
-	// "+" suffix and WITH clause attached during parsing. When an outer WITH
-	// is distributed onto a Compound (recovery for "(A OR B) WITH X"), each
-	// leaf's Raw is rewritten to include the inherited exception — Raw thus
-	// reflects the leaf's effective form, not necessarily a verbatim slice
-	// of the original input.
+	// "+" suffix and WITH clause attached during parsing. Two transformations
+	// can make Raw differ from a verbatim slice of the input:
+	//   - When an outer WITH is distributed onto a Compound (recovery for
+	//     "(A OR B) WITH X"), each *bare* leaf's Raw is rewritten to include
+	//     the inherited exception. Leaves that already carry their own
+	//     exception retain their original Raw.
+	//   - The lexer collapses runs of whitespace between adjacent IDENT chunks
+	//     into a single space when merging them into a free-text license name
+	//     (so "Apache  License\t2.0" lands as "Apache License 2.0").
 	Raw string
 	// Identifier is the canonical SPDX ID of the base license, or "" when the
 	// base did not normalize to SPDX. The "+" suffix and WITH clause are NOT
@@ -111,6 +115,13 @@ const maxExpressionLength = 64 * 1024
 //   - WITH chain ("A WITH B WITH C"): the first exception attaches to A;
 //     subsequent WITHs are silently truncated because parseWith only
 //     consumes one exception per primary.
+//   - Tokens following a complete top-level expression are silently dropped
+//     ("(MIT) (Apache-2.0)" returns just MIT). Bare-identifier sequences
+//     without an operator like "MIT BSD" exercise a different path — the
+//     lexer merges adjacent IDENTs into a single free-text identifier
+//     ("MIT BSD"), see Tokenization above.
+//     Recovery is best-effort — callers that need to detect "extra junk"
+//     must compare Root.String() to Raw themselves.
 //   - The parser never returns an error — consumers ingesting external data
 //     can treat a nil Root as "could not extract any license info" and fall
 //     back to their non-SPDX path.
@@ -175,8 +186,12 @@ func (n *ExprNode) String() string {
 
 // String renders an ExprLicense leaf as "<id>[+][ WITH <exception>]". When
 // the base did not normalize to SPDX, Raw of the base portion is used as a
-// best-effort fallback.
+// best-effort fallback. Returns "" for a nil receiver, matching
+// (*ExprNode).String() so both Stringers are uniformly nil-safe.
 func (l *ExprLicense) String() string {
+	if l == nil {
+		return ""
+	}
 	base := l.Identifier
 	if base == "" {
 		base = l.baseRaw()

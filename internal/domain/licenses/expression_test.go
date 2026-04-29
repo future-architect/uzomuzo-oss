@@ -383,10 +383,12 @@ func TestParseExpression_LeafNormalization(t *testing.T) {
 	}
 }
 
-// TestParseExpression_TerminationGuards lock in non-amplification: a long
-// flat OR chain (1024 operands) and deeply nested parens (512 levels) must
-// both complete without panic. The cap test pins the strict-> comparison
-// against future "≥" regressions.
+// TestParseExpression_TerminationGuards verifies graceful handling at large
+// inputs: a long flat OR chain (1024 operands) and deeply nested parens
+// (512 levels) both complete without panic, and an input exactly at the
+// length cap is still accepted (pinning the strict ">" comparison against
+// future "≥" regressions). These are not hard caps — termination is bounded
+// by maxExpressionLength, not by an explicit recursion / chain limit.
 func TestParseExpression_TerminationGuards(t *testing.T) {
 	t.Run("long_flat_chain", func(t *testing.T) {
 		const operandCount = 1024
@@ -570,24 +572,48 @@ func TestParseExpression_WithChain(t *testing.T) {
 // OrLater. Bare "+" and "++" do NOT set OrLater — they are passed verbatim
 // to the SPDX normalizer, whose alias-key collapsing may still resolve some
 // to a canonical ID, but that is the table's call, not the parser's.
+//
+// The "Apache-2.0++" case also pins a silent input-data-loss path: the parser
+// preserves Raw verbatim but the rendered String() drops the second "+"
+// because Normalize() aliases "Apache-2.0++" → canonical "Apache-2.0". The
+// test asserts the rendered form so a future change cannot accidentally
+// promote double-plus to "or-later" semantics.
 func TestParseExpression_PlusEdgeCases(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
-		wantOrLater bool
+		name           string
+		input          string
+		wantOrLater    bool
+		wantIdentifier string
+		wantRendered   string
 	}{
-		{name: "single_trailing_plus_sets_or_later", input: "Apache-2.0+", wantOrLater: true},
-		{name: "double_plus_does_not_set_or_later", input: "Apache-2.0++", wantOrLater: false},
-		{name: "bare_plus_does_not_set_or_later", input: "+", wantOrLater: false},
+		{
+			name: "single_trailing_plus_sets_or_later", input: "Apache-2.0+",
+			wantOrLater: true, wantIdentifier: "Apache-2.0", wantRendered: "Apache-2.0+",
+		},
+		{
+			name: "double_plus_does_not_set_or_later", input: "Apache-2.0++",
+			wantOrLater: false, wantIdentifier: "Apache-2.0", wantRendered: "Apache-2.0",
+		},
+		{
+			name: "bare_plus_does_not_set_or_later", input: "+",
+			wantOrLater: false, wantIdentifier: "", wantRendered: "+",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			leaves := ParseExpression(tt.input).Leaves()
+			res := ParseExpression(tt.input)
+			leaves := res.Leaves()
 			if len(leaves) != 1 {
 				t.Fatalf("expected 1 leaf, got %d", len(leaves))
 			}
 			if leaves[0].OrLater != tt.wantOrLater {
 				t.Errorf("OrLater = %v, want %v (raw=%q)", leaves[0].OrLater, tt.wantOrLater, leaves[0].Raw)
+			}
+			if leaves[0].Identifier != tt.wantIdentifier {
+				t.Errorf("Identifier = %q, want %q", leaves[0].Identifier, tt.wantIdentifier)
+			}
+			if got := res.Root.String(); got != tt.wantRendered {
+				t.Errorf("String() = %q, want %q", got, tt.wantRendered)
 			}
 		})
 	}
@@ -676,6 +702,45 @@ func TestParseExpression_AdjacentSimpleExpressions(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestParseExpression_TrailingOperators pins recovery for inputs ending in a
+// dangling binary operator. The grammar requires a right-hand operand, but
+// real-world Maven POM and ClearlyDefined data occasionally truncate. The
+// parser drops the trailing operator and returns the left primary unchanged
+// — never produces a degenerate single-operand Compound. WITH at end-of-
+// input falls through to the same recovery path as "WITH not followed by an
+// identifier".
+func TestParseExpression_TrailingOperators(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []leafSummary
+	}{
+		{
+			name:  "or_at_end",
+			input: "Apache-2.0 OR ",
+			want:  []leafSummary{{Raw: "Apache-2.0", Identifier: "Apache-2.0"}},
+		},
+		{
+			name:  "and_at_end",
+			input: "Apache-2.0 AND ",
+			want:  []leafSummary{{Raw: "Apache-2.0", Identifier: "Apache-2.0"}},
+		},
+		{
+			name:  "with_at_end_no_exception",
+			input: "Apache-2.0 WITH ",
+			want:  []leafSummary{{Raw: "Apache-2.0", Identifier: "Apache-2.0"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := summarize(ParseExpression(tt.input))
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("\n got %#v\nwant %#v", got, tt.want)
 			}
 		})
 	}
