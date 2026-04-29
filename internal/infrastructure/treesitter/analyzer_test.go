@@ -10,13 +10,13 @@ import (
 )
 
 // TestAnalyzer_CloseIdempotent verifies that Analyzer.Close can be called
-// multiple times without panic and that the Analyzer is no longer usable
-// after Close. The official tree-sitter Go bindings require explicit Close
+// multiple times without panic and that subsequent AnalyzeCoupling calls
+// do not panic. The official tree-sitter Go bindings require explicit Close
 // on Parser/Tree/Query/QueryCursor, so callers may combine
 // `defer analyzer.Close()` and a test cleanup that calls it again — both
-// must be safe. The post-Close call to AnalyzeCoupling must not panic and
-// must return without performing source coupling analysis (the per-language
-// nil-query guard inside extractImports/countCallSites takes over).
+// must be safe. After Close, AnalyzeCoupling still walks and parses files
+// but returns a nil result because the per-language nil-query guards inside
+// extractImports/countCallSites prevent import/call extraction.
 func TestAnalyzer_CloseIdempotent(t *testing.T) {
 	analyzer := NewAnalyzer()
 	analyzer.Close()

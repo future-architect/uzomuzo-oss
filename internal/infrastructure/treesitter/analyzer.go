@@ -104,19 +104,18 @@ func compileQueries(cfg *langConfig) {
 }
 
 // Close releases the C-side resources held by compiled queries. Callers must
-// invoke Close exactly once when the Analyzer is no longer needed; the
-// official tree-sitter Go bindings do not use runtime finalizers due to
-// known CGO interactions, so explicit cleanup is required.
+// invoke Close when the Analyzer is no longer needed; the official
+// tree-sitter Go bindings do not use runtime finalizers due to known CGO
+// interactions, so explicit cleanup is required. Multiple calls are safe.
 //
 // Close is idempotent: a nil compiledImport/compiledCall (compilation failure
 // at NewAnalyzer time) is treated as already-released, and calling Close
 // twice is safe because each compiled query is set to nil after release.
 //
 // Close must NOT be called concurrently with AnalyzeCoupling; the Analyzer
-// holds no internal mutex. After Close returns, the Analyzer is no longer
-// usable — subsequent AnalyzeCoupling calls return without performing source
-// coupling analysis (every per-language query is nil-guarded by the
-// extractImports/countCallSites entry checks).
+// holds no internal mutex. After Close returns, subsequent AnalyzeCoupling
+// calls will not panic but return a nil result because every per-language
+// query is nil-guarded by the extractImports/countCallSites entry checks.
 func (a *Analyzer) Close() {
 	for _, cfg := range a.configs {
 		if cfg.compiledImport != nil {
