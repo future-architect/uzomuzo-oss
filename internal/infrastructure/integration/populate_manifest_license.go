@@ -18,8 +18,8 @@ import (
 // follow-up PRs and will extend this dispatcher with a per-ecosystem switch.
 //
 // DDD Layer: Infrastructure (parallel best-effort enrichment, mirroring the
-// WaitGroup-only fan-out used by enrichPyPISummary). Concurrency is unbounded
-// (one goroutine per unique manifest coordinate). Within a single batch, the
+// WaitGroup-only fan-out used by enrichPyPISummary). Concurrency is bounded
+// by a semaphore (maxManifestFetchConcurrency). Within a single batch, the
 // jobs map deduplicates by (groupId, artifactId, version) so identical
 // coordinates issue exactly one POM lookup even when multiple analyses share
 // them.
@@ -72,11 +72,17 @@ func (s *IntegrationService) enrichLicenseFromManifest(ctx context.Context, anal
 		return
 	}
 
+	const maxManifestFetchConcurrency = 10
+	sem := make(chan struct{}, maxManifestFetchConcurrency)
+
 	var wg sync.WaitGroup
 	for k, targets := range jobs {
 		wg.Add(1)
 		go func(k mavenKey, targets []*domain.Analysis) {
 			defer wg.Done()
+
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			lics, found, err := s.mavenClient.FetchLicenses(ctx, k.group, k.artifact, k.version)
 			if err != nil {
 				event := "license_manifest_fetch_failed"

@@ -248,8 +248,8 @@ func TestEnrichLicenseFromManifest_EndToEnd(t *testing.T) {
 
 	hitsMu.Lock()
 	defer hitsMu.Unlock()
-	if hits == 0 {
-		t.Fatalf("expected at least one POM fetch, got 0")
+	if hits != 1 {
+		t.Fatalf("expected exactly 1 POM fetch, got %d", hits)
 	}
 }
 

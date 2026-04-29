@@ -89,7 +89,7 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 	pkgClient := packagist.NewClient()
 	pyClient := pypi.NewClient()
 	mvClient := maven.NewClient()
-	if u := cfg.Maven.BaseURL; strings.TrimSpace(u) != "" {
+	if u := strings.TrimSpace(cfg.Maven.BaseURL); u != "" {
 		mvClient.SetBaseURL(u)
 		slog.Debug("Maven base URL configured", "base_url", u)
 	}
