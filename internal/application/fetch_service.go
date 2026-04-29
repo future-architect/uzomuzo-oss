@@ -37,23 +37,22 @@ func NewFetchServiceFromConfig(cfg *config.Config) *FetchService {
 	rgClient := rubygems.NewClient()
 	pkgClient := packagist.NewClient()
 	pyClient := pypi.NewClient()
+	mvClient := maven.NewClient()
+	if u := strings.TrimSpace(cfg.Maven.BaseURL); u != "" {
+		mvClient.SetBaseURL(u)
+		slog.Debug("Maven base URL configured", "base_url", u)
+	}
 	depsdevClient := depsdev.NewDepsDevClient(&cfg.DepsDev).
 		WithRubyGems(rgClient).
 		WithPackagist(pkgClient).
 		WithPyPI(pyClient).
-		WithMaven(func() *maven.Client {
-			mv := maven.NewClient()
-			if u := cfg.Maven.BaseURL; strings.TrimSpace(u) != "" {
-				mv.SetBaseURL(u)
-				slog.Debug("Maven base URL configured", "base_url", u)
-			}
-			return mv
-		}())
+		WithMaven(mvClient)
 	integrationService := integration.NewIntegrationService(githubClient, depsdevClient,
 		integration.WithConfig(cfg),
 		integration.WithRubyGemsClient(rgClient),
 		integration.WithPackagistClient(pkgClient),
 		integration.WithPyPIClient(pyClient),
+		integration.WithMavenClient(mvClient),
 	)
 	return &FetchService{integrationService: integrationService}
 }

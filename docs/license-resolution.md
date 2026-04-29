@@ -36,6 +36,8 @@ Defined in `internal/domain/analysis/models.go`. Used for both the project level
 | `LicenseSourceGitHubProjectNonStandard` | `github-project-nonstandard` | GitHub license is non-SPDX (empty/NOASSERTION spdxId or cannot normalize) |
 | `LicenseSourceGitHubVersionSPDX` | `github-version-spdx` | Reserved (unused) |
 | `LicenseSourceGitHubVersionRaw` | `github-version-raw` | Reserved (unused) |
+| `LicenseSourceMavenPOMSPDX` | `maven-pom-spdx` | Maven Central pom.xml `<licenses>` resolved to canonical SPDX (via `<name>` normalization or `<url>` lookup) |
+| `LicenseSourceMavenPOMNonStandard` | `maven-pom-nonstandard` | Maven pom.xml `<licenses>` entry yielded a non-SPDX value (raw `<name>` or `<url>` preserved) |
 | `LicenseSourceProjectFallback` | `project-fallback` | Project SPDX copied to Version lacking SPDX / having only non-SPDX |
 | `LicenseSourceDerivedFromVersion` | `derived-from-version` | Single Version SPDX promoted to project license |
 
@@ -49,6 +51,7 @@ Defined in `internal/domain/analysis/models.go`. Used for both the project level
 4. All Version entries are non-SPDX & Project has SPDX → replace with single `project-fallback`
 5. Project empty/non-standard & Version has unique SPDX → promote to Project (`derived-from-version`)
 6. GitHub enrichment: if Project is still empty/non-standard, use GitHub license (SPDX or non-standard)
+7. **Ecosystem-native manifest fallback** (Maven only at present, NuGet/PyPI follow): if Project remains empty/non-standard or any version slice still lacks SPDX, fetch the package's own manifest (`pom.xml`) and apply its `<licenses>` declarations. SPDX results override `*-nonstandard` sources; canonical SPDX is never overwritten (disagreement is logged at WARN). See [Ecosystem-Native Fallback](#ecosystem-native-fallback) below.
 
 ## Promotion and Fallback Conditions
 
@@ -144,9 +147,55 @@ Flow summary: (1) SPDX-priority collection → (2) dedup/normalize → (3) if em
 
 Callers should use intention helpers instead of branching on `Source` directly.
 
+## Ecosystem-Native Fallback
+
+deps.dev and GitHub `licenseInfo` together cover most npm/Go/Cargo/Gem/Composer packages but leave a long tail unresolved for ecosystems whose authoritative license metadata lives in the package's own manifest. Observed coverage on a 30k+ package downstream sample:
+
+| Ecosystem | Coverage before fallback |
+|---|---:|
+| composer / golang / cargo / gem / npm | 74–89% |
+| pypi | 62% |
+| **maven** | **38%** |
+| **nuget** | **35%** |
+
+The third-tier fallback fetches the package's own ecosystem manifest after deps.dev and GitHub enrichment have run.
+
+| Ecosystem | Source | Status |
+|---|---|---|
+| Maven | `pom.xml` `<licenses>` from Maven Central | Implemented (`internal/infrastructure/maven/license.go`) |
+| NuGet | `.nuspec` `<license>` / `<licenseUrl>` from `api.nuget.org` | Planned (follow-up PR) |
+| PyPI | JSON API `info.license_expression` / `classifiers` / `info.license` | Planned (follow-up PR) |
+
+### Maven `<licenses>` decision tree (per entry)
+
+1. `<name>` normalized via `NormalizeLicenseIdentifier` → SPDX → emit `maven-pom-spdx`.
+2. Else `<url>` looked up against the curated SPDX URL table (`internal/domain/licenses/url_lookup.go`, ~30 entries covering apache.org, opensource.org, gnu.org, mozilla.org, eclipse.org, creativecommons.org, etc.) → SPDX → emit `maven-pom-spdx`.
+3. Else preserve `<name>` (or `<url>` if no name) as `Raw`, emit `maven-pom-nonstandard` with `Identifier` empty.
+
+`<licenses>` may contain multiple entries — each is emitted as its own `ResolvedLicense`. The dispatcher in `internal/infrastructure/integration/populate_manifest_license.go` then picks the first SPDX entry as the candidate `ProjectLicense` and writes the full list to `RequestedVersionLicenses` when the existing slice is empty or all non-SPDX.
+
+Parent POM inheritance is intentionally skipped in v1: the additional HTTP cost is rarely repaid (license declarations are typically per-artifact in Maven by convention). Revisit if telemetry shows >5% of misses are inheritance-bound.
+
+### Override rules (any ecosystem)
+
+| Existing `Source` | Manifest = SPDX | Manifest = non-SPDX |
+|---|---|---|
+| `IsZero()` | take it (`*-spdx`) | take it (`*-nonstandard`) |
+| `*-nonstandard` / `*-raw` (any layer) | replace | no-op |
+| Canonical SPDX (any layer) | no-op (log `license_disagreement` at WARN) | no-op |
+
+Pre-fetch short-circuit: if `ProjectLicense.IsSPDX` AND every `RequestedVersionLicenses` entry is canonical SPDX, the enricher skips the analysis entirely without issuing any HTTP.
+
+### Best-effort + rate-limit policy
+
+The enricher is **best-effort**: per-coordinate fetch failures (transport, 5xx, decode errors) are logged at WARN level as `license_manifest_fetch_failed`; HTTP 429 responses log as `license_manifest_rate_limited` so they can be monitored independently. The analysis is left untouched in all cases — affected packages remain `*-nonstandard` rather than being lost. Within a single batch the dispatcher deduplicates by (groupId, artifactId, version) so identical coordinates issue exactly one HTTP request.
+
+Maven Central applies CDN-layer rate limits to anonymous traffic. If 429s become frequent in production, follow-up work can add `MaxConcurrency` / `RequestInterval` controls to the Maven client (mirroring the GitHub client). For now the bounded fan-out of `enrichPyPISummary` provides equivalent shape without explicit caps.
+
 ## Future Extensions (Planned / Optional)
 
 - SPDX expression parsing / validation
-- Additional sources (registry manifests, LICENSE file hashes, SBOM import)
+- NuGet `.nuspec` and PyPI `info.*` license-source wiring (issue #327, follow-up PRs)
+- Auto-generation of the URL→SPDX table from upstream SPDX `seeAlso` field via `cmd/uzomuzo update-spdx`
 - Manual override channel (`manual-project-spdx`, etc.)
 - Confidence / scoring layer reintroduction

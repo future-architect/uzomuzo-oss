@@ -15,6 +15,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Reject Flags That Silently Have No Effect**: When a CLI flag only applies to a specific input mode (e.g., `--sample` for PURL list files), explicitly reject it with a clear error when the input is a different mode (e.g., go.mod or SBOM). Do not silently ignore the flag — users assume their flags take effect.
 - **Deduplicate Inputs Before Batch API Calls**: When accepting user-provided input lists (PURLs, URLs) that feed into batch API calls, deduplicate them while preserving first-seen order before processing. Duplicates cause redundant external calls, skew logging/counts, and waste resources.
 - **Normalize User-Provided Enum Values**: When accepting string values for format selectors, mode switches, or other enums from CLI flags, normalize with `strings.TrimSpace(strings.ToLower(...))` before validation. Case-sensitive matching rejects common inputs like `--format JSON` or `--format "json "`.
+- **Normalize Config Values Once Before Guard and Use**: When a config-sourced value is validated (e.g., `strings.TrimSpace(v) != ""`) and then used, assign the normalized result to a variable and use that variable for both the guard and subsequent operations (`SetBaseURL`, logging). Checking `TrimSpace(v)` in the guard but passing the original `v` to the consumer silently passes whitespace-padded values, producing invalid URLs or config entries.
 - **Doc Comments Must Match Type-Level Constraints**: When writing doc comments, ensure stated conditions are possible for the parameter types — do not document "nil" for non-pointer types (e.g., `string`, `int`), do not claim a knob controls APIs it does not actually affect, and do not name only a subset of the languages/contexts that use a shared constant. When test names or comment examples reference specific inputs, they must match the actual values under test. Comments that describe impossible states or overstate scope create false confidence and mislead future maintainers.
 - **Match `net/url` Function to Semantic Context**: When manipulating URL components, select the `net/url` function that matches the component's semantics — `u.Hostname()` (not `u.Host`) when only the hostname is needed (avoids including the port), `url.PathUnescape`/`url.PathEscape` (not `url.QueryUnescape`/`url.QueryEscape`) for URL path segments (avoids `+`-as-space misinterpretation). Mismatched functions silently corrupt values containing reserved characters like `:`, `+`, or `@`.
 - **Enforce Access Constraints on All CI Trigger Paths**: When a CI workflow guards against cross-repository or fork PRs on the `pull_request` trigger (e.g., `head.repo.full_name == github.repository`), enforce the same constraint in code paths reachable by other triggers (`schedule`, `workflow_dispatch`) that bypass the trigger-level guard. Unguarded paths can fire privileged operations (e.g., GraphQL mutations with a PAT) on fork PRs, causing auth failures or unintended side effects. Similarly, use generous page sizes (e.g., `first:100` instead of `first:20`) in paginated API verification queries to avoid false negatives that trigger unnecessary retries.
@@ -73,6 +74,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Verify Tree-Sitter Query Patterns Do Not Overlap**: When adding new tree-sitter (or similar AST) query patterns to a multi-pattern query, verify that the new pattern does not match nodes already captured by an existing pattern via parent-child nesting. For example, a standalone `member_expression` pattern already matches the inner `pkg.Foo` node inside `new pkg.Foo()`, so adding a `new_expression` wrapping `member_expression` pattern would double-count the same call site. Test with representative code that exercises both the new and existing patterns.
 - **Constrain Tree-Sitter Queries with Predicates for Framework-Specific Patterns**: When adding tree-sitter query patterns that target framework-specific AST shapes (e.g., Angular decorators, Vue component registrations), use `#eq?` or `#match?` predicates to constrain matches to the intended decorator names, function names, and property keys. Unconstrained structural patterns (e.g., "any decorator with an array argument") match far more broadly than intended and introduce false-positive call sites from unrelated code that happens to share the same AST shape. Always verify that `FilterPredicates` is called in the match loop so predicates are actually applied, and use dedicated capture names for predicate-only captures (e.g., `@decorator`, `@metaKey`) that are excluded from counting logic.
 
+- **Align Gating Predicates with Gated Function Semantics**: When a predicate function (e.g., `needsX()`) decides whether to invoke a downstream operation (e.g., `applyX()`), its conditions must mirror the downstream function's actual write/replace rules. A looser predicate triggers wasted work (e.g., HTTP fetches whose results are never applied); a tighter predicate silently skips cases the downstream function would handle. Similarly, when short-circuiting a function that returns a result struct inspected by downstream sentinel checks, populate all sentinel fields even on graceful skip paths — a zero-value struct with nil sentinel fields breaks downstream logic.
 - **Guard Ecosystem-Specific Heuristics by PURL Type**: When a detection heuristic (aggregator flattening, workspace detection, monorepo inference) is designed for a specific package ecosystem, guard it with an explicit PURL type check (e.g., `rootType != "maven"`). Structural properties like shared namespaces and parent-child dependency trees exist across ecosystems (Maven groupIds, npm scopes, PyPI namespaces) but have different semantics. Without a type guard, a Maven-specific heuristic can misfire on npm or other ecosystems that happen to share the same structural pattern, silently rewriting dependency graphs.
 - **Verify External-Service URL Conventions Against the Live Service, Not Folklore**: When generating URLs for external services (deps.dev, npm registry, mvnrepository, etc.), don't trust the obvious-looking pattern from the package coordinates — services often have non-obvious URL conventions (e.g., deps.dev's React Router pattern `/:system/:name/:version?` matches `:name` against `[^/]+` only, so multi-segment names *must* be path-escaped; Maven uses `groupId:artifactId` joined with `:`, not `/`; deps.dev does not host Packagist/Hex/Swift despite accepting any path server-side because its SPA shell always returns 200). Verify by hitting the service's actual data endpoint (or simulating its router) for both common cases and edge cases (multi-segment names, scoped packages, ecosystem-specific separators) before claiming the URL works. Bake the verification into the test suite as an opt-in live probe (env-var gated, e.g., `UZOMUZO_LIVE_PROBE=1`, so `go test ./...` stays hermetic) and pin the expected-URL fixture inside the test file so the cross-file convention can't drift silently between near-duplicate helpers.
 
@@ -94,6 +96,32 @@ Schema (YAML-in-Markdown):
 
 ```yaml
 pending_patterns:
+  - category: "defensive-coding"
+    summary: "Sanitize shell variables before embedding in GitHub Actions ::warning:: workflow commands — multi-line content or :: sequences break command parsing and can inject accidental workflow commands; emit a short single-line warning and log the full payload separately"
+    pr: 338
+    file: ".github/workflows/copilot-clean-label.yml"
+    date: "2026-04-28"
+  - category: "testing"
+    summary: "Test failure branch accessed struct field through potentially-nil pointer in error message — split nil guard (t.Fatalf) from value assertion to prevent panic masking the actual regression"
+    pr: 318
+    file: "internal/infrastructure/integration/populate_project_test.go"
+    date: "2026-04-20"
+  - category: "defensive-coding"
+    summary: "When a multi-branch resolution function (e.g., name-first then URL fallback) records evidence in a Raw/provenance field, set Raw to the input that actually produced the match — not the input from a prior branch that failed. Misattributed Raw values lose traceability for debugging and audit"
+    pr: 345
+    file: "internal/infrastructure/maven/license.go"
+    date: "2026-04-29"
+  - category: "concurrency"
+    summary: "Acquire bounded-concurrency semaphore before launching goroutine (not inside it) and select on ctx.Done to stop dispatch on cancellation — avoids spawning thousands of parked goroutines and respects context lifecycle"
+    prs: [345]
+    instances: 2
+    file: "internal/infrastructure/integration/populate_manifest_license.go"
+    date: "2026-04-29"
+  - category: "defensive-coding"
+    summary: "When a conditional replacement function overwrites low-quality data (non-SPDX) with a new source, guard the write on the new source being strictly higher quality (e.g., contains at least one SPDX entry) — replacing non-standard with non-standard is a no-op that wastes provenance"
+    pr: 345
+    file: "internal/infrastructure/integration/populate_manifest_license.go"
+    date: "2026-04-29"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
@@ -112,7 +140,13 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
-  # testing: promoted to testing-performance.instructions.md (PRs #318, #346 — close native resource handles in tests via t.Cleanup/defer; split nil guard from value assertion in test failure branches)
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #340, #345 — align gating predicates with gated function semantics: predicate conditions must mirror downstream write/replace rules; populate sentinel fields on graceful skip paths)
+  # comment-doc-drift (PR #345): already covered by "Comment-Code Consistency" rule — doc comment described non-existent debug-level logging, rate-limit signal, and per-client caching
+  # naming-consistency (PR #345): trivial spelling fix ("licence" → "license"), not recorded as pattern
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PR #345 round 2 — normalize config values once before guard and use: TrimSpace in guard but passing untrimmed value to SetBaseURL)
+  # testing (PR #345 round 2): already covered by "Assert Exact Computed Values, Not Just Thresholds" in testing-performance.instructions.md — assert exact POM fetch count, not minimum
+  # concurrency (PR #345 rounds 2+3): accumulated (2 instances) — bound fan-out with semaphore before goroutine launch + ctx.Done select
+  # comment-doc-drift (PR #345 round 3): already covered by "Comment-Code Consistency" rule — Raw precedence comment inconsistent with implementation
   # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #298, #299, #318, #336 — doc comments must match type-level constraints: no "nil" for non-pointer types, scope claims must match actual implementation, test names/examples must match exercised code)
   # testing: promoted to testing-performance.instructions.md (PRs #318, #336 — keep tests network-independent by default: env-var opt-in for live probes, stub transports to avoid real HTTP calls)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #324, #336 — match net/url function to semantic context: u.Hostname() not u.Host, PathEscape not QueryEscape for path segments)
