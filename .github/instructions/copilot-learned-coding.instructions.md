@@ -97,6 +97,11 @@ pending_patterns:
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
+  - category: "comment-doc-drift"
+    summary: "RetryConfig doc comment claimed DoWithRetryFunc could opt out of 429 retries via retryDecider, but 429 retry is hardcoded and retryDecider is not consulted — fix comment to match actual behavior"
+    pr: 359
+    file: "internal/infrastructure/httpclient/client.go"
+    date: "2026-04-29"
   - category: "defensive-coding"
     summary: "Guard time.Duration arithmetic against integer overflow when converting parsed delay-seconds — use strconv.ParseInt and reject values exceeding math.MaxInt64/time.Second before multiplying"
     pr: 359
@@ -111,6 +116,11 @@ pending_patterns:
     summary: "Assert diagnostic context fields on typed error structs (e.g., ScorecardError.Context) in tests — checking only error type and call count misses regressions that silently strip diagnostic metadata"
     pr: 359
     file: "internal/infrastructure/httpclient/client_test.go"
+    date: "2026-04-29"
+  - category: "defensive-coding"
+    summary: "Cap response body reads with io.LimitReader in retry paths (429/5xx) to prevent unbounded memory and log growth across retry attempts — consistent with existing codebase pattern for HTTP body reads"
+    pr: 359
+    file: "internal/infrastructure/httpclient/client.go"
     date: "2026-04-29"
   - category: "defensive-coding"
     summary: "Use time.NewTimer + Stop/drain instead of time.After in select with ctx.Done() to prevent timer accumulation during long cancellable waits"
