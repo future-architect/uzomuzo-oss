@@ -242,9 +242,11 @@ func TestDo_RateLimitHTTPDateHeader(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := atomic.AddInt32(&calls, 1)
 		if n == 1 {
-			// 50ms in the future — short enough to keep the test fast,
-			// long enough to be unambiguously a future date.
-			w.Header().Set("Retry-After", time.Now().Add(50*time.Millisecond).UTC().Format(http.TimeFormat))
+			// http.TimeFormat has 1-second granularity, so construct a timestamp
+			// on a whole-second boundary and move it far enough into the future
+			// that formatting cannot collapse it back to the current second.
+			retryAt := time.Now().UTC().Truncate(time.Second).Add(2 * time.Second)
+			w.Header().Set("Retry-After", retryAt.Format(http.TimeFormat))
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
