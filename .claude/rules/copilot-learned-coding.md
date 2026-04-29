@@ -94,11 +94,6 @@ Schema (YAML-in-Markdown):
 
 ```yaml
 pending_patterns:
-  - category: "testing"
-    summary: "Test failure branch accessed struct field through potentially-nil pointer in error message — split nil guard (t.Fatalf) from value assertion to prevent panic masking the actual regression"
-    pr: 318
-    file: "internal/infrastructure/integration/populate_project_test.go"
-    date: "2026-04-20"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
@@ -112,6 +107,7 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # testing: promoted to testing-performance.instructions.md (PRs #318, #346 — close native resource handles in tests via t.Cleanup/defer; split nil guard from value assertion in test failure branches)
   # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #298, #299, #318, #336 — doc comments must match type-level constraints: no "nil" for non-pointer types, scope claims must match actual implementation, test names/examples must match exercised code)
   # testing: promoted to testing-performance.instructions.md (PRs #318, #336 — keep tests network-independent by default: env-var opt-in for live probes, stub transports to avoid real HTTP calls)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #324, #336 — match net/url function to semantic context: u.Hostname() not u.Host, PathEscape not QueryEscape for path segments)
