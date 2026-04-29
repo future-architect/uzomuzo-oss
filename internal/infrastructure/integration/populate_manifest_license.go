@@ -26,8 +26,8 @@ import (
 //
 // Override rules:
 //   - Skip an analysis entirely when ProjectLicense is already canonical SPDX
-//     AND every RequestedVersionLicenses entry is canonical SPDX (cheap pre-check
-//     before any HTTP).
+//     AND RequestedVersionLicenses is non-empty and every entry is canonical
+//     SPDX (cheap pre-check before any HTTP).
 //   - For each manifest license, write to RequestedVersionLicenses when the slice
 //     is empty or composed entirely of non-SPDX entries.
 //   - Promote the first SPDX manifest license (in <licenses> document order) to
@@ -173,10 +173,12 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) {
 		a.ProjectLicense = lics[0]
 	}
 
-	// RequestedVersionLicenses: replace when empty or all non-SPDX, otherwise leave
-	// the existing canonical-SPDX slice intact (manifest cannot beat clean upstream
-	// SPDX at version level).
-	if len(a.RequestedVersionLicenses) == 0 || allVersionLicensesNonSPDX(a.RequestedVersionLicenses) {
+	// RequestedVersionLicenses: replace when empty, or when all existing entries
+	// are non-SPDX AND the manifest provides at least one SPDX license (replacing
+	// non-standard with non-standard is a no-op per the override matrix).
+	if len(a.RequestedVersionLicenses) == 0 {
+		a.RequestedVersionLicenses = append([]domain.ResolvedLicense(nil), lics...)
+	} else if allVersionLicensesNonSPDX(a.RequestedVersionLicenses) && bestSPDX != nil {
 		a.RequestedVersionLicenses = append([]domain.ResolvedLicense(nil), lics...)
 	}
 }

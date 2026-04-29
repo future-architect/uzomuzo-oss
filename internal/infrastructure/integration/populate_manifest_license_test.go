@@ -143,6 +143,15 @@ func TestApplyManifestLicenses(t *testing.T) {
 			wantVersionIDs: []string{""},
 		},
 		{
+			name:           "version_nonspdx_kept_when_manifest_also_nonspdx",
+			seedProject:    nonStd("Custom", domain.LicenseSourceDepsDevProjectNonStandard),
+			seedVersions:   []domain.ResolvedLicense{nonStd("Custom-v", domain.LicenseSourceDepsDevVersionRaw)},
+			manifest:       []domain.ResolvedLicense{nonStd("Acme Internal", domain.LicenseSourceMavenPOMNonStandard)},
+			wantProjectID:  "",
+			wantProjectSrc: domain.LicenseSourceDepsDevProjectNonStandard,
+			wantVersionIDs: []string{""},
+		},
+		{
 			name:           "version_slice_with_canonical_spdx_kept",
 			seedProject:    spdx("MIT", domain.LicenseSourceDepsDevProjectSPDX),
 			seedVersions:   []domain.ResolvedLicense{spdx("MIT", domain.LicenseSourceDepsDevVersionSPDX)},
