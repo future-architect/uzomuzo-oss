@@ -78,9 +78,11 @@ func (c *Client) FetchLicenses(ctx context.Context, groupID, artifactID, version
 // resolvePOMLicense applies the per-<license> decision tree.
 // name and urlStr must already be trimmed and have property placeholders expanded.
 //
-// Raw precedence: when <name> is present the human-readable name is preserved
-// in Raw (even when SPDX resolution succeeded via the URL fallback path); the
-// URL is only stored as Raw for url-only entries.
+// Raw provenance follows the value that produced the returned classification:
+// direct <name> normalization preserves name in Raw, while successful URL-based
+// SPDX lookup preserves urlStr in Raw even if <name> was present but did not
+// normalize. For non-standard results, Raw prefers <name> and falls back to
+// <url> for url-only entries.
 func resolvePOMLicense(name, urlStr string) domain.ResolvedLicense {
 	raw := name
 	if raw == "" {

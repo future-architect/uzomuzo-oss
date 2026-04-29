@@ -76,12 +76,17 @@ func (s *IntegrationService) enrichLicenseFromManifest(ctx context.Context, anal
 	sem := make(chan struct{}, maxManifestFetchConcurrency)
 
 	var wg sync.WaitGroup
+dispatchLoop:
 	for k, targets := range jobs {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			break dispatchLoop
+		}
+
 		wg.Add(1)
 		go func(k mavenKey, targets []*domain.Analysis) {
 			defer wg.Done()
-
-			sem <- struct{}{}
 			defer func() { <-sem }()
 			lics, found, err := s.mavenClient.FetchLicenses(ctx, k.group, k.artifact, k.version)
 			if err != nil {
