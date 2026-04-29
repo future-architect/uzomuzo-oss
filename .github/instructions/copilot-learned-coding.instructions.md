@@ -107,6 +107,11 @@ pending_patterns:
     pr: 346
     file: "internal/infrastructure/treesitter/analyzer.go"
     date: "2026-04-29"
+  - category: "testing"
+    summary: "Assert diagnostic context fields on typed error structs (e.g., ScorecardError.Context) in tests — checking only error type and call count misses regressions that silently strip diagnostic metadata"
+    pr: 359
+    file: "internal/infrastructure/httpclient/client_test.go"
+    date: "2026-04-29"
   - category: "defensive-coding"
     summary: "Use time.NewTimer + Stop/drain instead of time.After in select with ctx.Done() to prevent timer accumulation during long cancellable waits"
     pr: 359
