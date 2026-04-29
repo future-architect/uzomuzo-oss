@@ -99,6 +99,11 @@ pending_patterns:
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
+  - category: "logging-consistency"
+    summary: "Pass typed error values (e.g., *QueryError) directly to slog instead of pre-stringifying via .Error() — preserves type/structure and keeps logging consistent with slog conventions"
+    pr: 346
+    file: "internal/infrastructure/treesitter/analyzer.go"
+    date: "2026-04-29"
   - category: "api-consistency"
     summary: "Redundant gh pr view API call to fetch labels when pr_json from repos/.../pulls already contains label data — reuse already-fetched API response data instead of making redundant calls for a subset of the same information"
     pr: 338
