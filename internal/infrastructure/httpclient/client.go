@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common"
@@ -133,8 +135,33 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 
 		if resp.StatusCode == http.StatusTooManyRequests { // rate limit
 			body, _ := io.ReadAll(resp.Body)
+			retryAfter := resp.Header.Get("Retry-After")
 			_ = resp.Body.Close() // best-effort cleanup
-			return nil, common.NewRateLimitError("rate limit reached", nil).WithContext("request_url", req.URL.String()).WithContext("response_body", string(body)).WithContext("status_code", resp.StatusCode)
+			if attempt < c.config.MaxRetries {
+				wait := c.rateLimitBackoff(retryAfter, attempt)
+				slog.Warn("rate limit reached, retrying",
+					"status_code", resp.StatusCode,
+					"attempt", attempt+1,
+					"max_attempts", c.config.MaxRetries+1,
+					"retry_after_header", retryAfter,
+					"wait", wait,
+					"response_body", string(body))
+				select {
+				case <-ctx.Done():
+					if ctx.Err() == context.DeadlineExceeded {
+						return nil, common.NewTimeoutError("request timeout during rate limit retry", ctx.Err()).WithContext("request_url", req.URL.String())
+					}
+					return nil, ctx.Err()
+				case <-time.After(wait):
+					continue
+				}
+			}
+			return nil, common.NewRateLimitError("rate limit reached", nil).
+				WithContext("request_url", req.URL.String()).
+				WithContext("response_body", string(body)).
+				WithContext("status_code", resp.StatusCode).
+				WithContext("retry_after_header", retryAfter).
+				WithContext("max_attempts", c.config.MaxRetries+1)
 		}
 
 		if resp.StatusCode < 500 {
@@ -176,4 +203,43 @@ func (c *Client) calculateBackoff(attempt int) time.Duration { // exponential ba
 		backoff = c.config.MaxBackoff
 	}
 	return backoff
+}
+
+// rateLimitBackoff returns the wait duration before retrying a 429 response.
+// Honors the server's Retry-After header (per RFC 9110 §10.2.3) when present
+// and within the configured MaxBackoff cap; otherwise falls back to the same
+// exponential backoff used for 5xx retries.
+func (c *Client) rateLimitBackoff(retryAfter string, attempt int) time.Duration {
+	if d, ok := parseRetryAfter(retryAfter, time.Now()); ok && d <= c.config.MaxBackoff {
+		if d < 0 {
+			return 0
+		}
+		return d
+	}
+	return c.calculateBackoff(attempt)
+}
+
+// parseRetryAfter parses an RFC 9110 Retry-After header value. The header
+// can be either a delay-seconds integer (e.g., "30") or an HTTP-date. Returns
+// the resolved duration and true when the header was parseable, otherwise
+// (0, false). The "now" parameter is injected so tests can pin time.
+//
+// Per RFC, delay-seconds must be a non-negative integer; HTTP-date in the
+// past resolves to a non-positive duration which the caller should treat as
+// "retry immediately".
+func parseRetryAfter(header string, now time.Time) (time.Duration, bool) {
+	s := strings.TrimSpace(header)
+	if s == "" {
+		return 0, false
+	}
+	if secs, err := strconv.Atoi(s); err == nil {
+		if secs < 0 {
+			return 0, false
+		}
+		return time.Duration(secs) * time.Second, true
+	}
+	if t, err := http.ParseTime(s); err == nil {
+		return t.Sub(now), true
+	}
+	return 0, false
 }
