@@ -99,10 +99,20 @@ pending_patterns:
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
+  - category: "defensive-coding"
+    summary: "Guard time.Duration arithmetic against integer overflow when converting parsed delay-seconds — use strconv.ParseInt and reject values exceeding math.MaxInt64/time.Second before multiplying"
+    pr: 359
+    file: "internal/infrastructure/httpclient/client.go"
+    date: "2026-04-29"
   - category: "logging-consistency"
     summary: "Pass typed error values (e.g., *QueryError) directly to slog instead of pre-stringifying via .Error() — preserves type/structure and keeps logging consistent with slog conventions"
     pr: 346
     file: "internal/infrastructure/treesitter/analyzer.go"
+    date: "2026-04-29"
+  - category: "defensive-coding"
+    summary: "Use time.NewTimer + Stop/drain instead of time.After in select with ctx.Done() to prevent timer accumulation during long cancellable waits"
+    pr: 359
+    file: "internal/infrastructure/httpclient/client.go"
     date: "2026-04-29"
   - category: "api-consistency"
     summary: "Redundant gh pr view API call to fetch labels when pr_json from repos/.../pulls already contains label data — reuse already-fetched API response data instead of making redundant calls for a subset of the same information"
