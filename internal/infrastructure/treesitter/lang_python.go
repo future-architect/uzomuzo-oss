@@ -5,14 +5,14 @@ package treesitter
 import (
 	"strings"
 
-	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/python"
+	sitter "github.com/tree-sitter/go-tree-sitter"
+	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 )
 
 // registerPythonConfig registers the Python language configuration on the Analyzer.
 func registerPythonConfig(a *Analyzer) {
 	a.configs[langPython] = &langConfig{
-		language: python.GetLanguage(),
+		language: loadLanguage(tree_sitter_python.Language()),
 		importQuery: strings.Join([]string{
 			`(import_statement name: (dotted_name) @import)`,
 			`(import_statement name: (aliased_import name: (dotted_name) @import))`,
@@ -71,7 +71,7 @@ func (a *Analyzer) handlePythonImport(
 		aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
 	}
 
-	switch parent.Type() {
+	switch parent.Kind() {
 	case "import_statement":
 		// Regular import (e.g., "import requests") — register module name as alias.
 		alias := cfg.aliasFromPkg(importPath)
@@ -80,10 +80,10 @@ func (a *Analyzer) handlePythonImport(
 		// Aliased import (e.g., "import requests as r") — the captured dotted_name's
 		// parent is aliased_import. Register the explicit alias, not the module name.
 		grandparent := parent.Parent()
-		if grandparent != nil && grandparent.Type() == "import_statement" {
+		if grandparent != nil && grandparent.Kind() == "import_statement" {
 			aliasNode := parent.ChildByFieldName("alias")
 			if aliasNode != nil {
-				key := aliasNode.Content(src)
+				key := aliasNode.Utf8Text(src)
 				aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
 			} else {
 				// Fallback: no alias found, use module name.
@@ -116,9 +116,13 @@ func isPythonTryExceptImport(importStmt *sitter.Node, src []byte) bool {
 	child := importStmt
 	current := importStmt.Parent()
 	for depth := 0; current != nil && depth < maxAncestorWalkDepth; depth++ {
-		if current.Type() == "try_statement" {
+		if current.Kind() == "try_statement" {
 			tryBody := current.ChildByFieldName("body")
-			if tryBody == nil || tryBody != child {
+			// The official binding returns a freshly allocated *Node from each
+			// AST navigation call, so Go pointer equality cannot identify the
+			// same underlying tree node. Compare by Id (the C-side TSNode
+			// identifier) instead, which is stable across navigation calls.
+			if tryBody == nil || tryBody.Id() != child.Id() {
 				return false
 			}
 			return hasPythonImportErrorHandler(current, src)
@@ -132,9 +136,9 @@ func isPythonTryExceptImport(importStmt *sitter.Node, src []byte) bool {
 // hasPythonImportErrorHandler checks whether a try_statement has an except_clause
 // that catches ImportError, ModuleNotFoundError, or is a bare except (no type).
 func hasPythonImportErrorHandler(tryStmt *sitter.Node, src []byte) bool {
-	for i := 0; i < int(tryStmt.ChildCount()); i++ {
+	for i := uint(0); i < tryStmt.ChildCount(); i++ {
 		child := tryStmt.Child(i)
-		if child.Type() != "except_clause" {
+		if child.Kind() != "except_clause" {
 			continue
 		}
 
@@ -142,22 +146,22 @@ func hasPythonImportErrorHandler(tryStmt *sitter.Node, src []byte) bool {
 		// Exception types may appear as direct identifier children (single type)
 		// or inside a tuple child (multiple types, e.g., "except (ImportError, ValueError)").
 		hasExceptionType := false
-		for j := 0; j < int(child.ChildCount()); j++ {
+		for j := uint(0); j < child.ChildCount(); j++ {
 			gc := child.Child(j)
-			switch gc.Type() {
+			switch gc.Kind() {
 			case "identifier":
 				hasExceptionType = true
-				name := gc.Content(src)
+				name := gc.Utf8Text(src)
 				if name == "ImportError" || name == "ModuleNotFoundError" {
 					return true
 				}
 			case "tuple":
 				// except (ExcA, ExcB): — identifiers are inside the tuple node.
-				for k := 0; k < int(gc.ChildCount()); k++ {
+				for k := uint(0); k < gc.ChildCount(); k++ {
 					tc := gc.Child(k)
-					if tc.Type() == "identifier" {
+					if tc.Kind() == "identifier" {
 						hasExceptionType = true
-						name := tc.Content(src)
+						name := tc.Utf8Text(src)
 						if name == "ImportError" || name == "ModuleNotFoundError" {
 							return true
 						}
@@ -190,12 +194,13 @@ func isPythonTypeCheckingImport(importStmt *sitter.Node, src []byte) bool {
 	child := importStmt
 	current := importStmt.Parent()
 	for depth := 0; current != nil && depth < maxAncestorWalkDepth; depth++ {
-		if current.Type() == "if_statement" || current.Type() == "elif_clause" {
+		if current.Kind() == "if_statement" || current.Kind() == "elif_clause" {
 			// Only consider if/elif nodes whose consequence directly contains the
 			// current child path. If this node is reached through an else path,
-			// continue walking upward without matching.
+			// continue walking upward without matching. Use Id-based comparison
+			// because the official binding allocates a fresh *Node per call.
 			body := current.ChildByFieldName("consequence")
-			if body == child && isTypeCheckingCondition(current, src) {
+			if body != nil && body.Id() == child.Id() && isTypeCheckingCondition(current, src) {
 				return true
 			}
 		}
@@ -213,16 +218,16 @@ func isTypeCheckingCondition(ifStmt *sitter.Node, src []byte) bool {
 		return false
 	}
 
-	switch cond.Type() {
+	switch cond.Kind() {
 	case "identifier":
 		// `if TYPE_CHECKING:`
-		return cond.Content(src) == "TYPE_CHECKING"
+		return cond.Utf8Text(src) == "TYPE_CHECKING"
 	case "attribute":
 		// `if typing.TYPE_CHECKING:`
 		obj := cond.ChildByFieldName("object")
 		attr := cond.ChildByFieldName("attribute")
 		if obj != nil && attr != nil {
-			return obj.Content(src) == "typing" && attr.Content(src) == "TYPE_CHECKING"
+			return obj.Utf8Text(src) == "typing" && attr.Utf8Text(src) == "TYPE_CHECKING"
 		}
 	}
 	return false
@@ -270,26 +275,26 @@ func (a *Analyzer) registerFromImportNames(
 	aliasMap map[string][]string,
 ) {
 	parent := node.Parent()
-	if parent == nil || parent.Type() != "import_from_statement" {
+	if parent == nil || parent.Kind() != "import_from_statement" {
 		return
 	}
 
-	for i := 0; i < int(parent.ChildCount()); i++ {
+	for i := uint(0); i < parent.ChildCount(); i++ {
 		child := parent.Child(i)
-		switch child.Type() {
+		switch child.Kind() {
 		case "dotted_name":
 			// Only process named imports (field "name"), not the module_name field.
-			if parent.FieldNameForChild(i) != "name" {
+			if parent.FieldNameForChild(uint32(i)) != "name" {
 				continue
 			}
 			// from x import y → register "y" -> purls
-			name := child.Content(src)
+			name := child.Utf8Text(src)
 			aliasMap[name] = appendUniquePURLs(aliasMap[name], purls)
 		case "aliased_import":
 			// from x import y as z → register "z" -> purls
 			aliasNode := child.ChildByFieldName("alias")
 			if aliasNode != nil {
-				key := aliasNode.Content(src)
+				key := aliasNode.Utf8Text(src)
 				aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
 			}
 		case "wildcard_import":

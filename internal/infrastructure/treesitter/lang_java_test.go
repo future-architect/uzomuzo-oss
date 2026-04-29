@@ -28,6 +28,7 @@ public class Main {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:maven/com.google.code.gson/gson@2.10": {"com.google.gson"},
 	}
@@ -73,6 +74,7 @@ public class Main {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:maven/org.apache.commons/commons-lang3@3.14": {"org.apache.commons.lang3"},
 	}
@@ -113,6 +115,7 @@ public class Main {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:maven/junit/junit@4.13.2": {"org.junit"},
 	}
@@ -162,6 +165,7 @@ public class Main {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:maven/com.google.code.gson/gson@2.10": {"com.google.gson"},
 	}
@@ -207,6 +211,7 @@ public class Main {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:maven/com.google.code.findbugs/jsr305@3.0.2":               {"javax.annotation"},
 		"pkg:maven/com.google.inject/guice@5.1":                         {"com.google.inject"},
@@ -289,6 +294,7 @@ class MyTest extends TestCase {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:maven/org.reactivestreams/reactive-streams@1.0.4": {"org.reactivestreams"},
 		"pkg:maven/junit/junit@4.13.2":                         {"junit.framework"},
@@ -383,6 +389,7 @@ class MyList extends ImmutableList<String> {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:maven/com.google.code.gson/gson@2.10":             {"com.google.gson"},
 		"pkg:maven/com.google.guava/guava@33.0":                {"com.google.common"},
@@ -488,6 +495,7 @@ public class Main {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:maven/com.google.guava/guava@33.0": {"com.google.common"},
 		"pkg:maven/java/jdk@17":                 {"java.util"},
@@ -592,6 +600,7 @@ public class Main {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:maven/com.google.code.gson/gson@2.10":        {"com.google.gson"},
 		"pkg:maven/com.google.guava/guava@33.0":           {"com.google.common"},
@@ -756,6 +765,7 @@ public class Main {
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -856,6 +866,7 @@ public class Main {
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -935,6 +946,7 @@ public class Main {
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -981,6 +993,7 @@ public class Service {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:maven/java/jdk@17": {"java.util"},
 	}
@@ -1035,6 +1048,7 @@ public class Processor {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:maven/java/jdk@17": {"java.util"},
 	}
@@ -1084,6 +1098,7 @@ public class Main {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:maven/com.google.code.gson/gson@2.10":                     {"com.google.gson"},
 		"pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.15.2": {"com.fasterxml.jackson.databind"},

@@ -23,6 +23,7 @@ axios.post("https://example.com");
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/axios@1.6.0": {"axios"},
 	}
@@ -58,6 +59,7 @@ const res = axios.get("https://example.com");
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/axios@1.6.0": {"axios"},
 	}
@@ -104,6 +106,7 @@ function App() {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/lucide-react@0.300.0": {"lucide-react"},
 	}
@@ -154,6 +157,7 @@ function App() {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/react-icons@4.0.0": {"react-icons"},
 	}
@@ -196,6 +200,7 @@ function App() {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/lucide-react@0.300.0":   {"lucide-react"},
 		"pkg:npm/react-bootstrap@2.10.0": {"react-bootstrap"},
@@ -246,6 +251,7 @@ MyLib.doOther();
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/mylib@1.0.0": {"mylib"},
 	}
@@ -282,6 +288,7 @@ cloud.status();
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/%40strapi/plugin-cloud@1.0.0": {"@strapi/plugin-cloud"},
 	}
@@ -316,6 +323,7 @@ S3.GetObjectCommand();
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/%40aws-sdk/client-s3@3.0.0": {"@aws-sdk/client-s3"},
 	}
@@ -344,6 +352,7 @@ cloud.deploy();
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/%40strapi/plugin-cloud@1.0.0": {"@strapi/plugin-cloud"},
 	}
@@ -372,6 +381,7 @@ func TestAnalyzer_TypeScriptTypeOnlyImport(t *testing.T) {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/%40scope/pkg@1.0.0": {"@scope/pkg"},
 	}
@@ -404,6 +414,7 @@ axios.post("https://api.example.com");
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/react@18.2.0": {"react"},
 		"pkg:npm/axios@1.6.0":  {"axios"},
@@ -450,6 +461,7 @@ ue(() => {});
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/react@18.2.0": {"react"},
 	}
@@ -481,6 +493,7 @@ cloudNS.teardown();
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/%40strapi/plugin-cloud@1.0.0": {"@strapi/plugin-cloud"},
 	}
@@ -602,6 +615,7 @@ lib.init();
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -699,6 +713,7 @@ const data = Readable.from([1, 2, 3]);
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			importPaths := map[string][]string{
 				tt.purl: {tt.pkg},
 			}
@@ -749,6 +764,7 @@ const result = _generate(ast, { comments: true });
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/%40babel/generator@7.0.0": {"@babel/generator"},
 	}
@@ -782,6 +798,7 @@ func TestAnalyzer_TypeScriptSideEffectImport(t *testing.T) {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:npm/reflect-metadata@0.1.13": {"reflect-metadata"},
 	}
@@ -932,6 +949,7 @@ bar();
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -1049,6 +1067,7 @@ func TestAnalyzer_JSConditionalRequire(t *testing.T) {
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -1222,6 +1241,7 @@ const x = UNRELATED_CONST;
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -1339,6 +1359,7 @@ axios.post("https://example.com");
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -1490,6 +1511,7 @@ serialize(document);
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -1639,6 +1661,7 @@ export { foo };
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -1769,6 +1792,7 @@ axios.get("/api");
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -1919,6 +1943,7 @@ sync();
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -2118,6 +2143,7 @@ export class SharedModule {}
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -2149,5 +2175,81 @@ export class SharedModule {}
 				}
 			}
 		})
+	}
+}
+
+// TestAnalyzer_DecoratorPredicateFilter verifies that the
+// `(#match? @decorator "^(NgModule|Component)$")` predicate on the Angular/Vue
+// decorator query rejects unrelated decorators. After the migration to the
+// official tree-sitter binding, predicate evaluation moved from
+// `cursor.FilterPredicates` to the iterator-internal `SatisfiesTextPredicate`
+// implementation; this test pins the precision so a regression in predicate
+// evaluation surfaces as a test failure rather than silent over-counting.
+//
+// The fixture mixes a matching `@NgModule` (whose array argument should
+// produce a call site for FormsModule) with a non-matching `@CustomMeta`
+// decorator that has the exact same AST shape. Only FormsModule should be
+// counted; SomeOtherModule must NOT contribute to call sites.
+func TestAnalyzer_DecoratorPredicateFilter(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	code := `import { NgModule } from "@angular/core";
+import { FormsModule } from "@angular/forms";
+import { SomeOtherModule } from "@other/lib";
+
+function CustomMeta(meta: any) { return (target: any) => target; }
+
+@NgModule({
+  imports: [FormsModule],
+})
+export class AppModule {}
+
+@CustomMeta({
+  imports: [SomeOtherModule],
+})
+export class FakeModule {}
+`
+	if err := os.WriteFile(filepath.Join(dir, "app.module.ts"), []byte(code), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	defer analyzer.Close()
+	importPaths := map[string][]string{
+		"pkg:npm/%40angular/forms@17.0.0": {"@angular/forms"},
+		"pkg:npm/%40other/lib@1.0.0":      {"@other/lib"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// FormsModule must be counted exactly once via the @NgModule decorator.
+	forms, ok := result["pkg:npm/%40angular/forms@17.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for @angular/forms")
+	}
+	if forms.CallSiteCount != 1 {
+		t.Errorf("@angular/forms CallSiteCount = %d, want 1", forms.CallSiteCount)
+	}
+	if forms.APIBreadth != 1 {
+		t.Errorf("@angular/forms APIBreadth = %d, want 1", forms.APIBreadth)
+	}
+
+	// SomeOtherModule appears under @CustomMeta which the predicate excludes.
+	// Assert that the import statement IS detected (ImportFileCount=1) so
+	// a regression in import detection cannot masquerade as the predicate
+	// working — the test must distinguish "predicate filtered the call site"
+	// from "the import was never seen at all".
+	other, ok := result["pkg:npm/%40other/lib@1.0.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for @other/lib")
+	}
+	if other.ImportFileCount != 1 {
+		t.Errorf("@other/lib ImportFileCount = %d, want 1 (import must be detected so the predicate-filtering assertion below is meaningful)", other.ImportFileCount)
+	}
+	if other.CallSiteCount != 0 {
+		t.Errorf("@other/lib CallSiteCount = %d, want 0 (CustomMeta decorator must not match the predicate)", other.CallSiteCount)
 	}
 }

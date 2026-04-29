@@ -62,6 +62,8 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Collect All Matches in Collector Functions — No Early Return**: When a function iterates over children/items to collect all matching results (e.g., AST bindings, search hits), append each match to a slice and return the slice after the loop. Do not `return` on the first match — early return drops remaining items. This applies whenever the caller needs *all* matches, not just the first.
 - **Continue AST Ancestor Walks Past Non-Matching Nodes**: When walking AST ancestors to find a guarding condition (e.g., `if TYPE_CHECKING:` blocks), continue past intermediate nodes of the same type that don't match the target condition. Returning early on the first type match (e.g., the first `if_statement`) misses the actual guard when the import is nested inside inner conditionals.
 - **Normalize Map Keys Consistently Across Insert and Lookup**: When building a `map[string]T` with normalized keys (e.g., `strings.ToLower` at insertion), apply the same normalization at every lookup site. A mismatch causes silent lookup failures for inputs with non-canonical casing (e.g., mixed-case Python module names like `OpenSSL`). Audit all functions that query the map, not just the one you're currently editing.
+- **Sanitize Dynamic Content in GitHub Actions Workflow Commands**: When embedding dynamic content (shell variables, step outputs) into GitHub Actions workflow commands (`::warning::`, `::error::`, `::set-output::`), sanitize multi-line content and `::` sequences first — they break command parsing and can inject accidental workflow commands. Emit a short single-line summary and log the full payload separately.
+- **Populate Sentinel Error Fields on Graceful Skip Paths**: When short-circuiting a function that returns a result struct whose Error field is inspected downstream as a sentinel (e.g., batch assembly "mark not found" logic), populate the Error field even on graceful skip paths. A zero-value struct with nil Error breaks sentinel checks and silently omits the entry from result maps.
 - **Use Ecosystem-Neutral Language in Multi-Language Error Messages**: When a CLI tool supports multiple ecosystems, error hints and suggestions must not reference language-specific files (e.g., `go.mod`) unless the current context is confirmed to be that language. Generic messages like "dependency manifest not found" are safer than ecosystem-specific ones.
 - **Extract Shared Helpers for Near-Duplicate Code Paths**: When two functions follow the same sequence (e.g., parse input → call external API → interpret result → populate output) differing only in how one parameter is obtained, extract the shared sequence into a single helper parameterized on that value. Near-duplicate paths drift silently when logging, error handling, or evidence formatting is updated in one copy but not the other.
 - **Narrow Candidate Heuristics and Map Assertions to Specific Items**: When generating candidate values (import paths, match keys) from heuristics, validate each candidate against its target domain to avoid false-positive attribution from overly broad matching. Similarly, when asserting on `map[K]V` results, check the specific key under test (`paths := m[key]; len(paths) == 0`) — not the whole map (`len(m) == 0`), which only confirms any key has data without verifying the key you care about.
@@ -90,37 +92,29 @@ Schema (YAML-in-Markdown):
 
 ```yaml
 pending_patterns:
-  - category: "testing"
-    summary: "Test failure branch accessed struct field through potentially-nil pointer in error message — split nil guard (t.Fatalf) from value assertion to prevent panic masking the actual regression"
-    pr: 318
-    file: "internal/infrastructure/integration/populate_project_test.go"
-    date: "2026-04-20"
-  - category: "defensive-coding"
-    summary: "Sanitize shell variables before embedding in GitHub Actions ::warning:: workflow commands — multi-line content or :: sequences break command parsing and can inject accidental workflow commands; emit a short single-line warning and log the full payload separately"
-    pr: 338
-    file: ".github/workflows/copilot-clean-label.yml"
-    date: "2026-04-28"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
+  - category: "logging-consistency"
+    summary: "Pass typed error values (e.g., *QueryError) directly to slog instead of pre-stringifying via .Error() — preserves type/structure and keeps logging consistent with slog conventions"
+    pr: 346
+    file: "internal/infrastructure/treesitter/analyzer.go"
+    date: "2026-04-29"
   - category: "api-consistency"
     summary: "Redundant gh pr view API call to fetch labels when pr_json from repos/.../pulls already contains label data — reuse already-fetched API response data instead of making redundant calls for a subset of the same information"
     pr: 338
     file: ".github/workflows/copilot-clean-label.yml"
     date: "2026-04-27"
-  - category: "defensive-coding"
-    summary: "When short-circuiting a function that returns a result struct whose Error field is inspected downstream as a sentinel (e.g., batch assembly 'mark not found' logic), populate Error even on graceful skip paths — a zero-value struct with nil Error breaks sentinel checks and silently omits the entry from result maps"
-    pr: 340
-    file: "internal/infrastructure/depsdev/depsdev.go"
-    date: "2026-04-28"
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # testing: promoted to testing-performance.instructions.md (PRs #318, #346 — close native resource handles in tests via t.Cleanup/defer; split nil guard from value assertion in test failure branches)
   # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #298, #299, #318, #336 — doc comments must match type-level constraints: no "nil" for non-pointer types, scope claims must match actual implementation, test names/examples must match exercised code)
   # testing: promoted to testing-performance.instructions.md (PRs #318, #336 — keep tests network-independent by default: env-var opt-in for live probes, stub transports to avoid real HTTP calls)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #324, #336 — match net/url function to semantic context: u.Hostname() not u.Host, PathEscape not QueryEscape for path segments)
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #338, #340 — sanitize dynamic content in GH Actions workflow commands; populate sentinel Error fields on graceful skip paths)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #324, #338 — u.Hostname() for port-safe host comparison + go-import prefix matching per Go module spec)
   # defensive-coding: newly authored in copilot-learned-coding.instructions.md (PR #338 — Enforce Access Constraints on All CI Trigger Paths + generous pagination page sizes in verification queries)
   # security: promoted to security.instructions.md (PRs #276, #324 — normalize hostnames in SSRF denylists/cache keys: strip trailing dots + lowercase + IPv6 zone IDs before denylist checks and cache-key construction)

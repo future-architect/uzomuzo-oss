@@ -9,6 +9,52 @@ import (
 	"testing"
 )
 
+// TestAnalyzer_PythonMultiByteSource verifies that non-ASCII characters
+// (multi-byte UTF-8 sequences in comments and string literals) do not
+// corrupt byte-range extraction for surrounding AST nodes. The official
+// tree-sitter binding computes node text via Utf8Text, which slices the
+// source by byte offsets returned from the C-side parser. Multi-byte
+// characters expand the byte width of preceding text, so a naïve
+// byte-range extraction would misalign identifiers that follow them.
+// Pinning this to "exactly one import, exactly one call site" surfaces
+// any regression in byte-offset handling immediately.
+func TestAnalyzer_PythonMultiByteSource(t *testing.T) {
+	dir := t.TempDir()
+	src := []byte(`# 日本語コメント — references requests but is not an import
+description = "リクエストを送る"
+import requests
+
+requests.get("https://example.com/" + description)
+`)
+	if err := os.WriteFile(filepath.Join(dir, "main.py"), src, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	defer analyzer.Close()
+	importPaths := map[string][]string{
+		"pkg:pypi/requests@2.31.0": {"requests"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ca, ok := result["pkg:pypi/requests@2.31.0"]
+	if !ok {
+		t.Fatal("expected coupling analysis for requests")
+	}
+	if ca.ImportFileCount != 1 {
+		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
+	}
+	if ca.CallSiteCount != 1 {
+		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
+	}
+	if ca.APIBreadth != 1 {
+		t.Errorf("APIBreadth = %d, want 1", ca.APIBreadth)
+	}
+}
+
 func TestAnalyzer_Python(t *testing.T) {
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "main.py"), []byte(`import requests
@@ -22,6 +68,7 @@ requests.post("https://example.com")
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:pypi/requests@2.31.0": {"requests"},
 	}
@@ -173,6 +220,7 @@ app = Flask(__name__)
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -211,6 +259,7 @@ requests.get("https://example.com")
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:pypi/requests@2.31.0": {"requests"},
 		"pkg:pypi/request@1.0.0":   {"request"},
@@ -398,6 +447,7 @@ except (ValueError, TypeError):
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			importPaths := map[string][]string{
 				"pkg:pypi/cryptography@41.0.0": {"cryptography"},
 			}
@@ -603,6 +653,7 @@ HeaderTuple()
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -708,6 +759,7 @@ def test_something(value):
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)

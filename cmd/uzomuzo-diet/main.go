@@ -73,6 +73,7 @@ func main() {
 
 			graphAnalyzer := depgraph.NewAnalyzer()
 			sourceAnalyzer := treesitter.NewAnalyzer()
+			defer sourceAnalyzer.Close()
 			pypiResolver := pypi.NewClient()
 
 			return cli.RunDiet(ctx, cfg, opts, graphAnalyzer, sourceAnalyzer, pypiResolver)
