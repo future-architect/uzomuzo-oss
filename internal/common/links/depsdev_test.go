@@ -1,6 +1,7 @@
 package links
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"os"
@@ -86,6 +87,114 @@ func TestBuildDepsDevVersionURL(t *testing.T) {
 				t.Errorf("BuildDepsDevVersionURL(%q, %q, %q) = %q, want %q", tt.eco, tt.in, tt.ver, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestEncodeDepsDevPath(t *testing.T) {
+	tests := []struct {
+		name        string
+		eco, in     string
+		wantSystem  string
+		wantEncoded string
+	}{
+		// Single-name ecosystems
+		{"npm simple", "npm", "express", "npm", "express"},
+		{"cargo", "cargo", "serde", "cargo", "serde"},
+		{"rubygems passthrough", "rubygems", "rails", "rubygems", "rails"},
+		{"nuget preserves case", "nuget", "Newtonsoft.Json", "nuget", "Newtonsoft.Json"},
+		{"pypi", "pypi", "requests", "pypi", "requests"},
+
+		// Aliases
+		{"PyPI uppercase normalizes", "PyPI", "requests", "pypi", "requests"},
+		{"golang -> go", "golang", "golang.org/x/sys", "go", "golang.org%2Fx%2Fsys"},
+		{"gem -> rubygems", "gem", "rails", "rubygems", "rails"},
+
+		// Multi-segment names get path-escaped
+		{"npm scoped", "npm", "@types/node", "npm", "@types%2Fnode"},
+		{"go github multi-segment", "golang", "github.com/spf13/cobra", "go", "github.com%2Fspf13%2Fcobra"},
+
+		// Maven uses ":" separator (caller pre-joins via JoinMavenName)
+		{"maven groupId:artifactId", "maven", "org.springframework:spring-core", "maven", "org.springframework:spring-core"},
+
+		// PathEscape preserves "+" and encodes " " as %20
+		{"name with space encodes as %20", "npm", "weird name", "npm", "weird%20name"},
+		{"name with plus preserved", "cargo", "a+b", "cargo", "a+b"},
+		{"name with literal percent escapes to %25", "npm", "100%pkg", "npm", "100%25pkg"},
+
+		// Unsupported ecosystems return ("", "")
+		{"composer not hosted", "composer", "laravel/framework", "", ""},
+		{"hex not hosted", "hex", "phoenix", "", ""},
+		{"swift not hosted", "swift", "swift-collections", "", ""},
+		{"unknown ecosystem", "customtype", "foo", "", ""},
+
+		// Empty inputs
+		{"empty ecosystem", "", "express", "", ""},
+		{"empty name", "npm", "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSys, gotEnc := EncodeDepsDevPath(tt.eco, tt.in)
+			if gotSys != tt.wantSystem || gotEnc != tt.wantEncoded {
+				t.Errorf("EncodeDepsDevPath(%q, %q) = (%q, %q), want (%q, %q)",
+					tt.eco, tt.in, gotSys, gotEnc, tt.wantSystem, tt.wantEncoded)
+			}
+		})
+	}
+}
+
+func TestJoinMavenName(t *testing.T) {
+	tests := []struct {
+		name            string
+		group, artifact string
+		want            string
+	}{
+		{"both present", "org.springframework", "spring-core", "org.springframework:spring-core"},
+		{"dotted group", "org.apache.logging.log4j", "log4j-api", "org.apache.logging.log4j:log4j-api"},
+		{"empty group", "", "spring-core", "spring-core"},
+		{"whitespace group treated as empty", "  ", "spring-core", "spring-core"},
+		{"empty artifact", "org.springframework", "", ""},
+		{"both empty", "", "", ""},
+		{"trims surrounding whitespace", "  org.springframework  ", "  spring-core  ", "org.springframework:spring-core"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := JoinMavenName(tt.group, tt.artifact); got != tt.want {
+				t.Errorf("JoinMavenName(%q, %q) = %q, want %q", tt.group, tt.artifact, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestJoinNpmName(t *testing.T) {
+	tests := []struct {
+		name       string
+		scope, pkg string
+		want       string
+	}{
+		{"scoped with @ prefix", "@vue", "runtime-dom", "@vue/runtime-dom"},
+		{"scoped without @ prefix", "types", "node", "@types/node"},
+		{"unscoped", "", "lodash", "lodash"},
+		{"whitespace scope treated as empty", "  ", "lodash", "lodash"},
+		{"bare @ scope treated as empty", "@", "lodash", "lodash"},
+		{"double @ collapsed to single", "@@", "lodash", "lodash"},
+		{"triple @ scope collapsed to single", "@@@vue", "runtime-dom", "@vue/runtime-dom"},
+		{"empty name", "@types", "", ""},
+		{"both empty", "", "", ""},
+		{"trims surrounding whitespace", "  @types  ", "  node  ", "@types/node"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := JoinNpmName(tt.scope, tt.pkg); got != tt.want {
+				t.Errorf("JoinNpmName(%q, %q) = %q, want %q", tt.scope, tt.pkg, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestErrUnsupportedEcosystemSentinel(t *testing.T) {
+	wrapped := errors.Join(errors.New("normalize PURL"), ErrUnsupportedEcosystem)
+	if !errors.Is(wrapped, ErrUnsupportedEcosystem) {
+		t.Fatalf("wrapped error should match ErrUnsupportedEcosystem via errors.Is")
 	}
 }
 
