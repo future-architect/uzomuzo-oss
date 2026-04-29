@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common"
+	commonlinks "github.com/future-architect/uzomuzo-oss/internal/common/links"
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
@@ -182,8 +183,10 @@ func (s *IntegrationService) buildVersionDetail(src *depsdev.Version, analysis *
 			if group != "" {
 				switch strings.ToLower(strings.TrimSpace(analysis.Package.Ecosystem)) {
 				case "maven":
-					finalName = group + ":" + pkgName
-				case "packagist", "composer", "npm":
+					finalName = commonlinks.JoinMavenName(group, pkgName)
+				case "npm":
+					finalName = commonlinks.JoinNpmName(group, pkgName)
+				case "packagist", "composer":
 					finalName = group + "/" + pkgName
 				}
 			}

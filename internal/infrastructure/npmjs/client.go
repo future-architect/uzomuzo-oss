@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/common/links"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
@@ -75,13 +76,7 @@ func (c *Client) GetRepoURL(ctx context.Context, namespace, name, version string
 	if pkg == "" {
 		return "", nil
 	}
-	if ns != "" && !strings.HasPrefix(ns, "@") {
-		ns = "@" + ns
-	}
-	full := pkg
-	if ns != "" {
-		full = ns + "/" + pkg
-	}
+	full := links.JoinNpmName(ns, pkg)
 	endpoint := fmt.Sprintf("%s/%s", c.baseURL, url.PathEscape(full))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -246,13 +241,7 @@ func (c *Client) GetDeprecation(ctx context.Context, namespace, name, version st
 	if pkg == "" {
 		return nil, false, nil
 	}
-	if ns != "" && !strings.HasPrefix(ns, "@") {
-		ns = "@" + ns
-	}
-	full := pkg
-	if ns != "" {
-		full = ns + "/" + pkg
-	}
+	full := links.JoinNpmName(ns, pkg)
 	endpoint := fmt.Sprintf("%s/%s", c.baseURL, url.PathEscape(full))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -289,11 +278,7 @@ func (c *Client) GetDeprecation(ctx context.Context, namespace, name, version st
 				info.Message = msg
 				if succ := extractNpmSuccessor(msg); succ != "" {
 					// Self-reference suppression: compare normalized tokens ignoring case.
-					fullName := pkg
-					if ns != "" {
-						fullName = ns + "/" + pkg
-					}
-					if !strings.EqualFold(succ, pkg) && !strings.EqualFold(succ, fullName) {
+					if !strings.EqualFold(succ, pkg) && !strings.EqualFold(succ, full) {
 						info.Successor = succ
 					}
 				}
