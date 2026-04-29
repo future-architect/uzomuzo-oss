@@ -68,15 +68,13 @@ const wildcardImportAlias = "\x00wildcard"
 
 // langConfig holds the tree-sitter language and query patterns.
 type langConfig struct {
-	language           *sitter.Language
-	importQuery        string
-	callQuery          string
-	compiledImport     *sitter.Query // compiled once in NewAnalyzer
-	compiledCall       *sitter.Query // compiled once in NewAnalyzer
-	importCaptureNames []string      // cached compiledImport.CaptureNames() to avoid per-match recomputation
-	callCaptureNames   []string      // cached compiledCall.CaptureNames()
-	stripQuotes        bool
-	aliasFromPkg       func(importPath string) string
+	language       *sitter.Language
+	importQuery    string
+	callQuery      string
+	compiledImport *sitter.Query // compiled once in NewAnalyzer
+	compiledCall   *sitter.Query // compiled once in NewAnalyzer
+	stripQuotes    bool
+	aliasFromPkg   func(importPath string) string
 }
 
 // Analyzer implements SourceAnalyzer using tree-sitter for multi-language parsing.
@@ -85,9 +83,7 @@ type Analyzer struct {
 }
 
 // compileQueries compiles import and call queries for a langConfig.
-// Call this after setting importQuery and callQuery. Capture-name lookup
-// tables are cached on the config so per-match access is an O(1) slice index
-// instead of a per-call traversal of the query's capture metadata.
+// Call this after setting importQuery and callQuery.
 //
 // Argument order in tree_sitter.NewQuery is (language, source string) — the
 // inverse of smacker/go-tree-sitter, which took ([]byte, language). Source is
@@ -99,18 +95,12 @@ func compileQueries(cfg *langConfig) {
 		slog.Warn("failed to compile import query", "error", qErr.Error())
 	}
 	cfg.compiledImport = q
-	if q != nil {
-		cfg.importCaptureNames = q.CaptureNames()
-	}
 
 	q2, qErr2 := sitter.NewQuery(cfg.language, cfg.callQuery)
 	if qErr2 != nil {
 		slog.Warn("failed to compile call query", "error", qErr2.Error())
 	}
 	cfg.compiledCall = q2
-	if q2 != nil {
-		cfg.callCaptureNames = q2.CaptureNames()
-	}
 }
 
 // Close releases the C-side resources held by compiled queries. Callers must
@@ -121,6 +111,12 @@ func compileQueries(cfg *langConfig) {
 // Close is idempotent: a nil compiledImport/compiledCall (compilation failure
 // at NewAnalyzer time) is treated as already-released, and calling Close
 // twice is safe because each compiled query is set to nil after release.
+//
+// Close must NOT be called concurrently with AnalyzeCoupling; the Analyzer
+// holds no internal mutex. After Close returns, the Analyzer is no longer
+// usable — subsequent AnalyzeCoupling calls return without performing source
+// coupling analysis (every per-language query is nil-guarded by the
+// extractImports/countCallSites entry checks).
 func (a *Analyzer) Close() {
 	for _, cfg := range a.configs {
 		if cfg.compiledImport != nil {
@@ -246,18 +242,18 @@ func (a *Analyzer) AnalyzeCoupling(
 		}
 
 		if err := parser.SetLanguage(cfg.language); err != nil {
-			slog.Debug("failed to set language", "path", path, "error", err)
+			slog.Debug("failed to set language", "path", path, "lang", lid, "error", err)
 			return nil
 		}
 		// Parse returns *Tree directly (no error). A nil tree indicates parse
 		// failure; we skip the file. The official binding's ParseCtx is
 		// deprecated and will be removed in v0.26 — file-level context
-		// cancellation is already enforced above (line 172-174 of this
-		// callback), and per-file parsing is bounded (1 MB cap above), so
-		// dropping mid-parse cancellation here is safe.
+		// cancellation is already enforced by the ctx.Err() guard at the top
+		// of this WalkDir callback, and per-file parsing is bounded (1 MB cap
+		// above), so dropping mid-parse cancellation here is safe.
 		tree := parser.Parse(src, nil)
 		if tree == nil {
-			slog.Debug("failed to parse file", "path", path)
+			slog.Debug("failed to parse file", "path", path, "lang", lid)
 			return nil
 		}
 
@@ -386,7 +382,10 @@ func (a *Analyzer) extractImports(
 		slog.Debug("import query not compiled")
 		return aliasMap
 	}
-	names := cfg.importCaptureNames
+	// CaptureNames returns the query's pre-built capture-name slice (cached
+	// by the official binding); hoist once outside the match loop so
+	// per-match access is a plain slice index.
+	names := query.CaptureNames()
 
 	matches := cursor.Matches(query, root, src)
 	for {
@@ -484,7 +483,7 @@ func (a *Analyzer) countCallSites(
 		slog.Debug("call query not compiled")
 		return
 	}
-	names := cfg.callCaptureNames
+	names := query.CaptureNames()
 
 	matches := cursor.Matches(query, root, src)
 	for {

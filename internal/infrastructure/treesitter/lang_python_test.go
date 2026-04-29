@@ -9,13 +9,15 @@ import (
 	"testing"
 )
 
-// TestAnalyzer_PythonMultiByteSource verifies that non-ASCII characters in the
-// source file (comments, string literals) do not corrupt byte-range extraction
-// for surrounding identifiers. The official binding's Utf8Text computes node
-// text from byte ranges, so a non-ASCII string adjacent to an import statement
-// could in principle shift offsets for downstream nodes — this test pins the
-// behavior to "exactly one import, exactly one call site" so any regression
-// surfaces immediately.
+// TestAnalyzer_PythonMultiByteSource verifies that non-ASCII characters
+// (multi-byte UTF-8 sequences in comments and string literals) do not
+// corrupt byte-range extraction for surrounding AST nodes. The official
+// tree-sitter binding computes node text via Utf8Text, which slices the
+// source by byte offsets returned from the C-side parser. Multi-byte
+// characters expand the byte width of preceding text, so a naïve
+// byte-range extraction would misalign identifiers that follow them.
+// Pinning this to "exactly one import, exactly one call site" surfaces
+// any regression in byte-offset handling immediately.
 func TestAnalyzer_PythonMultiByteSource(t *testing.T) {
 	dir := t.TempDir()
 	src := []byte(`# 日本語コメント — references requests but is not an import
@@ -29,6 +31,7 @@ requests.get("https://example.com/" + description)
 	}
 
 	analyzer := NewAnalyzer()
+	defer analyzer.Close()
 	importPaths := map[string][]string{
 		"pkg:pypi/requests@2.31.0": {"requests"},
 	}

@@ -2189,6 +2189,7 @@ export class FakeModule {}
 	}
 
 	analyzer := NewAnalyzer()
+	defer analyzer.Close()
 	importPaths := map[string][]string{
 		"pkg:npm/%40angular/forms@17.0.0": {"@angular/forms"},
 		"pkg:npm/%40other/lib@1.0.0":      {"@other/lib"},
@@ -2211,11 +2212,16 @@ export class FakeModule {}
 	}
 
 	// SomeOtherModule appears under @CustomMeta which the predicate excludes.
-	// The import statement still creates an entry (ImportFileCount=1), but
-	// no call site should be attributed via the decorator query path.
+	// Assert that the import statement IS detected (ImportFileCount=1) so
+	// a regression in import detection cannot masquerade as the predicate
+	// working — the test must distinguish "predicate filtered the call site"
+	// from "the import was never seen at all".
 	other, ok := result["pkg:npm/%40other/lib@1.0.0"]
 	if !ok {
 		t.Fatal("expected coupling analysis for @other/lib")
+	}
+	if other.ImportFileCount != 1 {
+		t.Errorf("@other/lib ImportFileCount = %d, want 1 (import must be detected so the predicate-filtering assertion below is meaningful)", other.ImportFileCount)
 	}
 	if other.CallSiteCount != 0 {
 		t.Errorf("@other/lib CallSiteCount = %d, want 0 (CustomMeta decorator must not match the predicate)", other.CallSiteCount)

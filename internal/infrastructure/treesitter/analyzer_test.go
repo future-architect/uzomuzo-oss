@@ -10,15 +10,40 @@ import (
 )
 
 // TestAnalyzer_CloseIdempotent verifies that Analyzer.Close can be called
-// multiple times without panic. The official tree-sitter Go bindings require
-// explicit Close on Parser/Tree/Query/QueryCursor, so callers may add
-// `defer analyzer.Close()` and a test cleanup may call it again — both must
-// be safe.
+// multiple times without panic and that the Analyzer is no longer usable
+// after Close. The official tree-sitter Go bindings require explicit Close
+// on Parser/Tree/Query/QueryCursor, so callers may combine
+// `defer analyzer.Close()` and a test cleanup that calls it again — both
+// must be safe. The post-Close call to AnalyzeCoupling must not panic and
+// must return without performing source coupling analysis (the per-language
+// nil-query guard inside extractImports/countCallSites takes over).
 func TestAnalyzer_CloseIdempotent(t *testing.T) {
 	analyzer := NewAnalyzer()
 	analyzer.Close()
 	// Second Close must not panic — the implementation nils released queries.
 	analyzer.Close()
+
+	// After Close, AnalyzeCoupling must not panic. With every per-language
+	// query released, the import/call query nil guards return early; with no
+	// imports collected, AnalyzeCoupling returns (nil, nil) per the
+	// "no coupling data" branch.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
+import "github.com/foo/bar"
+func main() { bar.Do() }
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Errorf("AnalyzeCoupling after Close returned err = %v, want nil", err)
+	}
+	if result != nil {
+		t.Errorf("AnalyzeCoupling after Close returned %d entries, want nil result", len(result))
+	}
 }
 
 func TestAnalyzer_SkipsDirs(t *testing.T) {
