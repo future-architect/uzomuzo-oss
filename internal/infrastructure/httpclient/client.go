@@ -146,13 +146,20 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 					"retry_after_header", retryAfter,
 					"wait", wait,
 					"response_body", string(body))
+				timer := time.NewTimer(wait)
 				select {
 				case <-ctx.Done():
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
 					if ctx.Err() == context.DeadlineExceeded {
 						return nil, common.NewTimeoutError("request timeout during rate limit retry", ctx.Err()).WithContext("request_url", req.URL.String())
 					}
 					return nil, ctx.Err()
-				case <-time.After(wait):
+				case <-timer.C:
 					continue
 				}
 			}
@@ -232,8 +239,14 @@ func parseRetryAfter(header string, now time.Time) (time.Duration, bool) {
 	if s == "" {
 		return 0, false
 	}
-	if secs, err := strconv.Atoi(s); err == nil {
+	if secs, err := strconv.ParseInt(s, 10, 64); err == nil {
 		if secs < 0 {
+			return 0, false
+		}
+		// Guard against duration overflow: time.Duration is int64 nanoseconds,
+		// so max representable seconds is math.MaxInt64 / 1e9 ≈ 9.2e9 (~292 years).
+		const maxSafeSeconds = int64(math.MaxInt64 / int64(time.Second))
+		if secs > maxSafeSeconds {
 			return 0, false
 		}
 		return time.Duration(secs) * time.Second, true

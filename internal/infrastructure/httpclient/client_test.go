@@ -54,41 +54,41 @@ func TestRateLimitBackoff(t *testing.T) {
 		MaxBackoff:  500 * time.Millisecond,
 	})
 	tests := []struct {
-		name       string
-		header     string
-		attempt    int
-		wantBetwen [2]time.Duration // inclusive bounds
+		name        string
+		header      string
+		attempt     int
+		wantBetween [2]time.Duration // inclusive bounds
 	}{
 		{
-			name:       "header_within_cap_used_directly",
-			header:     "0", // 0 seconds — well within cap
-			attempt:    0,
-			wantBetwen: [2]time.Duration{0, 0},
+			name:        "header_within_cap_used_directly",
+			header:      "0", // 0 seconds — well within cap
+			attempt:     0,
+			wantBetween: [2]time.Duration{0, 0},
 		},
 		{
-			name:       "header_exceeds_cap_falls_back_to_exponential",
-			header:     "9999", // far beyond MaxBackoff
-			attempt:    0,
-			wantBetwen: [2]time.Duration{10 * time.Millisecond, 10 * time.Millisecond},
+			name:        "header_exceeds_cap_falls_back_to_exponential",
+			header:      "9999", // far beyond MaxBackoff
+			attempt:     0,
+			wantBetween: [2]time.Duration{10 * time.Millisecond, 10 * time.Millisecond},
 		},
 		{
-			name:       "no_header_uses_exponential",
-			header:     "",
-			attempt:    1,
-			wantBetwen: [2]time.Duration{20 * time.Millisecond, 20 * time.Millisecond},
+			name:        "no_header_uses_exponential",
+			header:      "",
+			attempt:     1,
+			wantBetween: [2]time.Duration{20 * time.Millisecond, 20 * time.Millisecond},
 		},
 		{
-			name:       "invalid_header_uses_exponential",
-			header:     "bogus",
-			attempt:    2,
-			wantBetwen: [2]time.Duration{40 * time.Millisecond, 40 * time.Millisecond},
+			name:        "invalid_header_uses_exponential",
+			header:      "bogus",
+			attempt:     2,
+			wantBetween: [2]time.Duration{40 * time.Millisecond, 40 * time.Millisecond},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := c.rateLimitBackoff(tt.header, tt.attempt)
-			if got < tt.wantBetwen[0] || got > tt.wantBetwen[1] {
-				t.Errorf("rateLimitBackoff(%q, %d) = %v, want in [%v, %v]", tt.header, tt.attempt, got, tt.wantBetwen[0], tt.wantBetwen[1])
+			if got < tt.wantBetween[0] || got > tt.wantBetween[1] {
+				t.Errorf("rateLimitBackoff(%q, %d) = %v, want in [%v, %v]", tt.header, tt.attempt, got, tt.wantBetween[0], tt.wantBetween[1])
 			}
 		})
 	}
