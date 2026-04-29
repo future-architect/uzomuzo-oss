@@ -30,6 +30,7 @@ func main() {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
 	}
@@ -93,6 +94,7 @@ func main() {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
 	}
@@ -131,6 +133,7 @@ func main() {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:golang/github.com/lib/pq@v1.10.0":     {"github.com/lib/pq"},
 		"pkg:golang/github.com/onsi/gomega@v1.0.0": {"github.com/onsi/gomega"},
@@ -220,6 +223,7 @@ func main() {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:golang/github.com/lib/pq@v1.10.0": {"github.com/lib/pq"},
 		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
@@ -277,6 +281,7 @@ func b() { bar.B(); bar.C() }
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
 	}
@@ -319,6 +324,7 @@ func main() {}
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
 	}
@@ -358,6 +364,7 @@ func main() {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	// SBOM/PURL uses lowercased namespace (PURL spec normalizes to lowercase).
 	importPaths := map[string][]string{
 		"pkg:golang/github.com/masterminds/semver/v3@v3.4.0": {"github.com/masterminds/semver/v3"},
@@ -494,6 +501,7 @@ func main() {
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -597,6 +605,7 @@ func main() {
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -757,6 +766,7 @@ func check(x interface{}) {
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			importPaths := map[string][]string{
 				"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
 			}
@@ -839,6 +849,7 @@ func main() {
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)

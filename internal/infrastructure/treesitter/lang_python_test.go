@@ -68,6 +68,7 @@ requests.post("https://example.com")
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:pypi/requests@2.31.0": {"requests"},
 	}
@@ -219,6 +220,7 @@ app = Flask(__name__)
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -257,6 +259,7 @@ requests.get("https://example.com")
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:pypi/requests@2.31.0": {"requests"},
 		"pkg:pypi/request@1.0.0":   {"request"},
@@ -444,6 +447,7 @@ except (ValueError, TypeError):
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			importPaths := map[string][]string{
 				"pkg:pypi/cryptography@41.0.0": {"cryptography"},
 			}
@@ -649,6 +653,7 @@ HeaderTuple()
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)
@@ -754,6 +759,7 @@ def test_something(value):
 			}
 
 			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
 			if err != nil {
 				t.Fatal(err)

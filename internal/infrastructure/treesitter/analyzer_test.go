@@ -61,6 +61,7 @@ func main() { bar.Do() }
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
 	}
@@ -87,6 +88,7 @@ func main() { fmt.Println("hi") }
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
 	}
@@ -120,6 +122,7 @@ public class Main {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	// Two versions of gson generating the same import path candidates.
 	importPaths := map[string][]string{
 		"pkg:maven/com.google.code.gson/gson@2.10.1": {"com.google.gson"},
@@ -164,6 +167,7 @@ func main() {
 	}
 
 	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
 	importPaths := map[string][]string{
 		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
 		"pkg:golang/github.com/foo/bar@v2.0.0": {"github.com/foo/bar"},
