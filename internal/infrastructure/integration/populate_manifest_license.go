@@ -114,9 +114,13 @@ dispatchLoop:
 }
 
 // needsManifestLicense returns true when an analysis is a viable target for
-// manifest-level license fallback. This predicate is aligned with
-// applyManifestLicenses: it returns true only when the apply function would
-// actually write something, avoiding wasted HTTP fetches.
+// manifest-level license fallback based on its current state.
+//
+// This predicate identifies analyses that are eligible for a manifest fetch to
+// fill missing or non-standard license data, helping avoid obviously wasted
+// HTTP requests. A true result does not guarantee that applyManifestLicenses
+// will write anything, because actual writes also depend on what SPDX licenses
+// the fetched manifest yields.
 //
 // Specifically: ProjectLicense is zero or non-standard, OR the version-license
 // slice is empty or composed entirely of non-SPDX entries.
