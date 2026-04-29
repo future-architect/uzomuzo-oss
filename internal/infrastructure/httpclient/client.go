@@ -222,15 +222,15 @@ func (c *Client) calculateBackoff(attempt int) time.Duration { // exponential ba
 // Honors the server's Retry-After header (per RFC 9110 §10.2.3) according to
 // the following precedence:
 //
-//  1. Header parses to a past HTTP-date (negative duration) → return 0
-//     ("retry immediately"); do not fall through to exponential backoff.
+//  1. Header parses to a past or present HTTP-date (non-positive duration) →
+//     return 0 ("retry immediately"); do not fall through to exponential backoff.
 //  2. Header parses and the resulting duration fits within MaxBackoff →
 //     return the exact duration.
 //  3. Header is missing, unparseable, or its duration exceeds MaxBackoff →
 //     fall back to the same exponential backoff used for 5xx retries.
 func (c *Client) rateLimitBackoff(retryAfter string, attempt int) time.Duration {
 	if d, ok := parseRetryAfter(retryAfter, time.Now()); ok {
-		if d < 0 {
+		if d <= 0 {
 			return 0
 		}
 		if d <= c.config.MaxBackoff {
@@ -246,11 +246,10 @@ func (c *Client) rateLimitBackoff(retryAfter string, attempt int) time.Duration 
 // enough for diagnostic messages without risking large HTML error pages.
 const maxErrorBodyBytes = 64 << 10
 
-// maxRetryAfterSeconds caps a server-supplied delay-seconds value so that
-// pathological inputs (e.g., a header like "999999999999") cannot overflow
-// the time.Duration multiplication and produce a negative or absurd wait.
-// One day is well past any realistic rate-limit window.
-const maxRetryAfterSeconds = 24 * 60 * 60
+// maxSafeSeconds is the largest delay-seconds value whose multiplication by
+// time.Second will not overflow time.Duration (int64 nanoseconds). Values
+// beyond this are rejected so the caller falls back to exponential backoff.
+const maxSafeSeconds = math.MaxInt64 / int64(time.Second)
 
 // parseRetryAfter parses an RFC 9110 Retry-After header value. The header
 // can be either a delay-seconds integer (e.g., "30") or an HTTP-date. Returns
@@ -258,9 +257,10 @@ const maxRetryAfterSeconds = 24 * 60 * 60
 // (0, false). The "now" parameter is injected so tests can pin time.
 //
 // Per RFC, delay-seconds must be a non-negative integer; values exceeding
-// maxRetryAfterSeconds are clamped to that cap to avoid overflow on absurd
-// inputs. HTTP-date in the past resolves to a non-positive duration which
-// the caller should treat as "retry immediately".
+// maxSafeSeconds (the time.Duration overflow boundary) are rejected so the
+// caller falls back to exponential backoff. HTTP-date in the past resolves
+// to a non-positive duration which the caller should treat as "retry
+// immediately".
 func parseRetryAfter(header string, now time.Time) (time.Duration, bool) {
 	s := strings.TrimSpace(header)
 	if s == "" {
@@ -270,8 +270,8 @@ func parseRetryAfter(header string, now time.Time) (time.Duration, bool) {
 		if secs < 0 {
 			return 0, false
 		}
-		if secs > maxRetryAfterSeconds {
-			secs = maxRetryAfterSeconds
+		if secs > maxSafeSeconds {
+			return 0, false
 		}
 		return time.Duration(secs) * time.Second, true
 	}

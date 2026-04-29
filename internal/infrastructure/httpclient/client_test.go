@@ -27,7 +27,7 @@ func TestParseRetryAfter(t *testing.T) {
 		{name: "delay_seconds_with_padding", header: "  30  ", wantOK: true, wantSeconds: 30},
 		{name: "delay_seconds_negative_rejected", header: "-1", wantOK: false},
 		{name: "delay_seconds_invalid_text", header: "soon", wantOK: false},
-		{name: "delay_seconds_overflow_clamped", header: "999999999999", wantOK: true, wantSeconds: maxRetryAfterSeconds},
+		{name: "delay_seconds_overflow_rejected", header: "999999999999999999", wantOK: false},
 		{name: "http_date_imf_fixdate_future", header: "Wed, 29 Apr 2026 12:00:30 GMT", wantOK: true, wantSeconds: 30},
 		{name: "http_date_imf_fixdate_past_negative", header: "Wed, 29 Apr 2026 11:59:30 GMT", wantOK: true, wantSeconds: -30},
 		{name: "http_date_invalid_format", header: "not a date", wantOK: false},
@@ -226,8 +226,8 @@ func TestDo_RateLimitContextCancellationDuringWait(t *testing.T) {
 		_ = resp.Body.Close()
 		t.Fatal("Do returned nil error, want context.Canceled")
 	}
-	if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("err = %v, want context-derived error", err)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err = %v, want %v", err, context.Canceled)
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Errorf("Do took %v after cancel; expected prompt return", elapsed)
