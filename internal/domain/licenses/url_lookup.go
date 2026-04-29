@@ -7,7 +7,7 @@ import (
 
 // LookupLicenseURL maps a license URL (e.g. from a Maven pom.xml <license><url>
 // element or a NuGet .nuspec <licenseUrl>) to a canonical SPDX identifier when
-// the URL is a well-known licence reference. Returns the empty string when the
+// the URL is a well-known license reference. Returns the empty string when the
 // URL is not recognized.
 //
 // Comparison is case-insensitive on host and path. Scheme, query, fragment,

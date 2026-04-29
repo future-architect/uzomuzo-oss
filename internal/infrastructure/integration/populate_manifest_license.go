@@ -17,8 +17,8 @@ import (
 //
 // DDD Layer: Infrastructure (parallel best-effort enrichment, mirroring the
 // WaitGroup-only fan-out used by enrichPyPISummary). Concurrency is unbounded
-// (one goroutine per unique manifest coordinate); per-client in-memory caches
-// in maven.Client deduplicate within a single scan.
+// (one goroutine per unique manifest coordinate); deduplication within a single
+// scan comes from the jobs map that groups analyses by Maven coordinate.
 //
 // Override rules:
 //   - Skip an analysis entirely when ProjectLicense is already canonical SPDX
@@ -31,9 +31,8 @@ import (
 //   - Never overwrite a current canonical SPDX in either field; log a WARN with
 //     "license_disagreement" when the manifest disagrees so we can audit later.
 //
-// Best-effort: per-coordinate fetch failures are logged at debug level and the
-// analysis is left untouched. 429 / transient errors specifically surface as
-// "license_manifest_rate_limited" so production telemetry can monitor them.
+// Best-effort: per-coordinate fetch failures are logged at WARN level
+// ("license_manifest_fetch_failed") and the analysis is left untouched.
 func (s *IntegrationService) enrichLicenseFromManifest(ctx context.Context, analyses map[string]*domain.Analysis) {
 	if s.mavenClient == nil || len(analyses) == 0 {
 		return
@@ -93,20 +92,21 @@ func (s *IntegrationService) enrichLicenseFromManifest(ctx context.Context, anal
 }
 
 // needsManifestLicense returns true when an analysis is a viable target for
-// manifest-level license fallback: it has Package metadata, and at least one of
-// (ProjectLicense, RequestedVersionLicenses) is missing or non-SPDX. This
-// short-circuit avoids any HTTP for analyses that are already cleanly resolved.
+// manifest-level license fallback. This predicate is aligned with
+// applyManifestLicenses: it returns true only when the apply function would
+// actually write something, avoiding wasted HTTP fetches.
+//
+// Specifically: ProjectLicense is zero or non-standard, OR the version-license
+// slice is empty or composed entirely of non-SPDX entries.
 func needsManifestLicense(a *domain.Analysis) bool {
 	if a == nil || a.Package == nil || a.Package.PURL == "" {
 		return false
 	}
-	if !a.ProjectLicense.IsSPDX {
+	if a.ProjectLicense.IsZero() || a.ProjectLicense.IsNonStandard() {
 		return true
 	}
-	for _, vl := range a.RequestedVersionLicenses {
-		if !vl.IsSPDX {
-			return true
-		}
+	if len(a.RequestedVersionLicenses) == 0 || allVersionLicensesNonSPDX(a.RequestedVersionLicenses) {
+		return true
 	}
 	return false
 }

@@ -46,13 +46,25 @@ func TestNeedsManifestLicense(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "project_spdx_but_version_raw_needs_fetch",
+			name: "project_spdx_but_version_all_raw_needs_fetch",
 			in: &domain.Analysis{
 				Package:                  &domain.Package{PURL: "pkg:maven/g/a@1"},
 				ProjectLicense:           domain.ResolvedLicense{Identifier: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX},
 				RequestedVersionLicenses: []domain.ResolvedLicense{{Source: domain.LicenseSourceDepsDevVersionRaw, Raw: "Proprietary"}},
 			},
 			want: true,
+		},
+		{
+			name: "project_spdx_mixed_versions_skip",
+			in: &domain.Analysis{
+				Package:        &domain.Package{PURL: "pkg:maven/g/a@1"},
+				ProjectLicense: domain.ResolvedLicense{Identifier: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX},
+				RequestedVersionLicenses: []domain.ResolvedLicense{
+					{Identifier: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevVersionSPDX},
+					{Source: domain.LicenseSourceDepsDevVersionRaw, Raw: "Proprietary"},
+				},
+			},
+			want: false,
 		},
 	}
 	for _, tt := range tests {

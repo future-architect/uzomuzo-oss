@@ -89,7 +89,7 @@ func resolvePOMLicense(name, urlStr string) domain.ResolvedLicense {
 			return domain.ResolvedLicense{
 				Identifier: id,
 				Source:     domain.LicenseSourceMavenPOMSPDX,
-				Raw:        raw,
+				Raw:        urlStr,
 				IsSPDX:     true,
 			}
 		}

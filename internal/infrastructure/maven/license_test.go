@@ -96,14 +96,18 @@ func TestFetchLicenses(t *testing.T) {
 		want      []domain.ResolvedLicense
 	}{
 		{
-			name:      "single_spdx_via_name_alias",
+			// "Apache License, Version 2.0" does not normalize via
+			// NormalizeLicenseIdentifier (the comma trips it), so resolution
+			// falls through to URL lookup. Raw should preserve the URL that
+			// produced the SPDX match.
+			name:      "single_spdx_via_url_fallback",
 			pomBody:   pomSingleSPDXName,
 			statusGet: http.StatusOK,
 			wantFound: true,
 			want: []domain.ResolvedLicense{{
 				Identifier: "Apache-2.0",
 				Source:     domain.LicenseSourceMavenPOMSPDX,
-				Raw:        "Apache License, Version 2.0",
+				Raw:        "https://www.apache.org/licenses/LICENSE-2.0.txt",
 				IsSPDX:     true,
 			}},
 		},
@@ -277,6 +281,16 @@ func TestResolvePOMLicense(t *testing.T) {
 				Identifier: "MIT",
 				Source:     domain.LicenseSourceMavenPOMSPDX,
 				Raw:        "MIT",
+				IsSPDX:     true,
+			},
+		},
+		{
+			name: "name_unknown_url_resolves_raw_preserves_url",
+			in:   struct{ name, urlStr string }{name: "Acme Apache License", urlStr: "https://www.apache.org/licenses/LICENSE-2.0"},
+			want: domain.ResolvedLicense{
+				Identifier: "Apache-2.0",
+				Source:     domain.LicenseSourceMavenPOMSPDX,
+				Raw:        "https://www.apache.org/licenses/LICENSE-2.0",
 				IsSPDX:     true,
 			},
 		},
