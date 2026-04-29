@@ -333,6 +333,7 @@ func TestExprNode_StringIdempotent(t *testing.T) {
 		"(Apache-2.0 OR MIT) AND BSD-3-Clause",
 		"A OR B OR C",
 		"Apache-2.0+",
+		"Apache-2.0+ WITH Classpath-exception-2.0",
 		"NOASSERTION",
 	}
 	for _, in := range inputs {
@@ -447,6 +448,32 @@ func TestExprNode_StringPanicsOnNilOperand(t *testing.T) {
 	leaf := &ExprNode{License: &ExprLicense{Identifier: "MIT"}}
 	bad := &ExprNode{Compound: &ExprCompound{Operator: "OR", Operands: []*ExprNode{leaf, nil}}}
 	_ = bad.String()
+}
+
+// TestExprNode_StringPanicsOnUnderfilledCompound enforces the documented
+// "Operands always length ≥ 2" invariant uniformly with the other panic
+// paths. The parser cannot produce a 0/1-operand Compound (finalizeCompound
+// collapses), but a hand-built misuse must surface immediately rather than
+// rendering a malformed SPDX string.
+func TestExprNode_StringPanicsOnUnderfilledCompound(t *testing.T) {
+	tests := []struct {
+		name     string
+		operands []*ExprNode
+	}{
+		{name: "empty_operands", operands: nil},
+		{name: "single_operand", operands: []*ExprNode{{License: &ExprLicense{Identifier: "MIT"}}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Errorf("expected panic on Compound with %d operands", len(tt.operands))
+				}
+			}()
+			bad := &ExprNode{Compound: &ExprCompound{Operator: "OR", Operands: tt.operands}}
+			_ = bad.String()
+		})
+	}
 }
 
 // TestLeaves_PanicsOnZeroValue mirrors TestExprNode_StringPanicsOnZeroValue
@@ -620,6 +647,35 @@ func TestParseExpression_FreeTextAdjacentOperators(t *testing.T) {
 			got := summarize(ParseExpression(tt.input))
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("\n got %#v\nwant %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestParseExpression_AdjacentSimpleExpressions pins the silent-truncation
+// behavior for malformed inputs that juxtapose two simple-expressions with
+// no operator between them — e.g., `(MIT) (Apache-2.0)` from a buggy SBOM
+// exporter. The parser returns the first compound and stops; the trailing
+// tokens are left unconsumed. Locked-in to prevent silent regressions when
+// the parser's recovery policy is revised.
+func TestParseExpression_AdjacentSimpleExpressions(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []string // expected Identifier sequence from Leaves()
+	}{
+		{name: "adjacent_paren_groups", input: "(MIT) (Apache-2.0)", want: []string{"MIT"}},
+		{name: "adjacent_idents_merge_to_one", input: "MIT Apache-2.0", want: []string{""}}, // tokenizer merges to "MIT Apache-2.0", not SPDX
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			leaves := ParseExpression(tt.input).Leaves()
+			got := make([]string, 0, len(leaves))
+			for _, l := range leaves {
+				got = append(got, l.Identifier)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})
 	}

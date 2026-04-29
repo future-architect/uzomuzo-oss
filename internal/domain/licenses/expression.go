@@ -59,7 +59,8 @@ type ExprCompound struct {
 
 // ExpressionResult is the outcome of parsing an SPDX license expression.
 type ExpressionResult struct {
-	// Raw is the original input string, before any trimming.
+	// Raw is the input as passed to ParseExpression, stored verbatim
+	// (no trimming, no canonicalization).
 	Raw string
 	// Root is the parsed AST. Nil for empty / oversized / fully-malformed input.
 	Root *ExprNode
@@ -103,6 +104,13 @@ const maxExpressionLength = 64 * 1024
 //     dropped (matches v1 contract).
 //   - A Compound with fewer than 2 children after parsing collapses to its
 //     single child or to nil; never emits a degenerate compound.
+//   - "(A OR B) WITH X" — SPDX-strict grammar forbids WITH on a compound,
+//     but real-world Maven / ClearlyDefined data ships it. The parser
+//     distributes the exception to every leaf so the legally-significant
+//     clause is preserved on each operand.
+//   - WITH chain ("A WITH B WITH C"): the first exception attaches to A;
+//     subsequent WITHs are silently truncated because parseWith only
+//     consumes one exception per primary.
 //   - The parser never returns an error — consumers ingesting external data
 //     can treat a nil Root as "could not extract any license info" and fall
 //     back to their non-SPDX path.
@@ -132,10 +140,12 @@ func ParseExpression(raw string) ExpressionResult {
 // operator gets parens. The result satisfies the idempotence property:
 // re-parsing the rendered string and rendering again produces the same text.
 //
-// Panics on any zero-valued or nil-operand node — these can only arise from
-// hand-built ASTs (the parser itself never produces them) and are surfaced
-// as programmer errors so a misuse is caught at the first render rather than
-// silently producing malformed SPDX text.
+// Panics on any malformed AST shape — zero-valued node (neither License nor
+// Compound), nil operand inside a Compound, or Compound with fewer than two
+// operands. These can only arise from hand-built ASTs (the parser itself
+// never produces them) and are surfaced as programmer errors so a misuse is
+// caught at the first render rather than silently producing malformed SPDX
+// text.
 func (n *ExprNode) String() string {
 	if n == nil {
 		return ""
@@ -145,6 +155,9 @@ func (n *ExprNode) String() string {
 	}
 	if n.Compound == nil {
 		panic("licenses.ExprNode: zero-valued node (neither License nor Compound)")
+	}
+	if len(n.Compound.Operands) < 2 {
+		panic("licenses.ExprNode: Compound must have at least two operands")
 	}
 	parts := make([]string, len(n.Compound.Operands))
 	for i, child := range n.Compound.Operands {
@@ -181,9 +194,20 @@ func (l *ExprLicense) String() string {
 // Returns nil when Root is nil so callers using a sentinel-nil check can
 // distinguish "no license info parsed" from "empty result accidentally
 // produced". This is the convenience accessor for consumers that do not need
-// operator structure (e.g., simple license enumeration).
+// operator structure (e.g., simple license enumeration in a CSV column).
 //
-// Panics if the AST contains a zero-valued ExprNode (programmer error).
+// Two caller-side caveats:
+//
+//   - Operator semantics are lost. A leaf-level walk cannot distinguish
+//     "must comply with all" (AND) from "choose any one" (OR). Consumers
+//     making legal-policy decisions must instead walk Root via the
+//     License/Compound discriminator and respect Compound.Operator.
+//   - The returned pointers alias live AST nodes. Mutating a leaf (e.g.,
+//     overwriting Identifier) silently corrupts the parsed tree shared
+//     with any other caller. Treat the returned slice as read-only or
+//     copy out the fields you need.
+//
+// Panics if the AST contains a malformed shape (programmer error).
 func (r ExpressionResult) Leaves() []*ExprLicense {
 	if r.Root == nil {
 		return nil
@@ -205,8 +229,9 @@ func needsParens(child *ExprNode, parentOp string) bool {
 }
 
 // walkLeaves appends every ExprLicense leaf reachable from n to out, in
-// reading order. Mirrors String()'s panic invariants: zero-valued and
-// nil-operand nodes are programmer errors and surface immediately.
+// reading order. Mirrors String()'s panic invariants: zero-valued node,
+// nil operand, and Compound with fewer than two operands are all
+// programmer errors and surface immediately.
 func walkLeaves(n *ExprNode, out *[]*ExprLicense) {
 	if n == nil {
 		return
@@ -217,6 +242,9 @@ func walkLeaves(n *ExprNode, out *[]*ExprLicense) {
 	}
 	if n.Compound == nil {
 		panic("licenses.ExprNode: zero-valued node during AST walk")
+	}
+	if len(n.Compound.Operands) < 2 {
+		panic("licenses.ExprNode: Compound must have at least two operands during AST walk")
 	}
 	for _, c := range n.Compound.Operands {
 		if c == nil {
@@ -402,16 +430,22 @@ func (p *parser) parseAnd() *ExprNode {
 
 // parseWith: with_expr = primary (WITH ident)?
 //
-// Two recovery paths for malformed inputs:
+// Recovery paths for malformed inputs:
 //
-//   - WITH is not followed by an identifier (`Apache-2.0 WITH`): the WITH
-//     token is consumed but not applied; the primary is returned untouched.
-//   - WITH follows a Compound primary (`(A OR B) WITH X`): SPDX strict
-//     grammar forbids this, but real-world Maven / ClearlyDefined data ships
-//     it. We distribute the exception to every leaf reachable from the
+//   - WITH not followed by an identifier (`Apache-2.0 WITH`, or
+//     `Apache-2.0 WITH OR ...` where the next token is another operator):
+//     the WITH token is consumed but not applied; the primary is returned
+//     untouched. The surrounding operator stays in the token stream and is
+//     handled normally by parseExpression / parseAnd.
+//   - WITH on a Compound primary (`(A OR B) WITH X`): SPDX strict grammar
+//     forbids this, but real-world Maven / ClearlyDefined data ships it.
+//     We distribute the exception to every leaf reachable from the
 //     compound — set-equivalent to the most generous interpretation
-//     ("either license, both with the same exception"). Each leaf that
-//     already has its own exception is left untouched.
+//     ("either license, both with the same exception"). Leaves that already
+//     carry their own exception keep theirs.
+//   - WITH chain (`A WITH B WITH C`): only one WITH is consumed per primary,
+//     so subsequent WITHs and their identifiers fall through and are
+//     silently dropped at the top level. SPDX 2.1+ does not permit chains.
 func (p *parser) parseWith() *ExprNode {
 	primary := p.parsePrimary()
 	if !p.acceptKind(tokWITH) {
@@ -434,9 +468,14 @@ func (p *parser) parseWith() *ExprNode {
 }
 
 // attachException sets the exception on a leaf that does not yet have one,
-// updating Raw to include the WITH clause. A leaf that already carries an
-// exception (e.g., chained "A WITH B WITH C") keeps its first exception —
-// SPDX 2.1+ forbids chains so additional WITHs are silently dropped.
+// updating Raw to include the WITH clause. The early-return guard is the
+// invariant used by distributeException: when an outer WITH is distributed
+// onto a Compound, leaves that were already parsed with their own inner
+// WITH keep their original exception rather than being overwritten.
+//
+// Note: chained "A WITH B WITH C" inputs do NOT exercise this guard —
+// parseWith consumes only one WITH per primary, so the second exception
+// is dropped at the parser level before attachException would see it.
 func attachException(l *ExprLicense, exception string) {
 	if l.Exception != "" {
 		return
