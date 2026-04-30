@@ -157,6 +157,17 @@ func TestApplyManifestLicenses(t *testing.T) {
 			wantProjectSrc: domain.LicenseSourceDepsDevProjectSPDX,
 			wantVersionExp: "MIT",
 		},
+		{
+			name: "noassertion_only_preserves_sentinel",
+			manifest: []domain.ResolvedLicense{{
+				Expression: "NOASSERTION",
+				Source:     domain.LicenseSourceMavenPOMSPDX,
+				Raw:        "NOASSERTION",
+			}},
+			wantProjectExp: "NOASSERTION",
+			wantProjectSrc: domain.LicenseSourceMavenPOMSPDX,
+			wantVersionExp: "NOASSERTION",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

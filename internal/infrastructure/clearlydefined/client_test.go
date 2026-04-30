@@ -422,8 +422,9 @@ func TestFetchLicenses_SPDXWithException(t *testing.T) {
 		t.Fatalf("got %d licenses, want 1", len(lics))
 	}
 	lic := lics[0]
-	if lic.Expression != "GPL-2.0-only" {
-		t.Errorf("Expression = %q, want %q", lic.Expression, "GPL-2.0-only")
+	wantExpr := "GPL-2.0-only WITH Classpath-exception-2.0"
+	if lic.Expression != wantExpr {
+		t.Errorf("Expression = %q, want %q (must include WITH clause)", lic.Expression, wantExpr)
 	}
 	if lic.Source != domain.LicenseSourceClearlyDefinedSPDX {
 		t.Errorf("Source = %q, want %q", lic.Source, domain.LicenseSourceClearlyDefinedSPDX)

@@ -338,12 +338,13 @@ func translateDefinition(def *definitionResponse) ([]domain.ResolvedLicense, boo
 // its specific operand. SPDX classification is taken from the leaf's
 // Normalization result — never from substring matching on the identifier.
 //
-// Per ADR-0019, recognized SPDX leaves carry the canonical identifier in
-// Expression; non-SPDX leaves leave Expression empty and preserve only Raw.
+// Per ADR-0019, recognized SPDX leaves carry the canonical rendered form
+// in Expression (including "+" and "WITH <exception>" when present);
+// non-SPDX leaves leave Expression empty and preserve only Raw.
 func leafToResolved(leaf *licenses.ExprLicense) domain.ResolvedLicense {
 	if leaf.Normalization.SPDX {
 		return domain.ResolvedLicense{
-			Expression: leaf.Identifier,
+			Expression: leaf.String(),
 			Source:     domain.LicenseSourceClearlyDefinedSPDX,
 			Raw:        leaf.Raw,
 		}
@@ -388,4 +389,3 @@ func (c *Client) storeCache(key cacheKey, lics []domain.ResolvedLicense, found b
 	}
 	c.cacheMu.Unlock()
 }
-
