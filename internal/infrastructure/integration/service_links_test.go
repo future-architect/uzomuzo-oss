@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -40,7 +41,7 @@ func TestPopulateAnalysisFromBatchResult_PackageLinks_HomepageFromLinks_And_Regi
 		},
 	}
 
-	svc.populateAnalysisFromBatchResult(analysis, batch)
+	svc.populateAnalysisFromBatchResult(context.Background(), analysis, batch)
 
 	if analysis.PackageLinks == nil {
 		t.Fatalf("PackageLinks should be initialized")
@@ -80,7 +81,7 @@ func TestPopulateAnalysisFromBatchResult_PackageLinks_HomepageFallbackToProject_
 		},
 	}
 
-	svc.populateAnalysisFromBatchResult(analysis, batch)
+	svc.populateAnalysisFromBatchResult(context.Background(), analysis, batch)
 
 	if analysis.PackageLinks == nil {
 		t.Fatalf("PackageLinks should be initialized")
@@ -138,7 +139,7 @@ func TestPopulateAnalysisFromBatchResult_PackageLinks_RegistryURL_Compositions(t
 				},
 			}
 
-			svc.populateAnalysisFromBatchResult(analysis, batch)
+			svc.populateAnalysisFromBatchResult(context.Background(), analysis, batch)
 
 			if analysis.PackageLinks == nil {
 				t.Fatalf("PackageLinks should be initialized")

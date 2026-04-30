@@ -37,6 +37,9 @@ func TestNormalizeExpression(t *testing.T) {
 		// is a valid simple-expression sentinel), so a compound mixing it with
 		// a canonical leaf renders as-is.
 		{name: "compound_with_noassertion_kept", in: "MIT OR NOASSERTION", want: "MIT OR NOASSERTION"},
+		// Non-canonical casing of NOASSERTION inside a compound is canonicalized.
+		{name: "compound_noassertion_case_folded", in: "MIT OR noassertion", want: "MIT OR NOASSERTION"},
+		{name: "compound_noassertion_mixed_case", in: "MIT OR NoAssertion", want: "MIT OR NOASSERTION"},
 
 		// Idempotence sanity (normalize twice = once)
 		{name: "idempotent_alias_compound", in: "Apache License 2.0 OR MIT OR BSD-3-Clause", want: "Apache-2.0 OR MIT OR BSD-3-Clause"},
@@ -67,6 +70,7 @@ func TestNormalizeExpression_Idempotent(t *testing.T) {
 		"Apache-2.0+ WITH Classpath-exception-2.0",
 		"ProprietaryFoo",
 		"MIT OR NOASSERTION",
+		"MIT OR noassertion",
 	}
 	for _, raw := range corpus {
 		t.Run(raw, func(t *testing.T) {

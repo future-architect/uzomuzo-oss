@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
@@ -32,7 +33,7 @@ func TestPopulateLicenses_DerivedVersionPromotion(t *testing.T) {
 		Project: &depsdev.Project{License: "non-standard"},
 	}
 
-	svc.populateLicenses(analysis, batch)
+	svc.populateLicenses(context.Background(), analysis, batch)
 
 	if analysis.ProjectLicense.Expression != "MIT" {
 		t.Fatalf("expected promoted project license MIT, got Expression=%q", analysis.ProjectLicense.Expression)
@@ -66,7 +67,7 @@ func TestPopulateLicenses_PromotionSkippedOnCompound(t *testing.T) {
 		},
 	}
 
-	svc.populateLicenses(analysis, batch)
+	svc.populateLicenses(context.Background(), analysis, batch)
 
 	if analysis.RequestedVersionLicense.Expression != "MIT OR Apache-2.0" {
 		t.Fatalf("expected version expression OR-joined to MIT OR Apache-2.0, got %q", analysis.RequestedVersionLicense.Expression)
@@ -96,7 +97,7 @@ func TestPopulateLicenses_WithExceptionPromotes(t *testing.T) {
 		},
 	}
 
-	svc.populateLicenses(analysis, batch)
+	svc.populateLicenses(context.Background(), analysis, batch)
 
 	want := "GPL-2.0-only WITH Classpath-exception-2.0"
 	if analysis.RequestedVersionLicense.Expression != want {
@@ -130,7 +131,7 @@ func TestPopulateLicenses_DepsDevAlreadyCompoundString(t *testing.T) {
 		},
 	}
 
-	svc.populateLicenses(analysis, batch)
+	svc.populateLicenses(context.Background(), analysis, batch)
 
 	if analysis.RequestedVersionLicense.Expression != "MIT OR Apache-2.0" {
 		t.Fatalf("compound LicenseDetails.Spdx must round-trip; got %q", analysis.RequestedVersionLicense.Expression)
@@ -157,7 +158,7 @@ func TestPopulateLicenses_NOASSERTION_NotPromoted(t *testing.T) {
 		},
 	}
 
-	svc.populateLicenses(analysis, batch)
+	svc.populateLicenses(context.Background(), analysis, batch)
 
 	if analysis.RequestedVersionLicense.Expression != "NOASSERTION" {
 		t.Fatalf("version: want NOASSERTION, got %q", analysis.RequestedVersionLicense.Expression)

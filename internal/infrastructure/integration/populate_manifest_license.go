@@ -25,7 +25,7 @@ import (
 // coordinates issue exactly one POM lookup even when multiple analyses share
 // them.
 //
-// Override rules (per ADR-0018):
+// Override rules (per ADR-0019):
 //   - Skip an analysis entirely when ProjectLicense AND RequestedVersionLicense
 //     are both already canonical SPDX expressions (cheap pre-check before any
 //     HTTP).

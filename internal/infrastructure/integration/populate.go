@@ -17,7 +17,7 @@ import (
 
 // populateAnalysisFromBatchResult populates a domain.Analysis from a deps.dev BatchResult.
 // Extracted for modularity & reuse across PURL and GitHub flows.
-func (s *IntegrationService) populateAnalysisFromBatchResult(analysis *domain.Analysis, batchResult *depsdev.BatchResult) {
+func (s *IntegrationService) populateAnalysisFromBatchResult(ctx context.Context, analysis *domain.Analysis, batchResult *depsdev.BatchResult) {
 	if batchResult == nil {
 		return
 	}
@@ -96,7 +96,7 @@ func (s *IntegrationService) populateAnalysisFromBatchResult(analysis *domain.An
 	}
 	s.populateReleaseInfo(analysis, batchResult)
 	// Populate license information after release info (needs RequestedVersion PURL)
-	s.populateLicenses(analysis, batchResult)
+	s.populateLicenses(ctx, analysis, batchResult)
 }
 
 // populateLicenses enriches Analysis with project-level and requested-version
@@ -105,9 +105,10 @@ func (s *IntegrationService) populateAnalysisFromBatchResult(analysis *domain.An
 // Data model: see ResolvedLicense / Analysis godoc and
 // docs/adr/0019-license-expression-of-truth.md. The key invariants:
 //   - Expression is canonical SPDX or "" or "NOASSERTION" (never half-normalized)
-//   - Raw preserves the upstream original verbatim
+//   - Raw preserves the upstream string for single-source inputs and may be a
+//     normalized/concatenated audit string when multiple upstream entries are merged
 //   - Multiple upstream entries collapse to one OR-joined expression (not a slice)
-func (s *IntegrationService) populateLicenses(analysis *domain.Analysis, batchResult *depsdev.BatchResult) {
+func (s *IntegrationService) populateLicenses(ctx context.Context, analysis *domain.Analysis, batchResult *depsdev.BatchResult) {
 	if analysis == nil || batchResult == nil {
 		return
 	}
@@ -140,7 +141,7 @@ func (s *IntegrationService) populateLicenses(analysis *domain.Analysis, batchRe
 		if versioned == "" {
 			versioned = analysis.Package.PURL
 		}
-		if fetched, err := s.depsdevClient.GetPackageVersionLicenses(context.Background(), versioned); err == nil && len(fetched) > 0 {
+		if fetched, err := s.depsdevClient.GetPackageVersionLicenses(ctx, versioned); err == nil && len(fetched) > 0 {
 			versionLicense = buildVersionLicenseFromRawList(fetched)
 		} else if err != nil {
 			slog.Debug("requested_version_license_fetch_failed", "purl", versioned, "error", err)

@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ func TestPopulateAnalysisFromBatchResult(t *testing.T) {
 	repoURL := "https://github.com/acme/example"
 	batch := &depsdev.BatchResult{PURL: purlStr, RepoURL: repoURL}
 
-	svc.populateAnalysisFromBatchResult(analysis, batch)
+	svc.populateAnalysisFromBatchResult(context.Background(), analysis, batch)
 
 	if analysis.RepoURL != repoURL {
 		t.Fatalf("expected RepoURL %s got %s", repoURL, analysis.RepoURL)
@@ -82,7 +83,7 @@ func TestPopulateLicensesDirect(t *testing.T) {
 	ver := depsdev.Version{VersionKey: depsdev.VersionKey{Version: "1.0.0"}, LicenseDetails: []depsdev.LicenseDetail{{Spdx: "MIT"}}}
 	batch := &depsdev.BatchResult{PURL: purlStr, Package: &depsdev.Package{Versions: []depsdev.Version{ver}}, ReleaseInfo: rel, Project: &depsdev.Project{License: "Apache-2.0"}}
 
-	svc.populateLicenses(analysis, batch)
+	svc.populateLicenses(context.Background(), analysis, batch)
 	if analysis.ProjectLicense.Expression != "Apache-2.0" { // canonical SPDX casing
 		t.Fatalf("expected project license Apache-2.0 got %+v", analysis.ProjectLicense)
 	}
@@ -105,7 +106,7 @@ func TestPopulateLicensesFallback(t *testing.T) {
 	ver := depsdev.Version{VersionKey: depsdev.VersionKey{Version: "2.0.0"}} // no license details
 	batch := &depsdev.BatchResult{PURL: purlStr, Package: &depsdev.Package{Versions: []depsdev.Version{ver}}, ReleaseInfo: rel, Project: &depsdev.Project{License: "BSD-3-Clause"}}
 
-	svc.populateLicenses(analysis, batch)
+	svc.populateLicenses(context.Background(), analysis, batch)
 	if analysis.RequestedVersionLicense.Expression != "BSD-3-Clause" {
 		t.Fatalf("expected fallback BSD-3-Clause got %+v", analysis.RequestedVersionLicense)
 	}

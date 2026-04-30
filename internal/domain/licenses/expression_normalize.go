@@ -41,6 +41,12 @@ func NormalizeExpression(raw string) string {
 		if !leafRecognized(l) {
 			return ""
 		}
+		// Canonicalize NOASSERTION leaves so the renderer emits the
+		// canonical "NOASSERTION" literal regardless of input casing
+		// (e.g. "noassertion", "NoAssertion" → "NOASSERTION").
+		if l.Normalization.MatchType == MatchNoAssertion {
+			l.Raw = "NOASSERTION"
+		}
 	}
 	return res.Root.String()
 }

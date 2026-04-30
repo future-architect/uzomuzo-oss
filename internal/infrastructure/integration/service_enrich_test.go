@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
@@ -25,7 +26,7 @@ func TestPopulateAnalysisFromBatchResult_EnrichAdvisories(t *testing.T) {
 		ReleaseInfo: depsdev.ReleaseInfo{StableVersion: depsdev.Version{VersionKey: depsdev.VersionKey{Version: "1.0.0"}}},
 	}
 
-	svc.populateAnalysisFromBatchResult(analysis, batch)
+	svc.populateAnalysisFromBatchResult(context.Background(), analysis, batch)
 
 	if analysis.ReleaseInfo == nil || analysis.ReleaseInfo.StableVersion == nil {
 		t.Fatalf("expected release info stable version populated")
