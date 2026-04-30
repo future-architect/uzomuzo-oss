@@ -59,6 +59,11 @@ const (
 	// not want to retry the same 404 on every analysis sharing the
 	// coordinate.
 	negativeCacheTTL = 1 * time.Hour
+
+	// maxJSONResponseSize caps the CD JSON API response body (1 MB).
+	// CD definition responses are typically <50 KB; this guards against
+	// malformed or abusive responses from the external service.
+	maxJSONResponseSize = 1 << 20
 )
 
 // providerByEcosystem maps uzomuzo's normalized ecosystem name to CD's
@@ -122,7 +127,10 @@ func (c *Client) SetBaseURL(u string) {
 }
 
 // SetHTTPClient lets tests inject a custom *http.Client (typically pointing
-// at an httptest.Server). The retry policy stays at the package default.
+// at an httptest.Server). The retry policy is reset to httpclient.DefaultRetryConfig
+// (MaxRetries=3, 1s base backoff), which differs from NewClient's batch-tuned
+// settings — this matches the codebase-wide SetHTTPClient convention used by
+// all other infra clients.
 func (c *Client) SetHTTPClient(h *http.Client) {
 	c.http = httpclient.NewClient(h, httpclient.DefaultRetryConfig())
 }
@@ -231,7 +239,7 @@ func (c *Client) fetchDefinition(ctx context.Context, defURL string) (*definitio
 		return nil, resp.StatusCode, fmt.Errorf("clearlydefined http status %d", resp.StatusCode)
 	}
 	var def definitionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&def); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&def); err != nil {
 		return nil, resp.StatusCode, fmt.Errorf("clearlydefined decode: %w", err)
 	}
 	return &def, resp.StatusCode, nil
@@ -336,6 +344,14 @@ func (c *Client) storeCache(key cacheKey, lics []domain.ResolvedLicense, found b
 		expires:  time.Now().Add(ttl),
 	}
 	c.cacheMu.Unlock()
+}
+
+// SupportsEcosystem reports whether ClearlyDefined has coverage for the
+// given ecosystem name. Callers can use this to skip enqueueing jobs for
+// ecosystems that would always return found=false without issuing HTTP.
+func SupportsEcosystem(ecosystem string) bool {
+	_, ok := providerByEcosystem[strings.ToLower(strings.TrimSpace(ecosystem))]
+	return ok
 }
 
 // IsRateLimitError reports whether an error from FetchLicenses indicates the

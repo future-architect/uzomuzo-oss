@@ -53,6 +53,9 @@ func (s *IntegrationService) enrichLicenseFromClearlyDefined(ctx context.Context
 		if ecosystem == "" {
 			continue
 		}
+		if !clearlydefined.SupportsEcosystem(ecosystem) {
+			continue
+		}
 		parsed, err := parser.Parse(a.Package.PURL)
 		if err != nil {
 			slog.Debug("license_clearlydefined_purl_parse_failed", "purl", a.Package.PURL, "error", err)
