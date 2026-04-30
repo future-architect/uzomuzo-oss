@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
@@ -227,6 +228,25 @@ func TestFetchLicenses_ServerErrorReturnsError(t *testing.T) {
 	}
 	if found {
 		t.Errorf("found=true, want false on error")
+	}
+}
+
+func TestFetchLicenses_RateLimitReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	t.Cleanup(srv.Close)
+	c := newTestClient(srv)
+
+	_, found, err := c.FetchLicenses(context.Background(), "maven", "g", "a", "v")
+	if err == nil {
+		t.Fatal("expected non-nil error on HTTP 429")
+	}
+	if found {
+		t.Errorf("found=true, want false on rate limit")
+	}
+	if !common.IsRateLimitError(err) {
+		t.Errorf("IsRateLimitError(err) = false, want true; err = %v", err)
 	}
 }
 
