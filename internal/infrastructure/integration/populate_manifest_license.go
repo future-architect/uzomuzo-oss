@@ -127,16 +127,16 @@ dispatchLoop:
 // will write anything, because actual writes also depend on what SPDX
 // expressions the fetched manifest yields.
 //
-// Specifically: ProjectLicense is zero or non-standard, OR
-// RequestedVersionLicense is zero or non-standard.
+// Specifically: ProjectLicense is not a usable SPDX expression (zero,
+// non-standard, or NOASSERTION), OR RequestedVersionLicense is not usable.
 func needsManifestLicense(a *domain.Analysis) bool {
 	if a == nil || a.Package == nil || a.Package.PURL == "" {
 		return false
 	}
-	if a.ProjectLicense.IsZero() || a.ProjectLicense.IsNonStandard() {
+	if !a.ProjectLicense.IsUsableSPDX() {
 		return true
 	}
-	if a.RequestedVersionLicense.IsZero() || a.RequestedVersionLicense.IsNonStandard() {
+	if !a.RequestedVersionLicense.IsUsableSPDX() {
 		return true
 	}
 	return false
@@ -187,7 +187,7 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 	// ProjectLicense: replace when current is zero or non-standard. Disagreement
 	// with an existing canonical SPDX is logged but not auto-resolved.
 	if firstSPDX != nil {
-		if a.ProjectLicense.IsZero() || a.ProjectLicense.IsNonStandard() {
+		if !a.ProjectLicense.IsUsableSPDX() {
 			a.ProjectLicense = *firstSPDX
 			wrote = true
 		} else if a.ProjectLicense.IsUsableSPDX() && !strings.EqualFold(a.ProjectLicense.Expression, firstSPDX.Expression) {
@@ -209,7 +209,7 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 	// per-entry concatenation for audit. The Source uses the same constant as
 	// the first SPDX entry so callers can attribute provenance (Maven POM vs
 	// ClearlyDefined.io).
-	if a.RequestedVersionLicense.IsZero() || a.RequestedVersionLicense.IsNonStandard() {
+	if !a.RequestedVersionLicense.IsUsableSPDX() {
 		if len(spdxExprs) > 0 && firstSPDX != nil {
 			joined := licenses.JoinExpressions(spdxExprs)
 			rawConcat := strings.Join(rawParts, " "+licenseORSeparator+" ")
@@ -232,4 +232,3 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 
 	return wrote
 }
-

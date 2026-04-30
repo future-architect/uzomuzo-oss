@@ -98,7 +98,7 @@ func resolvePOMLicense(name, urlStr string) domain.ResolvedLicense {
 		return domain.ResolvedLicense{}
 	}
 	if name != "" {
-		if expr := licenses.NormalizeExpression(name); expr != "" && expr != "NOASSERTION" {
+		if expr := licenses.NormalizeExpression(name); expr != "" {
 			return domain.ResolvedLicense{
 				Expression: expr,
 				Source:     domain.LicenseSourceMavenPOMSPDX,

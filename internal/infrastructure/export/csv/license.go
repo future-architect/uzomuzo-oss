@@ -107,18 +107,18 @@ func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err 
 		licensesAllMissingOrNonStandard := projectMissingOrUnusable && versionMissingOrUnusable
 
 		scenario := classifyLicenseScenario(scenarioInputs{
-			projectZero:         projectIsZero,
-			projectSPDX:         projectIsSPDX,
-			projectNonStandard:  projectNonStandard,
-			projectNoAssertion:  projectIsNoAssertion,
-			versionZero:         versionIsZero,
-			versionSPDX:         versionIsSPDX,
-			versionNonStandard:  vl.IsNonStandard(),
-			versionNoAssertion:  versionIsNoAssertion,
-			containsProjectID:   containsProjectID,
-			fallbackApplied:     fallbackApplied,
-			derived:             derived,
-			githubOverride:      githubOverride,
+			projectZero:              projectIsZero,
+			projectSPDX:              projectIsSPDX,
+			projectNonStandard:       projectNonStandard,
+			projectNoAssertion:       projectIsNoAssertion,
+			versionZero:              versionIsZero,
+			versionSPDX:              versionIsSPDX,
+			versionNonStandard:       vl.IsNonStandard(),
+			versionNoAssertion:       versionIsNoAssertion,
+			containsProjectID:        containsProjectID,
+			fallbackApplied:          fallbackApplied,
+			derived:                  derived,
+			githubOverride:           githubOverride,
 			projectVsVersionMismatch: projectVsVersionMismatch,
 		})
 
@@ -185,7 +185,13 @@ func leavesOf(expr string) []string {
 	}
 	out := make([]string, 0, len(leaves))
 	for _, l := range leaves {
+		if l.Identifier == "" {
+			continue
+		}
 		out = append(out, l.Identifier)
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

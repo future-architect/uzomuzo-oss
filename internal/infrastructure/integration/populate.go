@@ -147,7 +147,7 @@ func (s *IntegrationService) populateLicenses(analysis *domain.Analysis, batchRe
 		}
 	}
 	// 3. Fallback to project license expression when version-specific data is empty.
-	if versionLicense.IsZero() && analysis.ProjectLicense.Expression != "" {
+	if versionLicense.IsZero() && analysis.ProjectLicense.IsUsableSPDX() {
 		versionLicense = domain.ResolvedLicense{
 			Expression: analysis.ProjectLicense.Expression,
 			Raw:        analysis.ProjectLicense.Raw,
@@ -157,7 +157,7 @@ func (s *IntegrationService) populateLicenses(analysis *domain.Analysis, batchRe
 	analysis.RequestedVersionLicense = versionLicense
 
 	// 4. Replace a non-SPDX (raw-only) version expression with project SPDX when available.
-	if analysis.ProjectLicense.Expression != "" && analysis.RequestedVersionLicense.Expression == "" && !analysis.RequestedVersionLicense.IsZero() {
+	if analysis.ProjectLicense.IsUsableSPDX() && analysis.RequestedVersionLicense.Expression == "" && !analysis.RequestedVersionLicense.IsZero() {
 		analysis.RequestedVersionLicense = domain.ResolvedLicense{
 			Expression: analysis.ProjectLicense.Expression,
 			Raw:        analysis.ProjectLicense.Raw,
@@ -177,7 +177,6 @@ func buildProjectLicense(raw string) domain.ResolvedLicense {
 	if expr == "" {
 		return domain.ResolvedLicense{Expression: "", Raw: raw, Source: domain.LicenseSourceDepsDevProjectNonStandard}
 	}
-	// canonical SPDX or "NOASSERTION"
 	return domain.ResolvedLicense{Expression: expr, Raw: raw, Source: domain.LicenseSourceDepsDevProjectSPDX}
 }
 
@@ -246,23 +245,20 @@ func filterNonEmpty(s []string) []string {
 }
 
 // promoteProjectLicenseFromVersion elevates a single-leaf version expression
-// to project-level when ProjectLicense is empty or non-standard. Compound
-// version expressions ("MIT OR Apache-2.0") are NOT promoted: a project-level
-// claim must be unambiguous, and a project's own LICENSE file may pick a
-// single leaf from the dual-license set in ways the upstream package metadata
-// does not capture.
+// to project-level when ProjectLicense is not a usable SPDX expression (zero,
+// non-standard, or NOASSERTION). Compound version expressions
+// ("MIT OR Apache-2.0") are NOT promoted: a project-level claim must be
+// unambiguous, and a project's own LICENSE file may pick a single leaf from
+// the dual-license set in ways the upstream package metadata does not capture.
 //
 // Idempotent: safe to call multiple times; exits early once ProjectLicense is
-// set to a recognized expression.
+// set to a usable SPDX expression.
 func promoteProjectLicenseFromVersion(a *domain.Analysis) {
 	if a == nil {
 		return
 	}
-	if a.ProjectLicense.Expression != "" {
-		return // already set to canonical SPDX or NOASSERTION
-	}
-	if !a.ProjectLicense.IsZero() && !a.ProjectLicense.IsNonStandard() {
-		return
+	if a.ProjectLicense.IsUsableSPDX() {
+		return // already set to a usable canonical SPDX expression
 	}
 	expr := a.RequestedVersionLicense.Expression
 	if expr == "" || expr == "NOASSERTION" {
