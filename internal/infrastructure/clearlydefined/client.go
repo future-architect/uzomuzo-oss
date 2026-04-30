@@ -314,16 +314,13 @@ func translateDefinition(def *definitionResponse) ([]domain.ResolvedLicense, boo
 	parsed := licenses.ParseExpression(declared)
 	leaves := parsed.Leaves()
 	if len(leaves) == 0 {
-		// Fallback path: declared is non-empty but ParseExpression yielded
-		// no usable operands. Reachable when the input is operator-only
-		// ("OR", "AND OR"), pure parens ("()"), or oversized (>64KB
-		// rejected by the parser). Treat the whole string as a single
-		// non-standard entry so callers still see the raw value rather
-		// than dropping it.
-		return []domain.ResolvedLicense{{
-			Source: domain.LicenseSourceClearlyDefinedNonStandard,
-			Raw:    declared,
-		}}, true
+		// Ignore declared values that contain no usable license operands.
+		// Reachable for malformed/operator-only inputs such as "OR" or "()",
+		// and for parser-rejected oversized expressions. These should not be
+		// treated as resolved licenses or reported as found.
+		slog.Debug("clearlydefined: declared expression produced no license operands",
+			"declared", declared)
+		return nil, false
 	}
 
 	out := make([]domain.ResolvedLicense, 0, len(leaves))
