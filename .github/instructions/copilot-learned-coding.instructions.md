@@ -96,16 +96,6 @@ Schema (YAML-in-Markdown):
 ```yaml
 pending_patterns:
   - category: "defensive-coding"
-    summary: "Sanitize shell variables before embedding in GitHub Actions ::warning:: workflow commands — multi-line content or :: sequences break command parsing and can inject accidental workflow commands; emit a short single-line warning and log the full payload separately"
-    pr: 338
-    file: ".github/workflows/copilot-clean-label.yml"
-    date: "2026-04-28"
-  - category: "testing"
-    summary: "Test failure branch accessed struct field through potentially-nil pointer in error message — split nil guard (t.Fatalf) from value assertion to prevent panic masking the actual regression"
-    pr: 318
-    file: "internal/infrastructure/integration/populate_project_test.go"
-    date: "2026-04-20"
-  - category: "defensive-coding"
     summary: "When a multi-branch resolution function (e.g., name-first then URL fallback) records evidence in a Raw/provenance field, set Raw to the input that actually produced the match — not the input from a prior branch that failed. Misattributed Raw values lose traceability for debugging and audit"
     pr: 345
     file: "internal/infrastructure/maven/license.go"
@@ -174,6 +164,9 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # defensive-coding (PR #338): stale pending entry removed — already promoted as "Sanitize Dynamic Content in GitHub Actions Workflow Commands" rule
+  # testing (PR #318): stale pending entry removed — already promoted as "Split Nil Guards from Value Assertions in Test Failure Branches" rule in testing-performance.instructions.md
+  # comment-doc-drift (PR #366 round 4): already covered by "Comment-Code Consistency" rule — applyManifestLicenses comment said "zero or non-standard" but code uses !IsUsableSPDX(); override comment didn't describe non-standard-only branch's IsZero()-only condition
   # concurrency: promoted to copilot-learned-coding.instructions.md (PRs #345, #366 — respect context lifecycle: thread caller ctx instead of context.Background(), acquire semaphore before goroutine + ctx.Done select)
   # comment-doc-drift (PR #366): already covered by "Comment-Code Consistency" rule — comment said "Raw preserves verbatim" but implementation trims/re-joins; ADR reference pointed to wrong ADR number
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #340, #345 — align gating predicates with gated function semantics: predicate conditions must mirror downstream write/replace rules; populate sentinel fields on graceful skip paths)
