@@ -9,6 +9,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/common"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/clearlydefined"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/eolevaluator"
 	exportcsv "github.com/future-architect/uzomuzo-oss/internal/infrastructure/export/csv"
@@ -93,6 +94,7 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 		mvClient.SetBaseURL(u)
 		slog.Debug("Maven base URL configured", "base_url", u)
 	}
+	cdClient := clearlydefined.NewClient()
 	depsdevClient := depsdev.NewDepsDevClient(&cfg.DepsDev)
 	// Attach npmjs, RubyGems and Packagist clients to enable repository URL fallbacks
 	depsdevClient = depsdevClient.
@@ -108,6 +110,7 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 		integration.WithPackagistClient(pkgClient),
 		integration.WithPyPIClient(pyClient),
 		integration.WithMavenClient(mvClient),
+		integration.WithClearlyDefinedClient(cdClient),
 	)
 
 	s := &AnalysisService{

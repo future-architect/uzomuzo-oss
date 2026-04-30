@@ -10,7 +10,7 @@ Defined in `internal/domain/analysis/models.go`. Used at both the project
 level (`Analysis.ProjectLicense`) and the requested-version level
 (`Analysis.RequestedVersionLicense` — singular). The data model follows
 SPDX 2.3 §10 (License Expressions); see
-[ADR-0018](adr/0018-license-expression-of-truth.md) for the design
+[ADR-0019](adr/0019-license-expression-of-truth.md) for the design
 rationale.
 
 | Field | Meaning | Notes |
@@ -58,6 +58,8 @@ PR #358:
 | `LicenseSourceGitHubVersionRaw` | `github-version-raw` | Reserved (unused) |
 | `LicenseSourceMavenPOMSPDX` | `maven-pom-spdx` | Maven Central pom.xml `<licenses>` resolved to canonical SPDX (via `<name>` normalization or `<url>` lookup) |
 | `LicenseSourceMavenPOMNonStandard` | `maven-pom-nonstandard` | Maven pom.xml `<licenses>` entry yielded a non-SPDX value (raw `<name>` or `<url>` preserved) |
+| `LicenseSourceClearlyDefinedSPDX` | `clearlydefined-spdx` | ClearlyDefined.io curated `licensed.declared` resolved to canonical SPDX (single ID or operand of an SPDX expression) |
+| `LicenseSourceClearlyDefinedNonStandard` | `clearlydefined-nonstandard` | ClearlyDefined.io value that did not normalize to SPDX (e.g. `LicenseRef-scancode-*`, scancode-internal names) |
 | `LicenseSourceProjectFallback` | `project-fallback` | Project SPDX copied to Version lacking SPDX / having only non-SPDX |
 | `LicenseSourceDerivedFromVersion` | `derived-from-version` | Single Version SPDX promoted to project license |
 
@@ -86,7 +88,7 @@ PR #358:
    `Root.License != nil`) AND the leaf is canonical SPDX → promote to
    Project with Source `derived-from-version`. **Compound expressions are
    not promoted** (a project-level SPDX claim must be unambiguous; see
-   ADR-0018).
+   ADR-0019).
 6. **GitHub enrichment**: if Project is still empty / non-standard, use
    `licenseInfo.spdxId` (preferred — leaf-only) then `licenseInfo.name`.
 7. **Ecosystem-native manifest fallback** (Maven only at present;
@@ -96,6 +98,15 @@ PR #358:
    entries are OR-joined into a single Expression. SPDX results override
    `*-nonstandard` sources; canonical SPDX is never overwritten
    (disagreement is logged at WARN). See [Ecosystem-Native Fallback](#ecosystem-native-fallback).
+8. **ClearlyDefined.io safety net** (cross-ecosystem): if Project is still
+   empty/non-standard after the manifest tier, consult
+   [ClearlyDefined.io](https://clearlydefined.io/)'s curated
+   `licensed.declared`. SPDX expressions flow through the same
+   `NormalizeExpression` / `JoinExpressions` path; the resulting Expression
+   is OR-joined when multiple operands survive. Same override matrix as the
+   manifest tier; canonical SPDX never overwritten. Score-gated at
+   `licensed.score.declared >= 30`. See ADR-0018 for chain rationale and
+   ADR-0019 for the Expression model.
 
 ## Promotion and Fallback Conditions
 
@@ -256,10 +267,33 @@ The enricher is **best-effort**: per-coordinate fetch failures (transport, 5xx, 
 
 Maven Central applies CDN-layer rate limits to anonymous traffic. If 429s become frequent in production, follow-up work can add `MaxConcurrency` / `RequestInterval` controls to the Maven client (mirroring the GitHub client). For now the bounded fan-out of `enrichPyPISummary` provides equivalent shape without explicit caps.
 
+## ClearlyDefined.io Safety Net
+
+The fourth and final tier consults [ClearlyDefined.io](https://clearlydefined.io/), a Microsoft + GitHub-led, scancode-toolkit-backed curation database. It runs after the manifest tier on analyses that still lack a canonical SPDX identifier. Implemented in `internal/infrastructure/clearlydefined/client.go` and dispatched from `internal/infrastructure/integration/populate_clearlydefined_license.go`. Design rationale and chain placement documented in [ADR-0018](adr/0018-clearlydefined-integration.md).
+
+### `licensed.declared` decision tree
+
+CD's `declared` field has four observed shapes:
+
+1. Single SPDX ID (`Apache-2.0`) → emit one `clearlydefined-spdx`.
+2. SPDX expression (`Apache-2.0 AND EPL-2.0`, `CDDL-1.1 OR GPL-2.0-only WITH Classpath-exception-2.0`) → parsed via `licenses.ParseExpression`; each operand becomes its own `ResolvedLicense` (SPDX leaves → `clearlydefined-spdx`, non-SPDX leaves → `clearlydefined-nonstandard`).
+3. `LicenseRef-scancode-*` → emit `clearlydefined-nonstandard` with the raw value preserved. The `LicenseRef-` prefix is SPDX's own way of saying "no canonical SPDX exists for this license"; conversion would invent data.
+4. scancode-internal name (`Plexus`, etc.) → emit `clearlydefined-nonstandard`.
+
+### Score gating
+
+`licensed.score.declared >= 30` is required for CD to contribute. Lower scores indicate stale or uncurated entries; the empirical distribution from issue #354 shows everything in the 45–75 range is real, while 0 is genuinely-empty (`mysql-connector-java`).
+
+### Override rules and caching
+
+Override matrix is identical to the manifest tier (canonical SPDX never overwritten; `*-nonstandard` slots replaced; first SPDX leaf promoted to `ProjectLicense`). The dispatcher reuses `applyManifestLicenses`. CD responses are cached in-memory: 24h positive TTL (definitions are stable curation artifacts), 1h negative TTL (CD lazily curates new releases).
+
+Per-coordinate fetch failures log as `license_clearlydefined_fetch_failed` (WARN), with HTTP 429 specifically tagged as `license_clearlydefined_rate_limited` for telemetry separation. Hits and misses are at DEBUG.
+
 ## Future Extensions (Planned / Optional)
 
-- SPDX expression parsing / validation
 - NuGet `.nuspec` and PyPI `info.*` license-source wiring (issue #327, follow-up PRs)
 - Auto-generation of the URL→SPDX table from upstream SPDX `seeAlso` field via `cmd/uzomuzo update-spdx`
 - Manual override channel (`manual-project-spdx`, etc.)
+- SPDX exceptions table for `WITH` clause normalization (currently passes through verbatim)
 - Confidence / scoring layer reintroduction

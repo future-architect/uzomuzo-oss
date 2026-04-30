@@ -8,7 +8,7 @@ import (
 // ResolvedLicense represents normalized license information used at project
 // level (Analysis.ProjectLicense) and requested-version level
 // (Analysis.RequestedVersionLicense). The data model is documented in
-// docs/adr/0018-license-expression-of-truth.md.
+// docs/adr/0019-license-expression-of-truth.md.
 //
 // Fields:
 //   - Expression: canonical SPDX expression string, or "" / "NOASSERTION".
@@ -51,6 +51,7 @@ func (r ResolvedLicense) IsZero() bool {
 //   - LicenseSourceDepsDevVersionRaw
 //   - LicenseSourceGitHubVersionRaw (reserved / future)
 //   - LicenseSourceMavenPOMNonStandard
+//   - LicenseSourceClearlyDefinedNonStandard
 //
 // Notes:
 //   - A promoted or fallback SPDX (derived-from-version / project-fallback)
@@ -68,7 +69,8 @@ func (r ResolvedLicense) IsNonStandard() bool {
 		LicenseSourceGitHubProjectNonStandard,
 		LicenseSourceDepsDevVersionRaw,
 		LicenseSourceGitHubVersionRaw,
-		LicenseSourceMavenPOMNonStandard:
+		LicenseSourceMavenPOMNonStandard,
+		LicenseSourceClearlyDefinedNonStandard:
 		return true
 	default:
 		return false

@@ -380,14 +380,14 @@ func TestApplyManifestLicenses_DisagreementLogged(t *testing.T) {
 	if !strings.Contains(out, `"msg":"license_disagreement"`) {
 		t.Fatalf("expected license_disagreement log; got: %s", out)
 	}
-	if !strings.Contains(out, `"existing":"MIT"`) || !strings.Contains(out, `"manifest":"Apache-2.0"`) {
-		t.Fatalf("log missing existing/manifest expressions: %s", out)
+	if !strings.Contains(out, `"existing":"MIT"`) || !strings.Contains(out, `"incoming":"Apache-2.0"`) {
+		t.Fatalf("log missing existing/incoming expressions: %s", out)
 	}
 	if !strings.Contains(out, `"existing_source":"`+domain.LicenseSourceDepsDevProjectSPDX+`"`) {
 		t.Fatalf("log missing existing_source field: %s", out)
 	}
-	if !strings.Contains(out, `"manifest_source":"`+domain.LicenseSourceMavenPOMSPDX+`"`) {
-		t.Fatalf("log missing manifest_source field: %s", out)
+	if !strings.Contains(out, `"incoming_source":"`+domain.LicenseSourceMavenPOMSPDX+`"`) {
+		t.Fatalf("log missing incoming_source field: %s", out)
 	}
 	if !strings.Contains(out, `"purl":"pkg:maven/com.example/widget@1.0"`) {
 		t.Fatalf("log missing purl evidence: %s", out)

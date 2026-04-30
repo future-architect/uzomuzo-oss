@@ -145,7 +145,7 @@ for _, leaf := range parsed.Leaves() {
 > **BREAKING (post-#360)**: `ResolvedLicense.Identifier` and
 > `ResolvedLicense.IsSPDX` were removed. `Analysis.RequestedVersionLicenses
 > []ResolvedLicense` was singularized to `Analysis.RequestedVersionLicense
-> ResolvedLicense`. See [ADR-0018](adr/0018-license-expression-of-truth.md).
+> ResolvedLicense`. See [ADR-0019](adr/0019-license-expression-of-truth.md).
 
 ## Analysis Type: Key Fields / Methods
 

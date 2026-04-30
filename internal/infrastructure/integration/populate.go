@@ -103,7 +103,7 @@ func (s *IntegrationService) populateAnalysisFromBatchResult(analysis *domain.An
 // license data using SPDX expression strings.
 //
 // Data model: see ResolvedLicense / Analysis godoc and
-// docs/adr/0018-license-expression-of-truth.md. The key invariants:
+// docs/adr/0019-license-expression-of-truth.md. The key invariants:
 //   - Expression is canonical SPDX or "" or "NOASSERTION" (never half-normalized)
 //   - Raw preserves the upstream original verbatim
 //   - Multiple upstream entries collapse to one OR-joined expression (not a slice)

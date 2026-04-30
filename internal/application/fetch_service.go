@@ -8,6 +8,7 @@ import (
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/clearlydefined"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/integration"
@@ -42,6 +43,7 @@ func NewFetchServiceFromConfig(cfg *config.Config) *FetchService {
 		mvClient.SetBaseURL(u)
 		slog.Debug("Maven base URL configured", "base_url", u)
 	}
+	cdClient := clearlydefined.NewClient()
 	depsdevClient := depsdev.NewDepsDevClient(&cfg.DepsDev).
 		WithRubyGems(rgClient).
 		WithPackagist(pkgClient).
@@ -53,6 +55,7 @@ func NewFetchServiceFromConfig(cfg *config.Config) *FetchService {
 		integration.WithPackagistClient(pkgClient),
 		integration.WithPyPIClient(pyClient),
 		integration.WithMavenClient(mvClient),
+		integration.WithClearlyDefinedClient(cdClient),
 	)
 	return &FetchService{integrationService: integrationService}
 }

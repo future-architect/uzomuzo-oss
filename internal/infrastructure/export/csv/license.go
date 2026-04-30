@@ -18,7 +18,7 @@ import (
 //
 // Data model: each ResolvedLicense holds a single SPDX expression
 // (Expression), the upstream-original (Raw), and provenance (Source). See
-// docs/adr/0018-license-expression-of-truth.md. Composite shapes (AND / OR
+// docs/adr/0019-license-expression-of-truth.md. Composite shapes (AND / OR
 // / WITH / +) survive in the Expression string itself; the
 // version_license_is_compound and version_license_leaf_count columns
 // surface the structural breakdown without consumers having to parse the

@@ -1,4 +1,4 @@
-# 0018. License Expression as Source of Truth
+# 0019. License Expression as Source of Truth
 
 Date: 2026-04-30
 Status: Accepted

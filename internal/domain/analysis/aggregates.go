@@ -119,7 +119,7 @@ type Analysis struct {
 	// Source==LicenseSourceDepsDevProjectNonStandard, Raw holds original.
 	// Promotion from a single-leaf version expression:
 	// Source==LicenseSourceDerivedFromVersion. See
-	// docs/adr/0018-license-expression-of-truth.md for the full data model.
+	// docs/adr/0019-license-expression-of-truth.md for the full data model.
 	ProjectLicense ResolvedLicense
 
 	// RequestedVersionLicense provides license information for the explicitly

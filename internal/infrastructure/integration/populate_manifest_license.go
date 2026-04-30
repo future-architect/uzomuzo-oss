@@ -142,17 +142,28 @@ func needsManifestLicense(a *domain.Analysis) bool {
 	return false
 }
 
-// applyManifestLicenses merges manifest-derived licenses into the analysis,
-// applying the override rules documented on enrichLicenseFromManifest.
+// applyManifestLicenses merges externally-derived licenses into the analysis,
+// applying the override rules documented on enrichLicenseFromManifest. Used
+// by both the manifest tier (Maven POM) and the ClearlyDefined.io tier; the
+// override matrix is identical across sources so a single helper is reused.
 //
-// When the manifest reports multiple SPDX entries (multi-licensed POMs), the
-// first SPDX entry (in <licenses> document order — Maven publishers list the
-// primary first by convention) is promoted to ProjectLicense. All SPDX
-// entries are OR-joined into a single canonical expression and written to
+// Returns true when at least one field on the analysis was written, false when
+// the incoming licenses had no effect (e.g., all slots already occupied by
+// canonical SPDX, or the incoming set is entirely non-SPDX and cannot improve
+// the existing state). The bool is used by the ClearlyDefined.io tier to log
+// per-coordinate telemetry separately from the Maven POM tier.
+//
+// When the source reports multiple SPDX entries (multi-licensed POMs or
+// SPDX-expression operands from CD), the first SPDX entry in input order is
+// promoted to ProjectLicense for deterministic selection. All SPDX entries
+// are OR-joined into a single canonical expression and written to
 // RequestedVersionLicense when the current value is zero or non-standard.
-func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) {
+// Input order may reflect publisher convention for some manifest sources
+// (e.g. Maven POMs list the primary license first), but SPDX expressions
+// themselves do not imply a preferred license by operand order.
+func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bool {
 	if a == nil || len(lics) == 0 {
-		return
+		return false
 	}
 
 	// Collect SPDX expressions in document order for OR-joining at the version level.
@@ -171,45 +182,55 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) {
 		}
 	}
 
+	wrote := false
+
 	// ProjectLicense: replace when current is zero or non-standard. Disagreement
 	// with an existing canonical SPDX is logged but not auto-resolved.
 	if firstSPDX != nil {
 		if a.ProjectLicense.IsZero() || a.ProjectLicense.IsNonStandard() {
 			a.ProjectLicense = *firstSPDX
-		} else if a.ProjectLicense.Expression != "" && !strings.EqualFold(a.ProjectLicense.Expression, firstSPDX.Expression) {
+			wrote = true
+		} else if a.ProjectLicense.Expression != "" && a.ProjectLicense.Expression != "NOASSERTION" && !strings.EqualFold(a.ProjectLicense.Expression, firstSPDX.Expression) {
 			slog.Warn("license_disagreement",
 				"existing_source", a.ProjectLicense.Source,
 				"existing", a.ProjectLicense.Expression,
-				"manifest_source", firstSPDX.Source,
-				"manifest", firstSPDX.Expression,
+				"incoming_source", firstSPDX.Source,
+				"incoming", firstSPDX.Expression,
 				"purl", a.Package.PURL)
 		}
 	} else if a.ProjectLicense.IsZero() {
 		// Manifest had no SPDX but did report something — record the first non-standard.
 		a.ProjectLicense = lics[0]
+		wrote = true
 	}
 
 	// RequestedVersionLicense: replace when zero or non-standard. OR-join all
 	// SPDX manifest entries into one canonical expression. Raw preserves the
-	// per-entry concatenation for audit.
+	// per-entry concatenation for audit. The Source uses the same constant as
+	// the first SPDX entry so callers can attribute provenance (Maven POM vs
+	// ClearlyDefined.io).
 	if a.RequestedVersionLicense.IsZero() || a.RequestedVersionLicense.IsNonStandard() {
-		if len(spdxExprs) > 0 {
+		if len(spdxExprs) > 0 && firstSPDX != nil {
 			joined := licenses.JoinExpressions(spdxExprs)
 			rawConcat := strings.Join(rawParts, " "+manifestRawSeparator+" ")
 			a.RequestedVersionLicense = domain.ResolvedLicense{
 				Expression: joined,
 				Raw:        rawConcat,
-				Source:     domain.LicenseSourceMavenPOMSPDX,
+				Source:     firstSPDX.Source,
 			}
-		} else if a.RequestedVersionLicense.IsZero() {
+			wrote = true
+		} else if a.RequestedVersionLicense.IsZero() && len(rawParts) > 0 {
 			// All manifest entries were non-standard — preserve raw concatenation.
 			a.RequestedVersionLicense = domain.ResolvedLicense{
 				Expression: "",
 				Raw:        strings.Join(rawParts, " "+manifestRawSeparator+" "),
-				Source:     domain.LicenseSourceMavenPOMNonStandard,
+				Source:     lics[0].Source,
 			}
+			wrote = true
 		}
 	}
+
+	return wrote
 }
 
 // manifestRawSeparator concatenates upstream raw values when multiple
