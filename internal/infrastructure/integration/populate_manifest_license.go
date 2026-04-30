@@ -145,6 +145,11 @@ func needsManifestLicense(a *domain.Analysis) bool {
 // by both the manifest tier (Maven POM) and the ClearlyDefined.io tier; the
 // override matrix is identical across sources so a single helper is reused.
 //
+// Returns true when at least one field on the analysis was written, false when
+// the incoming licenses had no effect (e.g., all slots already occupied by
+// canonical SPDX, or the incoming set is entirely non-SPDX and cannot improve
+// the existing state).
+//
 // When the source reports multiple SPDX entries (multi-licensed POMs or
 // SPDX-expression operands from CD), the first SPDX entry in input order is
 // promoted to ProjectLicense for deterministic selection. The full list —
@@ -153,9 +158,9 @@ func needsManifestLicense(a *domain.Analysis) bool {
 // Input order may reflect publisher convention for some manifest sources
 // (e.g. Maven POMs list the primary license first), but SPDX expressions
 // themselves do not imply a preferred license by operand order.
-func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) {
+func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bool {
 	if a == nil || len(lics) == 0 {
-		return
+		return false
 	}
 
 	var bestSPDX *domain.ResolvedLicense
@@ -166,22 +171,26 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) {
 		}
 	}
 
+	wrote := false
+
 	// ProjectLicense: replace when current is zero or non-standard. Disagreement
 	// with an existing canonical SPDX is logged but not auto-resolved.
 	if bestSPDX != nil {
 		if a.ProjectLicense.IsZero() || a.ProjectLicense.IsNonStandard() {
 			a.ProjectLicense = *bestSPDX
+			wrote = true
 		} else if a.ProjectLicense.IsSPDX && !strings.EqualFold(a.ProjectLicense.Identifier, bestSPDX.Identifier) {
 			slog.Warn("license_disagreement",
 				"existing_source", a.ProjectLicense.Source,
 				"existing", a.ProjectLicense.Identifier,
-				"manifest_source", bestSPDX.Source,
-				"manifest", bestSPDX.Identifier,
+				"incoming_source", bestSPDX.Source,
+				"incoming", bestSPDX.Identifier,
 				"purl", a.Package.PURL)
 		}
 	} else if a.ProjectLicense.IsZero() {
 		// Manifest had no SPDX but did report something — record the first non-standard.
 		a.ProjectLicense = lics[0]
+		wrote = true
 	}
 
 	// RequestedVersionLicenses: replace when empty, or when all existing entries
@@ -189,7 +198,11 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) {
 	// non-standard with non-standard is a no-op per the override matrix).
 	if len(a.RequestedVersionLicenses) == 0 {
 		a.RequestedVersionLicenses = append([]domain.ResolvedLicense(nil), lics...)
+		wrote = true
 	} else if allVersionLicensesNonSPDX(a.RequestedVersionLicenses) && bestSPDX != nil {
 		a.RequestedVersionLicenses = append([]domain.ResolvedLicense(nil), lics...)
+		wrote = true
 	}
+
+	return wrote
 }

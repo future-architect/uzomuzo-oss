@@ -118,14 +118,26 @@ dispatchLoop:
 					"version", k.version)
 				return
 			}
-			slog.Debug("license_clearlydefined_hit",
-				"ecosystem", k.ecosystem,
-				"namespace", k.namespace,
-				"name", k.name,
-				"version", k.version,
-				"licenses_count", len(lics))
+			var wrote bool
 			for _, a := range targets {
-				applyManifestLicenses(a, lics)
+				if applyManifestLicenses(a, lics) {
+					wrote = true
+				}
+			}
+			if wrote {
+				slog.Debug("license_clearlydefined_hit",
+					"ecosystem", k.ecosystem,
+					"namespace", k.namespace,
+					"name", k.name,
+					"version", k.version,
+					"licenses_count", len(lics))
+			} else {
+				slog.Debug("license_clearlydefined_no_change",
+					"ecosystem", k.ecosystem,
+					"namespace", k.namespace,
+					"name", k.name,
+					"version", k.version,
+					"licenses_count", len(lics))
 			}
 		}(k, targets)
 	}
