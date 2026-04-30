@@ -45,6 +45,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Branch Output Display on Each Field's Own Availability**: When rendering output fields (CLI text, CSV, JSON), branch display logic on each field's own availability — do not couple display of one field to the presence of an unrelated field. Ensure all output formats use the same data-source fallback chain as domain logic. Use host-agnostic labels (e.g., `Repository:` not `GitHub:`) unless the host is confirmed, and render all populated data fields rather than silently dropping them.
 - **Use `utf8.RuneCountInString` for Terminal Display Widths**: When computing string widths for terminal display (box drawing, alignment), use `utf8.RuneCountInString` — not `len` — to avoid incorrect sizing with multi-byte characters (box-drawing glyphs, emoji). Clamp computed padding to zero when content already exceeds the budget rather than forcing a minimum that widens output beyond the declared width.
 - **Filter and Normalize IDs Before Batch API Calls**: When building batch API requests from collected IDs, filter empty/whitespace values and deduplicate before processing to prevent invalid HTTP requests and cache pollution. Use `select` on `ctx.Done()` alongside channel operations in batch goroutines to avoid blocking after context cancellation.
+- **Respect Context Lifecycle in Concurrent and Delegated I/O**: (1) When a function issues I/O (HTTP, database, external API) on behalf of a caller that provides a `context.Context`, thread that context through every intermediate function in the call chain — never substitute `context.Background()` at an internal callsite. `context.Background()` ignores the caller's cancellation and deadline signals, causing orphaned requests that persist after cancellation or exceed timeout budgets. (2) When dispatching goroutines under bounded concurrency, acquire the semaphore before launching the goroutine (not inside it) and `select` on `ctx.Done()` alongside the semaphore send to stop dispatch on cancellation — this avoids spawning parked goroutines that outlive the context.
 - **Guard Nil Structs Consistently Across Output Formats**: When a struct field may be nil (e.g., `ReleaseInfo`), apply the nil guard in every output renderer that accesses it (text, CSV, JSON). If one renderer has the guard and another does not, the unguarded path will panic on nil input.
 - **Gate Fallback Logic on Error, Not Result Nilness**: When deciding whether to trigger fallback or retry logic, check the error value — not whether the result is nil. A nil result with nil error is a valid success case (e.g., zero matches found), and treating it as a failure triggers unnecessary retries or incorrect fallback paths.
 - **Minimize Allocations in Hot Paths**: In batch-processing or frequently-called functions, avoid unnecessary O(n) allocations when only a subset of data is needed. Cache results of expensive parsing calls when the same value is checked multiple times in a loop iteration, and iterate to a known cutoff point rather than materializing the full collection (e.g., iterate runes up to a count rather than converting the entire string to `[]rune`).
@@ -115,12 +116,11 @@ pending_patterns:
     instances: 7
     file: "internal/infrastructure/integration/populate.go"
     date: "2026-04-30"
-  - category: "concurrency"
-    summary: "Acquire bounded-concurrency semaphore before launching goroutine (not inside it) and select on ctx.Done to stop dispatch on cancellation — avoids spawning thousands of parked goroutines and respects context lifecycle"
-    prs: [345]
-    instances: 2
-    file: "internal/infrastructure/integration/populate_manifest_license.go"
-    date: "2026-04-29"
+  - category: "defensive-coding"
+    summary: "Canonicalize sentinel values (e.g., NOASSERTION) when rendering compound SPDX expressions — the parser's leaf Raw field preserves original casing, so without explicit rewriting before String(), rendering produces non-canonical output like 'MIT OR noassertion' instead of 'MIT OR NOASSERTION'"
+    pr: 366
+    file: "internal/domain/licenses/expression_normalize.go"
+    date: "2026-04-30"
   - category: "defensive-coding"
     summary: "When a conditional replacement function overwrites low-quality data (non-SPDX) with a new source, guard the write on the new source being strictly higher quality (e.g., contains at least one SPDX entry) — replacing non-standard with non-standard is a no-op that wastes provenance"
     pr: 345
@@ -174,6 +174,8 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # concurrency: promoted to copilot-learned-coding.instructions.md (PRs #345, #366 — respect context lifecycle: thread caller ctx instead of context.Background(), acquire semaphore before goroutine + ctx.Done select)
+  # comment-doc-drift (PR #366): already covered by "Comment-Code Consistency" rule — comment said "Raw preserves verbatim" but implementation trims/re-joins; ADR reference pointed to wrong ADR number
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #340, #345 — align gating predicates with gated function semantics: predicate conditions must mirror downstream write/replace rules; populate sentinel fields on graceful skip paths)
   # comment-doc-drift (PR #345): already covered by "Comment-Code Consistency" rule — doc comment described non-existent debug-level logging, rate-limit signal, and per-client caching
   # naming-consistency (PR #345): trivial spelling fix ("licence" → "license"), not recorded as pattern
