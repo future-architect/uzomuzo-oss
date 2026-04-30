@@ -103,9 +103,10 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// Runs after enrichPyPISummary so all upstream license writes are visible.
 	s.enrichLicenseFromManifest(ctx, analyses)
 
-	// ClearlyDefined.io safety net (best-effort): for analyses still missing
-	// canonical SPDX after manifest enrichment, consult CD's curated license
-	// database. Runs strictly after the manifest tier so deterministic
+	// ClearlyDefined.io safety net (best-effort): after manifest enrichment,
+	// consult CD's curated license database for analyses still missing
+	// canonical SPDX, or whose RequestedVersionLicenses remain empty / entirely
+	// non-SPDX. Runs strictly after the manifest tier so deterministic
 	// ecosystem-native results take precedence (per ADR-0018 / issue #354).
 	s.enrichLicenseFromClearlyDefined(ctx, analyses)
 

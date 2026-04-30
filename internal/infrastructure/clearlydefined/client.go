@@ -318,18 +318,25 @@ func leafToResolved(leaf *licenses.ExprLicense, fullDeclared string) domain.Reso
 	}
 }
 
-// lookupCache returns a cached entry when present and unexpired. Holds the
-// read lock for the minimum span needed to copy the entry value.
+// lookupCache returns a cached entry when present and unexpired. It uses a
+// read lock on the fast path and evicts expired entries under a write lock to
+// keep the cache from retaining stale keys indefinitely.
 func (c *Client) lookupCache(key cacheKey) (cacheEntry, bool) {
+	now := time.Now()
+
 	c.cacheMu.RLock()
 	entry, ok := c.cache[key]
 	c.cacheMu.RUnlock()
 	if !ok {
 		return cacheEntry{}, false
 	}
-	if time.Now().After(entry.expires) {
-		// Expired; fall through to re-fetch. Don't bother evicting here —
-		// storeCache overwrites in place.
+	if now.After(entry.expires) {
+		c.cacheMu.Lock()
+		current, stillPresent := c.cache[key]
+		if stillPresent && now.After(current.expires) {
+			delete(c.cache, key)
+		}
+		c.cacheMu.Unlock()
 		return cacheEntry{}, false
 	}
 	return entry, true
