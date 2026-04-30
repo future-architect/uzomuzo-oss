@@ -77,6 +77,20 @@ func (r ResolvedLicense) IsNonStandard() bool {
 	}
 }
 
+// IsUsableSPDX reports whether Expression carries an SPDX value that downstream
+// consumers can act on (policy checks, compliance reports, leaf inspection) —
+// excluding the SPDX 2.3 §A.1.5 "NOASSERTION" sentinel, which is *recognized*
+// (not non-standard) but conveys "upstream refused to assert" rather than a
+// real license. Use this instead of inlining `Expression != "" && Expression
+// != "NOASSERTION"`: the predicate is a property of ResolvedLicense and must
+// stay aligned with `IsZero` / `IsNonStandard` (per ADR-0019).
+//
+// Compound expressions like `"MIT OR Apache-2.0"` return true; single-leaf
+// canonical SPDX returns true; `""` and `"NOASSERTION"` return false.
+func (r ResolvedLicense) IsUsableSPDX() bool {
+	return r.Expression != "" && r.Expression != "NOASSERTION"
+}
+
 // Repository represents a code repository being analyzed
 type Repository struct {
 	URL         string

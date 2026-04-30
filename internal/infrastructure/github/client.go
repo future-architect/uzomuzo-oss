@@ -941,8 +941,9 @@ func enrichProjectLicenseFromGitHub(current domain.ResolvedLicense, license *Lic
 		return current, false
 	}
 
-	// If already have a canonical SPDX expression, keep it.
-	if current.Expression != "" && current.Expression != "NOASSERTION" {
+	// If already have a usable SPDX expression, keep it. NOASSERTION is
+	// recognized but not usable, so fall through to allow GitHub to fill in.
+	if current.IsUsableSPDX() {
 		return current, false
 	}
 

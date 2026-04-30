@@ -64,3 +64,58 @@ func TestExportLicenses_Basic(t *testing.T) {
 		}
 	}
 }
+
+// TestExportLicenses_NOASSERTION_Scenarios locks the dedicated NOASSERTION
+// branches added in the scenarioInputs migration. Without them, NOASSERTION
+// at either level fell through every branch into "catch_all" and the
+// `licenses_all_missing_or_nonstandard` flag silently reported `false` even
+// though no usable license was present.
+func TestExportLicenses_NOASSERTION_Scenarios(t *testing.T) {
+	noassert := domain.ResolvedLicense{Expression: "NOASSERTION", Raw: "NOASSERTION", Source: domain.LicenseSourceDepsDevVersionSPDX}
+	mit := domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX}
+
+	cases := []struct {
+		name             string
+		project, version domain.ResolvedLicense
+		wantScenario     string
+		wantAllMissing   string // exact CSV cell for licenses_all_missing_or_nonstandard
+	}{
+		{name: "noassertion_both", project: noassert, version: noassert, wantScenario: "noassertion_both", wantAllMissing: "true"},
+		{name: "noassertion_project_only", project: noassert, version: mit, wantScenario: "noassertion_project", wantAllMissing: "false"},
+		{name: "noassertion_version_only", project: mit, version: noassert, wantScenario: "noassertion_version", wantAllMissing: "true"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			an := &domain.Analysis{
+				OriginalPURL:            "pkg:npm/example",
+				EffectivePURL:           "pkg:npm/example@1.0.0",
+				ProjectLicense:          tc.project,
+				RequestedVersionLicense: tc.version,
+			}
+			file, err := os.CreateTemp(t.TempDir(), "licenses-*.csv")
+			if err != nil {
+				t.Fatalf("temp file: %v", err)
+			}
+			_ = file.Close()
+
+			if err := ExportLicenses(map[string]*domain.Analysis{"pkg:npm/example": an}, file.Name()); err != nil {
+				t.Fatalf("ExportLicenses() error = %v", err)
+			}
+			data, err := os.ReadFile(file.Name())
+			if err != nil {
+				t.Fatalf("read exported: %v", err)
+			}
+			content := string(data)
+			if !strings.Contains(content, tc.wantScenario) {
+				t.Errorf("expected scenario %q in CSV, got:\n%s", tc.wantScenario, content)
+			}
+			if !strings.Contains(content, tc.wantAllMissing+",") {
+				// licenses_all_missing_or_nonstandard is a boolean cell — assert
+				// it appears followed by a comma so we don't accidentally match
+				// the same value in another column.
+				t.Errorf("expected licenses_all_missing_or_nonstandard=%q, got:\n%s", tc.wantAllMissing, content)
+			}
+		})
+	}
+}

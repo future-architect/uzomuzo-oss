@@ -72,14 +72,16 @@ func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err 
 		vl := an.RequestedVersionLicense
 
 		projectIsZero := pl.IsZero()
-		projectIsSPDX := isRecognizedSPDX(pl)
+		projectIsSPDX := pl.IsUsableSPDX()
 		projectNonStandard := pl.IsNonStandard()
+		projectIsNoAssertion := pl.Expression == "NOASSERTION"
 		projectLeaves := leavesOf(pl.Expression)
 		projectIsCompound := len(projectLeaves) > 1
 		projectLeafCount := len(projectLeaves)
 
 		versionIsZero := vl.IsZero()
-		versionIsSPDX := isRecognizedSPDX(vl)
+		versionIsSPDX := vl.IsUsableSPDX()
+		versionIsNoAssertion := vl.Expression == "NOASSERTION"
 		versionLeaves := leavesOf(vl.Expression)
 		versionIsCompound := len(versionLeaves) > 1
 		versionLeafCount := len(versionLeaves)
@@ -96,9 +98,29 @@ func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err 
 		derived := pl.Source == domain.LicenseSourceDerivedFromVersion
 		githubOverride := pl.Source == domain.LicenseSourceGitHubProjectSPDX || pl.Source == domain.LicenseSourceGitHubProjectNonStandard
 
-		licensesAllMissingOrNonStandard := (projectIsZero || projectNonStandard) && (versionIsZero || vl.IsNonStandard())
+		// "Missing or non-standard" includes NOASSERTION at either level: it is
+		// a recognized SPDX value but explicitly conveys "upstream refused to
+		// assert", so for downstream policy / coverage tracking it is not a
+		// usable license.
+		projectMissingOrUnusable := projectIsZero || projectNonStandard || projectIsNoAssertion
+		versionMissingOrUnusable := versionIsZero || vl.IsNonStandard() || versionIsNoAssertion
+		licensesAllMissingOrNonStandard := projectMissingOrUnusable && versionMissingOrUnusable
 
-		scenario := classifyLicenseScenario(projectIsZero, projectIsSPDX, projectNonStandard, versionIsZero, versionIsSPDX, vl.IsNonStandard(), containsProjectID, fallbackApplied, derived, githubOverride, projectVsVersionMismatch)
+		scenario := classifyLicenseScenario(scenarioInputs{
+			projectZero:         projectIsZero,
+			projectSPDX:         projectIsSPDX,
+			projectNonStandard:  projectNonStandard,
+			projectNoAssertion:  projectIsNoAssertion,
+			versionZero:         versionIsZero,
+			versionSPDX:         versionIsSPDX,
+			versionNonStandard:  vl.IsNonStandard(),
+			versionNoAssertion:  versionIsNoAssertion,
+			containsProjectID:   containsProjectID,
+			fallbackApplied:     fallbackApplied,
+			derived:             derived,
+			githubOverride:      githubOverride,
+			projectVsVersionMismatch: projectVsVersionMismatch,
+		})
 
 		errStr := ""
 		if an.Error != nil {
@@ -148,18 +170,10 @@ func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err 
 	return nil
 }
 
-// isRecognizedSPDX reports whether the license carries a usable SPDX
-// expression (any non-empty value other than the NOASSERTION sentinel).
-// NOASSERTION is recognized but not "usable SPDX" for downstream policy
-// decisions — it explicitly signals "upstream refused to assert".
-func isRecognizedSPDX(rl domain.ResolvedLicense) bool {
-	return rl.Expression != "" && rl.Expression != "NOASSERTION"
-}
-
 // leavesOf returns the canonical SPDX identifiers of every leaf in the
-// expression, in document order. NOASSERTION-only expressions return a
-// single-element slice with empty string (a leaf without a canonical ID).
-// Returns nil for empty input.
+// expression, in document order. Returns nil for empty input and for the
+// NOASSERTION sentinel (no leaves to expose; NOASSERTION conveys "upstream
+// refused to assert" rather than naming any license).
 func leavesOf(expr string) []string {
 	if expr == "" || expr == "NOASSERTION" {
 		return nil
@@ -200,58 +214,86 @@ func leafSetContainsAll(haystack, needles []string) bool {
 	return true
 }
 
+// scenarioInputs collects the boolean flags the scenario classifier branches
+// on. Promoting these to a struct (instead of positional args) prevents
+// argument-order regressions when new flags are added — the issue that
+// triggered finding H1's NOASSERTION miss.
+type scenarioInputs struct {
+	projectZero, projectSPDX, projectNonStandard, projectNoAssertion bool
+	versionZero, versionSPDX, versionNonStandard, versionNoAssertion bool
+	containsProjectID, fallbackApplied, derived, githubOverride      bool
+	projectVsVersionMismatch                                         bool
+}
+
 // classifyLicenseScenario assigns a scenario label (mutually exclusive, ordered rules).
-func classifyLicenseScenario(projectZero, projectSPDX, projectNonStandard, versionZero, versionSPDX, versionNonStandard, containsProjectID, fallbackApplied, derived, githubOverride, mismatch bool) string {
+//
+// NOASSERTION is treated as its own classification axis: a license with
+// Expression == "NOASSERTION" is recognized SPDX (so IsUsableSPDX is false,
+// IsNonStandard is also false), and would otherwise fall through every
+// branch into "catch_all". The dedicated NOASSERTION branches keep operator
+// triage actionable — operators care which side asserted nothing.
+func classifyLicenseScenario(in scenarioInputs) string {
 	// High-priority explicit scenarios
-	if fallbackApplied {
+	if in.fallbackApplied {
 		return "fallback_applied"
 	}
-	if derived {
+	if in.derived {
 		return "derived_from_version"
 	}
-	if githubOverride && projectSPDX {
+	if in.githubOverride && in.projectSPDX {
 		return "github_override_spdx"
 	}
-	if githubOverride && projectNonStandard {
+	if in.githubOverride && in.projectNonStandard {
 		return "github_override_nonstandard"
 	}
 
-	if projectZero && versionZero {
+	// NOASSERTION-explicit branches before the generic project/version matrix.
+	if in.projectNoAssertion && in.versionNoAssertion {
+		return "noassertion_both"
+	}
+	if in.projectNoAssertion {
+		return "noassertion_project"
+	}
+	if in.versionNoAssertion {
+		return "noassertion_version"
+	}
+
+	if in.projectZero && in.versionZero {
 		return "no_project_no_version"
 	}
-	if projectSPDX && versionZero {
+	if in.projectSPDX && in.versionZero {
 		return "project_spdx_no_version"
 	}
-	if projectNonStandard && versionZero {
+	if in.projectNonStandard && in.versionZero {
 		return "project_nonstandard_no_version"
 	}
-	if !projectSPDX && !projectNonStandard && !projectZero && versionZero {
+	if !in.projectSPDX && !in.projectNonStandard && !in.projectZero && in.versionZero {
 		return "project_other_no_version"
 	}
 
-	if !projectSPDX && !projectNonStandard && !projectZero && !versionZero {
+	if !in.projectSPDX && !in.projectNonStandard && !in.projectZero && !in.versionZero {
 		return "project_other_with_versions"
 	}
 
-	if !projectSPDX && !projectNonStandard && projectZero && !versionZero {
+	if !in.projectSPDX && !in.projectNonStandard && in.projectZero && !in.versionZero {
 		return "versions_only"
 	}
 
-	if projectSPDX && versionSPDX && !mismatch && containsProjectID {
+	if in.projectSPDX && in.versionSPDX && !in.projectVsVersionMismatch && in.containsProjectID {
 		return "project_spdx_version_all_spdx_consistent"
 	}
-	if projectSPDX && versionSPDX && mismatch {
+	if in.projectSPDX && in.versionSPDX && in.projectVsVersionMismatch {
 		return "project_spdx_version_all_spdx_mismatch"
 	}
 
-	if projectSPDX && versionNonStandard {
+	if in.projectSPDX && in.versionNonStandard {
 		return "project_spdx_versions_all_nonspdx"
 	}
 
-	if projectNonStandard && versionSPDX {
+	if in.projectNonStandard && in.versionSPDX {
 		return "project_nonstandard_versions_mixed"
 	}
-	if projectNonStandard && versionNonStandard {
+	if in.projectNonStandard && in.versionNonStandard {
 		return "project_nonstandard_versions_all_nonspdx"
 	}
 

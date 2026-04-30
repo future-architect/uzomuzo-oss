@@ -492,3 +492,27 @@ func TestResolvedLicense_IsNonStandard(t *testing.T) {
 		})
 	}
 }
+
+func TestResolvedLicense_IsUsableSPDX(t *testing.T) {
+	tests := []struct {
+		name string
+		in   ResolvedLicense
+		want bool
+	}{
+		{name: "zero_value", in: ResolvedLicense{}, want: false},
+		{name: "single_leaf_spdx", in: ResolvedLicense{Expression: "MIT", Source: LicenseSourceDepsDevProjectSPDX, Raw: "MIT"}, want: true},
+		{name: "compound_or_spdx", in: ResolvedLicense{Expression: "MIT OR Apache-2.0", Source: LicenseSourceDepsDevVersionSPDX}, want: true},
+		{name: "compound_with_exception", in: ResolvedLicense{Expression: "GPL-2.0-only WITH Classpath-exception-2.0", Source: LicenseSourceDepsDevProjectSPDX}, want: true},
+		{name: "noassertion_recognized_but_not_usable", in: ResolvedLicense{Expression: "NOASSERTION", Raw: "NOASSERTION", Source: LicenseSourceDepsDevVersionSPDX}, want: false},
+		{name: "non_standard_only_raw", in: ResolvedLicense{Expression: "", Raw: "Proprietary", Source: LicenseSourceDepsDevVersionRaw}, want: false},
+		{name: "github_non_standard", in: ResolvedLicense{Expression: "", Raw: "See LICENSE", Source: LicenseSourceGitHubProjectNonStandard}, want: false},
+		{name: "project_fallback_spdx_is_usable", in: ResolvedLicense{Expression: "MIT", Source: LicenseSourceProjectFallback, Raw: "MIT"}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.in.IsUsableSPDX(); got != tt.want {
+				t.Errorf("IsUsableSPDX() = %v, want %v (input=%+v)", got, tt.want, tt.in)
+			}
+		})
+	}
+}

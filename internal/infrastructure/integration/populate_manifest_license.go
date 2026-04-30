@@ -171,7 +171,7 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 	rawParts := make([]string, 0, len(lics))
 	var firstSPDX *domain.ResolvedLicense
 	for i := range lics {
-		if lics[i].Expression != "" && lics[i].Expression != "NOASSERTION" {
+		if lics[i].IsUsableSPDX() {
 			spdxExprs = append(spdxExprs, lics[i].Expression)
 			if firstSPDX == nil {
 				firstSPDX = &lics[i]
@@ -190,7 +190,7 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 		if a.ProjectLicense.IsZero() || a.ProjectLicense.IsNonStandard() {
 			a.ProjectLicense = *firstSPDX
 			wrote = true
-		} else if a.ProjectLicense.Expression != "" && a.ProjectLicense.Expression != "NOASSERTION" && !strings.EqualFold(a.ProjectLicense.Expression, firstSPDX.Expression) {
+		} else if a.ProjectLicense.IsUsableSPDX() && !strings.EqualFold(a.ProjectLicense.Expression, firstSPDX.Expression) {
 			slog.Warn("license_disagreement",
 				"existing_source", a.ProjectLicense.Source,
 				"existing", a.ProjectLicense.Expression,
@@ -212,7 +212,7 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 	if a.RequestedVersionLicense.IsZero() || a.RequestedVersionLicense.IsNonStandard() {
 		if len(spdxExprs) > 0 && firstSPDX != nil {
 			joined := licenses.JoinExpressions(spdxExprs)
-			rawConcat := strings.Join(rawParts, " "+manifestRawSeparator+" ")
+			rawConcat := strings.Join(rawParts, " "+licenseORSeparator+" ")
 			a.RequestedVersionLicense = domain.ResolvedLicense{
 				Expression: joined,
 				Raw:        rawConcat,
@@ -223,7 +223,7 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 			// All manifest entries were non-standard — preserve raw concatenation.
 			a.RequestedVersionLicense = domain.ResolvedLicense{
 				Expression: "",
-				Raw:        strings.Join(rawParts, " "+manifestRawSeparator+" "),
+				Raw:        strings.Join(rawParts, " "+licenseORSeparator+" "),
 				Source:     lics[0].Source,
 			}
 			wrote = true
@@ -233,7 +233,3 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 	return wrote
 }
 
-// manifestRawSeparator concatenates upstream raw values when multiple
-// <license> blocks appear in a single manifest. Mirrors the SPDX OR operator
-// so Expression and Raw stay visually congruent in the canonical case.
-const manifestRawSeparator = "OR"
