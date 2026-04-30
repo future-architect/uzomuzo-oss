@@ -45,6 +45,7 @@ func (r ResolvedLicense) IsZero() bool {
 //   - LicenseSourceDepsDevVersionRaw
 //   - LicenseSourceGitHubVersionRaw (reserved / future)
 //   - LicenseSourceMavenPOMNonStandard
+//   - LicenseSourceClearlyDefinedNonStandard
 //
 // Notes:
 //   - A promoted or fallback SPDX (derived-from-version / project-fallback) is NEVER non-standard.
@@ -61,7 +62,8 @@ func (r ResolvedLicense) IsNonStandard() bool {
 		LicenseSourceGitHubProjectNonStandard,
 		LicenseSourceDepsDevVersionRaw,
 		LicenseSourceGitHubVersionRaw,
-		LicenseSourceMavenPOMNonStandard:
+		LicenseSourceMavenPOMNonStandard,
+		LicenseSourceClearlyDefinedNonStandard:
 		return true
 	default:
 		return false
