@@ -15,6 +15,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/clearlydefined"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/golangresolve"
@@ -37,6 +38,7 @@ type IntegrationService struct {
 	packagistClient *packagist.Client
 	pypiClient      *pypi.Client
 	mavenClient     *maven.Client
+	cdClient        *clearlydefined.Client
 	vanityResolver  *govanityresolve.Resolver
 }
 
@@ -76,6 +78,20 @@ func WithPyPIClient(c *pypi.Client) IntegrationOption {
 // NewAnalysisServiceFromConfig and NewFetchServiceFromConfig wire it eagerly.
 func WithMavenClient(c *maven.Client) IntegrationOption {
 	return func(s *IntegrationService) { s.mavenClient = c }
+}
+
+// WithClearlyDefinedClient injects a ClearlyDefined.io client used by the
+// fourth-tier license fallback (after deps.dev, GitHub, and the Maven POM
+// manifest tier).
+//
+// Optional: when unset, the CD pass is skipped and licenses remain as resolved
+// by upstream tiers. In production this materially reduces license coverage
+// (#327 issue context: CD's empirical hit rate is 67-93% on the residual
+// "broken subset" across maven/nuget/pypi). Library users wiring their own
+// IntegrationService should opt in. NewAnalysisServiceFromConfig and
+// NewFetchServiceFromConfig wire it eagerly.
+func WithClearlyDefinedClient(c *clearlydefined.Client) IntegrationOption {
+	return func(s *IntegrationService) { s.cdClient = c }
 }
 
 // WithVanityResolver overrides the default Go vanity-URL resolver that
