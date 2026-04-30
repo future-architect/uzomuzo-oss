@@ -125,10 +125,40 @@ pending_patterns:
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
+  - category: "comment-doc-drift"
+    summary: "Doc comments must match implementation boundary conditions — RetryConfig said retryDecider controls 429 retries (it doesn't); rateLimitBackoff comment said 'negative' for a zero-inclusive guard (should say 'non-positive')"
+    pr: 359
+    file: "internal/infrastructure/httpclient/client.go"
+    date: "2026-04-29"
+  - category: "defensive-coding"
+    summary: "Guard time.Duration arithmetic against integer overflow — use strconv.ParseInt, reject values exceeding math.MaxInt64/time.Second, and do not clamp to an arbitrary policy constant (let the caller's configured cap decide)"
+    pr: 359
+    file: "internal/infrastructure/httpclient/client.go"
+    date: "2026-04-29"
   - category: "logging-consistency"
     summary: "Pass typed error values (e.g., *QueryError) directly to slog instead of pre-stringifying via .Error() — preserves type/structure and keeps logging consistent with slog conventions"
     pr: 346
     file: "internal/infrastructure/treesitter/analyzer.go"
+    date: "2026-04-29"
+  - category: "testing"
+    summary: "When generating time-based test fixtures with coarse-grained formatters (e.g., http.TimeFormat at 1-second granularity), truncate to the format boundary and add enough offset (e.g., 2s) so the formatted value is deterministically in the expected range — sub-granularity offsets (50ms) can collapse to the current or past second"
+    pr: 359
+    file: "internal/infrastructure/httpclient/client_test.go"
+    date: "2026-04-29"
+  - category: "testing"
+    summary: "Assert diagnostic context fields on typed error structs; match context-error assertions to the specific context constructor (WithCancel → Canceled only, WithTimeout → DeadlineExceeded only) — permissive OR hides misrouted error paths"
+    pr: 359
+    file: "internal/infrastructure/httpclient/client_test.go"
+    date: "2026-04-29"
+  - category: "defensive-coding"
+    summary: "Cap response body reads with io.LimitReader in retry paths (429/5xx) to prevent unbounded memory and log growth across retry attempts — consistent with existing codebase pattern for HTTP body reads"
+    pr: 359
+    file: "internal/infrastructure/httpclient/client.go"
+    date: "2026-04-29"
+  - category: "defensive-coding"
+    summary: "Use time.NewTimer + Stop/drain instead of time.After in select with ctx.Done() to prevent timer accumulation during long cancellable waits"
+    pr: 359
+    file: "internal/infrastructure/httpclient/client.go"
     date: "2026-04-29"
   - category: "api-consistency"
     summary: "Redundant gh pr view API call to fetch labels when pr_json from repos/.../pulls already contains label data — reuse already-fetched API response data instead of making redundant calls for a subset of the same information"
