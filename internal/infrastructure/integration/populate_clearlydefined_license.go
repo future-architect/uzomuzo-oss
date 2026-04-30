@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common"
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/clearlydefined"
@@ -50,9 +51,11 @@ func (s *IntegrationService) enrichLicenseFromClearlyDefined(ctx context.Context
 			continue
 		}
 		ecosystem := strings.ToLower(strings.TrimSpace(a.Package.Ecosystem))
-		if ecosystem == "" {
-			continue
-		}
+		// Positive-list gate: skip ecosystems CD doesn't cover (Go modules,
+		// Github Actions, generic, etc.) so we don't spawn goroutines that
+		// would short-circuit inside FetchLicenses. Keeps the
+		// license_clearlydefined_miss telemetry meaningful — a miss event
+		// always represents a coordinate CD was actually queried for.
 		if !clearlydefined.SupportsEcosystem(ecosystem) {
 			continue
 		}
@@ -96,7 +99,7 @@ dispatchLoop:
 			lics, found, err := s.cdClient.FetchLicenses(ctx, k.ecosystem, k.namespace, k.name, k.version)
 			if err != nil {
 				event := "license_clearlydefined_fetch_failed"
-				if clearlydefined.IsRateLimitError(err) {
+				if common.IsRateLimitError(err) {
 					event = "license_clearlydefined_rate_limited"
 				}
 				slog.Warn(event,

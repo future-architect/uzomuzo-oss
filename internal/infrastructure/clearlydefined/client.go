@@ -29,7 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/future-architect/uzomuzo-oss/internal/common"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/licenses"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
@@ -79,6 +78,32 @@ var providerByEcosystem = map[string]struct{ cdType, provider string }{
 	"composer": {cdType: "composer", provider: "packagist"},
 }
 
+// SupportsEcosystem reports whether the given ecosystem name has CD coverage.
+// Callers (typically the dispatcher in package integration) use it as an
+// up-front gate so analyses for unsupported ecosystems do not reach the
+// fan-out and waste a goroutine slot only to short-circuit inside FetchLicenses.
+// The accepted set matches FetchLicenses' lookup; pass the same lower-cased
+// ecosystem string both places.
+func SupportsEcosystem(ecosystem string) bool {
+	_, ok := providerByEcosystem[strings.ToLower(strings.TrimSpace(ecosystem))]
+	return ok
+}
+
+// defaultRetryConfig returns the retry policy used by both NewClient and
+// SetHTTPClient. Centralizing here ensures tests with injected transports
+// exercise the same retry behavior as production, avoiding test/production
+// drift where a mock'd transport would silently see a different MaxRetries
+// or backoff curve.
+func defaultRetryConfig() httpclient.RetryConfig {
+	return httpclient.RetryConfig{
+		MaxRetries:        2,
+		BaseBackoff:       500 * time.Millisecond,
+		MaxBackoff:        3 * time.Second,
+		RetryOn5xx:        true,
+		RetryOnNetworkErr: true,
+	}
+}
+
 // Client fetches curated license information from ClearlyDefined.io.
 //
 // DDD Layer: Infrastructure
@@ -92,6 +117,12 @@ type Client struct {
 	cache   map[cacheKey]cacheEntry
 }
 
+// cacheKey identifies a CD coordinate in the in-memory cache. namespace
+// stores the *original* (untransformed) input — empty stays empty. The URL
+// builder substitutes "-" for empty when constructing the request, but the
+// cache key never sees that substitution, so a package whose namespace is
+// genuinely "-" (rare but technically valid) does not collide with packages
+// whose namespace is empty.
 type cacheKey struct {
 	cdType, provider, namespace, name, version string
 }
@@ -109,30 +140,29 @@ func NewClient() *Client {
 		baseURL: defaultBaseURL,
 		http: httpclient.NewClient(
 			&http.Client{Timeout: 10 * time.Second},
-			httpclient.RetryConfig{
-				MaxRetries:        2,
-				BaseBackoff:       500 * time.Millisecond,
-				MaxBackoff:        3 * time.Second,
-				RetryOn5xx:        true,
-				RetryOnNetworkErr: true,
-			},
+			defaultRetryConfig(),
 		),
 		cache: make(map[cacheKey]cacheEntry),
 	}
 }
 
 // SetBaseURL overrides the API base URL (useful for tests or mirrors).
+//
+// The base URL is treated as origin-only — its path component, if any, is
+// overwritten when each definition URL is constructed. Callers wiring a
+// mirror that sits behind a path prefix (e.g. https://internal/cd/v1) need
+// a wrapper proxy or a future enhancement to JoinPath. Trailing slashes
+// are tolerated and stripped.
 func (c *Client) SetBaseURL(u string) {
 	c.baseURL = strings.TrimRight(strings.TrimSpace(u), "/")
 }
 
 // SetHTTPClient lets tests inject a custom *http.Client (typically pointing
-// at an httptest.Server). The retry policy is reset to httpclient.DefaultRetryConfig
-// (MaxRetries=3, 1s base backoff), which differs from NewClient's batch-tuned
-// settings — this matches the codebase-wide SetHTTPClient convention used by
-// all other infra clients.
+// at an httptest.Server). The retry policy stays at the package default
+// (defaultRetryConfig), so test-injected transports exercise the same retry
+// behavior as production.
 func (c *Client) SetHTTPClient(h *http.Client) {
-	c.http = httpclient.NewClient(h, httpclient.DefaultRetryConfig())
+	c.http = httpclient.NewClient(h, defaultRetryConfig())
 }
 
 // FetchLicenses queries CD for the given coordinate and translates the
@@ -160,18 +190,21 @@ func (c *Client) FetchLicenses(ctx context.Context, ecosystem, namespace, name, 
 	if n == "" || v == "" {
 		return nil, false, nil
 	}
-	// CD's path requires a namespace segment — packages without a
-	// namespace (e.g. some npm/pypi entries) use "-" as a placeholder.
-	if ns == "" {
-		ns = "-"
-	}
 
+	// Cache key uses the original (untransformed) namespace — never the URL
+	// builder's "-" placeholder — so empty and literal "-" stay distinct.
 	key := cacheKey{cdType: mapping.cdType, provider: mapping.provider, namespace: ns, name: n, version: v}
 	if cached, ok := c.lookupCache(key); ok {
 		return cached.licenses, cached.found, nil
 	}
 
-	defURL, err := c.buildDefinitionURL(mapping.cdType, mapping.provider, ns, n, v)
+	// CD's path requires a namespace segment — packages without a
+	// namespace (e.g. some npm/pypi entries) use "-" as a placeholder.
+	urlNS := ns
+	if urlNS == "" {
+		urlNS = "-"
+	}
+	defURL, err := c.buildDefinitionURL(mapping.cdType, mapping.provider, urlNS, n, v)
 	if err != nil {
 		return nil, false, fmt.Errorf("clearlydefined build url: %w", err)
 	}
@@ -282,9 +315,11 @@ func translateDefinition(def *definitionResponse) ([]domain.ResolvedLicense, boo
 	leaves := parsed.Leaves()
 	if len(leaves) == 0 {
 		// Fallback path: declared is non-empty but ParseExpression yielded
-		// no usable operands (e.g., bare punctuation). Treat the whole
-		// string as a single non-standard entry so callers still see the
-		// raw value rather than dropping it.
+		// no usable operands. Reachable when the input is operator-only
+		// ("OR", "AND OR"), pure parens ("()"), or oversized (>64KB
+		// rejected by the parser). Treat the whole string as a single
+		// non-standard entry so callers still see the raw value rather
+		// than dropping it.
 		return []domain.ResolvedLicense{{
 			Source: domain.LicenseSourceClearlyDefinedNonStandard,
 			Raw:    declared,
@@ -293,28 +328,29 @@ func translateDefinition(def *definitionResponse) ([]domain.ResolvedLicense, boo
 
 	out := make([]domain.ResolvedLicense, 0, len(leaves))
 	for _, leaf := range leaves {
-		out = append(out, leafToResolved(leaf, declared))
+		out = append(out, leafToResolved(leaf))
 	}
 	return out, true
 }
 
 // leafToResolved converts a single ExprLicense leaf to a ResolvedLicense.
-// fullDeclared is preserved on each entry so downstream provenance can
-// reconstruct the parent CD response. SPDX classification is taken from the
-// leaf's Normalization result — never from substring matching on the
-// identifier text.
-func leafToResolved(leaf *licenses.ExprLicense, fullDeclared string) domain.ResolvedLicense {
+// Raw is the leaf's per-operand substring (e.g. "Apache-2.0" rather than
+// the full "Apache-2.0 OR MIT"), matching PR #345's per-<license> Raw
+// semantics so downstream consumers can attribute each ResolvedLicense to
+// its specific operand. SPDX classification is taken from the leaf's
+// Normalization result — never from substring matching on the identifier.
+func leafToResolved(leaf *licenses.ExprLicense) domain.ResolvedLicense {
 	if leaf.Normalization.SPDX {
 		return domain.ResolvedLicense{
 			Identifier: leaf.Identifier,
 			Source:     domain.LicenseSourceClearlyDefinedSPDX,
-			Raw:        fullDeclared,
+			Raw:        leaf.Raw,
 			IsSPDX:     true,
 		}
 	}
 	return domain.ResolvedLicense{
 		Source: domain.LicenseSourceClearlyDefinedNonStandard,
-		Raw:    fullDeclared,
+		Raw:    leaf.Raw,
 	}
 }
 
@@ -353,17 +389,3 @@ func (c *Client) storeCache(key cacheKey, lics []domain.ResolvedLicense, found b
 	c.cacheMu.Unlock()
 }
 
-// SupportsEcosystem reports whether ClearlyDefined has coverage for the
-// given ecosystem name. Callers can use this to skip enqueueing jobs for
-// ecosystems that would always return found=false without issuing HTTP.
-func SupportsEcosystem(ecosystem string) bool {
-	_, ok := providerByEcosystem[strings.ToLower(strings.TrimSpace(ecosystem))]
-	return ok
-}
-
-// IsRateLimitError reports whether an error from FetchLicenses indicates the
-// underlying HTTP layer hit a rate limit. Re-exposed here so the dispatcher
-// can branch on event names without depending on internal/common directly.
-func IsRateLimitError(err error) bool {
-	return common.IsRateLimitError(err)
-}

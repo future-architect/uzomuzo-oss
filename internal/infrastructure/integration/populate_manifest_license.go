@@ -140,15 +140,18 @@ func needsManifestLicense(a *domain.Analysis) bool {
 	return false
 }
 
-// applyManifestLicenses merges manifest-derived licenses into the analysis,
-// applying the override rules documented on enrichLicenseFromManifest.
+// applyManifestLicenses merges externally-derived licenses into the analysis,
+// applying the override rules documented on enrichLicenseFromManifest. Used
+// by both the manifest tier (Maven POM) and the ClearlyDefined.io tier; the
+// override matrix is identical across sources so a single helper is reused.
 //
-// When the manifest reports multiple SPDX entries (multi-licensed POMs), the
-// first entry in <licenses> document order is promoted to ProjectLicense. The
-// full list — including any subsequent SPDX entries — is written to
-// RequestedVersionLicenses when that slice is empty or entirely non-SPDX.
-// Document order is treated as authoritative because Maven publishers list
-// the primary license first by convention.
+// When the source reports multiple SPDX entries (multi-licensed POMs or
+// SPDX-expression operands from CD), the first SPDX entry in input order is
+// promoted to ProjectLicense. The full list — including any subsequent SPDX
+// entries — is written to RequestedVersionLicenses when that slice is empty
+// or entirely non-SPDX. Order is treated as authoritative: Maven publishers
+// list the primary license first by convention; SPDX expressions place the
+// preferred license first in the operand sequence.
 func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) {
 	if a == nil || len(lics) == 0 {
 		return
