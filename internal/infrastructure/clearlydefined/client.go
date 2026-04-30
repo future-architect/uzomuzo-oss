@@ -25,6 +25,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -195,7 +196,7 @@ func (c *Client) FetchLicenses(ctx context.Context, ecosystem, namespace, name, 
 	// builder's "-" placeholder — so empty and literal "-" stay distinct.
 	key := cacheKey{cdType: mapping.cdType, provider: mapping.provider, namespace: ns, name: n, version: v}
 	if cached, ok := c.lookupCache(key); ok {
-		return cached.licenses, cached.found, nil
+		return slices.Clone(cached.licenses), cached.found, nil
 	}
 
 	// CD's path requires a namespace segment — packages without a
@@ -379,7 +380,7 @@ func (c *Client) lookupCache(key cacheKey) (cacheEntry, bool) {
 func (c *Client) storeCache(key cacheKey, lics []domain.ResolvedLicense, found bool, ttl time.Duration) {
 	c.cacheMu.Lock()
 	c.cache[key] = cacheEntry{
-		licenses: lics,
+		licenses: slices.Clone(lics),
 		found:    found,
 		expires:  time.Now().Add(ttl),
 	}
