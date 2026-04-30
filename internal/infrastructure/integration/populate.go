@@ -174,18 +174,17 @@ func (s *IntegrationService) populateLicenses(analysis *domain.Analysis, batchRe
 // values are recorded with Expression="" and Source=...NonStandard.
 func buildProjectLicense(raw string) domain.ResolvedLicense {
 	expr := licenses.NormalizeExpression(raw)
-	switch {
-	case expr == "":
+	if expr == "" {
 		return domain.ResolvedLicense{Expression: "", Raw: raw, Source: domain.LicenseSourceDepsDevProjectNonStandard}
-	default: // canonical SPDX or "NOASSERTION"
-		return domain.ResolvedLicense{Expression: expr, Raw: raw, Source: domain.LicenseSourceDepsDevProjectSPDX}
 	}
+	// canonical SPDX or "NOASSERTION"
+	return domain.ResolvedLicense{Expression: expr, Raw: raw, Source: domain.LicenseSourceDepsDevProjectSPDX}
 }
 
 // buildVersionLicenseFromDepsDev builds a ResolvedLicense for the requested
 // version from a deps.dev Version, OR-joining all upstream license entries
 // into a single SPDX expression. Priority order: LicenseDetails[].Spdx →
-// fallback to Licenses[]. The function never returns a slice — see ADR-0018.
+// fallback to Licenses[]. The function never returns a slice — see ADR-0019.
 func buildVersionLicenseFromDepsDev(v *depsdev.Version) domain.ResolvedLicense {
 	if v == nil {
 		return domain.ResolvedLicense{}
