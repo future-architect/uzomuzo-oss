@@ -159,10 +159,11 @@ func needsManifestLicense(a *domain.Analysis) bool {
 // SPDX-expression operands from CD), the first SPDX entry in input order is
 // promoted to ProjectLicense for deterministic selection. All SPDX entries
 // are OR-joined into a single canonical expression and written to
-// RequestedVersionLicense when the current value is zero or non-standard.
-// Input order may reflect publisher convention for some manifest sources
-// (e.g. Maven POMs list the primary license first), but SPDX expressions
-// themselves do not imply a preferred license by operand order.
+// RequestedVersionLicense when the current value is not a usable SPDX
+// expression (for example, when it contains NOASSERTION). Input order may
+// reflect publisher convention for some manifest sources (e.g. Maven POMs
+// list the primary license first), but SPDX expressions themselves do not
+// imply a preferred license by operand order.
 func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bool {
 	if a == nil || len(lics) == 0 {
 		return false
@@ -206,10 +207,14 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 		wrote = true
 	}
 
-	// RequestedVersionLicense: replace when zero or non-standard. OR-join all
-	// SPDX manifest entries into one canonical expression. Raw preserves the
-	// per-entry concatenation for audit. The Source uses the same constant as
-	// the first SPDX entry so callers can attribute provenance (Maven POM vs
+	// RequestedVersionLicense: when manifest includes SPDX entries, OR-join them
+	// into one canonical expression and replace the current value if it is not a
+	// usable SPDX expression (zero, non-standard, or NOASSERTION). When the
+	// manifest has only non-standard entries, preserve their raw concatenation
+	// only if the current value is zero (replacing non-standard with non-standard
+	// is a no-op per the override matrix). Raw preserves the per-entry
+	// concatenation for audit. The Source uses the same constant as the first
+	// SPDX entry so callers can attribute provenance (Maven POM vs
 	// ClearlyDefined.io).
 	if !a.RequestedVersionLicense.IsUsableSPDX() {
 		if len(spdxExprs) > 0 && firstSPDX != nil {
