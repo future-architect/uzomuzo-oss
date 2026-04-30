@@ -167,34 +167,35 @@ adds no information beyond `"MIT"`.
 
 ### ProjectLicense States
 
-| Identifier | Raw | Source | Meaning |
+| Expression | Raw | Source | Meaning |
 |------------|-----|--------|---------|
 | `""` | `""` | `""` | Pure absence: deps.dev project empty, no GitHub, no promotion |
 | `""` | `non-standard...` | `depsdev-project-nonstandard` | deps.dev non-SPDX placeholder (GitHub absent or also non-SPDX) |
 | `""` | `Some Custom Text` | `github-project-nonstandard` | GitHub non-SPDX (spdxId empty/NOASSERTION or cannot normalize) |
 | SPDX (e.g., `MIT`) | original (e.g., `mit`) | `depsdev-project-spdx` | deps.dev SPDX; raw preserves original casing |
 | SPDX | original | `github-project-spdx` | GitHub SPDX filled the gap |
-| SPDX | original | `derived-from-version` | Single Version SPDX promoted (Project was previously empty/non-standard) |
-| (empty or non-SPDX) | (various) | `(empty)` / nonstandard | Promotion skipped due to multiple/mixed Version SPDXs |
+| SPDX (single-leaf only) | original | `derived-from-version` | Single-leaf Version Expression promoted (Project was previously empty/non-standard); compound expressions are not promoted |
+| (empty or non-SPDX) | (various) | `(empty)` / nonstandard | Promotion skipped (compound version Expression or no SPDX leaf) |
 
 Notes:
 
 1. `project-fallback` does not appear at the Project level (direction is Project → Version only)
 2. `IsNonStandard()` covers `*-nonstandard` / `*-raw` sources
 3. `Raw` preserves upstream display/audit value even when SPDX-normalized
+4. `Expression` may be a compound SPDX expression (e.g., `"GPL-2.0-only WITH Classpath-exception-2.0"`) when upstream provides one; only single-leaf expressions are eligible for project-level promotion
 
-### RequestedVersionLicenses States
+### RequestedVersionLicense States
 
-| Identifier | Raw | Source | Meaning |
+| Expression | Raw | Source | Meaning |
 |------------|-----|--------|---------|
-| (empty slice) | – | – | No Version data; Project absent/non-SPDX and fallback not triggered |
-| SPDX | original | `depsdev-version-spdx` | From `Version.LicenseDetails[].Spdx` |
-| non-SPDX token | original | `depsdev-version-raw` | Raw license could not be normalized to SPDX |
-| SPDX | same | `project-fallback` | Version empty/all non-SPDX + Project has SPDX |
-| multiple SPDXs | originals | `depsdev-version-spdx` | Multiple candidates preserved; no fallback/promotion |
-| all non-SPDX | originals | `depsdev-version-raw` | If Project has SPDX → replaced with single fallback; otherwise as-is |
+| `""` | `""` | `""` | No Version data; Project absent/non-SPDX and fallback not triggered |
+| SPDX (single or compound) | original | `depsdev-version-spdx` | From `Version.LicenseDetails[].Spdx` (OR-joined when upstream provides multiple) |
+| `""` | OR-joined raw | `depsdev-version-raw` | Upstream array fully failed normalization; Raw preserves audit trail |
+| SPDX | original | `project-fallback` | Version empty / all non-SPDX + Project has SPDX |
+| compound SPDX | originals | `depsdev-version-spdx` | Multiple upstream entries OR-joined into single canonical Expression |
+| `""` | originals | `depsdev-version-raw` | If Project has SPDX → replaced with single `project-fallback`; otherwise preserved as-is |
 
-Flow summary: (1) SPDX-priority collection → (2) dedup/normalize → (3) if empty/all non-SPDX & Project has SPDX → fallback → (4) if Project empty/non-standard & Version SPDX is unique → promotion.
+Flow summary: (1) SPDX-priority collection → (2) `JoinExpressions` OR-joins survivors into a single canonical Expression → (3) if empty / Expression-empty & Project has SPDX → `project-fallback` → (4) if Project empty/non-standard & Version Expression is single-leaf canonical SPDX → promotion (`derived-from-version`).
 
 ### Helper Quick Reference
 
@@ -235,7 +236,7 @@ The third-tier fallback fetches the package's own ecosystem manifest after deps.
 2. Else `<url>` looked up against the curated SPDX URL table (`internal/domain/licenses/url_lookup.go`, ~30 entries covering apache.org, opensource.org, gnu.org, mozilla.org, eclipse.org, creativecommons.org, etc.) → SPDX → emit `maven-pom-spdx`.
 3. Else preserve `<name>` (or `<url>` if no name) as `Raw`, emit `maven-pom-nonstandard` with `Identifier` empty.
 
-`<licenses>` may contain multiple entries — each is emitted as its own `ResolvedLicense`. The dispatcher in `internal/infrastructure/integration/populate_manifest_license.go` then picks the first SPDX entry as the candidate `ProjectLicense` and writes the full list to `RequestedVersionLicenses` when the existing slice is empty or all non-SPDX.
+`<licenses>` may contain multiple entries — they are OR-joined into a single canonical SPDX Expression via `JoinExpressions`. The dispatcher in `internal/infrastructure/integration/populate_manifest_license.go` writes the joined Expression to `ProjectLicense` (when single-leaf and Project is empty/non-standard) and to `RequestedVersionLicense` when the existing version Expression is empty or non-SPDX.
 
 Parent POM inheritance is intentionally skipped in v1: the additional HTTP cost is rarely repaid (license declarations are typically per-artifact in Maven by convention). Revisit if telemetry shows >5% of misses are inheritance-bound.
 
@@ -247,7 +248,7 @@ Parent POM inheritance is intentionally skipped in v1: the additional HTTP cost 
 | `*-nonstandard` / `*-raw` (any layer) | replace | no-op |
 | Canonical SPDX (any layer) | no-op (log `license_disagreement` at WARN) | no-op |
 
-Pre-fetch short-circuit: if `ProjectLicense.IsSPDX` AND every `RequestedVersionLicenses` entry is canonical SPDX, the enricher skips the analysis entirely without issuing any HTTP.
+Pre-fetch short-circuit: if both `ProjectLicense.Expression` and `RequestedVersionLicense.Expression` carry a non-empty, non-`NOASSERTION` SPDX value, the enricher skips the analysis entirely without issuing any HTTP.
 
 ### Best-effort + rate-limit policy
 
