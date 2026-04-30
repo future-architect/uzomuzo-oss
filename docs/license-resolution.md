@@ -6,23 +6,43 @@ This document describes the current deterministic license acquisition / normaliz
 
 ## Core Domain Type: `ResolvedLicense`
 
-Defined in `internal/domain/analysis/models.go`. Used for both the project level (`Analysis.ProjectLicense`) and request version level (`Analysis.RequestedVersionLicenses`).
+Defined in `internal/domain/analysis/models.go`. Used at both the project
+level (`Analysis.ProjectLicense`) and the requested-version level
+(`Analysis.RequestedVersionLicense` — singular). The data model follows
+SPDX 2.3 §10 (License Expressions); see
+[ADR-0018](adr/0018-license-expression-of-truth.md) for the design
+rationale.
 
 | Field | Meaning | Notes |
 |-------|---------|-------|
-| `Identifier` | Normalized official SPDX identifier (empty if non-SPDX) | Normalized by `NormalizeLicenseIdentifier`; `NOASSERTION` is discarded |
-| `Raw` | Original upstream string | Preserved for auditing even when SPDX is recognized |
+| `Expression` | Canonical SPDX expression string, `""`, or `"NOASSERTION"` | Compound shapes (AND / OR / WITH / +) survive in this single string. `""` means uzomuzo could not parse / recognize SPDX content; `"NOASSERTION"` preserves the SPDX 2.3 sentinel. |
 | `Source` | Origin (closed set of constants) | See `license_sources.go` |
-| `IsSPDX` | Recognized as official SPDX | Excludes `NOASSERTION` |
-| `IsZero()` | Data is completely absent | All fields are empty / false |
-| `IsNonStandard()` | Non-SPDX data exists but is not normalized | Source is `*-nonstandard` / `*-raw` |
+| `Raw` | Upstream-original string verbatim | Preserved for audit trail and SBOM `name` fallback when `Expression` is empty. NEVER overwritten by the normalizer. |
+| `IsZero()` | Data is completely absent | All fields are empty |
+| `IsNonStandard()` | Non-SPDX data exists but is not normalized | `Expression == ""` AND Source is `*-nonstandard` / `*-raw` |
 
 ## Normalization Rules
 
-1. Trim whitespace (skip if empty)
-2. Normalize via `NormalizeLicenseIdentifier` (case / alias handling)
-3. Discard if empty or `NOASSERTION`
-4. Set `IsSPDX=true` only when officially matched
+License expression normalization is centralized in
+`internal/domain/licenses` and consumes the SPDX expression parser added in
+PR #358:
+
+1. **Single-string inputs** (e.g., deps.dev `Project.License`, GitHub
+   `licenseInfo.name`, Maven POM `<name>`) go through
+   `licenses.NormalizeExpression(raw) string`:
+   - empty / whitespace → `""`
+   - `"NOASSERTION"` / `"NONE"` (any case) → `"NOASSERTION"`
+   - all-recognized leaves → canonical re-rendered expression
+   - any non-SPDX leaf → `""` (caller keeps raw separately)
+2. **Array inputs** (e.g., deps.dev `Version.Licenses`,
+   `LicenseDetails[].Spdx`, Maven POM multi-`<license>`) go through
+   `licenses.JoinExpressions(rawInputs) string` which OR-joins the
+   normalized survivors. The implicit-OR convention matches Maven, npm,
+   and PyPI multi-license semantics.
+3. **Leaf-only API inputs** (e.g., GitHub `licenseInfo.spdxId`, which is a
+   single SPDX ID by API contract) use the existing
+   `domain.NormalizeLicenseIdentifier(raw) (string, bool)` — leaner than
+   the parser-based path when the input is guaranteed-leaf.
 
 ## Source Constants (`license_sources.go`)
 
@@ -43,22 +63,46 @@ Defined in `internal/domain/analysis/models.go`. Used for both the project level
 
 ## Resolution Flow (Overview)
 
-1. Project evaluation (deps.dev batch): SPDX → `depsdev-project-spdx`; otherwise → `depsdev-project-nonstandard`
-2. Request version candidate collection:
-   - `LicenseDetails[].Spdx` prioritized (deduplicated, SPDX wins over raw)
-   - Falls back to raw `Licenses[]` (non-SPDX) if none
-3. Version set empty & Project has SPDX → add single `project-fallback` entry
-4. All Version entries are non-SPDX & Project has SPDX → replace with single `project-fallback`
-5. Project empty/non-standard & Version has unique SPDX → promote to Project (`derived-from-version`)
-6. GitHub enrichment: if Project is still empty/non-standard, use GitHub license (SPDX or non-standard)
-7. **Ecosystem-native manifest fallback** (Maven only at present, NuGet/PyPI follow): if Project remains empty/non-standard or any version slice still lacks SPDX, fetch the package's own manifest (`pom.xml`) and apply its `<licenses>` declarations. SPDX results override `*-nonstandard` sources; canonical SPDX is never overwritten (disagreement is logged at WARN). See [Ecosystem-Native Fallback](#ecosystem-native-fallback) below.
+1. **Project evaluation** (deps.dev batch): `Project.License` flows through
+   `NormalizeExpression`. Recognized → `depsdev-project-spdx` (Expression
+   set); non-SPDX → `depsdev-project-nonstandard` (Expression empty, Raw
+   preserved).
+2. **Requested version collection**:
+   - `LicenseDetails[].Spdx` is preferred (filtered for non-empty entries)
+   - Falls back to `Licenses[]` if `LicenseDetails` produced no candidates
+   - Both arrays are OR-joined via `JoinExpressions` into a single
+     canonical Expression. If at least one entry survives normalization,
+     Source is `depsdev-version-spdx`; otherwise Expression is empty,
+     Source is `depsdev-version-raw`, and Raw holds the OR-joined
+     concatenation for audit.
+3. **Project → Version fallback**: if the version expression is zero AND
+   Project has SPDX → set `RequestedVersionLicense` from Project with
+   Source `project-fallback`.
+4. **Non-SPDX version override**: if version Expression is empty (raw-only)
+   AND Project has SPDX → replace with `project-fallback` carrying the
+   Project Expression.
+5. **Version → Project promotion**: if Project is empty / non-standard AND
+   the version Expression is **single-leaf** (parse and check
+   `Root.License != nil`) AND the leaf is canonical SPDX → promote to
+   Project with Source `derived-from-version`. **Compound expressions are
+   not promoted** (a project-level SPDX claim must be unambiguous; see
+   ADR-0018).
+6. **GitHub enrichment**: if Project is still empty / non-standard, use
+   `licenseInfo.spdxId` (preferred — leaf-only) then `licenseInfo.name`.
+7. **Ecosystem-native manifest fallback** (Maven only at present;
+   NuGet/PyPI follow): if Project remains empty/non-standard or
+   RequestedVersionLicense lacks SPDX, fetch the package's own manifest
+   (`pom.xml`) and apply its `<licenses>` declarations. Multiple manifest
+   entries are OR-joined into a single Expression. SPDX results override
+   `*-nonstandard` sources; canonical SPDX is never overwritten
+   (disagreement is logged at WARN). See [Ecosystem-Native Fallback](#ecosystem-native-fallback).
 
 ## Promotion and Fallback Conditions
 
 | Action | Trigger | Result Source | Safety Guard |
 |--------|---------|---------------|--------------|
-| Version → Project promotion | Project is zero or non-standard AND Version SPDX is unique | `derived-from-version` | Not executed if multiple SPDXs |
-| Project → Version fallback | Version empty or all non-SPDX AND Project has SPDX | `project-fallback` | Not executed if Version has 1+ existing SPDX |
+| Version → Project promotion | Project is zero or non-standard AND Version Expression is single-leaf canonical SPDX | `derived-from-version` | Compound expressions (`MIT OR Apache-2.0`) are NOT promoted |
+| Project → Version fallback | Version Expression is empty AND Project has canonical SPDX | `project-fallback` | Compound version expressions are preserved (not overridden) |
 
 ## Helper Semantics
 
@@ -72,24 +116,43 @@ Defined in `internal/domain/analysis/models.go`. Used for both the project level
 | derived-from-version SPDX | false | false |
 | Official SPDX (deps.dev / GitHub) | false | false |
 
-## Multi-License Handling (Version)
+## Compound Expression Handling
 
-- Deduplicated by normalized identifier (map)
-- Duplicate raw + SPDX prioritizes SPDX source
-- Sorted by `Identifier` for stable output
-- When multiple SPDXs remain: neither promotion nor fallback intervenes
+Multiple license declarations from upstream (e.g. deps.dev's
+`Version.Licenses` array, or Maven POMs with multiple `<license>` blocks)
+are OR-joined into a single canonical SPDX expression at normalization
+time:
+
+- `["MIT", "Apache-2.0"]` → `"MIT OR Apache-2.0"`
+- `["MIT", "MIT OR Apache-2.0"]` → `"MIT OR Apache-2.0"` (parser flattens)
+- `["MIT", "ProprietaryFoo"]` → `"MIT"` (non-SPDX entries drop entry-wise)
+- `["NOASSERTION", "MIT"]` → `"MIT"` (NOASSERTION dropped from mixed sets)
+- `["NOASSERTION"]` → `"NOASSERTION"` (preserved when alone)
+
+`AND`, `WITH`, `+` semantics survive in the Expression string when present
+in the upstream input. Consumers needing leaf-level identity (set
+membership, policy checks) should call
+`licenses.ParseExpression(expr).Leaves()`.
 
 ## Non-SPDX ("nonstandard") Criteria
 
-Any of the following:
+`Expression == ""` AND `Source` is one of:
 
-- deps.dev project license cannot be normalized
-- GitHub `licenseInfo` spdxId is empty/`NOASSERTION` and name cannot be normalized
-- Version has no SPDX and raw entries cannot be normalized
+- deps.dev project license cannot be normalized → `depsdev-project-nonstandard`
+- deps.dev version array fully fails normalization → `depsdev-version-raw`
+- GitHub `licenseInfo` spdxId is empty / NOASSERTION and name cannot be
+  normalized → `github-project-nonstandard`
+- Maven POM `<licenses>` entries cannot be normalized → `maven-pom-nonstandard`
 
-## NOASSERTION Handling
+## NOASSERTION Handling (per SPDX 2.3 §A.1.5)
 
-`NOASSERTION` (case-insensitive) is treated as absent: discarded and does not trigger promotion / fallback conditions.
+`Expression == "NOASSERTION"` preserves the SPDX sentinel — distinct from
+`Expression == ""` which means "no upstream data". NOASSERTION is
+recognized as a usable SPDX value and is **not** non-standard. It is **not**
+promoted to project-level (a project-level claim must be a real license,
+not a refusal-to-claim). When mixed into a multi-entry upstream array, it
+is dropped from the OR-join because choosing among `"NOASSERTION OR MIT"`
+adds no information beyond `"MIT"`.
 
 ## Error / Edge Cases
 

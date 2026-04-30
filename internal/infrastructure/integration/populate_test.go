@@ -83,14 +83,14 @@ func TestPopulateLicensesDirect(t *testing.T) {
 	batch := &depsdev.BatchResult{PURL: purlStr, Package: &depsdev.Package{Versions: []depsdev.Version{ver}}, ReleaseInfo: rel, Project: &depsdev.Project{License: "Apache-2.0"}}
 
 	svc.populateLicenses(analysis, batch)
-	if analysis.ProjectLicense.Identifier != "Apache-2.0" { // canonical SPDX casing
+	if analysis.ProjectLicense.Expression != "Apache-2.0" { // canonical SPDX casing
 		t.Fatalf("expected project license Apache-2.0 got %+v", analysis.ProjectLicense)
 	}
 	if analysis.ProjectLicense.Source != domain.LicenseSourceDepsDevProjectSPDX {
 		t.Fatalf("expected project license source %s got %s", domain.LicenseSourceDepsDevProjectSPDX, analysis.ProjectLicense.Source)
 	}
-	if len(analysis.RequestedVersionLicenses) != 1 || analysis.RequestedVersionLicenses[0].Identifier != "MIT" {
-		t.Fatalf("expected requested version license MIT got %+v", analysis.RequestedVersionLicenses)
+	if analysis.RequestedVersionLicense.Expression != "MIT" {
+		t.Fatalf("expected requested version license MIT got %+v", analysis.RequestedVersionLicense)
 	}
 }
 
@@ -106,8 +106,8 @@ func TestPopulateLicensesFallback(t *testing.T) {
 	batch := &depsdev.BatchResult{PURL: purlStr, Package: &depsdev.Package{Versions: []depsdev.Version{ver}}, ReleaseInfo: rel, Project: &depsdev.Project{License: "BSD-3-Clause"}}
 
 	svc.populateLicenses(analysis, batch)
-	if len(analysis.RequestedVersionLicenses) != 1 || analysis.RequestedVersionLicenses[0].Identifier != "BSD-3-Clause" {
-		t.Fatalf("expected fallback BSD-3-Clause got %+v", analysis.RequestedVersionLicenses)
+	if analysis.RequestedVersionLicense.Expression != "BSD-3-Clause" {
+		t.Fatalf("expected fallback BSD-3-Clause got %+v", analysis.RequestedVersionLicense)
 	}
 	if analysis.ProjectLicense.Source != domain.LicenseSourceDepsDevProjectSPDX {
 		t.Fatalf("expected project license source %s got %s", domain.LicenseSourceDepsDevProjectSPDX, analysis.ProjectLicense.Source)

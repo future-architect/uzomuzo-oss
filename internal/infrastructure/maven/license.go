@@ -9,11 +9,13 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/licenses"
 )
 
-// FetchLicenses fetches the POM for the given coordinates and extracts <licenses>
-// entries, returning each as a domain.ResolvedLicense. It performs a single POM
-// fetch with no parent traversal: license declarations in Maven are per-artifact
-// metadata, and parent inheritance for <licenses> is rare enough that the extra
-// HTTP cost is not justified. Property placeholders (${license.name}) inside
+// FetchLicenses fetches the POM for the given coordinates and extracts
+// <licenses> entries, returning each as a domain.ResolvedLicense with a
+// canonical SPDX expression (when recognized) or with Expression="" and Raw
+// preserved (when non-standard). It performs a single POM fetch with no
+// parent traversal: license declarations in Maven are per-artifact metadata,
+// and parent inheritance for <licenses> is rare enough that the extra HTTP
+// cost is not justified. Property placeholders (${license.name}) inside
 // <name>/<url> are expanded using the same merge rules as GetRepoURL.
 //
 // Each <license> entry is normalized via the following decision tree:
@@ -27,6 +29,10 @@ import (
 //
 // Returns:
 //   - ([]ResolvedLicense, true, nil) when at least one <license> is found.
+//     The slice preserves <licenses> document order — Maven publishers list
+//     the primary license first by convention. Callers needing a single
+//     ResolvedLicense (e.g., applyManifestLicenses) OR-join entries via
+//     licenses.JoinExpressions.
 //   - (nil, false, nil) when the POM is missing, has no <licenses>, or all
 //     entries are blank after expansion.
 //   - (nil, false, err) on transport / decode errors.
@@ -49,7 +55,7 @@ func (c *Client) FetchLicenses(ctx context.Context, groupID, artifactID, version
 	}
 	props := c.mergeProps(pom, nil, g, a, v)
 	out := make([]domain.ResolvedLicense, 0, len(pom.Licenses.License))
-	// Track keys to deduplicate same-license-twice declarations. Identifier is
+	// Track keys to deduplicate same-license-twice declarations. Expression is
 	// the natural key for SPDX entries; non-standard entries fall back to Raw.
 	seen := make(map[string]struct{}, len(pom.Licenses.License))
 	for _, lic := range pom.Licenses.License {
@@ -59,7 +65,7 @@ func (c *Client) FetchLicenses(ctx context.Context, groupID, artifactID, version
 		if rl.IsZero() {
 			continue
 		}
-		key := rl.Identifier
+		key := rl.Expression
 		if key == "" {
 			key = "raw:" + rl.Raw
 		}
@@ -92,22 +98,20 @@ func resolvePOMLicense(name, urlStr string) domain.ResolvedLicense {
 		return domain.ResolvedLicense{}
 	}
 	if name != "" {
-		if id, isSPDX := domain.NormalizeLicenseIdentifier(name); isSPDX {
+		if expr := licenses.NormalizeExpression(name); expr != "" && expr != "NOASSERTION" {
 			return domain.ResolvedLicense{
-				Identifier: id,
+				Expression: expr,
 				Source:     domain.LicenseSourceMavenPOMSPDX,
 				Raw:        raw,
-				IsSPDX:     true,
 			}
 		}
 	}
 	if urlStr != "" {
 		if id := licenses.LookupLicenseURL(urlStr); id != "" {
 			return domain.ResolvedLicense{
-				Identifier: id,
+				Expression: id,
 				Source:     domain.LicenseSourceMavenPOMSPDX,
 				Raw:        urlStr,
-				IsSPDX:     true,
 			}
 		}
 	}

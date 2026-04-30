@@ -113,24 +113,30 @@ type Analysis struct {
 	ScorecardURL    string
 	ScorecardAPIURL string
 
-	// ProjectLicense provides repository-wide license info in unified struct form.
-	// Zero value (Identifier=="" && Source=="") means no project-level license detected.
-	// Non-standard placeholder from deps.dev: Identifier=="", Source==LicenseSourceDepsDevProjectNonStandard, Raw holds original.
-	// Promotion from single version SPDX: Source==LicenseSourceDerivedFromVersion.
+	// ProjectLicense provides repository-wide license info as a single SPDX
+	// expression. Zero value means no project-level license detected.
+	// Non-standard placeholder from deps.dev: Expression=="",
+	// Source==LicenseSourceDepsDevProjectNonStandard, Raw holds original.
+	// Promotion from a single-leaf version expression:
+	// Source==LicenseSourceDerivedFromVersion. See
+	// docs/adr/0018-license-expression-of-truth.md for the full data model.
 	ProjectLicense ResolvedLicense
 
-	// RequestedVersionLicenses provides per-requested-version license information with source tracking.
-	// Each ResolvedLicense captures:
-	//   - Identifier: normalized SPDX identifier when recognized (canonical casing) OR best-effort normalized value
-	//   - Source: origin of this license (e.g. LicenseSourceDepsDevVersionSPDX, LicenseSourceDepsDevVersionRaw, LicenseSourceProjectFallback)
-	//   - Raw: original upstream string prior to normalization
-	//   - IsSPDX: true when Identifier is a recognized SPDX identifier
+	// RequestedVersionLicense provides license information for the explicitly
+	// requested version, as a single SPDX expression. Multiple license
+	// declarations from upstream (e.g., deps.dev's Version.Licenses array)
+	// are OR-joined into one canonical expression
+	// (e.g., ["MIT", "Apache-2.0"] -> "MIT OR Apache-2.0"). Compound shapes
+	// AND / OR / WITH / + survive in the single string — never split.
+	//
 	// Fallback semantics:
-	//   - If version-specific probing yields zero usable licenses and ProjectLicense is set, we set a single
-	//     entry sourced from project-fallback.
-	//   - If all collected version licenses are non-SPDX while project license is a valid SPDX, we replace
-	//     the slice with a single project-fallback entry (previously referred to as "harmonize").
-	RequestedVersionLicenses []ResolvedLicense
+	//   - If version-specific probing yields no usable license and
+	//     ProjectLicense is set, this is populated from ProjectLicense with
+	//     Source==LicenseSourceProjectFallback.
+	//   - If the version expression is non-SPDX while ProjectLicense is a
+	//     valid SPDX expression, the field is replaced with a project-
+	//     fallback entry (previously referred to as "harmonize").
+	RequestedVersionLicense ResolvedLicense
 
 	// Metadata
 	AnalyzedAt time.Time

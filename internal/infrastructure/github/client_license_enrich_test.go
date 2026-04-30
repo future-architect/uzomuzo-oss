@@ -26,28 +26,28 @@ func TestEnrichProjectLicenseFromGitHub(t *testing.T) {
 			name:    "spdx id fills empty",
 			current: domain.ResolvedLicense{},
 			license: &LicenseInfo{SpdxID: "MIT"},
-			want:    domain.ResolvedLicense{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceGitHubProjectSPDX},
+			want:    domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceGitHubProjectSPDX},
 			changed: true,
 		},
 		{
 			name:    "name fallback canonical",
 			current: domain.ResolvedLicense{},
 			license: &LicenseInfo{Name: "Apache License 2.0"},
-			want:    domain.ResolvedLicense{Identifier: "Apache-2.0", Raw: "Apache License 2.0", IsSPDX: true, Source: domain.LicenseSourceGitHubProjectSPDX},
+			want:    domain.ResolvedLicense{Expression: "Apache-2.0", Raw: "Apache License 2.0", Source: domain.LicenseSourceGitHubProjectSPDX},
 			changed: true,
 		},
 		{
 			name:    "no override canonical deps.dev",
-			current: domain.ResolvedLicense{Identifier: "Apache-2.0", Source: domain.LicenseSourceDepsDevProjectSPDX, Raw: "Apache-2.0", IsSPDX: true},
+			current: domain.ResolvedLicense{Expression: "Apache-2.0", Source: domain.LicenseSourceDepsDevProjectSPDX, Raw: "Apache-2.0"},
 			license: &LicenseInfo{SpdxID: "MIT"},
-			want:    domain.ResolvedLicense{Identifier: "Apache-2.0", Source: domain.LicenseSourceDepsDevProjectSPDX, Raw: "Apache-2.0", IsSPDX: true},
+			want:    domain.ResolvedLicense{Expression: "Apache-2.0", Source: domain.LicenseSourceDepsDevProjectSPDX, Raw: "Apache-2.0"},
 			changed: false,
 		},
 		{
 			name:    "override non-standard deps.dev",
-			current: domain.ResolvedLicense{Identifier: "", Raw: "custom-non-spdx", Source: domain.LicenseSourceDepsDevProjectNonStandard, IsSPDX: false},
+			current: domain.ResolvedLicense{Expression: "", Raw: "custom-non-spdx", Source: domain.LicenseSourceDepsDevProjectNonStandard},
 			license: &LicenseInfo{SpdxID: "GPL-3.0-only"},
-			want:    domain.ResolvedLicense{Identifier: "GPL-3.0-only", Raw: "GPL-3.0-only", IsSPDX: true, Source: domain.LicenseSourceGitHubProjectSPDX},
+			want:    domain.ResolvedLicense{Expression: "GPL-3.0-only", Raw: "GPL-3.0-only", Source: domain.LicenseSourceGitHubProjectSPDX},
 			changed: true,
 		},
 		{
@@ -61,56 +61,52 @@ func TestEnrichProjectLicenseFromGitHub(t *testing.T) {
 			name:    "name non-spdx captured",
 			current: domain.ResolvedLicense{},
 			license: &LicenseInfo{Name: "Custom Non SPDX License Foo"},
-			want:    domain.ResolvedLicense{Identifier: "", Raw: "Custom Non SPDX License Foo", IsSPDX: false, Source: domain.LicenseSourceGitHubProjectNonStandard},
+			want:    domain.ResolvedLicense{Expression: "", Raw: "Custom Non SPDX License Foo", Source: domain.LicenseSourceGitHubProjectNonStandard},
 			changed: true,
 		},
 		{
 			name:    "spdx id casing normalized",
 			current: domain.ResolvedLicense{},
 			license: &LicenseInfo{SpdxID: strings.ToLower("Apache-2.0")},
-			want:    domain.ResolvedLicense{Identifier: "Apache-2.0", Raw: strings.ToLower("Apache-2.0"), IsSPDX: true, Source: domain.LicenseSourceGitHubProjectSPDX},
+			want:    domain.ResolvedLicense{Expression: "Apache-2.0", Raw: strings.ToLower("Apache-2.0"), Source: domain.LicenseSourceGitHubProjectSPDX},
 			changed: true,
 		},
 		{
 			name:    "github nonspdx name captured when empty",
 			current: domain.ResolvedLicense{},
 			license: &LicenseInfo{Name: "Custom Non SPDX License"},
-			want:    domain.ResolvedLicense{Identifier: "", Raw: "Custom Non SPDX License", IsSPDX: false, Source: domain.LicenseSourceGitHubProjectNonStandard},
+			want:    domain.ResolvedLicense{Expression: "", Raw: "Custom Non SPDX License", Source: domain.LicenseSourceGitHubProjectNonStandard},
 			changed: true,
 		},
 		{
 			name:    "depsdev nonstandard overridden by github nonspdx",
-			current: domain.ResolvedLicense{Identifier: "", Raw: "placeholder", IsSPDX: false, Source: domain.LicenseSourceDepsDevProjectNonStandard},
+			current: domain.ResolvedLicense{Expression: "", Raw: "placeholder", Source: domain.LicenseSourceDepsDevProjectNonStandard},
 			license: &LicenseInfo{Name: "Another Custom Non SPDX"},
-			want:    domain.ResolvedLicense{Identifier: "", Raw: "Another Custom Non SPDX", IsSPDX: false, Source: domain.LicenseSourceGitHubProjectNonStandard},
+			want:    domain.ResolvedLicense{Expression: "", Raw: "Another Custom Non SPDX", Source: domain.LicenseSourceGitHubProjectNonStandard},
 			changed: true,
 		},
 		{
 			name:    "spdx current not overridden by github nonspdx",
-			current: domain.ResolvedLicense{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX},
+			current: domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX},
 			license: &LicenseInfo{Name: "Custom Non SPDX"},
-			want:    domain.ResolvedLicense{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX},
+			want:    domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX},
 			changed: false,
 		},
 		{
 			name:    "depsdev nonstandard overridden by github spdx",
-			current: domain.ResolvedLicense{Identifier: "", Raw: "placeholder", IsSPDX: false, Source: domain.LicenseSourceDepsDevProjectNonStandard},
+			current: domain.ResolvedLicense{Expression: "", Raw: "placeholder", Source: domain.LicenseSourceDepsDevProjectNonStandard},
 			license: &LicenseInfo{SpdxID: "Apache-2.0"},
-			want:    domain.ResolvedLicense{Identifier: "Apache-2.0", Raw: "Apache-2.0", IsSPDX: true, Source: domain.LicenseSourceGitHubProjectSPDX},
+			want:    domain.ResolvedLicense{Expression: "Apache-2.0", Raw: "Apache-2.0", Source: domain.LicenseSourceGitHubProjectSPDX},
 			changed: true,
 		},
 	}
 
 	for _, tc := range tests {
-		// capture range var
 		c := tc
 		t.Run(c.name, func(t *testing.T) {
 			updated, changed := enrichProjectLicenseFromGitHub(c.current, c.license)
 			if updated != c.want || changed != c.changed {
-				// deep compare fields manually (struct has no slices)
-				if updated.Identifier != c.want.Identifier || updated.Source != c.want.Source || updated.Raw != c.want.Raw || updated.IsSPDX != c.want.IsSPDX || changed != c.changed {
-					t.Fatalf("got (%+v,%v) want (%+v,%v)", updated, changed, c.want, c.changed)
-				}
+				t.Fatalf("got (%+v,%v) want (%+v,%v)", updated, changed, c.want, c.changed)
 			}
 		})
 	}

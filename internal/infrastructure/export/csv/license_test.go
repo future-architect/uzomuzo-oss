@@ -11,14 +11,12 @@ import (
 func TestExportLicenses_Basic(t *testing.T) {
 	// Arrange
 	an := &domain.Analysis{
-		OriginalPURL:   "pkg:npm/example",
-		EffectivePURL:  "pkg:npm/example@1.0.0",
-		ProjectLicense: domain.ResolvedLicense{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX},
-		RequestedVersionLicenses: []domain.ResolvedLicense{
-			{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevVersionSPDX},
-		},
-		PackageLinks: &domain.PackageLinks{RegistryURL: "https://registry.example/pkg"},
-		RepoURL:      "https://github.com/example/repo",
+		OriginalPURL:            "pkg:npm/example",
+		EffectivePURL:           "pkg:npm/example@1.0.0",
+		ProjectLicense:          domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX},
+		RequestedVersionLicense: domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevVersionSPDX},
+		PackageLinks:            &domain.PackageLinks{RegistryURL: "https://registry.example/pkg"},
+		RepoURL:                 "https://github.com/example/repo",
 	}
 	analyses := map[string]*domain.Analysis{"pkg:npm/example": an}
 

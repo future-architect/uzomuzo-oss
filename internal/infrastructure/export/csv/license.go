@@ -9,13 +9,20 @@ import (
 
 	"github.com/future-architect/uzomuzo-oss/internal/common"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/licenses"
 )
 
 // ExportLicenses writes extended license analysis data to a CSV file.
 //
 // DDD Layer: Infrastructure (CSV export implementation)
-// Columns (extended set, updated):
-// original_purl,effective_purl,version_resolved,project_license_identifier,project_license_raw,project_license_source,project_license_is_spdx,project_license_is_zero,version_license_identifiers,version_license_raws,version_license_sources,version_license_count,version_licenses_all_non_spdx,version_licenses_any_composite_expr,project_vs_version_mismatch,licenses_all_missing_or_nonstandard,fallback_applied,derived_from_version,github_override_applied,license_resolution_scenario,error,registry_url,repository_url
+//
+// Data model: each ResolvedLicense holds a single SPDX expression
+// (Expression), the upstream-original (Raw), and provenance (Source). See
+// docs/adr/0018-license-expression-of-truth.md. Composite shapes (AND / OR
+// / WITH / +) survive in the Expression string itself; the
+// version_license_is_compound and version_license_leaf_count columns
+// surface the structural breakdown without consumers having to parse the
+// expression themselves.
 func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err error) {
 	file, err := os.Create(filename)
 	if err != nil {
@@ -38,8 +45,10 @@ func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err 
 
 	headers := []string{
 		"original_purl", "effective_purl", "version_resolved",
-		"project_license_identifier", "project_license_raw", "project_license_source", "project_license_is_spdx", "project_license_is_zero",
-		"version_license_identifiers", "version_license_raws", "version_license_sources", "version_license_count", "version_licenses_all_non_spdx", "version_licenses_any_composite_expr",
+		"project_license_expression", "project_license_raw", "project_license_source",
+		"project_license_is_spdx", "project_license_is_zero", "project_license_is_compound", "project_license_leaf_count",
+		"version_license_expression", "version_license_raw", "version_license_source",
+		"version_license_is_spdx", "version_license_is_zero", "version_license_is_compound", "version_license_leaf_count",
 		"project_vs_version_mismatch", "licenses_all_missing_or_nonstandard", "fallback_applied", "derived_from_version", "github_override_applied",
 		"license_resolution_scenario", "error", "registry_url", "repository_url",
 	}
@@ -47,7 +56,6 @@ func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err 
 		return common.NewIOError("failed to write license CSV headers", err)
 	}
 
-	// Stable deterministic ordering for readability
 	keys := make([]string, 0, len(analyses))
 	for k := range analyses {
 		keys = append(keys, k)
@@ -61,47 +69,36 @@ func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err 
 		}
 
 		pl := an.ProjectLicense
-		vls := an.RequestedVersionLicenses
-		vCount := len(vls)
+		vl := an.RequestedVersionLicense
 
-		// Project level helpers
 		projectIsZero := pl.IsZero()
-		projectIsSPDX := pl.IsSPDX
+		projectIsSPDX := isRecognizedSPDX(pl)
 		projectNonStandard := pl.IsNonStandard()
+		projectLeaves := leavesOf(pl.Expression)
+		projectIsCompound := len(projectLeaves) > 1
+		projectLeafCount := len(projectLeaves)
 
-		// Version level aggregation
-		identifiers := make([]string, 0, vCount)
-		raws := make([]string, 0, vCount)
-		sources := make([]string, 0, vCount)
-		anyComposite := false
-		allNonSPDX := true
-		containsProjectID := false
+		versionIsZero := vl.IsZero()
+		versionIsSPDX := isRecognizedSPDX(vl)
+		versionLeaves := leavesOf(vl.Expression)
+		versionIsCompound := len(versionLeaves) > 1
+		versionLeafCount := len(versionLeaves)
 
-		for _, vl := range vls {
-			identifiers = append(identifiers, vl.Identifier)
-			raws = append(raws, vl.Raw)
-			sources = append(sources, vl.Source)
-			if vl.IsSPDX {
-				allNonSPDX = false
-			}
-			if compositeExpr(vl.Identifier) || compositeExpr(vl.Raw) {
-				anyComposite = true
-			}
-			if projectIsSPDX && vl.Identifier == pl.Identifier {
-				containsProjectID = true
-			}
-		}
+		// project_vs_version_mismatch: both are recognized SPDX, but the
+		// project's leaves are NOT a subset of the version's leaves. Set
+		// membership replaces the previous Identifier-equality check —
+		// supports compound versions like "MIT OR Apache-2.0" containing the
+		// project's "MIT" leaf.
+		projectVsVersionMismatch := projectIsSPDX && versionIsSPDX && !leafSetContainsAll(versionLeaves, projectLeaves)
+		containsProjectID := projectIsSPDX && versionIsSPDX && leafSetContainsAll(versionLeaves, projectLeaves)
 
-		versionAllNonSPDX := vCount > 0 && allNonSPDX
-		projectVsVersionMismatch := projectIsSPDX && vCount > 0 && !containsProjectID
-
-		fallbackApplied := vCount == 1 && vls[0].Source == domain.LicenseSourceProjectFallback
+		fallbackApplied := vl.Source == domain.LicenseSourceProjectFallback
 		derived := pl.Source == domain.LicenseSourceDerivedFromVersion
 		githubOverride := pl.Source == domain.LicenseSourceGitHubProjectSPDX || pl.Source == domain.LicenseSourceGitHubProjectNonStandard
 
-		licensesAllMissingOrNonStandard := (projectIsZero || projectNonStandard) && (vCount == 0 || versionAllNonSPDX)
+		licensesAllMissingOrNonStandard := (projectIsZero || projectNonStandard) && (versionIsZero || vl.IsNonStandard())
 
-		scenario := classifyLicenseScenario(projectIsZero, projectIsSPDX, projectNonStandard, vCount, versionAllNonSPDX, containsProjectID, fallbackApplied, derived, githubOverride, projectVsVersionMismatch)
+		scenario := classifyLicenseScenario(projectIsZero, projectIsSPDX, projectNonStandard, versionIsZero, versionIsSPDX, vl.IsNonStandard(), containsProjectID, fallbackApplied, derived, githubOverride, projectVsVersionMismatch)
 
 		errStr := ""
 		if an.Error != nil {
@@ -118,17 +115,20 @@ func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err 
 			an.OriginalPURL,
 			an.EffectivePURL,
 			fmt.Sprintf("%t", an.IsVersionResolved()),
-			pl.Identifier,
+			pl.Expression,
 			pl.Raw,
 			pl.Source,
 			fmt.Sprintf("%t", projectIsSPDX),
 			fmt.Sprintf("%t", projectIsZero),
-			strings.Join(identifiers, ";"),
-			strings.Join(raws, ";"),
-			strings.Join(sources, ";"),
-			fmt.Sprintf("%d", vCount),
-			fmt.Sprintf("%t", versionAllNonSPDX),
-			fmt.Sprintf("%t", anyComposite),
+			fmt.Sprintf("%t", projectIsCompound),
+			fmt.Sprintf("%d", projectLeafCount),
+			vl.Expression,
+			vl.Raw,
+			vl.Source,
+			fmt.Sprintf("%t", versionIsSPDX),
+			fmt.Sprintf("%t", versionIsZero),
+			fmt.Sprintf("%t", versionIsCompound),
+			fmt.Sprintf("%d", versionLeafCount),
 			fmt.Sprintf("%t", projectVsVersionMismatch),
 			fmt.Sprintf("%t", licensesAllMissingOrNonStandard),
 			fmt.Sprintf("%t", fallbackApplied),
@@ -148,17 +148,60 @@ func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err 
 	return nil
 }
 
-// compositeExpr detects if a license token contains composite logical expression markers.
-func compositeExpr(s string) bool {
-	if s == "" {
-		return false
+// isRecognizedSPDX reports whether the license carries a usable SPDX
+// expression (any non-empty value other than the NOASSERTION sentinel).
+// NOASSERTION is recognized but not "usable SPDX" for downstream policy
+// decisions — it explicitly signals "upstream refused to assert".
+func isRecognizedSPDX(rl domain.ResolvedLicense) bool {
+	return rl.Expression != "" && rl.Expression != "NOASSERTION"
+}
+
+// leavesOf returns the canonical SPDX identifiers of every leaf in the
+// expression, in document order. NOASSERTION-only expressions return a
+// single-element slice with empty string (a leaf without a canonical ID).
+// Returns nil for empty input.
+func leavesOf(expr string) []string {
+	if expr == "" || expr == "NOASSERTION" {
+		return nil
 	}
-	u := strings.ToUpper(s)
-	return strings.Contains(u, " AND ") || strings.Contains(u, " OR ") || strings.Contains(u, "(") || strings.Contains(u, ")")
+	parsed := licenses.ParseExpression(expr)
+	leaves := parsed.Leaves()
+	if len(leaves) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(leaves))
+	for _, l := range leaves {
+		out = append(out, l.Identifier)
+	}
+	return out
+}
+
+// leafSetContainsAll reports whether every needle is present in haystack.
+// Empty needle returns true (vacuous truth — used to short-circuit the
+// project-vs-version check when the project has no leaves to test).
+func leafSetContainsAll(haystack, needles []string) bool {
+	if len(needles) == 0 {
+		return true
+	}
+	set := make(map[string]struct{}, len(haystack))
+	for _, h := range haystack {
+		if h != "" {
+			set[h] = struct{}{}
+		}
+	}
+	for _, n := range needles {
+		if n == "" {
+			return false // a needle with no canonical ID can never match
+		}
+		if _, ok := set[n]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // classifyLicenseScenario assigns a scenario label (mutually exclusive, ordered rules).
-func classifyLicenseScenario(projectZero, projectSPDX, projectNonStandard bool, vCount int, versionAllNonSPDX, containsProjectID, fallbackApplied, derived, githubOverride, mismatch bool) string {
+func classifyLicenseScenario(projectZero, projectSPDX, projectNonStandard, versionZero, versionSPDX, versionNonStandard, containsProjectID, fallbackApplied, derived, githubOverride, mismatch bool) string {
 	// High-priority explicit scenarios
 	if fallbackApplied {
 		return "fallback_applied"
@@ -173,45 +216,42 @@ func classifyLicenseScenario(projectZero, projectSPDX, projectNonStandard bool, 
 		return "github_override_nonstandard"
 	}
 
-	if projectZero && vCount == 0 {
+	if projectZero && versionZero {
 		return "no_project_no_version"
 	}
-	if projectSPDX && vCount == 0 {
+	if projectSPDX && versionZero {
 		return "project_spdx_no_version"
 	}
-	if projectNonStandard && vCount == 0 {
+	if projectNonStandard && versionZero {
 		return "project_nonstandard_no_version"
 	}
-	if !projectSPDX && !projectNonStandard && !projectZero && vCount == 0 {
+	if !projectSPDX && !projectNonStandard && !projectZero && versionZero {
 		return "project_other_no_version"
 	}
 
-	if !projectSPDX && !projectNonStandard && !projectZero && vCount > 0 {
+	if !projectSPDX && !projectNonStandard && !projectZero && !versionZero {
 		return "project_other_with_versions"
 	}
 
-	if !projectSPDX && !projectNonStandard && projectZero && vCount > 0 {
+	if !projectSPDX && !projectNonStandard && projectZero && !versionZero {
 		return "versions_only"
 	}
 
-	if projectSPDX && vCount > 0 && !mismatch && !versionAllNonSPDX && containsProjectID {
+	if projectSPDX && versionSPDX && !mismatch && containsProjectID {
 		return "project_spdx_version_all_spdx_consistent"
 	}
-	if projectSPDX && vCount > 0 && mismatch && !versionAllNonSPDX {
+	if projectSPDX && versionSPDX && mismatch {
 		return "project_spdx_version_all_spdx_mismatch"
 	}
 
-	if projectSPDX && vCount > 0 && !mismatch && versionAllNonSPDX {
+	if projectSPDX && versionNonStandard {
 		return "project_spdx_versions_all_nonspdx"
 	}
-	if projectSPDX && vCount > 0 && mismatch && versionAllNonSPDX {
-		return "project_spdx_versions_all_nonspdx_mismatch"
-	}
 
-	if projectNonStandard && vCount > 0 && !versionAllNonSPDX {
+	if projectNonStandard && versionSPDX {
 		return "project_nonstandard_versions_mixed"
 	}
-	if projectNonStandard && vCount > 0 && versionAllNonSPDX {
+	if projectNonStandard && versionNonStandard {
 		return "project_nonstandard_versions_all_nonspdx"
 	}
 

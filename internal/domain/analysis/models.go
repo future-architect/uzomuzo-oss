@@ -5,41 +5,47 @@ import (
 	"time"
 )
 
-// ResolvedLicense represents normalized license information used at project level (Analysis.ProjectLicense)
-// and requested-version level (Analysis.RequestedVersionLicenses entries).
+// ResolvedLicense represents normalized license information used at project
+// level (Analysis.ProjectLicense) and requested-version level
+// (Analysis.RequestedVersionLicense). The data model is documented in
+// docs/adr/0018-license-expression-of-truth.md.
 //
 // Fields:
-//   - Identifier: normalized canonical SPDX identifier when recognized; otherwise best-effort normalized token (may be empty for non-standard placeholders)
-//   - Source: provenance (see license_sources.go constants, e.g. LicenseSourceDepsDevProjectSPDX, LicenseSourceDepsDevProjectNonStandard,
-//     LicenseSourceDepsDevVersionSPDX, LicenseSourceProjectFallback, LicenseSourceDerivedFromVersion, LicenseSourceGitHubProjectSPDX)
-//   - Raw: original upstream string prior to normalization (for debugging / traceability)
-//   - IsSPDX: true when Identifier is a recognized SPDX license (and not NOASSERTION)
+//   - Expression: canonical SPDX expression string, or "" / "NOASSERTION".
+//     Expression == "" means uzomuzo could not parse / recognize any SPDX
+//     content; Expression == "NOASSERTION" preserves the SPDX 2.3 §A.1.5
+//     sentinel emitted by upstream. Compound expressions (AND / OR / WITH /
+//     +) survive in this single string — never split across slice entries.
+//   - Source: provenance (see license_sources.go constants).
+//   - Raw: upstream-original string verbatim. NEVER overwritten by the
+//     normalizer; preserved for audit trail and SBOM `name` fallback when
+//     Expression is empty (per CycloneDX 1.6 / SPDX 2.3 LicenseRef path).
 //
-// Zero value (all empty/false) means no license detected.
+// Zero value (all empty) means no license detected.
 type ResolvedLicense struct {
-	Identifier string
+	Expression string
 	Source     string
 	Raw        string
-	IsSPDX     bool
 }
 
-// IsZero reports whether this license carries no information at all.
-// A zero ResolvedLicense means we did not detect ANY project/version license data.
-// Criteria:
-//   - Identifier empty AND Source empty AND Raw empty AND IsSPDX == false
-//
-// Rationale: Using a method clarifies intent vs directly comparing struct fields everywhere.
+// IsZero reports whether this license carries no information at all —
+// neither a recognized SPDX expression nor an upstream original to fall back
+// on. A zero ResolvedLicense means we did not detect ANY project / version
+// license data.
 func (r ResolvedLicense) IsZero() bool {
-	return r.Identifier == "" && r.Source == "" && r.Raw == "" && !r.IsSPDX
+	return r.Expression == "" && r.Source == "" && r.Raw == ""
 }
 
-// IsNonStandard reports whether the upstream provided license information, but it could not
-// be mapped to a canonical SPDX identifier (non-SPDX / ambiguous / proprietary wording).
-// It intentionally excludes the pure zero case (no data) and any successfully recognized SPDX.
+// IsNonStandard reports whether the upstream provided license information,
+// but it could not be mapped to a canonical SPDX expression (non-SPDX /
+// ambiguous / proprietary wording). It intentionally excludes the pure zero
+// case (no data) and any successfully recognized SPDX expression
+// (including "NOASSERTION").
+//
 // Detection rules:
 //   - NOT IsZero (we have some data)
-//   - !IsSPDX (normalization failed or SPDX list did not contain the value)
-//   - Source is one of the known non-standard/raw indicators:
+//   - Expression is empty (normalization could not produce SPDX)
+//   - Source is one of the known non-standard / raw indicators:
 //   - LicenseSourceDepsDevProjectNonStandard
 //   - LicenseSourceGitHubProjectNonStandard
 //   - LicenseSourceDepsDevVersionRaw
@@ -47,13 +53,14 @@ func (r ResolvedLicense) IsZero() bool {
 //   - LicenseSourceMavenPOMNonStandard
 //
 // Notes:
-//   - A promoted or fallback SPDX (derived-from-version / project-fallback) is NEVER non-standard.
-//   - If at version level a raw string still normalized into a valid SPDX (IsSPDX=true) we treat it as standard.
+//   - A promoted or fallback SPDX (derived-from-version / project-fallback)
+//     is NEVER non-standard.
+//   - "NOASSERTION" is a recognized SPDX value, not a non-standard one.
 func (r ResolvedLicense) IsNonStandard() bool {
 	if r.IsZero() {
 		return false
 	}
-	if r.IsSPDX { // recognized SPDX => standard
+	if r.Expression != "" { // any recognized SPDX (including "NOASSERTION") => standard
 		return false
 	}
 	switch r.Source {
