@@ -45,6 +45,14 @@ const (
 	// Maven Central pom.xml <licenses> entry that yielded a non-SPDX value (raw <name> or <url> kept; Identifier empty).
 	LicenseSourceMavenPOMNonStandard = "maven-pom-nonstandard"
 
+	// ClearlyDefined.io curated `licensed.declared` resolved to canonical SPDX
+	// (single id, or one operand of an SPDX expression parsed via licenses.ParseExpression).
+	LicenseSourceClearlyDefinedSPDX = "clearlydefined-spdx"
+	// ClearlyDefined.io curated value that did not normalize to SPDX
+	// (e.g. `LicenseRef-scancode-public-domain`, scancode-internal names like `Plexus`,
+	// or operands of an SPDX expression that failed normalization).
+	LicenseSourceClearlyDefinedNonStandard = "clearlydefined-nonstandard"
+
 	// Project → Version fallback: apply known project SPDX license to versions that only had non-SPDX / no data.
 	LicenseSourceProjectFallback = "project-fallback"
 	// Version → Project promotion: single version SPDX license elevated to project when project license unknown/non-standard.
