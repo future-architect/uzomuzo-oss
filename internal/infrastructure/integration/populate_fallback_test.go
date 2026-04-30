@@ -66,7 +66,7 @@ func TestRequestedVersionLicenseFallbackReplacement(t *testing.T) {
 // the rule independently of the full populate pipeline (which would require
 // a depsdev BatchResult fixture).
 func applyVersionFallback(a *domain.Analysis) {
-	if a.ProjectLicense.Expression == "" {
+	if !a.ProjectLicense.IsUsableSPDX() {
 		return
 	}
 	if a.RequestedVersionLicense.IsZero() {

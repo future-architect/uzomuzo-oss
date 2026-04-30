@@ -190,8 +190,8 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 
 	wrote := false
 
-	// ProjectLicense: replace when current is zero or non-standard. Disagreement
-	// with an existing canonical SPDX is logged but not auto-resolved.
+	// ProjectLicense: replace when current is not a usable SPDX value.
+	// Disagreement with an existing canonical SPDX is logged but not auto-resolved.
 	if firstSPDX != nil {
 		if !a.ProjectLicense.IsUsableSPDX() {
 			a.ProjectLicense = *firstSPDX
