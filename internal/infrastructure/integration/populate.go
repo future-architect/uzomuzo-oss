@@ -208,7 +208,7 @@ func buildVersionLicenseFromDepsDev(v *depsdev.Version) domain.ResolvedLicense {
 // requested version from any list of upstream license strings, by OR-joining
 // them into one canonical SPDX expression. When normalization recognizes at
 // least one entry, the result carries Source=DepsDevVersionSPDX (per the
-// "SPDX entry survival wins" rule in ADR-0018). When every entry fails
+// "SPDX entry survival wins" rule in ADR-0019). When every entry fails
 // normalization, the result carries Expression="" and Source=DepsDevVersionRaw,
 // with Raw holding the joined upstream concatenation for audit.
 func buildVersionLicenseFromRawList(rawList []string) domain.ResolvedLicense {

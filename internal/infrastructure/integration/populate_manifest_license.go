@@ -30,9 +30,11 @@ import (
 //     are both already canonical SPDX expressions (cheap pre-check before any
 //     HTTP).
 //   - Promote the first SPDX manifest license (in <licenses> document order) to
-//     ProjectLicense when the current ProjectLicense is zero or non-standard.
+//     ProjectLicense when the current ProjectLicense is not a usable SPDX
+//     expression (zero, non-standard, or NOASSERTION).
 //   - OR-join all SPDX manifest licenses into a single expression and write to
-//     RequestedVersionLicense when the current value is zero or non-standard.
+//     RequestedVersionLicense when the current value is not a usable SPDX
+//     expression (zero, non-standard, or NOASSERTION).
 //   - Never overwrite a current canonical SPDX in either field; log a WARN with
 //     "license_disagreement" when the manifest's primary disagrees with the
 //     existing project license so we can audit later.
