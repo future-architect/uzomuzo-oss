@@ -111,6 +111,12 @@ pending_patterns:
     pr: 345
     file: "internal/infrastructure/maven/license.go"
     date: "2026-04-29"
+  - category: "defensive-coding"
+    summary: "When a domain type uses a sentinel value that is 'recognized but not usable' (e.g., NOASSERTION), use the dedicated predicate method (e.g., IsUsableSPDX()) in all guard/gate checks rather than ad-hoc field checks (Expression != \"\", IsZero() || IsNonStandard()). Ad-hoc guards miss sentinel states and cause inconsistent behavior (propagating NOASSERTION as a real license, blocking enrichment, or corrupting leaf counts)"
+    pr: 366
+    instances: 7
+    file: "internal/infrastructure/integration/populate.go"
+    date: "2026-04-30"
   - category: "concurrency"
     summary: "Acquire bounded-concurrency semaphore before launching goroutine (not inside it) and select on ctx.Done to stop dispatch on cancellation — avoids spawning thousands of parked goroutines and respects context lifecycle"
     prs: [345]
