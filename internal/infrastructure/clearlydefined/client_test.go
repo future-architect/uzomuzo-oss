@@ -74,6 +74,13 @@ const (
 	}`
 
 	bodyMalformedJSON = `{ "licensed": { "declared": ` // truncated
+
+	bodyWithException = `{
+	  "licensed": {
+	    "declared": "GPL-2.0-only WITH Classpath-exception-2.0",
+	    "score": { "total": 80, "declared": 60 }
+	  }
+	}`
 )
 
 func TestFetchLicenses_SingleSPDX(t *testing.T) {
@@ -401,6 +408,40 @@ func TestFetchLicenses_SPDXExpressionAND(t *testing.T) {
 		if lic.Identifier != wantIDs[i] || lic.Source != domain.LicenseSourceClearlyDefinedSPDX || !lic.IsSPDX {
 			t.Errorf("license[%d] = %+v, want SPDX %q", i, lic, wantIDs[i])
 		}
+	}
+}
+
+func TestFetchLicenses_SPDXWithException(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(bodyWithException))
+	}))
+	t.Cleanup(srv.Close)
+	c := newTestClient(srv)
+
+	lics, found, err := c.FetchLicenses(context.Background(), "maven", "javax.servlet", "javax.servlet-api", "3.1.0")
+	if err != nil {
+		t.Fatalf("FetchLicenses error: %v", err)
+	}
+	if !found {
+		t.Fatal("expected found=true")
+	}
+	if len(lics) != 1 {
+		t.Fatalf("got %d licenses, want 1", len(lics))
+	}
+	lic := lics[0]
+	if lic.Identifier != "GPL-2.0-only" {
+		t.Errorf("Identifier = %q, want %q", lic.Identifier, "GPL-2.0-only")
+	}
+	if lic.Source != domain.LicenseSourceClearlyDefinedSPDX {
+		t.Errorf("Source = %q, want %q", lic.Source, domain.LicenseSourceClearlyDefinedSPDX)
+	}
+	if !lic.IsSPDX {
+		t.Error("IsSPDX = false, want true")
+	}
+	// Raw must preserve the full WITH operand so downstream consumers retain
+	// the exception clause for display and compliance purposes.
+	if lic.Raw != "GPL-2.0-only WITH Classpath-exception-2.0" {
+		t.Errorf("Raw = %q, want full WITH operand %q", lic.Raw, "GPL-2.0-only WITH Classpath-exception-2.0")
 	}
 }
 
