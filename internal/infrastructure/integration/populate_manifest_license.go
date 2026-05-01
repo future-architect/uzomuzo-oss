@@ -216,12 +216,14 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 	// RequestedVersionLicense: when manifest includes SPDX entries, OR-join them
 	// into one canonical expression and replace the current value if it is not a
 	// usable SPDX expression (zero, non-standard, or NOASSERTION). When the
-	// manifest has only non-standard entries, preserve their raw concatenation
-	// only if the current value is zero (replacing non-standard with non-standard
-	// is a no-op per the override matrix). Raw preserves the per-entry
-	// concatenation for audit. The Source uses the same constant as the first
-	// SPDX entry so callers can attribute provenance (Maven POM vs
-	// ClearlyDefined.io).
+	// manifest contains only NOASSERTION entries, preserve that sentinel only if
+	// the current value is zero so downstream consumers can distinguish "upstream
+	// refused to assert" from "no data at all". When the manifest has only
+	// non-standard entries, preserve their raw concatenation only if the current
+	// value is zero (replacing non-standard with non-standard is a no-op per the
+	// override matrix). Raw preserves the per-entry concatenation for audit. The
+	// Source uses the same constant as the first SPDX entry so callers can
+	// attribute provenance (Maven POM vs ClearlyDefined.io).
 	if !a.RequestedVersionLicense.IsUsableSPDX() {
 		if len(spdxExprs) > 0 && firstSPDX != nil {
 			joined := licenses.JoinExpressions(spdxExprs)

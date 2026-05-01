@@ -170,8 +170,9 @@ func ExportLicenses(analyses map[string]*domain.Analysis, filename string) (err 
 	return nil
 }
 
-// leavesOf returns the canonical SPDX identifiers of every leaf in the
-// expression, in document order. Returns nil for empty input and for the
+// leavesOf returns the canonical SPDX string of every leaf in the
+// expression, in document order, preserving "+" (OrLater) and "WITH
+// <exception>" modifiers. Returns nil for empty input and for the
 // NOASSERTION sentinel (no leaves to expose; NOASSERTION conveys "upstream
 // refused to assert" rather than naming any license).
 func leavesOf(expr string) []string {
@@ -185,10 +186,11 @@ func leavesOf(expr string) []string {
 	}
 	out := make([]string, 0, len(leaves))
 	for _, l := range leaves {
-		if l.Identifier == "" {
+		s := l.String()
+		if s == "" {
 			continue
 		}
-		out = append(out, l.Identifier)
+		out = append(out, s)
 	}
 	if len(out) == 0 {
 		return nil
