@@ -174,6 +174,7 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # testing (PR #366): already covered by "Scope Test Assertions to Specific Output Regions" in testing-performance + "Use Spec-Compliant Parsers for Standardized Formats" — use encoding/csv to parse CSV output and assert exact cells by header name instead of fragile strings.Contains on boolean patterns that match the wrong column
   # defensive-coding (PR #338): stale pending entry removed — already promoted as "Sanitize Dynamic Content in GitHub Actions Workflow Commands" rule
   # testing (PR #318): stale pending entry removed — already promoted as "Split Nil Guards from Value Assertions in Test Failure Branches" rule in testing-performance.instructions.md
   # comment-doc-drift (PR #366 round 4): already covered by "Comment-Code Consistency" rule — applyManifestLicenses comment said "zero or non-standard" but code uses !IsUsableSPDX(); override comment didn't describe non-standard-only branch's IsZero()-only condition
