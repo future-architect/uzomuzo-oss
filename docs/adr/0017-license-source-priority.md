@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted (2026-04-29)
+Accepted (2026-04-29). Data-model references to `IsSPDX` and
+`RequestedVersionLicenses` (slice) are superseded by
+[ADR-0019](0019-license-expression-of-truth.md) — read this ADR for the
+architectural decision (third-tier manifest fallback, override rules,
+inline-in-IntegrationService rationale), and consult ADR-0019 for the
+current `ResolvedLicense.Expression` shape.
 
 ## Context
 

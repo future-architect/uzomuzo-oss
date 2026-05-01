@@ -47,6 +47,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Branch Output Display on Each Field's Own Availability**: When rendering output fields (CLI text, CSV, JSON), branch display logic on each field's own availability — do not couple display of one field to the presence of an unrelated field. Ensure all output formats use the same data-source fallback chain as domain logic. Use host-agnostic labels (e.g., `Repository:` not `GitHub:`) unless the host is confirmed, and render all populated data fields rather than silently dropping them.
 - **Use `utf8.RuneCountInString` for Terminal Display Widths**: When computing string widths for terminal display (box drawing, alignment), use `utf8.RuneCountInString` — not `len` — to avoid incorrect sizing with multi-byte characters (box-drawing glyphs, emoji). Clamp computed padding to zero when content already exceeds the budget rather than forcing a minimum that widens output beyond the declared width.
 - **Filter and Normalize IDs Before Batch API Calls**: When building batch API requests from collected IDs, filter empty/whitespace values and deduplicate before processing to prevent invalid HTTP requests and cache pollution. Use `select` on `ctx.Done()` alongside channel operations in batch goroutines to avoid blocking after context cancellation.
+- **Respect Context Lifecycle in Concurrent and Delegated I/O**: (1) When a function issues I/O (HTTP, database, external API) on behalf of a caller that provides a `context.Context`, thread that context through every intermediate function in the call chain — never substitute `context.Background()` at an internal callsite. `context.Background()` ignores the caller's cancellation and deadline signals, causing orphaned requests that persist after cancellation or exceed timeout budgets. (2) When dispatching goroutines under bounded concurrency, acquire the semaphore before launching the goroutine (not inside it) and `select` on `ctx.Done()` alongside the semaphore send to stop dispatch on cancellation — this avoids spawning parked goroutines that outlive the context.
 - **Guard Nil Structs Consistently Across Output Formats**: When a struct field may be nil (e.g., `ReleaseInfo`), apply the nil guard in every output renderer that accesses it (text, CSV, JSON). If one renderer has the guard and another does not, the unguarded path will panic on nil input.
 - **Gate Fallback Logic on Error, Not Result Nilness**: When deciding whether to trigger fallback or retry logic, check the error value — not whether the result is nil. A nil result with nil error is a valid success case (e.g., zero matches found), and treating it as a failure triggers unnecessary retries or incorrect fallback paths.
 - **Minimize Allocations in Hot Paths**: In batch-processing or frequently-called functions, avoid unnecessary O(n) allocations when only a subset of data is needed. Cache results of expensive parsing calls when the same value is checked multiple times in a loop iteration, and iterate to a known cutoff point rather than materializing the full collection (e.g., iterate runes up to a count rather than converting the entire string to `[]rune`).
@@ -61,6 +62,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Unique Map Keys for Multi-Value Sentinels**: When using sentinel keys in a map to track special-case entries (e.g., blank imports, dot imports), ensure each entry gets a unique key (e.g., sentinel prefix + distinguishing suffix like the import path). Shared sentinel keys cause later entries to silently overwrite earlier ones, losing data.
 - **Use Framework-Provided Parsed Arguments for Subprocess Delegation**: When delegating to a subprocess from a CLI framework handler, use the framework's parsed argument accessors (e.g., `cmd.Args().Slice()`) instead of the process-global `os.Args`. Global args may not match the framework's routing and break when the CLI is invoked programmatically.
 - **Classify from Raw Values Before Rounding**: When deriving a category or label from a computed numeric value (e.g., score → difficulty bucket), apply the classification logic to the raw value before any rounding. Rounding first can push boundary values into the wrong bucket.
+- **Match Write Guard Quantifiers to Write Semantics**: When a conditional guard protects a field write, the guard's effective quantifier (any/all/only) must match the write's semantic claim. An "any item has X" flag (e.g., `hasNoAssertion`) guarding a branch that writes `Expression="NOASSERTION"` claiming "only X inputs present" will silently misrepresent mixed inputs. Similarly, when a replacement guard checks for presence of any high-quality entry, verify the replacement is a net improvement — "has any SPDX" does not guarantee "strictly higher quality" when non-standard entries are also present.
 - **Validate Generated Strings Against Target-Language Syntax**: When programmatically generating identifiers, import paths, or package names for a target language, validate each candidate against that language's syntax rules before emitting it. Validation must cover the full identifier grammar — not just invalid characters but also positional rules (e.g., Java identifiers cannot start with a digit) and compound structures (e.g., dot-separated package names must validate each segment independently). For example, Maven artifactIds often contain hyphens (`commons-lang3`) and groupIds can too (`commons-io`), which are invalid in Java package names — emitting them verbatim produces candidates that can never match real imports. Similarly, error hints and suggestions must use terminology appropriate to the detected language/ecosystem, not hardcode references to a single ecosystem (e.g., `go.mod`) when the tool supports multiple languages.
 - **Collect All Matches in Collector Functions — No Early Return**: When a function iterates over children/items to collect all matching results (e.g., AST bindings, search hits), append each match to a slice and return the slice after the loop. Do not `return` on the first match — early return drops remaining items. This applies whenever the caller needs *all* matches, not just the first.
 - **Continue AST Ancestor Walks Past Non-Matching Nodes**: When walking AST ancestors to find a guarding condition (e.g., `if TYPE_CHECKING:` blocks), continue past intermediate nodes of the same type that don't match the target condition. Returning early on the first type match (e.g., the first `if_statement`) misses the actual guard when the import is nested inside inner conditionals.
@@ -97,36 +99,31 @@ Schema (YAML-in-Markdown):
 ```yaml
 pending_patterns:
   - category: "defensive-coding"
-    summary: "Sanitize shell variables before embedding in GitHub Actions ::warning:: workflow commands — multi-line content or :: sequences break command parsing and can inject accidental workflow commands; emit a short single-line warning and log the full payload separately"
-    pr: 338
-    file: ".github/workflows/copilot-clean-label.yml"
-    date: "2026-04-28"
-  - category: "testing"
-    summary: "Test failure branch accessed struct field through potentially-nil pointer in error message — split nil guard (t.Fatalf) from value assertion to prevent panic masking the actual regression"
-    pr: 318
-    file: "internal/infrastructure/integration/populate_project_test.go"
-    date: "2026-04-20"
-  - category: "defensive-coding"
     summary: "When a multi-branch resolution function (e.g., name-first then URL fallback) records evidence in a Raw/provenance field, set Raw to the input that actually produced the match — not the input from a prior branch that failed. Misattributed Raw values lose traceability for debugging and audit"
     pr: 345
     file: "internal/infrastructure/maven/license.go"
     date: "2026-04-29"
-  - category: "concurrency"
-    summary: "Acquire bounded-concurrency semaphore before launching goroutine (not inside it) and select on ctx.Done to stop dispatch on cancellation — avoids spawning thousands of parked goroutines and respects context lifecycle"
-    prs: [345]
-    instances: 2
-    file: "internal/infrastructure/integration/populate_manifest_license.go"
-    date: "2026-04-29"
   - category: "defensive-coding"
-    summary: "When a conditional replacement function overwrites low-quality data (non-SPDX) with a new source, guard the write on the new source being strictly higher quality (e.g., contains at least one SPDX entry) — replacing non-standard with non-standard is a no-op that wastes provenance"
-    pr: 345
-    file: "internal/infrastructure/integration/populate_manifest_license.go"
-    date: "2026-04-29"
+    summary: "When a domain type uses a sentinel value that is 'recognized but not usable' (e.g., NOASSERTION), use the dedicated predicate method (e.g., IsUsableSPDX()) in all guard/gate checks rather than ad-hoc field checks (Expression != \"\", IsZero() || IsNonStandard()). Ad-hoc guards miss sentinel states and cause inconsistent behavior (propagating NOASSERTION as a real license, blocking enrichment, or corrupting leaf counts)"
+    pr: 366
+    instances: 7
+    file: "internal/infrastructure/integration/populate.go"
+    date: "2026-04-30"
+  - category: "defensive-coding"
+    summary: "Canonicalize sentinel values (e.g., NOASSERTION) when rendering compound SPDX expressions — the parser's leaf Raw field preserves original casing, so without explicit rewriting before String(), rendering produces non-canonical output like 'MIT OR noassertion' instead of 'MIT OR NOASSERTION'"
+    pr: 366
+    file: "internal/domain/licenses/expression_normalize.go"
+    date: "2026-04-30"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
+  - category: "defensive-coding"
+    summary: "When a structured type has a renderer that composes all sub-components (e.g., ExprLicense.String() includes Identifier + OrLater '+' + WITH exception), use the renderer instead of a single field (e.g., leaf.Identifier) when the full representation is needed — partial extraction silently drops components the renderer handles"
+    pr: 366
+    file: "internal/infrastructure/clearlydefined/client.go"
+    date: "2026-04-30"
   - category: "comment-doc-drift"
     summary: "Doc comments must match implementation boundary conditions — RetryConfig said retryDecider controls 429 retries (it doesn't); rateLimitBackoff comment said 'negative' for a zero-inclusive guard (should say 'non-positive')"
     pr: 359
@@ -170,6 +167,13 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #345, #366 — match write guard quantifiers to write semantics: an "any" flag guarding an "all/only" write misrepresents mixed inputs; verify replacement is a net improvement)
+  # testing (PR #366): already covered by "Scope Test Assertions to Specific Output Regions" in testing-performance + "Use Spec-Compliant Parsers for Standardized Formats" — use encoding/csv to parse CSV output and assert exact cells by header name instead of fragile strings.Contains on boolean patterns that match the wrong column
+  # defensive-coding (PR #338): stale pending entry removed — already promoted as "Sanitize Dynamic Content in GitHub Actions Workflow Commands" rule
+  # testing (PR #318): stale pending entry removed — already promoted as "Split Nil Guards from Value Assertions in Test Failure Branches" rule in testing-performance.instructions.md
+  # comment-doc-drift (PR #366 round 4): already covered by "Comment-Code Consistency" rule — applyManifestLicenses comment said "zero or non-standard" but code uses !IsUsableSPDX(); override comment didn't describe non-standard-only branch's IsZero()-only condition
+  # concurrency: promoted to copilot-learned-coding.instructions.md (PRs #345, #366 — respect context lifecycle: thread caller ctx instead of context.Background(), acquire semaphore before goroutine + ctx.Done select)
+  # comment-doc-drift (PR #366): already covered by "Comment-Code Consistency" rule — comment said "Raw preserves verbatim" but implementation trims/re-joins; ADR reference pointed to wrong ADR number
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #340, #345 — align gating predicates with gated function semantics: predicate conditions must mirror downstream write/replace rules; populate sentinel fields on graceful skip paths)
   # comment-doc-drift (PR #345): already covered by "Comment-Code Consistency" rule — doc comment described non-existent debug-level logging, rate-limit signal, and per-client caching
   # naming-consistency (PR #345): trivial spelling fix ("licence" → "license"), not recorded as pattern

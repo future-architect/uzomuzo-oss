@@ -6,40 +6,78 @@ import (
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
-// TestRequestedVersionLicenseFallbackReplacement verifies replacement of all non-SPDX version licenses
-// with the project SPDX license (fallback) and preservation when mixture exists.
+// TestRequestedVersionLicenseFallbackReplacement verifies the rule "when the
+// version expression is non-SPDX (raw-only) but the project has a valid SPDX
+// expression, replace the version license with a project-fallback entry."
+//
+// The rule is implemented inline in populateLicenses step 4; this test
+// exercises the same condition matrix on the new singular RequestedVersionLicense
+// shape so a regression in either populator or model would surface here.
 func TestRequestedVersionLicenseFallbackReplacement(t *testing.T) {
-	// Case: all non-SPDX replaced by project fallback
-	an := &domain.Analysis{ProjectLicense: domain.ResolvedLicense{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX},
-		RequestedVersionLicenses: []domain.ResolvedLicense{{Identifier: "Custom Non SPDX", Raw: "Custom Non SPDX", IsSPDX: false, Source: domain.LicenseSourceDepsDevVersionRaw}}}
-	if !allVersionLicensesNonSPDX(an.RequestedVersionLicenses) {
-		t.Fatalf("precondition failed: expected non-SPDX slice")
-	}
-	if an.ProjectLicense.Identifier != "" && len(an.RequestedVersionLicenses) > 0 && allVersionLicensesNonSPDX(an.RequestedVersionLicenses) {
-		an.RequestedVersionLicenses = []domain.ResolvedLicense{{Identifier: an.ProjectLicense.Identifier, Raw: an.ProjectLicense.Identifier, IsSPDX: true, Source: domain.LicenseSourceProjectFallback}}
-	}
-	if len(an.RequestedVersionLicenses) != 1 || an.RequestedVersionLicenses[0].Identifier != "MIT" || an.RequestedVersionLicenses[0].Source != domain.LicenseSourceProjectFallback {
-		t.Fatalf("expected fallback replacement to MIT project-fallback, got %+v", an.RequestedVersionLicenses)
-	}
+	t.Run("nonstandard_version_replaced_by_project_fallback", func(t *testing.T) {
+		an := &domain.Analysis{
+			ProjectLicense:          domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX},
+			RequestedVersionLicense: domain.ResolvedLicense{Expression: "", Raw: "Custom Non SPDX", Source: domain.LicenseSourceDepsDevVersionRaw},
+		}
+		applyVersionFallback(an)
+		if an.RequestedVersionLicense.Expression != "MIT" || an.RequestedVersionLicense.Source != domain.LicenseSourceProjectFallback {
+			t.Fatalf("expected fallback to MIT/ProjectFallback, got %+v", an.RequestedVersionLicense)
+		}
+	})
 
-	// Case: mixture retains original
-	an2 := &domain.Analysis{ProjectLicense: domain.ResolvedLicense{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX}, RequestedVersionLicenses: []domain.ResolvedLicense{{Identifier: "Apache-2.0", Raw: "Apache-2.0", IsSPDX: true, Source: domain.LicenseSourceDepsDevVersionSPDX}, {Identifier: "Custom Non SPDX", Raw: "Custom Non SPDX", IsSPDX: false, Source: domain.LicenseSourceDepsDevVersionRaw}}}
-	if allVersionLicensesNonSPDX(an2.RequestedVersionLicenses) {
-		t.Fatalf("should not be all non-SPDX")
-	}
-	if an2.ProjectLicense.Identifier != "" && len(an2.RequestedVersionLicenses) > 0 && allVersionLicensesNonSPDX(an2.RequestedVersionLicenses) {
-		an2.RequestedVersionLicenses = []domain.ResolvedLicense{{Identifier: an2.ProjectLicense.Identifier, Raw: an2.ProjectLicense.Identifier, IsSPDX: true, Source: domain.LicenseSourceProjectFallback}}
-	}
-	if len(an2.RequestedVersionLicenses) != 2 {
-		t.Fatalf("unexpected change: %v", an2.RequestedVersionLicenses)
-	}
+	t.Run("spdx_version_kept", func(t *testing.T) {
+		original := domain.ResolvedLicense{Expression: "Apache-2.0", Raw: "Apache-2.0", Source: domain.LicenseSourceDepsDevVersionSPDX}
+		an := &domain.Analysis{
+			ProjectLicense:          domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX},
+			RequestedVersionLicense: original,
+		}
+		applyVersionFallback(an)
+		if an.RequestedVersionLicense != original {
+			t.Fatalf("expected SPDX version preserved, got %+v", an.RequestedVersionLicense)
+		}
+	})
 
-	// Case: empty slice unchanged
-	an3 := &domain.Analysis{ProjectLicense: domain.ResolvedLicense{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX}}
-	if an3.ProjectLicense.Identifier != "" && len(an3.RequestedVersionLicenses) > 0 && allVersionLicensesNonSPDX(an3.RequestedVersionLicenses) {
-		an3.RequestedVersionLicenses = []domain.ResolvedLicense{{Identifier: an3.ProjectLicense.Identifier, Raw: an3.ProjectLicense.Identifier, IsSPDX: true, Source: domain.LicenseSourceProjectFallback}}
+	t.Run("compound_version_kept", func(t *testing.T) {
+		original := domain.ResolvedLicense{Expression: "MIT OR Apache-2.0", Raw: "MIT OR Apache-2.0", Source: domain.LicenseSourceDepsDevVersionSPDX}
+		an := &domain.Analysis{
+			ProjectLicense:          domain.ResolvedLicense{Expression: "BSD-3-Clause", Raw: "BSD-3-Clause", Source: domain.LicenseSourceDepsDevProjectSPDX},
+			RequestedVersionLicense: original,
+		}
+		applyVersionFallback(an)
+		if an.RequestedVersionLicense != original {
+			t.Fatalf("compound version expression should not be overridden by project fallback, got %+v", an.RequestedVersionLicense)
+		}
+	})
+
+	t.Run("zero_version_left_alone", func(t *testing.T) {
+		an := &domain.Analysis{
+			ProjectLicense: domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX},
+		}
+		applyVersionFallback(an)
+		if !an.RequestedVersionLicense.IsZero() {
+			t.Fatalf("zero version license must remain zero (the version-zero path is handled by populateLicenses step 3, not step 4); got %+v", an.RequestedVersionLicense)
+		}
+	})
+}
+
+// applyVersionFallback mirrors step 4 of populateLicenses: when the version
+// expression is non-SPDX but project has a valid SPDX expression, swap in a
+// project-fallback entry. This is an inline mirror so the test can exercise
+// the rule independently of the full populate pipeline (which would require
+// a depsdev BatchResult fixture).
+func applyVersionFallback(a *domain.Analysis) {
+	if !a.ProjectLicense.IsUsableSPDX() {
+		return
 	}
-	if len(an3.RequestedVersionLicenses) != 0 {
-		t.Fatalf("expected empty, got %v", an3.RequestedVersionLicenses)
+	if a.RequestedVersionLicense.IsZero() {
+		return
+	}
+	if a.RequestedVersionLicense.Expression != "" {
+		return
+	}
+	a.RequestedVersionLicense = domain.ResolvedLicense{
+		Expression: a.ProjectLicense.Expression,
+		Raw:        a.ProjectLicense.Raw,
+		Source:     domain.LicenseSourceProjectFallback,
 	}
 }

@@ -941,12 +941,16 @@ func enrichProjectLicenseFromGitHub(current domain.ResolvedLicense, license *Lic
 		return current, false
 	}
 
-	// If already have a canonical SPDX identifier, keep it.
-	if current.Identifier != "" && current.IsSPDX {
+	// If already have a usable SPDX expression, keep it. NOASSERTION is
+	// recognized but not usable, so fall through to allow GitHub to fill in.
+	if current.IsUsableSPDX() {
 		return current, false
 	}
 
-	// SPDX normalization helper (reject empty / NOASSERTION)
+	// SPDX normalization helper (reject empty / NOASSERTION). GitHub's
+	// licenseInfo.spdxId is documented as a single SPDX ID, so the leaf-only
+	// NormalizeLicenseIdentifier is the right tool here — using
+	// NormalizeExpression would add unnecessary parser overhead.
 	tryNormalize := func(raw string) (string, bool) {
 		raw = strings.TrimSpace(raw)
 		if raw == "" || strings.EqualFold(raw, "NOASSERTION") {
@@ -960,16 +964,16 @@ func enrichProjectLicenseFromGitHub(current domain.ResolvedLicense, license *Lic
 	}
 
 	// 1. Prefer spdxId
-	if lic, ok := tryNormalize(license.SpdxID); ok {
-		if current.Identifier == "" || current.IsNonStandard() {
-			return domain.ResolvedLicense{Identifier: lic, Raw: license.SpdxID, IsSPDX: true, Source: domain.LicenseSourceGitHubProjectSPDX}, true
+	if expr, ok := tryNormalize(license.SpdxID); ok {
+		if current.Expression == "" || current.IsNonStandard() {
+			return domain.ResolvedLicense{Expression: expr, Raw: license.SpdxID, Source: domain.LicenseSourceGitHubProjectSPDX}, true
 		}
 		return current, false
 	}
 	// 2. Next try name
-	if lic, ok := tryNormalize(license.Name); ok {
-		if current.Identifier == "" || current.IsNonStandard() {
-			return domain.ResolvedLicense{Identifier: lic, Raw: license.Name, IsSPDX: true, Source: domain.LicenseSourceGitHubProjectSPDX}, true
+	if expr, ok := tryNormalize(license.Name); ok {
+		if current.Expression == "" || current.IsNonStandard() {
+			return domain.ResolvedLicense{Expression: expr, Raw: license.Name, Source: domain.LicenseSourceGitHubProjectSPDX}, true
 		}
 		return current, false
 	}
@@ -994,7 +998,7 @@ func enrichProjectLicenseFromGitHub(current domain.ResolvedLicense, license *Lic
 		if current.IsNonStandard() && current.Raw == rawCandidate { // identical already
 			return current, false
 		}
-		return domain.ResolvedLicense{Identifier: "", Raw: rawCandidate, IsSPDX: false, Source: domain.LicenseSourceGitHubProjectNonStandard}, true
+		return domain.ResolvedLicense{Expression: "", Raw: rawCandidate, Source: domain.LicenseSourceGitHubProjectNonStandard}, true
 	}
 	return current, false
 }

@@ -39,32 +39,29 @@ func TestNeedsManifestLicense(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "project_spdx_versions_all_spdx_skip",
+			name: "project_spdx_version_spdx_skip",
 			in: &domain.Analysis{
-				Package:                  &domain.Package{PURL: "pkg:maven/g/a@1"},
-				ProjectLicense:           domain.ResolvedLicense{Identifier: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX},
-				RequestedVersionLicenses: []domain.ResolvedLicense{{Identifier: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevVersionSPDX}},
+				Package:                 &domain.Package{PURL: "pkg:maven/g/a@1"},
+				ProjectLicense:          domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX},
+				RequestedVersionLicense: domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevVersionSPDX},
 			},
 			want: false,
 		},
 		{
-			name: "project_spdx_but_version_all_raw_needs_fetch",
+			name: "project_spdx_but_version_raw_needs_fetch",
 			in: &domain.Analysis{
-				Package:                  &domain.Package{PURL: "pkg:maven/g/a@1"},
-				ProjectLicense:           domain.ResolvedLicense{Identifier: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX},
-				RequestedVersionLicenses: []domain.ResolvedLicense{{Source: domain.LicenseSourceDepsDevVersionRaw, Raw: "Proprietary"}},
+				Package:                 &domain.Package{PURL: "pkg:maven/g/a@1"},
+				ProjectLicense:          domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX},
+				RequestedVersionLicense: domain.ResolvedLicense{Source: domain.LicenseSourceDepsDevVersionRaw, Raw: "Proprietary"},
 			},
 			want: true,
 		},
 		{
-			name: "project_spdx_mixed_versions_skip",
+			name: "project_spdx_compound_version_skip",
 			in: &domain.Analysis{
-				Package:        &domain.Package{PURL: "pkg:maven/g/a@1"},
-				ProjectLicense: domain.ResolvedLicense{Identifier: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX},
-				RequestedVersionLicenses: []domain.ResolvedLicense{
-					{Identifier: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevVersionSPDX},
-					{Source: domain.LicenseSourceDepsDevVersionRaw, Raw: "Proprietary"},
-				},
+				Package:                 &domain.Package{PURL: "pkg:maven/g/a@1"},
+				ProjectLicense:          domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX},
+				RequestedVersionLicense: domain.ResolvedLicense{Expression: "MIT OR Apache-2.0", Raw: "MIT OR Apache-2.0", Source: domain.LicenseSourceDepsDevVersionSPDX},
 			},
 			want: false,
 		},
@@ -80,7 +77,7 @@ func TestNeedsManifestLicense(t *testing.T) {
 
 func TestApplyManifestLicenses(t *testing.T) {
 	spdx := func(id, src string) domain.ResolvedLicense {
-		return domain.ResolvedLicense{Identifier: id, Raw: id, IsSPDX: true, Source: src}
+		return domain.ResolvedLicense{Expression: id, Raw: id, Source: src}
 	}
 	nonStd := func(raw, src string) domain.ResolvedLicense {
 		return domain.ResolvedLicense{Raw: raw, Source: src}
@@ -89,99 +86,115 @@ func TestApplyManifestLicenses(t *testing.T) {
 	tests := []struct {
 		name           string
 		seedProject    domain.ResolvedLicense
-		seedVersions   []domain.ResolvedLicense
+		seedVersion    domain.ResolvedLicense
 		manifest       []domain.ResolvedLicense
-		wantProjectID  string
+		wantProjectExp string
 		wantProjectSrc string
-		wantVersionIDs []string
+		wantVersionExp string
 	}{
 		{
 			name:           "all_zero_replaced_by_spdx_manifest",
 			manifest:       []domain.ResolvedLicense{spdx("Apache-2.0", domain.LicenseSourceMavenPOMSPDX)},
-			wantProjectID:  "Apache-2.0",
+			wantProjectExp: "Apache-2.0",
 			wantProjectSrc: domain.LicenseSourceMavenPOMSPDX,
-			wantVersionIDs: []string{"Apache-2.0"},
+			wantVersionExp: "Apache-2.0",
 		},
 		{
 			name:           "nonstandard_project_replaced_by_spdx",
 			seedProject:    nonStd("Custom", domain.LicenseSourceDepsDevProjectNonStandard),
 			manifest:       []domain.ResolvedLicense{spdx("MIT", domain.LicenseSourceMavenPOMSPDX)},
-			wantProjectID:  "MIT",
+			wantProjectExp: "MIT",
 			wantProjectSrc: domain.LicenseSourceMavenPOMSPDX,
-			wantVersionIDs: []string{"MIT"},
+			wantVersionExp: "MIT",
 		},
 		{
 			name:           "canonical_spdx_project_kept_disagreement_logged_only",
 			seedProject:    spdx("MIT", domain.LicenseSourceDepsDevProjectSPDX),
-			seedVersions:   []domain.ResolvedLicense{spdx("MIT", domain.LicenseSourceDepsDevVersionSPDX)},
+			seedVersion:    spdx("MIT", domain.LicenseSourceDepsDevVersionSPDX),
 			manifest:       []domain.ResolvedLicense{spdx("Apache-2.0", domain.LicenseSourceMavenPOMSPDX)},
-			wantProjectID:  "MIT",
+			wantProjectExp: "MIT",
 			wantProjectSrc: domain.LicenseSourceDepsDevProjectSPDX,
-			wantVersionIDs: []string{"MIT"},
+			wantVersionExp: "MIT",
 		},
 		{
-			name:           "version_slice_all_nonspdx_replaced",
+			name:           "version_nonspdx_replaced_by_spdx",
 			seedProject:    nonStd("garbage", domain.LicenseSourceDepsDevProjectNonStandard),
-			seedVersions:   []domain.ResolvedLicense{nonStd("garbage-v", domain.LicenseSourceDepsDevVersionRaw)},
+			seedVersion:    nonStd("garbage-v", domain.LicenseSourceDepsDevVersionRaw),
 			manifest:       []domain.ResolvedLicense{spdx("BSD-3-Clause", domain.LicenseSourceMavenPOMSPDX)},
-			wantProjectID:  "BSD-3-Clause",
+			wantProjectExp: "BSD-3-Clause",
 			wantProjectSrc: domain.LicenseSourceMavenPOMSPDX,
-			wantVersionIDs: []string{"BSD-3-Clause"},
+			wantVersionExp: "BSD-3-Clause",
 		},
 		{
-			name:           "multi_license_emits_all_to_versions",
+			name:           "multi_license_or_joined_into_one_expression",
 			manifest:       []domain.ResolvedLicense{spdx("CDDL-1.1", domain.LicenseSourceMavenPOMSPDX), spdx("GPL-2.0-with-classpath-exception", domain.LicenseSourceMavenPOMSPDX)},
-			wantProjectID:  "CDDL-1.1",
+			wantProjectExp: "CDDL-1.1",
 			wantProjectSrc: domain.LicenseSourceMavenPOMSPDX,
-			wantVersionIDs: []string{"CDDL-1.1", "GPL-2.0-with-classpath-exception"},
+			wantVersionExp: "CDDL-1.1 OR GPL-2.0-with-classpath-exception",
 		},
 		{
 			name:           "manifest_only_nonstandard_writes_when_project_zero",
 			manifest:       []domain.ResolvedLicense{nonStd("Acme Internal", domain.LicenseSourceMavenPOMNonStandard)},
-			wantProjectID:  "",
+			wantProjectExp: "",
 			wantProjectSrc: domain.LicenseSourceMavenPOMNonStandard,
-			wantVersionIDs: []string{""},
+			wantVersionExp: "",
 		},
 		{
 			name:           "version_nonspdx_kept_when_manifest_also_nonspdx",
 			seedProject:    nonStd("Custom", domain.LicenseSourceDepsDevProjectNonStandard),
-			seedVersions:   []domain.ResolvedLicense{nonStd("Custom-v", domain.LicenseSourceDepsDevVersionRaw)},
+			seedVersion:    nonStd("Custom-v", domain.LicenseSourceDepsDevVersionRaw),
 			manifest:       []domain.ResolvedLicense{nonStd("Acme Internal", domain.LicenseSourceMavenPOMNonStandard)},
-			wantProjectID:  "",
+			wantProjectExp: "",
 			wantProjectSrc: domain.LicenseSourceDepsDevProjectNonStandard,
-			wantVersionIDs: []string{""},
+			wantVersionExp: "",
 		},
 		{
-			name:           "version_slice_with_canonical_spdx_kept",
+			name:           "version_canonical_spdx_kept",
 			seedProject:    spdx("MIT", domain.LicenseSourceDepsDevProjectSPDX),
-			seedVersions:   []domain.ResolvedLicense{spdx("MIT", domain.LicenseSourceDepsDevVersionSPDX)},
+			seedVersion:    spdx("MIT", domain.LicenseSourceDepsDevVersionSPDX),
 			manifest:       []domain.ResolvedLicense{spdx("MIT", domain.LicenseSourceMavenPOMSPDX)},
-			wantProjectID:  "MIT",
+			wantProjectExp: "MIT",
 			wantProjectSrc: domain.LicenseSourceDepsDevProjectSPDX,
-			wantVersionIDs: []string{"MIT"},
+			wantVersionExp: "MIT",
+		},
+		{
+			name: "noassertion_only_preserves_sentinel",
+			manifest: []domain.ResolvedLicense{{
+				Expression: "NOASSERTION",
+				Source:     domain.LicenseSourceMavenPOMSPDX,
+				Raw:        "NOASSERTION",
+			}},
+			wantProjectExp: "NOASSERTION",
+			wantProjectSrc: domain.LicenseSourceMavenPOMSPDX,
+			wantVersionExp: "NOASSERTION",
+		},
+		{
+			name: "noassertion_mixed_with_nonstandard_falls_through_to_raw",
+			manifest: []domain.ResolvedLicense{
+				nonStd("Acme Internal", domain.LicenseSourceMavenPOMNonStandard),
+				{Expression: "NOASSERTION", Source: domain.LicenseSourceMavenPOMSPDX, Raw: "NOASSERTION"},
+			},
+			wantProjectExp: "",
+			wantProjectSrc: domain.LicenseSourceMavenPOMNonStandard,
+			wantVersionExp: "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &domain.Analysis{
-				Package:                  &domain.Package{PURL: "pkg:maven/g/a@1"},
-				ProjectLicense:           tt.seedProject,
-				RequestedVersionLicenses: append([]domain.ResolvedLicense(nil), tt.seedVersions...),
+				Package:                 &domain.Package{PURL: "pkg:maven/g/a@1"},
+				ProjectLicense:          tt.seedProject,
+				RequestedVersionLicense: tt.seedVersion,
 			}
 			applyManifestLicenses(a, tt.manifest)
-			if a.ProjectLicense.Identifier != tt.wantProjectID {
-				t.Errorf("ProjectLicense.Identifier = %q, want %q", a.ProjectLicense.Identifier, tt.wantProjectID)
+			if a.ProjectLicense.Expression != tt.wantProjectExp {
+				t.Errorf("ProjectLicense.Expression = %q, want %q", a.ProjectLicense.Expression, tt.wantProjectExp)
 			}
 			if a.ProjectLicense.Source != tt.wantProjectSrc {
 				t.Errorf("ProjectLicense.Source = %q, want %q", a.ProjectLicense.Source, tt.wantProjectSrc)
 			}
-			if len(a.RequestedVersionLicenses) != len(tt.wantVersionIDs) {
-				t.Fatalf("RequestedVersionLicenses len = %d, want %d (%+v)", len(a.RequestedVersionLicenses), len(tt.wantVersionIDs), a.RequestedVersionLicenses)
-			}
-			for i, want := range tt.wantVersionIDs {
-				if a.RequestedVersionLicenses[i].Identifier != want {
-					t.Errorf("RequestedVersionLicenses[%d].Identifier = %q, want %q", i, a.RequestedVersionLicenses[i].Identifier, want)
-				}
+			if a.RequestedVersionLicense.Expression != tt.wantVersionExp {
+				t.Errorf("RequestedVersionLicense.Expression = %q, want %q", a.RequestedVersionLicense.Expression, tt.wantVersionExp)
 			}
 		})
 	}
@@ -228,9 +241,9 @@ func TestEnrichLicenseFromManifest_EndToEnd(t *testing.T) {
 		ProjectLicense: domain.ResolvedLicense{Source: domain.LicenseSourceDepsDevProjectNonStandard, Raw: "Custom Vendor License"},
 	}
 	skipAlreadySPDX := &domain.Analysis{
-		Package:                  &domain.Package{PURL: "pkg:maven/com.example/clean@1.0", Ecosystem: "maven", Version: "1.0"},
-		ProjectLicense:           domain.ResolvedLicense{Identifier: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX},
-		RequestedVersionLicenses: []domain.ResolvedLicense{{Identifier: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevVersionSPDX}},
+		Package:                 &domain.Package{PURL: "pkg:maven/com.example/clean@1.0", Ecosystem: "maven", Version: "1.0"},
+		ProjectLicense:          domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX},
+		RequestedVersionLicense: domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevVersionSPDX},
 	}
 	skipNonMaven := &domain.Analysis{
 		Package: &domain.Package{PURL: "pkg:npm/example@1.0", Ecosystem: "npm", Version: "1.0"},
@@ -242,14 +255,14 @@ func TestEnrichLicenseFromManifest_EndToEnd(t *testing.T) {
 		"npm":     skipNonMaven,
 	})
 
-	if target.ProjectLicense.Identifier != "Apache-2.0" {
-		t.Errorf("target ProjectLicense.Identifier = %q, want %q", target.ProjectLicense.Identifier, "Apache-2.0")
+	if target.ProjectLicense.Expression != "Apache-2.0" {
+		t.Errorf("target ProjectLicense.Expression = %q, want %q", target.ProjectLicense.Expression, "Apache-2.0")
 	}
 	if target.ProjectLicense.Source != domain.LicenseSourceMavenPOMSPDX {
 		t.Errorf("target ProjectLicense.Source = %q, want %q", target.ProjectLicense.Source, domain.LicenseSourceMavenPOMSPDX)
 	}
-	if len(target.RequestedVersionLicenses) != 1 || target.RequestedVersionLicenses[0].Identifier != "Apache-2.0" {
-		t.Errorf("target RequestedVersionLicenses = %+v, want [Apache-2.0]", target.RequestedVersionLicenses)
+	if target.RequestedVersionLicense.Expression != "Apache-2.0" {
+		t.Errorf("target RequestedVersionLicense.Expression = %q, want %q", target.RequestedVersionLicense.Expression, "Apache-2.0")
 	}
 	if skipAlreadySPDX.ProjectLicense.Source != domain.LicenseSourceDepsDevProjectSPDX {
 		t.Errorf("clean analysis was overwritten: source=%q", skipAlreadySPDX.ProjectLicense.Source)
@@ -303,11 +316,11 @@ func TestEnrichLicenseFromManifest_UnparseablePURL(t *testing.T) {
 	if bad.ProjectLicense.Source != domain.LicenseSourceDepsDevProjectNonStandard {
 		t.Errorf("bad analysis should be untouched; got source=%q", bad.ProjectLicense.Source)
 	}
-	if good.ProjectLicense.Identifier != "MIT" {
+	if good.ProjectLicense.Expression != "MIT" {
 		t.Errorf("good analysis should be enriched to MIT; got %+v", good.ProjectLicense)
 	}
-	if len(good.RequestedVersionLicenses) != 1 || good.RequestedVersionLicenses[0].Identifier != "MIT" {
-		t.Errorf("good analysis should have RequestedVersionLicenses populated to [MIT]; got %+v", good.RequestedVersionLicenses)
+	if good.RequestedVersionLicense.Expression != "MIT" {
+		t.Errorf("good analysis should have RequestedVersionLicense populated to MIT; got %+v", good.RequestedVersionLicense)
 	}
 }
 
@@ -347,7 +360,7 @@ func TestEnrichLicenseFromManifest_VersionlessPURL(t *testing.T) {
 		"noversion":   noVersion,
 	})
 
-	if versionless.ProjectLicense.Identifier != "MIT" {
+	if versionless.ProjectLicense.Expression != "MIT" {
 		t.Errorf("versionless analysis should be enriched to MIT; got %+v", versionless.ProjectLicense)
 	}
 	if noVersion.ProjectLicense.Source != domain.LicenseSourceDepsDevProjectNonStandard {
@@ -372,28 +385,25 @@ func TestApplyManifestLicenses_DisagreementLogged(t *testing.T) {
 
 	a := &domain.Analysis{
 		Package:        &domain.Package{PURL: "pkg:maven/com.example/widget@1.0"},
-		ProjectLicense: domain.ResolvedLicense{Identifier: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX, Raw: "MIT"},
+		ProjectLicense: domain.ResolvedLicense{Expression: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX, Raw: "MIT"},
 	}
 	manifest := []domain.ResolvedLicense{{
-		Identifier: "Apache-2.0",
-		IsSPDX:     true,
+		Expression: "Apache-2.0",
 		Source:     domain.LicenseSourceMavenPOMSPDX,
 		Raw:        "Apache-2.0",
 	}}
 	applyManifestLicenses(a, manifest)
 
-	if a.ProjectLicense.Identifier != "MIT" {
-		t.Fatalf("canonical SPDX must not be overwritten; got %q", a.ProjectLicense.Identifier)
+	if a.ProjectLicense.Expression != "MIT" {
+		t.Fatalf("canonical SPDX must not be overwritten; got %q", a.ProjectLicense.Expression)
 	}
 	out := buf.String()
 	if !strings.Contains(out, `"msg":"license_disagreement"`) {
 		t.Fatalf("expected license_disagreement log; got: %s", out)
 	}
 	if !strings.Contains(out, `"existing":"MIT"`) || !strings.Contains(out, `"incoming":"Apache-2.0"`) {
-		t.Fatalf("log missing existing/incoming identifiers: %s", out)
+		t.Fatalf("log missing existing/incoming expressions: %s", out)
 	}
-	// Lock the slog field names so a silent rename triggers a test failure
-	// (per the "Use Domain Constants for Domain-Defined String Values" rule).
 	if !strings.Contains(out, `"existing_source":"`+domain.LicenseSourceDepsDevProjectSPDX+`"`) {
 		t.Fatalf("log missing existing_source field: %s", out)
 	}

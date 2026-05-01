@@ -16,7 +16,7 @@ func TestLicenseOverrideNonStandard(t *testing.T) {
 		t.Fatalf("expected change true")
 	}
 	analysis.ProjectLicense = updated
-	if analysis.ProjectLicense.Identifier != "MIT" {
+	if analysis.ProjectLicense.Expression != "MIT" {
 		t.Fatalf("expected MIT got %#v", analysis.ProjectLicense)
 	}
 	if analysis.ProjectLicense.Source != domain.LicenseSourceGitHubProjectSPDX {
@@ -26,13 +26,13 @@ func TestLicenseOverrideNonStandard(t *testing.T) {
 
 // TestLicenseNoOverrideCanonical ensures a canonical deps.dev SPDX license is not overridden by different GitHub SPDX.
 func TestLicenseNoOverrideCanonical(t *testing.T) {
-	analysis := &domain.Analysis{ProjectLicense: domain.ResolvedLicense{Identifier: "Apache-2.0", Raw: "Apache-2.0", Source: domain.LicenseSourceDepsDevProjectSPDX, IsSPDX: true}}
+	analysis := &domain.Analysis{ProjectLicense: domain.ResolvedLicense{Expression: "Apache-2.0", Raw: "Apache-2.0", Source: domain.LicenseSourceDepsDevProjectSPDX}}
 	lic := &LicenseInfo{SpdxID: "MIT", Name: "MIT License"}
 	updated, changed := enrichProjectLicenseFromGitHub(analysis.ProjectLicense, lic)
 	if changed {
 		t.Fatalf("unexpected change for canonical project license")
 	}
-	if updated.Identifier != "Apache-2.0" || updated.Source != domain.LicenseSourceDepsDevProjectSPDX {
+	if updated.Expression != "Apache-2.0" || updated.Source != domain.LicenseSourceDepsDevProjectSPDX {
 		t.Fatalf("expected Apache-2.0/deps.dev got %+v", updated)
 	}
 }

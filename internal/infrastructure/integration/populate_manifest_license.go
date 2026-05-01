@@ -9,6 +9,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/common"
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/licenses"
 )
 
 // enrichLicenseFromManifest is the third-tier license fallback: when deps.dev
@@ -24,16 +25,19 @@ import (
 // coordinates issue exactly one POM lookup even when multiple analyses share
 // them.
 //
-// Override rules:
-//   - Skip an analysis entirely when ProjectLicense is already canonical SPDX
-//     AND RequestedVersionLicenses is non-empty and every entry is canonical
-//     SPDX (cheap pre-check before any HTTP).
-//   - For each manifest license, write to RequestedVersionLicenses when the slice
-//     is empty or composed entirely of non-SPDX entries.
+// Override rules (per ADR-0019):
+//   - Skip an analysis entirely when ProjectLicense AND RequestedVersionLicense
+//     are both already canonical SPDX expressions (cheap pre-check before any
+//     HTTP).
 //   - Promote the first SPDX manifest license (in <licenses> document order) to
-//     ProjectLicense when the current ProjectLicense is zero or non-standard.
+//     ProjectLicense when the current ProjectLicense is not a usable SPDX
+//     expression (zero, non-standard, or NOASSERTION).
+//   - OR-join all SPDX manifest licenses into a single expression and write to
+//     RequestedVersionLicense when the current value is not a usable SPDX
+//     expression (zero, non-standard, or NOASSERTION).
 //   - Never overwrite a current canonical SPDX in either field; log a WARN with
-//     "license_disagreement" when the manifest disagrees so we can audit later.
+//     "license_disagreement" when the manifest's primary disagrees with the
+//     existing project license so we can audit later.
 //
 // Best-effort: per-coordinate fetch failures are logged at WARN as
 // "license_manifest_fetch_failed" and the analysis is left untouched. HTTP 429
@@ -122,19 +126,19 @@ dispatchLoop:
 // This predicate identifies analyses that are eligible for a manifest fetch to
 // fill missing or non-standard license data, helping avoid obviously wasted
 // HTTP requests. A true result does not guarantee that applyManifestLicenses
-// will write anything, because actual writes also depend on what SPDX licenses
-// the fetched manifest yields.
+// will write anything, because actual writes also depend on what SPDX
+// expressions the fetched manifest yields.
 //
-// Specifically: ProjectLicense is zero or non-standard, OR the version-license
-// slice is empty or composed entirely of non-SPDX entries.
+// Specifically: ProjectLicense is not a usable SPDX expression (zero,
+// non-standard, or NOASSERTION), OR RequestedVersionLicense is not usable.
 func needsManifestLicense(a *domain.Analysis) bool {
 	if a == nil || a.Package == nil || a.Package.PURL == "" {
 		return false
 	}
-	if a.ProjectLicense.IsZero() || a.ProjectLicense.IsNonStandard() {
+	if !a.ProjectLicense.IsUsableSPDX() {
 		return true
 	}
-	if len(a.RequestedVersionLicenses) == 0 || allVersionLicensesNonSPDX(a.RequestedVersionLicenses) {
+	if !a.RequestedVersionLicense.IsUsableSPDX() {
 		return true
 	}
 	return false
@@ -148,43 +152,59 @@ func needsManifestLicense(a *domain.Analysis) bool {
 // Returns true when at least one field on the analysis was written, false when
 // the incoming licenses had no effect (e.g., all slots already occupied by
 // canonical SPDX, or the incoming set is entirely non-SPDX and cannot improve
-// the existing state).
+// the existing state). The bool is used by the ClearlyDefined.io tier to log
+// per-coordinate telemetry separately from the Maven POM tier.
 //
 // When the source reports multiple SPDX entries (multi-licensed POMs or
 // SPDX-expression operands from CD), the first SPDX entry in input order is
-// promoted to ProjectLicense for deterministic selection. The full list —
-// including any subsequent SPDX entries — is written to
-// RequestedVersionLicenses when that slice is empty or entirely non-SPDX.
-// Input order may reflect publisher convention for some manifest sources
-// (e.g. Maven POMs list the primary license first), but SPDX expressions
-// themselves do not imply a preferred license by operand order.
+// promoted to ProjectLicense for deterministic selection. All SPDX entries
+// are OR-joined into a single canonical expression and written to
+// RequestedVersionLicense when the current value is not a usable SPDX
+// expression (for example, when it contains NOASSERTION). Input order may
+// reflect publisher convention for some manifest sources (e.g. Maven POMs
+// list the primary license first), but SPDX expressions themselves do not
+// imply a preferred license by operand order.
 func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bool {
 	if a == nil || len(lics) == 0 {
 		return false
 	}
 
-	var bestSPDX *domain.ResolvedLicense
+	// Collect SPDX expressions in document order for OR-joining at the version level.
+	spdxExprs := make([]string, 0, len(lics))
+	rawParts := make([]string, 0, len(lics))
+	var firstSPDX *domain.ResolvedLicense
+	hasNoAssertion := false
+	hasNonStandard := false
 	for i := range lics {
-		if lics[i].IsSPDX {
-			bestSPDX = &lics[i]
-			break
+		if lics[i].IsUsableSPDX() {
+			spdxExprs = append(spdxExprs, lics[i].Expression)
+			if firstSPDX == nil {
+				firstSPDX = &lics[i]
+			}
+		} else if lics[i].Expression == "NOASSERTION" {
+			hasNoAssertion = true
+		} else if !lics[i].IsZero() {
+			hasNonStandard = true
+		}
+		if lics[i].Raw != "" {
+			rawParts = append(rawParts, lics[i].Raw)
 		}
 	}
 
 	wrote := false
 
-	// ProjectLicense: replace when current is zero or non-standard. Disagreement
-	// with an existing canonical SPDX is logged but not auto-resolved.
-	if bestSPDX != nil {
-		if a.ProjectLicense.IsZero() || a.ProjectLicense.IsNonStandard() {
-			a.ProjectLicense = *bestSPDX
+	// ProjectLicense: replace when current is not a usable SPDX value.
+	// Disagreement with an existing canonical SPDX is logged but not auto-resolved.
+	if firstSPDX != nil {
+		if !a.ProjectLicense.IsUsableSPDX() {
+			a.ProjectLicense = *firstSPDX
 			wrote = true
-		} else if a.ProjectLicense.IsSPDX && !strings.EqualFold(a.ProjectLicense.Identifier, bestSPDX.Identifier) {
+		} else if a.ProjectLicense.IsUsableSPDX() && !strings.EqualFold(a.ProjectLicense.Expression, firstSPDX.Expression) {
 			slog.Warn("license_disagreement",
 				"existing_source", a.ProjectLicense.Source,
-				"existing", a.ProjectLicense.Identifier,
-				"incoming_source", bestSPDX.Source,
-				"incoming", bestSPDX.Identifier,
+				"existing", a.ProjectLicense.Expression,
+				"incoming_source", firstSPDX.Source,
+				"incoming", firstSPDX.Expression,
 				"purl", a.Package.PURL)
 		}
 	} else if a.ProjectLicense.IsZero() {
@@ -193,15 +213,51 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 		wrote = true
 	}
 
-	// RequestedVersionLicenses: replace when empty, or when all existing entries
-	// are non-SPDX AND the manifest provides at least one SPDX license (replacing
-	// non-standard with non-standard is a no-op per the override matrix).
-	if len(a.RequestedVersionLicenses) == 0 {
-		a.RequestedVersionLicenses = append([]domain.ResolvedLicense(nil), lics...)
-		wrote = true
-	} else if allVersionLicensesNonSPDX(a.RequestedVersionLicenses) && bestSPDX != nil {
-		a.RequestedVersionLicenses = append([]domain.ResolvedLicense(nil), lics...)
-		wrote = true
+	// RequestedVersionLicense: when manifest includes SPDX entries, OR-join them
+	// into one canonical expression and replace the current value if it is not a
+	// usable SPDX expression (zero, non-standard, or NOASSERTION). When the
+	// manifest has only non-standard entries, preserve their raw concatenation
+	// only if the current value is zero (replacing non-standard with non-standard
+	// is a no-op per the override matrix). Raw preserves the per-entry
+	// concatenation for audit. The Source uses the same constant as the first
+	// SPDX entry so callers can attribute provenance (Maven POM vs
+	// ClearlyDefined.io).
+	if !a.RequestedVersionLicense.IsUsableSPDX() {
+		if len(spdxExprs) > 0 && firstSPDX != nil {
+			joined := licenses.JoinExpressions(spdxExprs)
+			rawConcat := strings.Join(rawParts, " "+licenseORSeparator+" ")
+			a.RequestedVersionLicense = domain.ResolvedLicense{
+				Expression: joined,
+				Raw:        rawConcat,
+				Source:     firstSPDX.Source,
+			}
+			wrote = true
+		} else if hasNoAssertion && !hasNonStandard && len(spdxExprs) == 0 && a.RequestedVersionLicense.IsZero() {
+			// Every non-zero entry is NOASSERTION (no non-standard entries
+			// mixed in) — preserve the sentinel so downstream consumers can
+			// distinguish "upstream refused to assert" from "no data at all".
+			noAssertionSource := lics[0].Source
+			for _, lic := range lics {
+				if lic.Expression == "NOASSERTION" {
+					noAssertionSource = lic.Source
+					break
+				}
+			}
+			a.RequestedVersionLicense = domain.ResolvedLicense{
+				Expression: "NOASSERTION",
+				Raw:        strings.Join(rawParts, " "+licenseORSeparator+" "),
+				Source:     noAssertionSource,
+			}
+			wrote = true
+		} else if a.RequestedVersionLicense.IsZero() && len(rawParts) > 0 {
+			// All manifest entries were non-standard — preserve raw concatenation.
+			a.RequestedVersionLicense = domain.ResolvedLicense{
+				Expression: "",
+				Raw:        strings.Join(rawParts, " "+licenseORSeparator+" "),
+				Source:     lics[0].Source,
+			}
+			wrote = true
+		}
 	}
 
 	return wrote

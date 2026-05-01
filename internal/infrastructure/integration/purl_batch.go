@@ -48,7 +48,7 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 		analysis := &domain.Analysis{OriginalPURL: p, EffectivePURL: p, Package: pkg, AnalyzedAt: time.Now()}
 		analysis.EnsureCanonical()
 		if batchResult, ok := batchResults[p]; ok && batchResult != nil {
-			s.populateAnalysisFromBatchResult(analysis, batchResult)
+			s.populateAnalysisFromBatchResult(ctx, analysis, batchResult)
 			// When deps.dev returned no package data but a repo URL was synthesized
 			// (e.g. Go module fallback), mark as not-found so downstream fallback
 			// logic (registry / catalog) can recognise the typed error.

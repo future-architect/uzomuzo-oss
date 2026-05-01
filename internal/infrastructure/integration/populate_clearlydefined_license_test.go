@@ -50,11 +50,8 @@ func TestEnrichLicenseFromClearlyDefined_FillsNonStandardFromSPDX(t *testing.T) 
 	if a.ProjectLicense.Source != domain.LicenseSourceClearlyDefinedSPDX {
 		t.Errorf("ProjectLicense.Source = %q, want %q", a.ProjectLicense.Source, domain.LicenseSourceClearlyDefinedSPDX)
 	}
-	if a.ProjectLicense.Identifier != "Apache-2.0" {
-		t.Errorf("ProjectLicense.Identifier = %q, want Apache-2.0", a.ProjectLicense.Identifier)
-	}
-	if !a.ProjectLicense.IsSPDX {
-		t.Errorf("ProjectLicense.IsSPDX = false, want true")
+	if a.ProjectLicense.Expression != "Apache-2.0" {
+		t.Errorf("ProjectLicense.Expression = %q, want Apache-2.0", a.ProjectLicense.Expression)
 	}
 }
 
@@ -73,10 +70,9 @@ func TestEnrichLicenseFromClearlyDefined_PreservesCanonicalSPDX(t *testing.T) {
 	svc := &IntegrationService{cdClient: cd}
 
 	canonical := domain.ResolvedLicense{
-		Identifier: "MIT",
+		Expression: "MIT",
 		Source:     domain.LicenseSourceDepsDevProjectSPDX,
 		Raw:        "MIT",
-		IsSPDX:     true,
 	}
 	a := &domain.Analysis{
 		Package: &domain.Package{
@@ -84,9 +80,9 @@ func TestEnrichLicenseFromClearlyDefined_PreservesCanonicalSPDX(t *testing.T) {
 			Ecosystem: "maven",
 		},
 		ProjectLicense: canonical,
-		// RequestedVersionLicenses also fully SPDX so needsManifestLicense
+		// RequestedVersionLicense also fully SPDX so needsManifestLicense
 		// will decide CD doesn't even need to fetch.
-		RequestedVersionLicenses: []domain.ResolvedLicense{canonical},
+		RequestedVersionLicense: canonical,
 	}
 	svc.enrichLicenseFromClearlyDefined(context.Background(), map[string]*domain.Analysis{"a": a})
 
@@ -118,18 +114,19 @@ func TestEnrichLicenseFromClearlyDefined_SPDXExpressionEmitsMultipleLeaves(t *te
 	}
 	svc.enrichLicenseFromClearlyDefined(context.Background(), map[string]*domain.Analysis{"a": a})
 
-	if a.ProjectLicense.Identifier != "CDDL-1.1" {
-		t.Errorf("ProjectLicense.Identifier = %q, want CDDL-1.1 (first SPDX leaf)", a.ProjectLicense.Identifier)
+	if a.ProjectLicense.Expression != "CDDL-1.1" {
+		t.Errorf("ProjectLicense.Expression = %q, want CDDL-1.1 (first SPDX leaf — single-leaf promotion only)", a.ProjectLicense.Expression)
 	}
-	if len(a.RequestedVersionLicenses) != 2 {
-		t.Fatalf("RequestedVersionLicenses len = %d, want 2", len(a.RequestedVersionLicenses))
+	// Per ADR-0019: multi-leaf upstream operands are OR-joined into one
+	// canonical Expression on RequestedVersionLicense (singular).
+	wantVersionExpr := "CDDL-1.1 OR GPL-2.0-only"
+	if a.RequestedVersionLicense.Expression != wantVersionExpr {
+		t.Errorf("RequestedVersionLicense.Expression = %q, want %q",
+			a.RequestedVersionLicense.Expression, wantVersionExpr)
 	}
-	wantIDs := []string{"CDDL-1.1", "GPL-2.0-only"}
-	for i, want := range wantIDs {
-		if a.RequestedVersionLicenses[i].Identifier != want {
-			t.Errorf("RequestedVersionLicenses[%d].Identifier = %q, want %q",
-				i, a.RequestedVersionLicenses[i].Identifier, want)
-		}
+	if a.RequestedVersionLicense.Source != domain.LicenseSourceClearlyDefinedSPDX {
+		t.Errorf("RequestedVersionLicense.Source = %q, want %q",
+			a.RequestedVersionLicense.Source, domain.LicenseSourceClearlyDefinedSPDX)
 	}
 }
 

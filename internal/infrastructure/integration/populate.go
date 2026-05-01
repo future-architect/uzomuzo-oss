@@ -4,20 +4,20 @@ import (
 	"context"
 	"log/slog"
 	"net/url"
-	"sort"
 	"strings"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common"
 	commonlinks "github.com/future-architect/uzomuzo-oss/internal/common/links"
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/licenses"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/links"
 )
 
 // populateAnalysisFromBatchResult populates a domain.Analysis from a deps.dev BatchResult.
 // Extracted for modularity & reuse across PURL and GitHub flows.
-func (s *IntegrationService) populateAnalysisFromBatchResult(analysis *domain.Analysis, batchResult *depsdev.BatchResult) {
+func (s *IntegrationService) populateAnalysisFromBatchResult(ctx context.Context, analysis *domain.Analysis, batchResult *depsdev.BatchResult) {
 	if batchResult == nil {
 		return
 	}
@@ -96,187 +96,185 @@ func (s *IntegrationService) populateAnalysisFromBatchResult(analysis *domain.An
 	}
 	s.populateReleaseInfo(analysis, batchResult)
 	// Populate license information after release info (needs RequestedVersion PURL)
-	s.populateLicenses(analysis, batchResult)
+	s.populateLicenses(ctx, analysis, batchResult)
 }
 
-// populateLicenses enriches Analysis with project-level and requested-version license data.
-// Requirements:
-//   - ProjectLicense (single string) prefers deps.dev Project.License; (GitHub fallback TBD)
-//   - RequestedVersionLicenses ([]string) collected only for explicitly requested version.
-//     If version-specific licenses absent, fallback to ProjectLicense (single-element slice).
-func (s *IntegrationService) populateLicenses(analysis *domain.Analysis, batchResult *depsdev.BatchResult) {
+// populateLicenses enriches Analysis with project-level and requested-version
+// license data using SPDX expression strings.
+//
+// Data model: see ResolvedLicense / Analysis godoc and
+// docs/adr/0019-license-expression-of-truth.md. The key invariants:
+//   - Expression is canonical SPDX or "" or "NOASSERTION" (never half-normalized)
+//   - Raw preserves the upstream string for single-source inputs and may be a
+//     normalized/concatenated audit string when multiple upstream entries are merged
+//   - Multiple upstream entries collapse to one OR-joined expression (not a slice)
+func (s *IntegrationService) populateLicenses(ctx context.Context, analysis *domain.Analysis, batchResult *depsdev.BatchResult) {
 	if analysis == nil || batchResult == nil {
 		return
 	}
 	// Project license (deps.dev project batch)
-	// Policy: if deps.dev returns a non-SPDX placeholder we record Source=deps.dev-nonstandard with empty Identifier.
-	if analysis.ProjectLicense.Identifier == "" && batchResult.Project != nil && strings.TrimSpace(batchResult.Project.License) != "" {
-		if norm, isSPDX := domain.NormalizeLicenseIdentifier(batchResult.Project.License); norm != "" && !strings.EqualFold(norm, "NOASSERTION") {
-			if isSPDX {
-				analysis.ProjectLicense = domain.ResolvedLicense{Identifier: norm, Raw: batchResult.Project.License, IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX}
-			} else {
-				analysis.ProjectLicense = domain.ResolvedLicense{Identifier: "", Raw: batchResult.Project.License, IsSPDX: false, Source: domain.LicenseSourceDepsDevProjectNonStandard}
-			}
-		}
+	if analysis.ProjectLicense.IsZero() && batchResult.Project != nil && strings.TrimSpace(batchResult.Project.License) != "" {
+		analysis.ProjectLicense = buildProjectLicense(batchResult.Project.License)
 	}
 	// Requested version license collection
 	if analysis.ReleaseInfo == nil || analysis.ReleaseInfo.RequestedVersion == nil || analysis.ReleaseInfo.RequestedVersion.Version == "" {
 		return
 	}
-	if len(analysis.RequestedVersionLicenses) > 0 { // already populated
+	if !analysis.RequestedVersionLicense.IsZero() { // already populated
 		return
 	}
 	requestedVersion := analysis.ReleaseInfo.RequestedVersion.Version
-	// Attempt to reuse batchResult.Package when it aligns with requested version
-	var licenses []domain.ResolvedLicense
+	// 1. Reuse batchResult.Package when it aligns with requested version.
+	var versionLicense domain.ResolvedLicense
 	if batchResult.Package != nil && len(batchResult.Package.Versions) > 0 {
-		// Robust selection mirrors repoURL logic: iterate over all returned versions to locate
-		// the exact requestedVersion instead of assuming index 0. This makes behavior explicit
-		// and resilient if deps.dev ever returns multiple versions for a versioned PURL.
 		for i := range batchResult.Package.Versions {
 			v := batchResult.Package.Versions[i]
 			if v.VersionKey.Version == requestedVersion {
-				licenses = buildResolvedLicensesFromVersion(&v)
+				versionLicense = buildVersionLicenseFromDepsDev(&v)
 				break
 			}
 		}
 	}
-	// If not found or empty, perform targeted fetch via deps.dev client (if versioned PURL known)
-	if len(licenses) == 0 && s.depsdevClient != nil && analysis.Package != nil && analysis.Package.Version != "" {
-		// Build versioned PURL from EffectivePURL (requested version), falling back to Package.PURL
+	// 2. Targeted fetch via deps.dev client when batch did not carry the version.
+	if versionLicense.IsZero() && s.depsdevClient != nil && analysis.Package != nil && analysis.Package.Version != "" {
 		versioned := analysis.EffectivePURL
-		if versioned == "" && analysis.Package != nil {
+		if versioned == "" {
 			versioned = analysis.Package.PURL
 		}
-		if fetched, err := s.depsdevClient.GetPackageVersionLicenses(context.Background(), versioned); err == nil && len(fetched) > 0 {
-			for _, raw := range fetched {
-				id, isSPDX := domain.NormalizeLicenseIdentifier(raw)
-				if id == "" || strings.EqualFold(id, "NOASSERTION") {
-					continue
-				}
-				src := domain.LicenseSourceDepsDevVersionSPDX
-				if !isSPDX {
-					src = domain.LicenseSourceDepsDevVersionRaw
-				}
-				licenses = append(licenses, domain.ResolvedLicense{Identifier: id, Raw: raw, IsSPDX: isSPDX, Source: src})
-			}
+		if fetched, err := s.depsdevClient.GetPackageVersionLicenses(ctx, versioned); err == nil && len(fetched) > 0 {
+			versionLicense = buildVersionLicenseFromRawList(fetched)
 		} else if err != nil {
 			slog.Debug("requested_version_license_fetch_failed", "purl", versioned, "error", err)
 		}
 	}
-	// Fallback to project license value (only if it has an actual value)
-	if len(licenses) == 0 && analysis.ProjectLicense.Identifier != "" {
-		licenses = []domain.ResolvedLicense{{Identifier: analysis.ProjectLicense.Identifier, Raw: analysis.ProjectLicense.Identifier, IsSPDX: true, Source: domain.LicenseSourceProjectFallback}}
+	// 3. Fallback to project license expression when version-specific data is empty.
+	if versionLicense.IsZero() && analysis.ProjectLicense.IsUsableSPDX() {
+		versionLicense = domain.ResolvedLicense{
+			Expression: analysis.ProjectLicense.Expression,
+			Raw:        analysis.ProjectLicense.Raw,
+			Source:     domain.LicenseSourceProjectFallback,
+		}
 	}
-	analysis.RequestedVersionLicenses = licenses
+	analysis.RequestedVersionLicense = versionLicense
 
-	// when all version licenses fail SPDX recognition but project has valid SPDX.
-	if analysis.ProjectLicense.Identifier != "" && len(analysis.RequestedVersionLicenses) > 0 && allVersionLicensesNonSPDX(analysis.RequestedVersionLicenses) {
-		analysis.RequestedVersionLicenses = []domain.ResolvedLicense{{Identifier: analysis.ProjectLicense.Identifier, Raw: analysis.ProjectLicense.Identifier, IsSPDX: true, Source: domain.LicenseSourceProjectFallback}}
+	// 4. Replace a non-SPDX (raw-only) version expression with project SPDX when available.
+	if analysis.ProjectLicense.IsUsableSPDX() && analysis.RequestedVersionLicense.Expression == "" && !analysis.RequestedVersionLicense.IsZero() {
+		analysis.RequestedVersionLicense = domain.ResolvedLicense{
+			Expression: analysis.ProjectLicense.Expression,
+			Raw:        analysis.ProjectLicense.Raw,
+			Source:     domain.LicenseSourceProjectFallback,
+		}
 	}
 
-	// Derive (promote) project-level license from a single requested-version license when eligible.
-	// See promoteProjectLicenseFromVersion for detailed policy.
+	// 5. Promote a single-leaf version expression to project-level when eligible.
 	promoteProjectLicenseFromVersion(analysis)
 }
 
-// extractNormalizedVersionLicenses extracts and normalizes SPDX license identifiers from a deps.dev Version.
-// Priority order:
-//  1. Version.LicenseDetails[].Spdx (preferred SPDX identifiers)
-//  2. Fallback to Version.Licenses slice if no SPDX entries found
-//
-// Behavior:
-//   - Trims whitespace
-//   - Normalizes via domain.NormalizeLicenseIdentifier
-//   - Drops empty / "NOASSERTION" / non-normalizable entries
-//   - Deduplicates and returns a sorted slice
+// buildProjectLicense classifies a deps.dev Project.License string into a
+// ResolvedLicense. NOASSERTION is preserved as the SPDX sentinel; non-SPDX
+// values are recorded with Expression="" and Source=...NonStandard.
+func buildProjectLicense(raw string) domain.ResolvedLicense {
+	expr := licenses.NormalizeExpression(raw)
+	if expr == "" {
+		return domain.ResolvedLicense{Expression: "", Raw: raw, Source: domain.LicenseSourceDepsDevProjectNonStandard}
+	}
+	return domain.ResolvedLicense{Expression: expr, Raw: raw, Source: domain.LicenseSourceDepsDevProjectSPDX}
+}
 
-// promoteProjectLicenseFromVersion encapsulates the logic for elevating a single requested-version SPDX license
-// to project-level when:
-//  1. ProjectLicense is still empty AND
-//  2. Exactly one requested-version license exists AND
-//  3. ProjectLicenseSource is either:
-//     a) domain.LicenseSourceDepsDevProjectNonStandard (deps.dev gave a non-standard placeholder), OR
-//     b) "" (no project-level source at all) AND
-//  4. That single license normalizes to a canonical SPDX (not NOASSERTION).
+// buildVersionLicenseFromDepsDev builds a ResolvedLicense for the requested
+// version from a deps.dev Version, OR-joining all upstream license entries
+// into a single SPDX expression. Priority order: LicenseDetails[].Spdx →
+// fallback to Licenses[]. The function never returns a slice — see ADR-0019.
+func buildVersionLicenseFromDepsDev(v *depsdev.Version) domain.ResolvedLicense {
+	if v == nil {
+		return domain.ResolvedLicense{}
+	}
+	rawDetails := make([]string, 0, len(v.LicenseDetails))
+	for _, d := range v.LicenseDetails {
+		if s := strings.TrimSpace(d.Spdx); s != "" {
+			rawDetails = append(rawDetails, s)
+		}
+	}
+	if len(rawDetails) > 0 {
+		return buildVersionLicenseFromRawList(rawDetails)
+	}
+	if len(v.Licenses) == 0 {
+		return domain.ResolvedLicense{}
+	}
+	return buildVersionLicenseFromRawList(v.Licenses)
+}
+
+// buildVersionLicenseFromRawList constructs a ResolvedLicense for the
+// requested version from any list of upstream license strings, by OR-joining
+// them into one canonical SPDX expression. When normalization recognizes at
+// least one entry, the result carries Source=DepsDevVersionSPDX (per the
+// "SPDX entry survival wins" rule in ADR-0019). When every entry fails
+// normalization, the result carries Expression="" and Source=DepsDevVersionRaw,
+// with Raw holding the joined upstream concatenation for audit.
+func buildVersionLicenseFromRawList(rawList []string) domain.ResolvedLicense {
+	rawConcat := strings.Join(filterNonEmpty(rawList), " "+licenseORSeparator+" ")
+	if rawConcat == "" {
+		return domain.ResolvedLicense{}
+	}
+	if expr := licenses.JoinExpressions(rawList); expr != "" {
+		return domain.ResolvedLicense{
+			Expression: expr,
+			Raw:        rawConcat,
+			Source:     domain.LicenseSourceDepsDevVersionSPDX,
+		}
+	}
+	return domain.ResolvedLicense{
+		Expression: "",
+		Raw:        rawConcat,
+		Source:     domain.LicenseSourceDepsDevVersionRaw,
+	}
+}
+
+// licenseORSeparator is the canonical operator used to concatenate upstream
+// license entries into the Raw audit string. Mirrors the SPDX OR operator so
+// that Expression and Raw are visually congruent for the canonical case.
+const licenseORSeparator = "OR"
+
+func filterNonEmpty(s []string) []string {
+	out := make([]string, 0, len(s))
+	for _, e := range s {
+		if t := strings.TrimSpace(e); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// promoteProjectLicenseFromVersion elevates a single-leaf version expression
+// to project-level when ProjectLicense is not a usable SPDX expression (zero,
+// non-standard, or NOASSERTION). Compound version expressions
+// ("MIT OR Apache-2.0") are NOT promoted: a project-level claim must be
+// unambiguous, and a project's own LICENSE file may pick a single leaf from
+// the dual-license set in ways the upstream package metadata does not capture.
 //
-// Outcome: ProjectLicense is set to the normalized identifier and source becomes derived-version.
-// Idempotent: safe to call multiple times; it exits early once ProjectLicense is set.
+// Idempotent: safe to call multiple times; exits early once ProjectLicense is
+// set to a usable SPDX expression.
 func promoteProjectLicenseFromVersion(a *domain.Analysis) {
 	if a == nil {
 		return
 	}
-	if a.ProjectLicense.Identifier != "" { // already set to SPDX or derived
+	if a.ProjectLicense.IsUsableSPDX() {
+		return // already set to a usable canonical SPDX expression
+	}
+	expr := a.RequestedVersionLicense.Expression
+	if expr == "" || expr == "NOASSERTION" {
 		return
 	}
-	if len(a.RequestedVersionLicenses) != 1 {
-		return
+	parsed := licenses.ParseExpression(expr)
+	if parsed.Root == nil || parsed.Root.License == nil {
+		return // compound — not a safe project-level claim
 	}
-	if !a.ProjectLicense.IsZero() && !a.ProjectLicense.IsNonStandard() {
-		return
+	if parsed.Root.License.Identifier == "" {
+		return // defensive: should not happen for canonical Expression
 	}
-	raw := a.RequestedVersionLicenses[0].Identifier
-	norm, isSPDX := domain.NormalizeLicenseIdentifier(raw)
-	if norm == "" || !isSPDX || strings.EqualFold(norm, "NOASSERTION") {
-		return
+	a.ProjectLicense = domain.ResolvedLicense{
+		Expression: expr,
+		Raw:        a.RequestedVersionLicense.Raw,
+		Source:     domain.LicenseSourceDerivedFromVersion,
 	}
-	a.ProjectLicense = domain.ResolvedLicense{Identifier: norm, Raw: raw, IsSPDX: true, Source: domain.LicenseSourceDerivedFromVersion}
-}
-
-// allVersionLicensesNonSPDX returns true if every VersionLicense is non-SPDX (or NOASSERTION equivalent).
-func allVersionLicensesNonSPDX(licenses []domain.ResolvedLicense) bool {
-	if len(licenses) == 0 {
-		return false
-	}
-	for _, vl := range licenses {
-		if vl.IsSPDX && !strings.EqualFold(vl.Identifier, "NOASSERTION") {
-			return false
-		}
-	}
-	return true
-}
-
-// buildResolvedLicensesFromVersion converts deps.dev version license details into ResolvedLicense slice.
-func buildResolvedLicensesFromVersion(v *depsdev.Version) []domain.ResolvedLicense {
-	if v == nil {
-		return nil
-	}
-	set := make(map[string]domain.ResolvedLicense)
-	add := func(raw string, src string) {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			return
-		}
-		id, isSPDX := domain.NormalizeLicenseIdentifier(raw)
-		if id == "" || strings.EqualFold(id, "NOASSERTION") {
-			return
-		}
-		if existing, ok := set[id]; ok {
-			// prefer SPDX source over raw if duplicate id appears
-			if existing.Source == domain.LicenseSourceDepsDevVersionRaw && src == domain.LicenseSourceDepsDevVersionSPDX {
-				set[id] = domain.ResolvedLicense{Identifier: id, Raw: raw, IsSPDX: isSPDX, Source: src}
-			}
-			return
-		}
-		set[id] = domain.ResolvedLicense{Identifier: id, Raw: raw, IsSPDX: isSPDX, Source: src}
-	}
-	for _, d := range v.LicenseDetails {
-		if d.Spdx != "" {
-			add(d.Spdx, domain.LicenseSourceDepsDevVersionSPDX)
-		}
-	}
-	if len(set) == 0 { // fallback to raw licenses
-		for _, l := range v.Licenses {
-			add(l, domain.LicenseSourceDepsDevVersionRaw)
-		}
-	}
-	if len(set) == 0 {
-		return nil
-	}
-	out := make([]domain.ResolvedLicense, 0, len(set))
-	for _, vl := range set {
-		out = append(out, vl)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Identifier < out[j].Identifier })
-	return out
 }

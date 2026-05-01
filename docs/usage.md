@@ -357,9 +357,7 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
       "dependent_count": 186349,
       "stable_version": "2.88.2",
       "project_license": "Apache-2.0",
-      "version_licenses": [
-        "Apache-2.0"
-      ],
+      "version_license": "Apache-2.0",
       "advisory_count": 4,
       "max_advisory_severity": "MEDIUM",
       "max_cvss3_score": 6.5,

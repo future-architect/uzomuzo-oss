@@ -120,10 +120,9 @@ func TestFetchLicenses(t *testing.T) {
 			statusGet: http.StatusOK,
 			wantFound: true,
 			want: []domain.ResolvedLicense{{
-				Identifier: "Apache-2.0",
+				Expression: "Apache-2.0",
 				Source:     domain.LicenseSourceMavenPOMSPDX,
 				Raw:        "https://www.apache.org/licenses/LICENSE-2.0.txt",
-				IsSPDX:     true,
 			}},
 		},
 		{
@@ -132,10 +131,9 @@ func TestFetchLicenses(t *testing.T) {
 			statusGet: http.StatusOK,
 			wantFound: true,
 			want: []domain.ResolvedLicense{{
-				Identifier: "MIT",
+				Expression: "MIT",
 				Source:     domain.LicenseSourceMavenPOMSPDX,
 				Raw:        "http://www.opensource.org/licenses/mit-license.php",
-				IsSPDX:     true,
 			}},
 		},
 		{
@@ -145,16 +143,14 @@ func TestFetchLicenses(t *testing.T) {
 			wantFound: true,
 			want: []domain.ResolvedLicense{
 				{
-					Identifier: "CDDL-1.1",
+					Expression: "CDDL-1.1",
 					Source:     domain.LicenseSourceMavenPOMSPDX,
 					Raw:        "CDDL 1.1",
-					IsSPDX:     true,
 				},
 				{
-					Identifier: "GPL-2.0-with-classpath-exception",
+					Expression: "GPL-2.0-with-classpath-exception",
 					Source:     domain.LicenseSourceMavenPOMSPDX,
 					Raw:        "GPL-2.0-with-classpath-exception",
-					IsSPDX:     true,
 				},
 			},
 		},
@@ -180,10 +176,9 @@ func TestFetchLicenses(t *testing.T) {
 			statusGet: http.StatusOK,
 			wantFound: true,
 			want: []domain.ResolvedLicense{{
-				Identifier: "BSD-3-Clause",
+				Expression: "BSD-3-Clause",
 				Source:     domain.LicenseSourceMavenPOMSPDX,
 				Raw:        "BSD 3-Clause License",
-				IsSPDX:     true,
 			}},
 		},
 		{
@@ -197,10 +192,9 @@ func TestFetchLicenses(t *testing.T) {
 			statusGet: http.StatusOK,
 			wantFound: true,
 			want: []domain.ResolvedLicense{{
-				Identifier: "Apache-2.0",
+				Expression: "Apache-2.0",
 				Source:     domain.LicenseSourceMavenPOMSPDX,
 				Raw:        "Apache License 2.0",
-				IsSPDX:     true,
 			}},
 		},
 	}
@@ -275,50 +269,45 @@ func TestResolvePOMLicense(t *testing.T) {
 			name: "name_exact_spdx",
 			in:   struct{ name, urlStr string }{name: "Apache-2.0"},
 			want: domain.ResolvedLicense{
-				Identifier: "Apache-2.0",
+				Expression: "Apache-2.0",
 				Source:     domain.LicenseSourceMavenPOMSPDX,
 				Raw:        "Apache-2.0",
-				IsSPDX:     true,
 			},
 		},
 		{
 			name: "name_alias",
 			in:   struct{ name, urlStr string }{name: "Apache License 2.0"},
 			want: domain.ResolvedLicense{
-				Identifier: "Apache-2.0",
+				Expression: "Apache-2.0",
 				Source:     domain.LicenseSourceMavenPOMSPDX,
 				Raw:        "Apache License 2.0",
-				IsSPDX:     true,
 			},
 		},
 		{
 			name: "url_only",
 			in:   struct{ name, urlStr string }{urlStr: "https://opensource.org/licenses/MIT"},
 			want: domain.ResolvedLicense{
-				Identifier: "MIT",
+				Expression: "MIT",
 				Source:     domain.LicenseSourceMavenPOMSPDX,
 				Raw:        "https://opensource.org/licenses/MIT",
-				IsSPDX:     true,
 			},
 		},
 		{
 			name: "name_takes_precedence_over_url",
 			in:   struct{ name, urlStr string }{name: "MIT", urlStr: "https://opensource.org/licenses/Apache-2.0"},
 			want: domain.ResolvedLicense{
-				Identifier: "MIT",
+				Expression: "MIT",
 				Source:     domain.LicenseSourceMavenPOMSPDX,
 				Raw:        "MIT",
-				IsSPDX:     true,
 			},
 		},
 		{
 			name: "name_unknown_url_resolves_raw_preserves_url",
 			in:   struct{ name, urlStr string }{name: "Acme Apache License", urlStr: "https://www.apache.org/licenses/LICENSE-2.0"},
 			want: domain.ResolvedLicense{
-				Identifier: "Apache-2.0",
+				Expression: "Apache-2.0",
 				Source:     domain.LicenseSourceMavenPOMSPDX,
 				Raw:        "https://www.apache.org/licenses/LICENSE-2.0",
-				IsSPDX:     true,
 			},
 		},
 		{

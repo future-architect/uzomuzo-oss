@@ -383,8 +383,8 @@ type enrichedJSONEntry struct {
 	OverallScore    float64  `json:"overall_score,omitempty"`
 	DependentCount  int      `json:"dependent_count,omitempty"`
 	StableVersion   string   `json:"stable_version,omitempty"`
-	ProjectLicense  string   `json:"project_license,omitempty"`
-	VersionLicenses []string `json:"version_licenses,omitempty"`
+	ProjectLicense string `json:"project_license,omitempty"`
+	VersionLicense string `json:"version_license,omitempty"`
 
 	// AdvisoryCount is the total number of advisories (direct + transitive).
 	AdvisoryCount       int     `json:"advisory_count,omitempty"`
@@ -482,15 +482,11 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 			}
 		}
 	}
-	if a.ProjectLicense.Identifier != "" {
-		je.ProjectLicense = a.ProjectLicense.Identifier
+	if a.ProjectLicense.Expression != "" {
+		je.ProjectLicense = a.ProjectLicense.Expression
 	}
-	if len(a.RequestedVersionLicenses) > 0 {
-		ids := make([]string, 0, len(a.RequestedVersionLicenses))
-		for _, lic := range a.RequestedVersionLicenses {
-			ids = append(ids, lic.Identifier)
-		}
-		je.VersionLicenses = ids
+	if a.RequestedVersionLicense.Expression != "" {
+		je.VersionLicense = a.RequestedVersionLicense.Expression
 	}
 	if lr := a.GetLifecycleResult(); lr != nil {
 		je.Reason = lr.Reason

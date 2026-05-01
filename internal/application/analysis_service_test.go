@@ -201,7 +201,7 @@ func TestAnalysisService_WriteLicenseCSV(t *testing.T) {
 		wantErr  bool
 	}{
 		{name: "empty_results", results: make(map[string]*domain.Analysis), filename: "licenses.csv", wantErr: false},
-		{name: "with_project_and_version", results: map[string]*domain.Analysis{"pkg:npm/example@1.0.0": {OriginalPURL: "pkg:npm/example", EffectivePURL: "pkg:npm/example@1.0.0", ProjectLicense: domain.ResolvedLicense{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevProjectSPDX}, RequestedVersionLicenses: []domain.ResolvedLicense{{Identifier: "MIT", Raw: "MIT", IsSPDX: true, Source: domain.LicenseSourceDepsDevVersionSPDX}}}}, filename: "licenses.csv", wantErr: false},
+		{name: "with_project_and_version", results: map[string]*domain.Analysis{"pkg:npm/example@1.0.0": {OriginalPURL: "pkg:npm/example", EffectivePURL: "pkg:npm/example@1.0.0", ProjectLicense: domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX}, RequestedVersionLicense: domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevVersionSPDX}}}, filename: "licenses.csv", wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -63,7 +63,7 @@ func main() {
       fmt.Printf("Lifecycle: %s (%s)\n", lr.Label, lr.Reason)
     }
 
-    // Project-level license (single ResolvedLicense)
+    // Project-level license (single ResolvedLicense, SPDX expression form)
     proj := a.ProjectLicense
     switch {
     case proj.IsZero():
@@ -71,7 +71,12 @@ func main() {
     case proj.IsNonStandard():
       fmt.Printf("Project License: non-standard raw=%q source=%s\n", proj.Raw, proj.Source)
     default:
-      fmt.Printf("Project License: SPDX=%s raw=%q source=%s\n", proj.Identifier, proj.Raw, proj.Source)
+      fmt.Printf("Project License: %s raw=%q source=%s\n", proj.Expression, proj.Raw, proj.Source)
+    }
+
+    // Requested-version license (single SPDX expression — ADR-0019)
+    if vl := a.RequestedVersionLicense; !vl.IsZero() {
+      fmt.Printf("Version License: %s raw=%q source=%s\n", vl.Expression, vl.Raw, vl.Source)
     }
 
     // Simple health rule (customize freely in your app)
@@ -121,7 +126,26 @@ Thin wrappers for fetching raw data without running the full evaluation pipeline
 - `IsGitHubURL(rawURL)` — Check whether a URL points to a GitHub repository
 - `ParseGitHubURL(rawURL)` — Extract owner and repo from a GitHub URL
 
-**Note**: `ResolvedLicense` (used by `Analysis.ProjectLicense` and `Analysis.RequestedVersionLicenses`) is defined in `internal/domain/analysis` and is not re-exported from `pkg/uzomuzo`. You can call its methods (e.g., `IsZero()`, `IsNonStandard()`) through the field, but cannot reference the type directly in your own signatures.
+**Note**: `ResolvedLicense` (used by `Analysis.ProjectLicense` and
+`Analysis.RequestedVersionLicense` — singular as of ADR-0019) is defined
+in `internal/domain/analysis` and re-exported from `pkg/uzomuzo` as a type
+alias. Read `r.Expression` for the canonical SPDX expression string,
+`r.Raw` for the upstream original (audit), and `r.Source` for provenance.
+Use `r.IsZero()` / `r.IsNonStandard()` helpers instead of branching on
+`Source` constants directly. To inspect leaves of a compound expression:
+
+```go
+import "github.com/future-architect/uzomuzo-oss/pkg/uzomuzo" // (or licenses package)
+parsed := licenses.ParseExpression(a.ProjectLicense.Expression)
+for _, leaf := range parsed.Leaves() {
+  // leaf.Identifier is the canonical SPDX ID; leaf.Exception, leaf.OrLater are populated
+}
+```
+
+> **BREAKING (post-#360)**: `ResolvedLicense.Identifier` and
+> `ResolvedLicense.IsSPDX` were removed. `Analysis.RequestedVersionLicenses
+> []ResolvedLicense` was singularized to `Analysis.RequestedVersionLicense
+> ResolvedLicense`. See [ADR-0019](adr/0019-license-expression-of-truth.md).
 
 ## Analysis Type: Key Fields / Methods
 

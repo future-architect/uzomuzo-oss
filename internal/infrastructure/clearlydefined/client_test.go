@@ -104,10 +104,9 @@ func TestFetchLicenses_SingleSPDX(t *testing.T) {
 		t.Fatalf("got %d licenses, want 1", len(lics))
 	}
 	want := domain.ResolvedLicense{
-		Identifier: "Apache-2.0",
+		Expression: "Apache-2.0",
 		Source:     domain.LicenseSourceClearlyDefinedSPDX,
 		Raw:        "Apache-2.0",
-		IsSPDX:     true,
 	}
 	if lics[0] != want {
 		t.Errorf("got %+v, want %+v", lics[0], want)
@@ -131,17 +130,14 @@ func TestFetchLicenses_SPDXExpression(t *testing.T) {
 	if len(lics) != 2 {
 		t.Fatalf("got %d licenses, want 2", len(lics))
 	}
-	wantIDs := []string{"CDDL-1.1", "GPL-2.0-only"}
+	wantExprs := []string{"CDDL-1.1", "GPL-2.0-only"}
 	wantRaws := []string{"CDDL-1.1", "GPL-2.0-only"} // per-leaf, NOT the full expression
 	for i, lic := range lics {
-		if lic.Identifier != wantIDs[i] {
-			t.Errorf("license[%d].Identifier = %q, want %q", i, lic.Identifier, wantIDs[i])
+		if lic.Expression != wantExprs[i] {
+			t.Errorf("license[%d].Expression = %q, want %q", i, lic.Expression, wantExprs[i])
 		}
 		if lic.Source != domain.LicenseSourceClearlyDefinedSPDX {
 			t.Errorf("license[%d].Source = %q, want %q", i, lic.Source, domain.LicenseSourceClearlyDefinedSPDX)
-		}
-		if !lic.IsSPDX {
-			t.Errorf("license[%d].IsSPDX = false, want true", i)
 		}
 		if lic.Raw != wantRaws[i] {
 			t.Errorf("license[%d].Raw = %q, want per-leaf %q", i, lic.Raw, wantRaws[i])
@@ -166,11 +162,8 @@ func TestFetchLicenses_LicenseRefScancodeIsNonStandard(t *testing.T) {
 	if lics[0].Source != domain.LicenseSourceClearlyDefinedNonStandard {
 		t.Errorf("Source = %q, want %q", lics[0].Source, domain.LicenseSourceClearlyDefinedNonStandard)
 	}
-	if lics[0].IsSPDX {
-		t.Errorf("IsSPDX = true; LicenseRef-scancode-* must classify as non-SPDX")
-	}
-	if lics[0].Identifier != "" {
-		t.Errorf("Identifier = %q, want empty for non-SPDX", lics[0].Identifier)
+	if lics[0].Expression != "" {
+		t.Errorf("Expression = %q, want empty; LicenseRef-scancode-* must classify as non-SPDX", lics[0].Expression)
 	}
 }
 
@@ -403,10 +396,10 @@ func TestFetchLicenses_SPDXExpressionAND(t *testing.T) {
 	if err != nil || !found || len(lics) != 2 {
 		t.Fatalf("got found=%v err=%v len=%d, want 2 SPDX leaves", found, err, len(lics))
 	}
-	wantIDs := []string{"Apache-2.0", "MIT"}
+	wantExprs := []string{"Apache-2.0", "MIT"}
 	for i, lic := range lics {
-		if lic.Identifier != wantIDs[i] || lic.Source != domain.LicenseSourceClearlyDefinedSPDX || !lic.IsSPDX {
-			t.Errorf("license[%d] = %+v, want SPDX %q", i, lic, wantIDs[i])
+		if lic.Expression != wantExprs[i] || lic.Source != domain.LicenseSourceClearlyDefinedSPDX {
+			t.Errorf("license[%d] = %+v, want SPDX %q", i, lic, wantExprs[i])
 		}
 	}
 }
@@ -429,14 +422,12 @@ func TestFetchLicenses_SPDXWithException(t *testing.T) {
 		t.Fatalf("got %d licenses, want 1", len(lics))
 	}
 	lic := lics[0]
-	if lic.Identifier != "GPL-2.0-only" {
-		t.Errorf("Identifier = %q, want %q", lic.Identifier, "GPL-2.0-only")
+	wantExpr := "GPL-2.0-only WITH Classpath-exception-2.0"
+	if lic.Expression != wantExpr {
+		t.Errorf("Expression = %q, want %q (must include WITH clause)", lic.Expression, wantExpr)
 	}
 	if lic.Source != domain.LicenseSourceClearlyDefinedSPDX {
 		t.Errorf("Source = %q, want %q", lic.Source, domain.LicenseSourceClearlyDefinedSPDX)
-	}
-	if !lic.IsSPDX {
-		t.Error("IsSPDX = false, want true")
 	}
 	// Raw must preserve the full WITH operand so downstream consumers retain
 	// the exception clause for display and compliance purposes.
@@ -459,11 +450,8 @@ func TestFetchLicenses_ScancodeInternalNameNonStandard(t *testing.T) {
 	if lics[0].Source != domain.LicenseSourceClearlyDefinedNonStandard {
 		t.Errorf("Source = %q, want non-standard", lics[0].Source)
 	}
-	if lics[0].IsSPDX {
-		t.Errorf("IsSPDX = true; scancode-internal name (raw=%q) must classify as non-SPDX", lics[0].Raw)
-	}
-	if lics[0].Identifier != "" {
-		t.Errorf("Identifier = %q, want empty", lics[0].Identifier)
+	if lics[0].Expression != "" {
+		t.Errorf("Expression = %q, want empty; scancode-internal name (raw=%q) must classify as non-SPDX", lics[0].Expression, lics[0].Raw)
 	}
 }
 
