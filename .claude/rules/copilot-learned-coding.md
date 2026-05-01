@@ -62,6 +62,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Unique Map Keys for Multi-Value Sentinels**: When using sentinel keys in a map to track special-case entries (e.g., blank imports, dot imports), ensure each entry gets a unique key (e.g., sentinel prefix + distinguishing suffix like the import path). Shared sentinel keys cause later entries to silently overwrite earlier ones, losing data.
 - **Use Framework-Provided Parsed Arguments for Subprocess Delegation**: When delegating to a subprocess from a CLI framework handler, use the framework's parsed argument accessors (e.g., `cmd.Args().Slice()`) instead of the process-global `os.Args`. Global args may not match the framework's routing and break when the CLI is invoked programmatically.
 - **Classify from Raw Values Before Rounding**: When deriving a category or label from a computed numeric value (e.g., score → difficulty bucket), apply the classification logic to the raw value before any rounding. Rounding first can push boundary values into the wrong bucket.
+- **Match Write Guard Quantifiers to Write Semantics**: When a conditional guard protects a field write, the guard's effective quantifier (any/all/only) must match the write's semantic claim. An "any item has X" flag (e.g., `hasNoAssertion`) guarding a branch that writes `Expression="NOASSERTION"` claiming "only X inputs present" will silently misrepresent mixed inputs. Similarly, when a replacement guard checks for presence of any high-quality entry, verify the replacement is a net improvement — "has any SPDX" does not guarantee "strictly higher quality" when non-standard entries are also present.
 - **Validate Generated Strings Against Target-Language Syntax**: When programmatically generating identifiers, import paths, or package names for a target language, validate each candidate against that language's syntax rules before emitting it. Validation must cover the full identifier grammar — not just invalid characters but also positional rules (e.g., Java identifiers cannot start with a digit) and compound structures (e.g., dot-separated package names must validate each segment independently). For example, Maven artifactIds often contain hyphens (`commons-lang3`) and groupIds can too (`commons-io`), which are invalid in Java package names — emitting them verbatim produces candidates that can never match real imports. Similarly, error hints and suggestions must use terminology appropriate to the detected language/ecosystem, not hardcode references to a single ecosystem (e.g., `go.mod`) when the tool supports multiple languages.
 - **Collect All Matches in Collector Functions — No Early Return**: When a function iterates over children/items to collect all matching results (e.g., AST bindings, search hits), append each match to a slice and return the slice after the loop. Do not `return` on the first match — early return drops remaining items. This applies whenever the caller needs *all* matches, not just the first.
 - **Continue AST Ancestor Walks Past Non-Matching Nodes**: When walking AST ancestors to find a guarding condition (e.g., `if TYPE_CHECKING:` blocks), continue past intermediate nodes of the same type that don't match the target condition. Returning early on the first type match (e.g., the first `if_statement`) misses the actual guard when the import is nested inside inner conditionals.
@@ -113,11 +114,6 @@ pending_patterns:
     pr: 366
     file: "internal/domain/licenses/expression_normalize.go"
     date: "2026-04-30"
-  - category: "defensive-coding"
-    summary: "When a conditional replacement function overwrites low-quality data (non-SPDX) with a new source, guard the write on the new source being strictly higher quality (e.g., contains at least one SPDX entry) — replacing non-standard with non-standard is a no-op that wastes provenance"
-    pr: 345
-    file: "internal/infrastructure/integration/populate_manifest_license.go"
-    date: "2026-04-29"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
@@ -143,11 +139,6 @@ pending_patterns:
     pr: 346
     file: "internal/infrastructure/treesitter/analyzer.go"
     date: "2026-04-29"
-  - category: "defensive-coding"
-    summary: "When a conditional chain branches on field state (zero / non-standard / SPDX), ensure sentinel values (e.g., NOASSERTION) get their own branch instead of falling through to a non-standard or zero fallback — missing sentinel branches lose 'upstream refused to assert' semantics by writing Expression=\"\" with Raw=\"NOASSERTION\""
-    pr: 366
-    file: "internal/infrastructure/integration/populate_manifest_license.go"
-    date: "2026-04-30"
   - category: "testing"
     summary: "When generating time-based test fixtures with coarse-grained formatters (e.g., http.TimeFormat at 1-second granularity), truncate to the format boundary and add enough offset (e.g., 2s) so the formatted value is deterministically in the expected range — sub-granularity offsets (50ms) can collapse to the current or past second"
     pr: 359
@@ -176,6 +167,7 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #345, #366 — match write guard quantifiers to write semantics: an "any" flag guarding an "all/only" write misrepresents mixed inputs; verify replacement is a net improvement)
   # testing (PR #366): already covered by "Scope Test Assertions to Specific Output Regions" in testing-performance + "Use Spec-Compliant Parsers for Standardized Formats" — use encoding/csv to parse CSV output and assert exact cells by header name instead of fragile strings.Contains on boolean patterns that match the wrong column
   # defensive-coding (PR #338): stale pending entry removed — already promoted as "Sanitize Dynamic Content in GitHub Actions Workflow Commands" rule
   # testing (PR #318): stale pending entry removed — already promoted as "Split Nil Guards from Value Assertions in Test Failure Branches" rule in testing-performance.instructions.md
