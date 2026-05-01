@@ -1,6 +1,7 @@
 package csv
 
 import (
+	"encoding/csv"
 	"os"
 	"strings"
 	"testing"
@@ -82,7 +83,7 @@ func TestExportLicenses_NOASSERTION_Scenarios(t *testing.T) {
 	}{
 		{name: "noassertion_both", project: noassert, version: noassert, wantScenario: "noassertion_both", wantAllMissing: "true"},
 		{name: "noassertion_project_only", project: noassert, version: mit, wantScenario: "noassertion_project", wantAllMissing: "false"},
-		{name: "noassertion_version_only", project: mit, version: noassert, wantScenario: "noassertion_version", wantAllMissing: "true"},
+		{name: "noassertion_version_only", project: mit, version: noassert, wantScenario: "noassertion_version", wantAllMissing: "false"},
 	}
 
 	for _, tc := range cases {
@@ -102,19 +103,39 @@ func TestExportLicenses_NOASSERTION_Scenarios(t *testing.T) {
 			if err := ExportLicenses(map[string]*domain.Analysis{"pkg:npm/example": an}, file.Name()); err != nil {
 				t.Fatalf("ExportLicenses() error = %v", err)
 			}
-			data, err := os.ReadFile(file.Name())
+			f, err := os.Open(file.Name())
 			if err != nil {
-				t.Fatalf("read exported: %v", err)
+				t.Fatalf("open exported: %v", err)
 			}
-			content := string(data)
-			if !strings.Contains(content, tc.wantScenario) {
-				t.Errorf("expected scenario %q in CSV, got:\n%s", tc.wantScenario, content)
+			defer f.Close() //nolint:errcheck // test file, best-effort cleanup
+			records, err := csv.NewReader(f).ReadAll()
+			if err != nil {
+				t.Fatalf("parse CSV: %v", err)
 			}
-			if !strings.Contains(content, tc.wantAllMissing+",") {
-				// licenses_all_missing_or_nonstandard is a boolean cell — assert
-				// it appears followed by a comma so we don't accidentally match
-				// the same value in another column.
-				t.Errorf("expected licenses_all_missing_or_nonstandard=%q, got:\n%s", tc.wantAllMissing, content)
+			if len(records) < 2 {
+				t.Fatalf("expected header + data row, got %d rows", len(records))
+			}
+			headerRow := records[0]
+			dataRow := records[1]
+
+			colIndex := func(name string) int {
+				for i, h := range headerRow {
+					if h == name {
+						return i
+					}
+				}
+				t.Fatalf("column %q not found in headers", name)
+				return -1
+			}
+
+			scenarioIdx := colIndex("license_resolution_scenario")
+			if dataRow[scenarioIdx] != tc.wantScenario {
+				t.Errorf("license_resolution_scenario: got %q, want %q", dataRow[scenarioIdx], tc.wantScenario)
+			}
+
+			allMissingIdx := colIndex("licenses_all_missing_or_nonstandard")
+			if dataRow[allMissingIdx] != tc.wantAllMissing {
+				t.Errorf("licenses_all_missing_or_nonstandard: got %q, want %q", dataRow[allMissingIdx], tc.wantAllMissing)
 			}
 		})
 	}
