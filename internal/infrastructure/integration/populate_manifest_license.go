@@ -233,10 +233,17 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 			// Source returned only NOASSERTION — preserve the sentinel so
 			// downstream consumers can distinguish "upstream refused to assert"
 			// from "no data at all".
+			noAssertionSource := lics[0].Source
+			for _, lic := range lics {
+				if lic.Expression == "NOASSERTION" {
+					noAssertionSource = lic.Source
+					break
+				}
+			}
 			a.RequestedVersionLicense = domain.ResolvedLicense{
 				Expression: "NOASSERTION",
 				Raw:        strings.Join(rawParts, " "+licenseORSeparator+" "),
-				Source:     lics[0].Source,
+				Source:     noAssertionSource,
 			}
 			wrote = true
 		} else if a.RequestedVersionLicense.IsZero() && len(rawParts) > 0 {

@@ -7,7 +7,7 @@ import (
 )
 
 // TestPromoteProjectLicenseFromVersion exercises the leaf-vs-compound rule
-// from ADR-0018: only single-leaf version expressions are promoted to
+// from ADR-0019: only single-leaf version expressions are promoted to
 // project-level. Compound expressions ("MIT OR Apache-2.0") are not safe
 // project-level claims and must not promote.
 func TestPromoteProjectLicenseFromVersion(t *testing.T) {

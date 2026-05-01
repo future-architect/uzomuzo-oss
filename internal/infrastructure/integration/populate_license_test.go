@@ -46,7 +46,7 @@ func TestPopulateLicenses_DerivedVersionPromotion(t *testing.T) {
 	}
 }
 
-// TestPopulateLicenses_PromotionSkippedOnCompound pins the ADR-0018 rule
+// TestPopulateLicenses_PromotionSkippedOnCompound pins the ADR-0019 rule
 // that compound version expressions ("MIT OR Apache-2.0") are NOT promoted
 // to project-level — a project's own LICENSE file may pick one leaf in ways
 // the upstream metadata does not capture, so a compound at project-level
