@@ -74,7 +74,7 @@ func main() {
       fmt.Printf("Project License: %s raw=%q source=%s\n", proj.Expression, proj.Raw, proj.Source)
     }
 
-    // Requested-version license (single SPDX expression — ADR-0018)
+    // Requested-version license (single SPDX expression — ADR-0019)
     if vl := a.RequestedVersionLicense; !vl.IsZero() {
       fmt.Printf("Version License: %s raw=%q source=%s\n", vl.Expression, vl.Raw, vl.Source)
     }
@@ -127,7 +127,7 @@ Thin wrappers for fetching raw data without running the full evaluation pipeline
 - `ParseGitHubURL(rawURL)` — Extract owner and repo from a GitHub URL
 
 **Note**: `ResolvedLicense` (used by `Analysis.ProjectLicense` and
-`Analysis.RequestedVersionLicense` — singular as of ADR-0018) is defined
+`Analysis.RequestedVersionLicense` — singular as of ADR-0019) is defined
 in `internal/domain/analysis` and re-exported from `pkg/uzomuzo` as a type
 alias. Read `r.Expression` for the canonical SPDX expression string,
 `r.Raw` for the upstream original (audit), and `r.Source` for provenance.
