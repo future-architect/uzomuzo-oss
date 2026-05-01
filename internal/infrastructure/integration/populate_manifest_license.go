@@ -174,6 +174,7 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 	rawParts := make([]string, 0, len(lics))
 	var firstSPDX *domain.ResolvedLicense
 	hasNoAssertion := false
+	hasNonStandard := false
 	for i := range lics {
 		if lics[i].IsUsableSPDX() {
 			spdxExprs = append(spdxExprs, lics[i].Expression)
@@ -182,6 +183,8 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 			}
 		} else if lics[i].Expression == "NOASSERTION" {
 			hasNoAssertion = true
+		} else if !lics[i].IsZero() {
+			hasNonStandard = true
 		}
 		if lics[i].Raw != "" {
 			rawParts = append(rawParts, lics[i].Raw)
@@ -229,10 +232,10 @@ func applyManifestLicenses(a *domain.Analysis, lics []domain.ResolvedLicense) bo
 				Source:     firstSPDX.Source,
 			}
 			wrote = true
-		} else if hasNoAssertion && len(spdxExprs) == 0 && a.RequestedVersionLicense.IsZero() {
-			// Source returned only NOASSERTION — preserve the sentinel so
-			// downstream consumers can distinguish "upstream refused to assert"
-			// from "no data at all".
+		} else if hasNoAssertion && !hasNonStandard && len(spdxExprs) == 0 && a.RequestedVersionLicense.IsZero() {
+			// Every non-zero entry is NOASSERTION (no non-standard entries
+			// mixed in) — preserve the sentinel so downstream consumers can
+			// distinguish "upstream refused to assert" from "no data at all".
 			noAssertionSource := lics[0].Source
 			for _, lic := range lics {
 				if lic.Expression == "NOASSERTION" {

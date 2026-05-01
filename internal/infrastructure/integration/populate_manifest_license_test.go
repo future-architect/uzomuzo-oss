@@ -168,6 +168,16 @@ func TestApplyManifestLicenses(t *testing.T) {
 			wantProjectSrc: domain.LicenseSourceMavenPOMSPDX,
 			wantVersionExp: "NOASSERTION",
 		},
+		{
+			name: "noassertion_mixed_with_nonstandard_falls_through_to_raw",
+			manifest: []domain.ResolvedLicense{
+				nonStd("Acme Internal", domain.LicenseSourceMavenPOMNonStandard),
+				{Expression: "NOASSERTION", Source: domain.LicenseSourceMavenPOMSPDX, Raw: "NOASSERTION"},
+			},
+			wantProjectExp: "",
+			wantProjectSrc: domain.LicenseSourceMavenPOMNonStandard,
+			wantVersionExp: "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
