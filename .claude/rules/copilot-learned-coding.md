@@ -119,6 +119,11 @@ pending_patterns:
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
+  - category: "ci-path-filters"
+    summary: "Use **/*.ext (not **.ext) in GitHub Actions path filters — ** must be a standalone path segment (followed by /) to reliably match across directory boundaries; **.ext is non-standard and may behave like *.ext in some glob implementations"
+    pr: 370
+    file: ".github/workflows/go-lint.yml"
+    date: "2026-05-02"
   - category: "defensive-coding"
     summary: "When a structured type has a renderer that composes all sub-components (e.g., ExprLicense.String() includes Identifier + OrLater '+' + WITH exception), use the renderer instead of a single field (e.g., leaf.Identifier) when the full representation is needed — partial extraction silently drops components the renderer handles"
     pr: 366
@@ -139,6 +144,11 @@ pending_patterns:
     pr: 346
     file: "internal/infrastructure/treesitter/analyzer.go"
     date: "2026-04-29"
+  - category: "dependency-pinning"
+    summary: "Pin CI tool binary versions explicitly (e.g., golangci-lint version: '2.2.1') — not just the action SHA. version: latest makes CI non-deterministic; new releases can introduce checks or behavior changes between runs on the same commit"
+    pr: 370
+    file: ".github/workflows/go-lint.yml"
+    date: "2026-05-02"
   - category: "testing"
     summary: "When generating time-based test fixtures with coarse-grained formatters (e.g., http.TimeFormat at 1-second granularity), truncate to the format boundary and add enough offset (e.g., 2s) so the formatted value is deterministically in the expected range — sub-granularity offsets (50ms) can collapse to the current or past second"
     pr: 359
@@ -154,6 +164,11 @@ pending_patterns:
     pr: 359
     file: "internal/infrastructure/httpclient/client.go"
     date: "2026-04-29"
+  - category: "ci-permissions"
+    summary: "Verify that GitHub Actions reporter actions (e.g., reviewdog with github-pr-check) have the permissions they need — github-pr-check reporter requires checks: write to publish annotations; missing permissions cause silent failures or degraded reporting"
+    pr: 370
+    file: ".github/workflows/lint.yml"
+    date: "2026-05-02"
   - category: "defensive-coding"
     summary: "Use time.NewTimer + Stop/drain instead of time.After in select with ctx.Done() to prevent timer accumulation during long cancellable waits"
     pr: 359
