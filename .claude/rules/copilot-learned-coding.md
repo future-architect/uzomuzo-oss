@@ -25,6 +25,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **CI Job Gating — Key on Outputs, Not Job Result**: When a CI job intentionally exits non-zero for a primary use case (e.g., policy violations), downstream jobs must not gate on `needs.<job>.result == 'success'`. Use explicit output variables (exit codes, flags) to control downstream behavior, so jobs run in the scenarios they are designed for.
 - **Remove Dead Configuration Inputs**: When a configuration surface (CLI flag, workflow input, env var) is no longer honored by the implementation (e.g., hardcoded internally), remove it entirely rather than leaving a misleading interface. A visible input that silently does nothing is worse than no input at all.
 - **CI Permissions Documentation — Verify Inheritance**: When documenting GitHub Actions job permissions, verify each job's actual `permissions:` block in the workflow file. Jobs without an explicit `permissions:` key inherit the workflow-level permissions — do not describe them as having "no permissions" or "no extra permissions". State what each job actually has, including inherited defaults.
+- **Attribute Control Claims to the Correct Mechanism**: When a comment asserts that a specific configuration, permission, or flag is "required for" or "controls" a behavior, verify the claim against the actual code path. Do not attribute behavior to a nearby-but-uninvolved mechanism (e.g., claiming `permissions:` block is "required for" `gh` commands when a PAT env var provides the effective auth; claiming a config field controls retries for an API where a different mechanism governs the retry decision). Misattributed control claims cause maintainers to debug or tune the wrong component.
 - **Lazy I/O During Format Detection**: When probing a file's format, prefer path-based checks first, then read only a small prefix for content-based heuristics. Read the full file only after confirming the format to avoid wasted I/O on non-matching files (e.g., reading an entire docker-compose.yml just to check if it's a GitHub Actions workflow).
 - **Deterministic Output from Non-Deterministic Sources**: When building ordered output from non-deterministic sources (Go map iteration, goroutine-collected results, API directory listings), sort the data before further processing. This applies to rendered text, BFS seed queues, and any "first-seen wins" algorithm where input order determines provenance.
 - **Post-Filter Fuzzy Search Results**: When using search APIs that perform fuzzy or word-level matching (e.g., GitHub issue search), add a post-filter to verify exact matches before acting on results. Fuzzy matches can cause false-positive deduplication or incorrect state transitions.
@@ -109,11 +110,11 @@ pending_patterns:
     pr: 370
     file: ".github/workflows/go-lint.yml"
     date: "2026-05-02"
-  - category: "comment-doc-drift"
-    summary: "Doc comments must match implementation boundary conditions — RetryConfig said retryDecider controls 429 retries (it doesn't); rateLimitBackoff comment said 'negative' for a zero-inclusive guard (should say 'non-positive')"
-    pr: 359
-    file: "internal/infrastructure/httpclient/client.go"
-    date: "2026-04-29"
+  - category: "defensive-coding"
+    summary: "Use quoted heredocs (<<'DELIM') for literal text bodies in CI workflows to prevent accidental parameter expansion and command substitution; inject dynamic values (markers, variables) via append after the heredoc rather than embedding them in an expansion-enabled body"
+    pr: 372
+    file: ".github/workflows/copilot-clean-label.yml"
+    date: "2026-05-02"
   - category: "defensive-coding"
     summary: "Guard time.Duration arithmetic against integer overflow — use strconv.ParseInt, reject values exceeding math.MaxInt64/time.Second, and do not clamp to an arbitrary policy constant (let the caller's configured cap decide)"
     pr: 359
@@ -163,6 +164,7 @@ pending_patterns:
 
 <!-- Promotion history (kept for audit trail):
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #345, #366 — use dedicated predicates and full renderers for sentinel/composed values: IsUsableSPDX() not ad-hoc checks; canonicalize sentinel casing; use type renderer not single field; attribute provenance to correct resolution branch)
+  # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #359, #372 — attribute control claims to the correct mechanism: do not claim a permission/config/flag controls a behavior when a different mechanism is the effective authority)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #345, #366 — match write guard quantifiers to write semantics: an "any" flag guarding an "all/only" write misrepresents mixed inputs; verify replacement is a net improvement)
   # testing (PR #366): already covered by "Scope Test Assertions to Specific Output Regions" in testing-performance + "Use Spec-Compliant Parsers for Standardized Formats" — use encoding/csv to parse CSV output and assert exact cells by header name instead of fragile strings.Contains on boolean patterns that match the wrong column
   # defensive-coding (PR #338): stale pending entry removed — already promoted as "Sanitize Dynamic Content in GitHub Actions Workflow Commands" rule
