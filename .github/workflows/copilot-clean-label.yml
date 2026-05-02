@@ -2,7 +2,7 @@ name: Copilot Clean Label
 
 # Apply the `copilot-clean` label to a PR when its latest Copilot review on the
 # current HEAD reports no (new) comments, matching `generated no( new)? comments`
-# (case-insensitive). Remove the label otherwise. Driven by cron (every 10 min)
+# (case-insensitive). Remove the label otherwise. Driven by cron (every 5 min)
 # because `pull_request_review` (submitted) does not fire for Copilot since the
 # 2026-03-05 agentic-architecture migration. The `synchronize` event handles
 # instant label removal on new commits.
@@ -13,7 +13,7 @@ name: Copilot Clean Label
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/5 * * * *'
   pull_request:
     types: [opened, reopened, synchronize]
   workflow_dispatch:
@@ -50,6 +50,10 @@ jobs:
     timeout-minutes: 5
     permissions:
       pull-requests: write
+      # Required for `gh pr edit --add-label/--remove-label` (label edits route
+      # through the Issues API) and for `gh pr comment` (PR comments are issue
+      # comments at the API level), used by the cron-poll @claude trigger fallback.
+      issues: write
     env:
       # PAT (kotakanbe), not GITHUB_TOKEN: GraphQL `requestReviews` for the
       # Copilot bot silently no-ops under GITHUB_TOKEN (200 OK with data, no
@@ -76,9 +80,15 @@ jobs:
       CLEAN_PHRASE_ERE: 'generated no( new)? comments'
       # Stuck-PR detector threshold. If the latest `review_requested` event
       # for Copilot is older than this (and HEAD has no Copilot review yet),
-      # re-fire the mutation. 5 min sits comfortably outside the observed
-      # short-lived dedup window when paired with the cron's 10 min period.
-      STUCK_THRESHOLD_MIN: '5'
+      # re-fire the mutation.
+      # Effective refire cadence with cron 5 min + threshold 7 min:
+      #   T+5: age=5 < 7 -> skip; T+10: age=10 >= 7 -> fire (timestamp=10);
+      #   T+15: age=5 < 7 -> skip; T+20: age=10 >= 7 -> fire ...
+      # = refire every other cron cycle (~10 min effective interval).
+      # This matches the prior cron 10 min + threshold 5 min behavior, so the
+      # absolute refire pressure on Copilot is unchanged; only the @claude
+      # trigger latency is halved.
+      STUCK_THRESHOLD_MIN: '7'
     steps:
       - name: Resolve target PR list
         env:
@@ -127,8 +137,12 @@ jobs:
             echo "::group::PR #$pr"
 
             # Single fetch of PR metadata: author + head SHA + labels + node_id.
-            if ! pr_json=$(gh api "repos/$REPO/pulls/$pr" 2>&1); then
-              echo "::warning::PR #$pr: failed to fetch PR metadata: $pr_json"
+            # Capture stdout only; gh writes errors to stderr which lands in
+            # the workflow log directly, and merging stderr into the captured
+            # variable would poison downstream jq parsing on success paths
+            # that emit non-fatal warnings (rate-limit notices, etc.).
+            if ! pr_json=$(gh api "repos/$REPO/pulls/$pr"); then
+              echo "::warning::PR #$pr: failed to fetch PR metadata"
               echo "::endgroup::"
               continue
             fi
@@ -153,8 +167,8 @@ jobs:
             # Aggregate paginated reviews into one array, then sort+last.
             # `gh api --paginate --jq` evaluates per-page, which would return
             # the per-page last instead of the global last.
-            if ! reviews_json=$(gh api --paginate "repos/$REPO/pulls/$pr/reviews" 2>&1); then
-              echo "::warning::PR #$pr: failed to fetch reviews: $reviews_json"
+            if ! reviews_json=$(gh api --paginate "repos/$REPO/pulls/$pr/reviews"); then
+              echo "::warning::PR #$pr: failed to fetch reviews"
               echo "::endgroup::"
               continue
             fi
@@ -210,6 +224,98 @@ jobs:
                 else
                   echo "no change (already unlabeled, review has comments)"
                 fi
+
+                # Cron-poll fallback for the @claude auto-fix trigger.
+                # `pull_request_review_comment` events are unreliable for the
+                # Copilot bot (agentic-architecture event suppression).
+                # To guarantee Claude is invoked even when those events do not
+                # fire, post the @claude trigger here when:
+                #   - Copilot's latest review on HEAD has actual inline comments
+                #   - AND we have not already posted a trigger for this HEAD
+                #
+                # MARKER CONTRACT (also implemented by copilot-review-fix.yml):
+                #   format:    <!-- copilot-fix-trigger:<HEAD_SHA> -->
+                #   placement: last line of the @claude comment body
+                #   author:    posted via PAT (kotakanbe), so the dedup query
+                #              scopes to .user.login == "kotakanbe"
+                #   prefix:    body starts with "@claude" so a quoted marker
+                #              in human prose does not produce a false match
+                # Marker auto-invalidates on push (new HEAD = new marker key).
+                # If you change ANY part of this contract, update both files.
+
+                # Verify the latest Copilot review has actual inline comments,
+                # not just a summary text change (which also produces dirty).
+                review_id=$(printf '%s' "$latest" | jq -r '.id')
+                has_review_comments=1
+                if [ -n "$review_id" ] && [ "$review_id" != "null" ]; then
+                  if ! rc_json=$(gh api "repos/$REPO/pulls/$pr/reviews/$review_id/comments"); then
+                    echo "::warning::PR #$pr: failed to verify review comments — proceeding with trigger"
+                  else
+                    rc_count=$(printf '%s' "$rc_json" | jq 'length' 2>/dev/null || echo 1)
+                    case "$rc_count" in
+                      ''|*[!0-9]*) rc_count=1 ;;
+                    esac
+                    if [ "$rc_count" = "0" ]; then
+                      echo "Copilot review on HEAD has no inline comments (summary-only) — skip @claude trigger"
+                      has_review_comments=0
+                    else
+                      echo "Copilot review on HEAD has $rc_count inline comment(s)"
+                    fi
+                  fi
+                fi
+
+                if [ "$has_review_comments" = "1" ]; then
+                  if [ -z "$head_sha" ] || [ "${#head_sha}" -lt 40 ]; then
+                    echo "::warning::PR #$pr: missing/short head_sha '$head_sha' — skip @claude trigger"
+                  else
+                    trigger_marker="<!-- copilot-fix-trigger:$head_sha -->"
+                    # Capture stdout only; on failure gh writes diagnostics to
+                    # stderr which lands in the workflow log (visible without
+                    # parsing). `set -e` is active but all fallible commands use
+                    # `if ! ...; then` guards so failures warn-and-continue.
+                    # On dedup fetch failure, proceed to post (worst case is a
+                    # duplicate, which claude.yml mitigates via cancel-in-progress).
+                    already_triggered=0
+                    if ! issue_comments=$(gh api --paginate "repos/$REPO/issues/$pr/comments"); then
+                      echo "::warning::PR #$pr: failed to fetch issue comments for trigger dedup — proceeding with post"
+                    else
+                      # Null-safe: comments authored by deleted/redacted users
+                      # may have body == null which would crash `contains()`.
+                      # Author + prefix scope: only kotakanbe-authored comments
+                      # that begin with "@claude" count, eliminating the
+                      # quoted-marker-in-prose false positive.
+                      already_triggered=$(printf '%s' "$issue_comments" | jq -s -r --arg m "$trigger_marker" '
+                        add // []
+                        | [.[] | select(
+                            .user.login == "kotakanbe"
+                            and .body != null
+                            and (.body | startswith("@claude"))
+                            and (.body | contains($m))
+                          )] | length
+                      ' 2>/dev/null || echo 0)
+                      case "$already_triggered" in
+                        ''|*[!0-9]*) already_triggered=0 ;;
+                      esac
+                    fi
+                    if [ "$already_triggered" = "0" ]; then
+                      echo "Posting @claude trigger for HEAD $head_sha (cron fallback)"
+                      if ! gh pr comment "$pr" --repo "$REPO" --body "$(cat <<BODY
+          @claude Follow the procedure in \`.github/prompts/review.prompt.md\` with \`--copilot-only\` mode for this PR.
+
+          Phase 2: Resolve all unresolved Copilot review threads (discover → classify → fix → build/test/lint → commit/push → reply/resolve).
+          Phase 3: Detect recurring patterns from FIX-classified comments, propose and apply coding rules to \`.github/instructions/\`, then run \`make sync-instructions\`.
+          Phase 4: Post a summary comment on this PR.
+
+          $trigger_marker
+          BODY
+          )"; then
+                        echo "::warning::PR #$pr: failed to post @claude trigger comment"
+                      fi
+                    else
+                      echo "trigger already posted for HEAD $head_sha (count=$already_triggered) — skip"
+                    fi
+                  fi
+                fi
                 ;;
               pending)
                 # No review yet, or latest review is for an older HEAD.
@@ -229,8 +335,38 @@ jobs:
                 # pinged recently. Recovers from cases where the push-event
                 # mutation in copilot-rereview-on-push.yml was silently
                 # deduped (200 OK but no `review_requested` event).
-                if ! timeline=$(gh api --paginate "repos/$REPO/issues/$pr/timeline" 2>&1); then
-                  echo "::warning::PR #$pr: failed to fetch timeline for stuck detection: $timeline"
+                #
+                # Empirically observed (in the sibling vuls-reach repo): a
+                # plain refire of `requestReviews` against a bot that is already
+                # on the requested-reviewer list is *also* deduped — the
+                # GraphQL mutation succeeds but no `review_requested`
+                # timeline event fires and Copilot does not re-review.
+                # So the refire below first clears Copilot from the
+                # reviewer slot via GraphQL `requestReviews(union:false)`
+                # (preserving humans + teams; bots are excluded by
+                # passing `botIds:[]`), then re-adds Copilot via a
+                # second GraphQL `requestReviews` call. The remove +
+                # re-add forces GitHub to consider it a fresh request,
+                # which fires the event and wakes Copilot.
+                #
+                # An earlier draft of this bypass used REST `DELETE
+                # /pulls/{n}/requested_reviewers` for step 1, but the
+                # REST endpoint only addresses User reviewers — Bot
+                # reviewers (Copilot) live in a separate request slot
+                # the REST endpoint cannot see, so the DELETE always
+                # 422'd and the subsequent re-add was still deduped.
+                # GraphQL is the only API that can manipulate bot
+                # reviewer slots.
+                #
+                # The push-event path (copilot-rereview-on-push.yml) is
+                # intentionally NOT modified: it tries the cheap mutation
+                # first; only this cron path escalates to remove + re-add
+                # when the cheap path has already failed.
+                # Permission: GraphQL `requestReviews` is covered by
+                # `pull-requests: write` (already granted at the job
+                # level above).
+                if ! timeline=$(gh api --paginate "repos/$REPO/issues/$pr/timeline"); then
+                  echo "::warning::PR #$pr: failed to fetch timeline for stuck detection"
                 else
                   # Note: timeline events use yet a third login form for Copilot
                   # ("Copilot", capitalized) — distinct from REST's
@@ -264,15 +400,167 @@ jobs:
                   fi
                   if [ "$refire_stuck" = "1" ]; then
                     pr_node_id=$(printf '%s' "$pr_json" | jq -r '.node_id')
-                    echo "stuck detector: refiring requestReviews"
+                    # Why GraphQL, not REST DELETE:
+                    # GitHub's REST `DELETE /pulls/{n}/requested_reviewers`
+                    # with `reviewers[]=...` only addresses User reviewers
+                    # — Bot reviewers (Copilot is a Bot, added via
+                    # `requestReviews{botIds:[...]}`) live in a separate
+                    # request slot the REST endpoint cannot see. Empirical
+                    # confirmation: REST DELETE returned `HTTP 422 Reviewer
+                    # is not a user` for both `reviewers[]=Copilot` and
+                    # `reviewers[]=copilot-pull-request-reviewer[bot]`.
+                    # The earlier REST-based bypass therefore never
+                    # cleared anything and the subsequent re-add was
+                    # still deduped.
+                    #
+                    # GraphQL `requestReviews(union:false)` REPLACES the
+                    # entire reviewer set, so to remove only the bot we
+                    # must first read the current set and then replay it
+                    # without any bots. Humans and teams are preserved.
+                    echo "stuck detector: clearing Copilot via GraphQL union:false (dedup bypass)"
+                    cleared=0
+                    # `clear_attempted` is set when the clear mutation was
+                    # actually dispatched (including partial-success / errors
+                    # paths). The sleep below gates on attempt, not success,
+                    # because GitHub may have partially committed the
+                    # reviewer-slot mutation even on `.errors` return — and
+                    # the whole point of the 2s pause is to let any such
+                    # commit settle before the re-add.
+                    clear_attempted=0
+                    _stderr_tmp=$(mktemp)
+                    if ! query_out=$(gh api graphql \
+                      -f query='query($pr:ID!){node(id:$pr){... on PullRequest{reviewRequests(first:100){nodes{requestedReviewer{__typename ... on User{id} ... on Team{id} ... on Bot{id}}}}}}}' \
+                      -f pr="$pr_node_id" 2>"$_stderr_tmp"); then
+                      _err_detail=$(printf '%s' "$query_out" | jq -r '.errors[0].message // empty' 2>/dev/null || true)
+                      [ -z "$_err_detail" ] && _err_detail=$(tr '\n' ' ' < "$_stderr_tmp" | head -c 200)
+                      _err_detail=$(printf '%s' "${_err_detail}" | tr '\r' ' ' | sed 's/%/%25/g')
+                      echo "::warning::PR #$pr: failed to query reviewer requests: ${_err_detail:-(unknown)} — proceeding to add"
+                    elif printf '%s' "$query_out" | jq -e '(.errors // []) | length > 0' >/dev/null 2>&1; then
+                      # Partial-success path (HTTP 200 with .errors[]).
+                      # Symmetric with the clear / refire `.errors` checks below.
+                      # Skip parsing because users_json/teams_json may be
+                      # incomplete; the bypass falls back to a deduped re-add,
+                      # which is still no worse than the pre-PR-#7 state.
+                      _err_detail=$(printf '%s' "$query_out" | jq -r '.errors[0].message // empty' 2>/dev/null || true)
+                      _err_detail=$(printf '%s' "${_err_detail}" | tr '\r' ' ' | sed 's/%/%25/g')
+                      echo "::warning::PR #$pr: GraphQL reviewer query returned errors (exit 0): ${_err_detail:-(unknown)} — proceeding to add"
+                    else
+                      # Split current reviewers into user / team / bot
+                      # buckets. `// []` coalesces null at any path level
+                      # to an empty array. The shell `|| reviewer_query_ok=0`
+                      # branch catches genuine jq parse failures (empty
+                      # `query_out`, malformed JSON) — distinct from the
+                      # legitimate "no reviewers" case (`query_out` valid
+                      # JSON, just an empty `nodes` array).
+                      reviewer_query_ok=1
+                      reviewer_nodes=$(printf '%s' "$query_out" | jq -c \
+                        '[(.data.node.reviewRequests.nodes // [])[] | select(. != null and .requestedReviewer != null)]') || reviewer_query_ok=0
+                      if [ "$reviewer_query_ok" = "0" ]; then
+                        # Skip the clear entirely. With reviewer_nodes
+                        # unknown, building users_json=[]/teams_json=[]
+                        # and calling `requestReviews(union:false)` would
+                        # *remove every human reviewer* on the PR — a
+                        # silent and irreversible side effect of a
+                        # transient parse failure. Re-add Copilot only;
+                        # the dedup may still bite this round but the
+                        # next cron tick will retry safely.
+                        echo "::warning::PR #$pr: reviewer_nodes jq parse failed — skipping clear to avoid removing humans, proceeding to add"
+                      else
+                        users_json=$(printf '%s' "$reviewer_nodes" | jq -c '
+                          map(select(.requestedReviewer.__typename == "User")
+                                | .requestedReviewer.id)')
+                        teams_json=$(printf '%s' "$reviewer_nodes" | jq -c '
+                          map(select(.requestedReviewer.__typename == "Team")
+                                | .requestedReviewer.id)')
+                        copilot_present=$(printf '%s' "$reviewer_nodes" | jq -r --arg id "$COPILOT_BOT_ID" '
+                          any(.requestedReviewer.__typename == "Bot"
+                                and .requestedReviewer.id == $id)')
+
+                        if [ "$copilot_present" != "true" ]; then
+                          # Copilot is not in the reviewer set — nothing to
+                          # clear. Skip the mutation + sleep to avoid a
+                          # wasteful API call and 2s delay.
+                          echo "::notice::PR #$pr: Copilot was not in reviewer requests — skipping clear"
+                        else
+                          # Build the GraphQL request body. botIds is
+                          # explicitly empty: replacing with humans + teams
+                          # only removes any bots from the slot, including
+                          # Copilot. If users_json / teams_json are also
+                          # empty, the whole reviewer set is cleared, which
+                          # is still safe (no humans to lose).
+                          clear_body=$(jq -n \
+                            --arg pr "$pr_node_id" \
+                            --argjson users "$users_json" \
+                            --argjson teams "$teams_json" \
+                            '{
+                              query: "mutation($pr:ID!,$users:[ID!]!,$teams:[ID!]!){requestReviews(input:{pullRequestId:$pr, userIds:$users, teamIds:$teams, botIds:[], union:false}){pullRequest{id}}}",
+                              variables: {pr:$pr, users:$users, teams:$teams}
+                            }')
+                          clear_attempted=1
+                          if ! clear_out=$(printf '%s' "$clear_body" | gh api graphql --input - 2>"$_stderr_tmp"); then
+                            _err_detail=$(printf '%s' "$clear_out" | jq -r '.errors[0].message // empty' 2>/dev/null || true)
+                            [ -z "$_err_detail" ] && _err_detail=$(tr '\n' ' ' < "$_stderr_tmp" | head -c 200)
+                            _err_detail=$(printf '%s' "${_err_detail}" | tr '\r' ' ' | sed 's/%/%25/g')
+                            echo "::warning::PR #$pr: GraphQL clear of bot reviewers failed: ${_err_detail:-(unknown)} — proceeding to add"
+                          elif printf '%s' "$clear_out" | jq -e '(.errors // []) | length > 0' >/dev/null 2>&1; then
+                            # Symmetric with query / refire `.errors` checks (same `(.errors // [])` form).
+                            # `|| true` guards `set -euo pipefail` against jq exiting non-zero on malformed `clear_out`.
+                            _err_detail=$(printf '%s' "$clear_out" | jq -r '.errors[0].message // empty' 2>/dev/null || true)
+                            _err_detail=$(printf '%s' "${_err_detail}" | tr '\r' ' ' | sed 's/%/%25/g')
+                            echo "::warning::PR #$pr: GraphQL clear returned errors (exit 0): ${_err_detail:-(unknown)} — proceeding to add"
+                          else
+                            cleared=1
+                            echo "stuck detector: cleared Copilot from reviewer slot via GraphQL union:false"
+                          fi
+                        fi
+                      fi
+                    fi
+                    # Pause so GitHub commits the removal before the add.
+                    # Without it the add can race the delete and the new
+                    # review_requested event collapses with the
+                    # corresponding review_request_removed event on the
+                    # same activity stream, defeating the bypass.
+                    # 2s margin absorbs GitHub API replication lag for
+                    # reviewer mutations under load (well inside the
+                    # 5-min job timeout). Sleep on `clear_attempted`,
+                    # not `cleared`: a partial-success path (`.errors[]`
+                    # on HTTP 200) may still have committed the mutation
+                    # — skipping the sleep there would race the dedup
+                    # window the bypass is trying to escape.
+                    if [ "$clear_attempted" = "1" ]; then
+                      sleep 2
+                    fi
+                    # Step 2: re-add Copilot via GraphQL. Now that the
+                    # request slot is clean, this fires a fresh
+                    # review_requested event.
+                    echo "stuck detector: re-requesting Copilot review"
                     if ! refire=$(gh api graphql \
                       -f query='mutation($pr:ID!,$bot:ID!){requestReviews(input:{pullRequestId:$pr, botIds:[$bot]}){pullRequest{id}}}' \
                       -f pr="$pr_node_id" \
-                      -f bot="$COPILOT_BOT_ID" 2>&1); then
-                      echo "::warning::PR #$pr: stuck-detector refire failed: $refire"
+                      -f bot="$COPILOT_BOT_ID" 2>"$_stderr_tmp"); then
+                      _err_detail=$(printf '%s' "$refire" | jq -r '.errors[0].message // empty' 2>/dev/null || true)
+                      [ -z "$_err_detail" ] && _err_detail=$(tr '\n' ' ' < "$_stderr_tmp" | head -c 200)
+                      _err_detail=$(printf '%s' "${_err_detail}" | tr '\r' ' ' | sed 's/%/%25/g')
+                      echo "::warning::PR #$pr: stuck-detector refire failed: ${_err_detail:-(unknown)}"
+                    elif printf '%s' "$refire" | jq -e '(.errors // []) | length > 0' >/dev/null 2>&1; then
+                      # Partial-success path: HTTP 200 with .errors[] (e.g.
+                      # `Could not resolve to a node`, permission downgrade).
+                      # Symmetric with the query / clear `.errors` checks
+                      # above. The whole point of the bypass is to fire a
+                      # fresh `review_requested` event; if GraphQL silently
+                      # returned errors here we have not actually fired
+                      # one and must surface that as a warning.
+                      _err_detail=$(printf '%s' "$refire" | jq -r '.errors[0].message // empty' 2>/dev/null || true)
+                      _err_detail=$(printf '%s' "${_err_detail}" | tr '\r' ' ' | sed 's/%/%25/g')
+                      echo "::warning::PR #$pr: stuck-detector refire returned errors (exit 0): ${_err_detail:-(unknown)}"
                     else
-                      echo "stuck detector: refire ok"
+                      if [ "$cleared" = "1" ]; then
+                        echo "stuck detector: refire ok (cleared + re-requested)"
+                      else
+                        echo "stuck detector: refire ok (re-requested without clear)"
+                      fi
                     fi
+                    rm -f "$_stderr_tmp"
                   fi
                 fi
                 ;;
