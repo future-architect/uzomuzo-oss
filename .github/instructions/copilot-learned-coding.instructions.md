@@ -78,6 +78,10 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Guard Ecosystem-Specific Heuristics by PURL Type**: When a detection heuristic (aggregator flattening, workspace detection, monorepo inference) is designed for a specific package ecosystem, guard it with an explicit PURL type check (e.g., `rootType != "maven"`). Structural properties like shared namespaces and parent-child dependency trees exist across ecosystems (Maven groupIds, npm scopes, PyPI namespaces) but have different semantics. Without a type guard, a Maven-specific heuristic can misfire on npm or other ecosystems that happen to share the same structural pattern, silently rewriting dependency graphs.
 - **Verify External-Service URL Conventions Against the Live Service, Not Folklore**: When generating URLs for external services (deps.dev, npm registry, mvnrepository, etc.), don't trust the obvious-looking pattern from the package coordinates — services often have non-obvious URL conventions (e.g., deps.dev's React Router pattern `/:system/:name/:version?` matches `:name` against `[^/]+` only, so multi-segment names *must* be path-escaped; Maven uses `groupId:artifactId` joined with `:`, not `/`; deps.dev does not host Packagist/Hex/Swift despite accepting any path server-side because its SPA shell always returns 200). Verify by hitting the service's actual data endpoint (or simulating its router) for both common cases and edge cases (multi-segment names, scoped packages, ecosystem-specific separators) before claiming the URL works. Bake the verification into the test suite as an opt-in live probe (env-var gated, e.g., `UZOMUZO_LIVE_PROBE=1`, so `go test ./...` stays hermetic) and pin the expected-URL fixture inside the test file so the cross-file convention can't drift silently between near-duplicate helpers.
 
+- **HTTP Retry Paths Must Bound Every Resource That Grows Across Attempts**: In HTTP retry paths (typically 429 / 5xx), bound every resource that accumulates across attempts. (1) **Body**: cap response body reads with `io.LimitReader` so retried-and-discarded responses cannot grow memory or log volume unbounded — match the limit to the codebase's existing read pattern. (2) **Timers**: use `time.NewTimer` with explicit `Stop` and channel-drain inside `select` blocks that include `ctx.Done()`. `time.After` allocates a fresh timer per call; in a long cancellable wait loop this leaks timers until they fire. (3) **Arithmetic**: parse user/config-supplied durations with `strconv.ParseInt` and reject values that exceed `math.MaxInt64 / time.Second` before multiplying — `time.Duration` arithmetic silently overflows. Do not clamp to an arbitrary policy constant; surface the bound to the caller's configured cap so policy stays in one place.
+
+- **Treat "Recognized But Unusable" Sentinels with a Predicate, Canonical Render, and Composing Accessor**: When a domain type carries a value that may be a regular instance, a recognized-but-unusable sentinel (e.g., SPDX `NOASSERTION`), or a composed expression with mixed leaves: (1) **Guards** — use a dedicated predicate method (e.g., `IsUsableSPDX()`) for every gate that decides whether to enrich, propagate, or count the value. Ad-hoc field checks (`Expression != ""`, `IsZero() || IsNonStandard()`) miss sentinel states and produce inconsistent behavior: propagating sentinels as real values, blocking valid enrichment, corrupting leaf counts. (2) **Render** — when the type has a renderer that composes leaves (`ExprLicense.String()` joining `MIT OR NOASSERTION`), canonicalize sentinel casing on each leaf before composition. Parsers that preserve raw casing will otherwise produce non-canonical output like `MIT OR noassertion`. (3) **Accessor** — use the composing renderer when the full representation is needed; reading a single leaf field (`leaf.Identifier`) silently drops `+` (or-later), `WITH exception`, and other components the renderer handles.
+
 ## Pending Copilot Patterns
 
 <!--
@@ -101,34 +105,13 @@ pending_patterns:
     pr: 345
     file: "internal/infrastructure/maven/license.go"
     date: "2026-04-29"
-  - category: "defensive-coding"
-    summary: "When a domain type uses a sentinel value that is 'recognized but not usable' (e.g., NOASSERTION), use the dedicated predicate method (e.g., IsUsableSPDX()) in all guard/gate checks rather than ad-hoc field checks (Expression != \"\", IsZero() || IsNonStandard()). Ad-hoc guards miss sentinel states and cause inconsistent behavior (propagating NOASSERTION as a real license, blocking enrichment, or corrupting leaf counts)"
-    pr: 366
-    instances: 7
-    file: "internal/infrastructure/integration/populate.go"
-    date: "2026-04-30"
-  - category: "defensive-coding"
-    summary: "Canonicalize sentinel values (e.g., NOASSERTION) when rendering compound SPDX expressions — the parser's leaf Raw field preserves original casing, so without explicit rewriting before String(), rendering produces non-canonical output like 'MIT OR noassertion' instead of 'MIT OR NOASSERTION'"
-    pr: 366
-    file: "internal/domain/licenses/expression_normalize.go"
-    date: "2026-04-30"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
-  - category: "defensive-coding"
-    summary: "When a structured type has a renderer that composes all sub-components (e.g., ExprLicense.String() includes Identifier + OrLater '+' + WITH exception), use the renderer instead of a single field (e.g., leaf.Identifier) when the full representation is needed — partial extraction silently drops components the renderer handles"
-    pr: 366
-    file: "internal/infrastructure/clearlydefined/client.go"
-    date: "2026-04-30"
   - category: "comment-doc-drift"
     summary: "Doc comments must match implementation boundary conditions — RetryConfig said retryDecider controls 429 retries (it doesn't); rateLimitBackoff comment said 'negative' for a zero-inclusive guard (should say 'non-positive')"
-    pr: 359
-    file: "internal/infrastructure/httpclient/client.go"
-    date: "2026-04-29"
-  - category: "defensive-coding"
-    summary: "Guard time.Duration arithmetic against integer overflow — use strconv.ParseInt, reject values exceeding math.MaxInt64/time.Second, and do not clamp to an arbitrary policy constant (let the caller's configured cap decide)"
     pr: 359
     file: "internal/infrastructure/httpclient/client.go"
     date: "2026-04-29"
@@ -146,16 +129,6 @@ pending_patterns:
     summary: "Assert diagnostic context fields on typed error structs; match context-error assertions to the specific context constructor (WithCancel → Canceled only, WithTimeout → DeadlineExceeded only) — permissive OR hides misrouted error paths"
     pr: 359
     file: "internal/infrastructure/httpclient/client_test.go"
-    date: "2026-04-29"
-  - category: "defensive-coding"
-    summary: "Cap response body reads with io.LimitReader in retry paths (429/5xx) to prevent unbounded memory and log growth across retry attempts — consistent with existing codebase pattern for HTTP body reads"
-    pr: 359
-    file: "internal/infrastructure/httpclient/client.go"
-    date: "2026-04-29"
-  - category: "defensive-coding"
-    summary: "Use time.NewTimer + Stop/drain instead of time.After in select with ctx.Done() to prevent timer accumulation during long cancellable waits"
-    pr: 359
-    file: "internal/infrastructure/httpclient/client.go"
     date: "2026-04-29"
   - category: "api-consistency"
     summary: "Redundant gh pr view API call to fetch labels when pr_json from repos/.../pulls already contains label data — reuse already-fetched API response data instead of making redundant calls for a subset of the same information"
