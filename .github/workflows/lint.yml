@@ -1,0 +1,39 @@
+name: Lint
+
+# Lint GitHub Actions workflows with actionlint (embeds shellcheck for `run:`
+# block bash). Catches GitHub Actions specific issues (deprecated actions,
+# unsafe `${{ ... }}` interpolation, missing permissions, stale runner labels)
+# plus shellcheck-detectable bash issues.
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+
+permissions: {}
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: actionlint
+        # Pinned to v1.72.0 SHA (released 2026-03-31). Bumps via dependabot.
+        uses: reviewdog/action-actionlint@6fb7acc99f4a1008869fa8a0f09cfca740837d9d # v1.72.0
+        with:
+          reporter: github-pr-check
+          level: error
+          fail_level: any
+          actionlint_flags: -color
