@@ -50,6 +50,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Respect Context Lifecycle in Concurrent and Delegated I/O**: (1) When a function issues I/O (HTTP, database, external API) on behalf of a caller that provides a `context.Context`, thread that context through every intermediate function in the call chain — never substitute `context.Background()` at an internal callsite. `context.Background()` ignores the caller's cancellation and deadline signals, causing orphaned requests that persist after cancellation or exceed timeout budgets. (2) When dispatching goroutines under bounded concurrency, acquire the semaphore before launching the goroutine (not inside it) and `select` on `ctx.Done()` alongside the semaphore send to stop dispatch on cancellation — this avoids spawning parked goroutines that outlive the context.
 - **Guard Nil Structs Consistently Across Output Formats**: When a struct field may be nil (e.g., `ReleaseInfo`), apply the nil guard in every output renderer that accesses it (text, CSV, JSON). If one renderer has the guard and another does not, the unguarded path will panic on nil input.
 - **Gate Fallback Logic on Error, Not Result Nilness**: When deciding whether to trigger fallback or retry logic, check the error value — not whether the result is nil. A nil result with nil error is a valid success case (e.g., zero matches found), and treating it as a failure triggers unnecessary retries or incorrect fallback paths.
+- **Use Dedicated Predicates and Full Renderers for Sentinel/Composed Values**: When a domain type uses sentinel values (e.g., NOASSERTION), use dedicated predicate methods (e.g., `IsUsableSPDX()`) in all guard checks — not ad-hoc field comparisons that miss sentinel states. Canonicalize sentinels before rendering compound expressions (parser leaf fields may preserve non-canonical casing). When a type has a renderer composing sub-components (e.g., `ExprLicense.String()` includes Identifier + OrLater + WITH exception), use the renderer — not a single field — for the full representation. When recording provenance in multi-branch resolution functions, set evidence fields to the input that actually produced the match, not a prior failed branch's input.
 - **Minimize Allocations in Hot Paths**: In batch-processing or frequently-called functions, avoid unnecessary O(n) allocations when only a subset of data is needed. Cache results of expensive parsing calls when the same value is checked multiple times in a loop iteration, and iterate to a known cutoff point rather than materializing the full collection (e.g., iterate runes up to a count rather than converting the entire string to `[]rune`).
 - **Use Structured Parsers for Structured Identifier Properties**: When checking properties of structured identifiers (PURLs, URIs, import paths), use the appropriate parser rather than naive string operations (`strings.Contains`, `strings.Split`). For example, `strings.Contains(purl, "@")` misclassifies npm scoped packages like `pkg:npm/@scope/name` as versioned because `@` appears in the namespace. Use `packageurl.FromString(p).Version != ""` or an equivalent parser-based check.
 - **Use `u.Hostname()` for Port-Safe Host Comparison**: When comparing URL hostnames, use `u.Hostname()` instead of `u.Host`. The `Host` field includes the port component (e.g., `github.com:443`), so direct string comparison against a bare hostname fails silently, misclassifying URLs and triggering unnecessary fallback processing. Similarly, when parsing multi-entry `go-import`/`go-source` meta tags, select the entry whose import prefix most specifically matches the requested path per the Go module spec — blindly taking the first match can resolve to the wrong repository on monorepo vanity pages.
@@ -98,32 +99,16 @@ Schema (YAML-in-Markdown):
 
 ```yaml
 pending_patterns:
-  - category: "defensive-coding"
-    summary: "When a multi-branch resolution function (e.g., name-first then URL fallback) records evidence in a Raw/provenance field, set Raw to the input that actually produced the match — not the input from a prior branch that failed. Misattributed Raw values lose traceability for debugging and audit"
-    pr: 345
-    file: "internal/infrastructure/maven/license.go"
-    date: "2026-04-29"
-  - category: "defensive-coding"
-    summary: "When a domain type uses a sentinel value that is 'recognized but not usable' (e.g., NOASSERTION), use the dedicated predicate method (e.g., IsUsableSPDX()) in all guard/gate checks rather than ad-hoc field checks (Expression != \"\", IsZero() || IsNonStandard()). Ad-hoc guards miss sentinel states and cause inconsistent behavior (propagating NOASSERTION as a real license, blocking enrichment, or corrupting leaf counts)"
-    pr: 366
-    instances: 7
-    file: "internal/infrastructure/integration/populate.go"
-    date: "2026-04-30"
-  - category: "defensive-coding"
-    summary: "Canonicalize sentinel values (e.g., NOASSERTION) when rendering compound SPDX expressions — the parser's leaf Raw field preserves original casing, so without explicit rewriting before String(), rendering produces non-canonical output like 'MIT OR noassertion' instead of 'MIT OR NOASSERTION'"
-    pr: 366
-    file: "internal/domain/licenses/expression_normalize.go"
-    date: "2026-04-30"
   - category: "whitespace-agnostic-matching"
     summary: "Use bytes.Fields tokenization instead of fixed-separator prefix checks when matching directives — tabs and multiple spaces are valid separators"
     pr: 140
     file: "internal/infrastructure/depparser/detect.go"
     date: "2026-04-05"
-  - category: "defensive-coding"
-    summary: "When a structured type has a renderer that composes all sub-components (e.g., ExprLicense.String() includes Identifier + OrLater '+' + WITH exception), use the renderer instead of a single field (e.g., leaf.Identifier) when the full representation is needed — partial extraction silently drops components the renderer handles"
-    pr: 366
-    file: "internal/infrastructure/clearlydefined/client.go"
-    date: "2026-04-30"
+  - category: "ci-path-filters"
+    summary: "Use **/*.ext (not **.ext) in GitHub Actions path filters — ** must be a standalone path segment (followed by /) to reliably match across directory boundaries; **.ext is non-standard and may behave like *.ext in some glob implementations"
+    pr: 370
+    file: ".github/workflows/go-lint.yml"
+    date: "2026-05-02"
   - category: "comment-doc-drift"
     summary: "Doc comments must match implementation boundary conditions — RetryConfig said retryDecider controls 429 retries (it doesn't); rateLimitBackoff comment said 'negative' for a zero-inclusive guard (should say 'non-positive')"
     pr: 359
@@ -139,6 +124,11 @@ pending_patterns:
     pr: 346
     file: "internal/infrastructure/treesitter/analyzer.go"
     date: "2026-04-29"
+  - category: "dependency-pinning"
+    summary: "Pin CI tool binary versions explicitly (e.g., golangci-lint version: '2.2.1') — not just the action SHA. version: latest makes CI non-deterministic; new releases can introduce checks or behavior changes between runs on the same commit"
+    pr: 370
+    file: ".github/workflows/go-lint.yml"
+    date: "2026-05-02"
   - category: "testing"
     summary: "When generating time-based test fixtures with coarse-grained formatters (e.g., http.TimeFormat at 1-second granularity), truncate to the format boundary and add enough offset (e.g., 2s) so the formatted value is deterministically in the expected range — sub-granularity offsets (50ms) can collapse to the current or past second"
     pr: 359
@@ -154,6 +144,11 @@ pending_patterns:
     pr: 359
     file: "internal/infrastructure/httpclient/client.go"
     date: "2026-04-29"
+  - category: "ci-permissions"
+    summary: "Verify that GitHub Actions reporter actions (e.g., reviewdog with github-pr-check) have the permissions they need — github-pr-check reporter requires checks: write to publish annotations; missing permissions cause silent failures or degraded reporting"
+    pr: 370
+    file: ".github/workflows/lint.yml"
+    date: "2026-05-02"
   - category: "defensive-coding"
     summary: "Use time.NewTimer + Stop/drain instead of time.After in select with ctx.Done() to prevent timer accumulation during long cancellable waits"
     pr: 359
@@ -167,6 +162,7 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #345, #366 — use dedicated predicates and full renderers for sentinel/composed values: IsUsableSPDX() not ad-hoc checks; canonicalize sentinel casing; use type renderer not single field; attribute provenance to correct resolution branch)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #345, #366 — match write guard quantifiers to write semantics: an "any" flag guarding an "all/only" write misrepresents mixed inputs; verify replacement is a net improvement)
   # testing (PR #366): already covered by "Scope Test Assertions to Specific Output Regions" in testing-performance + "Use Spec-Compliant Parsers for Standardized Formats" — use encoding/csv to parse CSV output and assert exact cells by header name instead of fragile strings.Contains on boolean patterns that match the wrong column
   # defensive-coding (PR #338): stale pending entry removed — already promoted as "Sanitize Dynamic Content in GitHub Actions Workflow Commands" rule

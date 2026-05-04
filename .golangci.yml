@@ -1,0 +1,54 @@
+# golangci-lint v2 config — uzomuzo-oss
+#
+# Initial baseline: errcheck, govet, ineffassign, staticcheck, unused.
+# These are deterministic correctness/quality checks that run cleanly on
+# the existing codebase.
+#
+# `gosec` (security smells) is NOT enabled in this initial setup. A full
+# scan reports 8 findings on existing code that warrant project-owner
+# triage before fixing or suppressing — see PR description for the list.
+# Enabling gosec is a follow-up PR.
+#
+# `revive` (exported-symbol godoc) is NOT enabled. Backfilling godoc on
+# existing symbols is single-purpose work better reviewed on its own.
+#
+# DDD layer enforcement (domain MUST NOT import application/infrastructure/
+# interfaces/pkg) is also a follow-up — depguard can express it but the
+# rule set deserves owner review before going live.
+version: "2"
+
+run:
+  timeout: 3m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        - (io.Closer).Close
+        - (*os.File).Close
+
+  exclusions:
+    rules:
+      # Test files use unchecked errors more liberally; tradeoff toward brevity.
+      - path: _test\.go$
+        linters:
+          - errcheck
+      # Generated files: never lint.
+      - path: _generated\.go$
+        linters:
+          - errcheck
+          - govet
+          - ineffassign
+          - staticcheck
+          - unused
