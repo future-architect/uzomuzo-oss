@@ -1,12 +1,19 @@
 name: Auto-fix Copilot Review
 
 on:
-  # Auto-trigger: Copilot posts a review comment.
-  # Note: pull_request_review (submitted) no longer fires for Copilot since the
-  # agentic architecture migration (2026-03-05) due to GITHUB_TOKEN event
-  # suppression. pull_request_review_comment still fires (verified in PR #81).
-  # Multiple comments trigger multiple events; concurrency cancel-in-progress
+  # Auto-trigger (event-driven, fast path): Copilot posts a review or an inline
+  # review comment.
+  #
+  # Note: both `pull_request_review` (submitted) and `pull_request_review_comment`
+  # (created) events are unreliable for the Copilot bot due to the agentic
+  # architecture's GITHUB_TOKEN-driven event suppression. They are still listened
+  # for as a best-effort fast path; the cron-driven fallback in
+  # `copilot-clean-label.yml` covers the suppressed cases within ~5 min.
+  #
+  # Multiple comments may trigger multiple events; concurrency cancel-in-progress
   # ensures only the last one runs.
+  pull_request_review:
+    types: [submitted]
   pull_request_review_comment:
     types: [created]
   # Manual trigger: add 'copilot-review' label to re-run
@@ -20,13 +27,23 @@ jobs:
     concurrency:
       group: copilot-review-${{ github.event.pull_request.number }}
       cancel-in-progress: true
-    # Run when: Copilot posts a review comment OR 'copilot-review' label is added
-    # Only for PRs authored by kotakanbe
+    # Run when: Copilot submits a review OR posts a review comment OR
+    # 'copilot-review' label is added by the maintainer.
+    # Only for same-repo PRs authored by kotakanbe (fork PRs cannot access
+    # GH_ACTIONS_TOKEN).
     if: >-
       github.event.pull_request.user.login == 'kotakanbe'
+      && github.event.pull_request.head.repo.full_name == github.repository
       && (
-        (github.event_name == 'pull_request_review_comment'
-         && github.event.comment.user.login == 'Copilot')
+        (github.event_name == 'pull_request_review'
+         && github.event.review.state == 'commented'
+         && (github.event.review.user.login == 'Copilot'
+             || github.event.review.user.login == 'copilot-pull-request-reviewer[bot]')
+         && !contains(github.event.review.body || '', 'generated no comments')
+         && !contains(github.event.review.body || '', 'generated no new comments'))
+        || (github.event_name == 'pull_request_review_comment'
+            && (github.event.comment.user.login == 'Copilot'
+                || github.event.comment.user.login == 'copilot-pull-request-reviewer[bot]'))
         || (github.event_name == 'pull_request'
             && github.event.label.name == 'copilot-review'
             && github.event.sender.login == 'kotakanbe')
@@ -35,6 +52,14 @@ jobs:
     timeout-minutes: 5
     permissions:
       pull-requests: write
+      # Required for `gh pr edit --remove-label` (label edits route through
+      # the Issues API) AND for `gh pr comment` (PR comments are issue comments
+      # at the API level), AND for the marker dedup read of issue comments.
+      issues: write
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      REPO: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - name: Remove copilot-review label if present
         if: github.event_name == 'pull_request' && github.event.label.name == 'copilot-review'
@@ -42,9 +67,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if ! output=$(gh pr edit "${{ github.event.pull_request.number }}" \
+          if ! output=$(gh pr edit "$PR_NUMBER" \
             --remove-label copilot-review \
-            --repo "${{ github.repository }}" 2>&1); then
+            --repo "$REPO" 2>&1); then
             if echo "$output" | grep -qiE 'label(.+)does not exist|could not find label'; then
               echo "Label 'copilot-review' is not present; nothing to remove."
             else
@@ -55,15 +80,63 @@ jobs:
 
       - name: Post @claude comment to trigger fix
         env:
+          # PAT so the resulting issue_comment event triggers claude.yml.
+          # GITHUB_TOKEN-posted comments do NOT fire downstream workflow events.
           GH_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
         run: |
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$(cat <<'BODY'
-          @claude Follow the procedure in `.github/prompts/review.prompt.md` with `--copilot-only` mode for this PR.
+          set -euo pipefail
+
+          # MARKER CONTRACT (also implemented by copilot-clean-label.yml cron):
+          #   format:    <!-- copilot-fix-trigger:<HEAD_SHA> -->
+          #   placement: last line of the @claude comment body
+          #   author:    posted via PAT (kotakanbe), so the dedup query
+          #              scopes to .user.login == "kotakanbe"
+          #   prefix:    body starts with "@claude" so a quoted marker
+          #              in human prose does not produce a false match
+          # Marker auto-invalidates on push (new HEAD = new marker key).
+          # If you change ANY part of this contract, update both files.
+          if [ -z "${HEAD_SHA:-}" ] || [ "${#HEAD_SHA}" -lt 40 ]; then
+            echo "::warning::missing/short HEAD_SHA '$HEAD_SHA' — skip @claude trigger"
+            exit 0
+          fi
+          trigger_marker="<!-- copilot-fix-trigger:$HEAD_SHA -->"
+
+          # Capture stdout only; on failure gh writes diagnostics to stderr
+          # which lands in the workflow log directly (visible without parsing).
+          if ! comments_json=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments"); then
+            echo "::warning::failed to fetch issue comments for marker dedup"
+            echo "Proceeding with post (worst case is a duplicate comment, which claude.yml dedups via cancel-in-progress)."
+          else
+            # Null-safe + author + prefix scoping eliminates false positives:
+            #   - .body == null on redacted/deleted comments would crash contains()
+            #   - human-quoted marker text (e.g. in PR review prose) would match
+            #     contains() but not the (kotakanbe + startswith @claude) scope.
+            already=$(printf '%s' "$comments_json" | jq -s -r --arg m "$trigger_marker" '
+              add // []
+              | [.[] | select(
+                  .user.login == "kotakanbe"
+                  and .body != null
+                  and (.body | startswith("@claude"))
+                  and (.body | contains($m))
+                )] | length
+            ' 2>/dev/null || echo 0)
+            case "$already" in
+              ''|*[!0-9]*) already=0 ;;
+            esac
+            if [ "$already" != "0" ]; then
+              echo "trigger already posted for HEAD $HEAD_SHA (count=$already) — skip"
+              exit 0
+            fi
+          fi
+
+          echo "Posting @claude trigger for HEAD $HEAD_SHA (event-driven path: $GITHUB_EVENT_NAME)"
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$(cat <<BODY
+          @claude Follow the procedure in \`.github/prompts/review.prompt.md\` with \`--copilot-only\` mode for this PR.
 
           Phase 2: Resolve all unresolved Copilot review threads (discover → classify → fix → build/test/lint → commit/push → reply/resolve).
-          Phase 3: Detect recurring patterns from FIX-classified comments, propose and apply coding rules to `.github/instructions/`, then run `make sync-instructions`.
+          Phase 3: Detect recurring patterns from FIX-classified comments, propose and apply coding rules to \`.github/instructions/\`, then run \`make sync-instructions\`.
           Phase 4: Post a summary comment on this PR.
+
+          $trigger_marker
           BODY
           )"
