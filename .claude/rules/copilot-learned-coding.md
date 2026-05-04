@@ -22,6 +22,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Interface Contract Documentation Must Match Signature Semantics**: When documenting an interface method, the doc comment must accurately reflect the method's full signature — including error returns, nil semantics, and parameter constraints. If the signature returns `(T, error)`, do not document it as "returns nil/empty on failure" — state that errors may be returned and describe the caller's expected handling (e.g., non-fatal/graceful degradation). Mismatched contract documentation misleads implementers and callers.
 - **GitHub Actions `||` Treats Empty as Falsy**: When a workflow input documents "empty = X behavior", do not use `${{ inputs.foo || 'default' }}` — the `||` operator treats empty string as falsy and applies the default, preventing users from intentionally selecting the empty option. Instead, pass the raw input via an env var and apply defaults conditionally (e.g., only for scheduled triggers).
 - **Guard Downstream Jobs Against Missing Outputs**: When a CI job produces outputs that downstream jobs depend on (exit codes, flags), gate downstream jobs on `needs.<job>.outputs.<key> != ''` to prevent execution when the upstream job fails before setting outputs. Otherwise, empty values may be misinterpreted (e.g., empty exit code `""` compared with `!= "0"` evaluates to true, creating misleading reports).
+- **Use Quoted Heredocs for Literal Text in CI Workflows**: When constructing multi-line literal text bodies in CI workflow scripts (e.g., comment bodies, PR descriptions), use quoted heredoc delimiters (`<<'DELIM'`) to prevent accidental parameter expansion and command substitution. Inject dynamic values (markers, timestamps) via append after the heredoc rather than embedding them inside an expansion-enabled body.
 - **CI Job Gating — Key on Outputs, Not Job Result**: When a CI job intentionally exits non-zero for a primary use case (e.g., policy violations), downstream jobs must not gate on `needs.<job>.result == 'success'`. Use explicit output variables (exit codes, flags) to control downstream behavior, so jobs run in the scenarios they are designed for.
 - **Remove Dead Configuration Inputs**: When a configuration surface (CLI flag, workflow input, env var) is no longer honored by the implementation (e.g., hardcoded internally), remove it entirely rather than leaving a misleading interface. A visible input that silently does nothing is worse than no input at all.
 - **CI Permissions Documentation — Verify Inheritance**: When documenting GitHub Actions job permissions, verify each job's actual `permissions:` block in the workflow file. Jobs without an explicit `permissions:` key inherit the workflow-level permissions — do not describe them as having "no permissions" or "no extra permissions". State what each job actually has, including inherited defaults.
@@ -30,6 +31,7 @@ Rules extracted from recurring Copilot review patterns on coding-standards topic
 - **Deterministic Output from Non-Deterministic Sources**: When building ordered output from non-deterministic sources (Go map iteration, goroutine-collected results, API directory listings), sort the data before further processing. This applies to rendered text, BFS seed queues, and any "first-seen wins" algorithm where input order determines provenance.
 - **Post-Filter Fuzzy Search Results**: When using search APIs that perform fuzzy or word-level matching (e.g., GitHub issue search), add a post-filter to verify exact matches before acting on results. Fuzzy matches can cause false-positive deduplication or incorrect state transitions.
 - **Rerun Analyzers with Combined Input Sets on Retry**: When retrying a subset of inputs through an analyzer that tracks collisions or shared matches, rerun with the combined input set (original + retry) to preserve attribution consistency. Subset reruns can misattribute shared matches to the wrong source.
+- **Guard Resource Bounds in HTTP Client Retry Logic**: When implementing retry/backoff logic for HTTP clients: (1) guard `time.Duration` arithmetic against integer overflow — use `strconv.ParseInt` and reject values exceeding `math.MaxInt64/time.Second` rather than clamping to an arbitrary policy constant; (2) cap response body reads with `io.LimitReader` in retry paths (429/5xx) to prevent unbounded memory and log growth across retry attempts; (3) use `time.NewTimer` + `Stop`/drain instead of `time.After` in `select` with `ctx.Done()` to prevent timer accumulation during long cancellable waits.
 - **Consolidate Detection Heuristics — Single Source of Truth**: When a detection heuristic (file type sniffing, format detection, path matching) is used in multiple locations, centralize it in the responsible package and have callers delegate. Duplicating the heuristic across layers (e.g., `cmd/` and `infrastructure/`) risks drift when one copy is updated but the other is not.
 - **Use Correct GitHub API Media Types**: When calling GitHub REST APIs, use the documented `Accept` header for the desired response format. For raw file content use `application/vnd.github.raw` (not `application/vnd.github.raw+json`). Incorrect media types may cause silent content-negotiation failures or unexpected response formats. Refer to GitHub's REST API media type documentation before adding a new endpoint call.
 - **Narrow Typed Error Matching to Specific Conditions**: When checking typed errors (e.g., `IsResourceNotFoundError`), verify the error's message or context matches the expected source — not just the error type. A single error type can be returned by multiple code paths with different semantics (e.g., "repo not found" vs "no package managers"), and a broad type check can trigger incorrect fallback behavior for unrelated error origins.
@@ -110,16 +112,6 @@ pending_patterns:
     pr: 370
     file: ".github/workflows/go-lint.yml"
     date: "2026-05-02"
-  - category: "defensive-coding"
-    summary: "Use quoted heredocs (<<'DELIM') for literal text bodies in CI workflows to prevent accidental parameter expansion and command substitution; inject dynamic values (markers, variables) via append after the heredoc rather than embedding them in an expansion-enabled body"
-    pr: 372
-    file: ".github/workflows/copilot-clean-label.yml"
-    date: "2026-05-02"
-  - category: "defensive-coding"
-    summary: "Guard time.Duration arithmetic against integer overflow — use strconv.ParseInt, reject values exceeding math.MaxInt64/time.Second, and do not clamp to an arbitrary policy constant (let the caller's configured cap decide)"
-    pr: 359
-    file: "internal/infrastructure/httpclient/client.go"
-    date: "2026-04-29"
   - category: "logging-consistency"
     summary: "Pass typed error values (e.g., *QueryError) directly to slog instead of pre-stringifying via .Error() — preserves type/structure and keeps logging consistent with slog conventions"
     pr: 346
@@ -140,21 +132,11 @@ pending_patterns:
     pr: 359
     file: "internal/infrastructure/httpclient/client_test.go"
     date: "2026-04-29"
-  - category: "defensive-coding"
-    summary: "Cap response body reads with io.LimitReader in retry paths (429/5xx) to prevent unbounded memory and log growth across retry attempts — consistent with existing codebase pattern for HTTP body reads"
-    pr: 359
-    file: "internal/infrastructure/httpclient/client.go"
-    date: "2026-04-29"
   - category: "ci-permissions"
     summary: "Verify that GitHub Actions reporter actions (e.g., reviewdog with github-pr-check) have the permissions they need — github-pr-check reporter requires checks: write to publish annotations; missing permissions cause silent failures or degraded reporting"
     pr: 370
     file: ".github/workflows/lint.yml"
     date: "2026-05-02"
-  - category: "defensive-coding"
-    summary: "Use time.NewTimer + Stop/drain instead of time.After in select with ctx.Done() to prevent timer accumulation during long cancellable waits"
-    pr: 359
-    file: "internal/infrastructure/httpclient/client.go"
-    date: "2026-04-29"
   - category: "api-consistency"
     summary: "Redundant gh pr view API call to fetch labels when pr_json from repos/.../pulls already contains label data — reuse already-fetched API response data instead of making redundant calls for a subset of the same information"
     pr: 338
@@ -163,6 +145,7 @@ pending_patterns:
 ```
 
 <!-- Promotion history (kept for audit trail):
+  # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #359, #372 — guard resource bounds in HTTP client retry logic: time.Duration overflow, io.LimitReader cap, time.NewTimer lifecycle; use quoted heredocs for literal text in CI workflows)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #345, #366 — use dedicated predicates and full renderers for sentinel/composed values: IsUsableSPDX() not ad-hoc checks; canonicalize sentinel casing; use type renderer not single field; attribute provenance to correct resolution branch)
   # comment-doc-drift: promoted to copilot-learned-coding.instructions.md (PRs #359, #372 — attribute control claims to the correct mechanism: do not claim a permission/config/flag controls a behavior when a different mechanism is the effective authority)
   # defensive-coding: promoted to copilot-learned-coding.instructions.md (PRs #345, #366 — match write guard quantifiers to write semantics: an "any" flag guarding an "all/only" write misrepresents mixed inputs; verify replacement is a net improvement)
