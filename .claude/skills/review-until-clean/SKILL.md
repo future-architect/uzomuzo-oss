@@ -127,8 +127,8 @@ git add -A
 
 # Skip commit if there's nothing staged. Without this guard, an empty
 # `git commit` would exit non-zero and abort the skill before Phase
-# B/C, breaking the documented "skip Phase A → existing PR で Copilot
-# review だけ iterate" use case.
+# B/C, breaking the "skip Phase A changes, iterate only Copilot
+# review on an existing PR" use case.
 if ! git diff --cached --quiet; then
     git commit -m "fix: <descriptive message>"
 fi
