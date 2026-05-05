@@ -643,7 +643,7 @@ The CI cron path (`copilot-clean-label.yml` schedule trigger) runs **the same pr
 CI environment requirements (`.github/workflows/claude.yml`):
 
 - **`Task` is included in `claude_args --allowedTools`** — required for Phase A's `code-reviewer` / `architect` subagents and the three `general-purpose` agents.
-- **`timeout-minutes: 60`** — covers Phase A 5–10 min + Phase B up to ~75 min cap (5 rounds × 15 min) + Phase C 1–3 min. Beyond that the run is force-killed; a partial execution is harmless because the next cron tick re-fires via `@claude` and the marker / dedup contract is idempotent.
+- **`timeout-minutes: 90`** — covers Phase A 5–10 min + Phase B up to ~75 min cap (5 rounds × 15 min) + Phase C 1–3 min, with margin for variance. Beyond that the run is force-killed; a partial execution is harmless because the next cron tick re-fires via `@claude` and the marker / dedup contract is idempotent.
 
 Flag (`--copilot-only`, etc.) is removed. CI redundancy is bounded (cron `*/30` cadence reduces frequency); CI and local share the same procedure / endpoints / dedup contract.
 

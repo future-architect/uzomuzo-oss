@@ -375,6 +375,13 @@ jobs:
                       #   - Age filter on `.updated_at` (NOT `.created_at`):
                       #     the skill heartbeats by PATCHing the marker's
                       #     body, which bumps `updated_at` only.
+                      # `|| echo 1` keeps the fail-CLOSED contract on jq
+                      # parse failure: a malformed comments payload would
+                      # otherwise turn an unverifiable state into "no
+                      # marker" (= post @claude), reintroducing the
+                      # parallel-fix race this block exists to prevent.
+                      # Same intent as the fail-closed default at the
+                      # `local_in_progress=1` declaration above.
                       local_in_progress=$(printf '%s' "$issue_comments" | jq -s -r \
                           --arg m "$local_marker" \
                           --arg cutoff "$local_marker_cutoff" '
@@ -385,9 +392,12 @@ jobs:
                             and (.body | startswith($m))
                             and (.updated_at >= $cutoff)
                           )] | length
-                      ' 2>/dev/null || echo 0)
+                      ' 2>/dev/null || echo 1)
+                      # Non-numeric output (corrupt parse, partial jq
+                      # write) ⇒ fall back to fail-closed `1` for the
+                      # same reason as the `|| echo 1` fallback above.
                       case "$local_in_progress" in
-                        ''|*[!0-9]*) local_in_progress=0 ;;
+                        ''|*[!0-9]*) local_in_progress=1 ;;
                       esac
                     fi
                     if [ "$local_in_progress" != "0" ]; then
