@@ -8,10 +8,17 @@ on:
   # (created) events are unreliable for the Copilot bot due to the agentic
   # architecture's GITHUB_TOKEN-driven event suppression. They are still listened
   # for as a best-effort fast path; the cron-driven fallback in
-  # `copilot-clean-label.yml` covers the suppressed cases within ~5 min.
+  # `copilot-clean-label.yml` runs every 30 minutes, so:
+  #   - suppressed-event recovery: ≤30 min worst case (next tick fires).
+  #   - local-marker TTL recovery: 30–60 min worst case (a fresh
+  #     `copilot-fix-local:<HEAD>` marker may cause the first tick to
+  #     skip; the next tick is needed to resume — see the marker
+  #     freshness check in `copilot-clean-label.yml`).
   #
-  # Multiple comments may trigger multiple events; concurrency cancel-in-progress
-  # ensures only the last one runs.
+  # Multiple events for the same PR are deduped by the marker-based check
+  # below (`already` / `local_in_progress` jq passes), so the
+  # concurrency group below uses `cancel-in-progress: false` and lets
+  # queued events run sequentially.
   pull_request_review:
     types: [submitted]
   pull_request_review_comment:
@@ -26,7 +33,15 @@ jobs:
   trigger-claude:
     concurrency:
       group: copilot-review-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
+      # `cancel-in-progress: false` is intentional. With `true`, a new
+      # Copilot review/comment event can cancel a label-triggered run
+      # before its first step removes the `copilot-review` label,
+      # leaving the label stuck on the PR. Re-adding an already-present
+      # label fires no event, so the manual retry path breaks. Marker-
+      # based dedup later in the job (`already` /
+      # `local_in_progress`) already prevents duplicate `@claude` posts,
+      # so queueing is the safe choice.
+      cancel-in-progress: false
     # Run when: Copilot submits a review OR posts a review comment OR
     # 'copilot-review' label is added by the maintainer.
     # Only for same-repo PRs authored by kotakanbe (fork PRs cannot access
@@ -107,6 +122,110 @@ jobs:
           # has no TTL (HEAD-scoped, cleared by next push). Same semantics
           # as the cron path in copilot-clean-label.yml.
           LOCAL_MARKER_MAX_AGE_MIN=30
+
+          # Refresh HEAD_SHA at runtime, not from the event payload.
+          # `cancel-in-progress: false` (above) means an older queued
+          # event can run after a newer push has advanced the PR HEAD;
+          # the payload-derived `github.event.pull_request.head.sha`
+          # would then post a marker / `@claude` trigger keyed to a
+          # stale SHA, while the cron / event-driven dedup looks up
+          # the current SHA and would still post a duplicate trigger
+          # for the newer HEAD. Read the current PR HEAD via
+          # `gh pr view` and branch by event type:
+          #
+          #   AUTO event paths (`pull_request_review` /
+          #   `pull_request_review_comment`):
+          #     - on `gh pr view` error: fail-CLOSED (exit 0). The
+          #       same Copilot review/comment that fired this run
+          #       will re-fire on the next cron tick / re-request,
+          #       so cron / a fresh Copilot review will eventually
+          #       drive the PR forward without us posting a
+          #       possibly-stale trigger now.
+          #     - on payload-vs-current SHA mismatch: exit early. A
+          #       fresh Copilot review/comment for the newer HEAD
+          #       will fire its own event reaching this workflow,
+          #       and if Copilot does NOT re-review, the cron
+          #       fallback covers within ~30–60 min.
+          #
+          #   MANUAL label path (`pull_request` event):
+          #     - on `gh pr view` error: fail-OPEN (fall back to
+          #       payload SHA and proceed). The earlier step has
+          #       already removed `copilot-review`, so a silent
+          #       exit would leave the operator with no CI run and
+          #       no feedback comment. Note: the manual label path
+          #       intentionally bypasses both `already` /
+          #       `local_in_progress` dedup checks below (escape
+          #       hatch semantics), so this fallback may post a
+          #       trigger keyed to a stale SHA — that is the
+          #       documented trade-off for keeping the retry path
+          #       actionable. Operator can re-attach the label
+          #       (after manually removing it) once the API
+          #       recovers if the stale-SHA trigger is unwanted.
+          #     - on payload-vs-current SHA mismatch: proceed using
+          #       the current SHA (no newer label-add event will
+          #       reach this workflow because the label-add event
+          #       has been consumed by the earlier remove step;
+          #       skipping would silently no-op).
+          payload_sha="${HEAD_SHA:-}"
+          current_sha=""
+          if ! current_sha=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid'); then
+            current_sha=""
+            if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
+              # Manual label path: the earlier step has already
+              # removed `copilot-review`, so an exit here would be
+              # a silent no-op (no `@claude` trigger, no PR
+              # feedback). Fall back to the payload SHA and
+              # proceed. The operator gets a CI run for what we
+              # can verify (payload HEAD), which is better than
+              # nothing. (The manual label path bypasses the
+              # `already` / `local_in_progress` dedup further
+              # down — see "Manual label path bypasses both
+              # suppressions" below — so this fallback may post a
+              # trigger keyed to a stale SHA. Documented trade-off
+              # for keeping the retry path actionable.)
+              echo "::warning::PR #$PR_NUMBER: gh pr view --json headRefOid failed on manual label path — falling back to payload HEAD ($payload_sha) and proceeding (label was already removed; silent exit would break the manual retry path)"
+              current_sha="$payload_sha"
+            else
+              # Auto event paths: skipping is safe — the same
+              # Copilot review/comment that fired this run will
+              # re-fire on the next cron tick / re-request, so
+              # cron / a fresh Copilot review will eventually
+              # drive this PR forward without us posting a
+              # possibly-stale trigger now.
+              echo "::warning::PR #$PR_NUMBER: gh pr view --json headRefOid failed on auto event path — skipping @claude trigger (will be re-driven by cron / next Copilot review)"
+              exit 0
+            fi
+          fi
+          if [ -z "$current_sha" ] || [ "${#current_sha}" -lt 40 ]; then
+            echo "::warning::missing/short current PR HEAD '$current_sha' — skip @claude trigger"
+            exit 0
+          fi
+          if [ -n "$payload_sha" ] && [ "$payload_sha" != "$current_sha" ]; then
+            if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
+              # Manual label path: the operator already chose to
+              # engage CI by attaching `copilot-review`, and the
+              # label-add event has already been consumed (the
+              # earlier "Remove copilot-review label if present"
+              # step ate the label). No newer event will reach this
+              # workflow on this label-add, so a stale-SHA exit
+              # here would be a silent no-op (label removed, no CI
+              # run, no feedback comment for the operator). Proceed
+              # using the current HEAD instead.
+              echo "stale label event: payload HEAD=$payload_sha, current HEAD=$current_sha — proceeding with current HEAD (manual label path: no newer event will reach this workflow)"
+            else
+              # Auto event paths (`pull_request_review` /
+              # `pull_request_review_comment`): a fresh Copilot
+              # review/comment for the newer HEAD will fire its
+              # own event reaching this workflow with the up-to-
+              # date HEAD; if Copilot does NOT re-review, the
+              # cron fallback in `copilot-clean-label.yml` covers
+              # this PR within ~30–60 min. Either way, skipping
+              # this stale-SHA run is correct.
+              echo "stale auto event: payload HEAD=$payload_sha, current HEAD=$current_sha — skip @claude trigger (newer Copilot review/comment for current HEAD will fire its own event, otherwise cron fallback handles within ~30–60 min)"
+              exit 0
+            fi
+          fi
+          HEAD_SHA="$current_sha"
           if [ -z "${HEAD_SHA:-}" ] || [ "${#HEAD_SHA}" -lt 40 ]; then
             echo "::warning::missing/short HEAD_SHA '$HEAD_SHA' — skip @claude trigger"
             exit 0
