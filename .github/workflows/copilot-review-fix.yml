@@ -118,14 +118,33 @@ jobs:
 
           # Capture stdout only; on failure gh writes diagnostics to stderr
           # which lands in the workflow log directly (visible without parsing).
-          # `local_in_progress=1` is the fail-CLOSED default for the local
-          # marker check (parallel-fix race avoidance); `already=0` is the
-          # fail-OPEN default for the @claude dedup (predates the local
-          # marker; claude.yml dedups via cancel-in-progress anyway).
+          # `already=0` is the fail-OPEN default for the @claude dedup
+          # (predates the local marker; claude.yml dedups via
+          # cancel-in-progress anyway).
+          # `local_in_progress` default differentiates by event:
+          #   - event-driven path (`pull_request_review_comment`): 1
+          #     (fail-CLOSED). Automatic Copilot-bot trigger; if we
+          #     can't read the marker, suppress to avoid racing a
+          #     local /review-until-clean session.
+          #   - manual label path (`pull_request: [labeled]`): 0
+          #     (fail-OPEN). The user explicitly added the label
+          #     requesting CI run; the previous step already removed
+          #     the label, so silently dropping the @claude post here
+          #     would require the user to notice and re-add it. Honor
+          #     the explicit user intent over the race-avoidance
+          #     default.
           already=0
-          local_in_progress=1
+          if [ "${GITHUB_EVENT_NAME:-}" = "pull_request_review_comment" ]; then
+            local_in_progress=1
+          else
+            local_in_progress=0
+          fi
           if ! comments_json=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments"); then
-            echo "::warning::failed to fetch issue comments for marker dedup — treating as 'local in progress' (fail-closed for local marker)"
+            if [ "$local_in_progress" = "1" ]; then
+              echo "::warning::failed to fetch issue comments for marker dedup — treating as 'local in progress' (fail-closed for local marker on event-driven path)"
+            else
+              echo "::warning::failed to fetch issue comments for marker dedup — proceeding with post (fail-open on manual label path; user explicitly requested run)"
+            fi
           else
             # @claude trigger dedup — also matches the converged marker
             # so a /review-until-clean B_CLEAN exit on this HEAD permanently
@@ -148,7 +167,12 @@ jobs:
               ''|*[!0-9]*) already=0 ;;
             esac
             # Local active-marker suppression — 30-min TTL on `updated_at`
-            # (refreshed by skill heartbeat PATCH).
+            # (refreshed by skill heartbeat PATCH). The jq parse fallback
+            # uses `$local_in_progress` (the event-aware default set
+            # above) so a corrupt parse on the manual label path falls
+            # OPEN (honor user intent) and on the event-driven path
+            # falls CLOSED (avoid race).
+            jq_default=$local_in_progress
             local_in_progress=$(printf '%s' "$comments_json" | jq -s -r \
                 --arg m "$local_marker" \
                 --arg cutoff "$local_marker_cutoff" '
@@ -159,9 +183,9 @@ jobs:
                   and (.body | startswith($m))
                   and (.updated_at >= $cutoff)
                 )] | length
-            ' 2>/dev/null || echo 1)
+            ' 2>/dev/null || echo "$jq_default")
             case "$local_in_progress" in
-              ''|*[!0-9]*) local_in_progress=1 ;;
+              ''|*[!0-9]*) local_in_progress=$jq_default ;;
             esac
           fi
           if [ "$local_in_progress" != "0" ]; then

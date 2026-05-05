@@ -100,10 +100,20 @@ jobs:
           PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
           GH_REPO: ${{ github.repository }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          # Best-effort lookup. The skill can derive headRefName itself
+          # from `$PR_NUMBER` later (via its own `gh pr view`), so a
+          # transient failure here must NOT fail the whole workflow —
+          # we'd otherwise turn a convenience env into a single point
+          # of failure for every @claude run. On failure, leave
+          # `head_ref` unset; the skill will fall back to its in-skill
+          # PR detection.
           if [[ -n "$PR_NUMBER" ]]; then
-            head_ref=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefName --jq .headRefName)
-            echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+            if head_ref=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefName --jq .headRefName 2>&1); then
+              echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::Resolve PR head ref name: gh pr view failed (PR_NUMBER=$PR_NUMBER): $head_ref — skill will derive from PR_NUMBER directly"
+            fi
           fi
 
       - uses: anthropics/claude-code-action@1c8b699d43e9bfed42b48ef15da85d89bab70960 # v1.0.94
