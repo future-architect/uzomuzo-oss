@@ -50,9 +50,12 @@ jobs:
     timeout-minutes: 5
     permissions:
       pull-requests: write
-      # Required for `gh pr edit --add-label/--remove-label` (label edits route
-      # through the Issues API) and for `gh pr comment` (PR comments are issue
-      # comments at the API level), used by the cron-poll @claude trigger fallback.
+      # `gh pr edit --add-label/--remove-label` and `gh pr comment` route
+      # through the Issues API, so they need `issues: write` — but only when
+      # `gh` authenticates via GITHUB_TOKEN. This job authenticates via the
+      # PAT in `GH_TOKEN` (env below), so this entry is the documented
+      # GITHUB_TOKEN scope set if the PAT were removed; it does NOT control
+      # the effective auth for the `gh` calls in this workflow.
       issues: write
     env:
       # PAT (kotakanbe), not GITHUB_TOKEN: GraphQL `requestReviews` for the
@@ -299,16 +302,25 @@ jobs:
                     fi
                     if [ "$already_triggered" = "0" ]; then
                       echo "Posting @claude trigger for HEAD $head_sha (cron fallback)"
-                      if ! gh pr comment "$pr" --repo "$REPO" --body "$(cat <<BODY
-          @claude Follow the procedure in \`.github/prompts/review.prompt.md\` with \`--copilot-only\` mode for this PR.
+                      # Quoted heredoc disables parameter expansion / command
+                      # substitution inside the literal instruction block;
+                      # the dynamic $trigger_marker is appended after the
+                      # body so future edits cannot accidentally introduce
+                      # `$()` or backtick execution paths.
+                      trigger_body=$(cat <<'BODY'
+          @claude Follow the procedure in `.github/prompts/review.prompt.md` with `--copilot-only` mode for this PR.
 
           Phase 2: Resolve all unresolved Copilot review threads (discover → classify → fix → build/test/lint → commit/push → reply/resolve).
-          Phase 3: Detect recurring patterns from FIX-classified comments, propose and apply coding rules to \`.github/instructions/\`, then run \`make sync-instructions\`.
+          Phase 3: Detect recurring patterns from FIX-classified comments, propose and apply coding rules to `.github/instructions/`, then run `make sync-instructions`.
           Phase 4: Post a summary comment on this PR.
-
-          $trigger_marker
           BODY
-          )"; then
+          )
+                      # $() strips trailing newlines, so re-introduce a blank
+                      # line before the marker to keep the previous layout.
+                      trigger_body="${trigger_body}
+
+          ${trigger_marker}"
+                      if ! gh pr comment "$pr" --repo "$REPO" --body "$trigger_body"; then
                         echo "::warning::PR #$pr: failed to post @claude trigger comment"
                       fi
                     else
