@@ -75,16 +75,34 @@ jobs:
           # active marker in place. Refuse upfront with a clear comment
           # so the maintainer knows to fix workflow PRs locally via
           # `/review-until-clean` (which uses their own gh auth).
-          # Fail-CLOSED on `gh pr diff` failure: a transient API / auth
-          # error must NOT silently bypass the workflow-file guard
-          # (would let Phase B push hit 403 mid-loop and spin until
-          # timeout). Treat fetch failure as "could be a workflow-file
-          # PR" and decline cleanly with a guidance comment.
-          if ! diff_files=$(gh pr diff "$PR_NUMBER" --repo "$GH_REPO" --name-only 2>&1); then
-            echo "::warning::PR #$PR_NUMBER: gh pr diff failed ($diff_files) — cannot verify workflow-file status. Failing closed."
+          # Fail-CLOSED on `gh pr view --json files` failure: a transient
+          # API / auth error must NOT silently bypass the workflow-file
+          # guard (would let Phase B push hit 403 mid-loop and spin
+          # until timeout). Treat fetch failure as "could be a
+          # workflow-file PR" and decline cleanly with a guidance
+          # comment.
+          #
+          # Use `gh pr view --json files` (returns both `path` and
+          # `previousPath`) instead of `gh pr diff --name-only` (which
+          # only reports the rename destination). Renames OUT of
+          # `.github/workflows/**` would otherwise miss this guard
+          # even though `git push` would still 403 on the source path.
+          err_file=$(mktemp)
+          if ! files_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json files 2>"$err_file"); then
+            err=$(cat "$err_file")
+            echo "::warning::PR #$PR_NUMBER: gh pr view --json files failed: $err — cannot verify workflow-file status. Failing closed."
+            rm -f "$err_file"
             touches_workflows=1
           else
-            touches_workflows=$(printf '%s\n' "$diff_files" | grep -c '^\.github/workflows/' || true)
+            rm -f "$err_file"
+            # `.path` covers added/modified/deleted; `.previousPath`
+            # covers source side of renames. Match on either.
+            touches_workflows=$(printf '%s' "$files_json" | jq '[.files[]
+                | (.path // "") , (.previousPath // "")
+                | select(startswith(".github/workflows/"))] | length')
+            case "$touches_workflows" in
+              ''|*[!0-9]*) touches_workflows=1 ;;
+            esac
           fi
           if [[ "$touches_workflows" -gt 0 ]]; then
             echo "::warning::PR #$PR_NUMBER touches .github/workflows/** — CI claude task cannot push under GH_ACTIONS_TOKEN scope. Posting a guidance comment and exiting cleanly so cron does not retry indefinitely."
@@ -153,12 +171,19 @@ jobs:
           # of failure for every @claude run. On failure, leave
           # `head_ref` unset; the skill will fall back to its in-skill
           # PR detection.
+          # IMPORTANT: capture stderr separately so non-fatal `gh`
+          # warnings don't pollute the `head_ref` value (a polluted
+          # value would propagate into the skill's `git push origin
+          # HEAD:$BRANCH` and turn a healthy run into an invalid push).
           if [[ -n "$PR_NUMBER" ]]; then
-            if head_ref=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefName --jq .headRefName 2>&1); then
+            err_file=$(mktemp)
+            if head_ref=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefName --jq .headRefName 2>"$err_file"); then
               echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
             else
-              echo "::warning::Resolve PR head ref name: gh pr view failed (PR_NUMBER=$PR_NUMBER): $head_ref — skill will derive from PR_NUMBER directly"
+              err_msg=$(cat "$err_file")
+              echo "::warning::Resolve PR head ref name: gh pr view failed (PR_NUMBER=$PR_NUMBER): $err_msg — skill will derive from PR_NUMBER directly"
             fi
+            rm -f "$err_file"
           fi
 
       - uses: anthropics/claude-code-action@1c8b699d43e9bfed42b48ef15da85d89bab70960 # v1.0.94
