@@ -8,9 +8,12 @@ on:
   # (created) events are unreliable for the Copilot bot due to the agentic
   # architecture's GITHUB_TOKEN-driven event suppression. They are still listened
   # for as a best-effort fast path; the cron-driven fallback in
-  # `copilot-clean-label.yml` covers the suppressed cases within ~30–60 min
-  # (cron fires every 30 minutes, worst case is "marker posted just after a
-  # tick" so cron only resumes on the tick after, ≈60 min later).
+  # `copilot-clean-label.yml` runs every 30 minutes, so:
+  #   - suppressed-event recovery: ≤30 min worst case (next tick fires).
+  #   - local-marker TTL recovery: 30–60 min worst case (a fresh
+  #     `copilot-fix-local:<HEAD>` marker may cause the first tick to
+  #     skip; the next tick is needed to resume — see the marker
+  #     freshness check in `copilot-clean-label.yml`).
   #
   # Multiple events for the same PR are deduped by the marker-based check
   # below (`already` / `local_in_progress` jq passes), so the
@@ -128,11 +131,41 @@ jobs:
           # stale SHA, while the cron / event-driven dedup looks up
           # the current SHA and would still post a duplicate trigger
           # for the newer HEAD. Read the current PR HEAD via
-          # `gh pr view` and exit early if the payload SHA no longer
-          # matches it (the newer event will run separately and
-          # handle the current HEAD). Fail-closed on `gh pr view`
-          # error: skipping is safer than posting a possibly-stale
-          # trigger.
+          # `gh pr view` and branch by event type:
+          #
+          #   AUTO event paths (`pull_request_review` /
+          #   `pull_request_review_comment`):
+          #     - on `gh pr view` error: fail-CLOSED (exit 0). The
+          #       same Copilot review/comment that fired this run
+          #       will re-fire on the next cron tick / re-request,
+          #       so cron / a fresh Copilot review will eventually
+          #       drive the PR forward without us posting a
+          #       possibly-stale trigger now.
+          #     - on payload-vs-current SHA mismatch: exit early. A
+          #       fresh Copilot review/comment for the newer HEAD
+          #       will fire its own event reaching this workflow,
+          #       and if Copilot does NOT re-review, the cron
+          #       fallback covers within ~30–60 min.
+          #
+          #   MANUAL label path (`pull_request` event):
+          #     - on `gh pr view` error: fail-OPEN (fall back to
+          #       payload SHA and proceed). The earlier step has
+          #       already removed `copilot-review`, so a silent
+          #       exit would leave the operator with no CI run and
+          #       no feedback comment. Note: the manual label path
+          #       intentionally bypasses both `already` /
+          #       `local_in_progress` dedup checks below (escape
+          #       hatch semantics), so this fallback may post a
+          #       trigger keyed to a stale SHA — that is the
+          #       documented trade-off for keeping the retry path
+          #       actionable. Operator can re-attach the label
+          #       (after manually removing it) once the API
+          #       recovers if the stale-SHA trigger is unwanted.
+          #     - on payload-vs-current SHA mismatch: proceed using
+          #       the current SHA (no newer label-add event will
+          #       reach this workflow because the label-add event
+          #       has been consumed by the earlier remove step;
+          #       skipping would silently no-op).
           payload_sha="${HEAD_SHA:-}"
           current_sha=""
           if ! current_sha=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid'); then
@@ -142,10 +175,14 @@ jobs:
               # removed `copilot-review`, so an exit here would be
               # a silent no-op (no `@claude` trigger, no PR
               # feedback). Fall back to the payload SHA and
-              # proceed; if the payload SHA was stale, the marker
-              # dedup further down will skip cleanly. The operator
-              # gets a CI run for what we can verify (payload
-              # HEAD), which is better than nothing.
+              # proceed. The operator gets a CI run for what we
+              # can verify (payload HEAD), which is better than
+              # nothing. (The manual label path bypasses the
+              # `already` / `local_in_progress` dedup further
+              # down — see "Manual label path bypasses both
+              # suppressions" below — so this fallback may post a
+              # trigger keyed to a stale SHA. Documented trade-off
+              # for keeping the retry path actionable.)
               echo "::warning::PR #$PR_NUMBER: gh pr view --json headRefOid failed on manual label path — falling back to payload HEAD ($payload_sha) and proceeding (label was already removed; silent exit would break the manual retry path)"
               current_sha="$payload_sha"
             else
