@@ -2,10 +2,12 @@ name: Copilot Clean Label
 
 # Apply the `copilot-clean` label to a PR when its latest Copilot review on the
 # current HEAD reports no (new) comments, matching `generated no( new)? comments`
-# (case-insensitive). Remove the label otherwise. Driven by cron (every 5 min)
-# because `pull_request_review` (submitted) does not fire for Copilot since the
-# 2026-03-05 agentic-architecture migration. The `synchronize` event handles
-# instant label removal on new commits.
+# (case-insensitive). Remove the label otherwise. Driven by cron (every 30 min;
+# safety-net cadence — the primary path is the local `/review-until-clean`
+# skill which posts a suppression marker, and cron only fires when the skill
+# is absent or has crashed) because `pull_request_review` (submitted) does
+# not fire for Copilot since the 2026-03-05 agentic-architecture migration.
+# The `synchronize` event handles instant label removal on new commits.
 #
 # Labels owned by this workflow: `copilot-clean` (read+write).
 # Other Copilot-related labels (e.g. `copilot-review` consumed by
@@ -13,7 +15,7 @@ name: Copilot Clean Label
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/30 * * * *'
   pull_request:
     types: [opened, reopened, synchronize]
   workflow_dispatch:
@@ -84,14 +86,24 @@ jobs:
       # Stuck-PR detector threshold. If the latest `review_requested` event
       # for Copilot is older than this (and HEAD has no Copilot review yet),
       # re-fire the mutation.
-      # Effective refire cadence with cron 5 min + threshold 7 min:
-      #   T+5: age=5 < 7 -> skip; T+10: age=10 >= 7 -> fire (timestamp=10);
-      #   T+15: age=5 < 7 -> skip; T+20: age=10 >= 7 -> fire ...
-      # = refire every other cron cycle (~10 min effective interval).
-      # This matches the prior cron 10 min + threshold 5 min behavior, so the
-      # absolute refire pressure on Copilot is unchanged; only the @claude
-      # trigger latency is halved.
-      STUCK_THRESHOLD_MIN: '7'
+      # Effective refire cadence with cron 30 min + threshold 25 min:
+      #   T+30:  age=30 >= 25 -> fire (timestamp=30);
+      #   T+60:  age=30 >= 25 -> fire (timestamp=60);
+      # = refire every cron cycle (~30 min effective interval).
+      # This is the safety-net path; the local /review-until-clean skill is
+      # the fast path and won't depend on the stuck detector.
+      STUCK_THRESHOLD_MIN: '25'
+      # Local-skill marker max-age. The `/review-until-clean` skill (Phase
+      # B) posts `<!-- copilot-fix-local:<HEAD_SHA> -->` to suppress the
+      # cron @claude trigger while the user iterates locally. If the skill
+      # crashes / aborts without a subsequent push, the marker remains
+      # for that HEAD forever (HEAD doesn't change ⇒ no auto-expire).
+      # This threshold caps how long cron honors a marker; after it,
+      # cron treats the marker as stale and resumes the @claude trigger.
+      # The skill should heartbeat (PATCH-update the marker on each
+      # iteration / polling cycle) to stay below the threshold; see
+      # /review-until-clean SKILL.md.
+      LOCAL_MARKER_MAX_AGE_MIN: '30'
     steps:
       - name: Resolve target PR list
         env:
@@ -272,35 +284,115 @@ jobs:
                     echo "::warning::PR #$pr: missing/short head_sha '$head_sha' — skip @claude trigger"
                   else
                     trigger_marker="<!-- copilot-fix-trigger:$head_sha -->"
+                    # LOCAL SUPPRESSION MARKER (posted by `/review-until-clean`
+                    # skill, Phase B):
+                    #   format:    <!-- copilot-fix-local:<HEAD_SHA> -->
+                    #   author:    posted via PAT (kotakanbe), same as trigger
+                    #   semantics: HEAD-scoped pause on the cron @claude trigger.
+                    #              The skill iterates Copilot reviews locally;
+                    #              this marker tells cron "I am driving this
+                    #              HEAD, stand down". Auto-invalidates on push
+                    #              (new HEAD ⇒ new marker key, cron resumes).
+                    # Skill contract: PATCH the marker comment (1 per HEAD)
+                    # on each iteration so `updated_at` stays fresh
+                    # (heartbeat). Cron honors the marker only while it is
+                    # younger than `LOCAL_MARKER_MAX_AGE_MIN`; older = stale
+                    # (skill crashed / aborted) ⇒ cron resumes. We use
+                    # `updated_at` (not `created_at`) so heartbeats do NOT
+                    # spawn new comments.
+                    local_marker="<!-- copilot-fix-local:$head_sha -->"
+                    # Skill convergence marker: posted (via PATCH from
+                    # the active marker) when /review-until-clean
+                    # finishes its Phase B+C cleanly on this HEAD.
+                    # Acts as a permanent (no TTL) suppression for
+                    # the @claude trigger: cron must NOT re-fire
+                    # @claude for a HEAD where the skill already did
+                    # the work, otherwise the CI claude task would
+                    # repeat Phase C and post duplicate "WONT_FIX"
+                    # replies on unresolved threads.
+                    local_converged_marker="<!-- copilot-fix-local-converged:$head_sha -->"
+                    # Cutoff timestamp in RFC3339 UTC (matches GitHub
+                    # API's `.updated_at` format) so jq can compare
+                    # lexicographically — no date math needed in jq.
+                    local_marker_cutoff=$(date -u -d "$LOCAL_MARKER_MAX_AGE_MIN minutes ago" +%Y-%m-%dT%H:%M:%SZ)
                     # Capture stdout only; on failure gh writes diagnostics to
                     # stderr which lands in the workflow log (visible without
                     # parsing). `set -e` is active but all fallible commands use
                     # `if ! ...; then` guards so failures warn-and-continue.
-                    # On dedup fetch failure, proceed to post (worst case is a
-                    # duplicate, which claude.yml mitigates via cancel-in-progress).
+                    # The two checks below have OPPOSITE failure semantics on
+                    # fetch failure (see comment blocks at each default):
+                    #   `already_triggered`  ⇒ fail-OPEN (default 0): predates
+                    #     the local marker, post even on uncertainty.
+                    #   `local_in_progress`  ⇒ fail-CLOSED (default 1): avoid
+                    #     racing /review-until-clean (Phase B) when we
+                    #     cannot read the marker.
                     already_triggered=0
+                    # `local_in_progress=1` is the fail-closed default for
+                    # the local-skill suppression check: if the comments
+                    # fetch fails below, we cannot know whether the
+                    # `/review-until-clean` skill (Phase B) is currently
+                    # iterating this HEAD. Posting `@claude` blindly would
+                    # double-fire (CI claude task and local skill both
+                    # fixing in parallel, racing on push). Cron is a retry
+                    # loop — missing this tick costs at most one cron
+                    # cycle (~30-60 min including GitHub schedule lag),
+                    # which is strictly safer than a parallel fix race.
+                    local_in_progress=1
                     if ! issue_comments=$(gh api --paginate "repos/$REPO/issues/$pr/comments"); then
-                      echo "::warning::PR #$pr: failed to fetch issue comments for trigger dedup — proceeding with post"
+                      echo "::warning::PR #$pr: failed to fetch issue comments for trigger dedup — treating as 'local in progress' (fail-closed for local marker; cron retries next tick)"
                     else
-                      # Null-safe: comments authored by deleted/redacted users
-                      # may have body == null which would crash `contains()`.
-                      # Author + prefix scope: only kotakanbe-authored comments
-                      # that begin with "@claude" count, eliminating the
-                      # quoted-marker-in-prose false positive.
-                      already_triggered=$(printf '%s' "$issue_comments" | jq -s -r --arg m "$trigger_marker" '
+                      # `already_triggered` counts BOTH:
+                      #   (a) cron's own `@claude` trigger comments
+                      #       (kotakanbe + startswith @claude + contains
+                      #       `copilot-fix-trigger:<HEAD>` marker)
+                      #   (b) skill convergence comments
+                      #       (kotakanbe + startswith
+                      #       `copilot-fix-local-converged:<HEAD>`)
+                      # Both signal "no further @claude needed for this
+                      # HEAD".
+                      already_triggered=$(printf '%s' "$issue_comments" | jq -s -r \
+                          --arg trig "$trigger_marker" \
+                          --arg conv "$local_converged_marker" '
                         add // []
                         | [.[] | select(
                             .user.login == "kotakanbe"
                             and .body != null
-                            and (.body | startswith("@claude"))
-                            and (.body | contains($m))
+                            and (
+                              ((.body | startswith("@claude")) and (.body | contains($trig)))
+                              or (.body | startswith($conv))
+                            )
                           )] | length
                       ' 2>/dev/null || echo 0)
                       case "$already_triggered" in
                         ''|*[!0-9]*) already_triggered=0 ;;
                       esac
+                      # Local suppression check.
+                      #   - body MUST start with the marker tag (not merely
+                      #     contain it). Without `startswith()`, a kotakanbe
+                      #     comment that quotes / pastes the marker text in
+                      #     an unrelated discussion would falsely suppress
+                      #     the cron trigger for that HEAD.
+                      #   - Age filter on `.updated_at` (NOT `.created_at`):
+                      #     the skill heartbeats by PATCHing the marker's
+                      #     body, which bumps `updated_at` only.
+                      local_in_progress=$(printf '%s' "$issue_comments" | jq -s -r \
+                          --arg m "$local_marker" \
+                          --arg cutoff "$local_marker_cutoff" '
+                        add // []
+                        | [.[] | select(
+                            .user.login == "kotakanbe"
+                            and .body != null
+                            and (.body | startswith($m))
+                            and (.updated_at >= $cutoff)
+                          )] | length
+                      ' 2>/dev/null || echo 0)
+                      case "$local_in_progress" in
+                        ''|*[!0-9]*) local_in_progress=0 ;;
+                      esac
                     fi
-                    if [ "$already_triggered" = "0" ]; then
+                    if [ "$local_in_progress" != "0" ]; then
+                      echo "local fix in progress for HEAD $head_sha (fresh markers=$local_in_progress, max age=${LOCAL_MARKER_MAX_AGE_MIN}min) — skip @claude trigger (cron yields to /review-until-clean skill Phase B)"
+                    elif [ "$already_triggered" = "0" ]; then
                       echo "Posting @claude trigger for HEAD $head_sha (cron fallback)"
                       # Quoted heredoc disables parameter expansion / command
                       # substitution inside the literal instruction block;
@@ -308,11 +400,7 @@ jobs:
                       # body so future edits cannot accidentally introduce
                       # `$()` or backtick execution paths.
                       trigger_body=$(cat <<'BODY'
-          @claude Follow the procedure in `.github/prompts/review.prompt.md` with `--copilot-only` mode for this PR.
-
-          Phase 2: Resolve all unresolved Copilot review threads (discover → classify → fix → build/test/lint → commit/push → reply/resolve).
-          Phase 3: Detect recurring patterns from FIX-classified comments, propose and apply coding rules to `.github/instructions/`, then run `make sync-instructions`.
-          Phase 4: Post a summary comment on this PR.
+          @claude Run `/review-until-clean` for this PR (full Phase A+B+C: local agent review iteration → push + Copilot review iteration → reply+resolve all unresolved threads).
           BODY
           )
                       # $() strips trailing newlines, so re-introduce a blank

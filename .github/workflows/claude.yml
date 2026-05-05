@@ -21,7 +21,12 @@ jobs:
     concurrency:
       group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
       cancel-in-progress: true
-    timeout-minutes: 30
+    # The CI claude task runs `/review-until-clean` (full Phase A+B+C).
+    # Phase A (5 review agents) + Phase B (max 5 round Copilot iterate, up
+    # to ~10 min pending wait per round) + Phase C may take 30-60 min on
+    # PRs with substantive Copilot feedback. 60min cap balances coverage
+    # vs runaway runs.
+    timeout-minutes: 60
     permissions:
       contents: write
       pull-requests: write
@@ -84,11 +89,34 @@ jobs:
         with:
           install-only: true
 
+      - name: Resolve PR head ref name
+        id: pr_head_ref
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$PR_NUMBER" ]]; then
+            head_ref=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefName --jq .headRefName)
+            echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: anthropics/claude-code-action@1c8b699d43e9bfed42b48ef15da85d89bab70960 # v1.0.94
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GH_ACTIONS_TOKEN }}
-          claude_args: "--model opus --allowedTools 'Bash(*)' Edit Write Read Glob Grep"
+          # `Task` is required for /review-until-clean Phase A (launches
+          # subagents via Task tool: `code-reviewer`, `architect`, plus 3
+          # general-purpose Task invocations for Code Reuse / Quality / PR
+          # Hygiene).
+          claude_args: "--model opus --allowedTools 'Bash(*)' Edit Write Read Glob Grep Task"
           show_full_output: false
         env:
           CLAUDE_CODE_MAX_TURNS: "50"
+          # Exposed to the skill so Phase B Step 7 can detect the PR
+          # without relying on `gh pr view` (no-arg form), which fails
+          # in detached-HEAD CI checkout. Also exposes the head branch
+          # name so `git push` can target the right ref explicitly.
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          PR_HEAD_REF: ${{ steps.pr_head_ref.outputs.head_ref }}
