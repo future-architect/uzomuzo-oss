@@ -134,10 +134,20 @@ jobs:
           #     count includes the converged marker so a converged
           #     local session permanently suppresses CI rerun for
           #     this HEAD (avoids duplicate WONT_FIX replies).
+          # Manual label path (`pull_request` event from
+          # `copilot-review` label) is the documented escape-hatch
+          # retry: skip BOTH dedups (no @claude `already` check, no
+          # local-marker suppression) and unconditionally post the
+          # trigger. The maintainer explicitly opted in.
+          # Auto event paths (`pull_request_review` /
+          # `pull_request_review_comment`) keep both dedups so the
+          # cron-coordination contract holds.
           if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
+            manual_label_path=1
             local_in_progress=0  # fail-OPEN — manual label path
             already_includes_converged=0
           else
+            manual_label_path=0
             local_in_progress=1  # fail-CLOSED — auto-event paths
             already_includes_converged=1
           fi
@@ -208,13 +218,20 @@ jobs:
               ''|*[!0-9]*) local_in_progress=$jq_default ;;
             esac
           fi
-          if [ "$local_in_progress" != "0" ]; then
-            echo "local fix in progress for HEAD $HEAD_SHA (fresh markers=$local_in_progress, max age=${LOCAL_MARKER_MAX_AGE_MIN}min) — skip @claude trigger (event-driven path yields to /review-until-clean Phase B)"
-            exit 0
-          fi
-          if [ "$already" != "0" ]; then
-            echo "trigger already posted for HEAD $HEAD_SHA (count=$already) — skip"
-            exit 0
+          # Manual label path bypasses both suppressions (see manual_label_path
+          # rationale above). For auto-event paths the suppressions enforce the
+          # cron-coordination contract.
+          if [ "$manual_label_path" = "0" ]; then
+            if [ "$local_in_progress" != "0" ]; then
+              echo "local fix in progress for HEAD $HEAD_SHA (fresh markers=$local_in_progress, max age=${LOCAL_MARKER_MAX_AGE_MIN}min) — skip @claude trigger (event-driven path yields to /review-until-clean Phase B)"
+              exit 0
+            fi
+            if [ "$already" != "0" ]; then
+              echo "trigger already posted for HEAD $HEAD_SHA (count=$already) — skip"
+              exit 0
+            fi
+          else
+            echo "manual label path: bypassing dedup checks (already=$already, local_in_progress=$local_in_progress) — maintainer requested explicit retry"
           fi
 
           echo "Posting @claude trigger for HEAD $HEAD_SHA (event-driven path: $GITHUB_EVENT_NAME)"

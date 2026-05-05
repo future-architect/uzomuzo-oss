@@ -54,6 +54,41 @@ jobs:
             exit 1
           fi
 
+      - name: Reject workflow-file PRs
+        env:
+          GH_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo "No PR number found; skipping workflow-file check."
+            exit 0
+          fi
+          # `GH_ACTIONS_TOKEN` is the PAT used by /review-until-clean's
+          # `git push` calls inside the claude code action. It deliberately
+          # omits the `workflow` scope (defense-in-depth — keeps a bot
+          # from rewriting its own runtime). PRs that touch
+          # `.github/workflows/**` therefore cannot be pushed by CI; if
+          # we let the skill run, every Phase B push attempt would 403
+          # and the run would loop until timeout while leaving the
+          # active marker in place. Refuse upfront with a clear comment
+          # so the maintainer knows to fix workflow PRs locally via
+          # `/review-until-clean` (which uses their own gh auth).
+          touches_workflows=$(gh pr diff "$PR_NUMBER" --repo "$GH_REPO" --name-only | grep -c '^\.github/workflows/' || true)
+          if [[ "$touches_workflows" -gt 0 ]]; then
+            echo "::warning::PR #$PR_NUMBER touches .github/workflows/** — CI claude task cannot push under GH_ACTIONS_TOKEN scope. Posting a guidance comment and exiting cleanly so cron does not retry indefinitely."
+            gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "🛑 **CI auto-fix declined**: this PR touches \`.github/workflows/**\`, which the auto-fix PAT (\`GH_ACTIONS_TOKEN\`) cannot push (workflow scope is intentionally omitted; see \`.claude/rules/agents.md\` § \"Workflow-File PRs Are Resolved Locally\"). Run \`/review-until-clean\` locally instead — your gh auth has the workflow scope and can push the fixes." || true
+            # Exit 0 (not 1): a non-zero exit would mark the run failed
+            # in the PR check status, which is misleading because the
+            # decline is intentional. The cron path's `already_triggered`
+            # dedup will not retry because we just posted a kotakanbe
+            # comment that does NOT start with `@claude` — but the
+            # @claude trigger comment from cron earlier is what's
+            # already counted, so this is moot.
+            exit 0
+          fi
+
       - name: Determine checkout ref
         id: determine_ref
         env:
