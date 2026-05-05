@@ -134,9 +134,30 @@ jobs:
           # error: skipping is safer than posting a possibly-stale
           # trigger.
           payload_sha="${HEAD_SHA:-}"
+          current_sha=""
           if ! current_sha=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid'); then
-            echo "::warning::PR #$PR_NUMBER: gh pr view --json headRefOid failed — skipping @claude trigger (will be re-driven by cron / next event)"
-            exit 0
+            current_sha=""
+            if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
+              # Manual label path: the earlier step has already
+              # removed `copilot-review`, so an exit here would be
+              # a silent no-op (no `@claude` trigger, no PR
+              # feedback). Fall back to the payload SHA and
+              # proceed; if the payload SHA was stale, the marker
+              # dedup further down will skip cleanly. The operator
+              # gets a CI run for what we can verify (payload
+              # HEAD), which is better than nothing.
+              echo "::warning::PR #$PR_NUMBER: gh pr view --json headRefOid failed on manual label path — falling back to payload HEAD ($payload_sha) and proceeding (label was already removed; silent exit would break the manual retry path)"
+              current_sha="$payload_sha"
+            else
+              # Auto event paths: skipping is safe — the same
+              # Copilot review/comment that fired this run will
+              # re-fire on the next cron tick / re-request, so
+              # cron / a fresh Copilot review will eventually
+              # drive this PR forward without us posting a
+              # possibly-stale trigger now.
+              echo "::warning::PR #$PR_NUMBER: gh pr view --json headRefOid failed on auto event path — skipping @claude trigger (will be re-driven by cron / next Copilot review)"
+              exit 0
+            fi
           fi
           if [ -z "$current_sha" ] || [ "${#current_sha}" -lt 40 ]; then
             echo "::warning::missing/short current PR HEAD '$current_sha' — skip @claude trigger"
@@ -156,12 +177,14 @@ jobs:
               echo "stale label event: payload HEAD=$payload_sha, current HEAD=$current_sha — proceeding with current HEAD (manual label path: no newer event will reach this workflow)"
             else
               # Auto event paths (`pull_request_review` /
-              # `pull_request_review_comment`): a newer push triggers
-              # a fresh review/comment event that will reach this
-              # workflow with the up-to-date HEAD, so it's safe (and
-              # correct) to skip this stale-SHA run rather than post
-              # a duplicate trigger.
-              echo "stale auto event: payload HEAD=$payload_sha, current HEAD=$current_sha — skip @claude trigger (newer event will handle current HEAD)"
+              # `pull_request_review_comment`): a fresh Copilot
+              # review/comment for the newer HEAD will fire its
+              # own event reaching this workflow with the up-to-
+              # date HEAD; if Copilot does NOT re-review, the
+              # cron fallback in `copilot-clean-label.yml` covers
+              # this PR within ~30–60 min. Either way, skipping
+              # this stale-SHA run is correct.
+              echo "stale auto event: payload HEAD=$payload_sha, current HEAD=$current_sha — skip @claude trigger (newer Copilot review/comment for current HEAD will fire its own event, otherwise cron fallback handles within ~30–60 min)"
               exit 0
             fi
           fi
