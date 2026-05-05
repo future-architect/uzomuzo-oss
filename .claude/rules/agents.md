@@ -52,6 +52,19 @@ Reviewer agent findings (including CRITICAL severity) are **discussion input**, 
 
 **Why:** Reviewer agents see only code, not the design intent behind it. In PR #123, a reviewer flagged "transitive advisories not shown on RequestedVersion" as CRITICAL, but this was an intentional decision (see ADR-0011). Blindly implementing the "fix" re-introduced a bug the user had already reported and resolved.
 
+### Workflow-File PRs Are Resolved Locally, Not by CI Claude
+
+PRs whose changes touch `.github/workflows/**` MUST be fixed locally by a human-driven Claude session, not by the auto-fix loop in `copilot-review-fix.yml`.
+
+**Why:** The auto-fix PAT (`GH_ACTIONS_TOKEN`) intentionally lacks the `workflow` scope. Workflow files define CI runtime permissions and secret access — granting a bot the ability to rewrite them creates a privilege-escalation surface (prompt-injection or misbehaviour can self-modify the bot's own runtime). Defense-in-depth: keep PAT scope minimal; pay the small operational cost of manual intervention on workflow PRs.
+
+**How to apply:**
+- When CI Claude reports "PAT lacks `workflow` scope" on a workflow-file thread, do NOT propose granting the scope. Pull the branch locally, apply the fix, push.
+- The marker dedup in `copilot-review-fix.yml` invalidates on push (HEAD SHA changes), so a manual push cleanly re-arms the auto-fix loop for the next round.
+- If the same Copilot finding loops indefinitely on a non-workflow PR, that's a different bug — investigate the auto-fix loop, do NOT relax PAT scope.
+
+**Symptom of the broken case (for debugging):** trigger-claude job runs `success` but logs `trigger already posted for HEAD <sha> (count=1) — skip` because a prior Claude run posted the marker but couldn't push the actual fix.
+
 ## Worktree Isolation Policy
 
 Agents that **write files** (Edit, Write) MUST be launched with `isolation: "worktree"` to prevent branch conflicts during parallel development. This gives each agent an isolated copy of the repository.
