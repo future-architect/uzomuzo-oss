@@ -441,6 +441,43 @@ jobs:
                   echo "no change (review pending, no stale label)"
                 fi
 
+                # Stuck-PR detector marker check: skip the refire if a fresh
+                # `/review-until-clean` Phase B session is already polling
+                # this HEAD (it's the skill's Step 8.3 to drive the
+                # requestReviews refire itself). Without this, cron and
+                # local would BOTH fire requestReviews against the same
+                # HEAD, producing duplicate `review_requested` events and
+                # reviewer-slot churn while the local session is healthy.
+                # Same active-marker semantics as the dirty branch above:
+                # `startswith()` filter on the marker tag, `.updated_at`
+                # newer than `LOCAL_MARKER_MAX_AGE_MIN` ago.
+                pending_local_in_progress=0
+                if [ -n "$head_sha" ] && [ "${#head_sha}" -ge 40 ]; then
+                  pending_local_marker="<!-- copilot-fix-local:$head_sha -->"
+                  pending_local_cutoff=$(date -u -d "$LOCAL_MARKER_MAX_AGE_MIN minutes ago" +%Y-%m-%dT%H:%M:%SZ)
+                  pending_local_in_progress=1  # fail-closed default
+                  if pending_comments=$(gh api --paginate "repos/$REPO/issues/$pr/comments" 2>/dev/null); then
+                    pending_local_in_progress=$(printf '%s' "$pending_comments" | jq -s -r \
+                        --arg m "$pending_local_marker" \
+                        --arg cutoff "$pending_local_cutoff" '
+                      add // []
+                      | [.[] | select(
+                          .user.login == "kotakanbe"
+                          and .body != null
+                          and (.body | startswith($m))
+                          and (.updated_at >= $cutoff)
+                        )] | length
+                    ' 2>/dev/null || echo 1)
+                    case "$pending_local_in_progress" in
+                      ''|*[!0-9]*) pending_local_in_progress=1 ;;
+                    esac
+                  else
+                    echo "::warning::PR #$pr: failed to fetch issue comments for stuck-detector marker check — treating as 'local in progress' (fail-closed)"
+                  fi
+                fi
+                if [ "$pending_local_in_progress" != "0" ]; then
+                  echo "stuck detector: local /review-until-clean Phase B is iterating HEAD $head_sha (fresh markers=$pending_local_in_progress) — skip refire (skill drives requestReviews itself in Step 8.3)"
+                else
                 # Stuck-PR detector: re-fire requestReviews if Copilot was not
                 # pinged recently. Recovers from cases where the push-event
                 # mutation in copilot-rereview-on-push.yml was silently
@@ -673,6 +710,7 @@ jobs:
                     rm -f "$_stderr_tmp"
                   fi
                 fi
+                fi  # end pending_local_in_progress guard (skip stuck-detector when local skill is active)
                 ;;
             esac
 
