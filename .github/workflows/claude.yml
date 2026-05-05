@@ -75,7 +75,17 @@ jobs:
           # active marker in place. Refuse upfront with a clear comment
           # so the maintainer knows to fix workflow PRs locally via
           # `/review-until-clean` (which uses their own gh auth).
-          touches_workflows=$(gh pr diff "$PR_NUMBER" --repo "$GH_REPO" --name-only | grep -c '^\.github/workflows/' || true)
+          # Fail-CLOSED on `gh pr diff` failure: a transient API / auth
+          # error must NOT silently bypass the workflow-file guard
+          # (would let Phase B push hit 403 mid-loop and spin until
+          # timeout). Treat fetch failure as "could be a workflow-file
+          # PR" and decline cleanly with a guidance comment.
+          if ! diff_files=$(gh pr diff "$PR_NUMBER" --repo "$GH_REPO" --name-only 2>&1); then
+            echo "::warning::PR #$PR_NUMBER: gh pr diff failed ($diff_files) — cannot verify workflow-file status. Failing closed."
+            touches_workflows=1
+          else
+            touches_workflows=$(printf '%s\n' "$diff_files" | grep -c '^\.github/workflows/' || true)
+          fi
           if [[ "$touches_workflows" -gt 0 ]]; then
             echo "::warning::PR #$PR_NUMBER touches .github/workflows/** — CI claude task cannot push under GH_ACTIONS_TOKEN scope. Posting a guidance comment and exiting cleanly so cron does not retry indefinitely."
             gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "🛑 **CI auto-fix declined**: this PR touches \`.github/workflows/**\`, which the auto-fix PAT (\`GH_ACTIONS_TOKEN\`) cannot push (workflow scope is intentionally omitted; see \`.claude/rules/agents.md\` § \"Workflow-File PRs Are Resolved Locally\"). Run \`/review-until-clean\` locally instead — your gh auth has the workflow scope and can push the fixes." || true
