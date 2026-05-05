@@ -81,7 +81,7 @@ Agents that **write files** (Edit, Write) MUST be launched with `isolation: "wor
 - Agents with write tools (`refactor-cleaner`, `doc-updater`) → always `isolation: "worktree"`
 - Read-only agents (`planner`, `architect`, `code-reviewer`) → no isolation needed
 - If the worktree agent makes changes, review the returned branch and merge manually
-- **NEVER remove another agent's worktree.** Agent worktrees created by `isolation: "worktree"` are automatically managed by the Agent tool. Only the spawning session or the agent itself should clean them up.
+- **NEVER remove another agent's worktree.** Agent worktrees created by `isolation: "worktree"` are automatically managed by the Task tool. Only the spawning session or the agent itself should clean them up.
 
 ```markdown
 # GOOD: Write agent with worktree isolation

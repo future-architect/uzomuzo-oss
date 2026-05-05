@@ -395,7 +395,7 @@ if printf '%s' "$review_body" | grep -qiE 'generated no( new)? comments'; then
 fi
 ```
 
-`PHASE_B_EXIT_REASON` is initialized at Step 7 to default `B_ABORTED` (fail-safe). Only the clean path flips it to `B_CLEAN`. Timeouts / circuit breaks / unrecoverable failures leave it as `B_ABORTED`. Step 11.9 dispatches marker cleanup based on this value.
+`PHASE_B_EXIT_REASON` is initialized at Step 7 to default `B_ABORTED` (fail-safe). The Step 8.2 clean path and the all-WONT_FIX/ALREADY_FIXED circuit breaker (see Round circuit breakers below) flip it to `B_CLEAN`. Timeouts / max-round / unrecoverable failures leave it as `B_ABORTED`. Step 11.9 dispatches marker cleanup based on this value.
 
 #### Step 8.3: pending — request re-review + poll
 
@@ -498,7 +498,7 @@ The freshness lock in `post_local_marker` keys on the active tag only, so a re-r
 
 ### Step 9: Paginated discovery of all unresolved Copilot threads
 
-Same paginated GraphQL as Step 8.4.1 — picks up everything past the first 100.
+Same paginated GraphQL pattern as Step 8.4.1 (reduced fields — no `diffHunk` needed for reply/resolve) — handles PRs with more than 100 review threads.
 
 ```bash
 threads=$(gh api graphql --paginate \
@@ -525,7 +525,7 @@ query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
 
 ### Step 10: Classify each thread
 
-For threads already classified during Phase A/B, reuse the cached result. For threads not seen by Phase A/B (e.g., left over from before the skill ran), classify here using the same contract as Step 8.4.2.
+For threads already classified during Phase B, reuse the cached result. For threads not seen by Phase B (e.g., left over from before the skill ran), classify here using the same contract as Step 8.4.2.
 
 ### Step 11: Reply + resolve mutation
 
