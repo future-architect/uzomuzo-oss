@@ -95,47 +95,148 @@ jobs:
           #              in human prose does not produce a false match
           # Marker auto-invalidates on push (new HEAD = new marker key).
           # If you change ANY part of this contract, update both files.
+          #
+          # LOCAL SUPPRESSION MARKER (posted by /review-until-clean Phase B):
+          #   active form:    <!-- copilot-fix-local:<HEAD_SHA> -->
+          #   converged form: <!-- copilot-fix-local-converged:<HEAD_SHA> -->
+          # The event-driven Copilot review path also fires when the user is
+          # actively iterating locally; without the suppression-marker check
+          # we'd post a duplicate @claude trigger and start a CI
+          # /review-until-clean run racing the local one. The active marker
+          # has a 30-min TTL (heartbeated via PATCH); the converged marker
+          # has no TTL (HEAD-scoped, cleared by next push). Same semantics
+          # as the cron path in copilot-clean-label.yml.
+          LOCAL_MARKER_MAX_AGE_MIN=30
           if [ -z "${HEAD_SHA:-}" ] || [ "${#HEAD_SHA}" -lt 40 ]; then
             echo "::warning::missing/short HEAD_SHA '$HEAD_SHA' — skip @claude trigger"
             exit 0
           fi
           trigger_marker="<!-- copilot-fix-trigger:$HEAD_SHA -->"
+          local_marker="<!-- copilot-fix-local:$HEAD_SHA -->"
+          local_converged_marker="<!-- copilot-fix-local-converged:$HEAD_SHA -->"
+          local_marker_cutoff=$(date -u -d "$LOCAL_MARKER_MAX_AGE_MIN minutes ago" +%Y-%m-%dT%H:%M:%SZ)
 
           # Capture stdout only; on failure gh writes diagnostics to stderr
           # which lands in the workflow log directly (visible without parsing).
-          if ! comments_json=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments"); then
-            echo "::warning::failed to fetch issue comments for marker dedup"
-            echo "Proceeding with post (worst case is a duplicate comment, which claude.yml dedups via cancel-in-progress)."
+          # Event-name discrimination:
+          #   - manual label path (`pull_request` event): user
+          #     explicitly added `copilot-review`. fail-OPEN on dedup
+          #     fetch / parse failures (the previous step already
+          #     removed the label, so silently dropping @claude would
+          #     require the user to notice and re-add). `already`
+          #     count ignores the converged marker so a successful
+          #     `/review-until-clean` pass doesn't permanently block
+          #     the manual escape hatch on the same HEAD.
+          #   - event-driven path (`pull_request_review` /
+          #     `pull_request_review_comment`): automatic Copilot-bot
+          #     trigger. fail-CLOSED to avoid racing a local
+          #     `/review-until-clean` Phase B session. `already`
+          #     count includes the converged marker so a converged
+          #     local session permanently suppresses CI rerun for
+          #     this HEAD (avoids duplicate WONT_FIX replies).
+          # Manual label path (`pull_request` event from
+          # `copilot-review` label) is the documented escape-hatch
+          # retry: skip BOTH dedups (no @claude `already` check, no
+          # local-marker suppression) and unconditionally post the
+          # trigger. The maintainer explicitly opted in.
+          # Auto event paths (`pull_request_review` /
+          # `pull_request_review_comment`) keep both dedups so the
+          # cron-coordination contract holds.
+          if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
+            manual_label_path=1
+            local_in_progress=0  # fail-OPEN — manual label path
+            already_includes_converged=0
           else
-            # Null-safe + author + prefix scoping eliminates false positives:
-            #   - .body == null on redacted/deleted comments would crash contains()
-            #   - human-quoted marker text (e.g. in PR review prose) would match
-            #     contains() but not the (kotakanbe + startswith @claude) scope.
-            already=$(printf '%s' "$comments_json" | jq -s -r --arg m "$trigger_marker" '
+            manual_label_path=0
+            local_in_progress=1  # fail-CLOSED — auto-event paths
+            already_includes_converged=1
+          fi
+          already=0
+          if ! comments_json=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments"); then
+            if [ "$local_in_progress" = "1" ]; then
+              echo "::warning::failed to fetch issue comments for marker dedup — treating as 'local in progress' (fail-closed for local marker on event-driven path)"
+            else
+              echo "::warning::failed to fetch issue comments for marker dedup — proceeding with post (fail-open on manual label path; user explicitly requested run)"
+            fi
+          else
+            # @claude trigger dedup. The auto-event paths also count the
+            # converged marker so a /review-until-clean B_CLEAN exit on
+            # this HEAD permanently suppresses CI re-firing (avoids
+            # duplicate WONT_FIX replies). The manual label path
+            # ignores the converged marker — a maintainer explicitly
+            # adding `copilot-review` after a converged session is
+            # asking for a retry on this HEAD (e.g., to re-process a
+            # WONT_FIX they want addressed now).
+            if [ "$already_includes_converged" = "1" ]; then
+              already=$(printf '%s' "$comments_json" | jq -s -r \
+                  --arg trig "$trigger_marker" \
+                  --arg conv "$local_converged_marker" '
+                add // []
+                | [.[] | select(
+                    .user.login == "kotakanbe"
+                    and .body != null
+                    and (
+                      ((.body | startswith("@claude")) and (.body | contains($trig)))
+                      or (.body | startswith($conv))
+                    )
+                  )] | length
+              ' 2>/dev/null || echo 0)
+            else
+              already=$(printf '%s' "$comments_json" | jq -s -r \
+                  --arg trig "$trigger_marker" '
+                add // []
+                | [.[] | select(
+                    .user.login == "kotakanbe"
+                    and .body != null
+                    and (.body | startswith("@claude"))
+                    and (.body | contains($trig))
+                  )] | length
+              ' 2>/dev/null || echo 0)
+            fi
+            case "$already" in
+              ''|*[!0-9]*) already=0 ;;
+            esac
+            # Local active-marker suppression — 30-min TTL on `updated_at`
+            # (refreshed by skill heartbeat PATCH). The jq parse fallback
+            # uses `$local_in_progress` (the event-aware default set
+            # above) so a corrupt parse on the manual label path falls
+            # OPEN (honor user intent) and on the event-driven path
+            # falls CLOSED (avoid race).
+            jq_default=$local_in_progress
+            local_in_progress=$(printf '%s' "$comments_json" | jq -s -r \
+                --arg m "$local_marker" \
+                --arg cutoff "$local_marker_cutoff" '
               add // []
               | [.[] | select(
                   .user.login == "kotakanbe"
                   and .body != null
-                  and (.body | startswith("@claude"))
-                  and (.body | contains($m))
+                  and (.body | startswith($m))
+                  and (.updated_at >= $cutoff)
                 )] | length
-            ' 2>/dev/null || echo 0)
-            case "$already" in
-              ''|*[!0-9]*) already=0 ;;
+            ' 2>/dev/null || echo "$jq_default")
+            case "$local_in_progress" in
+              ''|*[!0-9]*) local_in_progress=$jq_default ;;
             esac
+          fi
+          # Manual label path bypasses both suppressions (see manual_label_path
+          # rationale above). For auto-event paths the suppressions enforce the
+          # cron-coordination contract.
+          if [ "$manual_label_path" = "0" ]; then
+            if [ "$local_in_progress" != "0" ]; then
+              echo "local fix in progress for HEAD $HEAD_SHA (fresh markers=$local_in_progress, max age=${LOCAL_MARKER_MAX_AGE_MIN}min) — skip @claude trigger (event-driven path yields to /review-until-clean Phase B)"
+              exit 0
+            fi
             if [ "$already" != "0" ]; then
               echo "trigger already posted for HEAD $HEAD_SHA (count=$already) — skip"
               exit 0
             fi
+          else
+            echo "manual label path: bypassing dedup checks (already=$already, local_in_progress=$local_in_progress) — maintainer requested explicit retry"
           fi
 
           echo "Posting @claude trigger for HEAD $HEAD_SHA (event-driven path: $GITHUB_EVENT_NAME)"
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$(cat <<BODY
-          @claude Follow the procedure in \`.github/prompts/review.prompt.md\` with \`--copilot-only\` mode for this PR.
-
-          Phase 2: Resolve all unresolved Copilot review threads (discover → classify → fix → build/test/lint → commit/push → reply/resolve).
-          Phase 3: Detect recurring patterns from FIX-classified comments, propose and apply coding rules to \`.github/instructions/\`, then run \`make sync-instructions\`.
-          Phase 4: Post a summary comment on this PR.
+          @claude Run \`/review-until-clean\` for this PR (full Phase A+B+C: local agent review iteration → push + Copilot review iteration → reply+resolve all unresolved threads).
 
           $trigger_marker
           BODY

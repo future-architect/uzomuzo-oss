@@ -21,7 +21,16 @@ jobs:
     concurrency:
       group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
       cancel-in-progress: true
-    timeout-minutes: 30
+    # The CI claude task runs `/review-until-clean` (full Phase A+B+C).
+    # Worst-case budget:
+    #   Phase A: ~5-10 min (5 review agents in parallel + iterate)
+    #   Phase B: up to ~75 min (5 rounds × 15 min: 10 min pending wait
+    #            + 5 min fix/build/test/lint/commit/push)
+    #   Phase C: ~1-3 min (paginated discovery + reply/resolve)
+    # = ~80-90 min ceiling on heavy PRs. 90 min covers the worst case;
+    # under that, the run is force-killed and the next cron tick re-fires
+    # via @claude (idempotent: marker / dedup contract preserved).
+    timeout-minutes: 90
     permissions:
       contents: write
       pull-requests: write
@@ -43,6 +52,69 @@ jobs:
           if [[ "$IS_FORK" == "true" ]]; then
             echo "::error::Fork PRs are not allowed for automated Claude execution"
             exit 1
+          fi
+
+      - name: Reject workflow-file PRs
+        env:
+          GH_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo "No PR number found; skipping workflow-file check."
+            exit 0
+          fi
+          # `GH_ACTIONS_TOKEN` is the PAT used by /review-until-clean's
+          # `git push` calls inside the claude code action. It deliberately
+          # omits the `workflow` scope (defense-in-depth — keeps a bot
+          # from rewriting its own runtime). PRs that touch
+          # `.github/workflows/**` therefore cannot be pushed by CI; if
+          # we let the skill run, every Phase B push attempt would 403
+          # and the run would loop until timeout while leaving the
+          # active marker in place. Refuse upfront with a clear comment
+          # so the maintainer knows to fix workflow PRs locally via
+          # `/review-until-clean` (which uses their own gh auth).
+          # Fail-CLOSED on `gh pr view --json files` failure: a transient
+          # API / auth error must NOT silently bypass the workflow-file
+          # guard (would let Phase B push hit 403 mid-loop and spin
+          # until timeout). Treat fetch failure as "could be a
+          # workflow-file PR" and decline cleanly with a guidance
+          # comment.
+          #
+          # Use `gh pr view --json files` (returns both `path` and
+          # `previousPath`) instead of `gh pr diff --name-only` (which
+          # only reports the rename destination). Renames OUT of
+          # `.github/workflows/**` would otherwise miss this guard
+          # even though `git push` would still 403 on the source path.
+          err_file=$(mktemp)
+          if ! files_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json files 2>"$err_file"); then
+            err=$(cat "$err_file")
+            echo "::warning::PR #$PR_NUMBER: gh pr view --json files failed: $err — cannot verify workflow-file status. Failing closed."
+            rm -f "$err_file"
+            touches_workflows=1
+          else
+            rm -f "$err_file"
+            # `.path` covers added/modified/deleted; `.previousPath`
+            # covers source side of renames. Match on either.
+            touches_workflows=$(printf '%s' "$files_json" | jq '[.files[]
+                | (.path // "") , (.previousPath // "")
+                | select(startswith(".github/workflows/"))] | length')
+            case "$touches_workflows" in
+              ''|*[!0-9]*) touches_workflows=1 ;;
+            esac
+          fi
+          if [[ "$touches_workflows" -gt 0 ]]; then
+            echo "::warning::PR #$PR_NUMBER touches .github/workflows/** — CI claude task cannot push under GH_ACTIONS_TOKEN scope. Posting a guidance comment and exiting cleanly so cron does not retry indefinitely."
+            gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "🛑 **CI auto-fix declined**: this PR touches \`.github/workflows/**\`, which the auto-fix PAT (\`GH_ACTIONS_TOKEN\`) cannot push (workflow scope is intentionally omitted; see \`.claude/rules/agents.md\` § \"Workflow-File PRs Are Resolved Locally\"). Run \`/review-until-clean\` locally instead — your gh auth has the workflow scope and can push the fixes." || true
+            # Exit 0 (not 1): a non-zero exit would mark the run failed
+            # in the PR check status, which is misleading because the
+            # decline is intentional. The cron path's `already_triggered`
+            # dedup will not retry because we just posted a kotakanbe
+            # comment that does NOT start with `@claude` — but the
+            # @claude trigger comment from cron earlier is what's
+            # already counted, so this is moot.
+            exit 0
           fi
 
       - name: Determine checkout ref
@@ -84,11 +156,51 @@ jobs:
         with:
           install-only: true
 
+      - name: Resolve PR head ref name
+        id: pr_head_ref
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          # Best-effort lookup. The skill can derive headRefName itself
+          # from `$PR_NUMBER` later (via its own `gh pr view`), so a
+          # transient failure here must NOT fail the whole workflow —
+          # we'd otherwise turn a convenience env into a single point
+          # of failure for every @claude run. On failure, leave
+          # `head_ref` unset; the skill will fall back to its in-skill
+          # PR detection.
+          # IMPORTANT: capture stderr separately so non-fatal `gh`
+          # warnings don't pollute the `head_ref` value (a polluted
+          # value would propagate into the skill's `git push origin
+          # HEAD:$BRANCH` and turn a healthy run into an invalid push).
+          if [[ -n "$PR_NUMBER" ]]; then
+            err_file=$(mktemp)
+            if head_ref=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefName --jq .headRefName 2>"$err_file"); then
+              echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+            else
+              err_msg=$(cat "$err_file")
+              echo "::warning::Resolve PR head ref name: gh pr view failed (PR_NUMBER=$PR_NUMBER): $err_msg — skill will derive from PR_NUMBER directly"
+            fi
+            rm -f "$err_file"
+          fi
+
       - uses: anthropics/claude-code-action@1c8b699d43e9bfed42b48ef15da85d89bab70960 # v1.0.94
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GH_ACTIONS_TOKEN }}
-          claude_args: "--model opus --allowedTools 'Bash(*)' Edit Write Read Glob Grep"
+          # `Task` is required for /review-until-clean Phase A (launches
+          # subagents via Task tool: `code-reviewer`, `architect`, plus 3
+          # general-purpose Task invocations for Code Reuse / Quality / PR
+          # Hygiene).
+          claude_args: "--model opus --allowedTools 'Bash(*)' Edit Write Read Glob Grep Task"
           show_full_output: false
         env:
           CLAUDE_CODE_MAX_TURNS: "50"
+          # Exposed to the skill so Phase B Step 7 can detect the PR
+          # without relying on `gh pr view` (no-arg form), which fails
+          # in detached-HEAD CI checkout. Also exposes the head branch
+          # name so `git push` can target the right ref explicitly.
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          PR_HEAD_REF: ${{ steps.pr_head_ref.outputs.head_ref }}

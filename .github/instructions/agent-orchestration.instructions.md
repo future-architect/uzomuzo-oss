@@ -1,22 +1,34 @@
 # Agent Orchestration
 
-## Available Agents
+## Agent invocation
 
-| Agent | Purpose | When to Use | Isolation |
-|-------|---------|-------------|-----------|
-| planner | Implementation planning | Complex features, refactoring | — |
-| architect | System design | Architectural decisions, package structure | — |
-| code-reviewer | Code review | After writing code | — |
-| refactor-cleaner | Dead code cleanup | Code maintenance | `worktree` |
-| doc-updater | Documentation | Updating docs, godoc | `worktree` |
-| deep-inspector | EOL batch evidence fetching | Deep Inspection orchestration | — |
+Agents are launched via the **`Task` tool**. The legacy `Agent(...)` API has been replaced with `Task(subagent_type=..., prompt=...)`.
+
+```
+Task(subagent_type="<named>", prompt="...")              # named subagent
+Task(subagent_type="general-purpose", prompt="...")     # generic agent + freeform prompt
+```
+
+`general-purpose` is **not a named subagent_type with a pre-registered prompt template** — it's a generic agent where the prompt you pass becomes the entire instruction. Use it for review focuses or open-ended investigations not covered by a named subagent (e.g., `/review-until-clean` Phase A's "Code Reuse" / "Code Quality" / "PR Hygiene" passes).
+
+## Available subagent types
+
+| subagent_type | Kind | Purpose | When to Use | Isolation |
+|---|---|---|---|---|
+| planner | named | Implementation planning | Complex features, refactoring | — |
+| architect | named | System design | Architectural decisions, package structure | — |
+| code-reviewer | named | Code review | After writing code | — |
+| refactor-cleaner | named | Dead code cleanup | Code maintenance | `worktree` |
+| doc-updater | named | Documentation | Updating docs, godoc | `worktree` |
+| deep-inspector | named | EOL batch evidence fetching | Deep Inspection orchestration | — |
+| general-purpose | generic | Any focused review / investigation | Review focuses without a named subagent (e.g., Code Reuse / Quality / PR Hygiene), open-ended search | — |
 
 ## Available Skills
 
 | Skill | Command | When to Use |
 |-------|---------|-------------|
+| review-until-clean | `/review-until-clean` | **1-shot to merge-ready**: Phase A (5-agent local review) → Phase B (push + Copilot review iteration with cron coordination) → Phase C (reply+resolve). Final pre-merge skill |
 | deadcode | `/deadcode [fix] [path]` | Quick dead code audit or interactive cleanup |
-| review | `/review [PR#] [--copilot-only] [--dry-run]` | Unified review: Claude + Copilot resolution + rule learning |
 | batch-issues | `/batch-issues [issue#s] [--dry-run] [--max-parallel N]` | Parallel issue processing with conflict-aware agent dispatch |
 | diet-trial | `/diet-trial <org/repo> [--tool trivy\|syft] [--compare]` | Run diet on external OSS for testing, bug finding, and case study data |
 | diet-fuzz | `/diet-fuzz <languages\|all> [--count N] [--tool trivy,syft,cdxgen] [--max-parallel N]` | Batch fuzz-test diet across many OSS projects for parser accuracy bugs |
@@ -30,15 +42,13 @@ No user prompt needed:
 
 ## Code Review Policy
 
-When the user requests a code review (e.g., "レビューして", "review this"), use the `/review` skill.
-This skill orchestrates:
+When the user requests a code review (e.g., "レビューして", "review this"), use the `/review-until-clean` skill. The skill is a single 1-shot pipeline:
 
-1. **Phase 1** — Launch **code-reviewer** + **architect** agents in parallel (Claude review)
-2. **Phase 2** — Discover and resolve unresolved **Copilot** review comments (fix, reply, resolve)
-3. **Phase 3** — Detect recurring Copilot patterns and propose **rule additions** to prevent repeat feedback
+1. **Phase A** — 5 review agents in parallel (`code-reviewer` + `architect` named subagents + 3 `general-purpose` agents for Code Reuse / Code Quality / PR Hygiene), iterate until 0 findings, build/vet/test/lint
+2. **Phase B** — push, then iterate Copilot review cycles (fix, push, wait for re-review) with cron coordination via `<!-- copilot-fix-local:<HEAD> -->` marker
+3. **Phase C** — discover all unresolved Copilot threads (paginated GraphQL), classify FIX / ALREADY_FIXED / WONT_FIX, reply + resolve mutation (WONT_FIX is replied but left unresolved for further discussion)
 
-Use `/review --copilot-only` to skip Phase 1 when only Copilot resolution is needed.
-See `.github/prompts/review.prompt.md` for the full specification.
+CI runs the same procedure (full Phase A+B+C) via `claude.yml`. See `.claude/skills/review-until-clean/SKILL.md` for the canonical procedure.
 
 ### Reviewer Findings Are Input, Not Directives
 
@@ -71,17 +81,17 @@ Agents that **write files** (Edit, Write) MUST be launched with `isolation: "wor
 - Agents with write tools (`refactor-cleaner`, `doc-updater`) → always `isolation: "worktree"`
 - Read-only agents (`planner`, `architect`, `code-reviewer`) → no isolation needed
 - If the worktree agent makes changes, review the returned branch and merge manually
-- **NEVER remove another agent's worktree.** Agent worktrees created by `isolation: "worktree"` are automatically managed by the Agent tool. Only the spawning session or the agent itself should clean them up.
+- **NEVER remove another agent's worktree.** Agent worktrees created by `isolation: "worktree"` are automatically managed by the Task tool. Only the spawning session or the agent itself should clean them up.
 
 ```markdown
 # GOOD: Write agent with worktree isolation
-Agent(subagent_type="refactor-cleaner", isolation="worktree", prompt="...")
+Task(subagent_type="refactor-cleaner", isolation="worktree", prompt="...")
 
 # GOOD: Read-only agent without isolation
-Agent(subagent_type="code-reviewer", prompt="...")
+Task(subagent_type="code-reviewer", prompt="...")
 
 # BAD: Write agent without isolation (can corrupt working tree)
-Agent(subagent_type="doc-updater", prompt="...")
+Task(subagent_type="doc-updater", prompt="...")
 
 # BAD: Deleting a worktree you didn't create
 git worktree remove .claude/worktrees/some-agent-worktree  # may break another session!
@@ -92,12 +102,11 @@ git worktree remove .claude/worktrees/some-agent-worktree  # may break another s
 ALWAYS use parallel Task execution for independent operations:
 
 ```markdown
-# GOOD: Parallel execution
-Launch 3 agents in parallel:
-1. Agent 1: Review cmd/root.go changes
-2. Agent 2: Review internal/config/ changes
-3. Agent 3: Check test coverage
+# GOOD: Parallel execution (one message, multiple Task tool calls)
+Task(subagent_type="code-reviewer", prompt="Review cmd/root.go changes")
+Task(subagent_type="code-reviewer", prompt="Review internal/config/ changes")
+Task(subagent_type="general-purpose", prompt="Check test coverage")
 
 # BAD: Sequential when unnecessary
-First agent 1, then agent 2, then agent 3
+First Task 1, then Task 2, then Task 3
 ```
