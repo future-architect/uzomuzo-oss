@@ -143,8 +143,27 @@ jobs:
             exit 0
           fi
           if [ -n "$payload_sha" ] && [ "$payload_sha" != "$current_sha" ]; then
-            echo "stale event: payload HEAD=$payload_sha, current HEAD=$current_sha — skip @claude trigger (newer event will handle current HEAD)"
-            exit 0
+            if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
+              # Manual label path: the operator already chose to
+              # engage CI by attaching `copilot-review`, and the
+              # label-add event has already been consumed (the
+              # earlier "Remove copilot-review label if present"
+              # step ate the label). No newer event will reach this
+              # workflow on this label-add, so a stale-SHA exit
+              # here would be a silent no-op (label removed, no CI
+              # run, no feedback comment for the operator). Proceed
+              # using the current HEAD instead.
+              echo "stale label event: payload HEAD=$payload_sha, current HEAD=$current_sha — proceeding with current HEAD (manual label path: no newer event will reach this workflow)"
+            else
+              # Auto event paths (`pull_request_review` /
+              # `pull_request_review_comment`): a newer push triggers
+              # a fresh review/comment event that will reach this
+              # workflow with the up-to-date HEAD, so it's safe (and
+              # correct) to skip this stale-SHA run rather than post
+              # a duplicate trigger.
+              echo "stale auto event: payload HEAD=$payload_sha, current HEAD=$current_sha — skip @claude trigger (newer event will handle current HEAD)"
+              exit 0
+            fi
           fi
           HEAD_SHA="$current_sha"
           if [ -z "${HEAD_SHA:-}" ] || [ "${#HEAD_SHA}" -lt 40 ]; then
