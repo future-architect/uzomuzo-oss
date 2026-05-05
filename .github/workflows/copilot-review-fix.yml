@@ -95,38 +95,82 @@ jobs:
           #              in human prose does not produce a false match
           # Marker auto-invalidates on push (new HEAD = new marker key).
           # If you change ANY part of this contract, update both files.
+          #
+          # LOCAL SUPPRESSION MARKER (posted by /review-until-clean Phase B):
+          #   active form:    <!-- copilot-fix-local:<HEAD_SHA> -->
+          #   converged form: <!-- copilot-fix-local-converged:<HEAD_SHA> -->
+          # The event-driven Copilot review path also fires when the user is
+          # actively iterating locally; without the suppression-marker check
+          # we'd post a duplicate @claude trigger and start a CI
+          # /review-until-clean run racing the local one. The active marker
+          # has a 30-min TTL (heartbeated via PATCH); the converged marker
+          # has no TTL (HEAD-scoped, cleared by next push). Same semantics
+          # as the cron path in copilot-clean-label.yml.
+          LOCAL_MARKER_MAX_AGE_MIN=30
           if [ -z "${HEAD_SHA:-}" ] || [ "${#HEAD_SHA}" -lt 40 ]; then
             echo "::warning::missing/short HEAD_SHA '$HEAD_SHA' — skip @claude trigger"
             exit 0
           fi
           trigger_marker="<!-- copilot-fix-trigger:$HEAD_SHA -->"
+          local_marker="<!-- copilot-fix-local:$HEAD_SHA -->"
+          local_converged_marker="<!-- copilot-fix-local-converged:$HEAD_SHA -->"
+          local_marker_cutoff=$(date -u -d "$LOCAL_MARKER_MAX_AGE_MIN minutes ago" +%Y-%m-%dT%H:%M:%SZ)
 
           # Capture stdout only; on failure gh writes diagnostics to stderr
           # which lands in the workflow log directly (visible without parsing).
+          # `local_in_progress=1` is the fail-CLOSED default for the local
+          # marker check (parallel-fix race avoidance); `already=0` is the
+          # fail-OPEN default for the @claude dedup (predates the local
+          # marker; claude.yml dedups via cancel-in-progress anyway).
+          already=0
+          local_in_progress=1
           if ! comments_json=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments"); then
-            echo "::warning::failed to fetch issue comments for marker dedup"
-            echo "Proceeding with post (worst case is a duplicate comment, which claude.yml dedups via cancel-in-progress)."
+            echo "::warning::failed to fetch issue comments for marker dedup — treating as 'local in progress' (fail-closed for local marker)"
           else
-            # Null-safe + author + prefix scoping eliminates false positives:
-            #   - .body == null on redacted/deleted comments would crash contains()
-            #   - human-quoted marker text (e.g. in PR review prose) would match
-            #     contains() but not the (kotakanbe + startswith @claude) scope.
-            already=$(printf '%s' "$comments_json" | jq -s -r --arg m "$trigger_marker" '
+            # @claude trigger dedup — also matches the converged marker
+            # so a /review-until-clean B_CLEAN exit on this HEAD permanently
+            # suppresses CI re-firing (would just produce duplicate WONT_FIX
+            # replies on unresolved threads).
+            already=$(printf '%s' "$comments_json" | jq -s -r \
+                --arg trig "$trigger_marker" \
+                --arg conv "$local_converged_marker" '
               add // []
               | [.[] | select(
                   .user.login == "kotakanbe"
                   and .body != null
-                  and (.body | startswith("@claude"))
-                  and (.body | contains($m))
+                  and (
+                    ((.body | startswith("@claude")) and (.body | contains($trig)))
+                    or (.body | startswith($conv))
+                  )
                 )] | length
             ' 2>/dev/null || echo 0)
             case "$already" in
               ''|*[!0-9]*) already=0 ;;
             esac
-            if [ "$already" != "0" ]; then
-              echo "trigger already posted for HEAD $HEAD_SHA (count=$already) — skip"
-              exit 0
-            fi
+            # Local active-marker suppression — 30-min TTL on `updated_at`
+            # (refreshed by skill heartbeat PATCH).
+            local_in_progress=$(printf '%s' "$comments_json" | jq -s -r \
+                --arg m "$local_marker" \
+                --arg cutoff "$local_marker_cutoff" '
+              add // []
+              | [.[] | select(
+                  .user.login == "kotakanbe"
+                  and .body != null
+                  and (.body | startswith($m))
+                  and (.updated_at >= $cutoff)
+                )] | length
+            ' 2>/dev/null || echo 1)
+            case "$local_in_progress" in
+              ''|*[!0-9]*) local_in_progress=1 ;;
+            esac
+          fi
+          if [ "$local_in_progress" != "0" ]; then
+            echo "local fix in progress for HEAD $HEAD_SHA (fresh markers=$local_in_progress, max age=${LOCAL_MARKER_MAX_AGE_MIN}min) — skip @claude trigger (event-driven path yields to /review-until-clean Phase B)"
+            exit 0
+          fi
+          if [ "$already" != "0" ]; then
+            echo "trigger already posted for HEAD $HEAD_SHA (count=$already) — skip"
+            exit 0
           fi
 
           echo "Posting @claude trigger for HEAD $HEAD_SHA (event-driven path: $GITHUB_EVENT_NAME)"
