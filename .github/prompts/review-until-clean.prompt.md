@@ -446,6 +446,17 @@ PHASE_C_OK=0                     # fail-safe default; Step 11.5 verification fli
 
 ### Step 8: Copilot review iteration loop (max 5 rounds)
 
+**Phase B exit criteria — DO NOT MISREAD.** Step 8.2 below is the only authoritative path that exits Phase B with `PHASE_B_EXIT_REASON=B_CLEAN`. A common operator mistake is to look at "unresolved Copilot thread count == 0" (a Phase C / GraphQL `reviewThreads` query) and conclude the loop is done — that is **wrong**. Thread-resolved count is a Phase C verification metric (Step 11.5); it does not reflect whether Copilot has yet re-reviewed the latest pushed HEAD. The four-condition Phase B exit checklist (formalizing Step 8.2's branches) is:
+
+1. **`HEAD_SHA` captured** for the latest commit on the branch (`git rev-parse HEAD` after the most recent push).
+2. **Latest Copilot review fetched** for the PR (Step 8.1's `latest`).
+3. **`review_commit == HEAD_SHA`** — the review is for the current HEAD, not a stale earlier commit. (If not, state is `pending` → Step 8.3.)
+4. **`review_body =~ /generated no( new)? comments/i`** — Copilot itself declared the PR clean for this HEAD.
+
+ALL four must be true to flip `PHASE_B_EXIT_REASON=B_CLEAN` and exit to Phase C. If 1-3 hold but condition 4 fails, the state is `dirty` → Step 8.4 (fix cycle). If condition 3 fails, the state is `pending` → Step 8.3 (wait + re-request). Do **not** infer Phase B done from `unresolved_thread_count == 0` alone — that count can be 0 between rounds (after Phase C of the previous round resolved everything) while Copilot has not yet re-reviewed the new HEAD; exiting on that signal is how round-N regressions slip through.
+
+When relaying state to the user mid-loop ("is the PR clean yet?"), re-run the four conditions every time — do **not** trust an earlier "clean" conclusion across a push, because a push invalidates condition 3.
+
 At each round entry, **heartbeat the marker**:
 
 ```bash
