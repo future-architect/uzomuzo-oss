@@ -13,7 +13,7 @@ on:
   # tick" so cron only resumes on the tick after, ≈60 min later).
   #
   # Multiple events for the same PR are deduped by the marker-based check
-  # below (`already_triggered` / `local_in_progress` jq passes), so the
+  # below (`already` / `local_in_progress` jq passes), so the
   # concurrency group below uses `cancel-in-progress: false` and lets
   # queued events run sequentially.
   pull_request_review:
@@ -35,7 +35,7 @@ jobs:
       # before its first step removes the `copilot-review` label,
       # leaving the label stuck on the PR. Re-adding an already-present
       # label fires no event, so the manual retry path breaks. Marker-
-      # based dedup later in the job (`already_triggered` /
+      # based dedup later in the job (`already` /
       # `local_in_progress`) already prevents duplicate `@claude` posts,
       # so queueing is the safe choice.
       cancel-in-progress: false
@@ -119,6 +119,34 @@ jobs:
           # has no TTL (HEAD-scoped, cleared by next push). Same semantics
           # as the cron path in copilot-clean-label.yml.
           LOCAL_MARKER_MAX_AGE_MIN=30
+
+          # Refresh HEAD_SHA at runtime, not from the event payload.
+          # `cancel-in-progress: false` (above) means an older queued
+          # event can run after a newer push has advanced the PR HEAD;
+          # the payload-derived `github.event.pull_request.head.sha`
+          # would then post a marker / `@claude` trigger keyed to a
+          # stale SHA, while the cron / event-driven dedup looks up
+          # the current SHA and would still post a duplicate trigger
+          # for the newer HEAD. Read the current PR HEAD via
+          # `gh pr view` and exit early if the payload SHA no longer
+          # matches it (the newer event will run separately and
+          # handle the current HEAD). Fail-closed on `gh pr view`
+          # error: skipping is safer than posting a possibly-stale
+          # trigger.
+          payload_sha="${HEAD_SHA:-}"
+          if ! current_sha=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid'); then
+            echo "::warning::PR #$PR_NUMBER: gh pr view --json headRefOid failed — skipping @claude trigger (will be re-driven by cron / next event)"
+            exit 0
+          fi
+          if [ -z "$current_sha" ] || [ "${#current_sha}" -lt 40 ]; then
+            echo "::warning::missing/short current PR HEAD '$current_sha' — skip @claude trigger"
+            exit 0
+          fi
+          if [ -n "$payload_sha" ] && [ "$payload_sha" != "$current_sha" ]; then
+            echo "stale event: payload HEAD=$payload_sha, current HEAD=$current_sha — skip @claude trigger (newer event will handle current HEAD)"
+            exit 0
+          fi
+          HEAD_SHA="$current_sha"
           if [ -z "${HEAD_SHA:-}" ] || [ "${#HEAD_SHA}" -lt 40 ]; then
             echo "::warning::missing/short HEAD_SHA '$HEAD_SHA' — skip @claude trigger"
             exit 0
