@@ -8,10 +8,14 @@ on:
   # (created) events are unreliable for the Copilot bot due to the agentic
   # architecture's GITHUB_TOKEN-driven event suppression. They are still listened
   # for as a best-effort fast path; the cron-driven fallback in
-  # `copilot-clean-label.yml` covers the suppressed cases within ~5 min.
+  # `copilot-clean-label.yml` covers the suppressed cases within ~30–60 min
+  # (cron fires every 30 minutes, worst case is "marker posted just after a
+  # tick" so cron only resumes on the tick after, ≈60 min later).
   #
-  # Multiple comments may trigger multiple events; concurrency cancel-in-progress
-  # ensures only the last one runs.
+  # Multiple events for the same PR are deduped by the marker-based check
+  # below (`already_triggered` / `local_in_progress` jq passes), so the
+  # concurrency group below uses `cancel-in-progress: false` and lets
+  # queued events run sequentially.
   pull_request_review:
     types: [submitted]
   pull_request_review_comment:
@@ -26,7 +30,15 @@ jobs:
   trigger-claude:
     concurrency:
       group: copilot-review-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
+      # `cancel-in-progress: false` is intentional. With `true`, a new
+      # Copilot review/comment event can cancel a label-triggered run
+      # before its first step removes the `copilot-review` label,
+      # leaving the label stuck on the PR. Re-adding an already-present
+      # label fires no event, so the manual retry path breaks. Marker-
+      # based dedup later in the job (`already_triggered` /
+      # `local_in_progress`) already prevents duplicate `@claude` posts,
+      # so queueing is the safe choice.
+      cancel-in-progress: false
     # Run when: Copilot submits a review OR posts a review comment OR
     # 'copilot-review' label is added by the maintainer.
     # Only for same-repo PRs authored by kotakanbe (fork PRs cannot access
