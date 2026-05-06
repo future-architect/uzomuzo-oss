@@ -69,11 +69,12 @@ if [ -n "$PR" ]; then
 else
     DIFF=$(git diff main...HEAD)
 fi
-# Set BASE once here so Step 1.5's fact-map walk, Step 2's pre-filter, and
-# Step 4's verification all use the same diff anchor. Falling back to `main`
-# keeps the script useful when origin/main isn't fetched (CI checkout-depth
-# 1, fresh local clone), at the cost of an approximate diff range.
-BASE=$(git merge-base HEAD origin/main 2>/dev/null || echo main)
+# Set BASE once here so Step 1.5's fact-map walk and Step 2's pre-filter
+# share the same diff anchor (Step 4 is build/vet/test/lint and does not
+# use BASE). Falling back to local `main` (then the literal string) keeps
+# the script useful when origin/main isn't fetched (CI checkout-depth 1,
+# fresh local clone), at the cost of an approximate diff range.
+BASE=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2>/dev/null || echo main)
 ```
 
 ### Step 1.5: Generate a fact map (optional but recommended for doc-heavy PRs)
@@ -112,7 +113,7 @@ file.
 
 **Pre-filter — Agent 6 (`consistency-auditor`) only spawns for claim-bearing PRs**:
 
-`BASE` is the merge-base between the current branch and `origin/main` — set in Step 1 above so the same anchor is reused for the fact-map walk (Step 1.5), this filter (Step 2), and Step 4's verification.
+`BASE` is the merge-base between the current branch and `origin/main` — set in Step 1 above so the same anchor is reused for the fact-map walk (Step 1.5) and this filter (Step 2). Step 4 (build/vet/test/lint) does not depend on `BASE`.
 
 ```bash
 # AGENT_COUNT=6 is selected for diffs that include claim-bearing files: markdown
