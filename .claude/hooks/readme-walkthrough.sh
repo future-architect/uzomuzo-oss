@@ -139,21 +139,18 @@ scan_blocks() {
       # so any subsequent repo-root-relative paths are coherent. Detect the
       # clone and skip the cd-after-clone from fixture_re below.
       if (match($0, /(^|[[:space:]])git[[:space:]]+clone([[:space:]]|$)/)) saw_clone = 1
-      # Mask any `./<repo-root-prefix>/...` AND any `cd <repo-root-prefix>...`
-      # token before fixture_re matches. Without this:
-      #   - `go run ./cmd/uzomuzo ./internal/testdata/...` (which is
-      #     entirely repo-root-relative — root_re also matches `cmd/` and
-      #     `internal/`) would double-count as fixture-relative because of
-      #     the `./` prefix, producing a false-positive mixed-CWD flag.
-      #   - `cd internal/corpus/...` (a perfectly valid repo-root walkthrough)
-      #     fires fixture_re via the `cd ...` shape even though the cd target
-      #     IS itself a repo-root path.
-      # The masks below strip the repo-root tokens from a per-line copy
-      # before fixture_re inspects it, so genuine fixture-relative tokens
-      # (`./vulnerable`, `cd vulnerable`) still match while repo-root
-      # variants are excluded.
+      # Mask any `cd <repo-root-prefix>...` token before fixture_re
+      # matches. Without this, `cd internal/corpus/...` (a perfectly
+      # valid repo-root walkthrough) fires fixture_re via the `cd ...`
+      # shape even though the cd target IS itself a repo-root path.
+      # Bare `./<prefix>/...` path arguments (without `cd`) need no
+      # masking because fixture_re requires a `cd` prefix — they
+      # cannot match fixture_re regardless.
+      # The mask strips repo-root cd targets from a per-line copy
+      # before fixture_re inspects it, so genuine fixture-relative
+      # tokens (`cd vulnerable`) still match while repo-root cd
+      # targets are excluded.
       line_for_fixture = $0
-      gsub(/(^|[[:space:]])\.\/(cmd|internal|pkg|examples|scripts|testdata|third_party|claude-skills|bin|docs|\.github|\.claude)\/[^[:space:]]*/, " ", line_for_fixture)
       gsub(/(^|[[:space:]])cd[[:space:]]+(\.\/)?(cmd|internal|pkg|examples|scripts|testdata|third_party|claude-skills|bin|docs|\.github|\.claude)\/[^[:space:]]*/, " ", line_for_fixture)
       # Also strip bare top-level repo-root files (Makefile, go.mod, go.sum,
       # .golangci.yml). root_re classifies these as repo-root anchors via
