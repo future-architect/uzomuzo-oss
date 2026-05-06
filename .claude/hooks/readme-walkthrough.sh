@@ -164,17 +164,21 @@ scan_blocks() {
       # Keep this list in lockstep with the bare-file alternation in
       # root_re above.
       gsub(/(^|[[:space:]])(\.\/)?(Makefile|go\.mod|go\.sum|\.golangci\.yml|uzomuzo|uzomuzo-diet)([[:space:]]|$)/, " ", line_for_fixture)
-      # If `git clone` appeared earlier in this block, also strip the
-      # immediate post-clone `cd <single-token>` so a benign clone-and-cd
-      # block like:
+      # If `git clone` appeared earlier in this block, strip the FIRST
+      # post-clone `cd <single-token>` so a benign clone-and-cd block like:
       #     git clone https://github.com/foo/bar
       #     cd bar
       #     go build ./cmd/bar
       # is not flagged. The mask only strips a single-segment cd target
       # (no slashes), which is the shape that matches the working
-      # directory of a freshly-cloned repo.
+      # directory of a freshly-cloned repo. After consuming the post-clone
+      # cd, clear `saw_clone` so later cd commands (`cd demo`, `cd fixture`)
+      # still participate in mismatch detection — otherwise the exception
+      # applies too broadly and hides real fixture transitions.
       if (saw_clone) {
-        gsub(/(^|[[:space:]])cd[[:space:]]+(\.\/)?[a-z][a-z0-9_-]*\/?([[:space:]]|$)/, " ", line_for_fixture)
+        if (gsub(/(^|[[:space:]])cd[[:space:]]+(\.\/)?[a-z][a-z0-9_-]*\/?([[:space:]]|$)/, " ", line_for_fixture)) {
+          saw_clone = 0
+        }
       }
       if (match(line_for_fixture, fixture_re)) saw_fixture = 1
     }
