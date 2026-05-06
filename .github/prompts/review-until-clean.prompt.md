@@ -4,7 +4,7 @@ Running `/review-until-clean` once drives the following sequence to bring a PR t
 
 | Phase | What | Exit condition |
 |---|---|---|
-| **A**: Local agent review | 5 agents (code-reviewer + architect + Code Reuse + Code Quality + PR Hygiene) in parallel, iterate until subjective only | max 5 rounds / no mechanical findings left |
+| **A**: Local agent review | 5 or 6 agents (code-reviewer + architect + Code Reuse + Code Quality + PR Hygiene; +consistency-auditor when the diff touches any **claim-bearing file** — markdown / advisory / manifest content for narrative drift, OR `_test.go` / `testdata/**` / `internal/testdata/**` golden fixtures for identifier-literal claims) in parallel, iterate until subjective only. Optional Step 1.5 generates a fact map for claim-bearing PRs. Step 2 has the pre-filter that selects the agent count. | max 5 rounds / no mechanical findings left |
 | **B**: Copilot review iteration | push → Copilot re-review → fix → push → repeat | max 5 rounds / "no (new) comments" |
 | **C**: Reply + resolve | Discover all unresolved Copilot threads, reply + resolve mutation | All threads processed |
 
@@ -69,13 +69,85 @@ if [ -n "$PR" ]; then
 else
     DIFF=$(git diff main...HEAD)
 fi
+# Set BASE once here so Step 1.5's fact-map walk, Step 2's pre-filter, and
+# Step 4's verification all use the same diff anchor. Falling back to `main`
+# keeps the script useful when origin/main isn't fetched (CI checkout-depth
+# 1, fresh local clone), at the cost of an approximate diff range.
+BASE=$(git merge-base HEAD origin/main 2>/dev/null || echo main)
 ```
 
-### Step 2: Launch five review agents in parallel
+### Step 1.5: Generate a fact map (optional but recommended for doc-heavy PRs)
 
-Issue all five `Task` tool calls in a single message. Pass each agent the full diff.
+For PRs that touch any **claim-bearing file** — EITHER markdown / advisory /
+manifest content (narrative drift class) OR `_test.go` / `testdata/**` /
+`internal/testdata/**` golden fixtures (identifier-literal claims like
+package names, advisory IDs, license SPDX expressions) — build a one-shot
+**fact map** of every factual claim the PR asserts. The two file classes
+trigger independently; a test-only literal-update PR enables the fact map
+even if it touches no markdown. This becomes the consistency baseline for
+Step 2's `consistency-auditor` agent and the canonical answer Phase A
+converges on so multi-file edits stay aligned.
 
-The first two are **named subagent_types** (registered in `.claude/rules/agents.md`); the remaining three are **`general-purpose` Task agents with specialized prompts** (not named subagent_types — generic agent + custom focus).
+Skip this step ONLY when the diff is pure non-test Go code (no markdown / advisory /
+manifest / test / golden file changes) — the fact map is empty in that case and the
+consistency-auditor agent has nothing to verify. The skip condition exactly matches
+Step 2's `AGENT_COUNT=5` pre-filter so the fact-map presence and Agent 6 spawn
+stay aligned.
+
+The fact map has columns matching the consistency-auditor's claim-record schema (`<class, key, value, file:line>`):
+
+```
+| Class                    | Fact key                | Value                          | Asserted in (file:line)         |
+|---|---|---|---|
+| <claim-class from auditor> | <namespaced.key>        | <verbatim asserted value>      | <file:line>, <file:line>, ...   |
+```
+
+Construct the map by walking changed files, extracting claim triples, and
+clustering by `(class, key)`. The map is **scratch state** — paste it into the
+agent prompts in Step 2 (so consistency-auditor can verify against it) and
+optionally into the PR description draft, but do not commit it as a separate
+file.
+
+### Step 2: Launch five or six review agents in parallel
+
+**Pre-filter — Agent 6 (`consistency-auditor`) only spawns for claim-bearing PRs**:
+
+`BASE` is the merge-base between the current branch and `origin/main` — set in Step 1 above so the same anchor is reused for the fact-map walk (Step 1.5), this filter (Step 2), and Step 4's verification.
+
+```bash
+# AGENT_COUNT=6 is selected for diffs that include claim-bearing files: markdown
+# / .txt / .tsv content for narrative drift, AND Go test files / testdata
+# fixtures because identifier-literal claims (package names, advisory IDs,
+# license SPDX) live there. Generic *.json / *.yaml / *.yml are intentionally
+# NOT in the filter — they would also match config-only files
+# (.claude/settings.json, workflow YAML, .golangci.yml) where
+# consistency-auditor has no claims to verify. Claim-bearing JSON / YAML
+# lives under testdata/ / internal/testdata/ which are matched directly.
+# Pure non-test Go code is the only AGENT_COUNT=5 path.
+DOC_TOUCHING=$({ git diff --name-only "$BASE" HEAD -- \
+    '*.md' '*.txt' '*.tsv' \
+    '*_test.go' 'testdata/**' 'internal/testdata/**' \
+    2>/dev/null || true; } | head -1)
+# `|| true` inside the brace group prevents `set -euo pipefail` from aborting
+# Phase A when `head -1` closes the pipe early on the first match (causing
+# `git diff` to exit with SIGPIPE) — `head -1` is intentional, we only need
+# to know whether ANY claim-bearing file changed.
+if [ -n "$DOC_TOUCHING" ]; then
+    AGENT_COUNT=6
+else
+    AGENT_COUNT=5  # pure non-test Go diff — no markdown / manifest / test / golden file claims
+fi
+```
+
+If `AGENT_COUNT=5` (pure non-test Go PRs with no markdown / advisory / manifest / test / golden file changes), skip Agent 6's spawn entirely and proceed with five agents — Agent 6 has no claims to verify and would only return "no claims to check" after burning a spawn round-trip.
+
+Issue the configured `AGENT_COUNT` `Task` tool calls in a single message. Pass each agent the full diff (and, for `consistency-auditor`, the fact map from Step 1.5 if generated).
+
+The named subagent_types invocable here are `code-reviewer`, `architect`, and (when `AGENT_COUNT=6`) `consistency-auditor`. **`consistency-auditor` is intentionally not listed in `.claude/rules/agents.md`** (the project keeps that table hand-curated to long-stable named agents); it is invoked by file presence at `.claude/agents/consistency-auditor.md` because Claude Code resolves named subagents by scanning that directory, not by reading any catalog. `code-reviewer` and `architect` happen to also appear in agents.md for documentation discoverability, but the agents.md table is not the registration source for any of them. The remaining three Phase A agents are **`general-purpose` Task agents with specialized prompts** (Code Reuse, Code Quality, PR Hygiene — generic agent + custom focus). For `AGENT_COUNT=5`: 2 named + 3 general-purpose. For `AGENT_COUNT=6`: 3 named + 3 general-purpose.
+
+**Common context for all configured agents** (include verbatim in every prompt):
+
+> Before reporting findings, read **`.github/instructions/copilot-learned-coding.instructions.md`** in full. Its top section holds **promoted coding rules** (recurring patterns Copilot has caught on prior PRs and the project has chosen to enforce); its bottom section holds **`pending_patterns:`** YAML entries that have not yet reached the 2+ instance promotion threshold. Either kind is a strong signal that a Copilot reviewer will flag the same shape on this PR — proactively flag it now so we save a Phase B round-trip. Treat both lists as *additional review focus areas*, not as substitutes for your specialized scope.
 
 #### Agent 1: subagent_type=`code-reviewer` (named)
 
@@ -117,9 +189,17 @@ DDD layer compliance, dependency direction, package structure. Returns CRITICAL 
 - are independent concerns mixed in one PR that should be split?
 - changes not mentioned in the description?
 
+#### Agent 6: subagent_type=`consistency-auditor` (named)
+
+Cross-file narrative drift detector. Catches the failure shape where the same factual claim (CVE affected range, fix mechanism, advisory ID, package name, license SPDX expression, README walkthrough working directory, manifest header naming) appears in multiple files with different values.
+
+If Step 1.5 generated a fact map, paste it into this agent's prompt as the consistency baseline. The agent then verifies each diff claim against the baseline AND searches adjacent unchanged files (within ±2 directory steps of changed paths) for stale parallel statements that the PR's local edits left behind.
+
+Skip this agent's work only when the PR is pure Go code (no markdown / manifest / advisory changes) AND no identifier-literal claims appear in tests or golden files — in those cases there are no factual claims to drift, and the agent will return a clean "no claims to check".
+
 ### Step 3: Fix or dismiss
 
-Wait for all five agents. For each finding, classify by **fix shape**, not severity:
+Wait for all configured agents (5 or 6 per Step 2's pre-filter). For each finding, classify by **fix shape**, not severity:
 
 - **Mechanical / objective fix exists** → fix it, regardless of severity. Anything with a single right answer: doc-code drift, redundant calls, missing error checks, missing nil guards, `%s` vs `%q` quoting consistency, godoc naming removed identifiers, CSV/JSON column header mismatching the value, stale PR-body claims vs actual diff. Severity is often MEDIUM/LOW, but Copilot reliably catches these — fixing locally saves a Phase B round-trip.
 - **Subjective preference** (no mechanical right answer) → skip.
@@ -154,7 +234,7 @@ If any fix was applied in Step 3 (even nits), **return to Step 2** with fresh ag
 
 | Condition | Action |
 |---|---|
-| Round N found literally zero issues across all 5 agents | STOP |
+| Round N found literally zero issues across all configured agents (5 for pure non-test Go PRs, 6 when the diff touches any claim-bearing file: markdown / advisory / manifest / `_test.go` / `testdata/**`) | STOP |
 | Round N's findings are pure subjective preferences | STOP |
 | Round N repeats Round N-1's findings verbatim AND the prior fix was confirmed applied | STOP (cross-round consensus = false positive) |
 | Round N repeats but the prior fix was incomplete | Continue — re-attempt or escalate as unfixable |
