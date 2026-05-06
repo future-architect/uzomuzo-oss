@@ -42,9 +42,11 @@ fi
 # `/` — so `*README*.md` matches READMEs at any depth, and `docs/*.md`
 # recurses through `docs/<sub>/`, etc.
 #
-# `:!testdata/**` / `:!internal/testdata/**` exclusion: testdata fixtures may
-# DELIBERATELY contain mixed-CWD shell blocks as acceptance data for the
-# consistency-auditor agent or other test scenarios. Without the exclusion,
+# `:(exclude)testdata/**` / `:(exclude)internal/testdata/**` exclusion
+# (long-form git pathspec magic; equivalent to the short `:!` prefix):
+# testdata fixtures may DELIBERATELY contain mixed-CWD shell blocks as
+# acceptance data for the consistency-auditor agent or other test
+# scenarios. Without the exclusion,
 # every edit to those fixtures would produce a pre-push warning even though
 # the mismatch is the whole point of the fixture.
 DOC_FILES=$(git diff --name-only "$BASE" HEAD -- '*README*.md' 'docs/*.md' ':(exclude)testdata/**' ':(exclude)internal/testdata/**' 2>/dev/null | sort -u || true)
@@ -200,6 +202,6 @@ done <<< "$DOC_FILES"
 
 if [ ${#ISSUES[@]} -gt 0 ]; then
   BULLET_LIST=$(printf '\\n- %s' "${ISSUES[@]}")
-  MSG="PRE-PUSH README WALKTHROUGH: Working-directory mismatch detected in fenced shell blocks. Either prefix the block with an explicit \\\"Run from <CWD>\\\" hint and rewrite all paths to that CWD, or split into two blocks each consistent with one CWD.${BULLET_LIST}\\n\\nThis is the walkthrough-mismatch class tracked by the consistency-auditor agent (.claude/agents/consistency-auditor.md). Run 'git diff ${BASE} HEAD -- \\\"*README*.md\\\" \\\"docs/*.md\\\"' to inspect."
+  MSG="PRE-PUSH README WALKTHROUGH: Working-directory mismatch detected in fenced shell blocks. Either prefix the block with an explicit \\\"Run from <CWD>\\\" hint and rewrite all paths to that CWD, or split into two blocks each consistent with one CWD.${BULLET_LIST}\\n\\nThis is the walkthrough-mismatch class tracked by the consistency-auditor agent (.claude/agents/consistency-auditor.md). Run 'git diff ${BASE} HEAD -- \\\"*README*.md\\\" \\\"docs/*.md\\\" \\\":(exclude)testdata/**\\\" \\\":(exclude)internal/testdata/**\\\"' to reproduce the same file set the scanner walked."
   echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"${MSG}\"}}"
 fi
