@@ -152,13 +152,17 @@ scan_blocks() {
       # targets are excluded.
       line_for_fixture = $0
       gsub(/(^|[[:space:]])cd[[:space:]]+(\.\/)?(cmd|internal|pkg|examples|scripts|testdata|third_party|claude-skills|bin|docs|\.github|\.claude)\/[^[:space:]]*/, " ", line_for_fixture)
-      # Also strip bare top-level repo-root files (Makefile, go.mod, go.sum,
-      # .golangci.yml). root_re classifies these as repo-root anchors via
-      # the bare-file alternation, so without a parallel mask here a line
-      # like `go mod tidy && cat ./go.mod` (entirely repo-root) would match
-      # both root_re AND fixture_re (`./go.mod` looks like a fixture-relative
-      # token), producing a false-positive mixed-CWD flag. Keep this list in
-      # lockstep with the bare-file alternation in root_re above.
+      # Also strip bare top-level repo-root file tokens (Makefile, go.mod,
+      # go.sum, .golangci.yml, uzomuzo, uzomuzo-diet). The first gsub above
+      # only strips `cd <dir-prefix>/...` (note the trailing `/`), so bare
+      # names without a path separator slip through. Without this mask, a
+      # line like `cd uzomuzo && go build ./cmd/uzomuzo` would have
+      # `cd uzomuzo` match fixture_re (since `uzomuzo` starts with [a-z]
+      # and satisfies cd_arg), while `cmd/` matches root_re — producing a
+      # false-positive mixed-CWD flag even though `cd uzomuzo` is navigating
+      # into the repo root (after a clone), not a fixture subdirectory.
+      # Keep this list in lockstep with the bare-file alternation in
+      # root_re above.
       gsub(/(^|[[:space:]])(\.\/)?(Makefile|go\.mod|go\.sum|\.golangci\.yml|uzomuzo|uzomuzo-diet)([[:space:]]|$)/, " ", line_for_fixture)
       # If `git clone` appeared earlier in this block, also strip the
       # immediate post-clone `cd <single-token>` so a benign clone-and-cd
