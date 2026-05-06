@@ -4,8 +4,10 @@
 # Catches the "walkthrough-mismatch" class: a fenced ` ```bash ` /
 # ` ```sh ` / ` ```shell ` / ` ```zsh ` / ` ```console ` block in README*.md or
 # docs/*.md that mixes repo-root-relative paths (e.g., `cmd/uzomuzo/...`,
-# `internal/...`) with `cd <name>` / `./<name>` fixture-relative refs. The block
-# cannot be copy-pasted verbatim from any single CWD, so readers get stuck.
+# `internal/...`) with a `cd <name>` fixture-relative shell CWD change. The
+# block cannot be copy-pasted verbatim from any single CWD, so readers get
+# stuck. Note: only `cd <name>` actually changes CWD; bare `./<name>` path
+# arguments do NOT trigger the fixture signal (see Step body below for why).
 #
 # Hook contract: PreToolUse on Bash matcher gated on `git push`. Reads the
 # tool input JSON from stdin (same as adr-check.sh / pre-push-review.sh). If
@@ -52,7 +54,9 @@ fi
 # scan_blocks <file>: walks the file inside one awk program (no fold/unfold
 # round-trip), tracks fenced bash/sh/shell/zsh/console blocks, and emits
 # "<file>:<start-line>: <reason>" for each block whose lines mix repo-root-
-# relative paths with `cd <name>` / `./<name>` fixture-relative refs.
+# relative paths with a `cd <name>` fixture-relative shell CWD change. Only
+# `cd <name>` is a true CWD change; bare `./<name>` path arguments are not
+# treated as fixture-relative (see fixture_re comment in BEGIN).
 #
 # Awk is the right tool here because (a) it handles the line-by-line state
 # machine cleanly, (b) it avoids the bash `||`-as-newline-separator hack
@@ -121,7 +125,7 @@ scan_blocks() {
 
     in_block && match($0, fence_close) {
       if (saw_root && saw_fixture) {
-        printf "%s:%d: shell block mixes repo-root-relative (e.g., cmd/, internal/, pkg/) and fixture-relative (cd <name>, ./<name>) paths — readers cannot copy-paste from a single CWD\n", file, start_line
+        printf "%s:%d: shell block mixes repo-root-relative paths (e.g., cmd/, internal/, pkg/) with a `cd <name>` fixture-relative shell CWD change — readers cannot copy-paste from a single CWD\n", file, start_line
       }
       reset_block()
       next
