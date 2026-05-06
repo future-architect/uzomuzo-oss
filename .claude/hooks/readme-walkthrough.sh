@@ -2,7 +2,8 @@
 # readme-walkthrough.sh — pre-push static check for README / docs walkthroughs.
 #
 # Catches the "walkthrough-mismatch" class: a fenced ` ```bash ` /
-# ` ```sh ` / ` ```shell ` / ` ```zsh ` / ` ```console ` block in README*.md or
+# ` ```sh ` / ` ```shell ` / ` ```zsh ` / ` ```console ` / ` ```sh-session ` /
+# ` ```shell-session ` block in README*.md or
 # docs/*.md that mixes repo-root-relative paths (e.g., `cmd/uzomuzo/...`,
 # `internal/...`) with a `cd <name>` fixture-relative shell CWD change. The
 # block cannot be copy-pasted verbatim from any single CWD, so readers get
@@ -52,7 +53,7 @@ if [ -z "$DOC_FILES" ]; then
 fi
 
 # scan_blocks <file>: walks the file inside one awk program (no fold/unfold
-# round-trip), tracks fenced bash/sh/shell/zsh/console blocks, and emits
+# round-trip), tracks fenced bash/sh/shell/zsh/console/sh-session/shell-session blocks, and emits
 # "<file>:<start-line>: <reason>" for each block whose lines mix repo-root-
 # relative paths with a `cd <name>` fixture-relative shell CWD change. Only
 # `cd <name>` is a true CWD change; bare `./<name>` path arguments are not

@@ -102,7 +102,7 @@ The fact map has columns matching the consistency-auditor's claim-record schema 
 | <claim-class from auditor> | <namespaced.key>        | <verbatim asserted value>      | <file:line>, <file:line>, ...   |
 ```
 
-Construct the map by walking changed files, extracting claim triples, and
+Construct the map by walking changed files, extracting claim records, and
 clustering by `(class, key)`. The map is **scratch state** — paste it into the
 agent prompts in Step 2 (so consistency-auditor can verify against it) and
 optionally into the PR description draft, but do not commit it as a separate
@@ -191,7 +191,7 @@ DDD layer compliance, dependency direction, package structure. Returns CRITICAL 
 
 #### Agent 6: subagent_type=`consistency-auditor` (named)
 
-Cross-file narrative drift detector. Catches the failure shape where the same factual claim (CVE affected range, fix mechanism, advisory ID, package name, license SPDX expression, README walkthrough working directory, manifest header naming) appears in multiple files with different values.
+Cross-file narrative drift detector. Catches the failure shape where the same factual claim (e.g., CVE affected range, fix mechanism, advisory ID, package name, license SPDX expression, README walkthrough working directory, manifest header naming) appears in multiple files with different values. See `.github/agents/consistency-auditor.agent.md` for the full 8-class claim taxonomy.
 
 If Step 1.5 generated a fact map, paste it into this agent's prompt as the consistency baseline. The agent then verifies each diff claim against the baseline AND searches adjacent unchanged files (within ±2 directory steps of changed paths) for stale parallel statements that the PR's local edits left behind.
 
