@@ -915,7 +915,10 @@ done
 #    matters: clean phrase wins over thread-set comparison so that
 #    even if Copilot re-flagged something but ALSO declared
 #    `generated no new comments`, we treat it as 3a verified.
-new_body=$(printf '%s' "$latest_new" | jq -r '.body // ""')
+# Same `2>/dev/null) || …=""` guard as the other jq extractions in this
+# step: a parse error on empty/null `$latest_new` would abort under
+# `set -euo pipefail` and skip the timeout → B_ABORTED branch below.
+new_body=$(printf '%s' "$latest_new" | jq -r '.body // ""' 2>/dev/null) || new_body=""
 if [ "$new_id" = "$PRIOR_REVIEW_ID" ] || [ "$new_commit" != "$HEAD_SHA" ]; then
     # 5-min timeout reached without a fresh review on the current HEAD.
     # Treat as B_ABORTED — cron will retry on its next tick and may
@@ -931,6 +934,12 @@ elif printf '%s' "$new_body" | grep -qiE 'generated no( new)? comments'; then
 else
     # Fetch the post-re-review thread CIDs and compare against the
     # baseline. Any CID not in PRIOR_THREAD_CIDS is a new finding ⇒ 3c.
+    # Guard the `gh api` like the other Step 8.4.5 calls: a transient
+    # 5xx / rate limit / network failure under `set -euo pipefail`
+    # would abort the whole procedure and skip the intended marker
+    # cleanup. On failure, fall through with an empty `threads_new`,
+    # which the new_cids extraction (next block) handles via its own
+    # `|| new_cids=""` guard ⇒ has_new_finding=0 ⇒ 3b operator-clean.
     threads_new=$(gh api graphql --paginate \
         -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
         -f query='
@@ -950,7 +959,7 @@ else
       }
     }' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
         | select(.isResolved == false
-            and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")')
+            and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")' 2>/dev/null) || threads_new=""
     # Same `|| ""` guard as PRIOR_THREAD_CIDS extraction at the top of
     # Step 8.4.5: a bare jq parse error on empty `$threads_new` would
     # abort under `set -euo pipefail`, masking the 3b operator-clean
