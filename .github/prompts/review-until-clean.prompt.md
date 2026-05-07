@@ -666,12 +666,16 @@ A literal `requestReviews` retry without this clear+re-add will often fail to wa
 
    ```bash
    # Operator: populate this array with the paths fixed during the
-   # current round, then run `git add`. Empty default keeps the array
-   # safe under `set -u` if the operator forgets to populate (the
-   # subsequent `git diff --cached --quiet` will then catch the
-   # no-fix case via the existing branch).
+   # current round, then run `git add`. The length-guarded form below
+   # is safe under both `set -u` (array is initialized) and `set -e`
+   # (empty array would otherwise make `git add --` exit non-zero
+   # with "nothing specified" and abort the round before the no-fix
+   # detection runs); when the array is empty, the existing
+   # `git diff --cached --quiet` branch catches the no-fix case.
    FILES_TO_STAGE=()  # e.g. (cmd/uzomuzo/main.go internal/foo/bar.go)
-   git add -- "${FILES_TO_STAGE[@]}"
+   if [ "${#FILES_TO_STAGE[@]}" -gt 0 ]; then
+       git add -- "${FILES_TO_STAGE[@]}"
+   fi
    if git diff --cached --quiet; then
        # No fix to commit ⇒ every thread classified WONT_FIX or
        # ALREADY_FIXED. Do NOT exit B_CLEAN_* here — operator-judged
