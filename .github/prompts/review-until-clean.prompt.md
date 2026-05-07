@@ -755,6 +755,15 @@ PR_NID=$(gh api graphql -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
     PHASE_B_EXIT_REASON="B_ABORTED"
     break
 }
+# Copilot bot's GraphQL node ID. Same value defined as `COPILOT_BOT_ID`
+# env var in `.github/workflows/copilot-clean-label.yml` (search:
+# "COPILOT_BOT_ID:"). Hard-coded once here and reused by both the clear
+# and the re-add to keep this Step 8.4.5 self-contained for skill
+# agents. If the bot's node ID ever changes (the value has been stable
+# since GitHub assigned it; a change would also break the workflow's
+# env), update both this prompt and the workflow in the same commit.
+COPILOT_BOT_ID="BOT_kgDOCnlnWA"
+
 # Query current reviewer requests so the clear mutation preserves
 # humans + teams (removing only bots via empty botIds).
 reviewer_query=$(gh api graphql -F pr_nid="$PR_NID" \
@@ -765,13 +774,16 @@ reviewer_query=$(gh api graphql -F pr_nid="$PR_NID" \
         } } }
       } } }' 2>/dev/null) || true
 # Guard: if the reviewer query failed or returned unparseable data,
-# skip the clear entirely. With reviewer_nodes unknown, building
+# OR returned `.errors` (HTTP 200 partial-success), skip the clear
+# entirely. With reviewer_nodes unknown, building
 # users_json=[]/teams_json=[] and calling requestReviews(union:false)
 # would remove every human reviewer on the PR (same guard as
-# copilot-clean-label.yml `reviewer_query_ok` guard).
+# copilot-clean-label.yml `reviewer_query_ok` guard, plus the
+# partial-success `(.errors // []) | length > 0` check that workflow
+# also applies).
 reviewer_query_ok=0
 if [ -n "$reviewer_query" ] && printf '%s' "$reviewer_query" \
-    | jq -e '.data.node.reviewRequests' >/dev/null 2>&1; then
+    | jq -e '.data.node.reviewRequests and ((.errors // []) | length == 0)' >/dev/null 2>&1; then
     reviewer_query_ok=1
 fi
 if [ "$reviewer_query_ok" = "1" ]; then
@@ -788,11 +800,16 @@ if [ "$reviewer_query_ok" = "1" ]; then
         --arg pr "$PR_NID" --argjson users "$users_json" --argjson teams "$teams_json" \
         '{ query: "mutation($pr:ID!,$users:[ID!]!,$teams:[ID!]!){requestReviews(input:{pullRequestId:$pr, userIds:$users, teamIds:$teams, botIds:[], union:false}){pullRequest{id}}}",
            variables: {pr:$pr, users:$users, teams:$teams} }')
-    if ! printf '%s' "$clear_body" | gh api graphql --input - >/dev/null 2>&1; then
+    # Capture stdout so we can inspect `.errors[]` even on HTTP 200
+    # partial-success (gh exits 0 on this path, so a bare `|| ...`
+    # check would miss it; mirrors copilot-clean-label.yml).
+    if ! clear_out=$(printf '%s' "$clear_body" | gh api graphql --input - 2>/dev/null); then
         echo "::warning::Step 8.4.5: clear mutation failed — re-add may be deduped"
+    elif printf '%s' "$clear_out" | jq -e '(.errors // []) | length > 0' >/dev/null 2>&1; then
+        echo "::warning::Step 8.4.5: clear mutation returned errors (exit 0) — re-add may be deduped"
     fi
 else
-    echo "::warning::Step 8.4.5: reviewer query failed — skipping clear to preserve human reviewers; re-add may be deduped"
+    echo "::warning::Step 8.4.5: reviewer query failed or returned errors — skipping clear to preserve human reviewers; re-add may be deduped"
 fi
 sleep 2
 # Re-add Copilot as a fresh reviewer request.
@@ -801,7 +818,7 @@ mutation($pr: ID!, $bot: ID!) {
   requestReviews(input: { pullRequestId: $pr, botIds: [$bot] }) {
     pullRequest { id }
   }
-}' -F pr="$PR_NID" -F bot="BOT_kgDOCnlnWA" >/dev/null 2>&1; then
+}' -F pr="$PR_NID" -F bot="$COPILOT_BOT_ID" >/dev/null 2>&1; then
     echo "::warning::Step 8.4.5: re-add mutation failed — poll may timeout"
 fi
 
