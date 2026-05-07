@@ -38,7 +38,20 @@ Task(subagent_type="general-purpose", prompt="...")     # generic agent + freefo
 No user prompt needed:
 1. Complex feature requests - Use **planner** agent
 2. Code just written/modified - Use **code-reviewer** agent
-3. Architectural decision - Use **architect** agent
+3. Architectural decision - Use **architect** agent (on plan-mode entry, launch **planner + architect** in parallel by default — see "Plan Mode Default Behavior" below)
+
+## Plan Mode Default Behavior
+
+**The default action when entering plan mode is to launch `planner + architect` in parallel in a single message.** Proactive, not reactive ("I'll only call architect if architectural judgment seems needed" is the wrong default).
+
+```
+# Default action right after entering plan mode
+Task(subagent_type="planner", prompt="...")  +  Task(subagent_type="architect", prompt="...")
+```
+
+The only case where skipping is acceptable: **trivial fixes** (typo, comment, single-file refactor, simple flag addition, etc. with no DDD layer placement, repository interface, or cross-layer concerns). When in doubt, launch — calling unnecessarily is safer than not calling when needed.
+
+A `PreToolUse` hook (`.claude/hooks/plan-mode-architect-check.sh`) detects missing architect consultation on `ExitPlanMode` and emits a soft reminder. It is advisory only — `ExitPlanMode` itself is always allowed (never blocked). If the reminder fires, ignore it only if you can immediately answer "this was trivial"; otherwise, consult the architect subagent and re-propose the plan before user approval.
 
 ## Code Review Policy
 

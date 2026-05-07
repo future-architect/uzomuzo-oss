@@ -2,6 +2,17 @@
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/plan-mode-architect-check.sh",
+            "timeout": 10,
+            "statusMessage": "Checking architect consultation..."
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
