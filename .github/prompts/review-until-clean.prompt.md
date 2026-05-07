@@ -665,7 +665,7 @@ A literal `requestReviews` retry without this clear+re-add will often fail to wa
 4. **Commit + push** (commit only when something staged):
 
    ```bash
-   git add <files>
+   git add "${FILES_TO_STAGE[@]}"  # operator: replace with the actual fix-cycle file list
    if git diff --cached --quiet; then
        # No fix to commit ⇒ every thread classified WONT_FIX or
        # ALREADY_FIXED. Do NOT exit B_CLEAN_* here — operator-judged
@@ -738,12 +738,13 @@ Step 8.4.5 forces Copilot to adjudicate on the same HEAD before exit:
 ```bash
 # 1. Snapshot the current set of unresolved Copilot thread CIDs as the
 #    "previously seen" baseline. Step 3 below distinguishes 3c (any new
-#    CID) from 3b (every CID is in this set). The `|| ""` guard
-#    handles the empty-input case (e.g., the prior fetch returned no
-#    nodes): under `set -euo pipefail` a bare jq parse error here
-#    would abort Step 8.4.5 entirely, masking the intended 3a/3b/3c
-#    classification with an `B_ABORTED` exit. Empty baseline ⇒ every
-#    new CID flagged as "new finding" (3c), which is the safe default.
+#    CID) from 3b (every CID is in this set). The
+#    `... || PRIOR_THREAD_CIDS=""` guard handles the empty-input case
+#    (e.g., the prior fetch returned no nodes): under
+#    `set -euo pipefail` a bare jq parse error here would abort Step
+#    8.4.5 entirely, masking the intended 3a/3b/3c classification with
+#    a `B_ABORTED` exit. Empty baseline ⇒ every new CID flagged as
+#    "new finding" (3c), which is the safe default.
 PRIOR_THREAD_CIDS=$(printf '%s' "$threads" | jq -r '
     select(.isResolved == false
         and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")
@@ -964,6 +965,26 @@ else
     }' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
         | select(.isResolved == false
             and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")' 2>/dev/null) || { threads_new_fetch_ok=0; threads_new=""; }
+    # Note: `gh api graphql` can return HTTP 200 with `.errors[]`
+    # populated (partial-success), in which case the `||` fall-through
+    # above does NOT fire. The `--jq` filter strips structure, so we
+    # cannot inspect `.errors[]` after the fact. Refetch the raw
+    # response to check; same defensive pattern as the clear mutation
+    # earlier in this step. A `.errors[]` populated response is treated
+    # as a fetch failure (B_ABORTED) so the partial data does not flow
+    # into the 3b/3c classifier.
+    if [ "$threads_new_fetch_ok" = "1" ]; then
+        threads_new_raw=$(gh api graphql --paginate \
+            -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
+            -f query='query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
+              repository(owner: $owner, name: $repo) { pullRequest(number: $pr) {
+                reviewThreads(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor } } } } }' 2>/dev/null) || threads_new_raw=""
+        if [ -n "$threads_new_raw" ] && printf '%s' "$threads_new_raw" \
+            | jq -e '(.errors // []) | length > 0' >/dev/null 2>&1; then
+            threads_new_fetch_ok=0
+            echo "::warning::Step 8.4.5: thread fetch returned partial-success errors (HTTP 200 + .errors[]) — treating as fetch failure"
+        fi
+    fi
     if [ "$threads_new_fetch_ok" = "0" ]; then
         echo "::warning::Step 8.4.5: post-re-review thread fetch failed — exiting B_ABORTED (cron will retry)"
         PHASE_B_EXIT_REASON="B_ABORTED"
