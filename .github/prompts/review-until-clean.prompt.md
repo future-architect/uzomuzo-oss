@@ -474,8 +474,8 @@ delete_local_marker() {
 }
 
 # Abort-path contract for the skill agent. Step 11.9 is the canonical
-# cleanup point on a clean B_CLEAN/B_ABORTED exit, but the skill is run
-# step-by-step by an LLM agent — there is no shell-level `trap EXIT`.
+# cleanup point on a clean B_CLEAN_*/B_ABORTED exit, but the skill is
+# run step-by-step by an LLM agent — there is no shell-level `trap EXIT`.
 # Therefore: whenever the agent decides to abort Phase B/C for any
 # reason that does NOT reach Step 11.9 (jq parse failure mid-fetch,
 # unrecoverable build/test/lint error, gh API loop failure, manual
@@ -519,22 +519,30 @@ if ! git push origin "HEAD:$BRANCH"; then
     exit 1
 fi
 
-PHASE_B_EXIT_REASON="B_ABORTED"  # fail-safe default; Step 8.2 clean path flips to B_CLEAN
+PHASE_B_EXIT_REASON="B_ABORTED"  # fail-safe default. Step 8.2 clean path flips to B_CLEAN_VERIFIED. Step 8.4.5 re-review flips to B_CLEAN_VERIFIED (3a) or B_CLEAN_OPERATOR (3b).
 PHASE_C_OK=0                     # fail-safe default; Step 11.5 verification flips to 1 on success
 ```
 
-`PHASE_C_OK` is a separate fail-safe flag from `PHASE_B_EXIT_REASON` because Phase B can converge clean (B_CLEAN) yet Phase C can still fail mid-way (rate-limited reply, permission error, network partition during the resolve mutation). Without this flag the Step 11.9 if/else gate would mark the marker `converged` even though some FIX / ALREADY_FIXED threads were never replied to or resolved, permanently suppressing cron on a HEAD that still has unresolved Copilot threads. The gate requires **both** `PHASE_B_EXIT_REASON=B_CLEAN` **and** `PHASE_C_OK=1` before flipping to the converged marker form.
+`PHASE_B_EXIT_REASON` distinguishes three terminal states:
+
+| State | Meaning | `copilot-clean` label | Marker |
+|---|---|---|---|
+| `B_CLEAN_VERIFIED` | Copilot itself reported `generated no (new) comments` for the current HEAD (either via Step 8.2's clean path on a fix-cycle round, or via Step 8.4.5's forced re-review after a WONT_FIX-only round). | **Apply** in Step 11.9 (when `PHASE_C_OK=1`). | `mark_local_converged` |
+| `B_CLEAN_OPERATOR` | All threads are WONT_FIX/ALREADY_FIXED so the operator considers the PR clean, but Copilot's forced re-review (Step 8.4.5) re-emitted the same set of threads (cross-round consensus = false-positive confirmed). Operator-judged clean only. | **Do not apply** — Copilot still disagrees, so the literal label semantic is unmet. | `mark_local_converged` (still suppress cron from re-running the same WONT_FIX pass) |
+| `B_ABORTED` | Phase B did not converge (max rounds, unrecoverable build failure, push reject after rebase, Step 8.4.5 surfaced new findings that exhausted the round budget, etc.). | **Do not apply** (and remove if previously set, although the cron `copilot-clean-label.yml`'s `synchronize`/`dirty` paths handle that on the next event). | `delete_local_marker` (let cron retry) |
+
+`PHASE_C_OK` is a separate fail-safe flag from `PHASE_B_EXIT_REASON` because Phase B can converge clean (`B_CLEAN_VERIFIED` / `B_CLEAN_OPERATOR`) yet Phase C can still fail mid-way (rate-limited reply, permission error, network partition during the resolve mutation). Without this flag the Step 11.9 if/else gate would mark the marker `converged` even though some FIX / ALREADY_FIXED threads were never replied to or resolved, permanently suppressing cron on a HEAD that still has unresolved Copilot threads. The gate requires **both** a `B_CLEAN_*` exit AND `PHASE_C_OK=1` before flipping to the converged marker form (and additionally requires `B_CLEAN_VERIFIED` before applying the `copilot-clean` label).
 
 ### Step 8: Copilot review iteration loop (max 5 rounds)
 
-**Phase B exit criteria — DO NOT MISREAD.** Step 8.2 below is the only authoritative path that exits Phase B with `PHASE_B_EXIT_REASON=B_CLEAN`. A common operator mistake is to look at "unresolved Copilot thread count == 0" (a Phase C / GraphQL `reviewThreads` query) and conclude the loop is done — that is **wrong**. Thread-resolved count is a Phase C verification metric (Step 11.5); it does not reflect whether Copilot has yet re-reviewed the latest pushed HEAD. The four-condition Phase B exit checklist (formalizing Step 8.2's branches) is:
+**Phase B exit criteria — DO NOT MISREAD.** Two paths can exit Phase B with `PHASE_B_EXIT_REASON=B_CLEAN_VERIFIED`: (i) Step 8.2's clean classification on the natural fix cycle (Copilot already declared "no new comments" on the current HEAD) and (ii) Step 8.4.5's forced re-review path's 3a outcome (Copilot re-emitted "no new comments" after a stuck-detector dance). A third path, Step 8.4.5's 3b outcome, exits with `B_CLEAN_OPERATOR` (skill-judged clean only — Copilot kept emitting the same WONT_FIX threads). A common operator mistake is to look at "unresolved Copilot thread count == 0" (a Phase C / GraphQL `reviewThreads` query) and conclude the loop is done — that is **wrong**. Thread-resolved count is a Phase C verification metric (Step 11.5); it does not reflect whether Copilot has yet re-reviewed the latest pushed HEAD. The four-condition Phase B exit checklist (formalizing Step 8.2's branches) is:
 
 1. **`HEAD_SHA` captured** for the latest commit on the branch (`git rev-parse HEAD` after the most recent push).
 2. **Latest Copilot review fetched** for the PR (Step 8.1's `latest`).
 3. **`review_commit == HEAD_SHA`** — the review is for the current HEAD, not a stale earlier commit. (If not, state is `pending` → Step 8.3.)
 4. **`review_body =~ /generated no( new)? comments/i`** — Copilot itself declared the PR clean for this HEAD.
 
-ALL four must be true to flip `PHASE_B_EXIT_REASON=B_CLEAN` and exit to Phase C. If 1-3 hold but condition 4 fails, the state is `dirty` → Step 8.4 (fix cycle). If condition 3 fails, the state is `pending` → Step 8.3 (wait + re-request). Do **not** infer Phase B done from `unresolved_thread_count == 0` alone — that count can be 0 between rounds (after Phase C of the previous round resolved everything) while Copilot has not yet re-reviewed the new HEAD; exiting on that signal is how round-N regressions slip through.
+ALL four must be true to flip `PHASE_B_EXIT_REASON=B_CLEAN_VERIFIED` from Step 8.2 and exit to Phase C. If 1-3 hold but condition 4 fails, the state is `dirty` → Step 8.4 (fix cycle), where a no-fix sub-round will redirect to Step 8.4.5 (forced re-review) rather than exiting B_CLEAN immediately. If condition 3 fails, the state is `pending` → Step 8.3 (wait + re-request). Do **not** infer Phase B done from `unresolved_thread_count == 0` alone — that count can be 0 between rounds (after Phase C of the previous round resolved everything) while Copilot has not yet re-reviewed the new HEAD; exiting on that signal is how round-N regressions slip through.
 
 When relaying state to the user mid-loop ("is the PR clean yet?"), re-run the four conditions every time — do **not** trust an earlier "clean" conclusion across a push, because a push invalidates condition 3.
 
@@ -572,7 +580,7 @@ State classification is evaluated **in this exact order**: the `pending` check f
 | Order | State | Detection | Action | `PHASE_B_EXIT_REASON` |
 |---|---|---|---|---|
 | 1 | **pending** | `latest == null` or `review_commit != HEAD_SHA` | Step 8.3 | (in-flight) |
-| 2 | **clean** | (review on HEAD AND) `review_body =~ /generated no( new)? comments/i` | flip `PHASE_B_EXIT_REASON=B_CLEAN`, exit to Phase C | `B_CLEAN` |
+| 2 | **clean** | (review on HEAD AND) `review_body =~ /generated no( new)? comments/i` | flip `PHASE_B_EXIT_REASON=B_CLEAN_VERIFIED`, exit to Phase C | `B_CLEAN_VERIFIED` |
 | 3 | **dirty** | (review on HEAD AND) inline comments | Step 8.4 | (in-flight) |
 
 The order matters: without the pending check first, a stale `generated no comments` review left over for the **previous** HEAD would falsely trigger the clean exit on the new HEAD before Copilot has had a chance to re-review.
@@ -583,8 +591,9 @@ if [ -z "$latest" ] || [ "$latest" = "null" ] || [ "$review_commit" != "$HEAD_SH
 elif printf '%s' "$review_body" | grep -qiE 'generated no( new)? comments'; then
     # Reached only when review_commit == HEAD_SHA (gated by the pending
     # check above). The clean phrase here is therefore for the current
-    # HEAD, not a stale review of an older commit.
-    PHASE_B_EXIT_REASON="B_CLEAN"
+    # HEAD, not a stale review of an older commit. Copilot itself
+    # declared the PR clean ⇒ B_CLEAN_VERIFIED.
+    PHASE_B_EXIT_REASON="B_CLEAN_VERIFIED"
     break
 fi
 # else: dirty — review on HEAD with inline comments (Step 8.4)
@@ -656,15 +665,14 @@ A literal `requestReviews` retry without this clear+re-add will often fail to wa
    git add <files>
    if git diff --cached --quiet; then
        # No fix to commit ⇒ every thread classified WONT_FIX or
-       # ALREADY_FIXED. Treat this as a B_CLEAN exit immediately —
-       # iterating again on the same dirty review state would just
-       # re-classify the same threads the same way until the round
-       # counter trips, then leak the marker via B_ABORTED. Setting
-       # B_CLEAN here is the executable form of the "empty push (no
-       # fix to commit)" circuit breaker documented below.
-       PHASE_B_EXIT_REASON="B_CLEAN"
-       echo "no-fix round (all WONT_FIX/ALREADY_FIXED) — exiting Phase B with B_CLEAN"
-       break
+       # ALREADY_FIXED. Do NOT exit B_CLEAN here — operator-judged
+       # "all WONT_FIX/ALREADY_FIXED" is not the same as Copilot
+       # itself confirming clean. Drop into Step 8.4.5 to force a
+       # fresh re-review on this HEAD and let Copilot adjudicate
+       # (3a verified, 3b operator-only, 3c new findings).
+       echo "no-fix round (all WONT_FIX/ALREADY_FIXED) — entering Step 8.4.5 forced re-review"
+       goto_step_8_4_5=1  # skill agent: jump to Step 8.4.5 below
+       break              # exit the fix-cycle inner block; fall into Step 8.4.5
    fi
    git commit -m "fix: address Copilot review on PR #$PR (round N)
 
@@ -693,21 +701,168 @@ A literal `requestReviews` retry without this clear+re-add will often fail to wa
 
 6. **Increment round counter**. Return to Step 8.1.
 
+#### Step 8.4.5: Forced re-review on a no-fix round (Copilot adjudication)
+
+When Step 8.4 step 4 detects an empty staged diff (every thread classified
+WONT_FIX or ALREADY_FIXED, nothing to commit), the operator's judgment is
+that the PR is clean — but Copilot has not been asked to re-evaluate the
+HEAD with that classification context. Going straight to `B_CLEAN` here
+risks two failure modes the empty-push shortcut used to mask:
+
+- **3c — missed coverage**: Copilot's most recent review on this HEAD
+  produced findings only because of partial state (mid-fix-cycle review,
+  stale state, retry dedup). A fresh re-review can surface NEW issues
+  the previous round didn't catch. Exiting before re-review hides these
+  until the next push happens or the cron fallback fires.
+- **3b — false-positive cross-round consensus**: Copilot keeps
+  re-emitting the same threads we already classified WONT_FIX. That IS
+  a clean exit for the operator, but the literal `copilot-clean` label
+  semantic ("Copilot itself reported no new comments") is not met, so
+  applying that label would be a lie.
+
+Step 8.4.5 forces Copilot to adjudicate on the same HEAD before exit:
+
+```bash
+# 1. Snapshot the current set of unresolved Copilot thread CIDs as the
+#    "previously seen" baseline. Step 3 below distinguishes 3c (any new
+#    CID) from 3b (every CID is in this set).
+PRIOR_THREAD_CIDS=$(printf '%s' "$threads" | jq -r '.comments.nodes[0].databaseId')
+
+# 2. Stuck-detector dance (same procedure as Step 8.3): drop Copilot,
+#    sleep 2s, re-add. A bare `requestReviews` against a bot already on
+#    the reviewer slot is silently deduped (200 OK, no event). The
+#    drop-then-re-add is the only way to fire a fresh review_requested
+#    event without changing HEAD.
+PR_NID=$(gh api graphql -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
+    -f query='query($owner:String!,$repo:String!,$pr:Int!){
+      repository(owner:$owner,name:$repo){ pullRequest(number:$pr){ id } } }' \
+    --jq '.data.repository.pullRequest.id')
+gh api graphql -f query='
+mutation($pr: ID!) {
+  requestReviews(input: { pullRequestId: $pr, union: false, userIds: [], teamIds: [], botIds: [] }) {
+    pullRequest { id }
+  }
+}' -F pr="$PR_NID" >/dev/null
+sleep 2
+gh api graphql -f query='
+mutation($pr: ID!, $bot: ID!) {
+  requestReviews(input: { pullRequestId: $pr, botIds: [$bot] }) {
+    pullRequest { id }
+  }
+}' -F pr="$PR_NID" -F bot="BOT_kgDOCnlnWA" >/dev/null
+
+# 3. Poll Step 8.1 every 30s for up to 5 min. Capture the prior latest
+#    review timestamp first so we can detect a NEW review (not just
+#    re-read the old one). Heartbeat the marker each iteration so the
+#    wait does not let the freshness lock expire.
+PRIOR_REVIEW_AT=$(printf '%s' "$latest" | jq -r '.submitted_at // ""')
+deadline=$(( $(date +%s) + 300 ))
+while [ $(date +%s) -lt $deadline ]; do
+    sleep 30
+    update_local_marker "$HEAD_SHA"
+    reviews_new=$(gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/reviews")
+    latest_new=$(printf '%s' "$reviews_new" | jq -s '
+        add | [.[] | select(.user.login == "copilot-pull-request-reviewer[bot]")]
+        | sort_by(.submitted_at) | last')
+    new_at=$(printf '%s' "$latest_new" | jq -r '.submitted_at // ""')
+    new_commit=$(printf '%s' "$latest_new" | jq -r '.commit_id // ""')
+    if [ "$new_at" != "$PRIOR_REVIEW_AT" ] && [ "$new_commit" = "$HEAD_SHA" ]; then
+        break
+    fi
+done
+
+# 4. Classify the new review against the three outcomes. The order
+#    matters: clean phrase wins over thread-set comparison so that
+#    even if Copilot re-flagged something but ALSO declared
+#    `generated no new comments`, we treat it as 3a verified.
+new_body=$(printf '%s' "$latest_new" | jq -r '.body // ""')
+if [ "$new_at" = "$PRIOR_REVIEW_AT" ] || [ "$new_commit" != "$HEAD_SHA" ]; then
+    # 5-min timeout reached without a fresh review on the current HEAD.
+    # Treat as B_ABORTED — cron will retry on its next tick and may
+    # succeed where this synchronous wait failed.
+    echo "Step 8.4.5: no fresh re-review within 5 min (timeout) — exiting B_ABORTED"
+    PHASE_B_EXIT_REASON="B_ABORTED"
+    break  # exit the round loop
+elif printf '%s' "$new_body" | grep -qiE 'generated no( new)? comments'; then
+    # 3a — Copilot itself confirmed clean for this HEAD.
+    echo "Step 8.4.5: Copilot re-review reports no new comments — B_CLEAN_VERIFIED"
+    PHASE_B_EXIT_REASON="B_CLEAN_VERIFIED"
+    break
+else
+    # Fetch the post-re-review thread CIDs and compare against the
+    # baseline. Any CID not in PRIOR_THREAD_CIDS is a new finding ⇒ 3c.
+    threads_new=$(gh api graphql --paginate \
+        -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
+        -f query='
+    query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $pr) {
+          reviewThreads(first: 100, after: $endCursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id isResolved path line
+              comments(first: 10) {
+                nodes { databaseId author { login } body diffHunk }
+              }
+            }
+          }
+        }
+      }
+    }' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
+        | select(.isResolved == false
+            and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")')
+    new_cids=$(printf '%s' "$threads_new" | jq -r '.comments.nodes[0].databaseId')
+    has_new_finding=0
+    for cid in $new_cids; do
+        if ! printf '%s\n' "$PRIOR_THREAD_CIDS" | grep -qFx "$cid"; then
+            has_new_finding=1
+            break
+        fi
+    done
+    if [ "$has_new_finding" = "1" ]; then
+        # 3c — at least one CID is new. Continue the round loop with
+        # the refreshed thread set so Step 8.4 reclassifies. Reuse
+        # `threads` as the canonical input for the next iteration.
+        echo "Step 8.4.5: forced re-review surfaced new findings (CID not in baseline) — continuing dirty loop"
+        threads=$threads_new
+        # Round counter increments at Step 8.4 step 6 (next iteration);
+        # circuit breaker (max 5 rounds) still applies.
+        continue  # back to Step 8.1 of the round loop
+    else
+        # 3b — every CID in the new review is one we already classified
+        # WONT_FIX. Cross-round consensus = persistent false-positive.
+        # Operator-judged clean.
+        echo "Step 8.4.5: forced re-review re-emitted only known WONT_FIX threads — B_CLEAN_OPERATOR"
+        PHASE_B_EXIT_REASON="B_CLEAN_OPERATOR"
+        break
+    fi
+fi
+```
+
+The 5-minute polling cap matches typical Copilot re-review latency
+(~1-3 min observed in this repo's PR history). A miss falls through
+to `B_ABORTED` rather than waiting longer because (a) longer waits
+would let the marker freshness lock expire, and (b) cron's next tick
+will retry the whole pipeline within ~30 min.
+
 #### Round circuit breakers
 
-- **max 5 rounds**: round 6 ⇒ `B_ABORTED` (Copilot generates new issues forever ⇒ delegate to cron)
+- **max 5 rounds**: round 6 ⇒ `B_ABORTED` (Copilot generates new issues forever ⇒ delegate to cron). Step 8.4.5's 3c path also feeds the round counter so a stream of new findings still trips this breaker.
 - **same issue across 2+ rounds**: false positive, downgrade to WONT_FIX, continue
-- **empty push (no fix to commit)**: every thread WONT_FIX/ALREADY_FIXED ⇒ `B_CLEAN` ⇒ skip to Phase C
+- **empty push (no fix to commit)**: every thread WONT_FIX/ALREADY_FIXED ⇒ enter Step 8.4.5 (forced re-review), then exit `B_CLEAN_VERIFIED` (3a) / `B_CLEAN_OPERATOR` (3b) / continue dirty (3c) / `B_ABORTED` (timeout). The previous behaviour ("empty push ⇒ immediate B_CLEAN") is removed because it conflated operator judgment with Copilot adjudication and could mask 3c missed-coverage cases.
 - **unrecoverable build/test/lint failure**: cannot revert ⇒ `B_ABORTED` ⇒ Phase C
 
 Phase C Step 11.9 dispatches by exit reason:
 
-| Exit reason | Marker cleanup | Cron behavior |
-|---|---|---|
-| `B_CLEAN` | `mark_local_converged` PATCH (rewrites tag to `copilot-fix-local-converged:<HEAD>`) | Cron treats converged tag as `already_triggered` and skips `@claude` for this HEAD |
-| `B_ABORTED` | `delete_local_marker` removes the comment | Next cron tick (~30–60 min) fires `@claude` fallback |
+| Exit reason | Marker cleanup | `copilot-clean` label | Cron behavior |
+|---|---|---|---|
+| `B_CLEAN_VERIFIED` | `mark_local_converged` PATCH (rewrites tag to `copilot-fix-local-converged:<HEAD>`) | **`gh pr edit --add-label copilot-clean`** | Cron treats converged tag as `already_triggered` AND sees Copilot's literal "no new comments" body, so it keeps the label on its next tick. |
+| `B_CLEAN_OPERATOR` | `mark_local_converged` (same as above — still suppress duplicate WONT_FIX work from cron) | **No label** — Copilot still has comments on HEAD; the literal label semantic is unmet, so applying it would mislead consumers of the label. | Cron sees the converged tag and skips `@claude`, but its review-body check still sees comments and (correctly) does not add the label. |
+| `B_ABORTED` | `delete_local_marker` removes the comment | **No label** (and any prior label gets removed by cron's `dirty`/`pending` paths or by the `synchronize` event on the next push). | Next cron tick (~30–60 min) fires `@claude` fallback. |
 
-Freshness lock keys on the active tag only, so a re-run of `/review-until-clean` after `B_CLEAN` is allowed (POSTs a new active marker; converged tag is ignored by the lock).
+Freshness lock keys on the active tag only, so a re-run of `/review-until-clean` after `B_CLEAN_*` is allowed (POSTs a new active marker; converged tag is ignored by the lock).
+
+The `copilot-clean` label is owned by `.github/workflows/copilot-clean-label.yml` (cron-driven, cf. its `LABEL: copilot-clean` env). The skill applies the label preemptively on `B_CLEAN_VERIFIED` to avoid a 30-min cron-tick wait; the cron's natural lifecycle (add on Copilot literal-clean, remove on dirty/synchronize) preserves the same semantics on subsequent ticks. The skill does not need to remove the label on `B_ABORTED` because the cron's `dirty`/`pending` branches and the `synchronize` event each strip it independently — adding a redundant skill-side strip would just double-fire the API call.
 
 ## Phase C: Reply + resolve all unresolved threads
 
@@ -754,7 +909,7 @@ Reuse cached results from Phase A/B for known threads. Classify the rest using t
 
 The Step 9 query already filtered to Copilot threads, so iterating `$threads` here is safe.
 
-Initialize `WONT_FIX_COUNT=0` before the loop and increment for every WONT_FIX classification — Step 11.5 reads this counter to gate `PHASE_C_OK`. Without the counter the verify step has nothing to compare against and `PHASE_C_OK` would stay at 0 forever (B_CLEAN runs would still delete the marker, defeating cron suppression).
+Initialize `WONT_FIX_COUNT=0` before the loop and increment for every WONT_FIX classification — Step 11.5 reads this counter to gate `PHASE_C_OK`. Without the counter the verify step has nothing to compare against and `PHASE_C_OK` would stay at 0 forever (`B_CLEAN_*` runs would still delete the marker, defeating cron suppression).
 
 The loop **must** be fed via process substitution (`while ... done < <(...)`), not a pipe (`... | while ... done`). A piped `while` runs in a subshell, so `WONT_FIX_COUNT=$((... + 1))` updates a child variable that disappears when the subshell exits — the parent always reads `0`. Process substitution keeps the loop body in the parent shell so the increment persists.
 
@@ -867,26 +1022,61 @@ Expected: `unresolved_copilot` equals the number of Copilot WONT_FIX threads. Th
 ### Step 11.9: Cleanup marker by Phase B exit reason **and** Phase C completion
 
 ```bash
-# Both gates must pass: Phase B must have converged AND Phase C's reply +
-# resolve mutations must have completed cleanly (verified by Step 11.5).
-# Marking the marker `converged` permanently suppresses cron for this HEAD,
-# so we MUST NOT do it when Phase C left FIX / ALREADY_FIXED threads
-# unresolved — otherwise cron silently abandons a HEAD that still has
-# open Copilot findings.
-if [ "${PHASE_B_EXIT_REASON:-B_ABORTED}" = "B_CLEAN" ] && [ "${PHASE_C_OK:-0}" = "1" ]; then
-    mark_local_converged "$HEAD_SHA"
-    echo "/review-until-clean done (B_CLEAN + Phase C ok): marker marked converged for HEAD $HEAD_SHA."
-else
-    delete_local_marker
-    echo "/review-until-clean done (${PHASE_B_EXIT_REASON:-B_ABORTED}, PHASE_C_OK=${PHASE_C_OK:-0}): marker deleted, cron fallback will resume on next tick."
-fi
+# Three-way dispatch on PHASE_B_EXIT_REASON, gated additionally by
+# PHASE_C_OK for the "marker → converged" path. Marking the marker
+# converged permanently suppresses cron for this HEAD, so we MUST NOT
+# do it when Phase C left FIX/ALREADY_FIXED threads unresolved —
+# otherwise cron silently abandons a HEAD with open Copilot findings.
+case "${PHASE_B_EXIT_REASON:-B_ABORTED}" in
+    B_CLEAN_VERIFIED)
+        if [ "${PHASE_C_OK:-0}" = "1" ]; then
+            mark_local_converged "$HEAD_SHA"
+            # Apply the `copilot-clean` label preemptively. The cron
+            # `copilot-clean-label.yml` would also add it on its next
+            # tick (~30 min worst case) because the latest Copilot
+            # review body matches `generated no( new)? comments`, but
+            # applying here avoids that latency. Failures are
+            # warn-and-continue: the cron is the safety net.
+            if ! gh pr edit "$PR" --repo "$OWNER/$REPO" --add-label copilot-clean 2>&1; then
+                echo "::warning::PR #$PR: failed to apply copilot-clean label preemptively; cron will retry on next tick"
+            fi
+            echo "/review-until-clean done (B_CLEAN_VERIFIED + Phase C ok): marker marked converged + copilot-clean label applied for HEAD $HEAD_SHA."
+        else
+            delete_local_marker
+            echo "/review-until-clean done (B_CLEAN_VERIFIED + Phase C FAILED, PHASE_C_OK=$PHASE_C_OK): marker deleted (Phase C left threads unresolved); cron retries pipeline on next tick."
+        fi
+        ;;
+    B_CLEAN_OPERATOR)
+        if [ "${PHASE_C_OK:-0}" = "1" ]; then
+            mark_local_converged "$HEAD_SHA"
+            # Deliberately NOT applying `copilot-clean` label: Copilot's
+            # latest review still has comments, so the literal label
+            # semantic ("Copilot reported no new comments") is unmet.
+            # Cron's review-body check will (correctly) leave the label
+            # off on its next tick.
+            echo "/review-until-clean done (B_CLEAN_OPERATOR + Phase C ok): marker marked converged for HEAD $HEAD_SHA. No copilot-clean label (Copilot still has comments; cross-round consensus = WONT_FIX)."
+        else
+            delete_local_marker
+            echo "/review-until-clean done (B_CLEAN_OPERATOR + Phase C FAILED, PHASE_C_OK=$PHASE_C_OK): marker deleted; cron retries pipeline on next tick."
+        fi
+        ;;
+    *)
+        # B_ABORTED and any unhandled state. Always delete the marker
+        # so cron can re-fire on the next tick. No label work needed:
+        # cron's `dirty`/`pending` paths and the `synchronize` event
+        # each strip any stale `copilot-clean` label independently.
+        delete_local_marker
+        echo "/review-until-clean done (${PHASE_B_EXIT_REASON:-B_ABORTED}, PHASE_C_OK=${PHASE_C_OK:-0}): marker deleted, cron fallback will resume on next tick."
+        ;;
+esac
 ```
 
 Reasons:
 
-- `B_CLEAN` + `PHASE_C_OK=1`: Copilot converged AND Phase C resolved FIX/ALREADY_FIXED + WONT_FIX intentionally left unresolved. If cron re-fires `@claude`, CI claude task would repeat Phase C and post duplicate "declined" replies on WONT_FIX threads. The converged tag prevents this.
-- `B_CLEAN` + `PHASE_C_OK=0`: Phase B converged but Phase C failed (mid-loop reply/resolve error, rate limit, network partition). Treat as a non-clean exit — delete the marker so cron retries the pipeline rather than leaving open FIX/ALREADY_FIXED threads stamped as `converged` and silently abandoned.
-- `B_ABORTED` (any `PHASE_C_OK`): Phase B did not converge ⇒ delete so cron takes over within ~30–60 min.
+- `B_CLEAN_VERIFIED` + `PHASE_C_OK=1`: Copilot literally confirmed no new comments AND Phase C resolved FIX/ALREADY_FIXED + WONT_FIX intentionally left unresolved. Apply both the converged marker AND the `copilot-clean` label so downstream consumers (merge gate, dashboards, cron) immediately see the verified-clean state.
+- `B_CLEAN_OPERATOR` + `PHASE_C_OK=1`: skill judges clean (all threads WONT_FIX/ALREADY_FIXED) but Step 8.4.5's forced re-review re-emitted the same threads. Mark converged so cron does not waste budget re-running the same WONT_FIX classification, but skip the label because Copilot still disagrees with the operator-side verdict.
+- Either `B_CLEAN_*` + `PHASE_C_OK=0`: Phase B converged but Phase C failed (mid-loop reply/resolve error, rate limit, network partition). Treat as a non-clean exit — delete the marker so cron retries the pipeline rather than leaving open FIX/ALREADY_FIXED threads stamped as `converged` and silently abandoned.
+- `B_ABORTED` (any `PHASE_C_OK`): Phase B did not converge ⇒ delete the marker so cron takes over within ~30–60 min. Cron's existing `dirty`/`pending`/`synchronize` paths handle any stale label removal — no skill-side strip needed.
 
 ## Rules
 
