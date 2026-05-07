@@ -542,13 +542,16 @@ PHASE_C_OK=0                     # fail-safe default; Step 11.5 verification fli
 3. **`review_commit == HEAD_SHA`** — the review is for the current HEAD, not a stale earlier commit. (If not, state is `pending` → Step 8.3.)
 4. **`review_body =~ /generated no( new)? comments/i`** — Copilot itself declared the PR clean for this HEAD.
 
-ALL four must be true to flip `PHASE_B_EXIT_REASON=B_CLEAN_VERIFIED` from Step 8.2 and exit to Phase C. If 1-3 hold but condition 4 fails, the state is `dirty` → Step 8.4 (fix cycle), where a no-fix sub-round will redirect to Step 8.4.5 (forced re-review) rather than exiting B_CLEAN immediately. If condition 3 fails, the state is `pending` → Step 8.3 (wait + re-request). Do **not** infer Phase B done from `unresolved_thread_count == 0` alone — that count can be 0 between rounds (after Phase C of the previous round resolved everything) while Copilot has not yet re-reviewed the new HEAD; exiting on that signal is how round-N regressions slip through.
+ALL four must be true to flip `PHASE_B_EXIT_REASON=B_CLEAN_VERIFIED` from Step 8.2 and exit to Phase C. If 1-3 hold but condition 4 fails, the state is `dirty` → Step 8.4 (fix cycle), where a no-fix sub-round will redirect to Step 8.4.5 (forced re-review) rather than exiting B_CLEAN_* immediately. If condition 3 fails, the state is `pending` → Step 8.3 (wait + re-request). Do **not** infer Phase B done from `unresolved_thread_count == 0` alone — that count can be 0 between rounds (after Phase C of the previous round resolved everything) while Copilot has not yet re-reviewed the new HEAD; exiting on that signal is how round-N regressions slip through.
 
 When relaying state to the user mid-loop ("is the PR clean yet?"), re-run the four conditions every time — do **not** trust an earlier "clean" conclusion across a push, because a push invalidates condition 3.
+
+Initialize the round counter before entering the loop: `ROUND=0`.
 
 At each round entry, **heartbeat the marker**:
 
 ```bash
+ROUND=$((ROUND + 1))
 NEW_HEAD=$(git rev-parse HEAD)
 if [ "$NEW_HEAD" = "$HEAD_SHA" ]; then
     update_local_marker "$NEW_HEAD"
@@ -665,14 +668,14 @@ A literal `requestReviews` retry without this clear+re-add will often fail to wa
    git add <files>
    if git diff --cached --quiet; then
        # No fix to commit ⇒ every thread classified WONT_FIX or
-       # ALREADY_FIXED. Do NOT exit B_CLEAN here — operator-judged
+       # ALREADY_FIXED. Do NOT exit B_CLEAN_* here — operator-judged
        # "all WONT_FIX/ALREADY_FIXED" is not the same as Copilot
        # itself confirming clean. Drop into Step 8.4.5 to force a
        # fresh re-review on this HEAD and let Copilot adjudicate
        # (3a verified, 3b operator-only, 3c new findings).
        echo "no-fix round (all WONT_FIX/ALREADY_FIXED) — entering Step 8.4.5 forced re-review"
-       goto_step_8_4_5=1  # skill agent: jump to Step 8.4.5 below
-       break              # exit the fix-cycle inner block; fall into Step 8.4.5
+       # Skill agent: proceed to Step 8.4.5 below, skipping sub-steps 5-6.
+       break  # exit the fix-cycle inner block; fall into Step 8.4.5
    fi
    git commit -m "fix: address Copilot review on PR #$PR (round N)
 
@@ -699,15 +702,16 @@ A literal `requestReviews` retry without this clear+re-add will often fail to wa
 
 5. **New HEAD: marker refresh** is automatic at the next round's heartbeat block.
 
-6. **Increment round counter**. Return to Step 8.1.
+6. **Return to Step 8.1** (the heartbeat block at round entry increments `ROUND`).
 
 #### Step 8.4.5: Forced re-review on a no-fix round (Copilot adjudication)
 
 When Step 8.4 step 4 detects an empty staged diff (every thread classified
 WONT_FIX or ALREADY_FIXED, nothing to commit), the operator's judgment is
 that the PR is clean — but Copilot has not been asked to re-evaluate the
-HEAD with that classification context. Going straight to `B_CLEAN` here
-risks two failure modes the empty-push shortcut used to mask:
+HEAD with that classification context. Going straight to an immediate
+`B_CLEAN_*` exit here risks two failure modes the old empty-push
+shortcut used to mask:
 
 - **3c — missed coverage**: Copilot's most recent review on this HEAD
   produced findings only because of partial state (mid-fix-cycle review,
@@ -726,46 +730,99 @@ Step 8.4.5 forces Copilot to adjudicate on the same HEAD before exit:
 # 1. Snapshot the current set of unresolved Copilot thread CIDs as the
 #    "previously seen" baseline. Step 3 below distinguishes 3c (any new
 #    CID) from 3b (every CID is in this set).
-PRIOR_THREAD_CIDS=$(printf '%s' "$threads" | jq -r '.comments.nodes[0].databaseId')
+PRIOR_THREAD_CIDS=$(printf '%s' "$threads" | jq -r '
+    select(.isResolved == false
+        and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")
+    | .comments.nodes[0].databaseId')
 
-# 2. Stuck-detector dance (same procedure as Step 8.3): drop Copilot,
-#    sleep 2s, re-add. A bare `requestReviews` against a bot already on
-#    the reviewer slot is silently deduped (200 OK, no event). The
-#    drop-then-re-add is the only way to fire a fresh review_requested
-#    event without changing HEAD.
+# 2. Stuck-detector dance (same procedure as Step 8.3 and
+#    copilot-clean-label.yml's pending branch): drop Copilot from the
+#    reviewer slot, sleep 2s, re-add. A bare `requestReviews` against a
+#    bot already on the reviewer slot is silently deduped (200 OK, no
+#    event). The drop-then-re-add is the only way to fire a fresh
+#    review_requested event without changing HEAD.
+#
+#    CRITICAL: the clear mutation uses `union:false` which REPLACES the
+#    entire reviewer set. We must first query current reviewers and replay
+#    humans + teams, omitting only bots — otherwise all human/team review
+#    requests are silently dropped. This mirrors the safe pattern in
+#    copilot-clean-label.yml (search: "query current reviewers").
 PR_NID=$(gh api graphql -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
     -f query='query($owner:String!,$repo:String!,$pr:Int!){
       repository(owner:$owner,name:$repo){ pullRequest(number:$pr){ id } } }' \
-    --jq '.data.repository.pullRequest.id')
-gh api graphql -f query='
-mutation($pr: ID!) {
-  requestReviews(input: { pullRequestId: $pr, union: false, userIds: [], teamIds: [], botIds: [] }) {
-    pullRequest { id }
-  }
-}' -F pr="$PR_NID" >/dev/null
+    --jq '.data.repository.pullRequest.id') || {
+    echo "::warning::Step 8.4.5: PR node ID fetch failed — skipping dance, falling through to B_ABORTED"
+    PHASE_B_EXIT_REASON="B_ABORTED"
+    break
+}
+# Query current reviewer requests so the clear mutation preserves
+# humans + teams (removing only bots via empty botIds).
+reviewer_query=$(gh api graphql -F pr_nid="$PR_NID" \
+    -f query='query($pr_nid:ID!){
+      node(id:$pr_nid){ ... on PullRequest {
+        reviewRequests(first:100){ nodes { requestedReviewer {
+          __typename ... on User { id } ... on Team { id }
+        } } }
+      } } }' 2>/dev/null) || true
+# Guard: if the reviewer query failed or returned unparseable data,
+# skip the clear entirely. With reviewer_nodes unknown, building
+# users_json=[]/teams_json=[] and calling requestReviews(union:false)
+# would remove every human reviewer on the PR (same guard as
+# copilot-clean-label.yml `reviewer_query_ok` guard).
+reviewer_query_ok=0
+if [ -n "$reviewer_query" ] && printf '%s' "$reviewer_query" \
+    | jq -e '.data.node.reviewRequests' >/dev/null 2>&1; then
+    reviewer_query_ok=1
+fi
+if [ "$reviewer_query_ok" = "1" ]; then
+    users_json=$(printf '%s' "$reviewer_query" | jq -c \
+        '[(.data.node.reviewRequests.nodes // [])[]
+          | select(.requestedReviewer.__typename == "User")
+          | .requestedReviewer.id]' 2>/dev/null) || users_json="[]"
+    teams_json=$(printf '%s' "$reviewer_query" | jq -c \
+        '[(.data.node.reviewRequests.nodes // [])[]
+          | select(.requestedReviewer.__typename == "Team")
+          | .requestedReviewer.id]' 2>/dev/null) || teams_json="[]"
+    # Clear: replay humans + teams with union:false, botIds:[] — drops bots only.
+    clear_body=$(jq -n \
+        --arg pr "$PR_NID" --argjson users "$users_json" --argjson teams "$teams_json" \
+        '{ query: "mutation($pr:ID!,$users:[ID!]!,$teams:[ID!]!){requestReviews(input:{pullRequestId:$pr, userIds:$users, teamIds:$teams, botIds:[], union:false}){pullRequest{id}}}",
+           variables: {pr:$pr, users:$users, teams:$teams} }')
+    if ! printf '%s' "$clear_body" | gh api graphql --input - >/dev/null 2>&1; then
+        echo "::warning::Step 8.4.5: clear mutation failed — re-add may be deduped"
+    fi
+else
+    echo "::warning::Step 8.4.5: reviewer query failed — skipping clear to preserve human reviewers; re-add may be deduped"
+fi
 sleep 2
-gh api graphql -f query='
+# Re-add Copilot as a fresh reviewer request.
+if ! gh api graphql -f query='
 mutation($pr: ID!, $bot: ID!) {
   requestReviews(input: { pullRequestId: $pr, botIds: [$bot] }) {
     pullRequest { id }
   }
-}' -F pr="$PR_NID" -F bot="BOT_kgDOCnlnWA" >/dev/null
+}' -F pr="$PR_NID" -F bot="BOT_kgDOCnlnWA" >/dev/null 2>&1; then
+    echo "::warning::Step 8.4.5: re-add mutation failed — poll may timeout"
+fi
 
 # 3. Poll Step 8.1 every 30s for up to 5 min. Capture the prior latest
 #    review timestamp first so we can detect a NEW review (not just
 #    re-read the old one). Heartbeat the marker each iteration so the
 #    wait does not let the freshness lock expire.
 PRIOR_REVIEW_AT=$(printf '%s' "$latest" | jq -r '.submitted_at // ""')
+# Initialize poll-result variables so timeout detection at step 4 below
+# works correctly even if the while loop body never executes (defensive).
+latest_new="$latest"  new_at="$PRIOR_REVIEW_AT"  new_commit="$review_commit"
 deadline=$(( $(date +%s) + 300 ))
-while [ $(date +%s) -lt $deadline ]; do
+while [ "$(date +%s)" -lt "$deadline" ]; do
     sleep 30
     update_local_marker "$HEAD_SHA"
-    reviews_new=$(gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/reviews")
+    reviews_new=$(gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/reviews" 2>/dev/null) || continue
     latest_new=$(printf '%s' "$reviews_new" | jq -s '
         add | [.[] | select(.user.login == "copilot-pull-request-reviewer[bot]")]
-        | sort_by(.submitted_at) | last')
-    new_at=$(printf '%s' "$latest_new" | jq -r '.submitted_at // ""')
-    new_commit=$(printf '%s' "$latest_new" | jq -r '.commit_id // ""')
+        | sort_by(.submitted_at) | last' 2>/dev/null) || continue
+    new_at=$(printf '%s' "$latest_new" | jq -r '.submitted_at // ""' 2>/dev/null) || continue
+    new_commit=$(printf '%s' "$latest_new" | jq -r '.commit_id // ""' 2>/dev/null) || continue
     if [ "$new_at" != "$PRIOR_REVIEW_AT" ] && [ "$new_commit" = "$HEAD_SHA" ]; then
         break
     fi
@@ -825,9 +882,11 @@ else
         # `threads` as the canonical input for the next iteration.
         echo "Step 8.4.5: forced re-review surfaced new findings (CID not in baseline) — continuing dirty loop"
         threads=$threads_new
-        # Round counter increments at Step 8.4 step 6 (next iteration);
-        # circuit breaker (max 5 rounds) still applies.
-        continue  # back to Step 8.1 of the round loop
+        # No explicit ROUND increment here — `continue` returns to the
+        # loop top where the heartbeat block increments ROUND. This avoids
+        # double-counting (heartbeat + inline both firing on the same
+        # iteration).
+        continue  # back to Step 8.1 (heartbeat increments ROUND)
     else
         # 3b — every CID in the new review is one we already classified
         # WONT_FIX. Cross-round consensus = persistent false-positive.
@@ -1037,7 +1096,7 @@ case "${PHASE_B_EXIT_REASON:-B_ABORTED}" in
             # review body matches `generated no( new)? comments`, but
             # applying here avoids that latency. Failures are
             # warn-and-continue: the cron is the safety net.
-            if ! gh pr edit "$PR" --repo "$OWNER/$REPO" --add-label copilot-clean 2>&1; then
+            if ! gh pr edit "$PR" --repo "$OWNER/$REPO" --add-label copilot-clean >/dev/null 2>&1; then
                 echo "::warning::PR #$PR: failed to apply copilot-clean label preemptively; cron will retry on next tick"
             fi
             echo "/review-until-clean done (B_CLEAN_VERIFIED + Phase C ok): marker marked converged + copilot-clean label applied for HEAD $HEAD_SHA."
