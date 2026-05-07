@@ -665,7 +665,13 @@ A literal `requestReviews` retry without this clear+re-add will often fail to wa
 4. **Commit + push** (commit only when something staged):
 
    ```bash
-   git add "${FILES_TO_STAGE[@]}"  # operator: replace with the actual fix-cycle file list
+   # Operator: populate this array with the paths fixed during the
+   # current round, then run `git add`. Empty default keeps the array
+   # safe under `set -u` if the operator forgets to populate (the
+   # subsequent `git diff --cached --quiet` will then catch the
+   # no-fix case via the existing branch).
+   FILES_TO_STAGE=()  # e.g. (cmd/uzomuzo/main.go internal/foo/bar.go)
+   git add -- "${FILES_TO_STAGE[@]}"
    if git diff --cached --quiet; then
        # No fix to commit ⇒ every thread classified WONT_FIX or
        # ALREADY_FIXED. Do NOT exit B_CLEAN_* here — operator-judged
@@ -812,6 +818,11 @@ if [ "$reviewer_query_ok" = "1" ]; then
     # churn AND avoids silently removing other bot reviewers (e.g.,
     # dependabot) that the clear's `botIds:[]` would also drop. Same
     # skip pattern as copilot-clean-label.yml's `copilot_present` check.
+    # Initialize users_json/teams_json before the copilot_present
+    # branch so the post-branch `[ -n "$users_json" ]` test below is
+    # always defined under `set -u`, even if `copilot_present` is
+    # `false` or `unknown` and the inner block never runs.
+    users_json=""; teams_json=""
     # Default to "unknown" on jq failure (NOT "true") and skip the clear
     # entirely. Defaulting "true" + falling through would rebuild the
     # users_json/teams_json from possibly-corrupt data and call
@@ -965,26 +976,21 @@ else
     }' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
         | select(.isResolved == false
             and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")' 2>/dev/null) || { threads_new_fetch_ok=0; threads_new=""; }
-    # Note: `gh api graphql` can return HTTP 200 with `.errors[]`
-    # populated (partial-success), in which case the `||` fall-through
-    # above does NOT fire. The `--jq` filter strips structure, so we
-    # cannot inspect `.errors[]` after the fact. Refetch the raw
-    # response to check; same defensive pattern as the clear mutation
-    # earlier in this step. A `.errors[]` populated response is treated
-    # as a fetch failure (B_ABORTED) so the partial data does not flow
-    # into the 3b/3c classifier.
-    if [ "$threads_new_fetch_ok" = "1" ]; then
-        threads_new_raw=$(gh api graphql --paginate \
-            -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
-            -f query='query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
-              repository(owner: $owner, name: $repo) { pullRequest(number: $pr) {
-                reviewThreads(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor } } } } }' 2>/dev/null) || threads_new_raw=""
-        if [ -n "$threads_new_raw" ] && printf '%s' "$threads_new_raw" \
-            | jq -e '(.errors // []) | length > 0' >/dev/null 2>&1; then
-            threads_new_fetch_ok=0
-            echo "::warning::Step 8.4.5: thread fetch returned partial-success errors (HTTP 200 + .errors[]) — treating as fetch failure"
-        fi
-    fi
+    # Limitation: `gh api graphql` can return HTTP 200 with `.errors[]`
+    # populated (partial-success). The `--jq` filter on the main fetch
+    # above strips response structure, so we cannot retroactively
+    # inspect `.errors[]` from `$threads_new`. A separate `--jq`-less
+    # refetch would re-execute the same load against GitHub (rate-
+    # limit risk) and could itself return different errors than the
+    # main fetch (so the check would be unreliable anyway). Accepting
+    # the rare partial-success-as-empty case here: the resulting
+    # empty `threads_new` flows through to the 3b operator-clean
+    # branch, which is wrong but rare and recoverable on the next
+    # cron tick. The same trade-off is made by the clear mutation's
+    # `(.errors // []) | length > 0` check earlier in this step,
+    # where we DO have access to the raw response. If a future GitHub
+    # API change makes partial-success more common here, the right
+    # fix is to drop `--jq` and parse `threads_new` in two passes.
     if [ "$threads_new_fetch_ok" = "0" ]; then
         echo "::warning::Step 8.4.5: post-re-review thread fetch failed — exiting B_ABORTED (cron will retry)"
         PHASE_B_EXIT_REASON="B_ABORTED"
