@@ -529,7 +529,7 @@ PHASE_C_OK=0                     # fail-safe default; Step 11.5 verification fli
 |---|---|---|---|
 | `B_CLEAN_VERIFIED` | Copilot itself reported `generated no (new) comments` for the current HEAD (either via Step 8.2's clean path on a fix-cycle round, or via Step 8.4.5's forced re-review after a WONT_FIX-only round). | **Apply** in Step 11.9 (when `PHASE_C_OK=1`). | `mark_local_converged` |
 | `B_CLEAN_OPERATOR` | All threads are WONT_FIX/ALREADY_FIXED so the operator considers the PR clean, but Copilot's forced re-review (Step 8.4.5) re-emitted the same set of threads (cross-round consensus = false-positive confirmed). Operator-judged clean only. | **Do not apply** — Copilot still disagrees, so the literal label semantic is unmet. | `mark_local_converged` (still suppress cron from re-running the same WONT_FIX pass) |
-| `B_ABORTED` | Phase B did not converge (max rounds, unrecoverable build failure, push reject after rebase, Step 8.4.5 surfaced new findings that exhausted the round budget, etc.). | **Do not apply** (and remove if previously set, although the cron `copilot-clean-label.yml`'s `synchronize`/`dirty` paths handle that on the next event). | `delete_local_marker` (let cron retry) |
+| `B_ABORTED` | Phase B did not converge (max rounds, unrecoverable build failure, push reject after rebase, Step 8.4.5 surfaced new findings that exhausted the round budget, etc.). | **Do not apply.** The skill does NOT remove an existing label here — that strip is owned by `copilot-clean-label.yml` (its `synchronize`/`dirty`/`pending` paths on the next event tick) so a redundant skill-side strip would just double-fire the API call. | `delete_local_marker` (let cron retry) |
 
 `PHASE_C_OK` is a separate fail-safe flag from `PHASE_B_EXIT_REASON` because Phase B can converge clean (`B_CLEAN_VERIFIED` / `B_CLEAN_OPERATOR`) yet Phase C can still fail mid-way (rate-limited reply, permission error, network partition during the resolve mutation). Without this flag the Step 11.9 if/else gate would mark the marker `converged` even though some FIX / ALREADY_FIXED threads were never replied to or resolved, permanently suppressing cron on a HEAD that still has unresolved Copilot threads. The gate requires **both** a `B_CLEAN_*` exit AND `PHASE_C_OK=1` before flipping to the converged marker form (and additionally requires `B_CLEAN_VERIFIED` before applying the `copilot-clean` label).
 
@@ -760,7 +760,7 @@ PRIOR_THREAD_CIDS=$(printf '%s' "$threads" | jq -r '
 #    entire reviewer set. We must first query current reviewers and replay
 #    humans + teams, omitting only bots — otherwise all human/team review
 #    requests are silently dropped. This mirrors the safe pattern in
-#    copilot-clean-label.yml (search: "query current reviewers").
+#    copilot-clean-label.yml (search: "reviewer_query_ok").
 PR_NID=$(gh api graphql -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
     -f query='query($owner:String!,$repo:String!,$pr:Int!){
       repository(owner:$owner,name:$repo){ pullRequest(number:$pr){ id } } }' \
@@ -934,12 +934,16 @@ elif printf '%s' "$new_body" | grep -qiE 'generated no( new)? comments'; then
 else
     # Fetch the post-re-review thread CIDs and compare against the
     # baseline. Any CID not in PRIOR_THREAD_CIDS is a new finding ⇒ 3c.
-    # Guard the `gh api` like the other Step 8.4.5 calls: a transient
-    # 5xx / rate limit / network failure under `set -euo pipefail`
-    # would abort the whole procedure and skip the intended marker
-    # cleanup. On failure, fall through with an empty `threads_new`,
-    # which the new_cids extraction (next block) handles via its own
-    # `|| new_cids=""` guard ⇒ has_new_finding=0 ⇒ 3b operator-clean.
+    # Guard the `gh api` like the other Step 8.4.5 calls so a transient
+    # 5xx / rate limit / network failure does not abort the whole
+    # procedure under `set -euo pipefail`. CRITICAL: a fetch failure
+    # (`threads_new_fetch_ok=0`) is NOT the same as "Copilot returned
+    # no threads" — falling through to `threads_new=""` would
+    # incorrectly flip to 3b `B_CLEAN_OPERATOR` and suppress further
+    # rounds, when the right behaviour is to exit `B_ABORTED` so cron
+    # retries the pipeline. The flag below distinguishes the two
+    # outcomes for the classification block at the bottom of step 4.
+    threads_new_fetch_ok=1
     threads_new=$(gh api graphql --paginate \
         -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
         -f query='
@@ -959,7 +963,12 @@ else
       }
     }' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
         | select(.isResolved == false
-            and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")' 2>/dev/null) || threads_new=""
+            and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")' 2>/dev/null) || { threads_new_fetch_ok=0; threads_new=""; }
+    if [ "$threads_new_fetch_ok" = "0" ]; then
+        echo "::warning::Step 8.4.5: post-re-review thread fetch failed — exiting B_ABORTED (cron will retry)"
+        PHASE_B_EXIT_REASON="B_ABORTED"
+        break
+    fi
     # Same `|| ""` guard as PRIOR_THREAD_CIDS extraction at the top of
     # Step 8.4.5: a bare jq parse error on empty `$threads_new` would
     # abort under `set -euo pipefail`, masking the 3b operator-clean
