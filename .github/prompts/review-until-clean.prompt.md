@@ -738,11 +738,16 @@ Step 8.4.5 forces Copilot to adjudicate on the same HEAD before exit:
 ```bash
 # 1. Snapshot the current set of unresolved Copilot thread CIDs as the
 #    "previously seen" baseline. Step 3 below distinguishes 3c (any new
-#    CID) from 3b (every CID is in this set).
+#    CID) from 3b (every CID is in this set). The `|| ""` guard
+#    handles the empty-input case (e.g., the prior fetch returned no
+#    nodes): under `set -euo pipefail` a bare jq parse error here
+#    would abort Step 8.4.5 entirely, masking the intended 3a/3b/3c
+#    classification with an `B_ABORTED` exit. Empty baseline ⇒ every
+#    new CID flagged as "new finding" (3c), which is the safe default.
 PRIOR_THREAD_CIDS=$(printf '%s' "$threads" | jq -r '
     select(.isResolved == false
         and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")
-    | .comments.nodes[0].databaseId')
+    | .comments.nodes[0].databaseId' 2>/dev/null) || PRIOR_THREAD_CIDS=""
 
 # 2. Stuck-detector dance (same procedure as Step 8.3 and
 #    copilot-clean-label.yml's pending branch): drop Copilot from the
@@ -806,19 +811,40 @@ if [ "$reviewer_query_ok" = "1" ]; then
     # churn AND avoids silently removing other bot reviewers (e.g.,
     # dependabot) that the clear's `botIds:[]` would also drop. Same
     # skip pattern as copilot-clean-label.yml's `copilot_present` check.
+    # Default to "unknown" on jq failure (NOT "true") and skip the clear
+    # entirely. Defaulting "true" + falling through would rebuild the
+    # users_json/teams_json from possibly-corrupt data and call
+    # requestReviews(union:false) which REPLACES the reviewer set —
+    # the same way an empty users_json="[]" would silently drop every
+    # human reviewer. Skipping clear is the safe default (re-add will
+    # be deduped, but the dance still falls through to B_ABORTED
+    # cleanly via cron retry).
     copilot_present=$(printf '%s' "$reviewer_query" | jq -r --arg id "$COPILOT_BOT_ID" \
         'any(.data.node.reviewRequests.nodes // [] | .[]?;
              .requestedReviewer.__typename == "Bot"
-             and .requestedReviewer.id == $id)' 2>/dev/null) || copilot_present="true"
+             and .requestedReviewer.id == $id)' 2>/dev/null) || copilot_present="unknown"
     if [ "$copilot_present" = "true" ]; then
+        # Hard guard on users_json/teams_json: a jq failure here would
+        # leave the variables unset (or empty under `||`), and falling
+        # back to `[]` while `union:false` is in the mutation body
+        # below would silently drop every human/team reviewer. Treat
+        # any extraction failure as "skip the clear" and rely on the
+        # re-add (which will be deduped, but the dance still exits
+        # cleanly to B_ABORTED on poll-timeout).
         users_json=$(printf '%s' "$reviewer_query" | jq -c \
             '[(.data.node.reviewRequests.nodes // [])[]
               | select(.requestedReviewer.__typename == "User")
-              | .requestedReviewer.id]' 2>/dev/null) || users_json="[]"
+              | .requestedReviewer.id]' 2>/dev/null) || users_json=""
         teams_json=$(printf '%s' "$reviewer_query" | jq -c \
             '[(.data.node.reviewRequests.nodes // [])[]
               | select(.requestedReviewer.__typename == "Team")
-              | .requestedReviewer.id]' 2>/dev/null) || teams_json="[]"
+              | .requestedReviewer.id]' 2>/dev/null) || teams_json=""
+        if [ -z "$users_json" ] || [ -z "$teams_json" ]; then
+            echo "::warning::Step 8.4.5: User/Team extraction failed — skipping clear to preserve reviewers; re-add may be deduped"
+            users_json=""; teams_json=""
+        fi
+    fi
+    if [ "$copilot_present" = "true" ] && [ -n "$users_json" ] && [ -n "$teams_json" ]; then
         # Clear: replay humans + teams with union:false, botIds:[] —
         # drops Copilot AND any other bot reviewers. The cron's pattern
         # makes the same trade-off (search "botIds is explicitly empty"
@@ -839,7 +865,11 @@ if [ "$reviewer_query_ok" = "1" ]; then
             echo "::warning::Step 8.4.5: clear mutation returned errors (exit 0) — re-add may be deduped"
         fi
     else
-        echo "Step 8.4.5: Copilot not in reviewer requests — skipping clear (re-add will fire fresh)"
+        case "$copilot_present" in
+            true) echo "Step 8.4.5: User/Team extraction failed — skipping clear (re-add will be deduped)" ;;
+            unknown) echo "::warning::Step 8.4.5: copilot_present detection failed (jq error) — skipping clear; re-add may be deduped" ;;
+            *) echo "Step 8.4.5: Copilot not in reviewer requests — skipping clear (re-add will fire fresh)" ;;
+        esac
     fi
 else
     echo "::warning::Step 8.4.5: reviewer query failed or returned errors — skipping clear to preserve human reviewers; re-add may be deduped"
@@ -856,13 +886,16 @@ mutation($pr: ID!, $bot: ID!) {
 fi
 
 # 3. Poll Step 8.1 every 30s for up to 5 min. Capture the prior latest
-#    review timestamp first so we can detect a NEW review (not just
-#    re-read the old one). Heartbeat the marker each iteration so the
-#    wait does not let the freshness lock expire.
-PRIOR_REVIEW_AT=$(printf '%s' "$latest" | jq -r '.submitted_at // ""')
+#    review's REST id (not just submitted_at) so we can detect a NEW
+#    review unambiguously — if Copilot ever emits two reviews within
+#    the same second on the same HEAD, a `submitted_at`-only comparison
+#    would miss the second one and the loop would hit the 5-min
+#    timeout. Heartbeat the marker each iteration so the wait does
+#    not let the freshness lock expire.
+PRIOR_REVIEW_ID=$(printf '%s' "$latest" | jq -r '.id // ""' 2>/dev/null) || PRIOR_REVIEW_ID=""
 # Initialize poll-result variables so timeout detection at step 4 below
 # works correctly even if the while loop body never executes (defensive).
-latest_new="$latest"  new_at="$PRIOR_REVIEW_AT"  new_commit="$review_commit"
+latest_new="$latest"  new_id="$PRIOR_REVIEW_ID"  new_commit="$review_commit"
 deadline=$(( $(date +%s) + 300 ))
 while [ "$(date +%s)" -lt "$deadline" ]; do
     sleep 30
@@ -871,9 +904,9 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
     latest_new=$(printf '%s' "$reviews_new" | jq -s '
         add | [.[] | select(.user.login == "copilot-pull-request-reviewer[bot]")]
         | sort_by(.submitted_at) | last' 2>/dev/null) || continue
-    new_at=$(printf '%s' "$latest_new" | jq -r '.submitted_at // ""' 2>/dev/null) || continue
+    new_id=$(printf '%s' "$latest_new" | jq -r '.id // ""' 2>/dev/null) || continue
     new_commit=$(printf '%s' "$latest_new" | jq -r '.commit_id // ""' 2>/dev/null) || continue
-    if [ "$new_at" != "$PRIOR_REVIEW_AT" ] && [ "$new_commit" = "$HEAD_SHA" ]; then
+    if [ "$new_id" != "$PRIOR_REVIEW_ID" ] && [ "$new_commit" = "$HEAD_SHA" ]; then
         break
     fi
 done
@@ -883,7 +916,7 @@ done
 #    even if Copilot re-flagged something but ALSO declared
 #    `generated no new comments`, we treat it as 3a verified.
 new_body=$(printf '%s' "$latest_new" | jq -r '.body // ""')
-if [ "$new_at" = "$PRIOR_REVIEW_AT" ] || [ "$new_commit" != "$HEAD_SHA" ]; then
+if [ "$new_id" = "$PRIOR_REVIEW_ID" ] || [ "$new_commit" != "$HEAD_SHA" ]; then
     # 5-min timeout reached without a fresh review on the current HEAD.
     # Treat as B_ABORTED — cron will retry on its next tick and may
     # succeed where this synchronous wait failed.
@@ -918,7 +951,13 @@ else
     }' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
         | select(.isResolved == false
             and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")')
-    new_cids=$(printf '%s' "$threads_new" | jq -r '.comments.nodes[0].databaseId')
+    # Same `|| ""` guard as PRIOR_THREAD_CIDS extraction at the top of
+    # Step 8.4.5: a bare jq parse error on empty `$threads_new` would
+    # abort under `set -euo pipefail`, masking the 3b operator-clean
+    # path. Empty new_cids ⇒ has_new_finding stays 0 ⇒ falls into the
+    # 3b `B_CLEAN_OPERATOR` branch, the safe default for "Copilot
+    # silently said nothing" cases.
+    new_cids=$(printf '%s' "$threads_new" | jq -r '.comments.nodes[0].databaseId' 2>/dev/null) || new_cids=""
     has_new_finding=0
     for cid in $new_cids; do
         if ! printf '%s\n' "$PRIOR_THREAD_CIDS" | grep -qFx "$cid"; then
