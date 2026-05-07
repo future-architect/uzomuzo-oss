@@ -65,11 +65,12 @@ if [ "$JQ_EXIT" -eq 0 ] || [ -n "$JQ_STDERR" ]; then
   exit 0
 fi
 
-USER_MSG='ExitPlanMode without consulting the architect subagent. If this plan touches DDD layer placement, repository interfaces, or cross-layer boundaries, consider consulting architect first. Trivial fixes can ignore.'
-MODEL_CTX='REMINDER: no architect subagent tool-use found in this session before ExitPlanMode. If this plan involves DDD layer placement (domain / application / infrastructure / interfaces), repository interface design, or cross-layer concerns, consult the architect subagent before exiting plan mode. Trivial fixes (typo, comment, single-file refactor, simple flag addition) can ignore.'
+REMINDER='REMINDER: no architect subagent tool-use found in this session before ExitPlanMode. If this plan involves DDD layer placement (domain / application / infrastructure / interfaces), repository interface design, or cross-layer concerns, consult the architect subagent before exiting plan mode. Trivial fixes (typo, comment, single-file refactor, simple flag addition) can ignore.'
 
-# Emit the reminder JSON. If jq fails for any reason, still exit 0 to
-# preserve the soft-reminder contract — silent allow is preferable to a
-# blocked ExitPlanMode.
-jq -nc --arg msg "$USER_MSG" --arg ctx "$MODEL_CTX" \
-  '{systemMessage: $msg, hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: $ctx}}' || true
+# Emit the reminder JSON. Match the output schema used by other PreToolUse
+# hooks in this repo (hookSpecificOutput.additionalContext only — no
+# systemMessage). If jq fails for any reason, still exit 0 to preserve
+# the soft-reminder contract — silent allow is preferable to a blocked
+# ExitPlanMode.
+jq -nc --arg ctx "$REMINDER" \
+  '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": $ctx}}' || true
