@@ -780,6 +780,16 @@ PR_NID=$(gh api graphql -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
     PHASE_B_EXIT_REASON="B_ABORTED"
     break
 }
+# Validate explicitly: `gh api ... --jq` can exit 0 with `null` output
+# (e.g. PR not found, GraphQL partial response, missing field) which
+# would silently propagate `pr_nid=null` into the subsequent
+# `node(id:$pr_nid)` calls. Treat empty / "null" as the same failure
+# the `||` branch above handles.
+if [ -z "$PR_NID" ] || [ "$PR_NID" = "null" ]; then
+    echo "::warning::Step 8.4.5: PR node ID was empty or null — skipping dance, falling through to B_ABORTED"
+    PHASE_B_EXIT_REASON="B_ABORTED"
+    break
+fi
 # Copilot bot's GraphQL node ID. Same value defined as `COPILOT_BOT_ID`
 # env var in `.github/workflows/copilot-clean-label.yml` (search:
 # "COPILOT_BOT_ID:"). Hard-coded once here and reused by both the clear
