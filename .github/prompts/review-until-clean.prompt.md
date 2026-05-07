@@ -747,8 +747,8 @@ Step 8.4.5 forces Copilot to adjudicate on the same HEAD before exit:
 
 ```bash
 # 1. Snapshot the current set of unresolved Copilot thread CIDs as the
-#    "previously seen" baseline. Step 3 below distinguishes 3c (any new
-#    CID) from 3b (every CID is in this set). The
+#    "previously seen" baseline. The classification block below (step 4)
+#    distinguishes 3c (any new CID) from 3b (every CID is in this set). The
 #    `... || PRIOR_THREAD_CIDS=""` guard handles the empty-input case
 #    (e.g., the prior fetch returned no nodes): under
 #    `set -euo pipefail` a bare jq parse error here would abort Step
