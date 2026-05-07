@@ -674,8 +674,17 @@ A literal `requestReviews` retry without this clear+re-add will often fail to wa
        # fresh re-review on this HEAD and let Copilot adjudicate
        # (3a verified, 3b operator-only, 3c new findings).
        echo "no-fix round (all WONT_FIX/ALREADY_FIXED) — entering Step 8.4.5 forced re-review"
-       # Skill agent: proceed to Step 8.4.5 below, skipping sub-steps 5-6.
-       break  # exit the fix-cycle inner block; fall into Step 8.4.5
+       # Skill-agent control flow: this `break` is a SEMANTIC marker
+       # ("stop step 4 and proceed to Step 8.4.5"), not a literal Bash
+       # statement that would unwind a `for`/`while` loop. The skill is
+       # executed step-by-step by an LLM agent that interprets these
+       # control-flow keywords as transitions between numbered steps,
+       # not by a single shell session running the prompt as a script.
+       # If a future caller transcribes the snippet into a real script,
+       # they must wrap the round body in a `for`/`while` loop and
+       # promote this to a flag (e.g., `NO_FIX_ROUND=1`) that the loop
+       # body checks after Step 8.4.
+       break  # → fall into Step 8.4.5
    fi
    git commit -m "fix: address Copilot review on PR #$PR (round N)
 
@@ -765,12 +774,16 @@ PR_NID=$(gh api graphql -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
 COPILOT_BOT_ID="BOT_kgDOCnlnWA"
 
 # Query current reviewer requests so the clear mutation preserves
-# humans + teams (removing only bots via empty botIds).
+# humans + teams (removing only bots via empty botIds). The query also
+# includes Bot.id so we can detect whether Copilot is currently in the
+# reviewer slot — when it is not, the clear mutation is unnecessary
+# (and would needlessly remove any other bot reviewers, mirroring
+# copilot-clean-label.yml's `copilot_present` skip).
 reviewer_query=$(gh api graphql -F pr_nid="$PR_NID" \
     -f query='query($pr_nid:ID!){
       node(id:$pr_nid){ ... on PullRequest {
         reviewRequests(first:100){ nodes { requestedReviewer {
-          __typename ... on User { id } ... on Team { id }
+          __typename ... on User { id } ... on Team { id } ... on Bot { id }
         } } }
       } } }' 2>/dev/null) || true
 # Guard: if the reviewer query failed or returned unparseable data,
@@ -787,26 +800,46 @@ if [ -n "$reviewer_query" ] && printf '%s' "$reviewer_query" \
     reviewer_query_ok=1
 fi
 if [ "$reviewer_query_ok" = "1" ]; then
-    users_json=$(printf '%s' "$reviewer_query" | jq -c \
-        '[(.data.node.reviewRequests.nodes // [])[]
-          | select(.requestedReviewer.__typename == "User")
-          | .requestedReviewer.id]' 2>/dev/null) || users_json="[]"
-    teams_json=$(printf '%s' "$reviewer_query" | jq -c \
-        '[(.data.node.reviewRequests.nodes // [])[]
-          | select(.requestedReviewer.__typename == "Team")
-          | .requestedReviewer.id]' 2>/dev/null) || teams_json="[]"
-    # Clear: replay humans + teams with union:false, botIds:[] — drops bots only.
-    clear_body=$(jq -n \
-        --arg pr "$PR_NID" --argjson users "$users_json" --argjson teams "$teams_json" \
-        '{ query: "mutation($pr:ID!,$users:[ID!]!,$teams:[ID!]!){requestReviews(input:{pullRequestId:$pr, userIds:$users, teamIds:$teams, botIds:[], union:false}){pullRequest{id}}}",
-           variables: {pr:$pr, users:$users, teams:$teams} }')
-    # Capture stdout so we can inspect `.errors[]` even on HTTP 200
-    # partial-success (gh exits 0 on this path, so a bare `|| ...`
-    # check would miss it; mirrors copilot-clean-label.yml).
-    if ! clear_out=$(printf '%s' "$clear_body" | gh api graphql --input - 2>/dev/null); then
-        echo "::warning::Step 8.4.5: clear mutation failed — re-add may be deduped"
-    elif printf '%s' "$clear_out" | jq -e '(.errors // []) | length > 0' >/dev/null 2>&1; then
-        echo "::warning::Step 8.4.5: clear mutation returned errors (exit 0) — re-add may be deduped"
+    # Detect whether Copilot is currently in the reviewer slot. When it
+    # isn't, the bare re-add (no clear) is sufficient because there's
+    # nothing to dedup against — skipping the clear avoids unnecessary
+    # churn AND avoids silently removing other bot reviewers (e.g.,
+    # dependabot) that the clear's `botIds:[]` would also drop. Same
+    # skip pattern as copilot-clean-label.yml's `copilot_present` check.
+    copilot_present=$(printf '%s' "$reviewer_query" | jq -r --arg id "$COPILOT_BOT_ID" \
+        'any(.data.node.reviewRequests.nodes // [] | .[]?;
+             .requestedReviewer.__typename == "Bot"
+             and .requestedReviewer.id == $id)' 2>/dev/null) || copilot_present="true"
+    if [ "$copilot_present" = "true" ]; then
+        users_json=$(printf '%s' "$reviewer_query" | jq -c \
+            '[(.data.node.reviewRequests.nodes // [])[]
+              | select(.requestedReviewer.__typename == "User")
+              | .requestedReviewer.id]' 2>/dev/null) || users_json="[]"
+        teams_json=$(printf '%s' "$reviewer_query" | jq -c \
+            '[(.data.node.reviewRequests.nodes // [])[]
+              | select(.requestedReviewer.__typename == "Team")
+              | .requestedReviewer.id]' 2>/dev/null) || teams_json="[]"
+        # Clear: replay humans + teams with union:false, botIds:[] —
+        # drops Copilot AND any other bot reviewers. The cron's pattern
+        # makes the same trade-off (search "botIds is explicitly empty"
+        # in copilot-clean-label.yml). Documented because the only bot
+        # reviewer this PR family expects is Copilot; if a project ever
+        # adds dependabot/renovate as PR reviewers, this clear would
+        # need to preserve their bot IDs too.
+        clear_body=$(jq -n \
+            --arg pr "$PR_NID" --argjson users "$users_json" --argjson teams "$teams_json" \
+            '{ query: "mutation($pr:ID!,$users:[ID!]!,$teams:[ID!]!){requestReviews(input:{pullRequestId:$pr, userIds:$users, teamIds:$teams, botIds:[], union:false}){pullRequest{id}}}",
+               variables: {pr:$pr, users:$users, teams:$teams} }')
+        # Capture stdout so we can inspect `.errors[]` even on HTTP 200
+        # partial-success (gh exits 0 on this path, so a bare `|| ...`
+        # check would miss it; mirrors copilot-clean-label.yml).
+        if ! clear_out=$(printf '%s' "$clear_body" | gh api graphql --input - 2>/dev/null); then
+            echo "::warning::Step 8.4.5: clear mutation failed — re-add may be deduped"
+        elif printf '%s' "$clear_out" | jq -e '(.errors // []) | length > 0' >/dev/null 2>&1; then
+            echo "::warning::Step 8.4.5: clear mutation returned errors (exit 0) — re-add may be deduped"
+        fi
+    else
+        echo "Step 8.4.5: Copilot not in reviewer requests — skipping clear (re-add will fire fresh)"
     fi
 else
     echo "::warning::Step 8.4.5: reviewer query failed or returned errors — skipping clear to preserve human reviewers; re-add may be deduped"
@@ -902,8 +935,11 @@ else
         # No explicit ROUND increment here — `continue` returns to the
         # loop top where the heartbeat block increments ROUND. This avoids
         # double-counting (heartbeat + inline both firing on the same
-        # iteration).
-        continue  # back to Step 8.1 (heartbeat increments ROUND)
+        # iteration). Same skill-agent control-flow caveat as the
+        # `break` at the top of Step 8.4 step 4: this `continue` is a
+        # semantic transition ("re-enter Step 8.1") for the LLM agent,
+        # not a literal loop continuation.
+        continue  # → re-enter Step 8.1 (heartbeat increments ROUND)
     else
         # 3b — every CID in the new review is one we already classified
         # WONT_FIX. Cross-round consensus = persistent false-positive.
