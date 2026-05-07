@@ -38,6 +38,12 @@
             "command": "bash .claude/hooks/pre-push-review.sh",
             "timeout": 30,
             "statusMessage": "Self-reviewing for Copilot issues..."
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/readme-walkthrough.sh",
+            "timeout": 15,
+            "statusMessage": "Checking README walkthroughs for working-directory mismatches..."
           }
         ]
       }
