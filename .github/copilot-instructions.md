@@ -11,7 +11,8 @@ See `.github/instructions/` for detailed rules.
 | [ddd-architecture](instructions/ddd-architecture.instructions.md) | DDD layer definitions, search-first, pre-implementation checklist |
 | [coding-standards](instructions/coding-standards.instructions.md) | Clean Code, naming, API design, goimports/golangci-lint |
 | [error-handling](instructions/error-handling.instructions.md) | Error wrapping (`%w`), errors.Is/As, slog integration |
-| [testing-performance](instructions/testing-performance.instructions.md) | Table-driven tests, benchmarks, concurrency |
+| [testing-performance](instructions/testing-performance.instructions.md) | Table-driven tests, benchmarks, concurrency (how to write Go tests) |
+| [test-design](instructions/test-design.instructions.md) | Pre-PR lens: classical QA techniques, fuzz/PBT policy, DDD layer placement (what to test) |
 | [project-conventions](instructions/project-conventions.instructions.md) | Configuration policy, test data, JSON tooling constraints |
 | [git-workflow](instructions/git-workflow.instructions.md) | Commit messages, PR workflow, TDD |
 | [security](instructions/security.instructions.md) | Prompt injection defense, credentials, Go security |
