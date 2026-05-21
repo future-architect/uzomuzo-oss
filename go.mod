@@ -6,7 +6,7 @@ require github.com/joho/godotenv v1.5.1
 
 require github.com/package-url/packageurl-go v0.1.6
 
-require github.com/Masterminds/semver/v3 v3.4.0
+require github.com/Masterminds/semver/v3 v3.5.0
 
 require golang.org/x/mod v0.35.0
 
