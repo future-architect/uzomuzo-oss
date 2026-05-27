@@ -186,7 +186,7 @@ jobs:
             rm -f "$err_file"
           fi
 
-      - uses: anthropics/claude-code-action@2cc1ac1331eac7a6a96d716dd204dd2888d0fcd2 # v1.0.112
+      - uses: anthropics/claude-code-action@7d7d3055f1fdc9a97a040c69ead9ba392fa6326a # v1.0.113
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GH_ACTIONS_TOKEN }}
