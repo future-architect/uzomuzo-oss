@@ -34,6 +34,11 @@ Task(subagent_type="general-purpose", prompt="...")     # generic agent + freefo
 | batch-issues | `/batch-issues [issue#s] [--dry-run] [--max-parallel N]` | Parallel issue processing with conflict-aware agent dispatch |
 | diet-trial | `/diet-trial <org/repo> [--tool trivy\|syft] [--compare]` | Run diet on external OSS for testing, bug finding, and case study data |
 | diet-fuzz | `/diet-fuzz <languages\|all> [--count N] [--tool trivy,syft,cdxgen] [--max-parallel N]` | Batch fuzz-test diet across many OSS projects for parser accuracy bugs |
+| review-diff | `/review-diff [BASE_REF \| --cached]` | Pre-push **diff** review by the local Copilot CLI (gpt-5.5, a separate-vendor LLM). Default base=origin/main; pre-empts a Phase B Copilot-bot round-trip. The same Copilot CLI is also wired into `/review-until-clean` Phase A as the always-spawned Reviewer 7. |
+| plan-review | `/plan-review [<plan-path>]` | Have the local Copilot CLI (gpt-5.5) critique the latest plan-mode plan file (`/home/node/.claude/plans/*.md`) — a sanity check before ExitPlanMode. |
+| plan-debate | `/plan-debate [<plan-path>]` | Heavyweight `/plan-review`: gpt-5.5 reviews the plan, Claude ↔ gpt-5.5 debate up to 2 rounds, then the `architect` subagent rules neutrally (adopt / revise / reconsider). For high-rework-cost plans (premium ~15-22); send trivial plans to `/plan-review`. |
+
+The three Copilot-driven skills (`/review-diff`, `/plan-review`, `/plan-debate`) require the local `@github/copilot` CLI on `PATH` (`npm install -g @github/copilot`) authenticated via the ambient `gh auth` token, and the `gpt-5.5` model (override with the `COPILOT_MODEL` env var; an empty value drops to the cheaper server-default model). They send code/plan content to GitHub Copilot servers — uzomuzo-oss is public, but do not run them on diffs/plans that carry unpushed secrets (`.env`, credentials, tokens). Skill-name stage prefixes: `plan-*` = plan stage, `review-*` = review stage.
 
 ## Immediate Agent Usage
 
