@@ -25,6 +25,11 @@ Claude substitutes the user-supplied plan path into the `PLAN_ARG=''` line below
 # Every critical fs op below carries an explicit `|| { ...; exit; }` guard instead.
 set -uo pipefail
 
+command -v copilot >/dev/null 2>&1 || {
+  echo "NOTICE: copilot CLI not installed. Install with: npm install -g @github/copilot" >&2
+  exit 127
+}
+
 PLANS_DIR="/home/node/.claude/plans"
 PLANS_DIR_REAL=$(realpath "$PLANS_DIR" 2>/dev/null || echo "$PLANS_DIR")
 
@@ -202,7 +207,7 @@ Copilot usage: ...
 
 ## Notes / Cost / Model
 
-- `--model gpt-5.5` is the default (project preference, user-pinned 2026-05-24). Override via `COPILOT_MODEL`. The only verified-working model is `gpt-5.5` (`kotakanbe` subscription tier).
+- `--model gpt-5.5` is the default (project preference, user-pinned 2026-05-24). Override via `COPILOT_MODEL`. The only verified-working model is `gpt-5.5` on the current subscription tier.
 - ⚠️ **gpt-5.5 cost multiplier**: ~7.5 Premium requests per invocation (~7.5x the server-default model). Plans are smaller than diffs (typically 5-20KB) so the wall-clock is usually 1-3 min, but the per-request price matches a diff review. `COPILOT_MODEL` env semantics: **unset = gpt-5.5 default**, **set and non-empty = that model name**, **set and empty string = omit `--model` and use the cheaper server default**. For cost-sensitive runs, `export COPILOT_MODEL=` (empty string) to fall back to the cheaper server default.
 - `--allow-all-tools` is required for non-interactive mode.
 - `--deny-tool=write` / `--deny-tool=edit` / `--deny-tool=shell` prevent file modification and arbitrary command execution (read-only review — Copilot must not edit the plan or run shell commands).

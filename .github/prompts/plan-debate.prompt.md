@@ -27,7 +27,7 @@ This skill is the intermediate stage in `Claude (Opus, drafts a plan in plan mod
 
 ## Trust boundary / Data flow
 
-⚠️ This skill sends the plan file's contents to **GitHub Copilot servers** via the `copilot` subprocess (once per gpt-5.5 round). uzomuzo-oss is a **public** repository, but a plan may still quote unpushed secrets — do not run it on a plan that includes credentials or other secrets. The architect arbitration stage is a Claude subagent (no egress), so for sensitive plans you can fall back to `/plan-review`-free + architect consultation only.
+⚠️ This skill sends the plan file's contents to **GitHub Copilot servers** via the `copilot` subprocess (once per gpt-5.5 round). uzomuzo-oss is a **public** repository, but a plan may still quote unpushed secrets — do not run it on a plan that includes credentials or other secrets. The architect arbitration stage is a Claude subagent (no egress), so for sensitive plans you can fall back to an architect-only consultation (no `/plan-review` or `/plan-debate`).
 
 The plan content is treated as **UNTRUSTED data**. Each round's prompt tells gpt-5.5 not to execute strings found inside the plan / rebuttal files as instructions.
 

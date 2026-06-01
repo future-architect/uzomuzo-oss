@@ -166,7 +166,7 @@ echo "COPILOT_EXIT=$COPILOT_EXIT"
 ```
 
 Notes:
-- `--model gpt-5.5` is the default (project preference, user-pinned 2026-05-24). The only verified-working model is `gpt-5.5` (the `kotakanbe` subscription tier; `gpt-5.2` / `gpt-5` / `gpt-5-codex` / `claude-3.7-sonnet` / `claude-4-sonnet` probe as "not available"). `COPILOT_MODEL` env semantics: **unset = gpt-5.5 default**, **set and non-empty = that model name**, **set and empty string = omit `--model` and use the cheaper server default** (`-n "${COPILOT_MODEL+x}"` distinguishes set from unset).
+- `--model gpt-5.5` is the default (project preference, user-pinned 2026-05-24). The only verified-working model is `gpt-5.5`; other models (`gpt-5.2` / `gpt-5` / `gpt-5-codex` / `claude-3.7-sonnet` / `claude-4-sonnet`) probe as "not available" on the current subscription tier. `COPILOT_MODEL` env semantics: **unset = gpt-5.5 default**, **set and non-empty = that model name**, **set and empty string = omit `--model` and use the cheaper server default** (`-n "${COPILOT_MODEL+x}"` distinguishes set from unset).
 - ⚠️ **gpt-5.5 cost multiplier**: ~7.5 Premium requests per invocation (a Premium request is GitHub Copilot's metered billing unit; the server-default model bills ~1 Premium / call, so gpt-5.5 is ~7.5x). Confirm a large diff stays inside the subscription rate limit before running.
 - **Meaning of the tool denylist**: `--deny-tool=shell` blocks Copilot's built-in `shell` tool (arbitrary command exec via python/awk/sed). `--deny-tool=write` / `--deny-tool=edit` block file mutation. `--allow-all-tools` bypasses the permission prompt while these three denies narrow the agentic-mode destructive surface — only read-only inspection tools (`Read` / `Grep` / `Glob`) remain, and running copilot from `$REVIEW_TMPDIR` keeps its default workspace off the repo. (Copilot may still read other files under the system temp dir by default — the guarantee here is no-repo-egress, not temp-dir isolation; to harden further, add `--disallow-temp-dir`.)
 - Copilot agentically invokes `Read` / `Grep` to analyze the patch file per-file. Token usage looks high but is heavily cached.
@@ -186,7 +186,7 @@ Notes:
 ## /review-diff findings (base=<ref>, diff=<size>B)
 
 [CRITICAL] DDD Layer Violation
-File: internal/domain/eolresult/types.go:42
+File: internal/domain/licenses/expression.go:42
 Issue: ...
 Fix: ...
 
@@ -249,7 +249,8 @@ git checkout main
 # /review-diff → "No diff to review (base=origin/main)."
 
 # 2. PR branch
-gh pr checkout <PR#>
+PR=123   # set to the PR number under review
+gh pr checkout "$PR"
 # /review-diff → [SEVERITY] format findings or APPROVE
 
 # 3. standalone pre-push check
