@@ -49,7 +49,7 @@ type Client struct {
 func NewClient() *Client {
 	return &Client{
 		baseURL: "https://rubygems.org",
-		http:    httpclient.NewClient(&http.Client{Timeout: 3 * time.Second}, httpclient.RetryConfig{MaxRetries: 2, BaseBackoff: 400 * time.Millisecond, MaxBackoff: 2 * time.Second, RetryOn5xx: true, RetryOnNetworkErr: true}),
+		http:    httpclient.NewClient(&http.Client{Timeout: 3 * time.Second}, httpclient.RegistryRetryConfig()),
 	}
 }
 
@@ -57,8 +57,10 @@ func NewClient() *Client {
 func (c *Client) SetBaseURL(u string) { c.baseURL = u }
 
 // SetHTTPClient allows tests to inject a custom HTTP client.
+// Uses RegistryRetryConfig so injected test clients exercise the same retry
+// policy as production (DefaultRetryConfig was a prod/test parity gap).
 func (c *Client) SetHTTPClient(h *http.Client) {
-	c.http = httpclient.NewClient(h, httpclient.DefaultRetryConfig())
+	c.http = httpclient.NewClient(h, httpclient.RegistryRetryConfig())
 }
 
 // GetRepoURL attempts to resolve a repository URL for a gem name@version.

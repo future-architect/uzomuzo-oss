@@ -16,9 +16,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common/ttlcache"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
@@ -30,45 +30,33 @@ type Client struct {
 	http    *httpclient.Client
 	baseURL string
 
-	mu    sync.RWMutex
-	cache map[string]cacheEntry
+	cache        ttlcache.Cache[*ProjectInfo]
+	versionCache ttlcache.Cache[*VersionInfo] // key: "name@version" (lowercased name)
 
-	versionMu    sync.RWMutex
-	versionCache map[string]versionCacheEntry // key: "name@version" (lowercased name)
-
-	ttl time.Duration
-
-	importCacheFields // wheel-based import name cache (lazily initialised)
-}
-
-type cacheEntry struct {
-	info *ProjectInfo
-	ts   time.Time
-}
-
-type versionCacheEntry struct {
-	info *VersionInfo
-	ts   time.Time
+	importCacheFields // wheel-based import name cache (zero value usable)
 }
 
 // NewClient returns a PyPI client with sensible HTTP defaults.
 func NewClient() *Client { // nolint: revive
 	hc := &http.Client{Timeout: 5 * time.Second}
-	return &Client{
-		http:         httpclient.NewClient(hc, httpclient.RetryConfig{MaxRetries: 2, BaseBackoff: 400 * time.Millisecond, MaxBackoff: 2 * time.Second, RetryOn5xx: true, RetryOnNetworkErr: true}),
-		baseURL:      "https://pypi.org",
-		cache:        make(map[string]cacheEntry),
-		versionCache: make(map[string]versionCacheEntry),
-		ttl:          10 * time.Minute,
+	c := &Client{
+		http:    httpclient.NewClient(hc, httpclient.RegistryRetryConfig()),
+		baseURL: "https://pypi.org",
 	}
+	c.cache.SetTTL(10 * time.Minute)
+	c.versionCache.SetTTL(10 * time.Minute)
+	c.importCache.SetTTL(10 * time.Minute)
+	return c
 }
 
 // SetHTTPClient overrides the underlying http.Client (tests).
+// Uses RegistryRetryConfig so injected test clients exercise the same retry
+// policy as production (DefaultRetryConfig was a prod/test parity gap).
 func (c *Client) SetHTTPClient(h *http.Client) { // replaces underlying client preserving retry defaults
 	if h == nil {
 		return
 	}
-	c.http = httpclient.NewClient(h, httpclient.RetryConfig{MaxRetries: 2, BaseBackoff: 400 * time.Millisecond, MaxBackoff: 2 * time.Second, RetryOn5xx: true, RetryOnNetworkErr: true})
+	c.http = httpclient.NewClient(h, httpclient.RegistryRetryConfig())
 }
 
 // SetRetryConfig overrides retry configuration (tests / tuning).
@@ -88,7 +76,12 @@ func (c *Client) SetRetryConfig(cfg httpclient.RetryConfig) {
 func (c *Client) SetBaseURL(u string) { c.baseURL = strings.TrimRight(u, "/") }
 
 // SetCacheTTL sets the in-memory cache TTL (<=0 disables caching).
-func (c *Client) SetCacheTTL(d time.Duration) { c.ttl = d }
+// Fans the same TTL to all caches (project, version, and wheel import names).
+func (c *Client) SetCacheTTL(d time.Duration) {
+	c.cache.SetTTL(d)
+	c.versionCache.SetTTL(d)
+	c.importCache.SetTTL(d)
+}
 
 // resolvedBaseURL returns the configured base URL or the default.
 func (c *Client) resolvedBaseURL() string {
@@ -96,31 +89,6 @@ func (c *Client) resolvedBaseURL() string {
 		return c.baseURL
 	}
 	return "https://pypi.org"
-}
-
-func (c *Client) getCached(name string) (*ProjectInfo, bool) {
-	if c.ttl <= 0 {
-		return nil, false
-	}
-	c.mu.RLock()
-	ent, ok := c.cache[name]
-	c.mu.RUnlock()
-	if !ok {
-		return nil, false
-	}
-	if time.Since(ent.ts) > c.ttl {
-		return nil, false
-	}
-	return ent.info, true
-}
-
-func (c *Client) setCache(name string, info *ProjectInfo) {
-	if c.ttl <= 0 || info == nil {
-		return
-	}
-	c.mu.Lock()
-	c.cache[name] = cacheEntry{info: info, ts: time.Now()}
-	c.mu.Unlock()
 }
 
 // ProjectInfo is the minimal subset of PyPI project metadata we need.
@@ -142,31 +110,6 @@ type VersionInfo struct {
 	YankedReason string // info.yanked_reason; optional
 }
 
-func (c *Client) getVersionCached(key string) (*VersionInfo, bool) {
-	if c.ttl <= 0 {
-		return nil, false
-	}
-	c.versionMu.RLock()
-	ent, ok := c.versionCache[key]
-	c.versionMu.RUnlock()
-	if !ok {
-		return nil, false
-	}
-	if time.Since(ent.ts) > c.ttl {
-		return nil, false
-	}
-	return ent.info, true
-}
-
-func (c *Client) setVersionCache(key string, info *VersionInfo) {
-	if c.ttl <= 0 || info == nil {
-		return
-	}
-	c.versionMu.Lock()
-	c.versionCache[key] = versionCacheEntry{info: info, ts: time.Now()}
-	c.versionMu.Unlock()
-}
-
 // GetVersion retrieves PyPI version-level metadata. Returns (info, found, err).
 // On 404 -> (nil, false, nil). Other non-200 -> error.
 //
@@ -181,7 +124,7 @@ func (c *Client) GetVersion(ctx context.Context, name, version string) (*Version
 	}
 	lower := strings.ToLower(n)
 	key := lower + "@" + v
-	if info, ok := c.getVersionCached(key); ok {
+	if info, ok := c.versionCache.Get(key); ok {
 		slog.Debug("pypi: version cache hit", "name", lower, "version", v)
 		return info, true, nil
 	}
@@ -233,7 +176,9 @@ func (c *Client) GetVersion(ctx context.Context, name, version string) (*Version
 		Yanked:       yanked,
 		YankedReason: raw.Info.YankedReason,
 	}
-	c.setVersionCache(key, info)
+	if info != nil { // preserve caller-side nil-skip guard: only cache non-nil results
+		c.versionCache.Set(key, info)
+	}
 	return info, true, nil
 }
 
@@ -245,7 +190,7 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 		return nil, false, nil
 	}
 	lower := strings.ToLower(n)
-	if info, ok := c.getCached(lower); ok {
+	if info, ok := c.cache.Get(lower); ok {
 		slog.Debug("pypi: cache hit", "name", lower)
 		return info, true, nil
 	}
@@ -287,7 +232,9 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 		ProjectURLs: raw.Info.ProjectURLs,
 		HomePage:    raw.Info.HomePage,
 	}
-	c.setCache(lower, info)
+	if info != nil { // preserve caller-side nil-skip guard: only cache non-nil results
+		c.cache.Set(lower, info)
+	}
 	return info, true, nil
 }
 
