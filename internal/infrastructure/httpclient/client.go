@@ -41,6 +41,20 @@ func DefaultRetryConfig() RetryConfig {
 	}
 }
 
+// RegistryRetryConfig returns the shared fast-fail retry policy for registry
+// metadata lookups: 2 retries with a 400 ms base backoff and a 2 s cap.
+// All registry clients (crates, pypi, npmjs, rubygems, packagist) use this
+// policy so their behavior stays consistent.
+func RegistryRetryConfig() RetryConfig {
+	return RetryConfig{
+		MaxRetries:        2,
+		BaseBackoff:       400 * time.Millisecond,
+		MaxBackoff:        2 * time.Second,
+		RetryOn5xx:        true,
+		RetryOnNetworkErr: true,
+	}
+}
+
 // Client is an HTTP client with retry functionality.
 type Client struct {
 	http   *http.Client
@@ -106,15 +120,13 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 				_ = resp.Body.Close() // best-effort cleanup
 			}
 			slog.Debug("custom_retry_logic", "attempt", attempt+1, "max_attempts", c.config.MaxRetries+1, "wait_time", waitTime)
-			select {
-			case <-ctx.Done():
+			if err := waitWithContext(ctx, waitTime); err != nil {
 				if ctx.Err() == context.DeadlineExceeded {
 					return nil, common.NewTimeoutError("request timeout during retry", ctx.Err()).WithContext("request_url", req.URL.String())
 				}
 				return nil, ctx.Err()
-			case <-time.After(waitTime):
-				continue
 			}
+			continue
 		}
 
 		if err != nil { // network error handling
@@ -122,15 +134,13 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 			if c.config.RetryOnNetworkErr && attempt < c.config.MaxRetries {
 				backoff := c.calculateBackoff(attempt)
 				slog.Warn("network error, retrying", "attempt", attempt+1, "max_attempts", c.config.MaxRetries+1, "error", err, "backoff", backoff)
-				select {
-				case <-ctx.Done():
+				if err := waitWithContext(ctx, backoff); err != nil {
 					if ctx.Err() == context.DeadlineExceeded {
 						return nil, common.NewTimeoutError("request timeout during network retry", ctx.Err()).WithContext("request_url", req.URL.String())
 					}
 					return nil, ctx.Err()
-				case <-time.After(backoff):
-					continue
 				}
+				continue
 			}
 			continue
 		}
@@ -152,22 +162,13 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 					"retry_after_header", retryAfter,
 					"wait", wait,
 					"response_body", string(body))
-				timer := time.NewTimer(wait)
-				select {
-				case <-ctx.Done():
-					if !timer.Stop() {
-						select {
-						case <-timer.C:
-						default:
-						}
-					}
+				if err := waitWithContext(ctx, wait); err != nil {
 					if ctx.Err() == context.DeadlineExceeded {
 						return nil, common.NewTimeoutError("request timeout during rate limit retry", ctx.Err()).WithContext("request_url", req.URL.String())
 					}
 					return nil, ctx.Err()
-				case <-timer.C:
-					continue
 				}
+				continue
 			}
 			return nil, common.NewRateLimitError("rate limit reached", nil).
 				WithContext("request_url", req.URL.String()).
@@ -175,6 +176,27 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 				WithContext("status_code", resp.StatusCode).
 				WithContext("retry_after_header", retryAfter).
 				WithContext("max_attempts", c.config.MaxRetries+1)
+		}
+
+		// 408 Request Timeout is a transient network-level condition (server-side
+		// timeout, not a client error). Retry it with the same policy as 5xx —
+		// gated on RetryOn5xx so callers can opt out with a single flag.
+		if resp.StatusCode == http.StatusRequestTimeout && c.config.RetryOn5xx {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+			_ = resp.Body.Close() // best-effort cleanup
+			if attempt < c.config.MaxRetries {
+				backoff := c.calculateBackoff(attempt)
+				slog.Warn("request timeout (408), retrying", "attempt", attempt+1, "max_attempts", c.config.MaxRetries+1, "response_body", string(body), "backoff", backoff)
+				if err := waitWithContext(ctx, backoff); err != nil {
+					if ctx.Err() == context.DeadlineExceeded {
+						return nil, common.NewTimeoutError("request timeout during 408 retry", ctx.Err()).WithContext("request_url", req.URL.String())
+					}
+					return nil, ctx.Err()
+				}
+				continue
+			}
+			lastErr = common.NewNetworkError("request timeout (408)", nil).WithContext("request_url", req.URL.String()).WithContext("response_body", string(body))
+			continue
 		}
 
 		if resp.StatusCode < 500 {
@@ -187,15 +209,13 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 			if attempt < c.config.MaxRetries {
 				backoff := c.calculateBackoff(attempt)
 				slog.Warn("server error, retrying", "status_code", resp.StatusCode, "attempt", attempt+1, "max_attempts", c.config.MaxRetries+1, "response_body", string(body), "backoff", backoff)
-				select {
-				case <-ctx.Done():
+				if err := waitWithContext(ctx, backoff); err != nil {
 					if ctx.Err() == context.DeadlineExceeded {
 						return nil, common.NewTimeoutError("request timeout during server error retry", ctx.Err()).WithContext("request_url", req.URL.String())
 					}
 					return nil, ctx.Err()
-				case <-time.After(backoff):
-					continue
 				}
+				continue
 			}
 			lastErr = common.NewNetworkError("server error", nil).WithContext("request_url", req.URL.String()).WithContext("status_code", resp.StatusCode).WithContext("response_body", string(body))
 			continue
@@ -208,6 +228,27 @@ func (c *Client) DoWithRetryFunc(ctx context.Context, req *http.Request, retryDe
 		return nil, common.NewNetworkError("request failed after all retries", lastErr).WithContext("max_attempts", c.config.MaxRetries+1).WithContext("request_url", req.URL.String())
 	}
 	return nil, common.NewNetworkError("request failed after all retries with no specific error", nil).WithContext("max_attempts", c.config.MaxRetries+1).WithContext("request_url", req.URL.String())
+}
+
+// waitWithContext waits for duration d or until ctx is cancelled, whichever
+// comes first.  It uses time.NewTimer with explicit Stop/drain so the timer
+// goroutine is released immediately when the context fires, avoiding the leak
+// that time.After would cause.  Returns ctx.Err() when the context fires first,
+// nil otherwise.
+func waitWithContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	select {
+	case <-ctx.Done():
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (c *Client) calculateBackoff(attempt int) time.Duration { // exponential backoff with cap

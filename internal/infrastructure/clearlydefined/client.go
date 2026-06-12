@@ -269,7 +269,7 @@ func (c *Client) fetchDefinition(ctx context.Context, defURL string) (*definitio
 		return nil, http.StatusNotFound, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		_, _ = io.CopyN(io.Discard, resp.Body, 1024)
+		_, _ = io.CopyN(io.Discard, resp.Body, 1024) // best-effort drain before close
 		return nil, resp.StatusCode, fmt.Errorf("clearlydefined http status %d", resp.StatusCode)
 	}
 	var def definitionResponse
