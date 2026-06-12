@@ -466,7 +466,7 @@ func (c *Client) fetchRepositoryStatesBatch(ctx context.Context, repoURLs []stri
 
 		if result.err != nil {
 			// Check if this is a rate limit error
-			if c.isRateLimitError(result.err) {
+			if common.IsRateLimitError(result.err) {
 				rateLimitExceeded = true
 				slog.Error("GitHub API rate limit exceeded during batch processing",
 					"repo_url", result.repoURL,
@@ -524,15 +524,6 @@ func (c *Client) fetchRepositoryStatesBatch(ctx context.Context, repoURLs []stri
 	}
 
 	return results, errors, metas
-}
-
-// isRateLimitError checks if the error is related to GitHub API rate limit
-func (c *Client) isRateLimitError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errorMsg := strings.ToLower(err.Error())
-	return strings.Contains(errorMsg, "rate limit") || strings.Contains(errorMsg, "remaining: 0")
 }
 
 // githubWorker processes repository URLs in parallel.
@@ -593,7 +584,7 @@ func (c *Client) githubWorker(ctx context.Context, batchCancel context.CancelFun
 					enhancedErr = common.NewTimeoutError("GitHub API timeout", err).
 						WithContext("repository", fmt.Sprintf("%s/%s", owner, repo)).
 						WithContext("timeout_duration", c.config.Timeout.String())
-				} else if c.isRateLimitError(err) {
+				} else if common.IsRateLimitError(err) {
 					enhancedErr = common.NewRateLimitError("GitHub API rate limit exceeded", err).
 						WithContext("repository", fmt.Sprintf("%s/%s", owner, repo))
 				} else {
