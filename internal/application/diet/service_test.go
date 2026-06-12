@@ -3,6 +3,7 @@ package diet
 import (
 	"context"
 	"fmt"
+	"math"
 	"reflect"
 	"sync/atomic"
 	"testing"
@@ -380,8 +381,12 @@ func TestComputeHealthSignals_EOL(t *testing.T) {
 	if !h.IsEOL {
 		t.Error("expected IsEOL = true for EOLEndOfLife state")
 	}
-	if h.HealthRisk < 0.85 {
-		t.Errorf("expected HealthRisk >= 0.85 for EOL, got %f", h.HealthRisk)
+	// Formula (service.go): base=0.9 (EOLConfirmed) + (1-5/10)*0.1 = 0.05 → 0.95.
+	// Update this pin when computeHealthSignals formula changes.
+	const wantRisk = 0.95
+	const tolerance = 0.001
+	if math.Abs(h.HealthRisk-wantRisk) > tolerance {
+		t.Errorf("HealthRisk = %f, want %f (±%f)", h.HealthRisk, wantRisk, tolerance)
 	}
 }
 
@@ -397,8 +402,12 @@ func TestComputeHealthSignals_Active(t *testing.T) {
 	if h.IsEOL {
 		t.Error("expected IsEOL = false for NotEOL state")
 	}
-	if h.HealthRisk > 0.6 {
-		t.Errorf("expected HealthRisk <= 0.6 for non-EOL dep, got %f", h.HealthRisk)
+	// Formula (service.go): base=0.5 (LabelReviewNeeded) + (1-8/10)*0.1 = 0.02 → 0.52.
+	// Update this pin when computeHealthSignals formula changes.
+	const wantRisk = 0.52
+	const tolerance = 0.001
+	if math.Abs(h.HealthRisk-wantRisk) > tolerance {
+		t.Errorf("HealthRisk = %f, want %f (±%f)", h.HealthRisk, wantRisk, tolerance)
 	}
 }
 
@@ -415,8 +424,13 @@ func TestComputeHealthSignals_Archived(t *testing.T) {
 	if h.MaintenanceStatus != domaindiet.MaintenanceStatusArchived {
 		t.Errorf("expected MaintenanceStatus = Archived, got %s", h.MaintenanceStatus)
 	}
-	if h.HealthRisk < 0.85 {
-		t.Errorf("expected HealthRisk >= 0.85 for archived, got %f", h.HealthRisk)
+	// Formula (service.go): base=0.5 (LabelReviewNeeded), IsArchived → max(0.5,0.85)=0.85,
+	// DaysSince>365 → max(0.85,0.6)=0.85, Scorecard (1-5/10)*0.1=0.05 → 0.90.
+	// Update this pin when computeHealthSignals formula changes.
+	const wantRisk = 0.90
+	const tolerance = 0.001
+	if math.Abs(h.HealthRisk-wantRisk) > tolerance {
+		t.Errorf("HealthRisk = %f, want %f (±%f)", h.HealthRisk, wantRisk, tolerance)
 	}
 	if !h.IsStalled {
 		t.Error("expected IsStalled = true for 500 days since last commit")

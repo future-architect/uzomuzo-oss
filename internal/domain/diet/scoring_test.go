@@ -170,10 +170,9 @@ func TestNormalizeCouplingEffort_ZeroCounts(t *testing.T) {
 	// IsUnused is false (no source analysis), effort should be 0 so that
 	// difficulty is "trivial" — consistent with the IsUnused=true path.
 	tests := []struct {
-		name        string
-		c           CouplingAnalysis
-		want        float64
-		wantNonZero bool // when true, assert got > 0 instead of exact match
+		name string
+		c    CouplingAnalysis
+		want float64
 	}{
 		{
 			name: "no source data (all zeros, not unused)",
@@ -186,21 +185,18 @@ func TestNormalizeCouplingEffort_ZeroCounts(t *testing.T) {
 			want: 0.0,
 		},
 		{
-			name:        "has imports but no calls",
-			c:           CouplingAnalysis{ImportFileCount: 1},
-			wantNonZero: true, // logistic(1, 5) > 0
+			// Formula (scoring.go): 0.4*logistic(1,5)+0.4*logistic(0,20)+0.2*logistic(0,10)
+			// = 0.4*0.039166 + 0.4*0.017986 + 0.2*0.017986 ≈ 0.026458
+			// Update this pin when normalizeCouplingEffort formula changes.
+			name: "has imports but no calls",
+			c:    CouplingAnalysis{ImportFileCount: 1},
+			want: 0.026458,
 		},
 	}
 	const tolerance = 0.001
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := normalizeCouplingEffort(tt.c)
-			if tt.wantNonZero {
-				if got < 0.01 {
-					t.Errorf("normalizeCouplingEffort() = %f, expected > 0 for non-zero imports", got)
-				}
-				return
-			}
 			if got < tt.want-tolerance || got > tt.want+tolerance {
 				t.Errorf("normalizeCouplingEffort() = %f, want %f (±%f)", got, tt.want, tolerance)
 			}
@@ -418,10 +414,9 @@ func TestNormalizeCouplingEffort_BlankImportSideEffect(t *testing.T) {
 	// Before the fix, ImportFileCount > 0 caused non-zero effort even when
 	// there were no attributed API symbols/breadth for the dependency.
 	tests := []struct {
-		name        string
-		c           CouplingAnalysis
-		want        float64
-		wantNonZero bool
+		name string
+		c    CouplingAnalysis
+		want float64
 	}{
 		{
 			name: "side-effect import with baseline call site",
@@ -433,6 +428,9 @@ func TestNormalizeCouplingEffort_BlankImportSideEffect(t *testing.T) {
 			want: 0.0,
 		},
 		{
+			// Formula (scoring.go): 0.4*logistic(2,5)+0.4*logistic(5,20)+0.2*logistic(3,10)
+			// = 0.4*0.083173 + 0.4*0.047426 + 0.2*0.057324 ≈ 0.063704
+			// Update this pin when normalizeCouplingEffort formula changes.
 			name: "blank import with actual API usage should NOT be zero",
 			c: CouplingAnalysis{
 				ImportFileCount: 2,
@@ -440,28 +438,25 @@ func TestNormalizeCouplingEffort_BlankImportSideEffect(t *testing.T) {
 				APIBreadth:      3,
 				HasBlankImport:  true,
 			},
-			wantNonZero: true,
+			want: 0.063704,
 		},
 		{
+			// Formula (scoring.go): 0.4*logistic(1,5)+0.4*logistic(2,20)+0.2*logistic(0,10)
+			// = 0.4*0.039166 + 0.4*0.026597 + 0.2*0.017986 ≈ 0.029902
+			// Update this pin when normalizeCouplingEffort formula changes.
 			name: "blank import with CallSiteCount=2 but no API breadth",
 			c: CouplingAnalysis{
 				ImportFileCount: 1,
 				CallSiteCount:   2,
 				HasBlankImport:  true,
 			},
-			wantNonZero: true,
+			want: 0.029902,
 		},
 	}
 	const tolerance = 0.001
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := normalizeCouplingEffort(tt.c)
-			if tt.wantNonZero {
-				if got < 0.01 {
-					t.Errorf("normalizeCouplingEffort() = %f, expected > 0", got)
-				}
-				return
-			}
 			if got < tt.want-tolerance || got > tt.want+tolerance {
 				t.Errorf("normalizeCouplingEffort() = %f, want %f (±%f)", got, tt.want, tolerance)
 			}
