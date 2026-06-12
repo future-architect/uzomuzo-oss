@@ -939,11 +939,11 @@ func TestRun_RuntimeDepsNotFlaggedAsUnused(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name            string
-		purl            string
-		wantScope       string
-		wantIsUnused    bool
-		wantAPIBreadth  int
+		name           string
+		purl           string
+		wantScope      string
+		wantIsUnused   bool
+		wantAPIBreadth int
 	}{
 		{
 			name:           "MySQL JDBC driver recognized as runtime",

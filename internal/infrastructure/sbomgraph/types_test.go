@@ -40,8 +40,8 @@ func TestResolveDirectPURLs_AggregatorPOM(t *testing.T) {
 
 	// Sub-modules should be flattened; external deps should be direct.
 	wantDirect := map[string]bool{
-		"pkg:maven/org.springframework/spring-web@6.1.0":             true,
-		"pkg:maven/com.google.guava/guava@33.0.0":                    true,
+		"pkg:maven/org.springframework/spring-web@6.1.0":               true,
+		"pkg:maven/com.google.guava/guava@33.0.0":                      true,
 		"pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.17.0": true,
 	}
 	wantAbsent := []string{

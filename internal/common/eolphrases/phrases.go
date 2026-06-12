@@ -5,7 +5,6 @@
 //   - TierStrong:  auto-detect as project-level EOL (detector.go KindStrong)
 //   - TierReeval:  trigger not_eol re-evaluation (evidence.go)
 //   - TierSnippet: include in evidence snippets for LLM / human review
-//
 package eolphrases
 
 import "strings"

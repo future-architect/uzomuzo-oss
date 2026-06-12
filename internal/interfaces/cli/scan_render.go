@@ -378,13 +378,13 @@ type enrichedJSONEntry struct {
 	BuildIntegrityScore *float64 `json:"build_integrity_score,omitempty"`
 	Successor           string   `json:"successor,omitempty"`
 
-	RepoURL         string   `json:"repo_url,omitempty"`
-	Archived        bool     `json:"archived,omitempty"`
-	OverallScore    float64  `json:"overall_score,omitempty"`
-	DependentCount  int      `json:"dependent_count,omitempty"`
-	StableVersion   string   `json:"stable_version,omitempty"`
-	ProjectLicense string `json:"project_license,omitempty"`
-	VersionLicense string `json:"version_license,omitempty"`
+	RepoURL        string  `json:"repo_url,omitempty"`
+	Archived       bool    `json:"archived,omitempty"`
+	OverallScore   float64 `json:"overall_score,omitempty"`
+	DependentCount int     `json:"dependent_count,omitempty"`
+	StableVersion  string  `json:"stable_version,omitempty"`
+	ProjectLicense string  `json:"project_license,omitempty"`
+	VersionLicense string  `json:"version_license,omitempty"`
 
 	// AdvisoryCount is the total number of advisories (direct + transitive).
 	AdvisoryCount       int     `json:"advisory_count,omitempty"`

@@ -131,8 +131,8 @@ runs:
 	routes := map[string][]byte{
 		"myorg/myrepo/.github/workflows":        directoryJSON(t, []string{"ci.yml"}),
 		"myorg/myrepo/.github/workflows/ci.yml": workflowYAML,
-		"alpha/action-a/action.yml":              compositeActionA,
-		"beta/action-b/action.yml":               nodeActionB,
+		"alpha/action-a/action.yml":             compositeActionA,
+		"beta/action-b/action.yml":              nodeActionB,
 	}
 
 	srv := fakeGitHubAPI(t, routes)
@@ -215,9 +215,9 @@ runs:
 	routes := map[string][]byte{
 		"myorg/myrepo/.github/workflows":        directoryJSON(t, []string{"ci.yml"}),
 		"myorg/myrepo/.github/workflows/ci.yml": workflowYAML,
-		"alpha/action-a/action.yml":              compositeA,
-		"beta/action-b/action.yml":               compositeB,
-		"gamma/action-c/action.yml":              nodeC,
+		"alpha/action-a/action.yml":             compositeA,
+		"beta/action-b/action.yml":              compositeB,
+		"gamma/action-c/action.yml":             nodeC,
 	}
 
 	srv := fakeGitHubAPI(t, routes)
@@ -286,8 +286,8 @@ runs:
 	routes := map[string][]byte{
 		"myorg/myrepo/.github/workflows":        directoryJSON(t, []string{"ci.yml"}),
 		"myorg/myrepo/.github/workflows/ci.yml": workflowYAML,
-		"alpha/action-a/action.yml":              compositeA,
-		"beta/action-b/action.yml":               compositeB,
+		"alpha/action-a/action.yml":             compositeA,
+		"beta/action-b/action.yml":              compositeB,
 	}
 
 	srv := fakeGitHubAPI(t, routes)
@@ -348,8 +348,8 @@ runs:
 	routes := map[string][]byte{
 		"myorg/myrepo/.github/workflows":        directoryJSON(t, []string{"ci.yml"}),
 		"myorg/myrepo/.github/workflows/ci.yml": workflowYAML,
-		"alpha/node-action/action.yml":           nodeAction,
-		"beta/docker-action/action.yml":          dockerAction,
+		"alpha/node-action/action.yml":          nodeAction,
+		"beta/docker-action/action.yml":         dockerAction,
 	}
 
 	srv := fakeGitHubAPI(t, routes)
@@ -521,10 +521,10 @@ runs:
 `)
 
 	routes := map[string][]byte{
-		"myorg/myrepo/.github/workflows":                    directoryJSON(t, []string{"ci.yml"}),
-		"myorg/myrepo/.github/workflows/ci.yml":             workflowYAML,
-		"myorg/myrepo/.github/actions/wrapper/action.yml":   wrapperComposite,
-		"myorg/myrepo/.github/actions/inner/action.yml":     innerComposite,
+		"myorg/myrepo/.github/workflows":                  directoryJSON(t, []string{"ci.yml"}),
+		"myorg/myrepo/.github/workflows/ci.yml":           workflowYAML,
+		"myorg/myrepo/.github/actions/wrapper/action.yml": wrapperComposite,
+		"myorg/myrepo/.github/actions/inner/action.yml":   innerComposite,
 	}
 
 	srv := fakeGitHubAPI(t, routes)
@@ -590,10 +590,10 @@ runs:
 `)
 
 	routes := map[string][]byte{
-		"myorg/myrepo/.github/workflows":                    directoryJSON(t, []string{"ci.yml"}),
-		"myorg/myrepo/.github/workflows/ci.yml":             workflowYAML,
-		"myorg/myrepo/.github/actions/action-a/action.yml":  localA,
-		"myorg/myrepo/.github/actions/action-b/action.yml":  localB,
+		"myorg/myrepo/.github/workflows":                   directoryJSON(t, []string{"ci.yml"}),
+		"myorg/myrepo/.github/workflows/ci.yml":            workflowYAML,
+		"myorg/myrepo/.github/actions/action-a/action.yml": localA,
+		"myorg/myrepo/.github/actions/action-b/action.yml": localB,
 	}
 
 	srv := fakeGitHubAPI(t, routes)
@@ -661,8 +661,8 @@ runs:
 		"myorg/myrepo/.github/workflows":                directoryJSON(t, []string{"ci.yml"}),
 		"myorg/myrepo/.github/workflows/ci.yml":         workflowYAML,
 		"myorg/myrepo/.github/actions/setup/action.yml": localSetup,
-		"alpha/action-a/action.yml":                      compositeA,
-		"beta/action-b/action.yml":                       nodeB,
+		"alpha/action-a/action.yml":                     compositeA,
+		"beta/action-b/action.yml":                      nodeB,
 	}
 
 	srv := fakeGitHubAPI(t, routes)
@@ -724,8 +724,8 @@ runs:
 `)
 
 	routes := map[string][]byte{
-		"myorg/myrepo/.github/workflows":                     directoryJSON(t, []string{"ci.yml"}),
-		"myorg/myrepo/.github/workflows/ci.yml":              workflowYAML,
+		"myorg/myrepo/.github/workflows":                      directoryJSON(t, []string{"ci.yml"}),
+		"myorg/myrepo/.github/workflows/ci.yml":               workflowYAML,
 		"myorg/myrepo/.github/actions/node-action/action.yml": nodeAction,
 	}
 
@@ -795,10 +795,10 @@ runs:
 	routes := map[string][]byte{
 		"myorg/myrepo/.github/workflows":        directoryJSON(t, []string{"ci.yml"}),
 		"myorg/myrepo/.github/workflows/ci.yml": workflowYAML,
-		"alpha/action-a/action.yml":              compositeA,
-		"beta/action-b/action.yml":               compositeB,
-		"gamma/action-c/action.yml":              compositeC,
-		"delta/action-d/action.yml":              nodeD,
+		"alpha/action-a/action.yml":             compositeA,
+		"beta/action-b/action.yml":              compositeB,
+		"gamma/action-c/action.yml":             compositeC,
+		"delta/action-d/action.yml":             nodeD,
 	}
 
 	srv := fakeGitHubAPI(t, routes)
@@ -878,11 +878,11 @@ runs:
 `)
 
 	routes := map[string][]byte{
-		"myorg/myrepo/.github/workflows":                  directoryJSON(t, []string{"ci.yml"}),
-		"myorg/myrepo/.github/workflows/ci.yml":           workflowYAML,
-		"myorg/myrepo/.github/actions/level1/action.yml":  level1,
-		"myorg/myrepo/.github/actions/level2/action.yml":  level2,
-		"myorg/myrepo/.github/actions/level3/action.yml":  level3,
+		"myorg/myrepo/.github/workflows":                 directoryJSON(t, []string{"ci.yml"}),
+		"myorg/myrepo/.github/workflows/ci.yml":          workflowYAML,
+		"myorg/myrepo/.github/actions/level1/action.yml": level1,
+		"myorg/myrepo/.github/actions/level2/action.yml": level2,
+		"myorg/myrepo/.github/actions/level3/action.yml": level3,
 	}
 
 	srv := fakeGitHubAPI(t, routes)
