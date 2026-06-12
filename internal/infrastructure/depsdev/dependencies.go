@@ -58,7 +58,7 @@ func (c *DepsDevClient) FetchDependencies(ctx context.Context, purlStr string) (
 		slog.Debug("dependencies: skipping versionless PURL", "purl", purlStr)
 		return nil, nil
 	}
-	version = stripGoIncompatibleSuffix(parsed.GetEcosystem(), version)
+	version = stripGoIncompatibleSuffix(parsed.Ecosystem(), version)
 	if version == "" {
 		slog.Debug("dependencies: skipping empty version after suffix strip", "purl", purlStr)
 		return nil, nil
@@ -194,7 +194,7 @@ func (c *DepsDevClient) fetchDependenciesVersionFallback(ctx context.Context, pu
 	// reach FetchDependenciesBatch, but callers that invoke the exported
 	// FetchDependenciesBatch directly (tests, library consumers) would
 	// otherwise silently re-attempt the primary through the retry loop.
-	origVersion = stripGoIncompatibleSuffix(parsed.GetEcosystem(), origVersion)
+	origVersion = stripGoIncompatibleSuffix(parsed.Ecosystem(), origVersion)
 	if origVersion == "" {
 		return nil
 	}

@@ -19,7 +19,7 @@ func mustParseOrZero(s string) *purl.ParsedPURL {
 	parsed, err := p.Parse(s)
 	if err != nil {
 		// Return a zeroed (but non-nil) ParsedPURL so the helper functions can
-		// safely inspect GetEcosystem() etc and return their zero values.
+		// safely inspect Ecosystem() etc and return their zero values.
 		return &purl.ParsedPURL{}
 	}
 	return parsed

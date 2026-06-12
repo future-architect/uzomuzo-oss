@@ -45,11 +45,11 @@ func NormalizePathToModuleRoot(ctx context.Context, gp *goproxy.Client, rawPath 
 // When provided, it is tried first when falling back to fetching go.mod from the raw content host.
 // Empty defaultBranch preserves legacy behavior (tries main, then master).
 func NormalizePURLToModuleRoot(ctx context.Context, gp *goproxy.Client, pr *purl.ParsedPURL, defaultBranch string) (rawModule string, escapedName string, ok bool) {
-	if pr == nil || !strings.EqualFold(pr.GetEcosystem(), "golang") {
+	if pr == nil || !strings.EqualFold(pr.Ecosystem(), "golang") {
 		return "", "", false
 	}
 	// Use the full import path (namespace + name) and unescape before passing to resolvers.
-	rawFull := strings.TrimSpace(pr.GetPackageName())
+	rawFull := strings.TrimSpace(pr.PackageName())
 	if un, err := url.PathUnescape(rawFull); err == nil && un != "" {
 		rawFull = un
 	}

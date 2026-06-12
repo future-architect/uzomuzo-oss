@@ -40,13 +40,13 @@ func (p *Parser) Parse(purl string) (*ParsedPURL, error) {
 	}, nil
 }
 
-// GetEcosystem returns the ecosystem (type) component
-func (p *ParsedPURL) GetEcosystem() string {
+// Ecosystem returns the ecosystem (type) component
+func (p *ParsedPURL) Ecosystem() string {
 	return p.packageURL.Type
 }
 
-// GetPackageName returns the package name with URL encoding if needed (for API compatibility)
-func (p *ParsedPURL) GetPackageName() string {
+// PackageName returns the package name with URL encoding if needed (for API compatibility)
+func (p *ParsedPURL) PackageName() string {
 	// For Golang packages, include the namespace in the package name
 	if p.packageURL.Type == "golang" && p.packageURL.Namespace != "" {
 		fullName := p.packageURL.Namespace + "/" + p.packageURL.Name

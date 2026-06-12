@@ -1113,7 +1113,7 @@ func packageEcoName(a *analysispkg.Analysis) (ecosystem, name string) {
 	if err != nil {
 		return "", ""
 	}
-	eco := parsed.GetEcosystem()
+	eco := parsed.Ecosystem()
 	ns := parsed.Namespace()
 	name = parsed.Name()
 	if ns != "" {

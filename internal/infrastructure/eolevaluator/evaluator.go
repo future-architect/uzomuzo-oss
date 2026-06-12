@@ -205,7 +205,7 @@ func (e *Evaluator) applyNpmStableDeprecation(ctx context.Context, a *domain.Ana
 	}
 	purlParser := purl.NewParser()
 	parsed, err := purlParser.Parse(a.EffectivePURL)
-	if err != nil || parsed.GetEcosystem() != "npm" {
+	if err != nil || parsed.Ecosystem() != "npm" {
 		return false
 	}
 	return e.checkNpmDeprecation(ctx, parsed.Namespace(), parsed.Name(), a.ReleaseInfo.StableVersion.Version, "npmjs_stable_version_is_eol", status)
@@ -225,7 +225,7 @@ func (e *Evaluator) applyNpmPURLDeprecation(ctx context.Context, a *domain.Analy
 	}
 	purlParser := purl.NewParser()
 	parsed, err := purlParser.Parse(a.EffectivePURL)
-	if err != nil || parsed.GetEcosystem() != "npm" {
+	if err != nil || parsed.Ecosystem() != "npm" {
 		return false
 	}
 	ver := parsed.Version()
@@ -338,7 +338,7 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 	}
 	pp := purl.NewParser()
 	parsed, err := pp.Parse(a.Package.PURL)
-	if err != nil || parsed.GetEcosystem() != "pypi" {
+	if err != nil || parsed.Ecosystem() != "pypi" {
 		return false
 	}
 	name := strings.ToLower(parsed.Name())
@@ -395,7 +395,7 @@ func (e *Evaluator) applyRegistryYanked(
 	}
 	pp := purl.NewParser()
 	parsed, err := pp.Parse(a.Package.PURL)
-	if err != nil || parsed.GetEcosystem() != eco {
+	if err != nil || parsed.Ecosystem() != eco {
 		return false
 	}
 	name := parsed.Name()
@@ -516,7 +516,7 @@ func (e *Evaluator) applyDepsDevDeprecated(_ context.Context, a *domain.Analysis
 	if err != nil {
 		return false
 	}
-	eco := strings.ToLower(parsed.GetEcosystem())
+	eco := strings.ToLower(parsed.Ecosystem())
 	if _, hasAuthRule := ecosystemsWithAuthoritativeRules[eco]; hasAuthRule {
 		return false
 	}

@@ -141,7 +141,7 @@ func (s *IntegrationService) populateReleaseInfo(analysis *domain.Analysis, batc
 			raw = u
 		}
 		if parsed, err := parser.Parse(raw); err == nil {
-			pkgName := parsed.GetPackageName()
+			pkgName := parsed.PackageName()
 			group := parsed.Namespace()
 			finalName := pkgName
 			if group != "" {

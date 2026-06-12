@@ -254,8 +254,8 @@ func (c *DepsDevClient) fetchLatestRelease(ctx context.Context, purlStr string) 
 	origSystem, origName := system, name // capture before any normalization so we can log only when changed
 
 	// Track normalized module name locally (avoid context misuse for intra-function data)
-	normalizedRawName := parsed.GetPackageName()
-	if strings.EqualFold(parsed.GetEcosystem(), "golang") {
+	normalizedRawName := parsed.PackageName()
+	if strings.EqualFold(parsed.Ecosystem(), "golang") {
 		// Use helper to encapsulate Go-specific normalization logic for versions endpoint.
 		norm := normalizeGoModuleForVersions(ctx, c.goproxy, parsed)
 		switch norm.Strategy {
@@ -273,7 +273,7 @@ func (c *DepsDevClient) fetchLatestRelease(ctx context.Context, purlStr string) 
 	// Log only when mapping changed (noise reduction for high-volume batches)
 	if system != origSystem || name != origName {
 		fields := []any{"purl", purlStr, "system", system, "name", name, "from_system", origSystem, "from_name", origName}
-		if strings.EqualFold(parsed.GetEcosystem(), "golang") && normalizedRawName != parsed.GetPackageName() {
+		if strings.EqualFold(parsed.Ecosystem(), "golang") && normalizedRawName != parsed.PackageName() {
 			fields = append(fields, "normalized_raw", normalizedRawName)
 		}
 		slog.Debug("deps.dev versions endpoint mapping changed", fields...)
@@ -347,15 +347,15 @@ func (c *DepsDevClient) fetchLatestRelease(ctx context.Context, purlStr string) 
 	for _, version := range result.Versions {
 		versionInfo := Version{
 			VersionKey: VersionKey{
-				System: parsed.GetEcosystem(),
+				System: parsed.Ecosystem(),
 				// Prefer the normalized module name captured earlier for Go; fallback to original
-				Name:    parsed.GetPackageName(),
+				Name:    parsed.PackageName(),
 				Version: version.VersionKey.Version,
 			},
 		}
 
 		// If Go normalization provided a different module name, reconstruct the PURL accordingly
-		if strings.EqualFold(parsed.GetEcosystem(), "golang") {
+		if strings.EqualFold(parsed.Ecosystem(), "golang") {
 			if newPURL, ok := reconstructGoVersionPURL(purlStr, normalizedRawName, version.VersionKey.Version); ok {
 				versionInfo.PURL = newPURL
 				versionInfo.VersionKey.Name = normalizedRawName
@@ -498,11 +498,11 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 			slog.Debug("Fallback repo resolution skipped (parse failed)", "purl", orig, "error", err)
 			continue
 		}
-		eco := strings.ToLower(strings.TrimSpace(parsed.GetEcosystem()))
+		eco := strings.ToLower(strings.TrimSpace(parsed.Ecosystem()))
 
 		// Go-specific fallback: synthesize repository URL (module root or static fallback) centrally
 		if eco == "golang" && c.goproxy != nil {
-			if repo := attemptGoRepoURLFromPackageName(ctx, c.goproxy, parsed.GetPackageName()); repo != "" {
+			if repo := attemptGoRepoURLFromPackageName(ctx, c.goproxy, parsed.PackageName()); repo != "" {
 				repoURLMap[repo] = append(repoURLMap[repo], orig)
 				slog.Debug("Fallback repo resolved (golang)", "purl", orig, "repo", repo)
 			}
@@ -520,8 +520,8 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 			Version: Version{
 				PURL: orig,
 				VersionKey: VersionKey{
-					System:  parsed.GetEcosystem(),
-					Name:    parsed.GetPackageName(),
+					System:  parsed.Ecosystem(),
+					Name:    parsed.PackageName(),
 					Version: strings.TrimSpace(parsed.Version()),
 				},
 			},
@@ -595,8 +595,8 @@ func (c *DepsDevClient) resolveRepoURLsBatch(ctx context.Context, packageInfoMap
 			}
 			// Small-step 2: If repo URL still missing and ecosystem is golang, attempt a best-effort fallback
 			if url == "" {
-				if pr, err := purlpkgToParsed(p); err == nil && pr != nil && strings.EqualFold(pr.GetEcosystem(), "golang") {
-					if unescName, err := neturl.PathUnescape(pr.GetPackageName()); err == nil && unescName != "" {
+				if pr, err := purlpkgToParsed(p); err == nil && pr != nil && strings.EqualFold(pr.Ecosystem(), "golang") {
+					if unescName, err := neturl.PathUnescape(pr.PackageName()); err == nil && unescName != "" {
 						url = synthesizeGoGitHubRepoURL(ctx, c.goproxy, unescName)
 					}
 				}
@@ -702,7 +702,7 @@ func countSuspiciousMavenPURLs(purls []string) int {
 	count := 0
 	for _, p := range purls {
 		pr, err := purlpkgToParsed(p)
-		if err != nil || pr == nil || !strings.EqualFold(pr.GetEcosystem(), "maven") {
+		if err != nil || pr == nil || !strings.EqualFold(pr.Ecosystem(), "maven") {
 			continue
 		}
 		ns := strings.TrimSpace(pr.Namespace())
@@ -939,7 +939,7 @@ func (c *DepsDevClient) fetchPackageInfo(ctx context.Context, purlStr string) (*
 	// Pre-flight normalization + diagnostics for suspicious Maven PURLs
 	original := purlStr
 	normalizedApplied := false
-	if pr, err := purlpkgToParsed(purlStr); err == nil && pr != nil && strings.EqualFold(pr.GetEcosystem(), "maven") {
+	if pr, err := purlpkgToParsed(purlStr); err == nil && pr != nil && strings.EqualFold(pr.Ecosystem(), "maven") {
 		ns := strings.TrimSpace(pr.Namespace())
 		n := strings.TrimSpace(pr.Name())
 		// Attempt normalization only if namespace empty (collapsed form)
@@ -1037,7 +1037,7 @@ func (c *DepsDevClient) tryMavenSearchFallback(ctx context.Context, purlStr stri
 	if err != nil || pr == nil {
 		return nil
 	}
-	if !strings.EqualFold(pr.GetEcosystem(), "maven") {
+	if !strings.EqualFold(pr.Ecosystem(), "maven") {
 		return nil
 	}
 
@@ -1137,7 +1137,7 @@ func (c *DepsDevClient) FetchDependentCount(ctx context.Context, purlStr string)
 		return nil, nil
 	}
 	// Go modules may have "+incompatible" suffix that deps.dev doesn't recognize in the version path.
-	if strings.ToLower(parsed.GetEcosystem()) == "golang" {
+	if strings.ToLower(parsed.Ecosystem()) == "golang" {
 		if idx := strings.Index(version, "+"); idx >= 0 {
 			version = version[:idx]
 		}

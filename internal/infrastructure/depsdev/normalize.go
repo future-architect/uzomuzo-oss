@@ -28,7 +28,7 @@ func toDepsDevSystemAndName(p *purl.ParsedPURL) (system, name string, err error)
 		return "", "", fmt.Errorf("toDepsDevSystemAndName: nil PURL")
 	}
 
-	eco := strings.ToLower(strings.TrimSpace(p.GetEcosystem()))
+	eco := strings.ToLower(strings.TrimSpace(p.Ecosystem()))
 
 	var raw string
 	switch eco {

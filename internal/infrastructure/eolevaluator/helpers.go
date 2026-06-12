@@ -27,7 +27,7 @@ const (
 // Note: packageurl-go normalizes composer namespace and name to lowercase per the
 // PURL spec (Packagist paths are canonically lowercase).
 func parseComposerFromPURL(parsed *purl.ParsedPURL) (string, string) {
-	eco := strings.ToLower(parsed.GetEcosystem())
+	eco := strings.ToLower(parsed.Ecosystem())
 	if eco != "composer" && eco != "packagist" {
 		return "", ""
 	}
@@ -45,7 +45,7 @@ func parseComposerFromPURL(parsed *purl.ParsedPURL) (string, string) {
 // When a namespace is present (non-standard for NuGet but possible in malformed PURLs),
 // the ID is reconstructed as "Namespace/Name" to preserve existing behavior.
 func parseNuGetIDFromPURL(parsed *purl.ParsedPURL) string {
-	if strings.ToLower(parsed.GetEcosystem()) != "nuget" {
+	if strings.ToLower(parsed.Ecosystem()) != "nuget" {
 		return ""
 	}
 	ns := parsed.Namespace()
@@ -62,7 +62,7 @@ func parseNuGetIDFromPURL(parsed *purl.ParsedPURL) string {
 // parseMavenFromPURL extracts (groupId, artifactId, version) from a parsed Maven PURL.
 // Returns empty strings when not a Maven PURL or when any component is missing.
 func parseMavenFromPURL(parsed *purl.ParsedPURL) (string, string, string) {
-	if parsed.GetEcosystem() != "maven" {
+	if parsed.Ecosystem() != "maven" {
 		return "", "", ""
 	}
 	g := parsed.Namespace()

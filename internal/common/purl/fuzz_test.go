@@ -29,8 +29,8 @@ func FuzzParse(f *testing.F) {
 		parsed, _ := p.Parse(input)
 		if parsed != nil {
 			// Exercise accessor methods to check for panics
-			_ = parsed.GetEcosystem()
-			_ = parsed.GetPackageName()
+			_ = parsed.Ecosystem()
+			_ = parsed.PackageName()
 			_ = parsed.Namespace()
 			_ = parsed.Name()
 			_ = parsed.Version()

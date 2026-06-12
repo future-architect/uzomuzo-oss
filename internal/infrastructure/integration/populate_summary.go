@@ -52,7 +52,7 @@ func (s *IntegrationService) enrichPyPISummary(ctx context.Context, analyses map
 		if err != nil {
 			continue
 		}
-		name := strings.ToLower(strings.TrimSpace(parsed.GetPackageName()))
+		name := strings.ToLower(strings.TrimSpace(parsed.PackageName()))
 		if name == "" {
 			continue
 		}

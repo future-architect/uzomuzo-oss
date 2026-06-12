@@ -177,7 +177,7 @@ func (s *IntegrationService) createPackageFromPURL(purlStr string) *domain.Packa
 
 	return &domain.Package{
 		PURL:      purlStr,
-		Ecosystem: parsed.GetEcosystem(),
+		Ecosystem: parsed.Ecosystem(),
 		Version:   parsed.Version(),
 	}
 }
@@ -208,7 +208,7 @@ func (s *IntegrationService) buildVersionDetail(src *depsdev.Version, analysis *
 			raw = u
 		}
 		if parsed, err := parser.Parse(raw); err == nil {
-			pkgName := parsed.GetPackageName()
+			pkgName := parsed.PackageName()
 			group := parsed.Namespace()
 			finalName := pkgName
 			if group != "" {
