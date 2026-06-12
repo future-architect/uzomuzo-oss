@@ -6,8 +6,9 @@
 //   - TTL <= 0: Get always returns (zero, false); Set is a no-op.
 //   - TTL > 0: Set stores the value; Get returns it only if the entry's age
 //     does not exceed the TTL (checked on read, no background eviction).
-//   - nil values are not stored; callers that want negative caching must use a
-//     pointer type and store a non-nil sentinel.
+//   - Set stores whatever value it is given, including nil pointers and nil
+//     slices: Get then reports (nil, true), which callers use for negative
+//     caching (e.g. the PyPI wheel import-name cache stores nil on miss).
 //
 // DDD Layer: common (shared infrastructure utility; no domain logic).
 package ttlcache

@@ -380,7 +380,7 @@ type enrichedJSONEntry struct {
 
 	RepoURL        string  `json:"repo_url,omitempty"`
 	Archived       bool    `json:"archived"`
-	OverallScore   float64 `json:"overall_score,omitempty"`
+	OverallScore   float64 `json:"overall_score"`
 	DependentCount int     `json:"dependent_count,omitempty"`
 	StableVersion  string  `json:"stable_version,omitempty"`
 	ProjectLicense string  `json:"project_license,omitempty"`
