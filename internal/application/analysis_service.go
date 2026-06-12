@@ -24,6 +24,26 @@ import (
 	// TODO: rename directory successor -> eolevaluator; after physical move adjust import
 )
 
+// AnalysisSource is satisfied by *integration.IntegrationService and exists for
+// testability. It exposes only the two batch-fetch methods needed by
+// AnalysisService; GitHubClient() is deliberately NOT part of this interface —
+// putting it there would bake the concrete *github.Client infrastructure type
+// into the exported application contract and force every fake to import it.
+// ARCHITECT DECISION: keep GitHubClient() outside this interface.
+type AnalysisSource interface {
+	// AnalyzeFromPURLs fetches analysis data for a batch of PURLs.
+	AnalyzeFromPURLs(ctx context.Context, purls []string) (map[string]*domain.Analysis, error)
+	// AnalyzeFromGitHubURLs fetches analysis data for a batch of GitHub repository URLs.
+	AnalyzeFromGitHubURLs(ctx context.Context, urls []string) (map[string]*domain.Analysis, error)
+}
+
+// eolBatchEvaluator is the unexported seam for EOL batch evaluation. It is
+// satisfied by *eolevaluator.Evaluator and allows tests to inject a fake
+// without importing the concrete evaluator type.
+type eolBatchEvaluator interface {
+	EvaluateBatch(ctx context.Context, analyses map[string]*domain.Analysis) (map[string]domain.EOLStatus, error)
+}
+
 // AnalysisEnricher is called between Phase 1 (registry EOL) and Phase 3
 // (lifecycle/build-health assessment). It may mutate Analysis.EOL and
 // Analysis.Error fields. It MUST NOT modify other aggregate fields.
@@ -47,7 +67,7 @@ func WithEnricher(e AnalysisEnricher) Option {
 // DDD Layer: Application (use case orchestration)
 // Responsibilities: Orchestrates domain objects, coordinates business workflows
 type AnalysisService struct {
-	integrationService *integration.IntegrationService
+	integrationService AnalysisSource
 	cfg                *config.Config
 	enrichers          []AnalysisEnricher
 	// packagistClient is stored here (unlike other infra clients) because
@@ -58,22 +78,63 @@ type AnalysisService struct {
 	// the per-batch eolevaluator instance so both consumers reuse the same
 	// 10-min in-memory cache and avoid duplicate PyPI fetches per package.
 	pypiClient *pypi.Client
+	// newEOLEvaluator is the factory for per-call EOL evaluator instances.
+	// Defaulted in both constructors to exactly today's per-call construction
+	// (eolevaluator.NewEvaluator + SetPyPIClient + Maven base URL mirroring) so
+	// per-call cache semantics are preserved. Tests may inject a fake.
+	newEOLEvaluator func() eolBatchEvaluator
 }
 
-// GitHubClient returns the underlying GitHub client for rate limit inspection.
+// GitHubClient returns the underlying GitHub client for rate limit inspection
+// and composition-root wiring (cmd/ uses it to pass the client to the actions
+// discovery service). The accessor uses an unexported capability assertion so
+// that the AnalysisSource interface does not need to embed the concrete
+// *github.Client type — test fakes are never required to implement it.
 func (s *AnalysisService) GitHubClient() *github.Client {
-	return s.integrationService.GitHubClient()
+	if p, ok := s.integrationService.(interface{ GitHubClient() *github.Client }); ok {
+		return p.GitHubClient()
+	}
+	return nil
+}
+
+// GitHubRateLimitSummary returns the GitHub API remaining quota and reset
+// timestamp by delegating to the underlying GitHub client. It returns (0, "")
+// when no API calls have been made or when the integration service does not
+// expose a GitHub client (e.g., in tests using a fake AnalysisSource).
+func (s *AnalysisService) GitHubRateLimitSummary() (remaining int, resetAt string) {
+	if c := s.GitHubClient(); c != nil {
+		return c.RateLimitSummary()
+	}
+	return 0, ""
 }
 
 // NewAnalysisService creates a new AnalysisService that orchestrates
-// analysis operations using the provided IntegrationService.
+// analysis operations using the provided AnalysisSource.
 // It does not perform any external I/O at construction time.
-func NewAnalysisService(integrationService *integration.IntegrationService, opts ...Option) *AnalysisService {
+func NewAnalysisService(src AnalysisSource, opts ...Option) *AnalysisService {
 	s := &AnalysisService{
-		integrationService: integrationService,
+		integrationService: src,
 	}
 	for _, o := range opts {
 		o(s)
+	}
+	// Default EOL evaluator factory: per-call construction matches legacy behavior.
+	// packagistClient and pypiClient are nil for callers that use this constructor
+	// without clients, so the evaluator simply has no Packagist/PyPI support.
+	s.newEOLEvaluator = func() eolBatchEvaluator {
+		ev := eolevaluator.NewEvaluator(s.packagistClient)
+		if s.pypiClient != nil {
+			ev.SetPyPIClient(s.pypiClient)
+		}
+		if s.cfg != nil {
+			if u := s.cfg.Maven.BaseURL; strings.TrimSpace(u) != "" {
+				mv := maven.NewClient()
+				mv.SetBaseURL(u)
+				ev.SetMavenClient(mv)
+				slog.Debug("Maven base URL configured for EOL evaluator", "base_url", u)
+			}
+		}
+		return ev
 	}
 	return s
 }
@@ -122,6 +183,25 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 	for _, o := range opts {
 		o(s)
 	}
+	// Default EOL evaluator factory: exactly today's per-call construction so
+	// per-call cache semantics are preserved byte-for-byte.
+	s.newEOLEvaluator = func() eolBatchEvaluator {
+		ev := eolevaluator.NewEvaluator(s.packagistClient)
+		if s.pypiClient != nil {
+			// Reuse the integration-phase PyPI client so the cache populated by
+			// enrichPyPISummary is reused here, eliminating duplicate fetches per package.
+			ev.SetPyPIClient(s.pypiClient)
+		}
+		if s.cfg != nil { // mirror alignment
+			if u := s.cfg.Maven.BaseURL; strings.TrimSpace(u) != "" {
+				mv := maven.NewClient()
+				mv.SetBaseURL(u)
+				ev.SetMavenClient(mv)
+				slog.Debug("Maven base URL configured for EOL evaluator", "base_url", u)
+			}
+		}
+		return ev
+	}
 	return s
 }
 
@@ -140,22 +220,44 @@ func (s *AnalysisService) ProcessBatchPURLs(ctx context.Context, purls []string)
 		return nil, fmt.Errorf("failed to fetch batch analyses: %w", err)
 	}
 
-	// Phase 1: Evaluate base EOL from primary (non-catalog) deterministic sources
-	eolEvaluator := eolevaluator.NewEvaluator(s.packagistClient)
-	if s.pypiClient != nil {
-		// Reuse the integration-phase PyPI client so the cache populated by
-		// enrichPyPISummary is reused here, eliminating duplicate fetches per package.
-		eolEvaluator.SetPyPIClient(s.pypiClient)
+	if err := s.enrichAndAssess(ctx, analyses, "purl"); err != nil {
+		return nil, err
 	}
-	if s.cfg != nil { // mirror alignment
-		if u := s.cfg.Maven.BaseURL; strings.TrimSpace(u) != "" {
-			mv := maven.NewClient()
-			mv.SetBaseURL(u)
-			eolEvaluator.SetMavenClient(mv)
-			slog.Debug("Maven base URL configured for EOL evaluator", "base_url", u)
-		}
+	return analyses, nil
+}
+
+// ProcessBatchGitHubURLs processes multiple GitHub URLs and returns domain Analysis results
+//
+// DDD Layer: Application (use case orchestration)
+// Business Logic: Batch GitHub URL processing, lifecycle assessment application
+func (s *AnalysisService) ProcessBatchGitHubURLs(ctx context.Context, githubURLs []string) (map[string]*domain.Analysis, error) {
+	if len(githubURLs) == 0 {
+		return make(map[string]*domain.Analysis), nil
 	}
-	eolMap, evalErr := eolEvaluator.EvaluateBatch(ctx, analyses)
+	// Delegate to Infrastructure layer for batch processing
+	analyses, err := s.integrationService.AnalyzeFromGitHubURLs(ctx, githubURLs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch batch GitHub URL analyses: %w", err)
+	}
+
+	if err := s.enrichAndAssess(ctx, analyses, "url"); err != nil {
+		return nil, err
+	}
+	return analyses, nil
+}
+
+// enrichAndAssess runs the shared Phase 1-3 pipeline on the given analyses map.
+// refLogKey is the slog field name used for per-item telemetry ("purl" or "url").
+//
+// Phase 1: EOL evaluation + registry-fallback and repo-URL-fallback error clearing.
+// Phase 2: AnalysisEnricher hooks (e.g., catalog EOL override).
+// Phase 3: Composite lifecycle/build-health assessment.
+func (s *AnalysisService) enrichAndAssess(ctx context.Context, analyses map[string]*domain.Analysis, refLogKey string) error {
+	// Phase 1: Evaluate base EOL from primary (non-catalog) deterministic sources.
+	// newEOLEvaluator constructs a fresh per-call instance so its internal caches
+	// are not shared across concurrent batch calls.
+	eolEval := s.newEOLEvaluator()
+	eolMap, evalErr := eolEval.EvaluateBatch(ctx, analyses)
 	if evalErr != nil {
 		slog.Warn("base_eol_evaluate_failed", "error", evalErr)
 	}
@@ -178,8 +280,8 @@ func (s *AnalysisService) ProcessBatchPURLs(ctx context.Context, purls []string)
 		// assessment pipeline.
 		if common.IsResourceNotFoundError(analysis.Error) && isRegistryResolvedEOL(e) {
 			analysis.EOL = e
-			slog.Info("registry_fallback_resolved",
-				"purl", key,
+			slog.Debug("registry_fallback_resolved",
+				refLogKey, key,
 				"eol_state", string(e.State),
 				"source", eolEvidenceSource(e),
 			)
@@ -198,8 +300,8 @@ func (s *AnalysisService) ProcessBatchPURLs(ctx context.Context, purls []string)
 			continue
 		}
 		if analysis.RepoURL != "" && analysis.Repository != nil {
-			slog.Info("repo_url_fallback_resolved",
-				"purl", key,
+			slog.Debug("repo_url_fallback_resolved",
+				refLogKey, key,
 				"repo_url", analysis.RepoURL,
 			)
 			analysis.Error = nil
@@ -225,7 +327,7 @@ func (s *AnalysisService) ProcessBatchPURLs(ctx context.Context, purls []string)
 		in := domain.AssessmentInput{Analysis: analysis, Scores: analysis.Scores, EOL: analysis.EOL}
 		axisMap, err := composite.AssessAll(ctx, in)
 		if err != nil {
-			slog.Debug("Assess composite failed", "purl", key, "error", err)
+			slog.Debug("composite_assessment_failed", refLogKey, key, "error", err)
 			continue
 		}
 		if len(axisMap) == 0 {
@@ -239,114 +341,7 @@ func (s *AnalysisService) ProcessBatchPURLs(ctx context.Context, purls []string)
 		}
 	}
 
-	return analyses, nil
-}
-
-// ProcessBatchGitHubURLs processes multiple GitHub URLs and returns domain Analysis results
-//
-// DDD Layer: Application (use case orchestration)
-// Business Logic: Batch GitHub URL processing, lifecycle assessment application
-func (s *AnalysisService) ProcessBatchGitHubURLs(ctx context.Context, githubURLs []string) (map[string]*domain.Analysis, error) {
-	if len(githubURLs) == 0 {
-		return make(map[string]*domain.Analysis), nil
-	}
-	// Delegate to Infrastructure layer for batch processing
-	analyses, err := s.integrationService.AnalyzeFromGitHubURLs(ctx, githubURLs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch batch GitHub URL analyses: %w", err)
-	}
-
-	// Phase 1: Base EOL
-	eolEvaluator := eolevaluator.NewEvaluator(s.packagistClient)
-	if s.pypiClient != nil {
-		eolEvaluator.SetPyPIClient(s.pypiClient)
-	}
-	if s.cfg != nil {
-		if u := s.cfg.Maven.BaseURL; strings.TrimSpace(u) != "" {
-			mv := maven.NewClient()
-			mv.SetBaseURL(u)
-			eolEvaluator.SetMavenClient(mv)
-			slog.Debug("Maven base URL configured for EOL evaluator", "base_url", u)
-		}
-	}
-	eolMap, evalErr := eolEvaluator.EvaluateBatch(ctx, analyses)
-	if evalErr != nil {
-		slog.Warn("base_eol_evaluate_failed", "error", evalErr)
-	}
-	for key, a := range analyses {
-		if a == nil {
-			continue
-		}
-		e, ok := eolMap[key]
-		if !ok {
-			continue
-		}
-		if a.Error == nil {
-			a.EOL = e
-			continue
-		}
-		if common.IsResourceNotFoundError(a.Error) && isRegistryResolvedEOL(e) {
-			a.EOL = e
-			slog.Info("registry_fallback_resolved",
-				"url", key,
-				"eol_state", string(e.State),
-				"source", eolEvidenceSource(e),
-			)
-			a.Error = nil
-		}
-	}
-
-	// Repo-URL fallback: clear not-found error when a repo URL and project data exist.
-	for key, a := range analyses {
-		if a == nil || a.Error == nil {
-			continue
-		}
-		if !common.IsResourceNotFoundError(a.Error) {
-			continue
-		}
-		if a.RepoURL != "" && a.Repository != nil {
-			slog.Info("repo_url_fallback_resolved",
-				"url", key,
-				"repo_url", a.RepoURL,
-			)
-			a.Error = nil
-		}
-	}
-
-	// Phase 2: Run enrichers (catalog EOL, etc.)
-	for _, enrich := range s.enrichers {
-		if err := enrich(ctx, analyses); err != nil {
-			slog.Warn("enricher_failed", "error", err)
-		}
-	}
-
-	// Phase 3: Assess
-	composite := domain.NewCompositeAssessor(
-		domain.NewLifecycleAssessorService(),
-		domain.NewBuildHealthAssessorService(),
-	)
-	for key, a := range analyses {
-		if a == nil || a.Error != nil {
-			continue
-		}
-		in := domain.AssessmentInput{Analysis: a, Scores: a.Scores, EOL: a.EOL}
-		axisMap, err := composite.AssessAll(ctx, in)
-		if err != nil {
-			slog.Debug("Failed composite assessment", "url", key, "error", err)
-			continue
-		}
-		if len(axisMap) == 0 {
-			continue
-		}
-		if a.AxisResults == nil {
-			a.AxisResults = make(map[domain.AssessmentAxis]*domain.AssessmentResult)
-		}
-		for ax, r := range axisMap {
-			a.AxisResults[ax] = r
-		}
-	}
-
-	return analyses, nil
+	return nil
 }
 
 // WriteScoreCardCSV exports analysis results to CSV file
