@@ -28,11 +28,24 @@ func WithEnricher(e AnalysisEnricher) Option {
 	return application.WithEnricher(e)
 }
 
+// EvaluationService is the narrow interface the Evaluator delegates to.
+// *application.AnalysisService satisfies this interface.
+// External callers can implement it to inject a test double or an alternate
+// backend via NewEvaluatorFromService.
+type EvaluationService interface {
+	// ProcessBatchPURLs evaluates multiple PURLs and returns domain Analysis results.
+	ProcessBatchPURLs(ctx context.Context, purls []string) (map[string]*domain.Analysis, error)
+	// ProcessBatchGitHubURLs evaluates multiple GitHub repository URLs.
+	ProcessBatchGitHubURLs(ctx context.Context, urls []string) (map[string]*domain.Analysis, error)
+	// WriteScoreCardCSV exports analysis results to a CSV file.
+	WriteScoreCardCSV(results map[string]*domain.Analysis, filename string) error
+}
+
 // Evaluator performs full security & lifecycle evaluation including
 // primary-source EOL (registry heuristics / deprecation) integration.
 // DDD Layer exposure: public facade over application.AnalysisService.
 type Evaluator struct {
-	service *application.AnalysisService
+	service EvaluationService
 }
 
 // NewEvaluator creates a new Evaluator with the specified GitHub token.
@@ -55,24 +68,24 @@ func NewEvaluator(githubToken string, opts ...Option) *Evaluator {
 	return &Evaluator{service: service}
 }
 
-// NewEvaluatorFromService creates an Evaluator with a pre-configured AnalysisService.
-// This allows callers (e.g., a private catalog overlay) to inject custom enrichers
-// or other configuration into the service before passing it here.
-func NewEvaluatorFromService(service *application.AnalysisService) *Evaluator {
+// NewEvaluatorFromService creates an Evaluator backed by the provided EvaluationService.
+// This allows callers to inject a custom implementation (e.g., a catalog overlay or
+// test double). Previously this accepted *application.AnalysisService directly; the
+// parameter type is now the EvaluationService interface so external modules can call it.
+// *application.AnalysisService still satisfies the interface.
+func NewEvaluatorFromService(service EvaluationService) *Evaluator {
 	return &Evaluator{service: service}
 }
 
 // EvaluatePURLs performs full evaluation for multiple PURLs.
 // Each PURL should follow the Package URL specification (https://github.com/package-url/purl-spec).
 // Supported ecosystems: npm, pypi, maven, cargo, golang, gem, nuget.
-// EvaluatePURLs performs full evaluation (collection + lifecycle heuristics + EOL) for PURLs.
 func (e *Evaluator) EvaluatePURLs(ctx context.Context, purls []string) (map[string]*domain.Analysis, error) {
 	return e.service.ProcessBatchPURLs(ctx, purls)
 }
 
 // EvaluateGitHubRepos performs full evaluation for multiple GitHub repositories.
 // Accepts URL forms like: https://github.com/owner/repo or github.com/owner/repo.
-// EvaluateGitHubRepos performs full evaluation for GitHub repository URLs.
 func (e *Evaluator) EvaluateGitHubRepos(ctx context.Context, urls []string) (map[string]*domain.Analysis, error) {
 	return e.service.ProcessBatchGitHubURLs(ctx, urls)
 }
@@ -83,8 +96,6 @@ func (e *Evaluator) EvaluateGitHubRepos(ctx context.Context, urls []string) (map
 // Example:
 //
 //	err := client.ExportCSV(results, "security_report.csv")
-//
-// ExportCSV writes results to a CSV file with comprehensive metrics.
 func (e *Evaluator) ExportCSV(results map[string]*domain.Analysis, filename string) error {
 	return e.service.WriteScoreCardCSV(results, filename)
 }
