@@ -161,69 +161,22 @@ func (c *DepsDevClient) WithPyPI(p *pypi.Client) *DepsDevClient {
 // Purpose: Used by the GitHub URL flow to resolve default/latest versions for base PURLs.
 // Called from: integration.IntegrationService.AnalyzeFromGitHubURL
 func (c *DepsDevClient) GetLatestReleasesForPURLs(ctx context.Context, purls []string) (map[string]*ReleaseInfo, error) {
-	results := make(map[string]*ReleaseInfo)
-	resultMutex := sync.Mutex{}
-
-	// Limit the number of goroutines
 	const maxWorkers = 10
 
-	// Split processing into batches with progress tracking
-	processedCount := 0
-	for batchStart := 0; batchStart < len(purls); batchStart += c.config.BatchSize {
-		batchEnd := batchStart + c.config.BatchSize
-		if batchEnd > len(purls) {
-			batchEnd = len(purls)
-		}
-
-		batch := purls[batchStart:batchEnd]
-		// Log initial batch processing message only for actual batch processing (multiple items)
-		if len(purls) > 1 {
-			if batchStart == 0 {
-				slog.Debug("Starting PURL batch processing", "total", len(purls), "batch_size", c.config.BatchSize)
-			}
-		}
-		if batchStart == 0 || batchEnd == len(purls) {
-			slog.Debug("Processing PURL batch",
-				"batch_start", batchStart,
-				"batch_end", batchEnd-1,
-				"total_purls", len(purls))
-		}
-
-		// Parallel processing within batch
-		semaphore := make(chan struct{}, maxWorkers)
-		var wg sync.WaitGroup
-
-		for _, purl := range batch {
-			wg.Add(1)
-			go func(p string) {
-				defer wg.Done()
-				semaphore <- struct{}{}        // Acquire semaphore
-				defer func() { <-semaphore }() // Release semaphore
-
-				releaseInfo, _ := c.fetchLatestRelease(ctx, p) // Intentionally ignore error: details captured in releaseInfo.Error
-
-				resultMutex.Lock()
-				results[p] = &releaseInfo
-				processedCount++
-				currentProcessed := processedCount
-				resultMutex.Unlock()
-
-				// Log processing progress only for actual batch processing
-				if len(purls) > 1 && (currentProcessed%100 == 0 || currentProcessed == len(purls)) {
-					slog.Debug("Processing progress", "completed", currentProcessed, "total", len(purls))
-				}
-			}(purl)
-		}
-
-		wg.Wait()
-
-		// Log batch completion only for actual batch processing
-		if len(purls) > 1 && batchEnd < len(purls) {
-			slog.Debug("Batch completed", "processed", processedCount, "total", len(purls))
-		}
+	if len(purls) > 1 {
+		slog.Debug("Starting PURL batch processing", "total", len(purls), "batch_size", c.config.BatchSize)
 	}
 
-	// Log final completion message only for actual batch processing
+	// Collect all batches into a flat list so collectBounded handles concurrency.
+	// GetLatestReleasesForPURLs stores error-bearing ReleaseInfo (ok=true with error
+	// value) — divergent from fetchReleaseInfoBatch which drops errored items.
+	type ptrReleaseInfo = *ReleaseInfo
+	results := collectBounded[ptrReleaseInfo](ctx, purls, maxWorkers, func(ctx context.Context, p string) (string, *ReleaseInfo, bool) {
+		releaseInfo, _ := c.fetchLatestRelease(ctx, p) // intentionally ignore error: details captured in releaseInfo.Error
+		slog.Debug("Processing progress", "purl", p)
+		return p, &releaseInfo, true // always store (even with error) — ok=true preserves error-bearing semantics
+	})
+
 	if len(purls) > 1 {
 		slog.Debug("PURL processing completed", "processed", len(purls), "total", len(purls))
 	}
@@ -426,7 +379,7 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 	// Step 1: Fetch release information for ALL original PURLs in parallel (once per PURL)
 	releaseInfoMap, err := c.fetchReleaseInfoBatch(ctx, purls)
 	if err != nil {
-		slog.Info("ReleaseInfoBatchFailed", "error", err)
+		slog.Warn("release_info_batch_failed", "error", err)
 		releaseInfoMap = make(map[string]ReleaseInfo)
 	}
 
@@ -544,7 +497,7 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 
 	projectInfoMap, err := c.fetchProjectsBatch(ctx, repoURLs)
 	if err != nil {
-		slog.Info("ProjectBatchFailed", "error", err)
+		slog.Warn("project_batch_failed", "error", err)
 		projectInfoMap = make(map[string]*Project)
 	}
 	if len(projectInfoMap) == 0 && len(repoURLs) > 0 {
@@ -659,34 +612,16 @@ func (c *DepsDevClient) fetchPackageInfoBatch(ctx context.Context, purls []strin
 	// Pre-flight: count suspicious Maven PURLs for a single summary warning
 	suspiciousMavenCount := countSuspiciousMavenPURLs(purls)
 
-	results := make(map[string]*PackageResponse)
-	resultMutex := sync.Mutex{}
-
-	// Internal parallel processing
 	const maxWorkers = 10
-	semaphore := make(chan struct{}, maxWorkers)
-	var wg sync.WaitGroup
+	results := collectBounded[*PackageResponse](ctx, purls, maxWorkers, func(ctx context.Context, p string) (string, *PackageResponse, bool) {
+		packageResp, err := c.fetchPackageInfo(ctx, p)
+		if err != nil {
+			slog.Debug("Failed to fetch package info", "purl", p, "error", err)
+			return "", nil, false
+		}
+		return p, packageResp, true
+	})
 
-	for _, purl := range purls {
-		wg.Add(1)
-		go func(p string) {
-			defer wg.Done()
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-
-			packageResp, err := c.fetchPackageInfo(ctx, p)
-			if err != nil {
-				slog.Debug("Failed to fetch package info", "purl", p, "error", err)
-				return
-			}
-
-			resultMutex.Lock()
-			results[p] = packageResp
-			resultMutex.Unlock()
-		}(purl)
-	}
-
-	wg.Wait()
 	if suspiciousMavenCount > 0 {
 		slog.Warn("Suspicious Maven PURLs detected — namespace (groupId) may be missing or incorrect (set LOG_LEVEL=debug for details)",
 			"count", suspiciousMavenCount,
@@ -843,46 +778,25 @@ func (c *DepsDevClient) fetchProjectsBatch(ctx context.Context, repoURLs []strin
 	return results, nil
 }
 
-// fetchReleaseInfoBatch fetches release information for multiple PURLs with internal parallelization
+// fetchReleaseInfoBatch fetches release information for multiple PURLs with internal parallelization.
+// Errored items are dropped (ok=false) — divergent from GetLatestReleasesForPURLs which stores
+// error-bearing ReleaseInfo.
 func (c *DepsDevClient) fetchReleaseInfoBatch(ctx context.Context, purls []string) (map[string]ReleaseInfo, error) {
-	results := make(map[string]ReleaseInfo)
-	resultMutex := sync.Mutex{}
-
-	// Internal parallel processing
 	const maxWorkers = 10
-	semaphore := make(chan struct{}, maxWorkers)
-	var wg sync.WaitGroup
-
-	// Progress tracking
-	processedCount := 0
 	totalPURLs := len(purls)
 
-	for _, purl := range purls {
-		wg.Add(1)
-		go func(p string) {
-			defer wg.Done()
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
+	results := collectBounded[ReleaseInfo](ctx, purls, maxWorkers, func(ctx context.Context, p string) (string, ReleaseInfo, bool) {
+		releaseInfo, err := c.fetchLatestRelease(ctx, p)
+		if err != nil {
+			slog.Debug("Failed to fetch release information", "purl", p, "error", err)
+			return "", ReleaseInfo{}, false // drop errored items
+		}
+		if totalPURLs >= 1000 {
+			slog.Debug("Release info progress", "purl", p, "total", totalPURLs)
+		}
+		return p, releaseInfo, true
+	})
 
-			releaseInfo, err := c.fetchLatestRelease(ctx, p)
-			if err != nil {
-				slog.Debug("Failed to fetch release information", "purl", p, "error", err)
-				return
-			}
-
-			resultMutex.Lock()
-			results[p] = releaseInfo
-			processedCount++
-			currentProcessed := processedCount
-			resultMutex.Unlock()
-
-			if totalPURLs >= 1000 && currentProcessed%1000 == 0 {
-				slog.Debug("Release info progress", "processed", currentProcessed, "total", totalPURLs)
-			}
-		}(purl)
-	}
-
-	wg.Wait()
 	return results, nil
 }
 
@@ -945,7 +859,7 @@ func (c *DepsDevClient) fetchPackageInfo(ctx context.Context, purlStr string) (*
 		// Attempt normalization only if namespace empty (collapsed form)
 		if ns == "" {
 			if np := commonpurl.NormalizeMavenCollapsedCoordinates(purlStr); np != purlStr {
-				slog.Info("Normalized collapsed Maven PURL", "original", purlStr, "normalized", np)
+				slog.Debug("maven_purl_normalized", "original", purlStr, "normalized", np)
 				purlStr = np
 				normalizedApplied = true
 				// Re-parse to update namespace/name for warning evaluation
@@ -1071,7 +985,7 @@ func (c *DepsDevClient) tryMavenSearchFallback(ctx context.Context, purlStr stri
 		correctedPURL += "@" + version
 	}
 
-	slog.Info("maven search fallback: retrying with corrected PURL",
+	slog.Debug("maven_search_fallback_retry",
 		"original", purlStr,
 		"corrected", correctedPURL,
 	)
@@ -1086,7 +1000,7 @@ func (c *DepsDevClient) tryMavenSearchFallback(ctx context.Context, purlStr stri
 		return nil
 	}
 
-	slog.Info("maven search fallback: resolved via Maven Central Search",
+	slog.Debug("maven_search_fallback_resolved",
 		"original", purlStr,
 		"corrected", correctedPURL,
 	)
@@ -1194,40 +1108,23 @@ func (c *DepsDevClient) FetchDependentCountBatch(ctx context.Context, purls []st
 	}
 
 	const maxWorkers = 10
-	results := make(map[string]*DependentsResponse)
-	var mu sync.Mutex
-	semaphore := make(chan struct{}, maxWorkers)
-	var wg sync.WaitGroup
+	results := collectBounded[*DependentsResponse](ctx, purls, maxWorkers, func(ctx context.Context, purl string) (string, *DependentsResponse, bool) {
+		resp, err := c.FetchDependentCount(ctx, purl)
+		if err != nil {
+			slog.Debug("Failed to fetch dependent count", "purl", purl, "error", err)
+			return "", nil, false
+		}
+		if resp == nil {
+			return "", nil, false
+		}
+		// Normalize to versionless canonical key for map consistency
+		key := commonpurl.CanonicalKey(purl)
+		if key == "" {
+			key = purl
+		}
+		return key, resp, true
+	})
 
-	for _, p := range purls {
-		wg.Add(1)
-		go func(purl string) {
-			defer wg.Done()
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-
-			resp, err := c.FetchDependentCount(ctx, purl)
-			if err != nil {
-				slog.Debug("Failed to fetch dependent count", "purl", purl, "error", err)
-				return
-			}
-			if resp == nil {
-				return
-			}
-
-			// Normalize to versionless canonical key for map consistency
-			key := commonpurl.CanonicalKey(purl)
-			if key == "" {
-				key = purl
-			}
-
-			mu.Lock()
-			results[key] = resp
-			mu.Unlock()
-		}(p)
-	}
-
-	wg.Wait()
 	slog.Debug("Dependent count batch completed", "requested", len(purls), "successful", len(results))
 	return results
 }
@@ -1508,39 +1405,17 @@ func (c *DepsDevClient) FetchAdvisoriesBatch(ctx context.Context, advisoryIDs []
 	}
 
 	const maxWorkers = 10
-	results := make(map[string]*AdvisoryDetail)
-	var mu sync.Mutex
-	semaphore := make(chan struct{}, maxWorkers)
-	var wg sync.WaitGroup
-
-	for _, id := range unique {
-		wg.Add(1)
-		go func(advisoryID string) {
-			defer wg.Done()
-
-			select {
-			case semaphore <- struct{}{}:
-				defer func() { <-semaphore }()
-			case <-ctx.Done():
-				return
-			}
-
-			detail, err := c.FetchAdvisory(ctx, advisoryID)
-			if err != nil {
-				slog.Debug("failed to fetch advisory detail", "id", advisoryID, "error", err)
-				return
-			}
-			if detail == nil {
-				return
-			}
-
-			mu.Lock()
-			results[advisoryID] = detail
-			mu.Unlock()
-		}(id)
-	}
-
-	wg.Wait()
+	results := collectBounded[*AdvisoryDetail](ctx, unique, maxWorkers, func(ctx context.Context, advisoryID string) (string, *AdvisoryDetail, bool) {
+		detail, err := c.FetchAdvisory(ctx, advisoryID)
+		if err != nil {
+			slog.Debug("failed to fetch advisory detail", "id", advisoryID, "error", err)
+			return "", nil, false
+		}
+		if detail == nil {
+			return "", nil, false
+		}
+		return advisoryID, detail, true
+	})
 
 	slog.Debug("advisory severity fetch complete",
 		"requested", len(advisoryIDs),
