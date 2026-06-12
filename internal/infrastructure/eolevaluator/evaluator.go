@@ -132,11 +132,7 @@ func (e *Evaluator) applyPackagistAbandoned(ctx context.Context, a *domain.Analy
 	if err != nil {
 		return false
 	}
-	eco := strings.ToLower(parsed.GetEcosystem())
-	if eco != "composer" && eco != "packagist" {
-		return false
-	}
-	vendor, name := parseComposerFromPURL(a.Package.PURL)
+	vendor, name := parseComposerFromPURL(parsed)
 	if vendor == "" || name == "" {
 		return false
 	}
@@ -171,10 +167,10 @@ func (e *Evaluator) applyNuGetDeprecation(ctx context.Context, a *domain.Analysi
 	}
 	pp := purl.NewParser()
 	parsed, err := pp.Parse(a.Package.PURL)
-	if err != nil || strings.ToLower(parsed.GetEcosystem()) != "nuget" {
+	if err != nil {
 		return false
 	}
-	id := parseNuGetIDFromPURL(a.Package.PURL)
+	id := parseNuGetIDFromPURL(parsed)
 	if id == "" {
 		return false
 	}
@@ -293,11 +289,11 @@ func (e *Evaluator) applyMavenRelocation(ctx context.Context, a *domain.Analysis
 	if status.State != domain.EOLEndOfLife && a != nil && a.Package != nil && e.mvn != nil {
 		p := purl.NewParser()
 		parsed, err := p.Parse(a.Package.PURL)
-		if err != nil || parsed.GetEcosystem() != "maven" {
+		if err != nil {
 			return false
 		}
 		slog.Debug("eol: maven branch entered", "purl", a.Package.PURL)
-		g, art, v := parseMavenFromPURL(a.Package.PURL)
+		g, art, v := parseMavenFromPURL(parsed)
 		if g == "" || art == "" || v == "" {
 			return false
 		}
@@ -368,6 +364,70 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 	return false
 }
 
+// applyRegistryYanked is the shared core for yanked-version rules.
+//
+// It parses the PURL for the given ecosystem, optionally lowercases the name,
+// resolves the version (PURL version preferred, StableVersion as fallback), then
+// calls fetch to determine whether that version is yanked. On confirmation it
+// appends the evidence (using source and confidence) and promotes status to
+// EOLEndOfLife.
+//
+// Parameters:
+//   - eco: PURL ecosystem type to match (e.g. "pypi", "cargo")
+//   - source: EOLEvidence.Source string (e.g. "PyPI", "crates.io")
+//   - lowercaseName: if true, the package name is lowercased before passing to fetch
+//   - fetch: closure that calls the registry client and returns
+//     (yanked, summary, reference, found, err)
+//   - confidence: EOLEvidence.Confidence value
+//   - logEvent: slog event name emitted on yanked confirmation
+func (e *Evaluator) applyRegistryYanked(
+	ctx context.Context,
+	a *domain.Analysis,
+	status *domain.EOLStatus,
+	eco, source string,
+	lowercaseName bool,
+	fetch func(ctx context.Context, name, version string) (yanked bool, summary, reference string, found bool, err error),
+	confidence float64,
+	logEvent string,
+) bool {
+	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" {
+		return false
+	}
+	pp := purl.NewParser()
+	parsed, err := pp.Parse(a.Package.PURL)
+	if err != nil || parsed.GetEcosystem() != eco {
+		return false
+	}
+	name := parsed.Name()
+	if lowercaseName {
+		name = strings.ToLower(name)
+	}
+	version := parsed.Version()
+	if version == "" && a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
+		version = a.ReleaseInfo.StableVersion.Version
+	}
+	if name == "" || version == "" {
+		return false
+	}
+	yanked, summary, reference, found, fetchErr := fetch(ctx, name, version)
+	if fetchErr != nil {
+		slog.Error("eol: registry yanked fetch failed", "event", logEvent, "name", name, "version", version, "error", fetchErr)
+		return false
+	}
+	if !found || !yanked {
+		return false
+	}
+	status.State = domain.EOLEndOfLife
+	status.Evidences = append(status.Evidences, domain.EOLEvidence{
+		Source:     source,
+		Summary:    summary,
+		Reference:  reference,
+		Confidence: confidence,
+	})
+	slog.Debug(logEvent, "name", name, "version", version)
+	return true
+}
+
 // applyPyPIYanked checks if the PyPI version requested by the user (PURL version,
 // falling back to StableVersion when PURL is unversioned) is yanked on PyPI and
 // promotes to EOL on confirmation. PURL version is preferred because yanking is a
@@ -375,84 +435,44 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 // a user's pinned-to-yanked dependency.
 //
 // Yanked semantics: see pypi.Client.GetVersion (info.yanked OR all urls[].yanked).
-func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
-	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" || e.pypi == nil {
+func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) bool {
+	if e.pypi == nil {
 		return false
 	}
-	pp := purl.NewParser()
-	parsed, err := pp.Parse(a.Package.PURL)
-	if err != nil || parsed.GetEcosystem() != "pypi" {
-		return false
-	}
-	name := strings.ToLower(parsed.Name())
-	version := parsed.Version()
-	if version == "" && a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
-		version = a.ReleaseInfo.StableVersion.Version
-	}
-	if name == "" || version == "" {
-		return false
-	}
-	info, found, err := e.pypi.GetVersion(ctx, name, version)
-	if err != nil {
-		slog.Error("eol: pypi version fetch failed", "name", name, "version", version, "error", err)
-		return false
-	}
-	if !found || info == nil || !info.Yanked {
-		return false
-	}
-	summary := "Version yanked on PyPI"
-	if info.YankedReason != "" {
-		summary = summary + ": " + info.YankedReason
-	}
-	status.State = domain.EOLEndOfLife
-	status.Evidences = append(status.Evidences, domain.EOLEvidence{
-		Source:     "PyPI",
-		Summary:    summary,
-		Reference:  "https://pypi.org/project/" + url.PathEscape(info.Name) + "/" + url.PathEscape(info.Version) + "/",
-		Confidence: 0.95,
-	})
-	slog.Debug("eol: pypi version yanked", "name", name, "version", version)
-	return true
+	return e.applyRegistryYanked(ctx, a, status, "pypi", "PyPI", true,
+		func(ctx context.Context, name, version string) (bool, string, string, bool, error) {
+			info, found, err := e.pypi.GetVersion(ctx, name, version)
+			if err != nil || !found || info == nil {
+				return false, "", "", found, err
+			}
+			summary := "Version yanked on PyPI"
+			if info.YankedReason != "" {
+				summary = summary + ": " + info.YankedReason
+			}
+			ref := "https://pypi.org/project/" + url.PathEscape(info.Name) + "/" + url.PathEscape(info.Version) + "/"
+			return info.Yanked, summary, ref, true, nil
+		},
+		0.95, "eol: pypi version yanked")
 }
 
 // applyCargoYanked checks if the Cargo PURL version (falling back to StableVersion
 // when PURL is unversioned) is yanked on crates.io. Same precedence rationale as
 // applyPyPIYanked. crates.io yanks have no upstream successor, so status.Successor
 // is left untouched.
-func (e *Evaluator) applyCargoYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
-	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" || e.crates == nil {
+func (e *Evaluator) applyCargoYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) bool {
+	if e.crates == nil {
 		return false
 	}
-	pp := purl.NewParser()
-	parsed, err := pp.Parse(a.Package.PURL)
-	if err != nil || parsed.GetEcosystem() != "cargo" {
-		return false
-	}
-	name := parsed.Name()
-	version := parsed.Version()
-	if version == "" && a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
-		version = a.ReleaseInfo.StableVersion.Version
-	}
-	if name == "" || version == "" {
-		return false
-	}
-	info, found, err := e.crates.GetVersion(ctx, name, version)
-	if err != nil {
-		slog.Error("eol: crates fetch failed", "name", name, "version", version, "error", err)
-		return false
-	}
-	if !found || info == nil || !info.Yanked {
-		return false
-	}
-	status.State = domain.EOLEndOfLife
-	status.Evidences = append(status.Evidences, domain.EOLEvidence{
-		Source:     "crates.io",
-		Summary:    "Version yanked on crates.io",
-		Reference:  "https://crates.io/crates/" + url.PathEscape(name) + "/" + url.PathEscape(version),
-		Confidence: 1.0,
-	})
-	slog.Debug("eol: cargo version yanked", "name", name, "version", version)
-	return true
+	return e.applyRegistryYanked(ctx, a, status, "cargo", "crates.io", false,
+		func(ctx context.Context, name, version string) (bool, string, string, bool, error) {
+			info, found, err := e.crates.GetVersion(ctx, name, version)
+			if err != nil || !found || info == nil {
+				return false, "", "", found, err
+			}
+			ref := "https://crates.io/crates/" + url.PathEscape(name) + "/" + url.PathEscape(version)
+			return info.Yanked, "Version yanked on crates.io", ref, true, nil
+		},
+		1.0, "eol: cargo version yanked")
 }
 
 // ecosystemsWithAuthoritativeRules enumerates PURL ecosystems for which an
