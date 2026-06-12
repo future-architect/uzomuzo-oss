@@ -640,17 +640,17 @@ func (c *Client) resolveRepoURLHeuristics(ctx context.Context, raw string) strin
 		return ""
 	}
 	u, err := url.Parse(s)
-	if err != nil || u.Host == "" {
+	if err != nil || u.Hostname() == "" {
 		return ""
 	}
-	host := strings.ToLower(u.Host)
+	host := strings.ToLower(u.Hostname())
 
 	// Only attempt network heuristics for Microsoft shorteners/docs
 	if host == "aka.ms" || strings.HasSuffix(host, ".microsoft.com") {
 		if final := c.followRedirect(ctx, s); final != "" {
 			fu, _ := url.Parse(final)
 			if fu != nil {
-				if strings.Contains(strings.ToLower(fu.Host), "github.com") {
+				if strings.Contains(strings.ToLower(fu.Hostname()), "github.com") {
 					// Normalize and validate before returning
 					if norm := common.NormalizeRepositoryURL(final); norm != "" && common.IsValidGitHubURL(norm) {
 						return norm
@@ -660,7 +660,7 @@ func (c *Client) resolveRepoURLHeuristics(ctx context.Context, raw string) strin
 					}
 				}
 				// If we landed on a docs page, attempt to find a GitHub link within the HTML
-				if strings.Contains(strings.ToLower(fu.Host), "docs.microsoft.com") || strings.Contains(strings.ToLower(fu.Host), "learn.microsoft.com") {
+				if strings.Contains(strings.ToLower(fu.Hostname()), "docs.microsoft.com") || strings.Contains(strings.ToLower(fu.Hostname()), "learn.microsoft.com") {
 					if gh := c.scrapeFirstGitHubFromHTML(ctx, final); gh != "" {
 						return gh
 					}
