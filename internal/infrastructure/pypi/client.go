@@ -176,9 +176,7 @@ func (c *Client) GetVersion(ctx context.Context, name, version string) (*Version
 		Yanked:       yanked,
 		YankedReason: raw.Info.YankedReason,
 	}
-	if info != nil { // preserve caller-side nil-skip guard: only cache non-nil results
-		c.versionCache.Set(key, info)
-	}
+	c.versionCache.Set(key, info)
 	return info, true, nil
 }
 
@@ -232,9 +230,7 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 		ProjectURLs: raw.Info.ProjectURLs,
 		HomePage:    raw.Info.HomePage,
 	}
-	if info != nil { // preserve caller-side nil-skip guard: only cache non-nil results
-		c.cache.Set(lower, info)
-	}
+	c.cache.Set(lower, info)
 	return info, true, nil
 }
 

@@ -126,8 +126,6 @@ func (c *Client) GetVersion(ctx context.Context, name, version string) (*Version
 		Version: raw.Version.Num,
 		Yanked:  raw.Version.Yanked,
 	}
-	if info != nil { // preserve caller-side nil-skip guard: only cache non-nil results
-		c.cache.Set(key, info)
-	}
+	c.cache.Set(key, info)
 	return info, true, nil
 }
