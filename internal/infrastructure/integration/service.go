@@ -578,18 +578,22 @@ func (s *IntegrationService) parseGitHubURL(githubURL string) (string, string, e
 	return owner, repo, nil
 }
 
-// generateVersionedPURL creates a versioned PURL from base PURL and version
+// generateVersionedPURL creates a versioned PURL from a base PURL and a version
+// string. It uses a structured PURL parser so that npm scoped packages of the
+// form pkg:npm/@scope/name are handled correctly — naive strings.Contains(p,
+// "@") misidentifies the "@scope" namespace separator as a version delimiter,
+// corrupting the base when the PURL is split on "@".
+//
+// If basePURL already carries a version it is replaced; otherwise the version
+// is appended. Parse failures fall back to fmt.Sprintf to preserve the
+// pre-existing observable behaviour for malformed inputs.
 func (s *IntegrationService) generateVersionedPURL(basePURL, version string) string {
-	// PURL format: pkg:type/namespace/name@version?qualifiers#subpath
-	if strings.Contains(basePURL, "@") {
-		// If version already exists, replace it
-		parts := strings.Split(basePURL, "@")
-		baseWithoutVersion := parts[0]
-		return fmt.Sprintf("%s@%s", baseWithoutVersion, version)
-	} else {
-		// Add version to base PURL
+	result, err := purl.WithVersion(basePURL, version)
+	if err != nil {
+		// Fallback: basePURL is not a valid PURL — append the version directly.
 		return fmt.Sprintf("%s@%s", basePURL, version)
 	}
+	return result
 }
 
 // extractPackageManagersFromManifests extracts package managers from GitHub dependency manifests
