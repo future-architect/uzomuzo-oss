@@ -3,8 +3,10 @@ package scan_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/future-architect/uzomuzo-oss/internal/application"
 	"github.com/future-architect/uzomuzo-oss/internal/application/scan"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	domainscan "github.com/future-architect/uzomuzo-oss/internal/domain/scan"
@@ -22,6 +24,19 @@ func (m *mockParser) Parse(_ context.Context, _ []byte) ([]depparser.ParsedDepen
 
 func (m *mockParser) FormatName() string { return "mock" }
 
+// minimalService constructs a scan.Service backed by an AnalysisService with a
+// nil AnalysisSource. This is sufficient for tests that exercise RunFromParser
+// paths that exit before s.analysisService.ProcessBatchPURLs is called (nil-parser
+// guard, parse-error path, empty-deps path).
+func minimalService(t *testing.T) *scan.Service {
+	t.Helper()
+	svc, err := scan.NewService(application.NewAnalysisService(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return svc
+}
+
 func TestNewService_NilAnalysisService(t *testing.T) {
 	_, err := scan.NewService(nil)
 	if err == nil {
@@ -30,42 +45,46 @@ func TestNewService_NilAnalysisService(t *testing.T) {
 }
 
 func TestRunFromParser_NilParser(t *testing.T) {
-	// NewService requires non-nil analysisService; since we can't easily
-	// construct a real one in a unit test, we verify the nil-parser guard
-	// indirectly: ParseFailPolicy + RunFromParser with nil parser.
-	// The nil-analysisService path is already covered by TestNewService_NilAnalysisService.
-	// This test documents the expected contract.
-	t.Skip("requires non-nil AnalysisService which needs infrastructure setup")
+	svc := minimalService(t)
+	policy, err := domainscan.ParseFailPolicy("")
+	if err != nil {
+		t.Fatalf("ParseFailPolicy: %v", err)
+	}
+	_, err = svc.RunFromParser(context.Background(), nil, nil, policy, scan.ParserConfig{})
+	if err == nil {
+		t.Fatal("expected error for nil parser, got nil")
+	}
+	if !strings.Contains(err.Error(), "parser is nil") {
+		t.Errorf("error %q does not mention 'parser is nil'", err.Error())
+	}
 }
 
 func TestRunFromParser_ParserError(t *testing.T) {
-	t.Skip("requires non-nil AnalysisService which needs infrastructure setup")
+	svc := minimalService(t)
+	policy, err := domainscan.ParseFailPolicy("")
+	if err != nil {
+		t.Fatalf("ParseFailPolicy: %v", err)
+	}
+	p := &mockParser{err: fmt.Errorf("parse error")}
+	_, err = svc.RunFromParser(context.Background(), p, nil, policy, scan.ParserConfig{})
+	if err == nil {
+		t.Fatal("expected error from parser, got nil")
+	}
 }
 
 func TestRunFromParser_EmptyDeps(t *testing.T) {
-	t.Skip("requires non-nil AnalysisService which needs infrastructure setup")
-}
-
-func TestParseFailPolicy_Integration(t *testing.T) {
-	tests := []struct {
-		name    string
-		raw     string
-		wantErr bool
-	}{
-		{name: "empty is valid", raw: "", wantErr: false},
-		{name: "single valid label", raw: "eol-confirmed", wantErr: false},
-		{name: "multiple valid labels", raw: "eol-confirmed,stalled", wantErr: false},
-		{name: "invalid label", raw: "bogus", wantErr: true},
-		{name: "mixed valid and invalid", raw: "eol-confirmed,bogus", wantErr: true},
+	svc := minimalService(t)
+	policy, err := domainscan.ParseFailPolicy("")
+	if err != nil {
+		t.Fatalf("ParseFailPolicy: %v", err)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := domainscan.ParseFailPolicy(tt.raw)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseFailPolicy(%q) error = %v, wantErr %v", tt.raw, err, tt.wantErr)
-			}
-		})
+	p := &mockParser{deps: nil}
+	result, err := svc.RunFromParser(context.Background(), p, nil, policy, scan.ParserConfig{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Entries) != 0 {
+		t.Errorf("expected empty entries, got %d", len(result.Entries))
 	}
 }
 
