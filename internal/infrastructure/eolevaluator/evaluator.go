@@ -132,11 +132,7 @@ func (e *Evaluator) applyPackagistAbandoned(ctx context.Context, a *domain.Analy
 	if err != nil {
 		return false
 	}
-	eco := strings.ToLower(parsed.GetEcosystem())
-	if eco != "composer" && eco != "packagist" {
-		return false
-	}
-	vendor, name := parseComposerFromPURL(a.Package.PURL)
+	vendor, name := parseComposerFromPURL(parsed)
 	if vendor == "" || name == "" {
 		return false
 	}
@@ -171,10 +167,10 @@ func (e *Evaluator) applyNuGetDeprecation(ctx context.Context, a *domain.Analysi
 	}
 	pp := purl.NewParser()
 	parsed, err := pp.Parse(a.Package.PURL)
-	if err != nil || strings.ToLower(parsed.GetEcosystem()) != "nuget" {
+	if err != nil {
 		return false
 	}
-	id := parseNuGetIDFromPURL(a.Package.PURL)
+	id := parseNuGetIDFromPURL(parsed)
 	if id == "" {
 		return false
 	}
@@ -293,11 +289,11 @@ func (e *Evaluator) applyMavenRelocation(ctx context.Context, a *domain.Analysis
 	if status.State != domain.EOLEndOfLife && a != nil && a.Package != nil && e.mvn != nil {
 		p := purl.NewParser()
 		parsed, err := p.Parse(a.Package.PURL)
-		if err != nil || parsed.GetEcosystem() != "maven" {
+		if err != nil {
 			return false
 		}
 		slog.Debug("eol: maven branch entered", "purl", a.Package.PURL)
-		g, art, v := parseMavenFromPURL(a.Package.PURL)
+		g, art, v := parseMavenFromPURL(parsed)
 		if g == "" || art == "" || v == "" {
 			return false
 		}

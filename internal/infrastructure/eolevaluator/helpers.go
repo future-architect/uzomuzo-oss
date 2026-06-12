@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	purl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	eoltext "github.com/future-architect/uzomuzo-oss/internal/infrastructure/eoltext"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
@@ -19,129 +20,54 @@ const (
 	nugetReasonOther        = "other"
 )
 
-func parseComposerFromPURL(purl string) (string, string) {
-	// Supports both pkg:composer/vendor/name@ver and pkg:packagist/vendor/name@ver forms
-	s := strings.TrimSpace(purl)
-	if s == "" {
+// parseComposerFromPURL extracts (vendor, name) from a parsed Composer/Packagist PURL.
+// Returns ("", "") when the parsed PURL is not a Composer/Packagist ecosystem or
+// when vendor or name is missing.
+//
+// Note: packageurl-go normalizes composer namespace and name to lowercase per the
+// PURL spec (Packagist paths are canonically lowercase).
+func parseComposerFromPURL(parsed *purl.ParsedPURL) (string, string) {
+	eco := strings.ToLower(parsed.GetEcosystem())
+	if eco != "composer" && eco != "packagist" {
 		return "", ""
 	}
-	if !strings.HasPrefix(s, "pkg:") {
-		return "", ""
-	}
-	s = strings.TrimPrefix(s, "pkg:")
-	// s now starts with type/...
-	slash := strings.IndexByte(s, '/')
-	if slash < 0 {
-		return "", ""
-	}
-	typ := s[:slash]
-	rest := s[slash+1:]
-	if !strings.EqualFold(typ, "composer") && !strings.EqualFold(typ, "packagist") {
-		return "", ""
-	}
-	// Cut off version/qualifiers/subpath: @version ?qualifiers #subpath
-	cut := len(rest)
-	if i := strings.IndexByte(rest, '@'); i >= 0 && i < cut {
-		cut = i
-	}
-	if i := strings.IndexByte(rest, '?'); i >= 0 && i < cut {
-		cut = i
-	}
-	if i := strings.IndexByte(rest, '#'); i >= 0 && i < cut {
-		cut = i
-	}
-	rest = rest[:cut]
-	parts := strings.Split(rest, "/")
-	if len(parts) < 2 {
-		return "", ""
-	}
-	vendor := parts[0]
-	name := parts[1]
+	vendor := parsed.Namespace()
+	name := parsed.Name()
 	if vendor == "" || name == "" {
 		return "", ""
 	}
 	return vendor, name
 }
 
-// parseNuGetIDFromPURL extracts the NuGet package ID from a PURL like:
-// pkg:nuget/Package.Id@1.2.3 or pkg:nuget/Package.Id
-func parseNuGetIDFromPURL(purl string) string {
-	s := strings.TrimSpace(purl)
-	if s == "" {
+// parseNuGetIDFromPURL extracts the NuGet package ID from a parsed NuGet PURL.
+// Returns "" when the PURL is not a NuGet ecosystem or the name is missing.
+//
+// When a namespace is present (non-standard for NuGet but possible in malformed PURLs),
+// the ID is reconstructed as "Namespace/Name" to preserve existing behavior.
+func parseNuGetIDFromPURL(parsed *purl.ParsedPURL) string {
+	if strings.ToLower(parsed.GetEcosystem()) != "nuget" {
 		return ""
 	}
-	if !strings.HasPrefix(s, "pkg:") {
+	ns := parsed.Namespace()
+	name := parsed.Name()
+	if name == "" {
 		return ""
 	}
-	s = strings.TrimPrefix(s, "pkg:")
-	slash := strings.IndexByte(s, '/')
-	if slash < 0 {
-		return ""
+	if ns != "" {
+		return ns + "/" + name
 	}
-	typ := s[:slash]
-	rest := s[slash+1:]
-	if !strings.EqualFold(typ, "nuget") {
-		return ""
-	}
-	cut := len(rest)
-	if i := strings.IndexByte(rest, '@'); i >= 0 && i < cut {
-		cut = i
-	}
-	if i := strings.IndexByte(rest, '?'); i >= 0 && i < cut {
-		cut = i
-	}
-	if i := strings.IndexByte(rest, '#'); i >= 0 && i < cut {
-		cut = i
-	}
-	id := strings.TrimSpace(rest[:cut])
-	return id
+	return name
 }
 
-// parseMavenFromPURL extracts (groupId, artifactId, version) from a PURL like:
-//
-//	pkg:maven/group.id/artifact-id@1.2.3
-//
-// Returns empty strings when not a Maven PURL or when components are missing.
-func parseMavenFromPURL(purl string) (string, string, string) {
-	s := strings.TrimSpace(purl)
-	if s == "" || !strings.HasPrefix(s, "pkg:") {
+// parseMavenFromPURL extracts (groupId, artifactId, version) from a parsed Maven PURL.
+// Returns empty strings when not a Maven PURL or when any component is missing.
+func parseMavenFromPURL(parsed *purl.ParsedPURL) (string, string, string) {
+	if parsed.GetEcosystem() != "maven" {
 		return "", "", ""
 	}
-	s = strings.TrimPrefix(s, "pkg:")
-	slash := strings.IndexByte(s, '/')
-	if slash < 0 {
-		return "", "", ""
-	}
-	typ := s[:slash]
-	rest := s[slash+1:]
-	if !strings.EqualFold(typ, "maven") {
-		return "", "", ""
-	}
-	// Cut at qualifiers/subpath; keep @version to parse later
-	cut := len(rest)
-	if i := strings.IndexByte(rest, '?'); i >= 0 && i < cut {
-		cut = i
-	}
-	if i := strings.IndexByte(rest, '#'); i >= 0 && i < cut {
-		cut = i
-	}
-	core := rest[:cut]
-	// Split group/artifact and optional @version
-	var coords, ver string
-	if i := strings.IndexByte(core, '@'); i >= 0 {
-		coords = core[:i]
-		ver = core[i+1:]
-	} else {
-		coords = core
-		ver = ""
-	}
-	parts := strings.Split(coords, "/")
-	if len(parts) < 2 {
-		return "", "", ""
-	}
-	g := strings.TrimSpace(parts[0])
-	a := strings.TrimSpace(parts[1])
-	v := strings.TrimSpace(ver)
+	g := parsed.Namespace()
+	a := parsed.Name()
+	v := parsed.Version()
 	if g == "" || a == "" || v == "" {
 		return "", "", ""
 	}
