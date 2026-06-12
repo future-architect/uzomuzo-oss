@@ -75,7 +75,7 @@ func WithPyPIClient(c *pypi.Client) IntegrationOption {
 // and Maven licenses remain as resolved by upstream sources. In production
 // this materially reduces Maven license coverage (~38% baseline per issue
 // #327), so library users wiring their own IntegrationService should opt in.
-// NewAnalysisServiceFromConfig and NewFetchServiceFromConfig wire it eagerly.
+// NewAnalysisServiceFromConfig wires it eagerly.
 func WithMavenClient(c *maven.Client) IntegrationOption {
 	return func(s *IntegrationService) { s.mavenClient = c }
 }
@@ -88,8 +88,8 @@ func WithMavenClient(c *maven.Client) IntegrationOption {
 // by upstream tiers. In production this materially reduces license coverage
 // (#327 issue context: CD's empirical hit rate is 67-93% on the residual
 // "broken subset" across maven/nuget/pypi). Library users wiring their own
-// IntegrationService should opt in. NewAnalysisServiceFromConfig and
-// NewFetchServiceFromConfig wire it eagerly.
+// IntegrationService should opt in. NewAnalysisServiceFromConfig wires it
+// eagerly.
 func WithClearlyDefinedClient(c *clearlydefined.Client) IntegrationOption {
 	return func(s *IntegrationService) { s.cdClient = c }
 }

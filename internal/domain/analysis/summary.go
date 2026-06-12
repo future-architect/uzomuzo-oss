@@ -20,8 +20,9 @@ const summaryEllipsis = "…"
 //   - Collapse any run of whitespace (spaces, tabs, newlines) to a single space.
 //   - Truncate to MaxSummaryLen runes; when truncated, the last rune is replaced with "…".
 //
-// The helper does NOT perform first-sentence extraction — call FirstSentence first when the
-// source is known to be multi-paragraph (e.g. Maven POM <description>). See issue #316.
+// The helper does NOT perform first-sentence extraction; callers with
+// multi-paragraph sources (e.g. Maven POM <description>) must extract the
+// relevant sentence themselves. See issue #316.
 func NormalizeSummary(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {

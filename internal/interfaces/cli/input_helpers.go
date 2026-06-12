@@ -149,7 +149,8 @@ func categorizeFileLines(filename string, opts ProcessingOptions) (purls []strin
 	return purls, githubURLs, nil
 }
 
-// ProcessingOptions govern how batch or direct processing behaves.
+// ProcessingOptions govern how scan input processing behaves for both direct
+// arguments and file-based input.
 type ProcessingOptions struct {
 	SampleSize    int
 	Filename      string
