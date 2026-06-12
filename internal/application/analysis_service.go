@@ -355,14 +355,6 @@ func (s *AnalysisService) WriteScoreCardCSV(results map[string]*domain.Analysis,
 	return exportcsv.ExportScorecard(results, filename)
 }
 
-// WriteLicenseCSV exports extended license analysis data to CSV file.
-// DDD Layer: Application (delegates to Infrastructure exporter)
-// Args: results - map of PURL->Analysis, filename - destination path
-// Returns: error if export fails
-func (s *AnalysisService) WriteLicenseCSV(results map[string]*domain.Analysis, filename string) error {
-	return exportcsv.ExportLicenses(results, filename)
-}
-
 // ================= Registry Fallback Helpers =================
 
 // isRegistryResolvedEOL returns true when the EOL evaluation produced a terminal

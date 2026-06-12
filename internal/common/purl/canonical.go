@@ -7,7 +7,7 @@ import "strings"
 // portion (if present) while preserving qualifiers (?...), subpath (#...), and
 // fragment ordering, then lowercases the entire string.
 //
-// ⚠️ DO NOT use for user-facing display - use VersionlessPreserveCase instead.
+// ⚠️ DO NOT use for user-facing display — this function lowercases the PURL.
 //
 // Use cases:
 //   - Internal map keys

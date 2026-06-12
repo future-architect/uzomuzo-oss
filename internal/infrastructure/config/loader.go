@@ -13,10 +13,8 @@ import (
 	domainConfig "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
-// ConfigService implements domain config service interface
-type ConfigService struct {
-	config *domainConfig.Config
-}
+// ConfigService loads and validates application configuration from environment variables.
+type ConfigService struct{}
 
 // NewConfigService creates a new configuration service instance
 func NewConfigService() *ConfigService {
@@ -33,15 +31,13 @@ func (s *ConfigService) Load(ctx context.Context) (*domainConfig.Config, error) 
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
 
-	// Store the configuration
-	s.config = config
 	return config, nil
 }
 
 // Validate validates the configuration
 func (s *ConfigService) Validate(ctx context.Context, config *domainConfig.Config) error {
-	// Token presence is validated later in configureAuthentication (batch.go)
-	// where a user-visible banner is shown with actionable guidance.
+	// Token presence is validated at scan startup where a user-visible banner
+	// is shown with actionable guidance.
 
 	// Lifecycle assessment tuning validation
 	if config.Lifecycle.MaintenanceScoreMin < 0 || config.Lifecycle.MaintenanceScoreMin > 10 {
@@ -176,19 +172,4 @@ func (s *ConfigService) loadFromEnvironment(config *domainConfig.Config) {
 	// Normalize zero-values to defaults
 	domainConfig.NormalizeLifecycleConfig(&config.Lifecycle)
 
-}
-
-// GetConfig returns the current configuration
-func (s *ConfigService) GetConfig() *domainConfig.Config {
-	return s.config
-}
-
-// Reload reloads configuration from sources
-func (s *ConfigService) Reload(ctx context.Context) error {
-	config, err := s.Load(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to reload configuration: %w", err)
-	}
-	s.config = config
-	return nil
 }

@@ -193,28 +193,6 @@ func TestAnalysisService_WriteScoreCardCSV(t *testing.T) {
 	}
 }
 
-func TestAnalysisService_WriteLicenseCSV(t *testing.T) {
-	tests := []struct {
-		name     string
-		results  map[string]*domain.Analysis
-		filename string
-		wantErr  bool
-	}{
-		{name: "empty_results", results: make(map[string]*domain.Analysis), filename: "licenses.csv", wantErr: false},
-		{name: "with_project_and_version", results: map[string]*domain.Analysis{"pkg:npm/example@1.0.0": {OriginalPURL: "pkg:npm/example", EffectivePURL: "pkg:npm/example@1.0.0", ProjectLicense: domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX}, RequestedVersionLicense: domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevVersionSPDX}}}, filename: "licenses.csv", wantErr: false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			service := NewAnalysisService(nil)
-			tempDir := t.TempDir()
-			fullPath := filepath.Join(tempDir, tt.filename)
-			if err := service.WriteLicenseCSV(tt.results, fullPath); (err != nil) != tt.wantErr {
-				t.Errorf("AnalysisService.WriteLicenseCSV() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 // ================= Registry Fallback Helper Tests =================
 
 func TestIsRegistryResolvedEOL(t *testing.T) {

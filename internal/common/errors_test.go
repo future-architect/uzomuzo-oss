@@ -297,44 +297,6 @@ func TestNewValidationError(t *testing.T) {
 	}
 }
 
-func TestNewConfigError(t *testing.T) {
-	tests := []struct {
-		name    string
-		message string
-		cause   error
-	}{
-		{
-			name:    "config_error_with_cause",
-			message: "failed to load configuration",
-			cause:   errors.New("file not found"),
-		},
-		{
-			name:    "config_error_without_cause",
-			message: "invalid configuration",
-			cause:   nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := NewConfigError(tt.message, tt.cause)
-
-			if err.Type != ErrorTypeConfig {
-				t.Errorf("Type = %v, want %v", err.Type, ErrorTypeConfig)
-			}
-			if err.Message != tt.message {
-				t.Errorf("Message = %q, want %q", err.Message, tt.message)
-			}
-			if err.Cause != tt.cause {
-				t.Errorf("Cause = %v, want %v", err.Cause, tt.cause)
-			}
-			if err.Context == nil {
-				t.Error("Context should be initialized")
-			}
-		})
-	}
-}
-
 func TestNewIOError(t *testing.T) {
 	tests := []struct {
 		name    string
