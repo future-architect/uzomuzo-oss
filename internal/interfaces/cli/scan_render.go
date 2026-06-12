@@ -307,7 +307,7 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	if err := writeHeader(tw); err != nil {
-		return err
+		return fmt.Errorf("write scan table header: %w", err)
 	}
 
 	for i := range displayEntries {
@@ -379,7 +379,7 @@ type enrichedJSONEntry struct {
 	Successor           string   `json:"successor,omitempty"`
 
 	RepoURL        string  `json:"repo_url,omitempty"`
-	Archived       bool    `json:"archived,omitempty"`
+	Archived       bool    `json:"archived"`
 	OverallScore   float64 `json:"overall_score,omitempty"`
 	DependentCount int     `json:"dependent_count,omitempty"`
 	StableVersion  string  `json:"stable_version,omitempty"`

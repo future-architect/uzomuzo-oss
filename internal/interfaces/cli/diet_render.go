@@ -60,10 +60,10 @@ type dietJSONEntry struct {
 	HasWildcardImport bool     `json:"has_wildcard_import"`
 
 	Lifecycle          string  `json:"lifecycle"`
-	HasVulnerabilities bool    `json:"has_vulnerabilities,omitempty"`
-	VulnerabilityCount int     `json:"vulnerability_count,omitempty"`
-	MaxCVSSScore       float64 `json:"max_cvss_score,omitempty"`
-	OverallScore       float64 `json:"overall_score,omitempty"`
+	HasVulnerabilities bool    `json:"has_vulnerabilities"`
+	VulnerabilityCount int     `json:"vulnerability_count"`
+	MaxCVSSScore       float64 `json:"max_cvss_score"`
+	OverallScore       float64 `json:"overall_score"`
 }
 
 func renderDietOutput(w io.Writer, plan *domaindiet.DietPlan, format string) error {
@@ -174,7 +174,7 @@ func renderDietTable(w io.Writer, plan *domaindiet.DietPlan) error {
 		return tp.err
 	}
 	if err := tw.Flush(); err != nil {
-		return err
+		return fmt.Errorf("flush diet plan table: %w", err)
 	}
 
 	p.printf("\n── Dependency Tree ─────────────────────────────────────────────\n")

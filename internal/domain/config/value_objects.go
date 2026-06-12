@@ -138,6 +138,8 @@ type LifecycleAssessmentConfig struct {
 	CommitActivityWindowDays   int     `yaml:"commit_activity_window_days" json:"commit_activity_window_days"`
 }
 
+// NormalizeLifecycleConfig fills zero fields of c with defaults from DefaultValues.Lifecycle.
+// It is safe to call multiple times; fields already set to non-zero values are left unchanged.
 func NormalizeLifecycleConfig(c *LifecycleAssessmentConfig) {
 	def := DefaultValues.Lifecycle
 	if c.Type == "" {

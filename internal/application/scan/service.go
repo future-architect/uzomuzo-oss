@@ -44,44 +44,10 @@ func (s *Service) AnalysisService() *application.AnalysisService {
 }
 
 // RunFromPURLs executes the scan pipeline from pre-resolved PURLs and GitHub URLs.
+// It delegates to RunFromPURLsWithActions with a zero ActionsConfig, which skips
+// Phase B (Actions discovery) and is behaviorally identical.
 func (s *Service) RunFromPURLs(ctx context.Context, purls, githubURLs []string, policy domainscan.FailPolicy) (*Result, error) {
-	// Deduplicate inputs while preserving first-seen order.
-	purls = dedup(purls)
-	githubURLs = dedup(githubURLs)
-
-	allAnalyses := make(map[string]*analysis.Analysis)
-
-	if len(purls) > 0 {
-		slog.Info("scan: evaluating PURLs", "count", len(purls))
-		res, err := s.analysisService.ProcessBatchPURLs(ctx, purls)
-		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate PURLs: %w", err)
-		}
-		for k, v := range res {
-			allAnalyses[k] = v
-		}
-	}
-
-	if len(githubURLs) > 0 {
-		slog.Info("scan: evaluating GitHub URLs", "count", len(githubURLs))
-		res, err := s.analysisService.ProcessBatchGitHubURLs(ctx, githubURLs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate GitHub URLs: %w", err)
-		}
-		for k, v := range res {
-			allAnalyses[k] = v
-		}
-	}
-
-	// Build ordered entry list: PURLs first, then GitHub URLs.
-	keys := make([]string, 0, len(purls)+len(githubURLs))
-	keys = append(keys, purls...)
-	keys = append(keys, githubURLs...)
-
-	entries := buildEntries(keys, allAnalyses)
-	hasFailure := policy.Evaluate(entries)
-
-	return &Result{Entries: entries, HasFailure: hasFailure}, nil
+	return s.RunFromPURLsWithActions(ctx, purls, githubURLs, policy, ActionsConfig{})
 }
 
 // ParserConfig configures optional behavior for RunFromParser.
