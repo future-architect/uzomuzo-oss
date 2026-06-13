@@ -1,6 +1,6 @@
 // Package github provides GitHub API client for repository state fetching.
 //
-// GitHub API Rate Limit Strategy:
+// 🚨 GitHub API Rate Limit Strategy:
 //
 // GitHub API has strict rate limits:
 //   - REST API: 5,000 requests/hour (authenticated)

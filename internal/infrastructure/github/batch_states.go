@@ -36,12 +36,12 @@ type repoResult struct {
 
 // FetchRepositoryStates fetches repository states for multiple URLs with parallel processing
 //
-// GitHub API Rate Limits:
+// ⚠️  GitHub API Rate Limits:
 //   - REST API: 5,000 requests/hour (authenticated)
 //   - GraphQL API: 5,000 points/hour (authenticated)
 //   - Details: https://docs.github.com/en/rest/using-the-rest-api/rate-limits
 //
-// Important Limitations:
+// 📝 Important Limitations:
 //   - Rate limit exceeded causes continuous errors for 1 hour
 //   - No retry for rate limit errors (immediate failure)
 //   - Reason: 1-hour wait required, retries are ineffective
@@ -212,7 +212,7 @@ func (c *Client) fetchRepositoryStatesBatch(ctx context.Context, repoURLs []stri
 
 	// Display initial progress message for batch processing (log every 100)
 	if len(uniqueURLs) > 100 {
-		fmt.Printf("GitHub GraphQL processing started: 0/%d repositories (progress every 100)\n", len(uniqueURLs))
+		fmt.Printf("🔄 GitHub GraphQL processing started: 0/%d repositories (progress every 100)\n", len(uniqueURLs))
 	}
 
 	// Wrap context so we can cancel all workers on fatal errors (e.g. auth failure)
@@ -239,7 +239,7 @@ func (c *Client) fetchRepositoryStatesBatch(ctx context.Context, repoURLs []stri
 
 	// Initial progress (only for larger batches)
 	if totalRepos > 100 {
-		fmt.Printf("GitHub GraphQL processing: 0/%d repositories processed\n", totalRepos)
+		fmt.Printf("🔄 GitHub GraphQL processing: 0/%d repositories processed\n", totalRepos)
 	}
 
 	for result := range resultChan {
@@ -275,9 +275,9 @@ func (c *Client) fetchRepositoryStatesBatch(ctx context.Context, repoURLs []stri
 		if totalRepos > 100 && (processedCount%100 == 0 || processedCount == totalRepos) {
 			costTotal, remaining, resetAt, avgCost := c.snapshotRateLimit()
 			if resetAt == "" {
-				fmt.Printf("GitHub GraphQL progress: %d/%d (total_cost=%d avg_cost=%.2f)\n", processedCount, totalRepos, costTotal, avgCost)
+				fmt.Printf("🔄 GitHub GraphQL progress: %d/%d (total_cost=%d avg_cost=%.2f)\n", processedCount, totalRepos, costTotal, avgCost)
 			} else {
-				fmt.Printf("GitHub GraphQL progress: %d/%d (total_cost=%d avg_cost=%.2f remaining=%d reset=%s)\n", processedCount, totalRepos, costTotal, avgCost, remaining, formatResetLocal(resetAt))
+				fmt.Printf("🔄 GitHub GraphQL progress: %d/%d (total_cost=%d avg_cost=%.2f remaining=%d reset=%s)\n", processedCount, totalRepos, costTotal, avgCost, remaining, formatResetLocal(resetAt))
 			}
 		}
 	}
@@ -298,9 +298,9 @@ func (c *Client) fetchRepositoryStatesBatch(ctx context.Context, repoURLs []stri
 	if totalRepos > 100 {
 		costTotal, remaining, resetAt, avgCost := c.snapshotRateLimit()
 		if resetAt == "" {
-			fmt.Printf("GitHub GraphQL processing completed: %d/%d (total_cost=%d avg_cost=%.2f)\n", totalRepos, totalRepos, costTotal, avgCost)
+			fmt.Printf("✅ GitHub GraphQL processing completed: %d/%d (total_cost=%d avg_cost=%.2f)\n", totalRepos, totalRepos, costTotal, avgCost)
 		} else {
-			fmt.Printf("GitHub GraphQL processing completed: %d/%d (total_cost=%d avg_cost=%.2f remaining=%d reset=%s)\n", totalRepos, totalRepos, costTotal, avgCost, remaining, formatResetLocal(resetAt))
+			fmt.Printf("✅ GitHub GraphQL processing completed: %d/%d (total_cost=%d avg_cost=%.2f remaining=%d reset=%s)\n", totalRepos, totalRepos, costTotal, avgCost, remaining, formatResetLocal(resetAt))
 		}
 	}
 
