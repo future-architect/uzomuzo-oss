@@ -4,6 +4,8 @@
 
 Accepted (2026-03-29)
 
+> **Update (2026-06-15, PR #447):** The CI Copilot-review auto-fix mechanism was removed — the `claude.yml`, `copilot-review-fix.yml`, `copilot-rereview-on-push.yml`, and `copilot-clean-label.yml` workflows no longer exist. Code review is now driven entirely from a local machine via the `/review-until-clean` skill. The hardening decisions below that targeted `claude.yml` / `copilot-review-fix.yml` (items 2 and 3 — deny-all token permissions and fork-PR rejection) are therefore historical and no longer apply to those (now-deleted) files. The release-signing and dependency-pinning decisions (items 1 and 4) are unaffected and remain in force.
+
 ## Context
 
 The project aimed to improve its OpenSSF Scorecard rating and overall supply chain security posture. Several areas were identified as gaps (ref #63):
