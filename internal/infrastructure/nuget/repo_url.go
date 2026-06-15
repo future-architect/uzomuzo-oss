@@ -15,6 +15,10 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/common"
 )
 
+// githubURLPattern matches a GitHub URL embedded in scraped HTML. Compiled once
+// at package scope so the per-package HTML-scrape fallback does not recompile it.
+var githubURLPattern = regexp.MustCompile(`https?://github\.com/[^"'\s<>]+`)
+
 // GetRepoURL attempts to extract a repository URL (preferably GitHub) for the given NuGet package ID.
 //
 // DDD Layer: Infrastructure
@@ -235,9 +239,8 @@ func (c *Client) scrapeFirstGitHubFromHTML(ctx context.Context, pageURL string) 
 	if err != nil && !errors.Is(err, io.EOF) {
 		return ""
 	}
-	// Simple regex to find a GitHub URL
-	re := regexp.MustCompile(`https?://github\.com/[^"'\s<>]+`)
-	if m := re.Find(body); len(m) > 0 {
+	// Find a GitHub URL using the package-scope compiled pattern.
+	if m := githubURLPattern.Find(body); len(m) > 0 {
 		// Normalize candidate URL and validate it's a GitHub repo URL
 		candidate := string(m)
 		normalized := common.NormalizeRepositoryURL(candidate)
