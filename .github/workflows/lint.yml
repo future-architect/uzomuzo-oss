@@ -11,9 +11,8 @@ name: Lint
 # Known *not* caught (still requires reviewer / Copilot eye):
 #   - `set -euo pipefail` × `var=$(... | jq ...)` exit propagation when jq
 #     parse fails on malformed JSON. Shellcheck does not model this control-
-#     flow chain. We mitigate with `|| true` guards in the workflows that need
-#     it (see comments in copilot-clean-label.yml stuck-detector for the
-#     reference pattern).
+#     flow chain. We mitigate with `|| true` (or `|| echo <default>`) guards in
+#     the workflows that parse JSON in `run:` blocks.
 #
 # Scope: only runs when workflow files or actionlint config change. Cheap, and
 # avoids noise on non-CI PRs.

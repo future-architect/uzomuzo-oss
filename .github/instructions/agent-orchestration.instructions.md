@@ -27,7 +27,7 @@ Task(subagent_type="general-purpose", prompt="...")     # generic agent + freefo
 
 | Skill | Command | When to Use |
 |-------|---------|-------------|
-| review-until-clean | `/review-until-clean` | **1-shot to merge-ready**: Phase A (5-agent local review) → Phase B (push + Copilot review iteration with cron coordination) → Phase C (reply+resolve). Final pre-merge skill |
+| review-until-clean | `/review-until-clean` | **1-shot to merge-ready (local-only)**: Phase A (5-agent local review) → Phase B (push + self-driven Copilot re-review iteration) → Phase C (reply+resolve). Final pre-merge skill |
 | deadcode | `/deadcode [fix] [path]` | Quick dead code audit or interactive cleanup |
 | batch-issues | `/batch-issues [issue#s] [--dry-run] [--max-parallel N]` | Parallel issue processing with conflict-aware agent dispatch |
 | diet-trial | `/diet-trial <org/repo> [--tool trivy\|syft] [--compare]` | Run diet on external OSS for testing, bug finding, and case study data |
@@ -63,10 +63,10 @@ A `PreToolUse` hook (`.claude/hooks/plan-mode-architect-check.sh`) detects missi
 When the user requests a code review (e.g., "レビューして", "review this"), use the `/review-until-clean` skill. The skill is a single 1-shot pipeline:
 
 1. **Phase A** — 5 review agents in parallel (`code-reviewer` + `architect` named subagents + 3 `general-purpose` agents for Code Reuse / Code Quality / PR Hygiene), iterate until 0 findings, build/vet/test/lint
-2. **Phase B** — push, then iterate Copilot review cycles (fix, push, wait for re-review) with cron coordination via `<!-- copilot-fix-local:<HEAD> -->` marker
+2. **Phase B** — push, then iterate Copilot review cycles (fix, push, re-request review, wait for re-review). The skill drives the Copilot re-review itself via the GraphQL `requestReviews` mutation after each push.
 3. **Phase C** — discover all unresolved Copilot threads (paginated GraphQL), classify FIX / ALREADY_FIXED / WONT_FIX, reply + resolve mutation (WONT_FIX is replied but left unresolved for further discussion)
 
-CI runs the same procedure (full Phase A+B+C) via `claude.yml`. See `.claude/skills/review-until-clean/SKILL.md` for the canonical procedure.
+This skill is **local-only**: run `/review-until-clean` from your own machine (your `gh` auth drives the pushes and the Copilot re-review requests). There is **no CI auto-fix** — GitHub Actions never runs Claude to fix Copilot findings. See `.claude/skills/review-until-clean/SKILL.md` for the canonical procedure.
 
 ### Reviewer Findings Are Input, Not Directives
 
@@ -77,19 +77,6 @@ Reviewer agent findings (including CRITICAL severity) are **discussion input**, 
 3. **When in doubt, ask the user** — do not auto-fix reviewer findings that contradict prior decisions.
 
 **Why:** Reviewer agents see only code, not the design intent behind it. In PR #123, a reviewer flagged "transitive advisories not shown on RequestedVersion" as CRITICAL, but this was an intentional decision (see ADR-0011). Blindly implementing the "fix" re-introduced a bug the user had already reported and resolved.
-
-### Workflow-File PRs Are Resolved Locally, Not by CI Claude
-
-PRs whose changes touch `.github/workflows/**` MUST be fixed locally by a human-driven Claude session, not by the auto-fix loop in `copilot-review-fix.yml`.
-
-**Why:** The auto-fix PAT (`GH_ACTIONS_TOKEN`) intentionally lacks the `workflow` scope. Workflow files define CI runtime permissions and secret access — granting a bot the ability to rewrite them creates a privilege-escalation surface (prompt-injection or misbehaviour can self-modify the bot's own runtime). Defense-in-depth: keep PAT scope minimal; pay the small operational cost of manual intervention on workflow PRs.
-
-**How to apply:**
-- When CI Claude reports "PAT lacks `workflow` scope" on a workflow-file thread, do NOT propose granting the scope. Pull the branch locally, apply the fix, push.
-- The marker dedup in `copilot-review-fix.yml` invalidates on push (HEAD SHA changes), so a manual push cleanly re-arms the auto-fix loop for the next round.
-- If the same Copilot finding loops indefinitely on a non-workflow PR, that's a different bug — investigate the auto-fix loop, do NOT relax PAT scope.
-
-**Symptom of the broken case (for debugging):** trigger-claude job runs `success` but logs `trigger already posted for HEAD <sha> (count=1) — skip` because a prior Claude run posted the marker but couldn't push the actual fix.
 
 ## Worktree Isolation Policy
 
