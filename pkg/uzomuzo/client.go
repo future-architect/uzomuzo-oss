@@ -5,6 +5,7 @@ package uzomuzo
 import (
 	"context"
 	"os"
+	"reflect"
 
 	"github.com/future-architect/uzomuzo-oss/internal/application"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
@@ -73,8 +74,32 @@ func NewEvaluator(githubToken string, opts ...Option) *Evaluator {
 // test double). Previously this accepted *application.AnalysisService directly; the
 // parameter type is now the EvaluationService interface so external modules can call it.
 // *application.AnalysisService still satisfies the interface.
+//
+// It panics if service is nil or a typed-nil pointer: a missing required
+// dependency is a programmer error, and failing fast at construction gives a
+// clear message instead of an opaque nil-pointer panic on the first Evaluate call.
 func NewEvaluatorFromService(service EvaluationService) *Evaluator {
+	if isNilService(service) {
+		panic("uzomuzo: NewEvaluatorFromService requires a non-nil EvaluationService")
+	}
 	return &Evaluator{service: service}
+}
+
+// isNilService reports whether service is an untyped nil interface or a
+// typed-nil pointer (e.g. var s *MyService; isNilService(s) == true). A
+// typed-nil pointer is held in a non-nil interface value, so a plain
+// `service == nil` check would miss it and the nil would surface only later.
+func isNilService(service EvaluationService) bool {
+	if service == nil {
+		return true
+	}
+	v := reflect.ValueOf(service)
+	switch v.Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // EvaluatePURLs performs full evaluation for multiple PURLs.
