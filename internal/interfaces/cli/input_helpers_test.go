@@ -1,0 +1,151 @@
+package cli
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestRandomSample(t *testing.T) {
+	tests := []struct {
+		name       string
+		items      []string
+		sampleSize int
+		expected   int
+	}{
+		{name: "sample_size_zero", items: []string{"item1", "item2", "item3"}, sampleSize: 0, expected: 3},
+		{name: "sample_size_negative", items: []string{"item1", "item2", "item3"}, sampleSize: -1, expected: 3},
+		{name: "sample_size_larger_than_items", items: []string{"item1", "item2", "item3"}, sampleSize: 10, expected: 3},
+		{name: "sample_size_equal_to_items", items: []string{"item1", "item2", "item3"}, sampleSize: 3, expected: 3},
+		{name: "sample_size_smaller_than_items", items: []string{"item1", "item2", "item3", "item4", "item5"}, sampleSize: 2, expected: 2},
+		{name: "empty_items", items: []string{}, sampleSize: 2, expected: 0},
+		{name: "nil_items", items: nil, sampleSize: 2, expected: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := randomSample(tt.items, tt.sampleSize)
+			if len(result) != tt.expected {
+				t.Errorf("randomSample() length = %d, want %d", len(result), tt.expected)
+			}
+			seen := make(map[string]bool)
+			for _, item := range result {
+				if seen[item] {
+					t.Errorf("randomSample() contains duplicate item: %s", item)
+				}
+				seen[item] = true
+			}
+			originalSet := make(map[string]bool)
+			for _, item := range tt.items {
+				originalSet[item] = true
+			}
+			for _, item := range result {
+				if !originalSet[item] {
+					t.Errorf("randomSample() contains item not in original: %s", item)
+				}
+			}
+		})
+	}
+}
+
+func TestCategorizeInputs(t *testing.T) {
+	tests := []struct {
+		name               string
+		inputs             []string
+		expectedPURLs      int
+		expectedGitHubURLs int
+	}{
+		{name: "empty_inputs", inputs: []string{}, expectedPURLs: 0, expectedGitHubURLs: 0},
+		{name: "nil_inputs", inputs: nil, expectedPURLs: 0, expectedGitHubURLs: 0},
+		{name: "only_purls", inputs: []string{
+			"pkg:npm/express@4.18.2",
+			"pkg:pypi/django@3.2.0",
+			"pkg:golang/github.com/gin-gonic/gin@1.7.0",
+		}, expectedPURLs: 3, expectedGitHubURLs: 0},
+		{name: "only_github_urls", inputs: []string{
+			"https://github.com/expressjs/express",
+			"https://github.com/django/django",
+			"https://github.com/gin-gonic/gin",
+		}, expectedPURLs: 0, expectedGitHubURLs: 3},
+		{name: "mixed_purls_and_github_urls", inputs: []string{
+			"pkg:npm/express@4.18.2",
+			"https://github.com/expressjs/express",
+			"pkg:pypi/django@3.2.0",
+			"https://github.com/django/django",
+		}, expectedPURLs: 2, expectedGitHubURLs: 2},
+		{name: "inputs_with_empty_strings", inputs: []string{
+			"pkg:npm/express@4.18.2",
+			"",
+			"https://github.com/expressjs/express",
+			"   ",
+		}, expectedPURLs: 1, expectedGitHubURLs: 1},
+		{name: "inputs_with_invalid_formats", inputs: []string{
+			"pkg:npm/express@4.18.2",
+			"invalid-format",
+			"https://github.com/expressjs/express",
+			"not-a-valid-url",
+		}, expectedPURLs: 1, expectedGitHubURLs: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			purls, githubURLs := categorizeInputs(tt.inputs)
+			if len(purls) != tt.expectedPURLs {
+				t.Errorf("categorizeInputs() PURLs count = %d, want %d", len(purls), tt.expectedPURLs)
+			}
+			if len(githubURLs) != tt.expectedGitHubURLs {
+				t.Errorf("categorizeInputs() GitHub URLs count = %d, want %d", len(githubURLs), tt.expectedGitHubURLs)
+			}
+			for _, purl := range purls {
+				if !strings.HasPrefix(purl, "pkg:") {
+					t.Errorf("categorizeInputs() invalid PURL format: %s", purl)
+				}
+			}
+			for _, url := range githubURLs {
+				if url == "" {
+					t.Errorf("categorizeInputs() empty GitHub URL")
+				}
+			}
+		})
+	}
+}
+
+func TestCategorizeFileLines_UnrecognizedThreshold(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		wantErr bool
+	}{
+		{
+			name:    "valid PURL list",
+			content: "pkg:npm/express@4.18.2\npkg:npm/lodash@4.17.21\n",
+			wantErr: false,
+		},
+		{
+			name:    "mostly unrecognized lines triggers error",
+			content: "module example.com/test\n\ngo 1.21\n\nrequire (\n\texample.com/foo v1.0.0\n)\n",
+			wantErr: true,
+		},
+		{
+			name:    "mixed with minority unrecognized is OK",
+			content: "pkg:npm/express@4.18.2\npkg:npm/lodash@4.17.21\npkg:npm/react@18.0.0\nbad-line\n",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpFile := filepath.Join(t.TempDir(), "test-input")
+			if err := os.WriteFile(tmpFile, []byte(tt.content), 0o644); err != nil {
+				t.Fatalf("failed to write temp file: %v", err)
+			}
+
+			_, _, err := categorizeFileLines(tmpFile, ProcessingOptions{})
+			if tt.wantErr && err == nil {
+				t.Error("expected error for mostly unrecognized lines, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
