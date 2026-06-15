@@ -5,8 +5,6 @@ package links
 import (
 	"fmt"
 	"strings"
-
-	commonlinks "github.com/future-architect/uzomuzo-oss/internal/common/links"
 )
 
 // BuildPackageRegistryURL returns the ecosystem's canonical registry landing page (package-wide).
@@ -62,28 +60,4 @@ func BuildVersionRegistryURL(ecosystem, name, version string) string {
 		return fmt.Sprintf("https://pkg.go.dev/%s@%s", name, version)
 	}
 	return ""
-}
-
-// BuildDepsDevURL returns the deps.dev package overview page URL (no version).
-// Delegates to common/links for ecosystem normalization (golang->go, gem->rubygems, etc.).
-func BuildDepsDevURL(ecosystem, name string) string {
-	return commonlinks.BuildDepsDevURL(ecosystem, name)
-}
-
-// BuildDepsDevVersionURL returns the deps.dev version-specific page URL.
-// Delegates to common/links for ecosystem normalization (golang->go, gem->rubygems, etc.).
-func BuildDepsDevVersionURL(ecosystem, name, version string) string {
-	return commonlinks.BuildDepsDevVersionURL(ecosystem, name, version)
-}
-
-// BuildGitHubReleaseNotesURL attempts to build a GitHub release/tag URL if repoURL is a GitHub repo.
-// version may or may not have a leading 'v'. We generate two candidate forms, preferring exact match semantics
-// left to the caller if they wish to probe. Here we simply return one heuristic.
-func BuildGitHubReleaseNotesURL(repoURL, version string) string {
-	repoURL = strings.TrimSuffix(repoURL, "/")
-	if !strings.Contains(repoURL, "github.com/") || version == "" {
-		return ""
-	}
-	// Heuristic: prefer tag with same version; consumer could later enhance by probing with/without 'v'.
-	return fmt.Sprintf("%s/releases/tag/%s", repoURL, version)
 }

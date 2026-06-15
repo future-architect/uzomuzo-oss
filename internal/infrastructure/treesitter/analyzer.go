@@ -171,27 +171,7 @@ func (a *Analyzer) AnalyzeCoupling(
 	sourceRoot string,
 	importPaths map[string][]string,
 ) (map[string]*domaindiet.CouplingAnalysis, error) {
-	// Build reverse map: importPath -> []PURL.
-	// Keys are lowercased because PURL namespace is case-insensitive (PURL spec)
-	// while Go import paths are case-sensitive. SBOM generators may produce
-	// lowercased PURLs (e.g., "github.com/masterminds/semver") for imports that
-	// use mixed case (e.g., "github.com/Masterminds/semver").
-	//
-	// Multiple PURLs can map to the same import path (e.g., two versions of gson).
-	// We store all of them so coupling data is attributed to every matching PURL
-	// rather than silently dropping all but the last-written entry.
-	importToPURL := make(map[string][]string, len(importPaths))
-	for purl, paths := range importPaths {
-		for _, p := range paths {
-			key := strings.ToLower(p)
-			importToPURL[key] = append(importToPURL[key], purl)
-		}
-	}
-	// Sort and deduplicate each PURL slice for deterministic behavior when iterating.
-	for key, purls := range importToPURL {
-		slices.Sort(purls)
-		importToPURL[key] = slices.Compact(purls)
-	}
+	importToPURL := buildImportToPURL(importPaths)
 
 	accum := make(map[string]*accumulator)
 
@@ -214,91 +194,12 @@ func (a *Analyzer) AnalyzeCoupling(
 			return ctx.Err()
 		}
 
-		info, err := d.Info()
-		if err != nil {
-			return nil // skip
-		}
-		if info.Size() > 1<<20 { // 1 MB
-			slog.Debug("skipping large file for coupling analysis", "path", path, "size", info.Size())
-			return nil
-		}
-
-		ext := filepath.Ext(path)
-		lid, ok := extToLang(ext)
-		if !ok {
-			return nil
-		}
-
-		cfg, ok := a.configs[lid]
-		if !ok {
-			return nil
-		}
-
-		src, err := os.ReadFile(path)
-		if err != nil {
-			slog.Debug("failed to read file", "path", path, "error", err)
-			return nil
-		}
-
-		if err := parser.SetLanguage(cfg.language); err != nil {
-			slog.Debug("failed to set language", "path", path, "lang", lid, "error", err)
-			return nil
-		}
-		// Parse returns *Tree directly (no error). A nil tree indicates parse
-		// failure; we skip the file. The official binding's ParseCtx is
-		// deprecated and will be removed in v0.26 — file-level context
-		// cancellation is already enforced by the ctx.Err() guard at the top
-		// of this WalkDir callback, and per-file parsing is bounded (1 MB cap
-		// above), so dropping mid-parse cancellation here is safe.
-		tree := parser.Parse(src, nil)
-		if tree == nil {
-			slog.Debug("failed to parse file", "path", path, "lang", lid)
-			return nil
-		}
-
-		root := tree.RootNode()
-		cursor := sitter.NewQueryCursor()
-
-		// Phase 1: Extract imports and build alias->PURL map for this file.
-		fileAliases := a.extractImports(cfg, root, src, importToPURL, lid, cursor)
-
 		relPath, _ := filepath.Rel(sourceRoot, path)
 		if relPath == "" {
 			relPath = path
 		}
 
-		// Record import files
-		for alias, purls := range fileAliases {
-			for _, purl := range purls {
-				acc, ok := accum[purl]
-				if !ok {
-					acc = &accumulator{
-						importFiles: make(map[string]bool),
-						symbols:     make(map[string]bool),
-					}
-					accum[purl] = acc
-				}
-				if !acc.importFiles[relPath] {
-					acc.importFiles[relPath] = true
-				}
-				if strings.HasPrefix(alias, dotImportAlias) {
-					acc.hasDotImport = true
-				}
-				if strings.HasPrefix(alias, blankImportAlias) {
-					acc.hasBlankImport = true
-				}
-				if strings.HasPrefix(alias, wildcardImportAlias) {
-					acc.hasWildcardImport = true
-				}
-			}
-		}
-
-		// Phase 2: Count call sites using alias->PURL mapping.
-		a.countCallSites(cfg, root, src, fileAliases, accum, cursor)
-
-		// Close immediately — defer in WalkDir callback accumulates across all files.
-		cursor.Close()
-		tree.Close()
+		a.analyzeFile(path, relPath, parser, importToPURL, accum)
 
 		return nil
 	})
@@ -312,7 +213,132 @@ func (a *Analyzer) AnalyzeCoupling(
 		return nil, nil
 	}
 
-	// Build result map
+	return buildCouplingResults(accum), nil
+}
+
+// buildImportToPURL builds the reverse map from import path to []PURL.
+// Keys are lowercased because PURL namespace is case-insensitive (PURL spec)
+// while Go import paths are case-sensitive. SBOM generators may produce
+// lowercased PURLs (e.g., "github.com/masterminds/semver") for imports that
+// use mixed case (e.g., "github.com/Masterminds/semver").
+//
+// Multiple PURLs can map to the same import path (e.g., two versions of gson).
+// We store all of them so coupling data is attributed to every matching PURL
+// rather than silently dropping all but the last-written entry.
+func buildImportToPURL(importPaths map[string][]string) map[string][]string {
+	importToPURL := make(map[string][]string, len(importPaths))
+	for purl, paths := range importPaths {
+		for _, p := range paths {
+			key := strings.ToLower(p)
+			importToPURL[key] = append(importToPURL[key], purl)
+		}
+	}
+	// Sort and deduplicate each PURL slice for deterministic behavior when iterating.
+	for key, purls := range importToPURL {
+		slices.Sort(purls)
+		importToPURL[key] = slices.Compact(purls)
+	}
+	return importToPURL
+}
+
+// analyzeFile parses a single source file and updates the coupling accumulators.
+// It handles size gating, language detection, parsing, import extraction, and
+// call-site counting. The cursor and tree are created and closed within this
+// function to avoid accumulation across the WalkDir loop.
+func (a *Analyzer) analyzeFile(
+	path, relPath string,
+	parser *sitter.Parser,
+	importToPURL map[string][]string,
+	accum map[string]*accumulator,
+) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return // skip
+	}
+	if info.Size() > 1<<20 { // 1 MB
+		slog.Debug("skipping large file for coupling analysis", "path", path, "size", info.Size())
+		return
+	}
+
+	ext := filepath.Ext(path)
+	lid, ok := extToLang(ext)
+	if !ok {
+		return
+	}
+
+	cfg, ok := a.configs[lid]
+	if !ok {
+		return
+	}
+
+	src, err := os.ReadFile(path)
+	if err != nil {
+		slog.Debug("failed to read file", "path", path, "error", err)
+		return
+	}
+
+	if err := parser.SetLanguage(cfg.language); err != nil {
+		slog.Debug("failed to set language", "path", path, "lang", lid, "error", err)
+		return
+	}
+	// Parse returns *Tree directly (no error). A nil tree indicates parse
+	// failure; we skip the file. The official binding's ParseCtx is
+	// deprecated and will be removed in v0.26 — file-level context
+	// cancellation is already enforced by the ctx.Err() guard at the top
+	// of the WalkDir callback, and per-file parsing is bounded (1 MB cap
+	// above), so dropping mid-parse cancellation here is safe.
+	tree := parser.Parse(src, nil)
+	if tree == nil {
+		slog.Debug("failed to parse file", "path", path, "lang", lid)
+		return
+	}
+
+	root := tree.RootNode()
+	cursor := sitter.NewQueryCursor()
+
+	// Phase 1: Extract imports and build alias->PURL map for this file.
+	fileAliases := a.extractImports(cfg, root, src, importToPURL, lid, cursor)
+
+	// Record import files
+	for alias, purls := range fileAliases {
+		for _, purl := range purls {
+			acc, ok := accum[purl]
+			if !ok {
+				acc = &accumulator{
+					importFiles: make(map[string]bool),
+					symbols:     make(map[string]bool),
+				}
+				accum[purl] = acc
+			}
+			if !acc.importFiles[relPath] {
+				acc.importFiles[relPath] = true
+			}
+			if strings.HasPrefix(alias, dotImportAlias) {
+				acc.hasDotImport = true
+			}
+			if strings.HasPrefix(alias, blankImportAlias) {
+				acc.hasBlankImport = true
+			}
+			if strings.HasPrefix(alias, wildcardImportAlias) {
+				acc.hasWildcardImport = true
+			}
+		}
+	}
+
+	// Phase 2: Count call sites using alias->PURL mapping.
+	a.countCallSites(cfg, root, src, fileAliases, accum, cursor)
+
+	// Close immediately — defer in WalkDir callback accumulates across all files.
+	cursor.Close()
+	tree.Close()
+}
+
+// buildCouplingResults converts coupling accumulators to the CouplingAnalysis result map.
+// It applies the dot/blank-import baseline rules: dot imports and blank/side-effect
+// imports (Go: import _ "pkg", JS: import 'x', CJS: require('x')) are used but
+// uncountable via standard call-site queries, so they are marked as used with a
+// baseline call-site count.
+func buildCouplingResults(accum map[string]*accumulator) map[string]*domaindiet.CouplingAnalysis {
 	results := make(map[string]*domaindiet.CouplingAnalysis, len(accum))
 	for purl, acc := range accum {
 		files := make([]string, 0, len(acc.importFiles))
@@ -323,8 +349,7 @@ func (a *Analyzer) AnalyzeCoupling(
 		callSites := acc.callSites
 		isUnused := len(acc.importFiles) == 0
 
-		// Dot imports and blank/side-effect imports (Go: import _ "pkg",
-		// JS: import 'x', CJS: require('x')) are used but uncountable via
+		// Dot imports and blank/side-effect imports are used but uncountable via
 		// standard call-site queries. Mark as used with a baseline call
 		// site count so scoring does not penalize them.
 		if acc.hasDotImport || acc.hasBlankImport {
@@ -352,8 +377,7 @@ func (a *Analyzer) AnalyzeCoupling(
 			HasWildcardImport: acc.hasWildcardImport,
 		}
 	}
-
-	return results, nil
+	return results
 }
 
 // extractImports finds import statements in the AST and returns alias->[]PURL mapping.

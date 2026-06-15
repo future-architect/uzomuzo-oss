@@ -312,7 +312,7 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 
 	// Print GitHub API rate limit summary
 	if as := svc.AnalysisService(); as != nil {
-		remaining, resetAt := as.GitHubClient().RateLimitSummary()
+		remaining, resetAt := as.GitHubRateLimitSummary()
 		if resetAt != "" {
 			resetLocal := resetAt
 			if t, err := time.Parse(time.RFC3339, resetAt); err == nil {

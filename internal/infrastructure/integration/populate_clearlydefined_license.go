@@ -4,9 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
-	"sync"
 
-	"github.com/future-architect/uzomuzo-oss/internal/common"
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/clearlydefined"
@@ -44,8 +42,7 @@ func (s *IntegrationService) enrichLicenseFromClearlyDefined(ctx context.Context
 	}
 
 	parser := purl.NewParser()
-	type cdKey struct{ ecosystem, namespace, name, version string }
-	jobs := make(map[cdKey][]*domain.Analysis)
+	jobs := make(map[licenseCoord][]*domain.Analysis)
 	for _, a := range analyses {
 		if !needsManifestLicense(a) {
 			continue
@@ -73,73 +70,20 @@ func (s *IntegrationService) enrichLicenseFromClearlyDefined(ctx context.Context
 		if name == "" || version == "" {
 			continue
 		}
-		k := cdKey{ecosystem: ecosystem, namespace: namespace, name: name, version: version}
+		k := licenseCoord{ecosystem: ecosystem, namespace: namespace, name: name, version: version}
 		jobs[k] = append(jobs[k], a)
 	}
-	if len(jobs) == 0 {
-		return
-	}
 
-	const maxClearlyDefinedConcurrency = 10
-	sem := make(chan struct{}, maxClearlyDefinedConcurrency)
-
-	var wg sync.WaitGroup
-dispatchLoop:
-	for k, targets := range jobs {
-		select {
-		case sem <- struct{}{}:
-		case <-ctx.Done():
-			break dispatchLoop
-		}
-
-		wg.Add(1)
-		go func(k cdKey, targets []*domain.Analysis) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			lics, found, err := s.cdClient.FetchLicenses(ctx, k.ecosystem, k.namespace, k.name, k.version)
-			if err != nil {
-				event := "license_clearlydefined_fetch_failed"
-				if common.IsRateLimitError(err) {
-					event = "license_clearlydefined_rate_limited"
-				}
-				slog.Warn(event,
-					"ecosystem", k.ecosystem,
-					"namespace", k.namespace,
-					"name", k.name,
-					"version", k.version,
-					"error", err)
-				return
-			}
-			if !found || len(lics) == 0 {
-				slog.Debug("license_clearlydefined_miss",
-					"ecosystem", k.ecosystem,
-					"namespace", k.namespace,
-					"name", k.name,
-					"version", k.version)
-				return
-			}
-			var wrote bool
-			for _, a := range targets {
-				if applyManifestLicenses(a, lics) {
-					wrote = true
-				}
-			}
-			if wrote {
-				slog.Debug("license_clearlydefined_hit",
-					"ecosystem", k.ecosystem,
-					"namespace", k.namespace,
-					"name", k.name,
-					"version", k.version,
-					"licenses_count", len(lics))
-			} else {
-				slog.Debug("license_clearlydefined_no_change",
-					"ecosystem", k.ecosystem,
-					"namespace", k.namespace,
-					"name", k.name,
-					"version", k.version,
-					"licenses_count", len(lics))
-			}
-		}(k, targets)
-	}
-	wg.Wait()
+	s.dispatchLicenseJobs(ctx, jobs,
+		func(ctx context.Context, k licenseCoord) ([]domain.ResolvedLicense, bool, error) {
+			return s.cdClient.FetchLicenses(ctx, k.ecosystem, k.namespace, k.name, k.version)
+		},
+		licenseLogEvents{
+			fetchFailed: "license_clearlydefined_fetch_failed",
+			rateLimited: "license_clearlydefined_rate_limited",
+			miss:        "license_clearlydefined_miss",
+			hit:         "license_clearlydefined_hit",
+			noChange:    "license_clearlydefined_no_change",
+		},
+	)
 }

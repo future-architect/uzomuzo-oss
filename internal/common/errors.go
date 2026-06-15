@@ -115,16 +115,6 @@ func NewValidationError(message string) *ScorecardError {
 	}
 }
 
-// NewConfigError creates a new configuration error
-func NewConfigError(message string, cause error) *ScorecardError {
-	return &ScorecardError{
-		Type:    ErrorTypeConfig,
-		Message: message,
-		Cause:   cause,
-		Context: make(map[string]interface{}),
-	}
-}
-
 // NewIOError creates a new I/O error
 func NewIOError(message string, cause error) *ScorecardError {
 	return &ScorecardError{
@@ -193,16 +183,6 @@ func NewResourceNotFoundError(message string) *ScorecardError {
 	}
 }
 
-// NewInsufficientPermissionsError creates a new insufficient permissions error
-func NewInsufficientPermissionsError(message string, cause error) *ScorecardError {
-	return &ScorecardError{
-		Type:    ErrorTypeInsufficientPermissions,
-		Message: message,
-		Cause:   cause,
-		Context: make(map[string]interface{}),
-	}
-}
-
 // IsRateLimitError checks if an error is a rate limit error
 func IsRateLimitError(err error) bool {
 	var scorecardErr *ScorecardError
@@ -235,15 +215,6 @@ func IsResourceNotFoundError(err error) bool {
 	var scorecardErr *ScorecardError
 	if errors.As(err, &scorecardErr) {
 		return scorecardErr.Type == ErrorTypeResourceNotFound
-	}
-	return false
-}
-
-// IsInsufficientPermissionsError checks if an error is an insufficient permissions error
-func IsInsufficientPermissionsError(err error) bool {
-	var scorecardErr *ScorecardError
-	if errors.As(err, &scorecardErr) {
-		return scorecardErr.Type == ErrorTypeInsufficientPermissions
 	}
 	return false
 }

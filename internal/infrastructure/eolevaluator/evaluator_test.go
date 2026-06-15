@@ -124,4 +124,3 @@ func TestEvaluator_Maven_Relocation(t *testing.T) {
 		t.Fatalf("expected at least one evidence for relocation")
 	}
 }
-

@@ -11,7 +11,6 @@ import (
 	neturl "net/url"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -58,7 +57,7 @@ func (c *DepsDevClient) FetchDependencies(ctx context.Context, purlStr string) (
 		slog.Debug("dependencies: skipping versionless PURL", "purl", purlStr)
 		return nil, nil
 	}
-	version = stripGoIncompatibleSuffix(parsed.GetEcosystem(), version)
+	version = stripGoIncompatibleSuffix(parsed.Ecosystem(), version)
 	if version == "" {
 		slog.Debug("dependencies: skipping empty version after suffix strip", "purl", purlStr)
 		return nil, nil
@@ -115,52 +114,35 @@ func (c *DepsDevClient) FetchDependenciesBatch(ctx context.Context, purls []stri
 	}
 
 	const maxWorkers = 10
-	results := make(map[string]*DependenciesResponse)
-	var mu sync.Mutex
-	semaphore := make(chan struct{}, maxWorkers)
-	var wg sync.WaitGroup
-
-	for _, p := range purls {
-		wg.Add(1)
-		go func(purl string) {
-			defer wg.Done()
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-
-			resp, err := c.FetchDependencies(ctx, purl)
-			if err != nil {
-				slog.Debug("Failed to fetch dependencies", "purl", purl, "error", err)
-				return
+	results := collectBounded[*DependenciesResponse](ctx, purls, maxWorkers, func(ctx context.Context, purl string) (string, *DependenciesResponse, bool) {
+		resp, err := c.FetchDependencies(ctx, purl)
+		if err != nil {
+			slog.Debug("Failed to fetch dependencies", "purl", purl, "error", err)
+			return "", nil, false
+		}
+		// Only the 404 / versionless path returns (nil, nil); genuine transport
+		// or decode errors take the err branch above. Guard on (resp == nil &&
+		// err == nil) per the "Gate Fallback Logic on Error, Not Result Nilness"
+		// rule — a zero-node response (leaf) has resp != nil and should NOT
+		// trigger the retry. Skip the fallback entirely for versionless PURLs
+		// to avoid redundant parsing in the helper.
+		if resp == nil {
+			if !commonpurl.HasVersion(purl) {
+				return "", nil, false
 			}
-			// Only the 404 / versionless path returns (nil, nil); genuine transport
-			// or decode errors take the err branch above. Guard on (resp == nil &&
-			// err == nil) per the "Gate Fallback Logic on Error, Not Result Nilness"
-			// rule — a zero-node response (leaf) has resp != nil and should NOT
-			// trigger the retry. Skip the fallback entirely for versionless PURLs
-			// to avoid redundant parsing in the helper.
+			resp = c.fetchDependenciesVersionFallback(ctx, purl)
 			if resp == nil {
-				if !commonpurl.HasVersion(purl) {
-					return
-				}
-				resp = c.fetchDependenciesVersionFallback(ctx, purl)
-				if resp == nil {
-					return
-				}
+				return "", nil, false
 			}
+		}
+		// Normalize to versionless canonical key for map consistency
+		key := commonpurl.CanonicalKey(purl)
+		if key == "" {
+			key = purl
+		}
+		return key, resp, true
+	})
 
-			// Normalize to versionless canonical key for map consistency
-			key := commonpurl.CanonicalKey(purl)
-			if key == "" {
-				key = purl
-			}
-
-			mu.Lock()
-			results[key] = resp
-			mu.Unlock()
-		}(p)
-	}
-
-	wg.Wait()
 	slog.Debug("Dependencies batch completed", "requested", len(purls), "successful", len(results))
 	return results
 }
@@ -194,7 +176,7 @@ func (c *DepsDevClient) fetchDependenciesVersionFallback(ctx context.Context, pu
 	// reach FetchDependenciesBatch, but callers that invoke the exported
 	// FetchDependenciesBatch directly (tests, library consumers) would
 	// otherwise silently re-attempt the primary through the retry loop.
-	origVersion = stripGoIncompatibleSuffix(parsed.GetEcosystem(), origVersion)
+	origVersion = stripGoIncompatibleSuffix(parsed.Ecosystem(), origVersion)
 	if origVersion == "" {
 		return nil
 	}

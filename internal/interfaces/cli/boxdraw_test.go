@@ -569,7 +569,7 @@ func TestRenderScanDetailed_BoxFormat(t *testing.T) {
 }
 
 // License section tests removed — License section is no longer rendered in detailed output.
-// License data is available via --format csv and --export-license-csv.
+// License data is available via --format csv.
 
 func TestWriteBoxReleases_VersionDeduplication(t *testing.T) {
 	t.Run("stable_equals_requested", func(t *testing.T) {

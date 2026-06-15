@@ -325,15 +325,6 @@ func (ri *ReleaseInfo) LatestAdvisories() (int, []Advisory) {
 	return len(vd.Advisories), vd.Advisories
 }
 
-// Score represents an individual scorecard score
-type Score struct {
-	Name       string
-	Value      int
-	Reason     string
-	Details    []string
-	ComputedAt time.Time
-}
-
 // CommitStats represents commit statistics
 type CommitStats struct {
 	Total       int

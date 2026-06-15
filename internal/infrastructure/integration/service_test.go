@@ -255,10 +255,48 @@ func TestIntegrationService_GenerateVersionedPURL(t *testing.T) {
 			expected: "pkg:npm/express@4.18.2",
 		},
 		{
-			name:     "empty_version",
+			// Empty version: the structured parser omits the trailing "@" because
+			// a version-less PURL is valid per the spec. The old naive
+			// fmt.Sprintf("%s@%s", base, "") produced "pkg:npm/express@" which
+			// is not a valid PURL.
+			name:     "empty_version_returns_base_without_at",
 			basePURL: "pkg:npm/express",
 			version:  "",
-			expected: "pkg:npm/express@",
+			expected: "pkg:npm/express",
+		},
+		{
+			// npm scoped packages: pkg:npm/@scope/name — the "@" in "@scope" is
+			// a namespace character, not a version delimiter. The old naive
+			// strings.Split(basePURL, "@") yielded ["pkg:npm/", "scope/name"],
+			// so baseWithoutVersion became "pkg:npm/" — a corrupted base.
+			// The structured parser correctly identifies namespace="@scope",
+			// name="name", and appends the version after the package name.
+			name:     "npm_scoped_package_no_version_corruption",
+			basePURL: "pkg:npm/@angular/core",
+			version:  "15.0.0",
+			expected: "pkg:npm/%40angular/core@15.0.0",
+		},
+		{
+			// Replace version on already-versioned scoped npm package.
+			name:     "npm_scoped_package_replace_version",
+			basePURL: "pkg:npm/@angular/core@14.0.0",
+			version:  "15.0.0",
+			expected: "pkg:npm/%40angular/core@15.0.0",
+		},
+		{
+			// Maven PURL with namespace (groupId/artifactId).
+			name:     "maven_purl_with_namespace",
+			basePURL: "pkg:maven/org.springframework/spring-core",
+			version:  "5.3.27",
+			expected: "pkg:maven/org.springframework/spring-core@5.3.27",
+		},
+		{
+			// Malformed PURL falls back to fmt.Sprintf to preserve observable
+			// behaviour on invalid inputs.
+			name:     "malformed_purl_fallback",
+			basePURL: "not-a-valid-purl",
+			version:  "1.0.0",
+			expected: "not-a-valid-purl@1.0.0",
 		},
 	}
 

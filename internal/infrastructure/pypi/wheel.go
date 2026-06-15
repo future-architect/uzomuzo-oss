@@ -22,8 +22,8 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"sync"
-	"time"
+
+	"github.com/future-architect/uzomuzo-oss/internal/common/ttlcache"
 )
 
 // maxWheelSize is the maximum wheel file size we are willing to download (5 MB).
@@ -38,49 +38,18 @@ const maxEntrySize = 1 << 20
 // maxJSONResponseSize caps the PyPI JSON API response body (10 MB).
 const maxJSONResponseSize = 10 << 20
 
-// importNameCacheEntry stores resolved import names with a timestamp for TTL.
-type importNameCacheEntry struct {
-	names []string
-	ts    time.Time
-}
-
-// importNameCache is the mutex and map for import name caching on Client.
-// These fields are added to Client via composition below.
-
-// initImportCache lazily initialises the import name cache.
-func (c *Client) initImportCache() {
-	c.importOnce.Do(func() {
-		c.importCache = make(map[string]importNameCacheEntry)
-	})
-}
-
 // getImportCached returns cached import names if the TTL has not expired.
+// A (nil, true) result is a valid negative-cache hit (package has no import names).
 func (c *Client) getImportCached(name string) ([]string, bool) {
-	if c.ttl <= 0 {
-		return nil, false
-	}
-	c.initImportCache()
-	c.importMu.RLock()
-	ent, ok := c.importCache[name]
-	c.importMu.RUnlock()
-	if !ok {
-		return nil, false
-	}
-	if time.Since(ent.ts) > c.ttl {
-		return nil, false
-	}
-	return ent.names, true
+	return c.importCache.Get(name)
 }
 
 // setImportCache stores resolved import names in the cache.
+// Stores nil slices to represent negative cache results.
 func (c *Client) setImportCache(name string, names []string) {
-	if c.ttl <= 0 {
-		return
-	}
-	c.initImportCache()
-	c.importMu.Lock()
-	c.importCache[name] = importNameCacheEntry{names: names, ts: time.Now()}
-	c.importMu.Unlock()
+	// Cache the names unconditionally (including nil, for negative caching).
+	// ttlcache.Set is a no-op when TTL <= 0, matching old behavior.
+	c.importCache.Set(name, names)
 }
 
 // wheelURL describes a single distribution file from the PyPI JSON API urls array.
@@ -429,10 +398,9 @@ func isPyIdentifierSafe(s string) bool {
 	return true
 }
 
-// importCacheFields groups the fields added to Client for import name caching.
-// They are initialised lazily via initImportCache.
+// importCacheFields groups the fields added to Client for wheel import name
+// caching.  The zero value is usable; caching is disabled until SetTTL is
+// called on the embedded cache.
 type importCacheFields struct {
-	importOnce  sync.Once
-	importMu    sync.RWMutex
-	importCache map[string]importNameCacheEntry
+	importCache ttlcache.Cache[[]string]
 }

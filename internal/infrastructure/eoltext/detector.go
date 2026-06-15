@@ -234,77 +234,185 @@ var (
 	pyPINegativeExtra = []string{"will be deprecated"}
 )
 
-// DetectLifecycle is a unified detector replacing DetectPyPI and DetectReadme.
-func DetectLifecycle(opts LifecycleDetectOpts) DetectionResult {
-	var (
-		text          string
-		projectTokens []string
-		explicitRx    *regexp.Regexp
-		successorPats []*regexp.Regexp
-		negatives     []string
-		maxBytes      int
-	)
-	switch opts.Source {
-	case SourcePyPI:
-		text = strings.TrimSpace(opts.Text)
-		projectTokens = []string{"this project", "this package", strings.ToLower(opts.PackageName)}
-		explicitRx = rxPyPIExplicit
-		successorPats = rxPyPISuccessor
-		negatives = append(append([]string{}, negativeContexts...), pyPINegativeExtra...)
-		maxBytes = 200_000
-	case SourceReadme:
-		text = strings.TrimSpace(opts.Text)
-		projectTokens = []string{"this project", "this package", "this repository", "this repo", strings.ToLower(opts.RepoName)}
-		explicitRx = rxReadmeExplicit
-		negatives = negativeContexts
-		maxBytes = 400_000
-		successorPats = []*regexp.Regexp{
-			regexp.MustCompile(`(?i)deprecated[^\.\n]*?use\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)\s+instead`),
-			regexp.MustCompile(`(?i)use\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)\s+instead`),
-			regexp.MustCompile(`(?i)replaced\s+(by|with)\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-			regexp.MustCompile(`(?i)superseded\s+by\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-			regexp.MustCompile(`(?i)moved\s+to\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-			regexp.MustCompile(`(?i)renamed\s+to\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-			regexp.MustCompile(`(?i)successor\s+is\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-			regexp.MustCompile(`(?i)consolidated\s+into\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-			regexp.MustCompile(`(?i)integrated\s+into\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-			regexp.MustCompile(`(?i)(\w[\w._@/-]*)\s+supersedes`),
-		}
-	case SourceShortMessage:
-		text = strings.TrimSpace(opts.Text)
-		// Include generic project tokens so ambiguous strong phrases like "no longer maintained"
-		// are recognized when preceded by "This project ..." in short messages (release notes, registry messages).
-		projectTokens = []string{"this project", "this package", strings.ToLower(opts.PackageName)}
-		// For short messages treat only explicit self-references ("this project/package ...") as explicit.
-		// Generic "reached end of life" is handled by contextual patterns to keep KindContextual expectations.
-		explicitRx = regexp.MustCompile(`(?i)\b(this (project|package) (is )?(now )?(deprecated|unmaintained|abandoned|dead|sunset|sunsetted|decommissioned|obsoleted)|final release)\b`)
-		negatives = negativeContexts
-		maxBytes = 20_000
-		successorPats = []*regexp.Regexp{
-			regexp.MustCompile(`(?i)replaced\s+(by|with)\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-			regexp.MustCompile(`(?i)superseded\s+by\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-			regexp.MustCompile(`(?i)moved\s+to\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-			regexp.MustCompile(`(?i)use\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)\s+instead`),
-			regexp.MustCompile(`(?i)successor\s+is\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-			regexp.MustCompile(`(?i)consolidated\s+into\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-			regexp.MustCompile(`(?i)integrated\s+into\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
-		}
-	default:
-		return DetectionResult{}
-	}
-	cfg := detectorConfig{
+// rxReadmeSuccessor holds the package-level successor patterns for the SourceReadme source.
+// Hoisted from DetectLifecycle to avoid per-call regexp compilation on a hot path.
+var rxReadmeSuccessor = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)deprecated[^\.\n]*?use\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)\s+instead`),
+	regexp.MustCompile(`(?i)use\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)\s+instead`),
+	regexp.MustCompile(`(?i)replaced\s+(by|with)\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+	regexp.MustCompile(`(?i)superseded\s+by\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+	regexp.MustCompile(`(?i)moved\s+to\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+	regexp.MustCompile(`(?i)renamed\s+to\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+	regexp.MustCompile(`(?i)successor\s+is\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+	regexp.MustCompile(`(?i)consolidated\s+into\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+	regexp.MustCompile(`(?i)integrated\s+into\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+	regexp.MustCompile(`(?i)(\w[\w._@/-]*)\s+supersedes`),
+}
+
+// rxShortMessageExplicit holds the package-level explicit pattern for the SourceShortMessage source.
+// Hoisted from DetectLifecycle to avoid per-call regexp compilation on a hot path.
+// For short messages only explicit self-references ("this project/package ...") are treated as
+// explicit; generic "reached end of life" is handled by contextual patterns to preserve
+// KindContextual expectations.
+var rxShortMessageExplicit = regexp.MustCompile(`(?i)\b(this (project|package) (is )?(now )?(deprecated|unmaintained|abandoned|dead|sunset|sunsetted|decommissioned|obsoleted)|final release)\b`)
+
+// rxShortMessageSuccessor holds the package-level successor patterns for the SourceShortMessage source.
+// Hoisted from DetectLifecycle to avoid per-call regexp compilation on a hot path.
+var rxShortMessageSuccessor = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)replaced\s+(by|with)\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+	regexp.MustCompile(`(?i)superseded\s+by\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+	regexp.MustCompile(`(?i)moved\s+to\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+	regexp.MustCompile(`(?i)use\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)\s+instead`),
+	regexp.MustCompile(`(?i)successor\s+is\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+	regexp.MustCompile(`(?i)consolidated\s+into\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+	regexp.MustCompile(`(?i)integrated\s+into\s+(@?[A-Za-z0-9][A-Za-z0-9._@/\-]*)`),
+}
+
+// sourceConfig derives the detection text and detectorConfig from the given opts.
+// It returns (text, cfg, true) on a recognized source, or ("", zero, false) for the
+// default branch (unknown source), in which case the caller returns DetectionResult{}.
+func sourceConfig(opts LifecycleDetectOpts) (string, detectorConfig, bool) {
+	commonCfg := detectorConfig{
 		strongPhrases:       strongPhrasesFromCatalog(),
-		negativeSubs:        negatives,
 		contextualPatterns:  contextualEOLPatterns,
-		explicitPattern:     explicitRx,
 		componentPattern:    rxPyPIComponent,
 		requireProjectToken: true,
-		successorPatterns:   successorPats,
-		maxBytes:            maxBytes,
 		ambiguousStrong:     []string{"no longer supported", "no longer maintained", "no further development", "no further updates", "will not be updated"},
-		projectTokens:       projectTokens,
 		sentenceNegatives:   []string{"actively maintained", "actively developed", "under active development", "still active"},
 	}
+	switch opts.Source {
+	case SourcePyPI:
+		cfg := commonCfg
+		cfg.negativeSubs = append(append([]string{}, negativeContexts...), pyPINegativeExtra...)
+		cfg.explicitPattern = rxPyPIExplicit
+		cfg.successorPatterns = rxPyPISuccessor
+		cfg.maxBytes = 200_000
+		cfg.projectTokens = []string{"this project", "this package", strings.ToLower(opts.PackageName)}
+		return strings.TrimSpace(opts.Text), cfg, true
+
+	case SourceReadme:
+		cfg := commonCfg
+		cfg.negativeSubs = negativeContexts
+		cfg.explicitPattern = rxReadmeExplicit
+		cfg.successorPatterns = rxReadmeSuccessor
+		cfg.maxBytes = 400_000
+		cfg.projectTokens = []string{"this project", "this package", "this repository", "this repo", strings.ToLower(opts.RepoName)}
+		return strings.TrimSpace(opts.Text), cfg, true
+
+	case SourceShortMessage:
+		cfg := commonCfg
+		// Include generic project tokens so ambiguous strong phrases like "no longer maintained"
+		// are recognized when preceded by "This project ..." in short messages (release notes, registry messages).
+		cfg.projectTokens = []string{"this project", "this package", strings.ToLower(opts.PackageName)}
+		cfg.negativeSubs = negativeContexts
+		cfg.explicitPattern = rxShortMessageExplicit
+		cfg.successorPatterns = rxShortMessageSuccessor
+		cfg.maxBytes = 20_000
+		return strings.TrimSpace(opts.Text), cfg, true
+
+	default:
+		return "", detectorConfig{}, false
+	}
+}
+
+// findSentenceContaining returns the sentence in full that contains phrase (case-insensitive).
+// A sentence boundary is defined as '.', '!', '?', or '\n'. Returns empty string if not found.
+func findSentenceContaining(full, phrase string) string {
+	lf := strings.ToLower(full)
+	lp := strings.ToLower(phrase)
+	pi := strings.Index(lf, lp)
+	if pi < 0 {
+		return ""
+	}
+	start := pi
+	for start > 0 {
+		c := lf[start-1]
+		if c == '.' || c == '!' || c == '?' || c == '\n' {
+			break
+		}
+		start--
+	}
+	end := pi + len(lp)
+	for end < len(lf) {
+		c := lf[end]
+		if c == '.' || c == '!' || c == '?' || c == '\n' {
+			break
+		}
+		end++
+	}
+	return strings.ToLower(strings.TrimSpace(lf[start:end]))
+}
+
+// postProcessDetection applies the post-match suppression and enrichment pipeline to res.
+// It handles sentence-level negatives, ambiguous-phrase project-token checks,
+// platform-version suppression, successor proximity extraction, self-reference suppression,
+// and date backfill. This function is called only when res.Matched is true.
+func postProcessDetection(res DetectionResult, text string, cfg detectorConfig, opts LifecycleDetectOpts) DetectionResult {
+	sentence := findSentenceContaining(text, res.Phrase)
+
+	// Sentence-level negative suppression (applies to all detection kinds including explicit).
+	// Unlike negativeSubs which abort all detection, this only suppresses when the negative
+	// phrase appears in the same sentence as the matched phrase.
+	for _, neg := range cfg.sentenceNegatives {
+		if neg != "" && strings.Contains(sentence, neg) {
+			return DetectionResult{}
+		}
+	}
+
+	// Ambiguous explicit requires project token.
+	if res.Kind == KindExplicit && containsCI(cfg.ambiguousStrong, strings.ToLower(res.Phrase)) {
+		hasToken := false
+		for _, tk := range cfg.projectTokens {
+			if tk != "" && strings.Contains(sentence, tk) {
+				hasToken = true
+				break
+			}
+		}
+		if !hasToken || sentenceLooksLikePlatformVersionNotice(sentence, cfg.projectTokens) {
+			return DetectionResult{}
+		}
+	}
+
+	// Platform version suppression for ambiguous strong/explicit.
+	if (res.Kind == KindExplicit || res.Kind == KindStrong) && containsCI(cfg.ambiguousStrong, strings.ToLower(res.Phrase)) {
+		if sentenceLooksLikePlatformVersionNotice(sentence, cfg.projectTokens) {
+			return DetectionResult{}
+		}
+	}
+
+	// Successor proximity.
+	const maxChars = 400
+	const maxNewlines = 3
+	res.Successor = extractSuccessorNearPhrase(text, res.Phrase, cfg.successorPatterns, maxChars, maxNewlines)
+
+	// Self reference suppression.
+	var selfName string
+	switch opts.Source {
+	case SourcePyPI:
+		selfName = opts.PackageName
+	case SourceReadme:
+		selfName = opts.RepoName
+	}
+	if res.Successor != "" && selfName != "" && strings.EqualFold(res.Successor, selfName) {
+		res.Successor = ""
+	}
+
+	// Post-detection date extraction: if core detection (strong/explicit) matched
+	// but no date was captured, try date-anchored contextual patterns against original text.
+	if res.Matched && res.Date == "" {
+		res.Date = extractEOLDate(text)
+	}
+
+	return res
+}
+
+// DetectLifecycle is a unified detector replacing DetectPyPI and DetectReadme.
+func DetectLifecycle(opts LifecycleDetectOpts) DetectionResult {
+	text, cfg, ok := sourceConfig(opts)
+	if !ok {
+		return DetectionResult{}
+	}
+
 	// For PyPI we optionally restrict strong/contextual scanning to the pre-changelog
 	// section to avoid false positives from historical release notes mentioning
 	// phrases like "no longer maintained" for other components or old branches.
@@ -324,84 +432,11 @@ func DetectLifecycle(opts LifecycleDetectOpts) DetectionResult {
 	} else {
 		res = detect(text, cfg)
 	}
+
 	if !res.Matched {
 		return res
 	}
-	// Sentence extraction helper
-	findSentence := func(full, phrase string) string {
-		lf := strings.ToLower(full)
-		lp := strings.ToLower(phrase)
-		pi := strings.Index(lf, lp)
-		if pi < 0 {
-			return ""
-		}
-		start := pi
-		for start > 0 {
-			c := lf[start-1]
-			if c == '.' || c == '!' || c == '?' || c == '\n' {
-				break
-			}
-			start--
-		}
-		end := pi + len(lp)
-		for end < len(lf) {
-			c := lf[end]
-			if c == '.' || c == '!' || c == '?' || c == '\n' {
-				break
-			}
-			end++
-		}
-		return strings.ToLower(strings.TrimSpace(lf[start:end]))
-	}
-	sentence := findSentence(text, res.Phrase)
-	// Sentence-level negative suppression (applies to all detection kinds including explicit).
-	// Unlike negativeSubs which abort all detection, this only suppresses when the negative
-	// phrase appears in the same sentence as the matched phrase.
-	for _, neg := range cfg.sentenceNegatives {
-		if neg != "" && strings.Contains(sentence, neg) {
-			return DetectionResult{}
-		}
-	}
-	// Ambiguous explicit requires project token
-	if res.Kind == KindExplicit && containsCI(cfg.ambiguousStrong, strings.ToLower(res.Phrase)) {
-		hasToken := false
-		for _, tk := range cfg.projectTokens {
-			if tk != "" && strings.Contains(sentence, tk) {
-				hasToken = true
-				break
-			}
-		}
-		if !hasToken || sentenceLooksLikePlatformVersionNotice(sentence, cfg.projectTokens) {
-			return DetectionResult{}
-		}
-	}
-	// Platform version suppression for ambiguous strong/explicit
-	if (res.Kind == KindExplicit || res.Kind == KindStrong) && containsCI(cfg.ambiguousStrong, strings.ToLower(res.Phrase)) {
-		if sentenceLooksLikePlatformVersionNotice(sentence, cfg.projectTokens) {
-			return DetectionResult{}
-		}
-	}
-	// Successor proximity
-	const maxChars = 400
-	const maxNewlines = 3
-	res.Successor = extractSuccessorNearPhrase(text, res.Phrase, cfg.successorPatterns, maxChars, maxNewlines)
-	// Self reference suppression
-	var selfName string
-	switch opts.Source {
-	case SourcePyPI:
-		selfName = opts.PackageName
-	case SourceReadme:
-		selfName = opts.RepoName
-	}
-	if res.Successor != "" && selfName != "" && strings.EqualFold(res.Successor, selfName) {
-		res.Successor = ""
-	}
-	// Post-detection date extraction: if core detection (strong/explicit) matched
-	// but no date was captured, try date-anchored contextual patterns against original text.
-	if res.Matched && res.Date == "" {
-		res.Date = extractEOLDate(text)
-	}
-	return res
+	return postProcessDetection(res, text, cfg, opts)
 }
 
 // extractEOLDate scans text for date-anchored contextual EOL patterns (indices 4-7)
@@ -603,7 +638,7 @@ func extractSuccessorNearPhrase(fullText, phrase string, pats []*regexp.Regexp, 
 	// Sanitize invalid UTF-8 before lowercasing so that strings.ToLower
 	// cannot expand replacement characters and change the byte length.
 	// This keeps byte indices consistent between fullText and its lowercased form.
-	fullText = strings.ToValidUTF8(fullText, "\ufffd")
+	fullText = strings.ToValidUTF8(fullText, "�")
 	lowerFull := strings.ToLower(fullText)
 	lowerPhrase := strings.ToLower(phrase)
 	idx := strings.Index(lowerFull, lowerPhrase)

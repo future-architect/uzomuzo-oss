@@ -125,7 +125,7 @@ func (p *pomProperties) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 	for {
 		tok, err := d.Token()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			return err
@@ -395,7 +395,7 @@ func (c *Client) scrapeFirstGitHubFromHTML(ctx context.Context, pageURL string) 
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	// Avoid known-dead legacy hosts that often hang (e.g., dev.java.net)
 	if u, parseErr := url.Parse(pageURL); parseErr == nil {
-		host := strings.ToLower(u.Host)
+		host := strings.ToLower(u.Hostname())
 		if strings.HasSuffix(host, "dev.java.net") || host == "java.net" {
 			slog.Debug("maven: skip legacy host for scrape", "host", host, "url", pageURL)
 			return ""

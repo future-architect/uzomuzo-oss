@@ -133,12 +133,12 @@ func TestParseExpression_Leaves(t *testing.T) {
 		{
 			name:  "leading_operator_dropped",
 			input: " OR Apache-2.0",
-			want: []leafSummary{{Raw: "Apache-2.0", Identifier: "Apache-2.0"}},
+			want:  []leafSummary{{Raw: "Apache-2.0", Identifier: "Apache-2.0"}},
 		},
 		{
 			name:  "trailing_operator_dropped",
 			input: "Apache-2.0 OR ",
-			want: []leafSummary{{Raw: "Apache-2.0", Identifier: "Apache-2.0"}},
+			want:  []leafSummary{{Raw: "Apache-2.0", Identifier: "Apache-2.0"}},
 		},
 		{
 			name:  "consecutive_operators_skipped",
@@ -532,7 +532,7 @@ func TestParseExpression_CompoundWithExceptionDistributes(t *testing.T) {
 			},
 		},
 		{
-			name:  "leaf_with_existing_exception_kept",
+			name: "leaf_with_existing_exception_kept",
 			// The first leaf already has its own exception via the inner WITH;
 			// the outer WITH is distributed only to the second (bare) leaf.
 			input: "(MIT WITH Inner-Exception OR Apache-2.0) WITH Outer-Exception",

@@ -76,6 +76,7 @@ func runDiet(t *testing.T, format string) string {
 
 	graphAnalyzer := depgraph.NewAnalyzer()
 	sourceAnalyzer := treesitter.NewAnalyzer()
+	t.Cleanup(sourceAnalyzer.Close)
 
 	opts := cli.DietOptions{
 		SBOMPath:   testSBOMPath,
@@ -254,6 +255,7 @@ func TestE2E_DietCLIFlags(t *testing.T) {
 
 	graphAnalyzer := depgraph.NewAnalyzer()
 	sourceAnalyzer := treesitter.NewAnalyzer()
+	t.Cleanup(sourceAnalyzer.Close)
 
 	app := &urfcli.Command{
 		Name: "uzomuzo-diet",
@@ -301,6 +303,7 @@ func TestE2E_DietSourceValidation(t *testing.T) {
 
 	graphAnalyzer := depgraph.NewAnalyzer()
 	sourceAnalyzer := treesitter.NewAnalyzer()
+	t.Cleanup(sourceAnalyzer.Close)
 
 	// --source pointing to a file should fail
 	opts := cli.DietOptions{
@@ -388,6 +391,7 @@ func TestE2E_DietStdinSBOM(t *testing.T) {
 
 	graphAnalyzer := depgraph.NewAnalyzer()
 	sourceAnalyzer := treesitter.NewAnalyzer()
+	t.Cleanup(sourceAnalyzer.Close)
 	runErr := cli.RunDiet(context.Background(), cfg, opts, graphAnalyzer, sourceAnalyzer, nil)
 
 	os.Stdout = oldStdout

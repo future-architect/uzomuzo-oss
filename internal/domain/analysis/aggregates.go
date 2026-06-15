@@ -2,7 +2,6 @@
 package analysis
 
 import (
-	"strings"
 	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
@@ -422,12 +421,14 @@ func (a *Analysis) DisplayPURL() string {
 	return a.EffectivePURL
 }
 
-// IsVersionResolved reports whether EffectivePURL includes a @version segment.
+// IsVersionResolved reports whether EffectivePURL includes a non-empty version component.
+// Uses the PURL parser to correctly handle namespaced PURLs (e.g. pkg:npm/@scope/name
+// where "@" appears in the namespace, not as a version delimiter).
 func (a *Analysis) IsVersionResolved() bool {
 	if a == nil || a.EffectivePURL == "" {
 		return false
 	}
-	return strings.Contains(a.EffectivePURL, "@")
+	return purl.HasVersion(a.EffectivePURL)
 }
 
 // EnsureCanonical populates CanonicalKey if empty using the OriginalPURL (preferring it) or EffectivePURL.

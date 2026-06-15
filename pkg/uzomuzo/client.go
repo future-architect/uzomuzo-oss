@@ -5,9 +5,9 @@ package uzomuzo
 import (
 	"context"
 	"os"
+	"reflect"
 
 	"github.com/future-architect/uzomuzo-oss/internal/application"
-	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
@@ -28,11 +28,25 @@ func WithEnricher(e AnalysisEnricher) Option {
 	return application.WithEnricher(e)
 }
 
+// EvaluationService is the narrow interface the Evaluator delegates to.
+// *application.AnalysisService satisfies this interface.
+// External callers can implement it to inject a test double or an alternate
+// backend via NewEvaluatorFromService.
+type EvaluationService interface {
+	// ProcessBatchPURLs evaluates multiple PURLs and returns Analysis results
+	// keyed by input PURL.
+	ProcessBatchPURLs(ctx context.Context, purls []string) (map[string]*Analysis, error)
+	// ProcessBatchGitHubURLs evaluates multiple GitHub repository URLs.
+	ProcessBatchGitHubURLs(ctx context.Context, urls []string) (map[string]*Analysis, error)
+	// WriteScoreCardCSV exports analysis results to a CSV file.
+	WriteScoreCardCSV(results map[string]*Analysis, filename string) error
+}
+
 // Evaluator performs full security & lifecycle evaluation including
 // primary-source EOL (registry heuristics / deprecation) integration.
 // DDD Layer exposure: public facade over application.AnalysisService.
 type Evaluator struct {
-	service *application.AnalysisService
+	service EvaluationService
 }
 
 // NewEvaluator creates a new Evaluator with the specified GitHub token.
@@ -55,25 +69,49 @@ func NewEvaluator(githubToken string, opts ...Option) *Evaluator {
 	return &Evaluator{service: service}
 }
 
-// NewEvaluatorFromService creates an Evaluator with a pre-configured AnalysisService.
-// This allows callers (e.g., a private catalog overlay) to inject custom enrichers
-// or other configuration into the service before passing it here.
-func NewEvaluatorFromService(service *application.AnalysisService) *Evaluator {
+// NewEvaluatorFromService creates an Evaluator backed by the provided EvaluationService.
+// This allows callers to inject a custom implementation (e.g., a catalog overlay or
+// test double). Previously this accepted *application.AnalysisService directly; the
+// parameter type is now the EvaluationService interface so external modules can call it.
+// *application.AnalysisService still satisfies the interface.
+//
+// It panics if service is nil or a typed-nil pointer: a missing required
+// dependency is a programmer error, and failing fast at construction gives a
+// clear message instead of an opaque nil-pointer panic on the first Evaluate call.
+func NewEvaluatorFromService(service EvaluationService) *Evaluator {
+	if isNilService(service) {
+		panic("uzomuzo: NewEvaluatorFromService requires a non-nil EvaluationService")
+	}
 	return &Evaluator{service: service}
+}
+
+// isNilService reports whether service is an untyped nil interface or a
+// typed-nil pointer (e.g. var s *MyService; isNilService(s) == true). A
+// typed-nil pointer is held in a non-nil interface value, so a plain
+// `service == nil` check would miss it and the nil would surface only later.
+func isNilService(service EvaluationService) bool {
+	if service == nil {
+		return true
+	}
+	v := reflect.ValueOf(service)
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // EvaluatePURLs performs full evaluation for multiple PURLs.
 // Each PURL should follow the Package URL specification (https://github.com/package-url/purl-spec).
 // Supported ecosystems: npm, pypi, maven, cargo, golang, gem, nuget.
-// EvaluatePURLs performs full evaluation (collection + lifecycle heuristics + EOL) for PURLs.
-func (e *Evaluator) EvaluatePURLs(ctx context.Context, purls []string) (map[string]*domain.Analysis, error) {
+func (e *Evaluator) EvaluatePURLs(ctx context.Context, purls []string) (map[string]*Analysis, error) {
 	return e.service.ProcessBatchPURLs(ctx, purls)
 }
 
 // EvaluateGitHubRepos performs full evaluation for multiple GitHub repositories.
 // Accepts URL forms like: https://github.com/owner/repo or github.com/owner/repo.
-// EvaluateGitHubRepos performs full evaluation for GitHub repository URLs.
-func (e *Evaluator) EvaluateGitHubRepos(ctx context.Context, urls []string) (map[string]*domain.Analysis, error) {
+func (e *Evaluator) EvaluateGitHubRepos(ctx context.Context, urls []string) (map[string]*Analysis, error) {
 	return e.service.ProcessBatchGitHubURLs(ctx, urls)
 }
 
@@ -83,8 +121,6 @@ func (e *Evaluator) EvaluateGitHubRepos(ctx context.Context, urls []string) (map
 // Example:
 //
 //	err := client.ExportCSV(results, "security_report.csv")
-//
-// ExportCSV writes results to a CSV file with comprehensive metrics.
-func (e *Evaluator) ExportCSV(results map[string]*domain.Analysis, filename string) error {
+func (e *Evaluator) ExportCSV(results map[string]*Analysis, filename string) error {
 	return e.service.WriteScoreCardCSV(results, filename)
 }

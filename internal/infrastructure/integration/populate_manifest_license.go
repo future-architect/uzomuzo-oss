@@ -4,9 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
-	"sync"
 
-	"github.com/future-architect/uzomuzo-oss/internal/common"
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/licenses"
@@ -49,8 +47,7 @@ func (s *IntegrationService) enrichLicenseFromManifest(ctx context.Context, anal
 	}
 
 	parser := purl.NewParser()
-	type mavenKey struct{ group, artifact, version string }
-	jobs := make(map[mavenKey][]*domain.Analysis)
+	jobs := make(map[licenseCoord][]*domain.Analysis)
 	for _, a := range analyses {
 		if !needsManifestLicense(a) {
 			continue
@@ -72,52 +69,19 @@ func (s *IntegrationService) enrichLicenseFromManifest(ctx context.Context, anal
 		if group == "" || artifact == "" || version == "" {
 			continue
 		}
-		k := mavenKey{group: group, artifact: artifact, version: version}
+		k := licenseCoord{ecosystem: "maven", namespace: group, name: artifact, version: version}
 		jobs[k] = append(jobs[k], a)
 	}
-	if len(jobs) == 0 {
-		return
-	}
 
-	const maxManifestFetchConcurrency = 10
-	sem := make(chan struct{}, maxManifestFetchConcurrency)
-
-	var wg sync.WaitGroup
-dispatchLoop:
-	for k, targets := range jobs {
-		select {
-		case sem <- struct{}{}:
-		case <-ctx.Done():
-			break dispatchLoop
-		}
-
-		wg.Add(1)
-		go func(k mavenKey, targets []*domain.Analysis) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			lics, found, err := s.mavenClient.FetchLicenses(ctx, k.group, k.artifact, k.version)
-			if err != nil {
-				event := "license_manifest_fetch_failed"
-				if common.IsRateLimitError(err) {
-					event = "license_manifest_rate_limited"
-				}
-				slog.Warn(event,
-					"ecosystem", "maven",
-					"group_id", k.group,
-					"artifact_id", k.artifact,
-					"version", k.version,
-					"error", err)
-				return
-			}
-			if !found || len(lics) == 0 {
-				return
-			}
-			for _, a := range targets {
-				applyManifestLicenses(a, lics)
-			}
-		}(k, targets)
-	}
-	wg.Wait()
+	s.dispatchLicenseJobs(ctx, jobs,
+		func(ctx context.Context, k licenseCoord) ([]domain.ResolvedLicense, bool, error) {
+			return s.mavenClient.FetchLicenses(ctx, k.namespace, k.name, k.version)
+		},
+		licenseLogEvents{
+			fetchFailed: "license_manifest_fetch_failed",
+			rateLimited: "license_manifest_rate_limited",
+		},
+	)
 }
 
 // needsManifestLicense returns true when an analysis is a viable target for

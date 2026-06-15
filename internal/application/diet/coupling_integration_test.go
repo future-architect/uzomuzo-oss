@@ -80,6 +80,7 @@ public class Main {
 			t.Logf("buildImportPaths(%q) = %v", tt.purl, paths)
 
 			analyzer := treesitter.NewAnalyzer()
+			t.Cleanup(analyzer.Close)
 			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
 			if err != nil {
 				t.Fatalf("AnalyzeCoupling() error: %v", err)
@@ -133,6 +134,7 @@ public class Main {
 		t.Logf("importPaths = %v", importPaths)
 
 		analyzer := treesitter.NewAnalyzer()
+		t.Cleanup(analyzer.Close)
 		result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
 		if err != nil {
 			t.Fatalf("AnalyzeCoupling() error: %v", err)

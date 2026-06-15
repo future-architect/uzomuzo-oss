@@ -16,10 +16,10 @@ func TestBuildHealthAssessorService_Assess(t *testing.T) {
 			name: "all_signals_high",
 			scores: map[string]*ScoreEntity{
 				"Dangerous-Workflow":  NewScoreEntity("Dangerous-Workflow", 10, 10, ""),
-				"Branch-Protection":  NewScoreEntity("Branch-Protection", 9, 10, ""),
-				"Code-Review":        NewScoreEntity("Code-Review", 8, 10, ""),
-				"Token-Permissions":  NewScoreEntity("Token-Permissions", 9, 10, ""),
-				"Binary-Artifacts":   NewScoreEntity("Binary-Artifacts", 10, 10, ""),
+				"Branch-Protection":   NewScoreEntity("Branch-Protection", 9, 10, ""),
+				"Code-Review":         NewScoreEntity("Code-Review", 8, 10, ""),
+				"Token-Permissions":   NewScoreEntity("Token-Permissions", 9, 10, ""),
+				"Binary-Artifacts":    NewScoreEntity("Binary-Artifacts", 10, 10, ""),
 				"Pinned-Dependencies": NewScoreEntity("Pinned-Dependencies", 7, 10, ""),
 			},
 			wantLabel: string(BuildLabelHardened),
@@ -28,10 +28,10 @@ func TestBuildHealthAssessorService_Assess(t *testing.T) {
 			name: "all_signals_low",
 			scores: map[string]*ScoreEntity{
 				"Dangerous-Workflow":  NewScoreEntity("Dangerous-Workflow", 0, 10, ""),
-				"Branch-Protection":  NewScoreEntity("Branch-Protection", 0, 10, ""),
-				"Code-Review":        NewScoreEntity("Code-Review", 0, 10, ""),
-				"Token-Permissions":  NewScoreEntity("Token-Permissions", 0, 10, ""),
-				"Binary-Artifacts":   NewScoreEntity("Binary-Artifacts", 0, 10, ""),
+				"Branch-Protection":   NewScoreEntity("Branch-Protection", 0, 10, ""),
+				"Code-Review":         NewScoreEntity("Code-Review", 0, 10, ""),
+				"Token-Permissions":   NewScoreEntity("Token-Permissions", 0, 10, ""),
+				"Binary-Artifacts":    NewScoreEntity("Binary-Artifacts", 0, 10, ""),
 				"Pinned-Dependencies": NewScoreEntity("Pinned-Dependencies", 0, 10, ""),
 			},
 			wantLabel: string(BuildLabelWeak),
@@ -100,9 +100,9 @@ func TestBuildHealthAssessorService_Assess(t *testing.T) {
 		{
 			name: "example_from_adr",
 			scores: map[string]*ScoreEntity{
-				"Branch-Protection":  NewScoreEntity("Branch-Protection", 8, 10, ""),
-				"Code-Review":        NewScoreEntity("Code-Review", 7, 10, ""),
-				"Dangerous-Workflow": NewScoreEntity("Dangerous-Workflow", 10, 10, ""),
+				"Branch-Protection":   NewScoreEntity("Branch-Protection", 8, 10, ""),
+				"Code-Review":         NewScoreEntity("Code-Review", 7, 10, ""),
+				"Dangerous-Workflow":  NewScoreEntity("Dangerous-Workflow", 10, 10, ""),
 				"Pinned-Dependencies": NewScoreEntity("Pinned-Dependencies", 3, 10, ""),
 			},
 			// score = (7.5*8 + 7.5*7 + 10*10 + 5*3) / (7.5+7.5+10+5) = 227.5/30 = 7.58

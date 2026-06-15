@@ -242,7 +242,7 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 					return
 				}
 				analysis.DependentCount = count
-			}(a, parsed.GetPackageName())
+			}(a, parsed.PackageName())
 
 		case "packagist", "composer":
 			if s.packagistClient == nil {
@@ -253,7 +253,7 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 				continue
 			}
 			vendor := parsed.Namespace()
-			name := parsed.GetPackageName()
+			name := parsed.PackageName()
 			if vendor == "" || name == "" {
 				continue
 			}

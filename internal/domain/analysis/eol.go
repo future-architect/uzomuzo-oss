@@ -130,4 +130,3 @@ type EOLEvaluatorPort interface {
 	// EvaluateBatch computes EOL status for analyses keyed by input key (PURL or repo URL).
 	EvaluateBatch(ctx context.Context, analyses map[string]*Analysis) (map[string]EOLStatus, error)
 }
-

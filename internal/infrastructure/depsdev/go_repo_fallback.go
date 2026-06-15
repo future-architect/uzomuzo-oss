@@ -6,10 +6,10 @@ import (
 	"net/url"
 	"strings"
 
-	packageurl "github.com/package-url/packageurl-go"
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/golangresolve"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
+	packageurl "github.com/package-url/packageurl-go"
 )
 
 // moduleRootResolver provides the minimal capability needed to resolve a Go import path
@@ -95,7 +95,7 @@ type GoModuleNormalization struct {
 // decide repository identity; that logic is separate so that repo identity can drop
 // major suffixes while version listing can retain them.
 func normalizeGoModuleForVersions(ctx context.Context, gp *goproxy.Client, parsed *purl.ParsedPURL) GoModuleNormalization {
-	rawPkg := strings.TrimSpace(parsed.GetPackageName())
+	rawPkg := strings.TrimSpace(parsed.PackageName())
 	if rawPkg == "" {
 		return GoModuleNormalization{Strategy: "none"}
 	}

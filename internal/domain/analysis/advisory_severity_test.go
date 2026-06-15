@@ -53,10 +53,10 @@ func TestVersionDetail_MaxCVSS3(t *testing.T) {
 func TestVersionDetail_HighSeverityAdvisoryCount(t *testing.T) {
 	vd := &VersionDetail{
 		Advisories: []Advisory{
-			{ID: "A", CVSS3Score: 3.1},  // LOW
-			{ID: "B", CVSS3Score: 7.5},  // HIGH
-			{ID: "C", CVSS3Score: 9.8},  // CRITICAL
-			{ID: "D", CVSS3Score: 0},    // unknown
+			{ID: "A", CVSS3Score: 3.1}, // LOW
+			{ID: "B", CVSS3Score: 7.5}, // HIGH
+			{ID: "C", CVSS3Score: 9.8}, // CRITICAL
+			{ID: "D", CVSS3Score: 0},   // unknown
 		},
 	}
 	if got := vd.HighSeverityAdvisoryCount(7.0); got != 2 {

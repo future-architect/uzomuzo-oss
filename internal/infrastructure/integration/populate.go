@@ -35,7 +35,7 @@ func (s *IntegrationService) populateAnalysisFromBatchResult(ctx context.Context
 			raw = u
 		}
 		if parsed, err := parser.Parse(raw); err == nil {
-			pkgName := parsed.GetPackageName()
+			pkgName := parsed.PackageName()
 			group := parsed.Namespace()
 			finalName := pkgName
 			if group != "" {

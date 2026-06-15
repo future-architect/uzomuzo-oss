@@ -136,7 +136,7 @@ func TestParser_Parse(t *testing.T) {
 	}
 }
 
-func TestParsedPURL_GetEcosystem(t *testing.T) {
+func TestParsedPURL_Ecosystem(t *testing.T) {
 	tests := []struct {
 		name              string
 		purl              string
@@ -177,15 +177,15 @@ func TestParsedPURL_GetEcosystem(t *testing.T) {
 				t.Fatalf("Failed to parse PURL: %v", err)
 			}
 
-			ecosystem := parsed.GetEcosystem()
+			ecosystem := parsed.Ecosystem()
 			if ecosystem != tt.expectedEcosystem {
-				t.Errorf("GetEcosystem() = %q, want %q", ecosystem, tt.expectedEcosystem)
+				t.Errorf("Ecosystem() = %q, want %q", ecosystem, tt.expectedEcosystem)
 			}
 		})
 	}
 }
 
-func TestParsedPURL_GetPackageName(t *testing.T) {
+func TestParsedPURL_PackageName(t *testing.T) {
 	tests := []struct {
 		name                string
 		purl                string
@@ -226,9 +226,9 @@ func TestParsedPURL_GetPackageName(t *testing.T) {
 				t.Fatalf("Failed to parse PURL: %v", err)
 			}
 
-			packageName := parsed.GetPackageName()
+			packageName := parsed.PackageName()
 			if packageName != tt.expectedPackageName {
-				t.Errorf("GetPackageName() = %q, want %q", packageName, tt.expectedPackageName)
+				t.Errorf("PackageName() = %q, want %q", packageName, tt.expectedPackageName)
 			}
 		})
 	}
@@ -451,8 +451,8 @@ func TestParser_Integration(t *testing.T) {
 					return false
 				}
 
-				return parsed.GetEcosystem() == "npm" &&
-					parsed.GetPackageName() == "node" &&
+				return parsed.Ecosystem() == "npm" &&
+					parsed.PackageName() == "node" &&
 					parsed.Namespace() == "@types" &&
 					parsed.Name() == "node" &&
 					parsed.Version() == "16.11.7" &&
@@ -469,9 +469,9 @@ func TestParser_Integration(t *testing.T) {
 					return false
 				}
 
-				// golang packages with slashes should be URL encoded in GetPackageName()
-				return parsed.GetEcosystem() == "golang" &&
-					parsed.GetPackageName() == "github.com%2Fgorilla%2Fmux" &&
+				// golang packages with slashes should be URL encoded in PackageName()
+				return parsed.Ecosystem() == "golang" &&
+					parsed.PackageName() == "github.com%2Fgorilla%2Fmux" &&
 					parsed.Name() == "github.com/gorilla/mux" &&
 					parsed.Version() == "v1.8.0"
 			},

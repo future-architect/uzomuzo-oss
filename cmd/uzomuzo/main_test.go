@@ -52,12 +52,6 @@ func TestBuildScanOptions(t *testing.T) {
 			name: "zero/default flags",
 			args: nil,
 			check: func(t *testing.T, opts cli.ScanOptions) {
-				if opts.OnlyReviewNeeded {
-					t.Error("OnlyReviewNeeded should be false")
-				}
-				if opts.OnlyEOL {
-					t.Error("OnlyEOL should be false")
-				}
 				if opts.Format != "" {
 					t.Errorf("Format should be empty, got %q", opts.Format)
 				}

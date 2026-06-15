@@ -37,8 +37,7 @@ func (s *IntegrationService) populateProjectScorecard(analysis *domain.Analysis,
 	//   2. enrichPyPISummary                    (overwrites with PyPI info.summary
 	//                                            for ecosystem == "pypi")
 	// Per-ecosystem package-level wiring (npm package.json, Maven POM
-	// <description>, Cargo.toml) is deferred from issue #316 — see
-	// domain.FirstSentence which exists for the Maven path.
+	// <description>, Cargo.toml) is deferred from issue #316.
 	analysis.Repository.Summary = domain.NormalizeSummary(project.Description)
 	analysis.OverallScore = project.Scorecard.OverallScore
 	projectKey := project.ProjectKey.ID
@@ -142,7 +141,7 @@ func (s *IntegrationService) populateReleaseInfo(analysis *domain.Analysis, batc
 			raw = u
 		}
 		if parsed, err := parser.Parse(raw); err == nil {
-			pkgName := parsed.GetPackageName()
+			pkgName := parsed.PackageName()
 			group := parsed.Namespace()
 			finalName := pkgName
 			if group != "" {

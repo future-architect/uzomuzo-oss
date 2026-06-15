@@ -4,11 +4,175 @@ import (
 	"strings"
 	"testing"
 
+	purl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	eoltext "github.com/future-architect/uzomuzo-oss/internal/infrastructure/eoltext"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/nuget"
 )
+
+// mustParseOrZero returns a zeroed ParsedPURL on parse failure so pinning tests
+// can exercise the "wrong ecosystem" and malformed paths without a nil dereference.
+// It is only used in tests.
+func mustParseOrZero(s string) *purl.ParsedPURL {
+	p := purl.NewParser()
+	parsed, err := p.Parse(s)
+	if err != nil {
+		// Return a zeroed (but non-nil) ParsedPURL so the helper functions can
+		// safely inspect Ecosystem() etc and return their zero values.
+		return &purl.ParsedPURL{}
+	}
+	return parsed
+}
+
+// TestParseComposerFromPURL_pinning pins the canonical outputs for
+// parseComposerFromPURL so future refactors stay behavior-compatible.
+//
+// Note: packageurl-go normalizes composer namespace and name to lowercase per
+// the PURL spec (Packagist paths are canonically lowercase). The pinned expected
+// values already use lowercase.
+func TestParseComposerFromPURL_pinning(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		input      string
+		wantVendor string
+		wantName   string
+	}{
+		{
+			name:       "canonical composer PURL",
+			input:      "pkg:composer/vendor/name@1.0",
+			wantVendor: "vendor",
+			wantName:   "name",
+		},
+		{
+			name:       "malformed - missing name segment",
+			input:      "pkg:composer/vendor",
+			wantVendor: "",
+			wantName:   "",
+		},
+		{
+			name:       "malformed - unparseable string",
+			input:      "",
+			wantVendor: "",
+			wantName:   "",
+		},
+		{
+			name:       "wrong ecosystem",
+			input:      "pkg:npm/vendor/name@1.0",
+			wantVendor: "",
+			wantName:   "",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			gotVendor, gotName := parseComposerFromPURL(mustParseOrZero(tt.input))
+			if gotVendor != tt.wantVendor || gotName != tt.wantName {
+				t.Errorf("parseComposerFromPURL(%q) = (%q, %q), want (%q, %q)",
+					tt.input, gotVendor, gotName, tt.wantVendor, tt.wantName)
+			}
+		})
+	}
+}
+
+// TestParseNuGetIDFromPURL_pinning pins the canonical outputs for
+// parseNuGetIDFromPURL so future refactors stay behavior-compatible.
+func TestParseNuGetIDFromPURL_pinning(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		input  string
+		wantID string
+	}{
+		{
+			name:   "canonical NuGet PURL",
+			input:  "pkg:nuget/Newtonsoft.Json@13.0.1",
+			wantID: "Newtonsoft.Json",
+		},
+		{
+			name:   "NuGet with namespace (malformed) - reconstructed",
+			input:  "pkg:nuget/Namespace/PackageId@1.0",
+			wantID: "Namespace/PackageId",
+		},
+		{
+			name:   "malformed - unparseable string",
+			input:  "",
+			wantID: "",
+		},
+		{
+			name:   "malformed - empty name",
+			input:  "pkg:nuget/",
+			wantID: "",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			gotID := parseNuGetIDFromPURL(mustParseOrZero(tt.input))
+			if gotID != tt.wantID {
+				t.Errorf("parseNuGetIDFromPURL(%q) = %q, want %q", tt.input, gotID, tt.wantID)
+			}
+		})
+	}
+}
+
+// TestParseMavenFromPURL_pinning pins the canonical outputs for
+// parseMavenFromPURL so future refactors stay behavior-compatible.
+func TestParseMavenFromPURL_pinning(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		input        string
+		wantGroup    string
+		wantArtifact string
+		wantVersion  string
+	}{
+		{
+			name:         "canonical Maven PURL",
+			input:        "pkg:maven/group/artifact@1.2.3",
+			wantGroup:    "group",
+			wantArtifact: "artifact",
+			wantVersion:  "1.2.3",
+		},
+		{
+			name:         "malformed - no version",
+			input:        "pkg:maven/group/artifact",
+			wantGroup:    "",
+			wantArtifact: "",
+			wantVersion:  "",
+		},
+		{
+			name:         "malformed - unparseable string",
+			input:        "",
+			wantGroup:    "",
+			wantArtifact: "",
+			wantVersion:  "",
+		},
+		{
+			name:         "wrong ecosystem",
+			input:        "pkg:npm/name@1.0",
+			wantGroup:    "",
+			wantArtifact: "",
+			wantVersion:  "",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			gotGroup, gotArtifact, gotVersion := parseMavenFromPURL(mustParseOrZero(tt.input))
+			if gotGroup != tt.wantGroup || gotArtifact != tt.wantArtifact || gotVersion != tt.wantVersion {
+				t.Errorf("parseMavenFromPURL(%q) = (%q, %q, %q), want (%q, %q, %q)",
+					tt.input,
+					gotGroup, gotArtifact, gotVersion,
+					tt.wantGroup, tt.wantArtifact, tt.wantVersion)
+			}
+		})
+	}
+}
 
 func Test_decideNuGetEOL(t *testing.T) {
 	t.Parallel()

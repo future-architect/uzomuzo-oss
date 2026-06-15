@@ -193,28 +193,6 @@ func TestAnalysisService_WriteScoreCardCSV(t *testing.T) {
 	}
 }
 
-func TestAnalysisService_WriteLicenseCSV(t *testing.T) {
-	tests := []struct {
-		name     string
-		results  map[string]*domain.Analysis
-		filename string
-		wantErr  bool
-	}{
-		{name: "empty_results", results: make(map[string]*domain.Analysis), filename: "licenses.csv", wantErr: false},
-		{name: "with_project_and_version", results: map[string]*domain.Analysis{"pkg:npm/example@1.0.0": {OriginalPURL: "pkg:npm/example", EffectivePURL: "pkg:npm/example@1.0.0", ProjectLicense: domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevProjectSPDX}, RequestedVersionLicense: domain.ResolvedLicense{Expression: "MIT", Raw: "MIT", Source: domain.LicenseSourceDepsDevVersionSPDX}}}, filename: "licenses.csv", wantErr: false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			service := NewAnalysisService(nil)
-			tempDir := t.TempDir()
-			fullPath := filepath.Join(tempDir, tt.filename)
-			if err := service.WriteLicenseCSV(tt.results, fullPath); (err != nil) != tt.wantErr {
-				t.Errorf("AnalysisService.WriteLicenseCSV() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 // ================= Registry Fallback Helper Tests =================
 
 func TestIsRegistryResolvedEOL(t *testing.T) {
@@ -302,10 +280,47 @@ func TestEolEvidenceSource(t *testing.T) {
 	}
 }
 
+// fakeAnalysisSource implements AnalysisSource with canned responses for testing.
+type fakeAnalysisSource struct {
+	analyses map[string]*domain.Analysis
+}
+
+func (f *fakeAnalysisSource) AnalyzeFromPURLs(_ context.Context, _ []string) (map[string]*domain.Analysis, error) {
+	return f.analyses, nil
+}
+
+func (f *fakeAnalysisSource) AnalyzeFromGitHubURLs(_ context.Context, _ []string) (map[string]*domain.Analysis, error) {
+	return f.analyses, nil
+}
+
+// fakeEOLEvaluator implements eolBatchEvaluator with a canned EOL map. It also
+// counts calls so tests can assert that exactly one evaluator instance is created
+// per ProcessBatch* invocation (per-call construction is deliberate and must not
+// be silently hoisted).
+type fakeEOLEvaluator struct {
+	eolMap map[string]domain.EOLStatus
+	calls  *int // pointer so multiple instances share the counter
+}
+
+func (f *fakeEOLEvaluator) EvaluateBatch(_ context.Context, _ map[string]*domain.Analysis) (map[string]domain.EOLStatus, error) {
+	*f.calls++
+	return f.eolMap, nil
+}
+
+// newFakeEOLFactory returns a factory function and a shared invocation counter.
+// The counter is incremented once per factory call (i.e., once per
+// ProcessBatch* invocation), asserting per-call evaluator construction.
+func newFakeEOLFactory(eolMap map[string]domain.EOLStatus) (func() eolBatchEvaluator, *int) {
+	factoryCalls := 0
+	factory := func() eolBatchEvaluator {
+		factoryCalls++
+		calls := 0
+		return &fakeEOLEvaluator{eolMap: eolMap, calls: &calls}
+	}
+	return factory, &factoryCalls
+}
+
 func TestRegistryFallback_ErrorClearedWhenEOLResolved(t *testing.T) {
-	// Simulate the registry fallback logic inline to verify the decision rules.
-	// The actual integration with EvaluateBatch requires Infrastructure clients,
-	// so we verify the conditional logic applied in ProcessBatchPURLs.
 	tests := []struct {
 		name           string
 		analysisError  error
@@ -356,10 +371,11 @@ func TestRegistryFallback_ErrorClearedWhenEOLResolved(t *testing.T) {
 			wantEOLApplied: true,
 		},
 	}
+	const purl = "pkg:pypi/numeric@24.2"
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &domain.Analysis{
-				Package: &domain.Package{PURL: "pkg:pypi/numeric@24.2", Ecosystem: "pypi"},
+				Package: &domain.Package{PURL: purl, Ecosystem: "pypi"},
 				Error:   tt.analysisError,
 			}
 			eolResult := domain.EOLStatus{
@@ -369,25 +385,39 @@ func TestRegistryFallback_ErrorClearedWhenEOLResolved(t *testing.T) {
 				},
 			}
 
-			// Apply the same logic as ProcessBatchPURLs Phase 1
-			if a.Error == nil {
-				a.EOL = eolResult
-			} else if common.IsResourceNotFoundError(a.Error) && isRegistryResolvedEOL(eolResult) {
-				a.EOL = eolResult
-				a.Error = nil
+			eolMap := map[string]domain.EOLStatus{purl: eolResult}
+			factory, factoryCalls := newFakeEOLFactory(eolMap)
+
+			svc := NewAnalysisService(&fakeAnalysisSource{analyses: map[string]*domain.Analysis{purl: a}})
+			svc.newEOLEvaluator = factory
+
+			ctx := context.Background()
+			results, err := svc.ProcessBatchPURLs(ctx, []string{purl})
+			if err != nil {
+				t.Fatalf("ProcessBatchPURLs() unexpected error: %v", err)
 			}
 
-			if tt.wantErrorNil && a.Error != nil {
-				t.Errorf("expected error to be cleared, got: %v", a.Error)
+			// Assert per-call evaluator construction (must be exactly 1).
+			if *factoryCalls != 1 {
+				t.Errorf("expected newEOLEvaluator called once, got %d", *factoryCalls)
 			}
-			if !tt.wantErrorNil && a.Error == nil {
+
+			got, ok := results[purl]
+			if !ok {
+				t.Fatalf("expected result for key %q", purl)
+			}
+
+			if tt.wantErrorNil && got.Error != nil {
+				t.Errorf("expected error to be cleared, got: %v", got.Error)
+			}
+			if !tt.wantErrorNil && got.Error == nil {
 				t.Error("expected error to be preserved, got nil")
 			}
-			if tt.wantEOLApplied && a.EOL.State != tt.eolState {
-				t.Errorf("expected EOL state %q, got %q", tt.eolState, a.EOL.State)
+			if tt.wantEOLApplied && got.EOL.State != tt.eolState {
+				t.Errorf("expected EOL state %q, got %q", tt.eolState, got.EOL.State)
 			}
-			if !tt.wantEOLApplied && a.EOL.State != domain.EOLUnknown && a.EOL.State != "" {
-				t.Errorf("expected EOL state to remain zero value, got %q", a.EOL.State)
+			if !tt.wantEOLApplied && got.EOL.State != domain.EOLUnknown && got.EOL.State != "" {
+				t.Errorf("expected EOL state to remain zero value, got %q", got.EOL.State)
 			}
 		})
 	}
@@ -437,24 +467,42 @@ func TestRepoURLFallback_ErrorClearedWhenRepoResolved(t *testing.T) {
 			wantErrorNil: true,
 		},
 	}
+	const purl = "pkg:npm/express@4.18.2"
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &domain.Analysis{
-				Package:    &domain.Package{PURL: "pkg:npm/express@4.18.2", Ecosystem: "npm"},
+				Package:    &domain.Package{PURL: purl, Ecosystem: "npm"},
 				Error:      tt.err,
 				RepoURL:    tt.repoURL,
 				Repository: tt.repository,
 			}
 
-			// Apply the same logic as the repo-URL fallback in ProcessBatchPURLs
-			if a.Error != nil && common.IsResourceNotFoundError(a.Error) && a.RepoURL != "" && a.Repository != nil {
-				a.Error = nil
+			// Empty EOL map: no registry fallback fires, only repo-URL fallback matters here.
+			factory, factoryCalls := newFakeEOLFactory(map[string]domain.EOLStatus{})
+
+			svc := NewAnalysisService(&fakeAnalysisSource{analyses: map[string]*domain.Analysis{purl: a}})
+			svc.newEOLEvaluator = factory
+
+			ctx := context.Background()
+			results, err := svc.ProcessBatchPURLs(ctx, []string{purl})
+			if err != nil {
+				t.Fatalf("ProcessBatchPURLs() unexpected error: %v", err)
 			}
 
-			if tt.wantErrorNil && a.Error != nil {
-				t.Errorf("expected error to be cleared, got: %v", a.Error)
+			// Assert per-call evaluator construction (must be exactly 1).
+			if *factoryCalls != 1 {
+				t.Errorf("expected newEOLEvaluator called once, got %d", *factoryCalls)
 			}
-			if !tt.wantErrorNil && a.Error == nil {
+
+			got, ok := results[purl]
+			if !ok {
+				t.Fatalf("expected result for key %q", purl)
+			}
+
+			if tt.wantErrorNil && got.Error != nil {
+				t.Errorf("expected error to be cleared, got: %v", got.Error)
+			}
+			if !tt.wantErrorNil && got.Error == nil {
 				t.Error("expected error to be preserved, got nil")
 			}
 		})

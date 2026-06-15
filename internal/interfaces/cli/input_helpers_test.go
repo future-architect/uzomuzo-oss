@@ -5,46 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
-
-func TestFilterPackageTypes(t *testing.T) {
-	tests := []struct {
-		name               string
-		purls              []string
-		expectedAllowed    int
-		expectedNotAllowed int
-	}{
-		{name: "empty_purls", purls: []string{}, expectedAllowed: 0, expectedNotAllowed: 0},
-		{name: "nil_purls", purls: nil, expectedAllowed: 0, expectedNotAllowed: 0},
-		{name: "mixed_supported_and_unsupported", purls: []string{
-			"pkg:npm/express@4.18.2",
-			"pkg:pypi/django@3.2.0",
-			"pkg:unsupported/package@1.0.0",
-			"pkg:golang/github.com/gin-gonic/gin@1.7.0",
-		}, expectedAllowed: 3, expectedNotAllowed: 1},
-		{name: "all_supported_packages", purls: []string{
-			"pkg:npm/express@4.18.2",
-			"pkg:pypi/django@3.2.0",
-			"pkg:golang/github.com/gin-gonic/gin@1.7.0",
-		}, expectedAllowed: 3, expectedNotAllowed: 0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			allowed, notAllowed := filterPackageTypes(tt.purls)
-			if len(allowed) != tt.expectedAllowed {
-				t.Errorf("filterPackageTypes() allowed count = %d, want %d", len(allowed), tt.expectedAllowed)
-			}
-			if len(notAllowed) != tt.expectedNotAllowed {
-				t.Errorf("filterPackageTypes() notAllowed count = %d, want %d", len(notAllowed), tt.expectedNotAllowed)
-			}
-			if len(allowed)+len(notAllowed) != len(tt.purls) {
-				t.Errorf("filterPackageTypes() total count mismatch: allowed %d + notAllowed %d != input %d", len(allowed), len(notAllowed), len(tt.purls))
-			}
-		})
-	}
-}
 
 func TestRandomSample(t *testing.T) {
 	tests := []struct {
@@ -148,49 +109,6 @@ func TestCategorizeInputs(t *testing.T) {
 	}
 }
 
-func TestDisplayFunctions_NoPanic(t *testing.T) {
-	tests := []struct {
-		name     string
-		testFunc func()
-	}{
-		{name: "display_batch_analyses_full_empty", testFunc: func() {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Error("displayBatchAnalysesFull panicked with empty input")
-				}
-			}()
-			displayBatchAnalysesFull(make(map[string]*domain.Analysis), ProcessingOptions{})
-		}},
-		{name: "display_batch_analyses_full_filter_empty", testFunc: func() {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Error("displayBatchAnalysesFull panicked with empty input + filter")
-				}
-			}()
-			displayBatchAnalysesFull(make(map[string]*domain.Analysis), ProcessingOptions{OnlyReviewNeeded: true})
-		}},
-		{name: "display_batch_errors_empty", testFunc: func() {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Error("displayBatchErrors panicked with empty input")
-				}
-			}()
-			displayBatchErrors(make(map[string]*domain.Analysis))
-		}},
-		{name: "display_batch_summary_empty", testFunc: func() {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Error("displayBatchAnalysesSummary panicked with empty input")
-				}
-			}()
-			displayBatchAnalysesSummary(make(map[string]*domain.Analysis))
-		}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) { tt.testFunc() })
-	}
-}
-
 func TestCategorizeFileLines_UnrecognizedThreshold(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -231,7 +149,3 @@ func TestCategorizeFileLines_UnrecognizedThreshold(t *testing.T) {
 		})
 	}
 }
-
-// License display tests
-// License section tests removed — License section is no longer rendered in detailed output.
-// License data is available via --format csv and --export-license-csv.

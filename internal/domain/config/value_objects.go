@@ -2,7 +2,6 @@
 package config
 
 import (
-	"context"
 	"time"
 )
 
@@ -72,19 +71,9 @@ func NewConfigWithDefaults() *Config {
 	}
 }
 
-// GetDefaultApp returns a copy of the default AppConfig
-func GetDefaultApp() AppConfig {
-	return DefaultValues.App
-}
-
-// GetDefaultGitHub returns a copy of the default GitHubConfig
+// GetDefaultGitHub returns a copy of the default GitHubConfig.
 func GetDefaultGitHub() GitHubConfig {
 	return DefaultValues.GitHub
-}
-
-// GetDefaultDepsDev returns a copy of the default DepsDevConfig
-func GetDefaultDepsDev() DepsDevConfig {
-	return DefaultValues.DepsDev
 }
 
 // GetDefaultLifecycle returns lifecycle assessment defaults
@@ -149,6 +138,8 @@ type LifecycleAssessmentConfig struct {
 	CommitActivityWindowDays   int     `yaml:"commit_activity_window_days" json:"commit_activity_window_days"`
 }
 
+// NormalizeLifecycleConfig fills zero fields of c with defaults from DefaultValues.Lifecycle.
+// It is safe to call multiple times; fields already set to non-zero values are left unchanged.
 func NormalizeLifecycleConfig(c *LifecycleAssessmentConfig) {
 	def := DefaultValues.Lifecycle
 	if c.Type == "" {
@@ -190,37 +181,4 @@ func NormalizeLifecycleConfig(c *LifecycleAssessmentConfig) {
 	if c.CommitActivityWindowDays == 0 {
 		c.CommitActivityWindowDays = def.CommitActivityWindowDays
 	}
-}
-
-// Service defines configuration management operations
-type Service interface {
-	// Load loads configuration from various sources
-	Load(ctx context.Context) (*Config, error)
-
-	// Validate validates configuration values
-	Validate(ctx context.Context, config *Config) error
-
-	// GetConfig returns current configuration
-	GetConfig() *Config
-
-	// Reload reloads configuration from sources
-	Reload(ctx context.Context) error
-}
-
-// Source defines a configuration source
-type Source interface {
-	// Name returns the source name
-	Name() string
-
-	// Load loads configuration data from this source
-	Load(ctx context.Context) (map[string]interface{}, error)
-
-	// Priority returns the priority of this source (higher = more important)
-	Priority() int
-}
-
-// Validator defines configuration validation interface
-type Validator interface {
-	// Validate validates a configuration section
-	Validate(ctx context.Context, config interface{}) error
 }

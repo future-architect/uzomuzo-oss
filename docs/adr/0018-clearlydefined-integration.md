@@ -105,9 +105,9 @@ Mirrors the existing maven package's shape (`infrastructure/maven/client.go` + `
 
 `internal/infrastructure/integration/populate_clearlydefined_license.go` houses `enrichLicenseFromClearlyDefined`, called from `purl_batch.go` immediately after `enrichLicenseFromManifest`. The method:
 
-- Skips when the injected `cdClient` is nil (CD is opt-in for library users; the application-layer factories `NewAnalysisServiceFromConfig` and `NewFetchServiceFromConfig` wire it eagerly).
+- Skips when the injected `cdClient` is nil (CD is opt-in for library users; the application-layer factory `NewAnalysisServiceFromConfig` wires it eagerly).
 - Reuses the `needsManifestLicense` predicate so eligibility stays consistent with the manifest tier.
-- Fans out fetches under its own semaphore (`maxClearlyDefinedConcurrency = 10`) so the budget does not contend with Maven Central.
+- Fans out fetches under the shared `maxLicenseFetchConcurrency = 10` semaphore (`license_dispatch.go::dispatchLicenseJobs`, the same dispatcher the manifest tier uses) so the combined license-fetch budget is bounded.
 - Deduplicates by `(ecosystem, namespace, name, version)` so identical coordinates issue exactly one CD call per batch.
 - Applies CD results via the same `applyManifestLicenses` helper as the manifest tier.
 

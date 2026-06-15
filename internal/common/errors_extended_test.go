@@ -50,13 +50,6 @@ func TestNewErrorTypes(t *testing.T) {
 		}
 	})
 
-	t.Run("NewInsufficientPermissionsError", func(t *testing.T) {
-		err := NewInsufficientPermissionsError("access denied", nil)
-
-		if err.Type != ErrorTypeInsufficientPermissions {
-			t.Errorf("Expected error type %v, got %v", ErrorTypeInsufficientPermissions, err.Type)
-		}
-	})
 }
 
 func TestErrorTypeHelpers(t *testing.T) {
@@ -89,13 +82,13 @@ func TestErrorTypeHelpers(t *testing.T) {
 
 	t.Run("IsNetworkError", func(t *testing.T) {
 		networkErr := NewNetworkError("network error", nil)
-		configErr := NewConfigError("config error", nil)
+		fetchErr := NewFetchError("fetch error", nil)
 
 		if !IsNetworkError(networkErr) {
 			t.Error("Expected IsNetworkError to return true for network error")
 		}
-		if IsNetworkError(configErr) {
-			t.Error("Expected IsNetworkError to return false for config error")
+		if IsNetworkError(fetchErr) {
+			t.Error("Expected IsNetworkError to return false for fetch error")
 		}
 	})
 
@@ -111,17 +104,6 @@ func TestErrorTypeHelpers(t *testing.T) {
 		}
 	})
 
-	t.Run("IsInsufficientPermissionsError", func(t *testing.T) {
-		permErr := NewInsufficientPermissionsError("access denied", nil)
-		validationErr := NewValidationError("validation error")
-
-		if !IsInsufficientPermissionsError(permErr) {
-			t.Error("Expected IsInsufficientPermissionsError to return true for permissions error")
-		}
-		if IsInsufficientPermissionsError(validationErr) {
-			t.Error("Expected IsInsufficientPermissionsError to return false for validation error")
-		}
-	})
 }
 
 func TestUpdatedTypeStrings(t *testing.T) {
@@ -133,7 +115,6 @@ func TestUpdatedTypeStrings(t *testing.T) {
 		{ErrorTypeTimeout, "timeout"},
 		{ErrorTypeNetworkError, "network"},
 		{ErrorTypeResourceNotFound, "not_found"},
-		{ErrorTypeInsufficientPermissions, "insufficient_permissions"},
 	}
 
 	for _, test := range tests {
