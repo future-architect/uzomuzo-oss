@@ -738,3 +738,38 @@ func TestRenderScanJSON_WithShowOnly(t *testing.T) {
 		t.Errorf("shown = %d, want 1", out.Shown)
 	}
 }
+
+// TestRenderScanJSON_AlwaysSerializesZeroValueFields pins the intentional
+// removal of `omitempty` from `archived` and `overall_score`: these keys must
+// appear in every entry even when the value is the zero value (false / 0), so
+// downstream consumers can distinguish "absent" from "false/zero". Asserts on
+// raw JSON bytes because struct unmarshalling cannot observe key presence.
+func TestRenderScanJSON_AlwaysSerializesZeroValueFields(t *testing.T) {
+	var buf bytes.Buffer
+	entries := makeTestEntries() // entry[0] (express, OK) has Archived=false, OverallScore=0
+	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
+		t.Fatalf("renderScanJSON() error = %v", err)
+	}
+
+	var probe struct {
+		Packages []map[string]json.RawMessage `json:"packages"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &probe); err != nil {
+		t.Fatalf("JSON unmarshal error = %v", err)
+	}
+	if len(probe.Packages) == 0 {
+		t.Fatal("got 0 packages, want at least 1")
+	}
+
+	first := probe.Packages[0]
+	for key, want := range map[string]string{"archived": "false", "overall_score": "0"} {
+		raw, ok := first[key]
+		if !ok {
+			t.Errorf("entry[0] missing key %q (omitempty must not be set)", key)
+			continue
+		}
+		if got := string(raw); got != want {
+			t.Errorf("entry[0].%s = %s, want %s", key, got, want)
+		}
+	}
+}
