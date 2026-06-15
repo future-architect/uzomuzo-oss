@@ -32,7 +32,8 @@ func WithEnricher(e AnalysisEnricher) Option {
 // External callers can implement it to inject a test double or an alternate
 // backend via NewEvaluatorFromService.
 type EvaluationService interface {
-	// ProcessBatchPURLs evaluates multiple PURLs and returns domain Analysis results.
+	// ProcessBatchPURLs evaluates multiple PURLs and returns Analysis results
+	// keyed by input PURL.
 	ProcessBatchPURLs(ctx context.Context, purls []string) (map[string]*Analysis, error)
 	// ProcessBatchGitHubURLs evaluates multiple GitHub repository URLs.
 	ProcessBatchGitHubURLs(ctx context.Context, urls []string) (map[string]*Analysis, error)
