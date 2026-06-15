@@ -24,7 +24,7 @@ type entry[V any] struct {
 }
 
 // Cache is a generic TTL cache. The zero value is usable with caching disabled.
-// Set SetTTL to a positive duration to enable caching.
+// Call SetTTL with a positive duration to enable caching.
 //
 // Cache is safe for concurrent use by multiple goroutines.
 type Cache[V any] struct {
