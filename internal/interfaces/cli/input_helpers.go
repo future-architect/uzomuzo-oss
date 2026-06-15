@@ -23,8 +23,9 @@ func truncateDescription(s string) string {
 	// single line normalization
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.Join(strings.Fields(s), " ")
-	if len(s) > maxDescriptionLen {
-		return s[:maxDescriptionLen-1] + "…"
+	// Truncate by rune, not byte, so multi-byte UTF-8 characters are not split.
+	if r := []rune(s); len(r) > maxDescriptionLen {
+		return string(r[:maxDescriptionLen-1]) + "…"
 	}
 	return s
 }
@@ -50,7 +51,7 @@ func randomSample(items []string, sampleSize int) []string {
 // validateLineRange validates line range options and returns an error if invalid.
 func validateLineRange(opts *ProcessingOptions) error {
 	if opts.LineStart < 0 || opts.LineEnd < 0 {
-		return fmt.Errorf("--line-range values must be positive")
+		return fmt.Errorf("--line-range values must be non-negative (0 disables range filtering)")
 	}
 	if opts.LineStart > 0 && opts.LineEnd > 0 && opts.LineEnd < opts.LineStart {
 		return fmt.Errorf("--line-range end must be >= start (start=%d, end=%d)", opts.LineStart, opts.LineEnd)
