@@ -12,19 +12,11 @@ Branches without a PR skip Phase B/C (Phase A → push only). Draft PRs also ski
 
 This command exists to catch issues **before** Copilot sees them, then handle the Copilot pass that's still required, all in one shot. Calibrate Phase A to Copilot's threshold: anything with a single right answer (doc-code drift, redundant calls, missing error checks, naming that contradicts the value) gets fixed locally even if severity is MEDIUM/LOW — otherwise Copilot will catch it and force a follow-up round-trip in Phase B.
 
-## Relationship with the CI cron path (two-tier architecture)
+## Local-only execution
 
-| Path | Trigger | Latency | Cost |
-|---|---|---|---|
-| **(this skill) local** | `/review-until-clean` invocation | immediate | no claude code action billing |
-| **CI cron fallback** | `copilot-clean-label.yml` schedule (`*/30`) | 30–60 min | claude code action billed |
+This skill runs **only from your own machine** — there is no CI auto-fix path. GitHub Actions never runs Claude to fix Copilot findings. Phase B drives the Copilot re-review itself (the skill calls the GraphQL `requestReviews` mutation after each push; see Step 8.3), using your `gh` auth.
 
-The two coordinate via the **`<!-- copilot-fix-local:<HEAD_SHA> -->` marker**:
-
-- The skill posts the marker at Phase B Step 7 → cron sees it and skips its `@claude` post.
-- Each push advances HEAD → the old marker auto-expires; the skill posts a fresh one for the new HEAD.
-- If the skill stops heartbeating (older than `LOCAL_MARKER_MAX_AGE_MIN`, default 30 min), cron treats the marker as stale and resumes.
-- On skill abort/crash, the next push immediately hands off to cron; without a push, cron resumes within ~30–60 min (one 30-min TTL window plus up to one 30-min cron tick) — no permanent block. The recovery window matches the "CI cron fallback" row above and the same 30–60 min figure quoted elsewhere in this prompt; the worst case is "marker posted just after a tick" (still fresh on the next tick, picked up only by the tick after, ≈60 min later).
+Phase B posts a single **`<!-- copilot-fix-local:<HEAD_SHA> -->` marker comment** that acts purely as a **local concurrency lock**: it prevents a second `/review-until-clean` invocation from running on the same PR/HEAD in parallel (which would race on pushes). The lock is keyed on the marker's `updated_at`; the skill heartbeats it (PATCH) on each round entry and after long steps, and deletes it on exit. If a session crashes without cleanup, the lock auto-expires after `LOCAL_MARKER_MAX_AGE_MIN` (default 30 min), after which a fresh invocation may start.
 
 ## Phase A: Local agent review iteration
 
@@ -56,7 +48,7 @@ fi
 
 ### Step 1: Get the diff
 
-CI checks the PR head out at the SHA in detached HEAD, so `git branch --show-current` returns empty there and the local `gh pr list --head ""` fallback would silently miss the PR. Prefer `$PR_NUMBER` (set by `claude.yml`) when available; only fall back to branch lookup for genuine local invocations. The terminal `git diff main...HEAD` fallback is correct only for PRs targeting `main`; it does not handle non-`main` base branches or aliased local checkouts, so reaching it should be rare (no PR at all) and the diff is approximate.
+Resolve the PR from the current branch via `gh pr list --head`. (`$PR_NUMBER` is honored if exported, but normal local invocations rely on the branch lookup.) The terminal `git diff main...HEAD` fallback is correct only for PRs targeting `main`; it does not handle non-`main` base branches or aliased local checkouts, so reaching it should be rare (no PR at all) and the diff is approximate.
 
 ```bash
 if [ -n "${PR_NUMBER:-}" ]; then
@@ -397,14 +389,12 @@ fi
 ```bash
 # PR detection FIRST — branches without a PR exit cleanly without
 # triggering the kotakanbe identity gate (which is only relevant for
-# the marker / heartbeat coordination in Phase B/C; non-kotakanbe
+# the requestReviews / marker-lock work in Phase B/C; non-kotakanbe
 # identities can still legitimately run Phase A on no-PR branches).
 #
-# CI vs local: claude.yml checks the PR head SHA out in detached HEAD
-# (no branch tracking, no upstream). In that mode `gh pr view` (no
-# arg) cannot resolve the PR. CI exposes `$PR_NUMBER` and
-# `$PR_HEAD_REF` env vars to bridge this; local sessions auto-detect
-# from the current branch.
+# `$PR_NUMBER` / `$PR_HEAD_REF` are honored if exported (e.g. a
+# detached-HEAD checkout where `gh pr view` with no arg cannot resolve
+# the PR); normal local sessions auto-detect from the current branch.
 if [ -n "${PR_NUMBER:-}" ]; then
     PR=$PR_NUMBER
     err_file=$(mktemp)
@@ -413,16 +403,15 @@ if [ -n "${PR_NUMBER:-}" ]; then
     else
         err_msg=$(cat "$err_file")
         rm -f "$err_file"
-        # CI mode (`PR_NUMBER` set): a `gh pr view` failure is NOT
-        # equivalent to "PR doesn't exist" — claude.yml only fires for
-        # actual PR contexts. PR_HEAD_REF gives us a push target, but
-        # `.isDraft` is read from PR_JSON later (Step 7 draft gate).
-        # Silently letting the flow continue with PR_JSON="" would skip
-        # the draft gate (jq '.isDraft' on empty -> "null", not
+        # `PR_NUMBER` explicitly set: a `gh pr view` failure is NOT
+        # equivalent to "PR doesn't exist". PR_HEAD_REF gives us a push
+        # target, but `.isDraft` is read from PR_JSON later (Step 7 draft
+        # gate). Silently letting the flow continue with PR_JSON="" would
+        # skip the draft gate (jq '.isDraft' on empty -> "null", not
         # "true") which is a fail-OPEN failure mode for drafts. Fail
         # CLOSED: surface the error and abort. Re-run when API
         # recovers.
-        echo "ERROR: gh pr view failed for PR #$PR in CI mode: $err_msg" >&2
+        echo "ERROR: gh pr view failed for PR #$PR (PR_NUMBER set): $err_msg" >&2
         echo "       Refusing to skip draft gate / proceed with empty PR_JSON. Re-run when the API recovers." >&2
         exit 1
     fi
@@ -496,10 +485,11 @@ if [ "$IS_DRAFT" = "true" ]; then
     exit 0
 fi
 
-# Identity gate. The cron suppression check filters by
-# `.user.login == "kotakanbe"` (see copilot-clean-label.yml). Running
-# under any other gh identity would post a marker that cron can't see,
-# leading to double-fire. Only enforced when entering Phase B/C.
+# Identity gate. Phase B/C drive Copilot re-reviews via the GraphQL
+# `requestReviews` mutation and post reply/resolve mutations; these need
+# a user token with Copilot + push access on this repo. The concurrency
+# lock marker is also keyed on the `kotakanbe` author. Gate Phase B/C to
+# that identity (Phase A and the push already completed above).
 GH_USER=$(gh api user --jq .login)
 [ "$GH_USER" = "kotakanbe" ] || {
     git push origin "HEAD:$BRANCH"
@@ -520,17 +510,16 @@ MARKER_CID=""
 post_local_marker() {
     local sha=$1
     local marker_tag="<!-- copilot-fix-local:$sha -->"
-    # Concurrency lock + idempotent restart in one lookup.
+    # Local concurrency lock + idempotent restart in one lookup.
     # The freshness window must cover the longest stretch between
     # heartbeats. Heartbeats fire on round entry (Step 8 top), every
     # 10 min during pending waits (Step 8.3), and after each long
     # synchronous step (Step 4 / Step 8.4.3 build+vet+test+lint). On a
     # heavy repo, build+vet+test+lint can run 15-20 min on its own, plus
-    # an agent-driven fix pass; matching the cron freshness threshold
-    # (LOCAL_MARKER_MAX_AGE_MIN, default 30 min) gives us a single
-    # tunable for both "session is stuck" definitions. Anything shorter
-    # opens a race where a long, otherwise-healthy fix cycle would let a
-    # second /review-until-clean session start in parallel.
+    # an agent-driven fix pass; LOCAL_MARKER_MAX_AGE_MIN (default 30 min)
+    # is the single "session is stuck" tunable. Anything shorter opens a
+    # race where a long, otherwise-healthy fix cycle would let a second
+    # /review-until-clean session start in parallel.
     local concurrency_cutoff
     concurrency_cutoff=$(date -u -d "${LOCAL_MARKER_MAX_AGE_MIN:-30} minutes ago" +%Y-%m-%dT%H:%M:%SZ)
     local existing
@@ -556,16 +545,7 @@ post_local_marker() {
         return
     fi
     local body
-    # CRITICAL: marker bodies must NOT contain the literal substring
-    # `@claude`. They are posted by the skill (running as `kotakanbe`),
-    # and `claude.yml` triggers on
-    #   `contains(comment.body, '@claude') && comment.user.login == 'kotakanbe'`.
-    # If the marker body mentions `@claude` (even in backticks or
-    # inside a sentence about suppression), every marker post will
-    # trigger a CI claude run — the exact opposite of suppression.
-    # Phrasing rule: refer to "cron Claude trigger" / "Claude
-    # mention" / similar without the `@` symbol.
-    body=$(printf '<!-- copilot-fix-local:%s -->\n\nlocal fix in progress (`/review-until-clean` skill, HEAD %s, started %s). The cron Claude trigger is suppressed for this HEAD.' \
+    body=$(printf '<!-- copilot-fix-local:%s -->\n\nlocal fix in progress (`/review-until-clean` skill, HEAD %s, started %s). Concurrency lock for this HEAD.' \
         "$sha" "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
     MARKER_CID=$(gh api "repos/$OWNER/$REPO/issues/$PR/comments" \
         -X POST -f body="$body" --jq .id)
@@ -585,9 +565,9 @@ delete_local_marker() {
     [ -n "$MARKER_CID" ] || return 0
     if gh api "repos/$OWNER/$REPO/issues/comments/$MARKER_CID" \
         -X DELETE >/dev/null 2>&1; then
-        echo "deleted local marker (cid=$MARKER_CID) — cron fallback can resume on next tick"
+        echo "deleted local marker (cid=$MARKER_CID) — concurrency lock released"
     else
-        echo "::warning::failed to delete local marker (cid=$MARKER_CID); cron will resume after marker ages out (~${LOCAL_MARKER_MAX_AGE_MIN:-30}min)" >&2
+        echo "::warning::failed to delete local marker (cid=$MARKER_CID); the lock auto-expires after ~${LOCAL_MARKER_MAX_AGE_MIN:-30}min" >&2
     fi
     MARKER_CID=""
 }
@@ -599,41 +579,19 @@ delete_local_marker() {
 # reason that does NOT reach Step 11.9 (jq parse failure mid-fetch,
 # unrecoverable build/test/lint error, gh API loop failure, manual
 # Ctrl-C, etc.), the agent MUST call `delete_local_marker` before
-# exiting. The fallback safety net is the LOCAL_MARKER_MAX_AGE_MIN
-# expiry (default 30 min), but explicit cleanup is still preferred so
-# cron picks up immediately on the next tick rather than after the
-# expiry window.
+# exiting so the concurrency lock is released immediately. The fallback
+# safety net is the LOCAL_MARKER_MAX_AGE_MIN expiry (default 30 min).
 
-mark_local_converged() {
-    local sha=$1
-    [ -n "$MARKER_CID" ] || return 0
-    local body
-    # Same rule as `post_local_marker`: no literal `@claude` in body
-    # (would re-trigger claude.yml under the kotakanbe-comment trigger).
-    body=$(printf '<!-- copilot-fix-local-converged:%s -->\n\nlocal /review-until-clean session converged on HEAD %s at %s. The cron Claude trigger is suppressed for this HEAD.' \
-        "$sha" "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
-    if gh api "repos/$OWNER/$REPO/issues/comments/$MARKER_CID" \
-        -X PATCH -f body="$body" --jq .id >/dev/null 2>&1; then
-        echo "marked local marker as converged (cid=$MARKER_CID) — cron will skip the Claude trigger for HEAD $sha"
-    else
-        echo "::warning::failed to mark marker converged (cid=$MARKER_CID); falling back to delete." >&2
-        delete_local_marker
-    fi
-}
-
-# IMPORTANT: post the marker BEFORE pushing the new HEAD to origin.
-# A reverse order opens a race window where a cron tick fires between
-# push and marker post, sees the new HEAD with no suppression marker,
-# and posts an `@claude` trigger.
+# Post the concurrency-lock marker BEFORE pushing the new HEAD so a
+# second invocation racing this one observes the lock as early as
+# possible.
 post_local_marker "$HEAD_SHA"
 
 # Wrap the initial push: if the push is rejected (non-fast-forward,
-# protected branch rule, transient network), the marker we just posted
-# would otherwise remain in place and block the cron fallback for up to
-# LOCAL_MARKER_MAX_AGE_MIN minutes. Delete the marker before exiting so
-# cron picks up on the next tick.
+# protected branch rule, transient network), release the lock before
+# exiting so a retry is not blocked for up to LOCAL_MARKER_MAX_AGE_MIN.
 if ! git push origin "HEAD:$BRANCH"; then
-    echo "ERROR: initial push failed; cleaning up suppression marker so cron can resume" >&2
+    echo "ERROR: initial push failed; releasing concurrency lock" >&2
     delete_local_marker
     exit 1
 fi
@@ -642,15 +600,15 @@ PHASE_B_EXIT_REASON="B_ABORTED"  # fail-safe default. Step 8.2 clean path flips 
 PHASE_C_OK=0                     # fail-safe default; Step 11.5 verification flips to 1 on success
 ```
 
-`PHASE_B_EXIT_REASON` distinguishes three terminal states:
+`PHASE_B_EXIT_REASON` distinguishes three terminal states (all release the concurrency-lock marker in Step 11.9):
 
-| State | Meaning | `copilot-clean` label | Marker |
-|---|---|---|---|
-| `B_CLEAN_VERIFIED` | Copilot itself reported `generated no (new) comments` for the current HEAD (either via Step 8.2's clean path on a fix-cycle round, or via Step 8.4.5's forced re-review after a WONT_FIX-only round). | **Apply** in Step 11.9 (when `PHASE_C_OK=1`). | `mark_local_converged` |
-| `B_CLEAN_OPERATOR` | All threads are WONT_FIX/ALREADY_FIXED so the operator considers the PR clean, but Copilot's forced re-review (Step 8.4.5) re-emitted the same set of threads (cross-round consensus = false-positive confirmed). Operator-judged clean only. | **Do not apply** — Copilot still disagrees, so the literal label semantic is unmet. | `mark_local_converged` (still suppress cron from re-running the same WONT_FIX pass) |
-| `B_ABORTED` | Phase B did not converge (max rounds, unrecoverable build failure, push reject after rebase, Step 8.4.5 surfaced new findings that exhausted the round budget, etc.). | **Do not apply.** The skill does NOT remove an existing label here — that strip is owned by `copilot-clean-label.yml` (its `synchronize`/`dirty`/`pending` paths on the next event tick) so a redundant skill-side strip would just double-fire the API call. | `delete_local_marker` (let cron retry) |
+| State | Meaning |
+|---|---|
+| `B_CLEAN_VERIFIED` | Copilot itself reported `generated no (new) comments` for the current HEAD (either via Step 8.2's clean path on a fix-cycle round, or via Step 8.4.5's forced re-review after a WONT_FIX-only round). |
+| `B_CLEAN_OPERATOR` | All threads are WONT_FIX/ALREADY_FIXED so the operator considers the PR clean, but Copilot's forced re-review (Step 8.4.5) re-emitted the same set of threads (cross-round consensus = false-positive confirmed). Operator-judged clean only. |
+| `B_ABORTED` | Phase B did not converge (max rounds, unrecoverable build failure, push reject after rebase, Step 8.4.5 surfaced new findings that exhausted the round budget, etc.). |
 
-`PHASE_C_OK` is a separate fail-safe flag from `PHASE_B_EXIT_REASON` because Phase B can converge clean (`B_CLEAN_VERIFIED` / `B_CLEAN_OPERATOR`) yet Phase C can still fail mid-way (rate-limited reply, permission error, network partition during the resolve mutation). Without this flag the Step 11.9 if/else gate would mark the marker `converged` even though some FIX / ALREADY_FIXED threads were never replied to or resolved, permanently suppressing cron on a HEAD that still has unresolved Copilot threads. The gate requires **both** a `B_CLEAN_*` exit AND `PHASE_C_OK=1` before flipping to the converged marker form (and additionally requires `B_CLEAN_VERIFIED` before applying the `copilot-clean` label).
+`PHASE_C_OK` is a separate fail-safe flag from `PHASE_B_EXIT_REASON` because Phase B can converge clean (`B_CLEAN_VERIFIED` / `B_CLEAN_OPERATOR`) yet Phase C can still fail mid-way (rate-limited reply, permission error, network partition during the resolve mutation). It is reported in Step 11.9 so the operator knows whether all FIX / ALREADY_FIXED threads were actually replied to and resolved; `PHASE_C_OK=0` on an otherwise-clean exit means some threads are still open and the skill should be re-run.
 
 ### Step 8: Copilot review iteration loop (max 5 rounds)
 
@@ -723,15 +681,29 @@ fi
 
 #### Step 8.3: pending — request re-review + poll
 
-After push, `copilot-rereview-on-push.yml` auto-requests. Poll Step 8.1 every 30s for up to 10 min.
+There is no CI workflow that auto-requests a Copilot re-review on push — **the skill must drive it itself**. Immediately after the push that produced the current HEAD, fire a GraphQL `requestReviews` mutation to ask Copilot to re-review, then poll Step 8.1 every 30s for up to 10 min for a Copilot review whose `commit_id == HEAD_SHA`.
 
-If 10 min elapses, fire the **stuck-detector dance** documented in `.github/workflows/copilot-clean-label.yml`'s `pending` branch: a plain `requestReviews` retry against a bot already on the reviewer slot is silently deduped (the GraphQL mutation succeeds but no `review_requested` event fires), so the recovery sequence is:
+```bash
+# Copilot bot's GraphQL node ID (globally stable; verified via
+# `gh api graphql -f query='query{node(id:"BOT_kgDOCnlnWA"){__typename ... on Bot{login}}}'`
+# → login: copilot-pull-request-reviewer).
+COPILOT_BOT_ID="BOT_kgDOCnlnWA"
+PR_NID=$(gh api graphql -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
+    -f query='query($owner:String!,$repo:String!,$pr:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$pr){id}}}' \
+    --jq '.data.repository.pullRequest.id')
+gh api graphql -f query='mutation($pr:ID!,$bot:ID!){requestReviews(input:{pullRequestId:$pr, botIds:[$bot]}){pullRequest{id}}}' \
+    -f pr="$PR_NID" -f bot="$COPILOT_BOT_ID"
+```
+
+When Copilot has just submitted a review on a prior HEAD it is no longer on the reviewer slot, so this plain re-request fires a fresh review cleanly (verified in practice: Copilot re-reviews within ~30–60s). A user token (your `gh` auth) is required — the Actions `GITHUB_TOKEN` silently no-ops this mutation for the Copilot bot.
+
+If 10 min elapses with no review for the current HEAD, fire the **stuck-detector dance** — the plain re-request can be silently deduped when Copilot is **already** on the reviewer slot (the GraphQL mutation succeeds with 200 OK but no `review_requested` event fires). The recovery sequence (fully implemented in Step 8.4.5 below) is:
 
 1. GraphQL `requestReviews(input: { ..., union: false, botIds: [] })` to remove Copilot from the reviewer slot (preserves humans + teams; only the bot is dropped).
 2. Sleep ~2s for GitHub to commit the removal (avoids the add racing the delete).
 3. GraphQL `requestReviews(input: { ..., botIds: [<copilot-bot-id>] })` to re-add Copilot — now a fresh request that fires the event.
 
-A literal `requestReviews` retry without this clear+re-add will often fail to wake Copilot. If still no review after 10 min from the re-add, exit to Phase C with `PHASE_B_EXIT_REASON=B_ABORTED`.
+A literal `requestReviews` retry without this clear+re-add will often fail to wake an already-requested Copilot. If still no review after 10 min from the re-add, exit to Phase C with `PHASE_B_EXIT_REASON=B_ABORTED`.
 
 #### Step 8.4: dirty — fix cycle
 
@@ -821,8 +793,8 @@ A literal `requestReviews` retry without this clear+re-add will often fail to wa
    ..."
    if ! git push origin "HEAD:$BRANCH"; then
        # Push reject (other-session conflict) → fetch → rebase → push again.
-       # If retry still fails, exit Phase B with B_ABORTED so Step 11.9 deletes
-       # the marker (cron picks up the fallback on next tick).
+       # If retry still fails, exit Phase B with B_ABORTED so Step 11.9
+       # releases the concurrency lock.
        git fetch origin "$BRANCH" && git rebase "origin/$BRANCH" || {
            echo "ERROR: rebase against origin/$BRANCH failed during fix-cycle push" >&2
            PHASE_B_EXIT_REASON="B_ABORTED"
@@ -855,12 +827,12 @@ shortcut used to mask:
   produced findings only because of partial state (mid-fix-cycle review,
   stale state, retry dedup). A fresh re-review can surface NEW issues
   the previous round didn't catch. Exiting before re-review hides these
-  until the next push happens or the cron fallback fires.
+  until the next push happens.
 - **3b — false-positive cross-round consensus**: Copilot keeps
   re-emitting the same threads we already classified WONT_FIX. That IS
-  a clean exit for the operator, but the literal `copilot-clean` label
-  semantic ("Copilot itself reported no new comments") is not met, so
-  applying that label would be a lie.
+  a clean exit for the operator (`B_CLEAN_OPERATOR`), but it is distinct
+  from Copilot itself reporting "no new comments" (`B_CLEAN_VERIFIED`),
+  so the two exit reasons are kept separate.
 
 Step 8.4.5 forces Copilot to adjudicate on the same HEAD before exit:
 
@@ -879,18 +851,18 @@ PRIOR_THREAD_CIDS=$(printf '%s' "$threads" | jq -r '
         and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")
     | .comments.nodes[0].databaseId' 2>/dev/null) || PRIOR_THREAD_CIDS=""
 
-# 2. Stuck-detector dance (same procedure as Step 8.3 and
-#    copilot-clean-label.yml's pending branch): drop Copilot from the
-#    reviewer slot, sleep 2s, re-add. A bare `requestReviews` against a
-#    bot already on the reviewer slot is silently deduped (200 OK, no
-#    event). The drop-then-re-add is the only way to fire a fresh
-#    review_requested event without changing HEAD.
+# 2. Stuck-detector dance (the fallback referenced by Step 8.3): drop
+#    Copilot from the reviewer slot, sleep 2s, re-add. A bare
+#    `requestReviews` against a bot already on the reviewer slot is
+#    silently deduped (200 OK, no event). The drop-then-re-add is the
+#    only way to fire a fresh review_requested event without changing
+#    HEAD.
 #
 #    CRITICAL: the clear mutation uses `union:false` which REPLACES the
 #    entire reviewer set. We must first query current reviewers and replay
 #    humans + teams, omitting only bots — otherwise all human/team review
-#    requests are silently dropped. This mirrors the safe pattern in
-#    copilot-clean-label.yml (search: "reviewer_query_ok").
+#    requests are silently dropped (see the `reviewer_query_ok` guard
+#    below).
 PR_NID=$(gh api graphql -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
     -f query='query($owner:String!,$repo:String!,$pr:Int!){
       repository(owner:$owner,name:$repo){ pullRequest(number:$pr){ id } } }' \
@@ -909,21 +881,18 @@ if [ -z "$PR_NID" ] || [ "$PR_NID" = "null" ]; then
     PHASE_B_EXIT_REASON="B_ABORTED"
     break
 fi
-# Copilot bot's GraphQL node ID. Same value defined as `COPILOT_BOT_ID`
-# env var in `.github/workflows/copilot-clean-label.yml` (search:
-# "COPILOT_BOT_ID:"). Hard-coded once here and reused by both the clear
-# and the re-add to keep this Step 8.4.5 self-contained for skill
-# agents. If the bot's node ID ever changes (the value has been stable
-# since GitHub assigned it; a change would also break the workflow's
-# env), update both this prompt and the workflow in the same commit.
+# Copilot bot's GraphQL node ID (same value used by Step 8.3's plain
+# re-request). Globally stable since GitHub assigned it. Hard-coded
+# once here and reused by both the clear and the re-add to keep this
+# Step 8.4.5 self-contained for skill agents.
 COPILOT_BOT_ID="BOT_kgDOCnlnWA"
 
 # Query current reviewer requests so the clear mutation preserves
 # humans + teams (removing only bots via empty botIds). The query also
 # includes Bot.id so we can detect whether Copilot is currently in the
 # reviewer slot — when it is not, the clear mutation is unnecessary
-# (and would needlessly remove any other bot reviewers, mirroring
-# copilot-clean-label.yml's `copilot_present` skip).
+# (and would needlessly remove any other bot reviewers, so it is
+# skipped via the `copilot_present` check below).
 reviewer_query=$(gh api graphql -F pr_nid="$PR_NID" \
     -f query='query($pr_nid:ID!){
       node(id:$pr_nid){ ... on PullRequest {
@@ -935,10 +904,9 @@ reviewer_query=$(gh api graphql -F pr_nid="$PR_NID" \
 # OR returned `.errors` (HTTP 200 partial-success), skip the clear
 # entirely. With reviewer_nodes unknown, building
 # users_json=[]/teams_json=[] and calling requestReviews(union:false)
-# would remove every human reviewer on the PR (same guard as
-# copilot-clean-label.yml `reviewer_query_ok` guard, plus the
-# partial-success `(.errors // []) | length > 0` check that workflow
-# also applies).
+# would remove every human reviewer on the PR. The guard also rejects
+# partial-success responses via the `(.errors // []) | length > 0`
+# check.
 reviewer_query_ok=0
 if [ -n "$reviewer_query" ] && printf '%s' "$reviewer_query" \
     | jq -e '.data.node.reviewRequests and ((.errors // []) | length == 0)' >/dev/null 2>&1; then
@@ -949,8 +917,7 @@ if [ "$reviewer_query_ok" = "1" ]; then
     # isn't, the bare re-add (no clear) is sufficient because there's
     # nothing to dedup against — skipping the clear avoids unnecessary
     # churn AND avoids silently removing other bot reviewers (e.g.,
-    # dependabot) that the clear's `botIds:[]` would also drop. Same
-    # skip pattern as copilot-clean-label.yml's `copilot_present` check.
+    # dependabot) that the clear's `botIds:[]` would also drop.
     # Initialize users_json/teams_json before the copilot_present
     # branch so the post-branch `[ -n "$users_json" ]` test below is
     # always defined under `set -u`, even if `copilot_present` is
@@ -963,7 +930,7 @@ if [ "$reviewer_query_ok" = "1" ]; then
     # the same way an empty users_json="[]" would silently drop every
     # human reviewer. Skipping clear is the safe default (re-add will
     # be deduped, but the dance still falls through to B_ABORTED
-    # cleanly via cron retry).
+    # cleanly; re-run to retry).
     copilot_present=$(printf '%s' "$reviewer_query" | jq -r --arg id "$COPILOT_BOT_ID" \
         'any(.data.node.reviewRequests.nodes // [] | .[]?;
              .requestedReviewer.__typename == "Bot"
@@ -991,19 +958,17 @@ if [ "$reviewer_query_ok" = "1" ]; then
     fi
     if [ "$copilot_present" = "true" ] && [ -n "$users_json" ] && [ -n "$teams_json" ]; then
         # Clear: replay humans + teams with union:false, botIds:[] —
-        # drops Copilot AND any other bot reviewers. The cron's pattern
-        # makes the same trade-off (search "botIds is explicitly empty"
-        # in copilot-clean-label.yml). Documented because the only bot
-        # reviewer this PR family expects is Copilot; if a project ever
-        # adds dependabot/renovate as PR reviewers, this clear would
-        # need to preserve their bot IDs too.
+        # drops Copilot AND any other bot reviewers. Documented because
+        # the only bot reviewer this PR family expects is Copilot; if a
+        # project ever adds dependabot/renovate as PR reviewers, this
+        # clear would need to preserve their bot IDs too.
         clear_body=$(jq -n \
             --arg pr "$PR_NID" --argjson users "$users_json" --argjson teams "$teams_json" \
             '{ query: "mutation($pr:ID!,$users:[ID!]!,$teams:[ID!]!){requestReviews(input:{pullRequestId:$pr, userIds:$users, teamIds:$teams, botIds:[], union:false}){pullRequest{id}}}",
                variables: {pr:$pr, users:$users, teams:$teams} }')
         # Capture stdout so we can inspect `.errors[]` even on HTTP 200
         # partial-success (gh exits 0 on this path, so a bare `|| ...`
-        # check would miss it; mirrors copilot-clean-label.yml).
+        # check would miss it).
         if ! clear_out=$(printf '%s' "$clear_body" | gh api graphql --input - 2>/dev/null); then
             echo "::warning::Step 8.4.5: clear mutation failed — re-add may be deduped"
         elif printf '%s' "$clear_out" | jq -e '(.errors // []) | length > 0' >/dev/null 2>&1; then
@@ -1066,7 +1031,7 @@ done
 new_body=$(printf '%s' "$latest_new" | jq -r '.body // ""' 2>/dev/null) || new_body=""
 if [ "$new_id" = "$PRIOR_REVIEW_ID" ] || [ "$new_commit" != "$HEAD_SHA" ]; then
     # 5-min timeout reached without a fresh review on the current HEAD.
-    # Treat as B_ABORTED — cron will retry on its next tick and may
+    # Treat as B_ABORTED — re-run to retry; a fresh invocation may
     # succeed where this synchronous wait failed.
     echo "Step 8.4.5: no fresh re-review within 5 min (timeout) — exiting B_ABORTED"
     PHASE_B_EXIT_REASON="B_ABORTED"
@@ -1085,8 +1050,8 @@ else
     # (`threads_new_fetch_ok=0`) is NOT the same as "Copilot returned
     # no threads" — falling through to `threads_new=""` would
     # incorrectly flip to 3b `B_CLEAN_OPERATOR` and suppress further
-    # rounds, when the right behaviour is to exit `B_ABORTED` so cron
-    # retries the pipeline. The flag below distinguishes the two
+    # rounds, when the right behaviour is to exit `B_ABORTED` so a
+    # re-run retries the pipeline. The flag below distinguishes the two
     # outcomes for the classification block at the bottom of step 4.
     threads_new_fetch_ok=1
     threads_new=$(gh api graphql --paginate \
@@ -1118,14 +1083,14 @@ else
     # main fetch (so the check would be unreliable anyway). Accepting
     # the rare partial-success-as-empty case here: the resulting
     # empty `threads_new` flows through to the 3b operator-clean
-    # branch, which is wrong but rare and recoverable on the next
-    # cron tick. The same trade-off is made by the clear mutation's
+    # branch, which is wrong but rare and recoverable on a re-run.
+    # The same trade-off is made by the clear mutation's
     # `(.errors // []) | length > 0` check earlier in this step,
     # where we DO have access to the raw response. If a future GitHub
     # API change makes partial-success more common here, the right
     # fix is to drop `--jq` and parse `threads_new` in two passes.
     if [ "$threads_new_fetch_ok" = "0" ]; then
-        echo "::warning::Step 8.4.5: post-re-review thread fetch failed — exiting B_ABORTED (cron will retry)"
+        echo "::warning::Step 8.4.5: post-re-review thread fetch failed — exiting B_ABORTED (re-run to retry)"
         PHASE_B_EXIT_REASON="B_ABORTED"
         break
     fi
@@ -1170,28 +1135,27 @@ fi
 
 The 5-minute polling cap matches typical Copilot re-review latency
 (~1-3 min observed in this repo's PR history). A miss falls through
-to `B_ABORTED` rather than waiting longer because (a) longer waits
-would let the marker freshness lock expire, and (b) cron's next tick
-will retry the whole pipeline within ~30 min.
+to `B_ABORTED` rather than waiting longer because longer waits would
+let the concurrency-lock marker expire; re-run `/review-until-clean`
+to retry the pipeline.
 
 #### Round circuit breakers
 
-- **max 5 rounds**: round 6 ⇒ `B_ABORTED` (Copilot generates new issues forever ⇒ delegate to cron). Step 8.4.5's 3c path also feeds the round counter so a stream of new findings still trips this breaker.
+- **max 5 rounds**: round 6 ⇒ `B_ABORTED` (Copilot generates new issues forever ⇒ stop and reconsider scope; re-run later if warranted). Step 8.4.5's 3c path also feeds the round counter so a stream of new findings still trips this breaker.
 - **same issue across 2+ rounds**: false positive, downgrade to WONT_FIX, continue
 - **empty push (no fix to commit)**: every thread WONT_FIX/ALREADY_FIXED ⇒ enter Step 8.4.5 (forced re-review), then exit `B_CLEAN_VERIFIED` (3a) / `B_CLEAN_OPERATOR` (3b) / continue dirty (3c) / `B_ABORTED` (timeout). The previous behaviour ("empty push ⇒ immediate B_CLEAN") is removed because it conflated operator judgment with Copilot adjudication and could mask 3c missed-coverage cases.
 - **unrecoverable build/test/lint failure**: cannot revert ⇒ `B_ABORTED` ⇒ Phase C
 
-Phase C Step 11.9 dispatches by exit reason:
+Phase C Step 11.9 releases the concurrency-lock marker on every exit (`delete_local_marker`) and reports the terminal state to the operator:
 
-| Exit reason | Marker cleanup | `copilot-clean` label | Cron behavior |
-|---|---|---|---|
-| `B_CLEAN_VERIFIED` | `mark_local_converged` PATCH (rewrites tag to `copilot-fix-local-converged:<HEAD>`) | **`gh pr edit --add-label copilot-clean`** | Cron treats converged tag as `already_triggered` AND sees Copilot's literal "no new comments" body, so it keeps the label on its next tick. |
-| `B_CLEAN_OPERATOR` | `mark_local_converged` (same as above — still suppress duplicate WONT_FIX work from cron) | **No label** — Copilot still has comments on HEAD; the literal label semantic is unmet, so applying it would mislead consumers of the label. | Cron sees the converged tag and skips `@claude`, but its review-body check still sees comments and (correctly) does not add the label. |
-| `B_ABORTED` | `delete_local_marker` removes the comment | **No label** (and any prior label gets removed by cron's `dirty`/`pending` paths or by the `synchronize` event on the next push). | Next cron tick (~30–60 min) fires `@claude` fallback. |
+| Exit reason | Meaning for the operator |
+|---|---|
+| `B_CLEAN_VERIFIED` + `PHASE_C_OK=1` | Copilot itself confirmed "no new comments" on the current HEAD and Phase C resolved all FIX/ALREADY_FIXED threads. Merge-ready. |
+| `B_CLEAN_OPERATOR` + `PHASE_C_OK=1` | Skill judged clean (all threads WONT_FIX/ALREADY_FIXED) but Copilot re-emitted the same threads. Operator-judged clean only — review the open WONT_FIX threads before merging. |
+| any `B_*` + `PHASE_C_OK=0` | Phase C did not finish (some FIX/ALREADY_FIXED threads still unresolved, or a mid-loop error). Re-run `/review-until-clean`. |
+| `B_ABORTED` | Phase B did not converge (max rounds, build failure, push reject). Re-run after addressing the cause. |
 
-Freshness lock keys on the active tag only, so a re-run of `/review-until-clean` after `B_CLEAN_*` is allowed (POSTs a new active marker; converged tag is ignored by the lock).
-
-The `copilot-clean` label is owned by `.github/workflows/copilot-clean-label.yml` (cron-driven, cf. its `LABEL: copilot-clean` env). The skill applies the label preemptively on `B_CLEAN_VERIFIED` to avoid a 30-min cron-tick wait; the cron's natural lifecycle (add on Copilot literal-clean, remove on dirty/synchronize) preserves the same semantics on subsequent ticks. The skill does not need to remove the label on `B_ABORTED` because the cron's `dirty`/`pending` branches and the `synchronize` event each strip it independently — adding a redundant skill-side strip would just double-fire the API call.
+The concurrency lock keys on the active marker tag only, so a re-run of `/review-until-clean` is always allowed after a prior exit.
 
 ## Phase C: Reply + resolve all unresolved threads
 
@@ -1238,7 +1202,7 @@ Reuse cached results from Phase A/B for known threads. Classify the rest using t
 
 The Step 9 query already filtered to Copilot threads, so iterating `$threads` here is safe.
 
-Initialize `WONT_FIX_COUNT=0` before the loop and increment for every WONT_FIX classification — Step 11.5 reads this counter to gate `PHASE_C_OK`. Without the counter the verify step has nothing to compare against and `PHASE_C_OK` would stay at 0 forever (`B_CLEAN_*` runs would still delete the marker, defeating cron suppression).
+Initialize `WONT_FIX_COUNT=0` before the loop and increment for every WONT_FIX classification — Step 11.5 reads this counter to gate `PHASE_C_OK`. Without the counter the verify step has nothing to compare against and `PHASE_C_OK` would stay at 0, falsely reporting an incomplete Phase C.
 
 The loop **must** be fed via process substitution (`while ... done < <(...)`), not a pipe (`... | while ... done`). A piped `while` runs in a subshell, so `WONT_FIX_COUNT=$((... + 1))` updates a child variable that disappears when the subshell exits — the parent always reads `0`. Process substitution keeps the loop body in the parent shell so the increment persists.
 
@@ -1313,10 +1277,10 @@ WONT_FIX is **not resolved** — leave the thread open.
 # `set -euo pipefail` from killing the script on a transient `gh api`
 # failure — `unresolved_copilot=""` falls into the `''|*[!0-9]*` case
 # below (which sets it to -1, "verification failed"), which leaves
-# `PHASE_C_OK=0` and lets Step 11.9 delete the marker (cron retries the
-# pipeline). The `gh api` stderr is intentionally NOT redirected to
+# `PHASE_C_OK=0` so Step 11.9 reports an incomplete Phase C (re-run to
+# retry). The `gh api` stderr is intentionally NOT redirected to
 # `/dev/null`: it's the only diagnostic for transient network /
-# rate-limit errors and must reach the workflow log.
+# rate-limit errors and must reach the log.
 unresolved_copilot=$(gh api graphql --paginate \
     -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
     -f query='
@@ -1342,70 +1306,46 @@ if [ "$unresolved_copilot" -ge 0 ] && [ "$unresolved_copilot" -eq "${WONT_FIX_CO
     PHASE_C_OK=1
     echo "Phase C verified: unresolved=$unresolved_copilot matches WONT_FIX=${WONT_FIX_COUNT:-0}"
 else
-    echo "::warning::Phase C verification FAILED: unresolved=$unresolved_copilot WONT_FIX=${WONT_FIX_COUNT:-0} — leaving PHASE_C_OK=0 so Step 11.9 deletes the marker and cron retries"
+    echo "::warning::Phase C verification FAILED: unresolved=$unresolved_copilot WONT_FIX=${WONT_FIX_COUNT:-0} — leaving PHASE_C_OK=0 (Phase C incomplete; re-run)"
 fi
 ```
 
-Expected: `unresolved_copilot` equals the number of Copilot WONT_FIX threads. The assignment above is the single source of truth for `PHASE_C_OK`; do not rely on prose to flip the flag. If the count exceeds the WONT_FIX count (some FIX/ALREADY_FIXED thread failed to resolve) or the verification query itself errors out, `PHASE_C_OK` stays at 0 so Step 11.9 falls into the marker-delete branch and cron retries the whole pipeline within ~30–60 min instead of stamping the HEAD as converged with unresolved threads still open.
+Expected: `unresolved_copilot` equals the number of Copilot WONT_FIX threads. The assignment above is the single source of truth for `PHASE_C_OK`; do not rely on prose to flip the flag. If the count exceeds the WONT_FIX count (some FIX/ALREADY_FIXED thread failed to resolve) or the verification query itself errors out, `PHASE_C_OK` stays at 0 so Step 11.9 reports an incomplete Phase C — re-run `/review-until-clean` rather than treating the HEAD as done with unresolved threads still open.
 
-### Step 11.9: Cleanup marker by Phase B exit reason **and** Phase C completion
+### Step 11.9: Release the concurrency lock and report the terminal state
 
 ```bash
-# Three-way dispatch on PHASE_B_EXIT_REASON, gated additionally by
-# PHASE_C_OK for the "marker → converged" path. Marking the marker
-# converged permanently suppresses cron for this HEAD, so we MUST NOT
-# do it when Phase C left FIX/ALREADY_FIXED threads unresolved —
-# otherwise cron silently abandons a HEAD with open Copilot findings.
+# Always release the concurrency-lock marker on exit, then report the
+# terminal state (PHASE_B_EXIT_REASON + PHASE_C_OK) so the operator knows
+# whether the PR is merge-ready or needs a re-run.
+delete_local_marker
 case "${PHASE_B_EXIT_REASON:-B_ABORTED}" in
     B_CLEAN_VERIFIED)
         if [ "${PHASE_C_OK:-0}" = "1" ]; then
-            mark_local_converged "$HEAD_SHA"
-            # Apply the `copilot-clean` label preemptively. The cron
-            # `copilot-clean-label.yml` would also add it on its next
-            # tick (~30 min worst case) because the latest Copilot
-            # review body matches `generated no( new)? comments`, but
-            # applying here avoids that latency. Failures are
-            # warn-and-continue: the cron is the safety net.
-            if ! gh pr edit "$PR" --repo "$OWNER/$REPO" --add-label copilot-clean >/dev/null 2>&1; then
-                echo "::warning::PR #$PR: failed to apply copilot-clean label preemptively; cron will retry on next tick"
-            fi
-            echo "/review-until-clean done (B_CLEAN_VERIFIED + Phase C ok): marker marked converged + copilot-clean label applied for HEAD $HEAD_SHA."
+            echo "/review-until-clean done (B_CLEAN_VERIFIED + Phase C ok): Copilot reported no new comments on HEAD $HEAD_SHA and all FIX/ALREADY_FIXED threads are resolved. Merge-ready."
         else
-            delete_local_marker
-            echo "/review-until-clean done (B_CLEAN_VERIFIED + Phase C FAILED, PHASE_C_OK=$PHASE_C_OK): marker deleted (Phase C left threads unresolved); cron retries pipeline on next tick."
+            echo "/review-until-clean done (B_CLEAN_VERIFIED + Phase C INCOMPLETE, PHASE_C_OK=$PHASE_C_OK): Copilot is clean but some threads remain unresolved — re-run to finish Phase C."
         fi
         ;;
     B_CLEAN_OPERATOR)
         if [ "${PHASE_C_OK:-0}" = "1" ]; then
-            mark_local_converged "$HEAD_SHA"
-            # Deliberately NOT applying `copilot-clean` label: Copilot's
-            # latest review still has comments, so the literal label
-            # semantic ("Copilot reported no new comments") is unmet.
-            # Cron's review-body check will (correctly) leave the label
-            # off on its next tick.
-            echo "/review-until-clean done (B_CLEAN_OPERATOR + Phase C ok): marker marked converged for HEAD $HEAD_SHA. No copilot-clean label (Copilot still has comments; cross-round consensus = WONT_FIX)."
+            echo "/review-until-clean done (B_CLEAN_OPERATOR + Phase C ok): all threads WONT_FIX/ALREADY_FIXED on HEAD $HEAD_SHA, but Copilot re-emitted the same threads (operator-judged clean only — review the open WONT_FIX threads before merging)."
         else
-            delete_local_marker
-            echo "/review-until-clean done (B_CLEAN_OPERATOR + Phase C FAILED, PHASE_C_OK=$PHASE_C_OK): marker deleted; cron retries pipeline on next tick."
+            echo "/review-until-clean done (B_CLEAN_OPERATOR + Phase C INCOMPLETE, PHASE_C_OK=$PHASE_C_OK): re-run to finish Phase C."
         fi
         ;;
     *)
-        # B_ABORTED and any unhandled state. Always delete the marker
-        # so cron can re-fire on the next tick. No label work needed:
-        # cron's `dirty`/`pending` paths and the `synchronize` event
-        # each strip any stale `copilot-clean` label independently.
-        delete_local_marker
-        echo "/review-until-clean done (${PHASE_B_EXIT_REASON:-B_ABORTED}, PHASE_C_OK=${PHASE_C_OK:-0}): marker deleted, cron fallback will resume on next tick."
+        echo "/review-until-clean done (${PHASE_B_EXIT_REASON:-B_ABORTED}, PHASE_C_OK=${PHASE_C_OK:-0}): Phase B did not converge — re-run after addressing the cause (max rounds, build failure, push reject, or re-review timeout)."
         ;;
 esac
 ```
 
 Reasons:
 
-- `B_CLEAN_VERIFIED` + `PHASE_C_OK=1`: Copilot literally confirmed no new comments AND Phase C resolved FIX/ALREADY_FIXED + WONT_FIX intentionally left unresolved. Apply both the converged marker AND the `copilot-clean` label so downstream consumers (merge gate, dashboards, cron) immediately see the verified-clean state.
-- `B_CLEAN_OPERATOR` + `PHASE_C_OK=1`: skill judges clean (all threads WONT_FIX/ALREADY_FIXED) but Step 8.4.5's forced re-review re-emitted the same threads. Mark converged so cron does not waste budget re-running the same WONT_FIX classification, but skip the label because Copilot still disagrees with the operator-side verdict.
-- Either `B_CLEAN_*` + `PHASE_C_OK=0`: Phase B converged but Phase C failed (mid-loop reply/resolve error, rate limit, network partition). Treat as a non-clean exit — delete the marker so cron retries the pipeline rather than leaving open FIX/ALREADY_FIXED threads stamped as `converged` and silently abandoned.
-- `B_ABORTED` (any `PHASE_C_OK`): Phase B did not converge ⇒ delete the marker so cron takes over within ~30–60 min. Cron's existing `dirty`/`pending`/`synchronize` paths handle any stale label removal — no skill-side strip needed.
+- `B_CLEAN_VERIFIED` + `PHASE_C_OK=1`: Copilot literally confirmed no new comments AND Phase C resolved FIX/ALREADY_FIXED (WONT_FIX intentionally left unresolved). Merge-ready.
+- `B_CLEAN_OPERATOR` + `PHASE_C_OK=1`: skill judges clean (all threads WONT_FIX/ALREADY_FIXED) but Step 8.4.5's forced re-review re-emitted the same threads. Operator-judged clean only — Copilot still disagrees, so review the open WONT_FIX threads before merging.
+- Either `B_CLEAN_*` + `PHASE_C_OK=0`: Phase B converged but Phase C did not finish (mid-loop reply/resolve error, rate limit, network partition). Re-run to complete the reply/resolve pass.
+- `B_ABORTED` (any `PHASE_C_OK`): Phase B did not converge. Re-run after addressing the cause.
 
 ## Rules
 
@@ -1416,41 +1356,10 @@ Reasons:
 - **Phase A code-only**: do NOT post review comments to the PR during Phase A. Reply / resolve happens in Phase C after push.
 - **Don't degrade existing error handling** — `t.Cleanup` (safety net) and explicit error-checked cleanup serve different purposes; keep both.
 - **WONT_FIX is not resolved** — leave the thread open for further discussion.
-- **Heartbeat is mandatory** in Phase B — at each round entry and every 10 min during long pending waits.
-- **Identity gate**: Phase B/C require `gh api user --jq .login == kotakanbe` (cron suppression filters by `kotakanbe` author).
-- **At most 1 active `/review-until-clean` per PR via local invocations** (concurrency lock at `post_local_marker` enforces this for `/review-until-clean` calls). The `copilot-review` label manual escape hatch is **not** subject to this lock — `copilot-review-fix.yml` deliberately bypasses both dedup checks on the labeled `pull_request` event so `kotakanbe` can force a CI run even when a fresh local marker exists. The escape hatch can therefore start a CI `/review-until-clean` in parallel with a local one; the operator opting into the manual label is responsible for that overlap.
+- **Heartbeat is mandatory** in Phase B — at each round entry and every 10 min during long pending waits (keeps the concurrency-lock marker fresh).
+- **Identity gate**: Phase B/C require `gh api user --jq .login == kotakanbe` — the account whose `gh` auth drives the pushes, the Copilot re-review requests, and the reply/resolve mutations.
+- **At most 1 active `/review-until-clean` per PR** — the concurrency lock at `post_local_marker` prevents a second local invocation from racing the first on the same PR/HEAD.
 
-## CI integration
+## Local-only — no CI
 
-CI cron path runs the same procedure (full Phase A+B+C). The `@claude` trigger comment instructs "Run /review-until-clean for this PR"; CI claude code action treats this prompt as canonical.
-
-CI environment requirements (`.github/workflows/claude.yml`):
-
-- **`Task` in `claude_args --allowedTools`** — required for Phase A's `code-reviewer` / `architect` subagents and the three `general-purpose` agents.
-- **`timeout-minutes: 90`** — Phase A 5-10 min + Phase B up to ~75 min cap (5 rounds × 15 min) + Phase C 1-3 min, with margin.
-- **Workflow-file pre-flight (3-tier defense)**: PRs touching `.github/workflows/**` are filtered at three points to avoid burning CI cycles and accumulating decline-comments. (1) `copilot-review-fix.yml` (event-driven, fail-OPEN) and (2) `copilot-clean-label.yml` cron (fail-OPEN) skip the upstream `@claude` trigger entirely; the maintainer gets a workflow-log notice but no PR comment for these auto paths. (3) `claude.yml`'s pre-flight (fail-CLOSED) is the safety guard — it's reached only when a direct `@claude` mention bypasses the upstream filters, in which case it posts the visible decline guidance comment ("run /review-until-clean locally") because `GH_ACTIONS_TOKEN` deliberately omits the `workflow` scope and Phase B push would 403. The manual `copilot-review` label path also reaches a feedback comment via `copilot-review-fix.yml`'s "skip" branch (added to surface the no-op to the operator who attached the label).
-
-Flag (`--copilot-only`, etc.) is removed. CI redundancy is bounded by the cron `*/30` cadence.
-
-## Manual escape hatch
-
-If the skill cannot run / cron is delayed, attaching the **`copilot-review` label** triggers an `@claude` task immediately (claude code action billed) — **only on `kotakanbe`-authored PRs**:
-
-```bash
-PR=123  # your PR number
-gh pr edit "$PR" --add-label copilot-review
-```
-
-The workflow removes the label automatically. Manual label path bypasses both `local_in_progress` and `already` dedup checks (which includes the converged-form marker dedup), AND deletes any active-form `copilot-fix-local:<HEAD>` markers before posting the trigger. Without that marker cleanup, the spawned CI `/review-until-clean` would still abort at Phase B's `post_local_marker` concurrency lock on the very crashed-session marker the escape hatch is meant to recover from. The cleanup is bounded to the active form (`copilot-fix-local:`); the converged-form marker (`copilot-fix-local-converged:`) is left in place by the cleanup loop because it's HEAD-scoped state, but the manual-label workflow's dedup bypass already overrides converged-marker suppression separately, so attaching `copilot-review` does retrigger the full skill on the same converged HEAD when the operator wants that. **Manual label is "force CI run" semantics** — both the in-progress concurrency lock and the converged-HEAD suppression are intentionally overridden.
-
-**EXCEPTION — workflow-file PRs**: when the PR's full file list includes any path under `.github/workflows/**`, `copilot-review-fix.yml`'s upstream pre-flight short-circuits before posting the `@claude` trigger (claude code action's `GH_ACTIONS_TOKEN` lacks the `workflow` scope and would 403 on push). To make this visible to the operator who attached the label, the workflow posts an explicit guidance comment in the skip path explaining why the request was a no-op and pointing at the local `/review-until-clean` recovery path. Attaching the label on a workflow-file PR therefore is **not silent** but is also not actually starting a CI run — it's a "documented no-op with feedback." The same upstream pre-flight applies to the cron and event-driven auto paths, but those don't post a feedback comment (no operator action to acknowledge); they emit a workflow-log warning instead.
-
-CAVEAT — concurrency vs. healthy local sessions: the marker cleanup is unconditional within the active form, so attaching the label while a HEALTHY local `/review-until-clean` run is in progress will delete that session's marker. The original session's next heartbeat PATCH will fail (comment cid no longer exists) and the spawned CI run will then start its own marker. Two fixers can race in parallel. The label is **operator override**, not a coordination primitive — only attach it when you are sure the local session is dead, or when you intentionally want to fork the work to CI.
-
-**Authorship gate, not just operator gate**: `copilot-review-fix.yml` filters on `github.event.pull_request.user.login == 'kotakanbe'`. Adding `copilot-review` to a PR authored by anyone else is a **no-op for this workflow** — the job is skipped and no `@claude` is posted via the label path. Operator identity (who attaches the label) is not what's checked; only the PR author matters for this specific workflow.
-
-That said, the **Claude-mention comment path is still available — for SAME-REPO PRs only**: `claude.yml` gates on `comment.user.login == 'kotakanbe'` (not on PR author), so `kotakanbe` can comment a Claude trigger on a non-`kotakanbe`-authored same-repo PR and CI runs the full Phase A+B+C. **Fork PRs cannot use this fallback**: `claude.yml`'s first step is "Reject fork PRs" (`gh pr view --json isCrossRepository → exit 1` on `true`), so the comment path is also blocked for cross-repository PRs even when posted by `kotakanbe`. The label is just one of several ways to engage CI; the comment path is the more permissive fallback for same-repo PRs when the label is a no-op.
-
-CAVEAT (degraded but functional, same-repo path only): on non-`kotakanbe`-authored same-repo PRs, `copilot-rereview-on-push.yml` is also author-gated and will not auto-request a Copilot re-review after the CI run's fix push. Phase B's pending-poll loop (Step 8.3) wastes ~10 min waiting for the event that never fires, then the skill's stuck-detector dance issues the requestReviews mutation manually. Each round therefore takes an extra ~10 min compared to a `kotakanbe`-authored PR, but Phase B still completes. For fork PRs, no automated path is available at all — Phase A locally, then rebase onto a `kotakanbe`-authored, same-repo branch is the only way to engage automated Phase B/C. Rebasing also unblocks `copilot-review-fix.yml`, `copilot-rereview-on-push.yml`, and the cron filter for future rounds (so the per-round latency drops back to baseline).
-
-**kotakanbe-only restriction (broader)**: the `kotakanbe` literal is hard-coded across `copilot-review-fix.yml`, `claude.yml`, `copilot-clean-label.yml`'s cron path, and Phase B Step 7's identity gate. Operational gating: claude code action consumes budget + has elevated repo access, so until multi-maintainer support is engineered, only the originating account can trigger it. Multi-maintainer expansion is tracked as a follow-up.
+This skill runs **only from your own machine**. There is no GitHub Actions workflow that runs Claude to fix Copilot findings, re-requests Copilot reviews on push, or manages a `copilot-clean` label — the skill drives all of that itself (Phase B's `requestReviews` calls, Step 8.3 / Step 8.4.5). To bring a PR to merge-ready state, run `/review-until-clean` locally and leave it running; it iterates Phase A → B → C until Copilot reports "no new comments" (or the round budget is exhausted).
