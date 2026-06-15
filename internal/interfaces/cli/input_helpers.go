@@ -51,7 +51,7 @@ func randomSample(items []string, sampleSize int) []string {
 // validateLineRange validates line range options and returns an error if invalid.
 func validateLineRange(opts *ProcessingOptions) error {
 	if opts.LineStart < 0 || opts.LineEnd < 0 {
-		return fmt.Errorf("--line-range values must be non-negative (0 disables range filtering)")
+		return fmt.Errorf("--line-range values must be non-negative (0 leaves a bound unset: start 0 = from first line, end 0 = to EOF)")
 	}
 	if opts.LineStart > 0 && opts.LineEnd > 0 && opts.LineEnd < opts.LineStart {
 		return fmt.Errorf("--line-range end must be >= start (start=%d, end=%d)", opts.LineStart, opts.LineEnd)
