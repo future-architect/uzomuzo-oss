@@ -95,7 +95,7 @@ func isNilService(service EvaluationService) bool {
 	}
 	v := reflect.ValueOf(service)
 	switch v.Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
 		return v.IsNil()
 	default:
 		return false
