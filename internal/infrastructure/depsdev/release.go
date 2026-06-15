@@ -23,10 +23,11 @@ func (c *DepsDevClient) GetLatestReleasesForPURLs(ctx context.Context, purls []s
 	const maxWorkers = 10
 
 	if len(purls) > 1 {
-		slog.Debug("Starting PURL batch processing", "total", len(purls), "batch_size", c.config.BatchSize)
+		slog.Debug("Starting PURL batch processing", "total", len(purls), "max_workers", maxWorkers)
 	}
 
-	// Collect all batches into a flat list so collectBounded handles concurrency.
+	// Process all PURLs concurrently; collectBounded bounds parallelism by maxWorkers
+	// (no BatchSize chunking — the full list is fanned out under the worker cap).
 	// GetLatestReleasesForPURLs stores error-bearing ReleaseInfo (ok=true with error
 	// value) — divergent from fetchReleaseInfoBatch which drops errored items.
 	type ptrReleaseInfo = *ReleaseInfo
