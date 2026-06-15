@@ -84,11 +84,14 @@ func TestCache(t *testing.T) {
 }
 
 // TestCache_Expiry verifies that a cached entry is considered a miss after
-// its TTL has elapsed.  We use a very small TTL and sleep past it.
+// its TTL has elapsed. The TTL is kept small for speed but the post-TTL sleep
+// uses a generous multiple of it so the test stays deterministic under CI load
+// (where this t.Parallel test can be paused between statements).
 func TestCache_Expiry(t *testing.T) {
 	t.Parallel()
+	const ttl = 50 * time.Millisecond
 	var c Cache[int]
-	c.SetTTL(10 * time.Millisecond)
+	c.SetTTL(ttl)
 	c.Set("x", 42)
 
 	// Confirm hit immediately.
@@ -96,8 +99,8 @@ func TestCache_Expiry(t *testing.T) {
 		t.Fatal("Get returned miss immediately after Set; want hit")
 	}
 
-	// Sleep past TTL.
-	time.Sleep(20 * time.Millisecond)
+	// Sleep well past the TTL (5x) to avoid flakiness under scheduler pressure.
+	time.Sleep(5 * ttl)
 
 	if _, ok := c.Get("x"); ok {
 		t.Error("Get returned hit after TTL expired; want miss")
