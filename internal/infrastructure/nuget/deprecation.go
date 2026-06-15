@@ -129,7 +129,7 @@ func (c *Client) GetDeprecation(ctx context.Context, packageID string) (*Depreca
 		_ = resp.Body.Close() // best-effort cleanup
 
 		if info, found, err := c.deprecationFromIndex(ctx, reg, id); err != nil {
-			return nil, false, err
+			return nil, false, fmt.Errorf("deprecation index lookup for %q: %w", id, err)
 		} else if found {
 			c.remember(id, info)
 			return info, true, nil
