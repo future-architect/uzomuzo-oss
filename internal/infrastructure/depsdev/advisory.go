@@ -14,6 +14,14 @@ import (
 // FetchAdvisory fetches advisory detail (title, CVSS3 score) for a single advisory ID.
 // Returns nil without error for 404 (withdrawn advisory).
 func (c *DepsDevClient) FetchAdvisory(ctx context.Context, advisoryID string) (*AdvisoryDetail, error) {
+	// Normalize the ID the same way FetchAdvisoriesBatch does, so direct callers
+	// don't pollute the cache with whitespace-padded keys or issue invalid
+	// requests for empty IDs.
+	advisoryID = strings.TrimSpace(advisoryID)
+	if advisoryID == "" {
+		return nil, fmt.Errorf("advisory ID is required")
+	}
+
 	// Check cache first.
 	if cached, ok := c.advisoryCache.Load(advisoryID); ok {
 		return cached.(*AdvisoryDetail), nil

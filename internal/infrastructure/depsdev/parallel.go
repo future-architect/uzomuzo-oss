@@ -27,6 +27,13 @@ func collectBounded[V any](
 	maxWorkers int,
 	fetch func(ctx context.Context, key string) (mapKey string, v V, ok bool),
 ) map[string]V {
+	// Clamp to a usable worker count: maxWorkers <= 0 would make an unbuffered
+	// (deadlocking) or invalid (panicking) semaphore. All current callers pass a
+	// positive constant; the clamp keeps this generic helper safe for reuse.
+	if maxWorkers < 1 {
+		maxWorkers = 1
+	}
+
 	results := make(map[string]V, len(keys))
 	var mu sync.Mutex
 	semaphore := make(chan struct{}, maxWorkers)
