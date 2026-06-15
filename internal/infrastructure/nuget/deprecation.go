@@ -89,7 +89,6 @@ func (c *Client) GetDeprecation(ctx context.Context, packageID string) (*Depreca
 
 	var last404 bool
 	var anyOK bool
-	var decodeErrors int
 	for idx, b := range candidates {
 		endpoint := fmt.Sprintf("%s/%s/index.json", b, url.PathEscape(idLower))
 		slog.Debug("nuget: request registration index", "id", id, "endpoint", endpoint, "attempt", idx+1)
@@ -123,7 +122,6 @@ func (c *Client) GetDeprecation(ctx context.Context, packageID string) (*Depreca
 			// Try next candidate (gz/non-gz) or fallback scraper.
 			slog.Debug("nuget: decode failed for registration index", "id", id, "error", err)
 			_ = resp.Body.Close() // best-effort cleanup
-			decodeErrors++
 			continue
 		}
 		_ = resp.Body.Close() // best-effort cleanup
@@ -144,8 +142,6 @@ func (c *Client) GetDeprecation(ctx context.Context, packageID string) (*Depreca
 	} else {
 		slog.Debug("nuget: no deprecation found (checked variants)", "id", id)
 	}
-	// Suppress unused warning: decodeErrors is intentional (tracked for future metrics).
-	_ = decodeErrors
 	// Best-effort HTML fallback for nuget.org: scrape the package page for a deprecation banner
 	if info, ok := c.scrapeDeprecationFromNuGetHTML(ctx, id); ok {
 		slog.Debug("nuget: deprecation found via HTML fallback", "id", id, "alt", info.AlternatePackageID)

@@ -276,7 +276,7 @@ func TestEnrichLicenseFromManifest_EndToEnd(t *testing.T) {
 }
 
 // TestEnrichLicenseFromManifest_NilClient ensures the enricher is a no-op when
-// the Maven client is unwired (FetchService instances that opt out, etc.).
+// the Maven client is unwired (e.g., service instances that opt out of Maven enrichment).
 func TestEnrichLicenseFromManifest_NilClient(t *testing.T) {
 	svc := &IntegrationService{}
 	a := &domain.Analysis{

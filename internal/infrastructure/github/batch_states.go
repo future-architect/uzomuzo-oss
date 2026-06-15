@@ -406,9 +406,8 @@ func (c *Client) githubWorker(ctx context.Context, batchCancel context.CancelFun
 			}
 		}
 
-		// Attach metadata to RepoState via unused fields? RepoState does not carry stars; instead,
-		// we will pass back RepoState and later enrich analysis.Repository using a side channel is not available.
-		// As a pragmatic step, we encode stars etc. into the result by updating a map later. Here, just return state.
+		// Return the RepoState; the caller re-keys results by repoURL and enriches
+		// analysis.Repository with star/metadata fields (RepoState itself does not carry them).
 		resultChannel <- repoResult{
 			repoURL:       repoURL,
 			repoState:     repoState,

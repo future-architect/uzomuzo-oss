@@ -1,4 +1,6 @@
-// Package diet orchestrates the 4-phase dependency diet analysis pipeline.
+// import_paths.go: PURL → import-path heuristics for source-coupling analysis.
+// (Package doc lives in service.go.)
+
 package diet
 
 import (

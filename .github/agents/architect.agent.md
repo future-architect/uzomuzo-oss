@@ -60,7 +60,7 @@ uzomuzo/
       licenses/              # License resolution (spdx_generated.go)
       eolresult/             # EOL status types
     application/             # Use case orchestration
-      analysis_service.go    # AnalysisService, FetchService
+      analysis_service.go    # AnalysisService
     infrastructure/          # External integrations, parallel processing
       depsdev/               # deps.dev API client
       github/                # GitHub GraphQL/REST client

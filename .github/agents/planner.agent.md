@@ -27,7 +27,7 @@ You are an expert planning specialist for this DDD-based Go CLI project, focused
 ### 2. Codebase Review
 - Analyze existing DDD layer structure:
   - `internal/domain/` — Pure business logic, entities, value objects
-  - `internal/application/` — Use case orchestration (AnalysisService, FetchService)
+  - `internal/application/` — Use case orchestration (AnalysisService)
   - `internal/infrastructure/` — External APIs, parallel processing
   - `internal/interfaces/cli/` — CLI entry points (thin orchestration)
   - `pkg/uzomuzo/` — Public Go library facade

@@ -28,7 +28,7 @@ Team uses **Go 1.26.1**. `go.mod` `go 1.25.0` is the dependency minimum — do n
 `Interfaces → Application → Domain ← Infrastructure`. See `.claude/rules/ddd-architecture.md`.
 
 - **domain/** — Pure business logic. Core: `Analysis`, `ResolvedLicense`, `EOLStatus`, `AssessmentResult`
-- **application/** — Use case orchestration. `AnalysisService` / `FetchService`. Supports `AnalysisEnricher` hook
+- **application/** — Use case orchestration. `AnalysisService`. Supports `AnalysisEnricher` hook
 - **infrastructure/** — API clients (depsdev, github, eolevaluator), integration, CSV export
 - **interfaces/cli/** — CLI entry points. No concurrent logic
 - **pkg/uzomuzo/** — Public library facade
