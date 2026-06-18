@@ -89,6 +89,21 @@ func TestConvertRepoURLToProjectKey(t *testing.T) {
 			expected: "github.com/owner/repo",
 		},
 		{
+			name:     "github_host_with_port",
+			input:    "https://github.com:443/Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "github_com_embedded_in_path_returns_empty",
+			input:    "https://evil.example/path/github.com/Owner/Repo",
+			expected: "",
+		},
+		{
+			name:     "notgithub_domain_returns_empty",
+			input:    "https://notgithub.com/Owner/Repo",
+			expected: "",
+		},
+		{
 			name:     "non_github_domain_returns_empty",
 			input:    "https://gitlab.com/Owner/Repo",
 			expected: "",
