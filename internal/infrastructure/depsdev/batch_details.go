@@ -485,13 +485,14 @@ func (c *DepsDevClient) buildFinalResults(purls []string, packageInfoMap map[str
 
 // buildBasicResult creates a BatchResult with basic package information only
 func (c *DepsDevClient) buildBasicResult(purl string, packageResp *PackageResponse) *BatchResult {
-	return &BatchResult{
-		PURL: purl,
-		Package: &Package{
+	result := &BatchResult{PURL: purl}
+	if packageResp != nil {
+		result.Package = &Package{
 			PURL:     packageResp.Version.PURL,
 			Versions: []Version{packageResp.Version},
-		},
+		}
 	}
+	return result
 }
 
 // buildCompleteResult creates a BatchResult with all available information
