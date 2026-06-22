@@ -121,7 +121,7 @@ The lifecycle assessor uses two distinct decision paths depending on `GITHUB_TOK
 │  • Zero-advisory + dormant commit → Legacy-Safe                    │
 │  • HIGH/CRITICAL vulns + dormant → EOL-Effective                   │
 │  • LOW/MEDIUM-only vulns + dormant → Stalled (severity-aware)      │
-│  • Archive/disable status → EOL-Confirmed                          │
+│  • Archive/disable → Stalled (unless explicit EOL)                 │
 ├─────────────────────────────────────────────────────────────────────┤
 │ Path B: Without GITHUB_TOKEN (basic precision)                     │
 │                                                                     │
@@ -129,7 +129,7 @@ The lifecycle assessor uses two distinct decision paths depending on `GITHUB_TOK
 │                                                                     │
 │ Capabilities:                                                       │
 │  • Publish recency + advisories → coarse classification            │
-│  • Archive detection via Scorecard "Maintained" check → EOL-Confirmed│
+│  • Archive via Scorecard "Maintained" → Stalled (unless EOL)       │
 │  • No commit signals → cannot detect active-but-unpublished        │
 │  • Packages with commits but no publish → misclassified as Stalled │
 └─────────────────────────────────────────────────────────────────────┘

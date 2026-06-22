@@ -223,8 +223,8 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | --- | --- | --- |
 | **Active** | Recent human commits + releases + healthy maintenance score | No action needed |
 | **Legacy-Safe** | No recent activity, but zero vulnerabilities — frozen and stable | Accept risk or pin version |
-| **Stalled** | Maintenance declining: low score or commits stopped | Monitor; plan migration |
-| **EOL-Confirmed** | Repository archived/disabled, or registry explicitly marks EOL | Migrate immediately |
+| **Stalled** | Maintenance declining: low score or commits stopped; or repository archived/disabled without an explicit end-of-life signal | Monitor; plan migration |
+| **EOL-Confirmed** | Registry explicitly declares end-of-life (deprecated / yanked / abandoned / relocation) | Migrate immediately |
 | **EOL-Effective** | No official EOL, but 2+ yrs without human commits AND HIGH/CRITICAL unpatched vulns | Migrate; treat as EOL |
 | **EOL-Scheduled** | Future EOL date announced (not yet reached) | Plan migration before EOL date |
 | **Review Needed** | Insufficient data for automated classification | Manual investigation required |
@@ -441,13 +441,59 @@ STATUS     PURL                 LIFECYCLE      BUILD
 
 No deprecation, no archive — but unpatched ReDoS + zero maintenance. **SCA blind spot.**
 
-### EOL-Effective — `dgrijalva/jwt-go` (archived repository)
+### EOL-Effective — `xlsx` (SheetJS — popular, but frozen on npm)
+
+<!-- begin:output:xlsx-detailed -->
+```text
+--- Summary Table ---
+STATUS     PURL                 LIFECYCLE      BUILD
+🔴 replace  pkg:npm/xlsx@0.18.5  EOL-Effective  —
+
+── Summary ─────────────────────────────────────────────────
+│ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
+└───────────────────────────────────────────────────────────
+
+--- Detailed Report ---
+
+--- PURL 1 ---
+── pkg:npm/xlsx@0.18.5 ─────────────────────────────────────
+│ 📗 SheetJS Spreadsheet Data Toolkit -- New home
+│   https://git.sheetjs.com/SheetJS/sheetjs
+│ 🔴 EOL-Effective: Unmaintained, unpatched vulnerabilities
+├─ Signals ─────────────────────────────────────────────────
+│ Last Human Commit: 2024-02-01
+│ Maintained Score: 0/10
+│ Advisories: 2
+│ Max Advisory Severity: HIGH 7.8
+├─ Health ──────────────────────────────────────────────────
+│ 36278 stars
+│ Used by: 5145 packages
+│ Depends on: 7 direct, 1 transitive
+│ Scorecard Overall: 2.3/10  Maintained: 0.0/10
+│ Last Commit: 2024-02-01
+├─ Releases ────────────────────────────────────────────────
+│ Stable: 0.18.5 (2022-03-24)  ⚠️ 2 advisories
+│   HIGH     (7.8)  GHSA-4r6h-8v6p-xvw6
+│   HIGH     (7.5)  GHSA-5pgg-2g8v-p4x9
+│   → https://deps.dev/npm/xlsx/0.18.5
+├─ Links ───────────────────────────────────────────────────
+│ Homepage: https://sheetjs.com/
+│ Repository: https://github.com/sheetjs/sheetjs
+│ Registry: https://www.npmjs.com/package/xlsx
+│ deps.dev: https://deps.dev/npm/xlsx
+└───────────────────────────────────────────────────────────
+```
+<!-- end:output:xlsx-detailed -->
+
+Not deprecated, not archived — npm still resolves `0.18.5`. But SheetJS stopped publishing to npm years ago (newer builds ship only from its own CDN), so the artifact your lockfile pins is frozen with the unpatched advisories shown above. Popular and healthy-looking, yet effectively end-of-life on npm — **the textbook SCA blind spot.**
+
+### Stalled — `dgrijalva/jwt-go` (archived & relocated, but no declared EOL)
 
 <!-- begin:output:jwt-go-detailed -->
 ```text
 --- Summary Table ---
-STATUS     PURL                                          LIFECYCLE      BUILD
-🔴 replace  pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  —
+STATUS     PURL                                          LIFECYCLE  BUILD
+🔴 replace  pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  Stalled    —
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -459,30 +505,31 @@ STATUS     PURL                                          LIFECYCLE      BUILD
 ── pkg:golang/github.com/dgrijalva/jwt-go@3.2.0 ────────────
 │ ARCHIVE - Golang implementation of JSON Web Tokens (JWT).
 │   This project is now maintained at:
-│ 🔴 EOL-Confirmed: Repository archived or disabled
+│ 🔴 Stalled: Repository archived/disabled but not declared
+│            end-of-life
 ├─ Signals ─────────────────────────────────────────────────
 │ Repo Archived: true
 ├─ Health ──────────────────────────────────────────────────
 │ 📦 Archived
-│ 10759 stars
+│ 10747 stars
 │ Scorecard Overall: 2.8/10  Maintained: 0.0/10
 │ Last Commit: 2021-08-02
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: v3.2.0+incompatible (2018-03-08)  ⚠️ 2 advisories
 │   HIGH     (7.5)  GHSA-w73w-5m7g-f7qc
 │                   GO-2020-0017
-│   → https://deps.dev/go/github.com/dgrijalva/jwt-go/v3.2.0+incompatible
+│   → https://deps.dev/go/github.com%2Fdgrijalva%2Fjwt-go/v3.2.0+incompatible
 │ Highest (SemVer): v4.0.0-20210802184156-9742bd7fca1c+incompatible (2021-08-02)
 ├─ Links ───────────────────────────────────────────────────
 │ Homepage: https://github.com/golang-jwt/jwt
 │ Repository: https://github.com/dgrijalva/jwt-go
 │ Registry: https://pkg.go.dev/github.com%2Fdgrijalva%2Fjwt-go
-│ deps.dev: https://deps.dev/go/github.com/dgrijalva/jwt-go
+│ deps.dev: https://deps.dev/go/github.com%2Fdgrijalva%2Fjwt-go
 └───────────────────────────────────────────────────────────
 ```
 <!-- end:output:jwt-go-detailed -->
 
-Successor is `golang-jwt/jwt`. **Migrate immediately.**
+Archived, relocated to `golang-jwt/jwt`, two unpatched HIGH advisories — you might expect EOL-Confirmed. But Go has no registry-level deprecation signal, so uzomuzo will not *mechanically* declare end-of-life on the archive flag alone ([ADR-0020](docs/adr/0020-archived-registry-liveness.md)): it reports **Stalled** and surfaces the archive, the advisories, and the successor for a policy/human layer to act on. **Migrate to `golang-jwt/jwt`.**
 
 ### EOL-Confirmed — `request` (186K dependents, npm deprecated)
 
@@ -549,7 +596,7 @@ STATUS      PURL                                          LIFECYCLE      BUILD
 ✅ ok        pkg:npm/moment@2.29.4                         Legacy-Safe    Moderate 4.7
 ⚠️ caution  pkg:golang/github.com/gorilla/mux@1.8.1       Stalled        Moderate 6.5
 🔴 replace   pkg:npm/dicer@0.3.1                           EOL-Effective  —
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  —
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  Stalled        —
 🔴 replace   pkg:npm/request@2.88.2                        EOL-Confirmed  —
 
 ── Summary ─────────────────────────────────────────────────
@@ -568,7 +615,7 @@ STATUS      PURL                                          LIFECYCLE      BUILD
 $ uzomuzo scan --file go.mod -f table
 
 STATUS      PURL                                                        RELATION  LIFECYCLE      BUILD
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  —
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    Stalled        —
 ⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled        Moderate 6.5
 ✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Moderate 6.7
 
