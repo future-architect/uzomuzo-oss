@@ -49,18 +49,20 @@ func TestBuildBasicResultPopulatesPackage(t *testing.T) {
 }
 
 // TestBuildFinalResultsNoRepoNoPackageInfo exercises buildFinalResults' integrated
-// assembly for a PURL in purlsWithoutRepo whose packageInfoMap entry is missing, so
-// buildBasicResult receives a nil packageResp. The state is constructed directly (it
-// is not produced by resolveRepoURLsBatch, which only emits purlsWithoutRepo entries
-// that have a packageInfoMap key) to lock in the guard behavior end-to-end.
+// assembly for a PURL in purlsWithoutRepo whose packageInfoMap value is nil, so
+// buildBasicResult receives a nil packageResp. resolveRepoURLsBatch only emits
+// purlsWithoutRepo entries that are packageInfoMap keys, so the key is supplied
+// (present) with a nil value to mirror that invariant while still exercising the
+// defensive nil guard. (In production only successful fetches are stored, so the
+// value is non-nil there; the nil value is the case the guard protects against.)
 func TestBuildFinalResultsNoRepoNoPackageInfo(t *testing.T) {
 	c := NewDepsDevClient(&config.DepsDevConfig{BaseURL: "http://localhost"})
 
 	purl := "pkg:golang/example.com/missing@v0.0.0"
 	results := c.buildFinalResults(
 		[]string{purl},
-		map[string]*PackageResponse{}, // packageInfoMap miss -> nil packageResp
-		[]string{purl},                // purlsWithoutRepo
+		map[string]*PackageResponse{purl: nil}, // key present, nil value -> nil packageResp
+		[]string{purl},                         // purlsWithoutRepo (always a packageInfoMap key)
 		map[string][]string{},
 		map[string]*Project{},
 		map[string]ReleaseInfo{},
