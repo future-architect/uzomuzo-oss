@@ -6,11 +6,12 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
-// TestBuildBasicResultNilPackageResp covers the case where buildBasicResult is
-// called with a nil *PackageResponse, which happens in buildFinalResults when
-// packageInfoMap[purl] misses (the key is absent for PURLs whose package info
-// could not be fetched). Before the nil guard, dereferencing packageResp.Version
-// panicked. The result should now carry no Package, matching buildCompleteResult.
+// TestBuildBasicResultNilPackageResp covers buildBasicResult being called with a
+// nil *PackageResponse. Before the guard, dereferencing packageResp.Version would
+// panic; the guard now leaves Package nil, mirroring the sibling buildCompleteResult.
+// The nil input is defensive: the only current caller (buildFinalResults over
+// purlsWithoutRepo) always has a packageInfoMap entry, but the guard protects any
+// future caller that passes a nil packageResp.
 func TestBuildBasicResultNilPackageResp(t *testing.T) {
 	c := NewDepsDevClient(&config.DepsDevConfig{BaseURL: "http://localhost"})
 
@@ -47,8 +48,11 @@ func TestBuildBasicResultPopulatesPackage(t *testing.T) {
 	}
 }
 
-// TestBuildFinalResultsNoRepoNoPackageInfo exercises the integrated path that
-// triggered the panic: a PURL in purlsWithoutRepo with no entry in packageInfoMap.
+// TestBuildFinalResultsNoRepoNoPackageInfo exercises buildFinalResults' integrated
+// assembly for a PURL in purlsWithoutRepo whose packageInfoMap entry is missing, so
+// buildBasicResult receives a nil packageResp. The state is constructed directly (it
+// is not produced by resolveRepoURLsBatch, which only emits purlsWithoutRepo entries
+// that have a packageInfoMap key) to lock in the guard behavior end-to-end.
 func TestBuildFinalResultsNoRepoNoPackageInfo(t *testing.T) {
 	c := NewDepsDevClient(&config.DepsDevConfig{BaseURL: "http://localhost"})
 
@@ -66,7 +70,15 @@ func TestBuildFinalResultsNoRepoNoPackageInfo(t *testing.T) {
 	if !ok {
 		t.Fatalf("no result for %q", purl)
 	}
+	if res.PURL != purl {
+		t.Errorf("PURL = %q, want %q", res.PURL, purl)
+	}
 	if res.Package != nil {
 		t.Errorf("Package = %+v, want nil", res.Package)
+	}
+	// The PURL is handled by the purlsWithoutRepo branch, not the "mark not
+	// found" branch, so Error must stay nil — pins which branch produced it.
+	if res.Error != nil {
+		t.Errorf("Error = %q, want nil", *res.Error)
 	}
 }
