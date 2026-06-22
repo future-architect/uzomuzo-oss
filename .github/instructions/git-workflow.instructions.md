@@ -22,7 +22,23 @@ When creating PRs:
 3. Use `git diff [base-branch]...HEAD` to see all changes
 4. Draft comprehensive PR summary
 5. Include test plan with TODOs
-6. Push with `-u` flag if new branch
+6. For behavior-changing PRs, include a **Runtime verification** section with real evidence — see below
+7. Push with `-u` flag if new branch
+
+### Runtime verification — always paste real evidence in the PR body
+
+A behavior-changing PR (new feature, bug fix, or a refactor that alters runtime behavior) must include a
+**"Runtime verification" section** in the PR body that pastes the **actual commands you ran and the output you
+observed** (logs, file/DB state, exit codes, etc.).
+
+- **Unit tests passing plus static analysis alone does NOT count as "verified".** Run the real binary / real
+  environment at least once and observe the headline behavior actually happening.
+- A path that is hard to unit-test because of concrete dependencies can still be observed end-to-end with the
+  **real binary plus a small forced scenario** (e.g., run the target once against a temporary fixture, seed the
+  prior state / input so the target branch is exercised, then inspect the logs and resulting state).
+- Only when runtime verification is genuinely impossible, **state the reason and the residual risk
+  explicitly**. **Do not defer the headline behavior's verification to a runbook and use that as the primary
+  evidence.**
 
 ## Branch Isolation with Git Worktree
 

@@ -14,7 +14,7 @@ See `.github/instructions/` for detailed rules.
 | [testing-performance](instructions/testing-performance.instructions.md) | Table-driven tests, benchmarks, concurrency (how to write Go tests) |
 | [test-design](instructions/test-design.instructions.md) | Pre-PR lens: classical QA techniques, fuzz/PBT policy, DDD layer placement (what to test) |
 | [project-conventions](instructions/project-conventions.instructions.md) | Configuration policy, test data, JSON tooling constraints |
-| [git-workflow](instructions/git-workflow.instructions.md) | Commit messages, PR workflow, TDD |
+| [git-workflow](instructions/git-workflow.instructions.md) | Commit messages, PR workflow, runtime verification, TDD |
 | [security](instructions/security.instructions.md) | Prompt injection defense, credentials, Go security |
 | [agent-orchestration](instructions/agent-orchestration.instructions.md) | Available agents, usage rules, parallel execution |
 
