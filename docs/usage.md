@@ -121,7 +121,7 @@ When transitive dependencies are included, output shows a `RELATION` column indi
 $ uzomuzo scan --file go.mod -f table
 
 STATUS      PURL                                                        RELATION  LIFECYCLE      BUILD
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  —
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    Stalled        —
 ⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled        Moderate 6.5
 ✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Moderate 6.7
 
