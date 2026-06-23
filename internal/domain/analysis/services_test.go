@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -130,7 +131,8 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 6, 10, "Maintained"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 8, 10, "Few vulnerabilities"),
 			},
-			want:    string(LabelEOLConfirmed),
+			// archived without an explicit primary-source EOL -> Stalled, not EOL-Confirmed (#451).
+			want:    string(LabelStalled),
 			wantErr: false,
 		},
 		{
@@ -186,7 +188,8 @@ func TestLifecycleAssessorService_Assess(t *testing.T) {
 			scores: map[string]*ScoreEntity{
 				"Maintained": NewScoreEntity("Maintained", 6, 10, "Maintained"),
 			},
-			want:    string(LabelEOLConfirmed),
+			// disabled without an explicit primary-source EOL -> Stalled, not EOL-Confirmed (#451).
+			want:    string(LabelStalled),
 			wantErr: false,
 		},
 	}
@@ -1075,6 +1078,82 @@ func TestLifecycleAssessorService_Signals(t *testing.T) {
 			}
 			if !found {
 				t.Errorf("Signal %q not found in result signals: %v", tt.wantSignalName, res.Signals)
+			}
+		})
+	}
+}
+
+// TestLifecycleAssessorService_ArchivedLiveness verifies the archive/disable gate (uzomuzo-oss#451):
+// an archived/disabled repository is NOT end-of-life on the strength of the archive flag alone — only
+// an explicit primary-source EOL (in.EOL.IsEOL(): deprecated/yanked/abandoned/relocation) yields
+// EOL-Confirmed. Everything else archived/disabled is Stalled, INDEPENDENT of release recency.
+func TestLifecycleAssessorService_ArchivedLiveness(t *testing.T) {
+	now := time.Now()
+	recent := now.AddDate(0, 0, -10)
+	ancient := now.AddDate(0, 0, -4000) // ~11 years dormant
+	stable := func(pub time.Time) *ReleaseInfo {
+		return &ReleaseInfo{StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: pub}}
+	}
+	archived := func(ri *ReleaseInfo) *Analysis {
+		return &Analysis{RepoState: &RepoState{IsArchived: true}, ReleaseInfo: ri}
+	}
+
+	tests := []struct {
+		name        string
+		analysis    *Analysis
+		eol         EOLStatus
+		wantLabel   string
+		wantTrace   string   // substring discriminator in res.Trace
+		wantSignals []string // signal names that must be present with value "true"
+	}{
+		// archived + not primary-source EOL -> Stalled, INDEPENDENT of release recency.
+		{"archived_recent_stable", archived(stable(recent)), EOLStatus{State: EOLNotEOL}, string(LabelStalled), "not_eol", []string{SignalRepoArchived}},
+		{"archived_dormant_stable", archived(stable(ancient)), EOLStatus{State: EOLNotEOL}, string(LabelStalled), "not_eol", []string{SignalRepoArchived}},
+		{"archived_no_releaseinfo", archived(nil), EOLStatus{State: EOLNotEOL}, string(LabelStalled), "not_eol", []string{SignalRepoArchived}},
+		// EOLUnknown is a distinct non-IsEOL/non-IsPlannedEOL state; it must funnel to the same
+		// archive -> Stalled branch as EOLNotEOL (the gate keys on !IsEOL(), not on NotEOL specifically).
+		{"archived_unknown_eol", archived(stable(recent)), EOLStatus{State: EOLUnknown}, string(LabelStalled), "not_eol", []string{SignalRepoArchived}},
+		// explicit primary-source EOL (deprecated/yanked/abandoned/relocation) -> EOL-Confirmed via the
+		// primary-source branch (checked before archive), even when the repository is archived.
+		{"archived_primary_source_eol", archived(stable(recent)), EOLStatus{State: EOLEndOfLife}, string(LabelEOLConfirmed), "primary_source_eol", nil},
+		// PlannedEOL (position 0) wins over the archive branch. Regression pin against future reordering.
+		{"archived_scheduled_eol", archived(stable(recent)), EOLStatus{State: EOLScheduled}, string(LabelEOLScheduled), "planned_eol", nil},
+		// Disabled is treated symmetrically.
+		{"disabled_not_eol", &Analysis{RepoState: &RepoState{IsDisabled: true}, ReleaseInfo: stable(recent)}, EOLStatus{State: EOLNotEOL}, string(LabelStalled), "not_eol", []string{SignalRepoDisabled}},
+		{"disabled_primary_source_eol", &Analysis{RepoState: &RepoState{IsDisabled: true}}, EOLStatus{State: EOLEndOfLife}, string(LabelEOLConfirmed), "primary_source_eol", nil},
+		{"archived_and_disabled_not_eol", &Analysis{RepoState: &RepoState{IsArchived: true, IsDisabled: true}, ReleaseInfo: stable(recent)}, EOLStatus{State: EOLNotEOL}, string(LabelStalled), "not_eol", []string{SignalRepoArchived, SignalRepoDisabled}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := NewLifecycleAssessorService().Assess(context.Background(), AssessmentInput{Analysis: tt.analysis, EOL: tt.eol})
+			if err != nil {
+				t.Fatalf("Assess() error = %v", err)
+			}
+			if res.Label != tt.wantLabel {
+				t.Errorf("Label = %q, want %q (trace=%v)", res.Label, tt.wantLabel, res.Trace)
+			}
+			traceFound := false
+			for _, s := range res.Trace {
+				if strings.Contains(s, tt.wantTrace) {
+					traceFound = true
+					break
+				}
+			}
+			if !traceFound {
+				t.Errorf("Trace %v, want a step containing %q", res.Trace, tt.wantTrace)
+			}
+			for _, want := range tt.wantSignals {
+				ok := false
+				for _, s := range res.Signals {
+					if s.Name == want && s.Value == "true" {
+						ok = true
+						break
+					}
+				}
+				if !ok {
+					t.Errorf("signal %q (=true) not found in %v", want, res.Signals)
+				}
 			}
 		})
 	}

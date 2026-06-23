@@ -82,20 +82,10 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		trace = append(trace, "planned_eol override")
 		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLScheduled), Reason: reason, Trace: trace, Signals: signals}, nil
 	}
-	// 1. Archive/disable check
-	if analysis != nil && (analysis.IsArchived() || analysis.IsDisabled()) {
-		var signals []Signal
-		if analysis.IsArchived() {
-			signals = append(signals, sig(SignalRepoArchived, "true"))
-		}
-		if analysis.IsDisabled() {
-			signals = append(signals, sig(SignalRepoDisabled, "true"))
-		}
-		trace = append(trace, "repo archived_or_disabled")
-		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLConfirmed), Reason: "Repository archived or disabled", Trace: trace, Signals: signals}, nil
-	}
-
-	// 1.5 Primary-source EOL status override
+	// 1. Primary-source EOL status override.
+	// EOL-Confirmed is driven ONLY by an explicit primary-source signal (npm deprecated /
+	// PyPI yanked / Packagist abandoned / Maven relocation). Checked before the archive branch so
+	// the EOL verdict and its reason are attributed to that signal, not to the archive flag.
 	if in.EOL.IsEOL() {
 		reason := in.EOL.FinalReason()
 		if reason == "" {
@@ -107,6 +97,23 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		signalSource := eolEvidenceSource(in.EOL)
 		trace = append(trace, "primary_source_eol override")
 		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLConfirmed), Reason: reason, Trace: trace, Signals: []Signal{sig(SignalEOLSource, signalSource)}}, nil
+	}
+
+	// 1.5 Archive/disable check (reached only when there is no primary-source EOL).
+	// An archived/disabled repository is a "development ceased" signal, but archive alone is NOT
+	// end-of-life: a monorepo-consolidated package can keep publishing (e.g. google-auth-library,
+	// google-gax, k6deps), and even a long-dormant package remains installable under the same PURL.
+	// So it is Stalled (frozen, but not declared EOL), never EOL-Confirmed on the archive flag alone.
+	if analysis != nil && (analysis.IsArchived() || analysis.IsDisabled()) {
+		var signals []Signal
+		if analysis.IsArchived() {
+			signals = append(signals, sig(SignalRepoArchived, "true"))
+		}
+		if analysis.IsDisabled() {
+			signals = append(signals, sig(SignalRepoDisabled, "true"))
+		}
+		trace = append(trace, "repo_archived_or_disabled_not_eol")
+		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelStalled), Reason: "Repository archived/disabled but not declared end-of-life", Trace: trace, Signals: signals}, nil
 	}
 
 	// 2. Data validity check — residual vulnerability override

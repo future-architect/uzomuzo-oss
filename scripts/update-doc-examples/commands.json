@@ -38,6 +38,12 @@
       "fence_lang": "text"
     },
     {
+      "id": "xlsx-detailed",
+      "args": ["scan", "pkg:npm/xlsx@0.18.5", "-f", "detailed"],
+      "files": ["README.md"],
+      "fence_lang": "text"
+    },
+    {
       "id": "request-detailed",
       "args": ["scan", "pkg:npm/request@2.88.2", "-f", "detailed"],
       "files": ["README.md"],
