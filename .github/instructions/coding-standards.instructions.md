@@ -51,6 +51,7 @@ A key tenet of idiomatic Go is to make the zero value of a type useful.
 
 - **Exported Identifiers**: All exported functions, types, constants, and variables MUST have a `godoc` comment.
 - **Godoc Format**: A comment for `MyFunction` should start with `// MyFunction ...`.
+- **Architectural rationale belongs in ADRs, not comments — reference by ID, do not restate**: The reasoning behind a design decision (why we chose this, which alternatives we rejected, the forces at play) lives in an ADR, which is the single source of truth. Comments / godoc must NOT copy that reasoning; reference the ADR by ID instead (`// See ADR-NNNN.`). The two have different jobs: an ADR is an append-only decision history (it never erases the past), while a comment is a snapshot of what the code does *now*. Writing the rationale in both means a later code change updates only one, they drift apart, and the ADR loses the value that makes it worth keeping — stopping a rejected proposal from being re-proposed. Apply this at authoring time, before the `comment-impl-drift` / `narrative-drift` accumulator catches the drift after the fact. Cite by a stable anchor (ADR ID, function name, heading), never by copying the ADR's prose.
 
 ## API Design and Backward Compatibility
 
