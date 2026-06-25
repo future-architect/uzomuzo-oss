@@ -44,6 +44,12 @@
             "command": "bash .claude/hooks/readme-walkthrough.sh",
             "timeout": 15,
             "statusMessage": "Checking README walkthroughs for working-directory mismatches..."
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pr-body-review.sh",
+            "timeout": 15,
+            "statusMessage": "Checking PR/issue body for coined jargon..."
           }
         ]
       }
