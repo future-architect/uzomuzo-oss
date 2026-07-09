@@ -18,6 +18,14 @@ This skill runs **only from your own machine** — there is no CI auto-fix path.
 
 Phase B posts a single **`<!-- copilot-fix-local:<HEAD_SHA> -->` marker comment** that acts purely as a **local concurrency lock**: it prevents a second `/review-until-clean` invocation from running on the same PR/HEAD in parallel (which would race on pushes). The lock is keyed on the marker's `updated_at`; the skill heartbeats it (PATCH) on each round entry and after long steps, and deletes it on exit. If a session crashes without cleanup, the lock auto-expires after `LOCAL_MARKER_MAX_AGE_MIN` (default 30 min), after which a fresh invocation may start.
 
+## Model policy — Sonnet 5 default for Phase A fan-out
+
+Step 2 below fans out 5 or 6 `Agent` tool calls per round, up to 5 rounds — the single biggest token driver in this skill. Every `Agent` call issued there MUST pass an explicit `model` parameter; never leave it unset and let the call silently inherit whatever model is orchestrating the skill itself.
+
+- **Default: `model="sonnet"` for every Phase A agent.** Running the whole skill under Fable — orchestrator and all Phase A agents inheriting Fable — has exhausted the token budget in practice. Fable is reserved for release-track implementation work, not this review loop's subagent fan-out.
+- **Combining Fable with Sonnet is fine when there's a concrete reason** — e.g. a high-stakes PR where one specific agent role (`architect` or `code-reviewer`) benefits from Fable's review quality. Pass `model="fable"` for that one `Agent` call only; leave the rest at `model="sonnet"`. Do not default every agent to Fable "just in case" — that's the exact pattern that exhausted the budget.
+- **Fallback when Fable is unavailable**: if an `Agent` call with `model="fable"` errors because Fable isn't reachable in the current session/plan, retry that same call with `model="opus"` instead of silently dropping to Sonnet or giving up. Opus is the next-highest quality tier when Fable was the deliberate choice for that agent.
+
 ## Phase A: Local agent review iteration
 
 ### Step 0: Pre-flight — clean working tree
@@ -134,7 +142,7 @@ fi
 
 If `AGENT_COUNT=5` (pure non-test Go PRs with no markdown / advisory / manifest / test / golden file changes), skip Agent 6's spawn entirely and proceed with five agents — Agent 6 has no claims to verify and would only return "no claims to check" after burning a spawn round-trip.
 
-Issue the configured `AGENT_COUNT` `Task` tool calls **plus one Bash tool call for Reviewer 7 (local Copilot CLI — see sub-section below)** in a single message — all reviewers run in parallel. Pass each Task agent the full diff (and, for `consistency-auditor`, the fact map from Step 1.5 if generated). Reviewer 7 reads the diff from a `mktemp`-generated temporary directory (file-read pattern, see its sub-section).
+Issue the configured `AGENT_COUNT` `Task` tool calls **plus one Bash tool call for Reviewer 7 (local Copilot CLI — see sub-section below)** in a single message — all reviewers run in parallel. Pass each Task agent the full diff (and, for `consistency-auditor`, the fact map from Step 1.5 if generated). Reviewer 7 reads the diff from a `mktemp`-generated temporary directory (file-read pattern, see its sub-section). **Every one of these calls sets an explicit `model` parameter per the "Model policy" section above** — default `model="sonnet"`, override individual agents to `model="fable"` only with a stated reason, fall back to `model="opus"` if a `fable` call errors.
 
 The named subagent_types invocable here are `code-reviewer`, `architect`, and (when `AGENT_COUNT=6`) `consistency-auditor`. **`consistency-auditor` is invoked by file presence at `.claude/agents/consistency-auditor.md`** — Claude Code resolves named subagents by scanning that directory, not by reading any registry. `.claude/rules/agents.md` is a generated mirror of `.github/instructions/agent-orchestration.instructions.md` (see the `<!-- Generated from ... DO NOT EDIT DIRECTLY -->` header in the mirror) and is documentation, not the registration source — `consistency-auditor` does not need to be listed in either to be invocable. The instruction-file SoT may be updated in a follow-up to mention the new agent for documentation purposes; that is independent of this skill working. The remaining three Phase A agents are **`general-purpose` Task agents with specialized prompts** (Code Reuse, Code Quality, PR Hygiene — generic agent + custom focus). For `AGENT_COUNT=5`: 2 named + 3 general-purpose. For `AGENT_COUNT=6`: 3 named + 3 general-purpose.
 
