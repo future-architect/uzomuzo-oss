@@ -14,6 +14,27 @@ When invoked:
 
 ## Review Checklist
 
+The checklist has two layers. The **Generic Correctness** perspectives below are the
+language- and architecture-agnostic foundation; the repo-specific sections that follow
+(DDD Layer Compliance / Language Policy / Security / ...) build on top. Read the generic
+perspectives first, then apply the repo-specific ones.
+
+### Generic Correctness
+
+Correctness foundation. The generic perspectives are numbered ①–⑥; **③ backward
+compatibility is intentionally out of scope while the project is experimental** (so ③ is
+skipped). Read the remaining ①②④⑤⑥ (5 perspectives) before the repo-specific sections.
+Severity: ①②④ are CRITICAL-level; ⑤⑥ are delegated to the Testing (HIGH) section below.
+
+- **① Correctness**: logic errors, nil dereferences, type mismatches, boundary-value behavior.
+  - **Range variable pointer**: never take `&e` where `e` is a `for _, e := range` variable and pass/store the pointer; use an index loop `for i := range` with `&slice[i]`.
+  - **Nil receiver/field**: a method dereferencing possibly-nil fields must guard with a descriptive error before the dereference.
+- **② Edge cases / error paths**: missed failure handling — empty input, malformed input, mid-operation failure; not crashing and not silently swallowing errors (detail in the Error Handling section below).
+- **④ Functional loss**: does this change break or silently drop an existing capability, path, or output?
+  - Scope it to the **caller-observable surface only**: CLI flags / subcommands, output-format fields, supported data sources / formats, declared interfaces, documented behavior. **Internal unexported refactors are out of scope** (the Code Reuse reviewer / `/deadcode` skill / `refactor-cleaner` agent handle those).
+  - Judge from the **actual code**: a `switch` case removed and made unreachable, a handler no longer wired, a dropped output field, a silently changed contract. Flag it even if the PR body mentions it ("PR body vs diff mismatch" is the PR Hygiene reviewer's job, not this).
+- **⑤ Test sufficiency / ⑥ Unit-test coverage**: judged in the Testing (HIGH) section below (new code has tests; normal / abnormal / boundary cases covered).
+
 ### DDD Layer Compliance (CRITICAL)
 
 - **Layer violations**: Code in correct DDD layer (`Interfaces → Application → Domain ← Infrastructure`)
@@ -38,9 +59,8 @@ When invoked:
 - Receiver names: short, consistent (not `this` or `self`)
 - Package names: short, lowercase, no underscores
 - No stuttering: `config.Config` is fine, `config.ConfigManager` is not
-- **Range variable pointer**: Never take `&e` where `e` is a `for _, e := range` variable and pass/store the pointer. Use index loop `for i := range` with `&slice[i]` instead
 - **flag.FlagSet output**: When using `flag.NewFlagSet` with `ContinueOnError`, call `fs.SetOutput(io.Discard)` to suppress duplicate error/usage output (check existing patterns in the codebase)
-- **Nil receiver/field panic**: If a struct method dereferences fields that could be nil at runtime, add a nil guard returning a descriptive error before the dereference
+- Nil safety / range-variable-pointer are covered by Generic Correctness ① (Correctness) above
 
 ### Error Handling (CRITICAL)
 
@@ -77,7 +97,7 @@ if err != nil {
 - `io.Writer` / `io.Reader` instead of concrete os.Stdout/os.Stdin
 - No unnecessary new env vars or CLI flags (see project-conventions)
 
-### Testing (HIGH)
+### Testing (HIGH) — Generic Correctness ⑤ Test sufficiency / ⑥ Unit-test coverage
 
 - New code has table-driven tests
 - Test function names: `TestFuncName_scenario`

@@ -152,13 +152,14 @@ The named subagent_types invocable here are `code-reviewer`, `architect`, and (w
 
 #### Agent 1: subagent_type=`code-reviewer` (named)
 
-Code quality, Go idioms, error handling, security. Returns CRITICAL / HIGH / MEDIUM / LOW + file + line + suggested fix.
+Generic correctness (Generic Correctness ①②④⑤⑥), Go idioms, error handling, security. Returns CRITICAL / HIGH / MEDIUM / LOW + file + line + suggested fix.
 
-Focus areas:
+Owns the generic correctness perspectives (correctness / edge-case / functional-loss / test sufficiency + coverage) — see the `## Review Checklist` → `Generic Correctness` section of `.github/agents/code-reviewer.agent.md`. Focus areas:
 
 - error handling: silenced errors (`_ = err`), missing error wrapping, inconsistent patterns
 - resource cleanup: `t.Cleanup` for process-global state AND explicit error-checked close on the normal path (both required, not either/or)
-- API contracts, nil safety, race conditions
+- API contracts, nil safety, race conditions, logic errors, boundary values
+- functional loss (④): apply the caller-observable-surface checklist in `.github/agents/code-reviewer.agent.md`'s Generic Correctness ④ (single source of truth). Cross-agent boundary: internal unexported churn is out of scope (the Code Reuse reviewer / `/deadcode` skill / `refactor-cleaner` agent handle it), and "PR body vs diff mismatch" is Agent 5's job, not this.
 
 #### Agent 2: subagent_type=`architect` (named)
 
@@ -179,7 +180,7 @@ DDD layer compliance, dependency direction, package structure. Returns CRITICAL 
 - redundant state, parameter sprawl, copy-paste with variation
 - leaky abstractions, stringly-typed code
 - unnecessary comments (WHAT not WHY)
-- bugs: nil dereference, panics, edge cases
+- correctness bugs (nil deref / panics / edge cases) — Agent 1's Generic Correctness ①② (correctness / edge-case), not duplicated here
 
 #### Agent 5: general-purpose with "PR Hygiene" prompt
 
