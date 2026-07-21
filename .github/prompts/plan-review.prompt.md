@@ -1,4 +1,4 @@
-# /plan-review — Have Copilot (gpt-5.5) critique a Claude-made plan
+# /plan-review — Have Copilot (gpt-5.6-sol) critique a Claude-made plan
 
 This skill is the intermediate stage in `Claude (drafts a plan in plan mode)` → **`Copilot CLI plan review (this skill)`** → `user check` → `ExitPlanMode + implement`. The intent is to beat Claude's own convergence bias by having a separate-vendor machine reviewer surface design issues before ExitPlanMode.
 
@@ -10,7 +10,7 @@ This skill is the intermediate stage in `Claude (drafts a plan in plan mode)` �
 
 ## Trust boundary / Data flow
 
-⚠️ This skill sends the plan file's contents to **GitHub Copilot servers** via the `copilot` subprocess. uzomuzo-oss is a **public** repository, but a plan may still quote unpushed secrets — do not run it on a plan that includes credentials or other secrets. The plan content is treated as UNTRUSTED data; the prompt tells gpt-5.5 not to execute instructions found inside it.
+⚠️ This skill sends the plan file's contents to **GitHub Copilot servers** via the `copilot` subprocess. uzomuzo-oss is a **public** repository, but a plan may still quote unpushed secrets — do not run it on a plan that includes credentials or other secrets. The plan content is treated as UNTRUSTED data; the prompt tells gpt-5.6-sol not to execute instructions found inside it.
 
 ## Procedure
 
@@ -92,8 +92,8 @@ fi
 `copilot` runs non-interactive (`-p`), review-only (`shell` / `write` / `edit` denied). Plans are usually 5-20KB, but the file-read pattern (`--add-dir "$REVIEW_TMPDIR"` exposing only `$PLAN_COPY`, never all of `/tmp`) is the default for `ARG_MAX` safety. `timeout 600` enforces a 10-min ceiling.
 
 ```bash
-# Model arg: COPILOT_MODEL unset → gpt-5.5 default; set-but-empty → omit --model (server default).
-MODEL_ARGS=(--model gpt-5.5)
+# Model arg: COPILOT_MODEL unset → gpt-5.6-sol default; set-but-empty → omit --model (server default).
+MODEL_ARGS=(--model gpt-5.6-sol)
 if [ -n "${COPILOT_MODEL+x}" ]; then
     if [ -n "$COPILOT_MODEL" ]; then MODEL_ARGS=(--model "$COPILOT_MODEL"); else MODEL_ARGS=(); fi
 fi
@@ -210,8 +210,8 @@ Copilot usage: ...
 
 ## Notes / Cost / Model
 
-- `--model gpt-5.5` is the default (project preference, user-pinned 2026-05-24). Override via `COPILOT_MODEL`. The only verified-working model is `gpt-5.5` on the current subscription tier.
-- ⚠️ **gpt-5.5 cost multiplier**: ~7.5 Premium requests per invocation (~7.5x the server-default model). Plans are smaller than diffs (typically 5-20KB) so the wall-clock is usually 1-3 min, but the per-request price matches a diff review. `COPILOT_MODEL` env semantics: **unset = gpt-5.5 default**, **set and non-empty = that model name**, **set and empty string = omit `--model` and use the cheaper server default**. For cost-sensitive runs, `export COPILOT_MODEL=` (empty string) to fall back to the cheaper server default.
+- `--model gpt-5.6-sol` is the default (project preference, user-pinned 2026-07-21; previously `gpt-5.5`). Override via `COPILOT_MODEL`. `gpt-5.6-sol` is confirmed accepted via a `copilot -p` probe on the current subscription tier; `gpt-5.5` was the prior verified default.
+- ⚠️ **gpt-5.6-sol cost multiplier**: ~7.5 Premium requests per invocation (~7.5x the server-default model; carried over from the prior gpt-5.5 measurement, not yet re-benchmarked for gpt-5.6-sol). Plans are smaller than diffs (typically 5-20KB) so the wall-clock is usually 1-3 min, but the per-request price matches a diff review. `COPILOT_MODEL` env semantics: **unset = gpt-5.6-sol default**, **set and non-empty = that model name**, **set and empty string = omit `--model` and use the cheaper server default**. For cost-sensitive runs, `export COPILOT_MODEL=` (empty string) to fall back to the cheaper server default.
 - `--allow-all-tools` is required for non-interactive mode.
 - `--deny-tool=write` / `--deny-tool=edit` / `--deny-tool=shell` prevent file modification and arbitrary command execution (read-only review — Copilot must not edit the plan or run shell commands).
 - `--add-dir "$REVIEW_TMPDIR"` lets Copilot read `$PLAN_COPY` (outside the cwd allow-list). The sandbox tmpdir is private (0700) and cleaned on exit via `trap`.
@@ -220,7 +220,7 @@ Copilot usage: ...
 ## Relationship to existing skills / agents
 
 - `/review-diff` — **diff** review. This skill is **plan** review; the review surface is orthogonal.
-- `/plan-debate` — the heavyweight version of this skill (gpt-5.5 review → Claude↔gpt-5.5 debate → architect arbitration). Use `/plan-review` for trivial plans, `/plan-debate` for high-rework-cost plans. The Round-0 finding format ([SEVERITY] Category + Total + Overall verdict) is intentionally identical between the two — if you change THAT format, update both in the same commit (`copilot-learned-coding.instructions.md` narrative-drift category).
+- `/plan-debate` — the heavyweight version of this skill (gpt-5.6-sol review → Claude↔gpt-5.6-sol debate → architect arbitration). Use `/plan-review` for trivial plans, `/plan-debate` for high-rework-cost plans. The Round-0 finding format ([SEVERITY] Category + Total + Overall verdict) is intentionally identical between the two — if you change THAT format, update both in the same commit (`copilot-learned-coding.instructions.md` narrative-drift category).
 - Claude's built-in `architect` / `planner` subagents — spawned in plan mode. This skill is a separate-vendor (GitHub) perspective running alongside; it does not replace architect / planner.
 
 ## Verification

@@ -1,12 +1,12 @@
-# /plan-debate — gpt-5.5 review → Claude↔gpt-5.5 debate → architect arbitration
+# /plan-debate — gpt-5.6-sol review → Claude↔gpt-5.6-sol debate → architect arbitration
 
 This skill is the intermediate stage in `Claude (Opus, drafts a plan in plan mode)` → **`this skill`** → `user check` → `ExitPlanMode + implement`.
 
-`/plan-review` is "gpt-5.5 critiques the plan once and stops". This skill is the **heavyweight** version, adding three things:
+`/plan-review` is "gpt-5.6-sol critiques the plan once and stops". This skill is the **heavyweight** version, adding three things:
 
-1. **Rebuttal debate** — Claude rebuts / concedes each gpt-5.5 finding, and gpt-5.5 re-evaluates, for up to two rounds. This kills gpt-5.5 false positives based on misreading, and deepens the genuine findings.
+1. **Rebuttal debate** — Claude rebuts / concedes each gpt-5.6-sol finding, and gpt-5.6-sol re-evaluates, for up to two rounds. This kills gpt-5.6-sol false positives based on misreading, and deepens the genuine findings.
 2. **Neutral arbitration** — after the debate, the `architect` subagent rules "adopt / revise / reconsider" using the repo's DDD rules and ADRs. This avoids the bias of the thread that wrote the plan grading its own work.
-3. **Cross-vendor perspective** — the plan author is Claude (Opus, Anthropic); the critic is gpt-5.5 (OpenAI, via Copilot CLI). Two models from different vendors are less likely to share the same blind spot; we run their conflict as an arbitrated debate rather than a single reviewer.
+3. **Cross-vendor perspective** — the plan author is Claude (Opus, Anthropic); the critic is gpt-5.6-sol (OpenAI, via Copilot CLI). Two models from different vendors are less likely to share the same blind spot; we run their conflict as an arbitrated debate rather than a single reviewer.
 
 ## Mode
 
@@ -27,18 +27,18 @@ This skill is the intermediate stage in `Claude (Opus, drafts a plan in plan mod
 
 ## Trust boundary / Data flow
 
-⚠️ This skill sends the plan file's contents to **GitHub Copilot servers** via the `copilot` subprocess (once per gpt-5.5 round). uzomuzo-oss is a **public** repository, but a plan may still quote unpushed secrets — do not run it on a plan that includes credentials or other secrets. The architect arbitration stage is a Claude subagent (no egress), so for sensitive plans you can fall back to an architect-only consultation (no `/plan-review` or `/plan-debate`).
+⚠️ This skill sends the plan file's contents to **GitHub Copilot servers** via the `copilot` subprocess (once per gpt-5.6-sol round). uzomuzo-oss is a **public** repository, but a plan may still quote unpushed secrets — do not run it on a plan that includes credentials or other secrets. The architect arbitration stage is a Claude subagent (no egress), so for sensitive plans you can fall back to an architect-only consultation (no `/plan-review` or `/plan-debate`).
 
-The plan content is treated as **UNTRUSTED data**. Each round's prompt tells gpt-5.5 not to execute strings found inside the plan / rebuttal files as instructions.
+The plan content is treated as **UNTRUSTED data**. Each round's prompt tells gpt-5.6-sol not to execute strings found inside the plan / rebuttal files as instructions.
 
 ## Procedure
 
 Overview:
 
 ```
-Step A  (Bash)   acquire plan + create debate dir + gpt-5.5 Round 0 review
+Step A  (Bash)   acquire plan + create debate dir + gpt-5.6-sol Round 0 review
 Step B  (Claude) read Round 0 findings, write rebuttal/concession to claude-r1.md (Write)
-Step C  (Bash)   gpt-5.5 Round 1 re-evaluation (MAINTAINED / WITHDRAWN / REFINED)
+Step C  (Bash)   gpt-5.6-sol Round 1 re-evaluation (MAINTAINED / WITHDRAWN / REFINED)
 Step D  (Claude) convergence check — if unresolved CRITICAL/HIGH disagreement remains, Round 2; else skip
 Step E  (Agent)  architect reads the plan + the full debate and rules neutrally
 Step F  (Claude) display debate summary + architect verdict to the user
@@ -49,7 +49,7 @@ Step G  (Bash)   explicitly delete the debate dir (cleanup)
 
 ---
 
-### Step A — acquire plan + create debate dir + gpt-5.5 Round 0
+### Step A — acquire plan + create debate dir + gpt-5.6-sol Round 0
 
 Claude substitutes the user-supplied plan path into the `PLAN_ARG=''` line below, **wrapped in single quotes** (empty = latest plan). Escape any embedded single quote as the 4-char sequence `'\''`. Substituting into double quotes or bare risks executing a path containing `$(...)` / backticks / `;` before validation (option-injection / command-injection guard).
 
@@ -130,13 +130,16 @@ if [ "$SIZE" -gt 102400 ]; then
     printf '%s' "$TRUNCATED" > "$DEBATE_DIR/TRUNCATED_NOTICE.txt" || die_clean "ERROR: writing TRUNCATED_NOTICE failed"
 fi
 
-# Model arg: COPILOT_MODEL unset → gpt-5.5 default; set-but-empty → omit --model (server default)
-MODEL_ARGS=(--model gpt-5.5)
+# Model arg: COPILOT_MODEL unset → gpt-5.6-sol default; set-but-empty → omit --model (server default)
+MODEL_ARGS=(--model gpt-5.6-sol)
+MODEL_LABEL="gpt-5.6-sol"
 if [ -n "${COPILOT_MODEL+x}" ]; then
     if [ -n "$COPILOT_MODEL" ]; then
         MODEL_ARGS=(--model "$COPILOT_MODEL")
+        MODEL_LABEL="$COPILOT_MODEL"
     else
         MODEL_ARGS=()  # explicit empty → server default (cheap)
+        MODEL_LABEL="server default"
     fi
 fi
 
@@ -144,7 +147,7 @@ fi
 echo "DEBATE_DIR=$DEBATE_DIR"
 echo "PLAN_SOURCE=$PLAN"
 echo "PLAN_SIZE=$SIZE"
-echo "=== ROUND 0 (gpt-5.5 initial review) ==="
+echo "=== ROUND 0 ($MODEL_LABEL initial review) ==="
 
 # Sandbox: run copilot inside a SUBSHELL whose cwd is $DEBATE_DIR, so copilot's agentic
 # Read/Grep tools default to the debate dir, not the whole repo (`--add-dir`
@@ -232,7 +235,7 @@ Cover every finding (do not silently drop any). Do NOT default to all-REBUT by t
 
 ---
 
-### Step C — gpt-5.5 Round 1 re-evaluation (Bash)
+### Step C — gpt-5.6-sol Round 1 re-evaluation (Bash)
 
 Claude substitutes the captured `DEBATE_DIR` (the `mktemp` path Step A printed) into the `DEBATE_DIR="..."` lines of Step C and Step G, **inside the existing double quotes, verbatim**. This value is a Step-A `mktemp` path, so it needs no injection validation like Step A's `PLAN_ARG`, but **never paste an arbitrary value / never unquote it** — Step G does `rm -rf`, so keep the discipline of sourcing the value only from the mktemp path.
 
@@ -241,10 +244,11 @@ set -uo pipefail
 DEBATE_DIR="/tmp/plan-debate.XXXXXX"    # ← Claude substitutes captured DEBATE_DIR here
 
 # Model arg (same three-way logic as Step A — shell state does not persist across Bash calls)
-MODEL_ARGS=(--model gpt-5.5)
+MODEL_ARGS=(--model gpt-5.6-sol)
+MODEL_LABEL="gpt-5.6-sol"
 if [ -n "${COPILOT_MODEL+x}" ]; then
-    if [ -n "$COPILOT_MODEL" ]; then MODEL_ARGS=(--model "$COPILOT_MODEL")
-    else MODEL_ARGS=(); fi
+    if [ -n "$COPILOT_MODEL" ]; then MODEL_ARGS=(--model "$COPILOT_MODEL"); MODEL_LABEL="$COPILOT_MODEL"
+    else MODEL_ARGS=(); MODEL_LABEL="server default"; fi
 fi
 
 [ -f "$DEBATE_DIR/plan.md" ]      || { echo "ERROR: $DEBATE_DIR/plan.md missing" >&2; exit 1; }
@@ -258,7 +262,7 @@ if [ -f "$DEBATE_DIR/TRUNCATED_NOTICE.txt" ]; then
     TRUNC_NOTE="$(cat "$DEBATE_DIR/TRUNCATED_NOTICE.txt") " || { echo "ERROR: reading TRUNCATED_NOTICE failed; refusing to silently drop the partial-plan constraint" >&2; exit 1; }
 fi
 
-echo "=== ROUND 1 (gpt-5.5 re-evaluation after Claude rebuttal) ==="
+echo "=== ROUND 1 ($MODEL_LABEL re-evaluation after Claude rebuttal) ==="
 # Sandbox via SUBSHELL (see Step A note): cwd=$DEBATE_DIR for copilot, without leaking cwd
 # into later Bash calls (the Step G rm would otherwise getcwd-fail inside the deleted dir).
 COPILOT_EXIT=0
@@ -302,9 +306,9 @@ echo "COPILOT_EXIT=$COPILOT_EXIT"
 
 Claude reads `copilot-r1.txt` and checks whether an **unresolved disagreement (genuine disagreement)** remains on a CRITICAL/HIGH finding. Note the Round 2 trigger is NOT "high severity remained" but "**the two still disagree**":
 
-- **unresolved disagreement = a CRITICAL/HIGH where gpt-5.5 said `MAINTAINED` AND Claude's stance was `REBUT`** (gpt-5.5 "this is a problem" vs Claude "it is not" still clashing). Worth a Round 2.
+- **unresolved disagreement = a CRITICAL/HIGH where gpt-5.6-sol said `MAINTAINED` AND Claude's stance was `REBUT`** (gpt-5.6-sol "this is a problem" vs Claude "it is not" still clashing). Worth a Round 2.
 - **not a disagreement (no Round 2)**:
-  - `WITHDRAWN` — gpt-5.5 dropped it = Claude's rebuttal won.
+  - `WITHDRAWN` — gpt-5.6-sol dropped it = Claude's rebuttal won.
   - `REFINED`, or a `MAINTAINED` where Claude had `CONCEDE`/`REFINE` — both **agree** it is a minor fix. Not a debate target; pass it straight to Step E (architect arbitration) as an **agreed required-fix candidate**.
 
 Decision:
@@ -318,10 +322,11 @@ Decision:
      set -uo pipefail
      DEBATE_DIR="/tmp/plan-debate.XXXXXX"    # ← Claude substitutes captured DEBATE_DIR (mktemp path, verbatim)
      # Model arg (same three-way logic — shell state does not persist across Bash calls)
-     MODEL_ARGS=(--model gpt-5.5)
+     MODEL_ARGS=(--model gpt-5.6-sol)
+     MODEL_LABEL="gpt-5.6-sol"
      if [ -n "${COPILOT_MODEL+x}" ]; then
-         if [ -n "$COPILOT_MODEL" ]; then MODEL_ARGS=(--model "$COPILOT_MODEL")
-         else MODEL_ARGS=(); fi
+         if [ -n "$COPILOT_MODEL" ]; then MODEL_ARGS=(--model "$COPILOT_MODEL"); MODEL_LABEL="$COPILOT_MODEL"
+         else MODEL_ARGS=(); MODEL_LABEL="server default"; fi
      fi
      for f in plan.md copilot-r1.txt claude-r1.md claude-r2.md; do
        [ -f "$DEBATE_DIR/$f" ] || { echo "ERROR: $DEBATE_DIR/$f missing" >&2; exit 1; }
@@ -330,7 +335,7 @@ Decision:
      if [ -f "$DEBATE_DIR/TRUNCATED_NOTICE.txt" ]; then
        TRUNC_NOTE="$(cat "$DEBATE_DIR/TRUNCATED_NOTICE.txt") " || { echo "ERROR: reading TRUNCATED_NOTICE failed; refusing to drop the partial-plan constraint" >&2; exit 1; }
      fi
-     echo "=== ROUND 2 (gpt-5.5 re-evaluation, still-disputed CRITICAL/HIGH only) ==="
+     echo "=== ROUND 2 ($MODEL_LABEL re-evaluation, still-disputed CRITICAL/HIGH only) ==="
      COPILOT_EXIT=0
      (
        cd "$DEBATE_DIR" || exit 97
@@ -371,18 +376,18 @@ You are the neutral arbiter of a plan. The same thread of Claude both wrote the 
 
 Read all of these files with the Read tool (paths verbatim, under /tmp):
 - <DEBATE_DIR>/plan.md         — the plan under review
-- <DEBATE_DIR>/copilot-r0.txt  — gpt-5.5's initial findings
+- <DEBATE_DIR>/copilot-r0.txt  — gpt-5.6-sol's initial findings
 - <DEBATE_DIR>/claude-r1.md    — Claude's rebuttal
-- <DEBATE_DIR>/copilot-r1.txt  — gpt-5.5's re-evaluation
+- <DEBATE_DIR>/copilot-r1.txt  — gpt-5.6-sol's re-evaluation
 - (if present) <DEBATE_DIR>/claude-r2.md, <DEBATE_DIR>/copilot-r2.txt
 - (if present) <DEBATE_DIR>/TRUNCATED_NOTICE.txt — if this exists, plan.md was truncated to ~100KB (a PARTIAL plan). In that case do NOT issue ADOPT; issue REVISE or stronger (a partial plan can't be judged sound).
 
-Using uzomuzo-oss's DDD rules (.claude/rules/ddd-architecture.md), ADRs (docs/adr/), coding standards (.claude/rules/coding-standards.md, .claude/rules/project-conventions.md — incl. the small-stable-config policy), and test rules (.claude/rules/test-design.md — what-to-test / classical-QA lens; .claude/rules/testing-performance.md — how-to-write-Go-tests) as grounds, rule on each point the debate left disputed. Decide whether gpt-5.5 or Claude is right, checked against the repo's settled design decisions (ADRs).
+Using uzomuzo-oss's DDD rules (.claude/rules/ddd-architecture.md), ADRs (docs/adr/), coding standards (.claude/rules/coding-standards.md, .claude/rules/project-conventions.md — incl. the small-stable-config policy), and test rules (.claude/rules/test-design.md — what-to-test / classical-QA lens; .claude/rules/testing-performance.md — how-to-write-Go-tests) as grounds, rule on each point the debate left disputed. Decide whether gpt-5.6-sol or Claude is right, checked against the repo's settled design decisions (ADRs).
 
 Output format:
 
 ## Ruling (per disputed point)
-- <Fn>: leans gpt-5.5 / leans Claude / both insufficient — grounds (ADR number / rule / layer constraint) in 1-2 sentences
+- <Fn>: leans gpt-5.6-sol / leans Claude / both insufficient — grounds (ADR number / rule / layer constraint) in 1-2 sentences
 
 ## Required fixes (to apply to the plan before ExitPlanMode)
 - <concretely what to change. 'none' if none>
@@ -405,15 +410,15 @@ Claude integrates the debate and the ruling for the user:
 ```
 ## /plan-debate result (plan=<PLAN_SOURCE>, size=<N>B, rounds=<1|2>)
 
-### Round 0 — gpt-5.5 initial
+### Round 0 — gpt-5.6-sol initial
 Total: X findings (C critical, H high, M medium, L low)
 Overall verdict: <PROCEED|REVISE|RECONSIDER>
 
 ### After debate (Round <1|2>)
-- MAINTAINED: F2 (HIGH, Architecture) — <why gpt-5.5 held, summarized>
+- MAINTAINED: F2 (HIGH, Architecture) — <why gpt-5.6-sol held, summarized>
 - REFINED:    F4 (MEDIUM, Scope) — <the narrowed remaining concern>
 - WITHDRAWN:  F1, F3, F5 — <points where Claude's rebuttal won>
-Revised verdict (gpt-5.5): <PROCEED|REVISE|RECONSIDER>
+Revised verdict (gpt-5.6-sol): <PROCEED|REVISE|RECONSIDER>
 
 ### architect ruling (neutral arbiter)
 <Step E per-point ruling + required fixes>
@@ -424,10 +429,10 @@ Reason: ...
 <architect verdict is deciding:
  ADOPT → proceed to ExitPlanMode / REVISE → apply the required fixes first / RECONSIDER → rebuild the plan>
 
-Copilot usage: ~<2 or 3> invocations (gpt-5.5, premium-heavy — see Cost)
+Copilot usage: ~<2 or 3> invocations (gpt-5.6-sol, premium-heavy — see Cost)
 ```
 
-**The final recommendation is based on the architect's verdict** (it is the neutral arbiter). But Claude cross-checks whether the architect missed a CRITICAL that gpt-5.5 held to the end; if they conflict, make it explicit to the user.
+**The final recommendation is based on the architect's verdict** (it is the neutral arbiter). But Claude cross-checks whether the architect missed a CRITICAL that gpt-5.6-sol held to the end; if they conflict, make it explicit to the user.
 
 ---
 
@@ -488,19 +493,19 @@ The `rm -rf` target is restricted to a directory whose basename starts with `pla
 - **copilot not installed**: Step A pre-flight `exit 127` + `NOTICE: ... npm install -g @github/copilot`. Relay to user.
 - **auth failure**: copilot exits non-zero and `copilot-r0.txt` contains `not authenticated` (no dedicated grep — Claude reads the `cat` output and judges) → prompt the user with `export GH_TOKEN=$(gh auth token)`.
 - **non-zero `COPILOT_EXIT` at Round 0**: do not proceed to debate; show the `copilot-r0.txt` partial + exit code and stop (Step G cleans up). 124 = timeout.
-- **non-zero `COPILOT_EXIT` at Round 1/2**: proceed to Step E (architect arbitration) with the debate so far (Round 0 + Claude rebuttal) — note in the user presentation that gpt-5.5's re-evaluation is missing.
-- **architect can't arbitrate** (can't read the debate files etc.): use gpt-5.5's Revised verdict as the provisional deciding verdict and state that the architect ruling was unavailable.
-- **huge plan** (already 100KB-truncated in Step A but still overflows context): the truncation-notified gpt-5.5 returns REVISE / RECONSIDER instead of PROCEED (truncation noted in the reason). Respect it.
+- **non-zero `COPILOT_EXIT` at Round 1/2**: proceed to Step E (architect arbitration) with the debate so far (Round 0 + Claude rebuttal) — note in the user presentation that gpt-5.6-sol's re-evaluation is missing.
+- **architect can't arbitrate** (can't read the debate files etc.): use gpt-5.6-sol's Revised verdict as the provisional deciding verdict and state that the architect ruling was unavailable.
+- **huge plan** (already 100KB-truncated in Step A but still overflows context): the truncation-notified gpt-5.6-sol returns REVISE / RECONSIDER instead of PROCEED (truncation noted in the reason). Respect it.
 
 ## Cost / Model
 
-- **Model**: all copilot calls use the three-way `COPILOT_MODEL` logic (project preference, user-pinned gpt-5.5). Semantics: `COPILOT_MODEL` **unset** = gpt-5.5; **set and non-empty** = that model name; **set and empty** = omit `--model` (server default, cheap). Only `gpt-5.5` is verified-working.
-- ⚠️ **Cost**: gpt-5.5 is ~7.5 premium requests per invocation. This skill calls copilot **2 times (Round 0 + Round 1) to 3 times (+ Round 2)**, so roughly **15-22 premium requests** — 2-3x `/plan-review` (~7.5). The architect stage is a Claude subagent (no premium-request cost). For trivial plans use `/plan-review` instead.
-- `--allow-all-tools` + `--deny-tool=shell|write|edit` keeps it read-only (blocks file mutation / shell exec). gpt-5.5's readable scope is confined to the debate dir by the combination of **subshell cwd = debate dir + read-only tool deny** (Step A/C); `--add-dir` itself is additive, not restrictive.
+- **Model**: all copilot calls use the three-way `COPILOT_MODEL` logic (project preference, user-pinned gpt-5.6-sol as of 2026-07-21; previously gpt-5.5). Semantics: `COPILOT_MODEL` **unset** = gpt-5.6-sol; **set and non-empty** = that model name; **set and empty** = omit `--model` (server default, cheap). `gpt-5.6-sol` is confirmed accepted via a `copilot -p` probe; `gpt-5.5` was the prior verified default.
+- ⚠️ **Cost**: gpt-5.6-sol is ~7.5 premium requests per invocation (carried over from the prior gpt-5.5 measurement; not yet re-benchmarked for gpt-5.6-sol). This skill calls copilot **2 times (Round 0 + Round 1) to 3 times (+ Round 2)**, so roughly **15-22 premium requests** — 2-3x `/plan-review` (~7.5). The architect stage is a Claude subagent (no premium-request cost). For trivial plans use `/plan-review` instead.
+- `--allow-all-tools` + `--deny-tool=shell|write|edit` keeps it read-only (blocks file mutation / shell exec). gpt-5.6-sol's readable scope is confined to the debate dir by the combination of **subshell cwd = debate dir + read-only tool deny** (Step A/C); `--add-dir` itself is additive, not restrictive.
 
 ## Relationship to existing skills / agents
 
-- **`/plan-review`** — the lightweight version of this skill (gpt-5.5 critiques once, no debate / arbitration). **Not a replacement — pick by stakes**: trivial plan → `/plan-review`; important plan → `/plan-debate`. The Round-0 **finding format** ([SEVERITY] Category + Total + Overall verdict) is intentionally identical to `/plan-review` — sync the two in the same commit only when you change THAT finding format (`copilot-learned-coding.instructions.md` narrative-drift category). The truncation banner and other prompt parts may evolve independently.
+- **`/plan-review`** — the lightweight version of this skill (gpt-5.6-sol critiques once, no debate / arbitration). **Not a replacement — pick by stakes**: trivial plan → `/plan-review`; important plan → `/plan-debate`. The Round-0 **finding format** ([SEVERITY] Category + Total + Overall verdict) is intentionally identical to `/plan-review` — sync the two in the same commit only when you change THAT finding format (`copilot-learned-coding.instructions.md` narrative-drift category). The truncation banner and other prompt parts may evolve independently.
 - **`/review-diff`** — Copilot review of a post-implementation **diff**. Review surface (plan vs diff) is orthogonal.
 - **`/review-until-clean`** — post-implementation, pre-push multi-reviewer. This skill is the **pre-implementation plan** stage, orthogonal.
 - **`planner` / `architect` (plan mode)** — spawned at the plan-mode entry. This skill calls them at the tail (just before ExitPlanMode). The plan-drafting architect consult and this skill's Step E architect ruling serve different purposes (design vs debate arbitration).
