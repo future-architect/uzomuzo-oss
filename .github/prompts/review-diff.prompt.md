@@ -1,4 +1,4 @@
-# /review-diff — Local Copilot CLI (gpt-5.5) pre-push review
+# /review-diff — Local Copilot CLI (gpt-5.6-sol) pre-push review
 
 This skill is the intermediate stage in `Claude (plan + implement)` → **`Local Copilot CLI review (this skill)`** → `git push` → `GitHub-side Copilot bot review`.
 
@@ -100,8 +100,8 @@ if [ "$SIZE" -gt "$MAX_DIFF_BYTES" ]; then
   TRUNCATED="WARNING: This diff has been truncated to ~${MAX_DIFF_BYTES} bytes. Your review covers only a partial diff — do NOT issue an APPROVE verdict; instead end with: 'PARTIAL REVIEW (diff truncated)'. "
 fi
 
-# --- Model arg: COPILOT_MODEL unset → gpt-5.5 default; set-but-empty → omit --model (server default) ---
-MODEL_ARGS=(--model gpt-5.5)
+# --- Model arg: COPILOT_MODEL unset → gpt-5.6-sol default; set-but-empty → omit --model (server default) ---
+MODEL_ARGS=(--model gpt-5.6-sol)
 if [ -n "${COPILOT_MODEL+x}" ]; then
   if [ -n "$COPILOT_MODEL" ]; then
     MODEL_ARGS=(--model "$COPILOT_MODEL")
@@ -170,8 +170,8 @@ echo "COPILOT_EXIT=$COPILOT_EXIT"
 ```
 
 Notes:
-- `--model gpt-5.5` is the default (project preference, user-pinned 2026-05-24). The only verified-working model is `gpt-5.5`; other models (`gpt-5.2` / `gpt-5` / `gpt-5-codex` / `claude-3.7-sonnet` / `claude-4-sonnet`) probe as "not available" on the current subscription tier. `COPILOT_MODEL` env semantics: **unset = gpt-5.5 default**, **set and non-empty = that model name**, **set and empty string = omit `--model` and use the cheaper server default** (`-n "${COPILOT_MODEL+x}"` distinguishes set from unset).
-- ⚠️ **gpt-5.5 cost multiplier**: ~7.5 Premium requests per invocation (a Premium request is GitHub Copilot's metered billing unit; the server-default model bills ~1 Premium / call, so gpt-5.5 is ~7.5x). Confirm a large diff stays inside the subscription rate limit before running.
+- `--model gpt-5.6-sol` is the default (project preference, user-pinned 2026-07-21; previously `gpt-5.5`). `gpt-5.6-sol` is confirmed accepted via a `copilot -p` probe on the current subscription tier; other models (`gpt-5.2` / `gpt-5` / `gpt-5-codex` / `claude-3.7-sonnet` / `claude-4-sonnet`) probe as "not available". `COPILOT_MODEL` env semantics: **unset = gpt-5.6-sol default**, **set and non-empty = that model name**, **set and empty string = omit `--model` and use the cheaper server default** (`-n "${COPILOT_MODEL+x}"` distinguishes set from unset).
+- ⚠️ **gpt-5.6-sol cost multiplier**: ~7.5 Premium requests per invocation (a Premium request is GitHub Copilot's metered billing unit; the server-default model bills ~1 Premium / call, so gpt-5.6-sol is ~7.5x — carried over from the prior gpt-5.5 measurement, not yet re-benchmarked). Confirm a large diff stays inside the subscription rate limit before running.
 - **Meaning of the tool denylist**: `--deny-tool=shell` blocks Copilot's built-in `shell` tool (arbitrary command exec via python/awk/sed). `--deny-tool=write` / `--deny-tool=edit` block file mutation. `--allow-all-tools` bypasses the permission prompt while these three denies narrow the agentic-mode destructive surface — only read-only inspection tools (`Read` / `Grep` / `Glob`) remain, and running copilot from `$REVIEW_TMPDIR` keeps its default workspace off the repo. (Copilot may still read other files under the system temp dir by default — the guarantee here is no-repo-egress, not temp-dir isolation; to harden further, add `--disallow-temp-dir`.)
 - Copilot agentically invokes `Read` / `Grep` to analyze the patch file per-file. Token usage looks high but is heavily cached.
 - Copilot uses the ambient GitHub token (`GH_TOKEN` / `gh auth` / `~/.copilot/`) for auth; no explicit `copilot login` is needed if `gh auth status` already authenticates as a Copilot-subscribed user.
@@ -243,7 +243,7 @@ Dispatch matrix:
 ## Relationship to existing skills
 
 - `/review-until-clean` Phase A — 5-6 reviewer iteration. The Copilot CLI is integrated there as an always-spawned additional reviewer (Reviewer 7); that integration duplicates this skill's prompt / model pin / `--deny-tool` set inline (the `timeout` differs by design — 300s here, 600s for the iterative loop). If you change the prompt categories / denylist / truncation rule here, update the Copilot-reviewer sub-section of `.github/prompts/review-until-clean.prompt.md` in the same commit (the same fact lives in two files — `copilot-learned-coding.instructions.md` narrative-drift category).
-- `/plan-review` / `/plan-debate` — pre-implementation plan critique by the same Copilot CLI (gpt-5.5). Complementary surface (plan vs diff); the sandbox / timeout / denylist bash scaffold is near-identical. The three Copilot-driven skills (`/review-diff` / `/plan-review` / `/plan-debate`) keep the scaffold inline at each site for now; a shared helper is a future consideration.
+- `/plan-review` / `/plan-debate` — pre-implementation plan critique by the same Copilot CLI (gpt-5.6-sol). Complementary surface (plan vs diff); the sandbox / timeout / denylist bash scaffold is near-identical. The three Copilot-driven skills (`/review-diff` / `/plan-review` / `/plan-debate`) keep the scaffold inline at each site for now; a shared helper is a future consideration.
 
 ## Verification
 

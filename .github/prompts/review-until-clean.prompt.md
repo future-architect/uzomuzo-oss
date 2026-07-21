@@ -4,7 +4,7 @@ Running `/review-until-clean` once drives the following sequence to bring a PR t
 
 | Phase | What | Exit condition |
 |---|---|---|
-| **A**: Local agent review | 5 or 6 agents (code-reviewer + architect + Code Reuse + Code Quality + PR Hygiene; +consistency-auditor when the diff touches any **claim-bearing file** — markdown / advisory / manifest content for narrative drift, OR `_test.go` / `testdata/**` / `internal/testdata/**` golden fixtures for identifier-literal claims) in parallel, iterate until subjective only. Optional Step 1.5 generates a fact map for claim-bearing PRs. Step 2 has the pre-filter that selects the Task-agent count. The local Copilot CLI (gpt-5.5, a separate-vendor LLM) is **always** spawned as a 7th reviewer every round — a Bash subprocess, not a Task agent. | max 5 rounds / no mechanical findings left AND Copilot CLI APPROVE (or unavailable) |
+| **A**: Local agent review | 5 or 6 agents (code-reviewer + architect + Code Reuse + Code Quality + PR Hygiene; +consistency-auditor when the diff touches any **claim-bearing file** — markdown / advisory / manifest content for narrative drift, OR `_test.go` / `testdata/**` / `internal/testdata/**` golden fixtures for identifier-literal claims) in parallel, iterate until subjective only. Optional Step 1.5 generates a fact map for claim-bearing PRs. Step 2 has the pre-filter that selects the Task-agent count. The local Copilot CLI (gpt-5.6-sol, a separate-vendor LLM) is **always** spawned as a 7th reviewer every round — a Bash subprocess, not a Task agent. | max 5 rounds / no mechanical findings left AND Copilot CLI APPROVE (or unavailable) |
 | **B**: Copilot review iteration | push → Copilot re-review → fix → push → repeat | max 5 rounds / "no (new) comments" |
 | **C**: Reply + resolve | Discover all unresolved Copilot threads, reply + resolve mutation | All threads processed |
 
@@ -201,9 +201,9 @@ Skip this agent's work only when the PR is pure Go code (no markdown / manifest 
 
 #### Reviewer 7: Local Copilot CLI (always-spawned Bash subprocess, every round)
 
-In addition to the `AGENT_COUNT` Task agents above, **issue ONE Bash tool call in the SAME message** that invokes the local `@github/copilot` standalone agentic CLI as a 7th parallel reviewer. Unlike the Task agents this is a Bash subprocess, not a subagent — Copilot CLI is itself an agent, so wrapping it in a Task subagent would nest agent-in-agent for no gain. It contributes a separate-vendor (OpenAI gpt-5.5) perspective that the Claude Task agents structurally cannot.
+In addition to the `AGENT_COUNT` Task agents above, **issue ONE Bash tool call in the SAME message** that invokes the local `@github/copilot` standalone agentic CLI as a 7th parallel reviewer. Unlike the Task agents this is a Bash subprocess, not a subagent — Copilot CLI is itself an agent, so wrapping it in a Task subagent would nest agent-in-agent for no gain. It contributes a separate-vendor (OpenAI gpt-5.6-sol) perspective that the Claude Task agents structurally cannot.
 
-**Always spawned** — no `AGENT_COUNT` gate, no diff-shape filter, no skip env var. The cost (gpt-5.5 = ~7.5 Premium requests per call, multiplied by the Phase A round count = typically 15-40 Premium requests per `/review-until-clean` run on a non-trivial PR) is intentional: it catches as many bugs as possible in Phase A before Phase B (the GitHub-side Copilot bot) burns a push round-trip. To reduce cost without removing the integration, set `COPILOT_MODEL=` (empty) in the operator shell before invoking the skill — Copilot CLI then falls back to the server-default model (~1 Premium per call, less thorough).
+**Always spawned** — no `AGENT_COUNT` gate, no diff-shape filter, no skip env var. The cost (gpt-5.6-sol = ~7.5 Premium requests per call [carried over from the prior gpt-5.5 measurement, not yet re-benchmarked for gpt-5.6-sol], multiplied by the Phase A round count = typically 15-40 Premium requests per `/review-until-clean` run on a non-trivial PR) is intentional: it catches as many bugs as possible in Phase A before Phase B (the GitHub-side Copilot bot) burns a push round-trip. To reduce cost without removing the integration, set `COPILOT_MODEL=` (empty) in the operator shell before invoking the skill — Copilot CLI then falls back to the server-default model (~1 Premium per call, less thorough).
 
 ⚠️ **Trust boundary**: this sends the diff to GitHub Copilot servers. uzomuzo-oss is **public**, so committed code is already public — but a working-tree diff can still carry UNPUSHED secrets; if the diff includes `.env`, credentials, or `GITHUB_TOKEN`, `git stash` those files before invoking the skill.
 
@@ -245,8 +245,8 @@ if [ "$SIZE" -gt 204800 ]; then
     TRUNCATED="WARNING: This diff was truncated to ~200KB — you are reviewing only a PARTIAL diff. Do NOT print APPROVE; if you find no issues in the visible portion, print exactly: PARTIAL REVIEW (diff truncated). "
 fi
 
-# Model arg: COPILOT_MODEL unset → gpt-5.5 default; set-but-empty → omit --model (server default).
-MODEL_ARGS=(--model gpt-5.5)
+# Model arg: COPILOT_MODEL unset → gpt-5.6-sol default; set-but-empty → omit --model (server default).
+MODEL_ARGS=(--model gpt-5.6-sol)
 if [ -n "${COPILOT_MODEL+x}" ]; then
   if [ -n "$COPILOT_MODEL" ]; then MODEL_ARGS=(--model "$COPILOT_MODEL"); else MODEL_ARGS=(); fi
 fi
@@ -308,7 +308,7 @@ elif [ "$COPILOT_EXIT" -ne 0 ]; then
 fi
 ```
 
-**Foreground (10-min Bash timeout via `timeout 600`)**: Copilot CLI on a ≤200KB diff with gpt-5.5 typically completes in 2-5 minutes; the 10-min ceiling absorbs slower runs. If `timeout` fires (exit 124), partial stdout up to the kill is still captured — treat as best-effort. Phase A does not abort on Copilot CLI timeout — additive, not blocking.
+**Foreground (10-min Bash timeout via `timeout 600`)**: Copilot CLI on a ≤200KB diff with gpt-5.6-sol typically completes in 2-5 minutes; the 10-min ceiling absorbs slower runs. If `timeout` fires (exit 124), partial stdout up to the kill is still captured — treat as best-effort. Phase A does not abort on Copilot CLI timeout — additive, not blocking.
 
 **Common-context exclusion (intentional)**: the Copilot CLI prompt above is self-contained — it does NOT receive the `copilot-learned-coding.instructions.md` context block that the Task agents see. Copilot CLI is an independent vendor's machine reviewer; injecting our internal rule corpus would create a feedback loop where it just re-asserts what the Task agents are already taught. Treat its findings as independent perspective — especially valuable for catching shapes our 5-6 Task agents share as convergence bias.
 
