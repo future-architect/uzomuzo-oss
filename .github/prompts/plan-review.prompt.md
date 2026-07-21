@@ -160,7 +160,7 @@ fi
 
 Copilot stdout interleaves conversational preamble, the summary line, and a Token-usage line. Claude (the skill runner):
 
-1. Extracts only the `[SEVERITY]`-prefixed finding blocks (excludes Copilot's own `Changes` / `Requests` / `Tokens` usage stats)
+1. Extracts only the `[SEVERITY]`-prefixed finding blocks (excludes Copilot's own `Changes` / `AI Credits` / `Tokens` / `Resume` usage stats)
 2. Extracts the trailing `Total: ...` line and the `Overall verdict: ...` line
 3. Displays to the user as:
 
@@ -180,7 +180,7 @@ Suggestion: ...
 Total: 5 findings (1 critical, 2 high, 2 medium, 0 low)
 Overall verdict: REVISE
 
-Copilot usage: 1 premium request, ↑XXk / ↓Z tokens (cached Yk)
+Copilot usage: N.N AI Credits, ↑XXk / ↓Z tokens (cached Yk)
 ```
 
 Zero-finding case (PROCEED):
@@ -211,7 +211,7 @@ Copilot usage: ...
 ## Notes / Cost / Model
 
 - `--model gpt-5.6-sol` is the default (project preference, user-pinned 2026-07-21; previously `gpt-5.5`). Override via `COPILOT_MODEL`. `gpt-5.6-sol` is confirmed accepted via a `copilot -p` probe on the current subscription tier; `gpt-5.5` was the prior verified default.
-- ⚠️ **gpt-5.6-sol cost multiplier**: ~7.5 Premium requests per invocation (~7.5x the server-default model; carried over from the prior gpt-5.5 measurement, not yet re-benchmarked for gpt-5.6-sol). Plans are smaller than diffs (typically 5-20KB) so the wall-clock is usually 1-3 min, but the per-request price matches a diff review. `COPILOT_MODEL` env semantics: **unset = gpt-5.6-sol default**, **set and non-empty = that model name**, **set and empty string = omit `--model` and use the cheaper server default**. For cost-sensitive runs, `export COPILOT_MODEL=` (empty string) to fall back to the cheaper server default.
+- ⚠️ **gpt-5.6-sol billing unit**: the local Copilot CLI reports `gpt-5.6-sol` usage in **GitHub AI Credits**, not Premium requests — see `.github/prompts/review-diff.prompt.md`'s Cost note for the observed values. The `gpt-5.5`-era `~7.5 Premium requests per invocation` estimate used the legacy billing unit and does not carry over to `gpt-5.6-sol`; per-invocation AI Credit cost has not been systematically measured in this repository. Plans are smaller than diffs (typically 5-20KB) so the wall-clock is usually 1-3 min — this timing figure also carries over from `gpt-5.5` and is unverified for `gpt-5.6-sol`. `COPILOT_MODEL` env semantics: **unset = gpt-5.6-sol default**, **set and non-empty = that model name**, **set and empty string = omit `--model` and use the cheaper server default**. For cost-sensitive runs, `export COPILOT_MODEL=` (empty string) to fall back to the cheaper server default.
 - `--allow-all-tools` is required for non-interactive mode.
 - `--deny-tool=write` / `--deny-tool=edit` / `--deny-tool=shell` prevent file modification and arbitrary command execution (read-only review — Copilot must not edit the plan or run shell commands).
 - `--add-dir "$REVIEW_TMPDIR"` lets Copilot read `$PLAN_COPY` (outside the cwd allow-list). The sandbox tmpdir is private (0700) and cleaned on exit via `trap`.
