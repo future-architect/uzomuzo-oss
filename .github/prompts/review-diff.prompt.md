@@ -11,7 +11,7 @@ Spawns the `@github/copilot` standalone agentic CLI (a separate-vendor LLM that 
 **When NOT**:
 - plan-mode (no diff yet — plan review is `/plan-review` / `/plan-debate`)
 - offline / `gh auth` not completed
-- Copilot subscription premium-request budget is tight and the diff is large (> 100KB) — set `COPILOT_MODEL=` empty to fall back to the cheaper server-default model
+- Copilot subscription AI Credits budget is tight and the diff is large (> 100KB) — set `COPILOT_MODEL=` empty to fall back to the cheaper server-default model
 - the diff contains secrets / private customer data you must not send to a third-party endpoint (see Trust boundary)
 
 ## Trust boundary / Data flow
@@ -171,7 +171,7 @@ echo "COPILOT_EXIT=$COPILOT_EXIT"
 
 Notes:
 - `--model gpt-5.6-sol` is the default (project preference, user-pinned 2026-07-21; previously `gpt-5.5`). `gpt-5.6-sol` is confirmed accepted via a `copilot -p` probe on the current subscription tier; other models (`gpt-5.2` / `gpt-5` / `gpt-5-codex` / `claude-3.7-sonnet` / `claude-4-sonnet`) probe as "not available". `COPILOT_MODEL` env semantics: **unset = gpt-5.6-sol default**, **set and non-empty = that model name**, **set and empty string = omit `--model` and use the cheaper server default** (`-n "${COPILOT_MODEL+x}"` distinguishes set from unset).
-- ⚠️ **gpt-5.6-sol cost multiplier**: ~7.5 Premium requests per invocation (a Premium request is GitHub Copilot's metered billing unit; the server-default model bills ~1 Premium / call, so gpt-5.6-sol is ~7.5x — carried over from the prior gpt-5.5 measurement, not yet re-benchmarked). Confirm a large diff stays inside the subscription rate limit before running.
+- ⚠️ **gpt-5.6-sol billing unit**: the local Copilot CLI reports `gpt-5.6-sol` usage in **GitHub AI Credits**, not Premium requests. The `gpt-5.5`-era `~7.5 Premium requests per invocation` estimate used the legacy billing unit and does not carry over to `gpt-5.6-sol`; per-invocation AI Credit cost has not been systematically measured in this repository — probes in the sibling repositories (vuls-saas/uzomuzo-catalog observed `AI Credits 30`-`56.6` per call; vuls-saas/vuls-reach observed `16.7`-`42.4`) suggest the actual range, but confirm current AI Credit usage against your subscription's allowance before running a large diff.
 - **Meaning of the tool denylist**: `--deny-tool=shell` blocks Copilot's built-in `shell` tool (arbitrary command exec via python/awk/sed). `--deny-tool=write` / `--deny-tool=edit` block file mutation. `--allow-all-tools` bypasses the permission prompt while these three denies narrow the agentic-mode destructive surface — only read-only inspection tools (`Read` / `Grep` / `Glob`) remain, and running copilot from `$REVIEW_TMPDIR` keeps its default workspace off the repo. (Copilot may still read other files under the system temp dir by default — the guarantee here is no-repo-egress, not temp-dir isolation; to harden further, add `--disallow-temp-dir`.)
 - Copilot agentically invokes `Read` / `Grep` to analyze the patch file per-file. Token usage looks high but is heavily cached.
 - Copilot uses the ambient GitHub token (`GH_TOKEN` / `gh auth` / `~/.copilot/`) for auth; no explicit `copilot login` is needed if `gh auth status` already authenticates as a Copilot-subscribed user.
@@ -182,7 +182,7 @@ Notes:
 
 `copilot` stdout typically interleaves conversational preamble, the summary line, and a Token-usage line. Claude (the skill runner) reads BOTH stdout and stderr from the Bash result and:
 
-1. Extracts only the `[SEVERITY]`-prefixed finding blocks (excludes Copilot's own `Changes` / `Requests` / `Tokens` usage stats and the `COPILOT_EXIT=` control line)
+1. Extracts only the `[SEVERITY]`-prefixed finding blocks (excludes Copilot's own `Changes` / `AI Credits` / `Tokens` / `Resume` usage stats and the `COPILOT_EXIT=` control line)
 2. Extracts the trailing `Total: ...` line
 3. Displays to the user as:
 
@@ -197,7 +197,7 @@ Fix: ...
 ... (each finding verbatim)
 
 Total: 5 findings (1 critical, 2 high, 2 medium, 0 low)
-Copilot usage: 1 premium request, ↑XXk / ↓Z tokens (cached Yk)
+Copilot usage: N.N AI Credits, ↑XXk / ↓Z tokens (cached Yk)
 ```
 
 If the output contains `APPROVE`, do not show finding blocks:
