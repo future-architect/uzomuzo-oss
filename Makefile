@@ -1,4 +1,4 @@
-.PHONY: build build-diet build-all test lint clean sync-instructions update-doc-examples check-doc-examples
+.PHONY: build build-diet build-all test lint bench bench-save clean sync-instructions update-doc-examples check-doc-examples
 
 # ── Build ──────────────────────────────────────────────────
 
@@ -17,6 +17,20 @@ test:
 
 lint:
 	go vet ./...
+
+# ── Benchmark ──────────────────────────────────────────────
+
+# bench: run every benchmark at 10 counts for benchstat comparison.
+# CGO_ENABLED=1 is required because the treesitter package is //go:build cgo;
+# without it those benchmarks are silently excluded from the run.
+bench:
+	CGO_ENABLED=1 go test ./... -run='^$$' -bench=. -benchmem -count=10
+
+# bench-save: same run, captured to FILE for benchstat before/after comparison.
+# Usage: make bench-save FILE=.perf-loop/bench-0.txt
+bench-save:
+	@test -n "$(FILE)" || (echo "FILE is required: make bench-save FILE=path" >&2; exit 1)
+	CGO_ENABLED=1 go test ./... -run='^$$' -bench=. -benchmem -count=10 | tee $(FILE)
 
 # ── Clean ──────────────────────────────────────────────────
 
