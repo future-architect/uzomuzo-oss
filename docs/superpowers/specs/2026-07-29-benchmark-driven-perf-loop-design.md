@@ -37,16 +37,27 @@ so `go test ./...` stays runnable in CI and restricted-network environments
 | 1 | `internal/infrastructure/treesitter` | `BenchmarkAnalyzeCoupling` | `AnalyzeCoupling` walks the entire source tree and tree-sitter-parses **every** matching file through a single `*sitter.Parser` in one sequential `filepath.WalkDir`. This is the dominant cost of `diet` coupling analysis on any real repository. |
 | 2 | `internal/infrastructure/depparser/cyclonedx` | `BenchmarkParse` | Parses SBOMs with thousands of components; runs once per invocation but over large input. |
 | 3 | `internal/common/purl` | `BenchmarkParse`, `BenchmarkNormalizeMavenCollapsedCoordinates` | Called once per component in every code path; small per-call cost multiplied by component count. |
-| 4 | `internal/infrastructure/eolevaluator` | `BenchmarkEvaluateBatch` | Rule-chain evaluation over a batch, with stubbed clients so no network is touched. |
+| 4 | `internal/infrastructure/eoltext` | `BenchmarkDetectLifecycleReadme`, `BenchmarkDetectLifecyclePyPI` | Regex battery over README / PyPI description text. This is the pure-CPU core behind the EOL evaluator's text rules, and it is reachable with no client at all. |
 | 5 | `internal/interfaces/cli` | `BenchmarkRenderScan` | Allocation-heavy string/box rendering over a large result set. |
+
+Target 4 deliberately benchmarks `eoltext` rather than `eolevaluator.EvaluateBatch`. The
+evaluator's clients are concrete types (`*nuget.Client`, `*maven.Client`, `*pypi.Client`, …), not
+interfaces, so they cannot be replaced with hermetic stubs; a benchmark built on nil clients would
+measure worker-channel overhead and short-circuit returns rather than real evaluation work.
+`eoltext.DetectLifecycle` is the CPU-heavy part that batch actually spends time in, and it takes
+plain values.
 
 Constraints that fall out of the repo's rules:
 
 - Target 1 needs `//go:build cgo` on its benchmark file, matching the package
   (`testing-performance.md`, "Propagate Build Tags to Test Files").
-- Fixtures live under each package's `testdata/` (`project-conventions.md`). Target 1's fixture is
-  a generated, committed synthetic source tree (Go/JavaScript/Python/Java files) sized so a run
-  takes seconds, not minutes.
+- Fixtures live under each package's `testdata/` (`project-conventions.md`), with one reasoned
+  exception: target 1's multi-language source corpus is produced at run time by a **committed
+  deterministic generator** into `b.TempDir()`. `skipDirs` in `analyzer.go:34` contains
+  `"testdata"`, so a committed corpus risks being skipped by the very walker under test, and
+  committing hundreds of synthetic source files into a dependency-analysis tool's own repository
+  invites its scanners to treat them as real dependencies. The generator uses no randomness, so
+  runs stay byte-identical and benchmark numbers stay comparable across commits.
 - Benchmarks must not `t.Fatal` from non-test goroutines and must `Close()` tree-sitter handles
   (`testing-performance.md`).
 
@@ -126,7 +137,8 @@ evidence that the remaining code paths were examined and found already adequate.
 | Loop loses context across wake-ups | `.perf-loop/journal.md` is the single source of truth and is re-read at the start of each iteration. |
 | A "win" is really a benchmark artifact | The end-to-end binary timing in the PR is the cross-check; a microbenchmark win that does not move the real run is reported as such. |
 
-## 8. Open Choices Deliberately Left to the Plan
+## 8. Fixture Sizes
 
-The implementation plan decides fixture sizes and the exact generated-corpus shape for target 1.
-Everything else in this document is fixed.
+Fixed by the implementation plan: 2000 components for the CycloneDX SBOM, 50 files per language
+(200 files total) for the tree-sitter corpus, 1000 entries for the CLI render benchmark. Each is
+sized so a single benchmark run takes seconds.
