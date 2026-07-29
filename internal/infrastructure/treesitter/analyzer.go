@@ -10,8 +10,10 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"unsafe"
 
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
@@ -166,6 +168,18 @@ func extToLang(ext string) (langID, bool) {
 }
 
 // AnalyzeCoupling walks sourceRoot, parses source files, and returns coupling analysis per PURL.
+//
+// The walk only collects paths; parsing runs across a worker pool. Tree-sitter
+// parsing is CGO-bound and independent per file, so a single-threaded walk left
+// every core but one idle. Each worker owns its parser — SetLanguage mutates it —
+// and its own accumulator map, merged once after the pool drains. The compiled
+// queries are shared rather than duplicated per worker because a *sitter.Query is
+// never written after NewQuery; all mutable match state lives in the per-file
+// QueryCursor.
+//
+// Why the result stays deterministic even though completion order is not: every
+// accumulator field is order-independent (two set unions, a counter sum, three
+// OR-ed flags), and buildCouplingResults sorts the slices it emits.
 func (a *Analyzer) AnalyzeCoupling(
 	ctx context.Context,
 	sourceRoot string,
@@ -173,10 +187,8 @@ func (a *Analyzer) AnalyzeCoupling(
 ) (map[string]*domaindiet.CouplingAnalysis, error) {
 	importToPURL := buildImportToPURL(importPaths)
 
-	accum := make(map[string]*accumulator)
-
-	parser := sitter.NewParser()
-	defer parser.Close()
+	type fileJob struct{ path, relPath string }
+	var jobs []fileJob
 
 	err := filepath.WalkDir(sourceRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -199,13 +211,54 @@ func (a *Analyzer) AnalyzeCoupling(
 			relPath = path
 		}
 
-		a.analyzeFile(path, relPath, parser, importToPURL, accum)
+		jobs = append(jobs, fileJob{path: path, relPath: relPath})
 
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("walking source tree: %w", err)
 	}
+
+	if len(jobs) == 0 {
+		return nil, nil
+	}
+
+	workers := min(runtime.GOMAXPROCS(0), len(jobs))
+
+	partials := make([]map[string]*accumulator, workers)
+	jobCh := make(chan fileJob)
+	var wg sync.WaitGroup
+
+	for w := range workers {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			parser := sitter.NewParser()
+			defer parser.Close()
+			local := make(map[string]*accumulator)
+			for j := range jobCh {
+				a.analyzeFile(j.path, j.relPath, parser, importToPURL, local)
+			}
+			partials[idx] = local
+		}(w)
+	}
+
+dispatch:
+	for _, j := range jobs {
+		select {
+		case <-ctx.Done():
+			break dispatch
+		case jobCh <- j:
+		}
+	}
+	close(jobCh)
+	wg.Wait()
+
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("walking source tree: %w", err)
+	}
+
+	accum := mergeAccumulators(partials)
 
 	// No coupling data collected — return nil so callers treat coupling as unavailable
 	// rather than misclassifying every dependency as unused.
@@ -214,6 +267,36 @@ func (a *Analyzer) AnalyzeCoupling(
 	}
 
 	return buildCouplingResults(accum), nil
+}
+
+// mergeAccumulators folds the per-worker accumulator maps into one.
+//
+// Every field is order-independent — set union, counter sum, flag OR — so the
+// merged result does not depend on which worker happened to see which file.
+// The first accumulator for a PURL is adopted by reference and mutated in place;
+// the partial maps are not read after merging.
+func mergeAccumulators(partials []map[string]*accumulator) map[string]*accumulator {
+	merged := make(map[string]*accumulator)
+	for _, part := range partials {
+		for purl, src := range part {
+			dst, ok := merged[purl]
+			if !ok {
+				merged[purl] = src
+				continue
+			}
+			for f := range src.importFiles {
+				dst.importFiles[f] = true
+			}
+			for s := range src.symbols {
+				dst.symbols[s] = true
+			}
+			dst.callSites += src.callSites
+			dst.hasDotImport = dst.hasDotImport || src.hasDotImport
+			dst.hasBlankImport = dst.hasBlankImport || src.hasBlankImport
+			dst.hasWildcardImport = dst.hasWildcardImport || src.hasWildcardImport
+		}
+	}
+	return merged
 }
 
 // buildImportToPURL builds the reverse map from import path to []PURL.
