@@ -274,6 +274,36 @@ func renderScanDetailed(w io.Writer, allEntries, displayEntries []domainaudit.Au
 // The result is fixed-width padded so tabwriter aligns subsequent columns correctly
 // despite emoji taking variable display width.
 func tableVerdictDisplay(v domainaudit.Verdict) string {
+	if s, ok := tableVerdictCells[v]; ok {
+		return s
+	}
+	// Verdict added to the domain without being listed below: format on demand
+	// rather than rendering a blank cell.
+	return formatTableVerdictCell(v)
+}
+
+// tableVerdictCells holds the rendered cell for every known verdict.
+//
+// The cell depends only on the verdict, but renderScanTable formatted one per
+// row, which made this the single largest allocation source in table rendering.
+// Precomputing costs four strings at init.
+var tableVerdictCells = func() map[domainaudit.Verdict]string {
+	known := []domainaudit.Verdict{
+		domainaudit.VerdictOK,
+		domainaudit.VerdictCaution,
+		domainaudit.VerdictReplace,
+		domainaudit.VerdictReview,
+	}
+	m := make(map[domainaudit.Verdict]string, len(known))
+	for _, v := range known {
+		m[v] = formatTableVerdictCell(v)
+	}
+	return m
+}()
+
+// formatTableVerdictCell renders one verdict cell. Both the cache and the
+// unknown-verdict fallback go through here so the two cannot format differently.
+func formatTableVerdictCell(v domainaudit.Verdict) string {
 	icon := verdictIcon(v)
 	// Pad verdict text to 7 chars (length of "replace") so columns after it align.
 	return fmt.Sprintf("%s %-7s", icon, string(v))
