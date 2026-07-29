@@ -28,7 +28,7 @@
 | Path | Status | Responsibility |
 |------|--------|----------------|
 | `Makefile` | Modify | Add a `bench` target so every iteration measures identically. |
-| `.git/info/exclude` | Modify | Keep the loop journal out of commits without touching the shared `.gitignore`. |
+| `<scratchpad>/perf-loop/` | Create (outside the repo) | Loop state — journal, `bench-N.txt`, pprof profiles. Kept outside the working tree entirely; see the note below. |
 | `internal/common/purl/bench_test.go` | Create | Benchmarks `Parser.Parse` and `IsStableVersion` — per-component cost multiplied by component count. |
 | `internal/infrastructure/eoltext/bench_test.go` | Create | Benchmarks `DetectLifecycle` — regex-heavy pure CPU over README/PyPI text. |
 | `internal/infrastructure/depparser/cyclonedx/bench_test.go` | Create | Benchmarks `Parser.Parse` over a large generated SBOM. |
@@ -36,10 +36,19 @@
 | `internal/interfaces/cli/bench_test.go` | Create | Benchmarks `renderScanOutput` for table/json/csv over a large entry set. |
 | `internal/infrastructure/treesitter/bench_test.go` | Create | Benchmarks `Analyzer.AnalyzeCoupling` over a generated multi-language source corpus. `//go:build cgo`. |
 | `internal/infrastructure/treesitter/corpus_test.go` | Create | Deterministic corpus generator shared by the benchmark. `//go:build cgo`. |
-| `.perf-loop/journal.md` | Create (uncommitted) | The loop's memory across wake-ups. |
-| `.perf-loop/ITERATION.md` | Create (uncommitted) | The exact prompt the loop re-executes each wake-up. |
+| `<scratchpad>/perf-loop/journal.md` | Create (outside the repo) | The loop's memory across wake-ups. |
+| `<scratchpad>/perf-loop/ITERATION.md` | Create (outside the repo) | The exact prompt the loop re-executes each wake-up. |
 
 Each benchmark file is package-local and self-contained: it owns its fixture and its correctness assertion, so a reviewer can approve or reject one target without reading the others.
+
+**Why loop state lives outside the repository.** The original plan put it in an in-tree
+`.perf-loop/` directory excluded via `.git/info/exclude`. That does not work in a worktree: `git rev-parse --git-path
+info/exclude` resolves to the **common** git directory, which is shared with the main checkout and
+every other worktree, so the exclude entry would be written into state other sessions read. Writing
+a per-worktree `info/exclude` instead has the opposite problem — git never reads it. Keeping loop
+artifacts in the session scratchpad avoids both: nothing is added to the working tree, so
+`git status` stays clean with no exclude rule at all, and no shared state is modified.
+`$LOOPDIR` below refers to that scratchpad path.
 
 ---
 
@@ -47,11 +56,11 @@ Each benchmark file is package-local and self-contained: it owns its fixture and
 
 **Files:**
 - Modify: `Makefile` (append after the `lint:` target, around line 20)
-- Modify: `.git/info/exclude`
+- Create: `$LOOPDIR/` (session scratchpad, outside the working tree)
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `make bench` (runs every benchmark, 10 counts, writes nothing — stdout is redirected by the caller); `make bench-save FILE=<path>` (same run, tee'd to `<path>`). The `.perf-loop/` directory, git-excluded.
+- Produces: `make bench` (runs every benchmark, 10 counts, writes nothing — stdout is redirected by the caller); `make bench-save FILE=<path>` (same run, tee'd to `<path>`). The `$LOOPDIR/` directory, outside the repository.
 
 - [ ] **Step 1: Install benchstat and verify it runs**
 
@@ -60,7 +69,7 @@ go install golang.org/x/perf/cmd/benchstat@latest
 "$(go env GOPATH)/bin/benchstat" -h
 ```
 
-Expected: usage text on stderr and a non-crash exit. If the install fails because the network is unavailable, stop and record that in `.perf-loop/journal.md` (Step 5 creates it) — the loop can still run with median comparison, but every later claim of a "significant" win must then be stated as weaker evidence. Do not silently continue as if benchstat were present.
+Expected: usage text on stderr and a non-crash exit. If the install fails because the network is unavailable, stop and record that in `$LOOPDIR/journal.md` (Step 5 creates it) — the loop can still run with median comparison, but every later claim of a "significant" win must then be stated as weaker evidence. Do not silently continue as if benchstat were present.
 
 - [ ] **Step 2: Add the bench targets to the Makefile**
 
@@ -76,7 +85,7 @@ bench:
 	CGO_ENABLED=1 go test ./... -run='^$$' -bench=. -benchmem -count=10
 
 # bench-save: same run, captured to FILE for benchstat before/after comparison.
-# Usage: make bench-save FILE=.perf-loop/bench-0.txt
+# Usage: make bench-save FILE=$LOOPDIR/bench-0.txt
 bench-save:
 	@test -n "$(FILE)" || (echo "FILE is required: make bench-save FILE=path" >&2; exit 1)
 	CGO_ENABLED=1 go test ./... -run='^$$' -bench=. -benchmem -count=10 | tee $(FILE)
@@ -92,19 +101,24 @@ make bench 2>&1 | tail -20
 
 Expected: packages report `ok` / `no test files` and **no** `Benchmark...` result lines, because none exist yet. This confirms the target is wired before any benchmark can mask a wiring bug.
 
-- [ ] **Step 4: Exclude the loop journal from git**
+- [ ] **Step 4: Create the loop state directory outside the working tree**
+
+Set `$LOOPDIR` to `<session scratchpad>/perf-loop` and create it:
 
 ```bash
-mkdir -p .perf-loop
-printf '\n# Local perf-loop state (see docs/superpowers/specs/2026-07-29-benchmark-driven-perf-loop-design.md)\n.perf-loop/\n' >> .git/info/exclude
+export LOOPDIR="<session scratchpad>/perf-loop"
+mkdir -p "$LOOPDIR"
 git status --porcelain
 ```
 
-Expected: `.perf-loop/` does **not** appear in the output. Only `Makefile` shows as modified.
+Expected: `git status` reports only `Makefile` as modified. Nothing loop-related appears, because
+nothing loop-related is inside the working tree — no exclude rule is needed or wanted. Do **not**
+write to `.git/info/exclude`: in a worktree that path resolves to the common git directory shared
+with the main checkout and every other worktree.
 
 - [ ] **Step 5: Seed the journal**
 
-Write `.perf-loop/journal.md`:
+Write `$LOOPDIR/journal.md`:
 
 ```markdown
 # Perf Loop Journal
@@ -759,9 +773,9 @@ git commit -m "test: add tree-sitter coupling analysis benchmark"
 ### Task 7: Capture the baseline and write the iteration prompt
 
 **Files:**
-- Create: `.perf-loop/bench-0.txt` (uncommitted)
-- Create: `.perf-loop/ITERATION.md` (uncommitted)
-- Modify: `.perf-loop/journal.md` (uncommitted)
+- Create: `$LOOPDIR/bench-0.txt` (uncommitted)
+- Create: `$LOOPDIR/ITERATION.md` (uncommitted)
+- Modify: `$LOOPDIR/journal.md` (uncommitted)
 
 **Interfaces:**
 - Consumes: `make bench-save` from Task 1; all benchmarks from Tasks 2–6.
@@ -784,14 +798,14 @@ Expected exactly these names: `BenchmarkAnalyzeCoupling`, `BenchmarkDetectLifecy
 - [ ] **Step 2: Capture the baseline**
 
 ```bash
-make bench-save FILE=.perf-loop/bench-0.txt
+make bench-save FILE=$LOOPDIR/bench-0.txt
 ```
 
 Expected: the file exists and contains the full result set. This is iteration 0 and is exempt from the win requirement — it only establishes the reference point.
 
 - [ ] **Step 3: Write the iteration prompt**
 
-Write `.perf-loop/ITERATION.md`. This file is the loop's instruction set; it is written once and re-read at every wake-up:
+Write `$LOOPDIR/ITERATION.md`. This file is the loop's instruction set; it is written once and re-read at every wake-up:
 
 ```markdown
 # Perf Loop — One Iteration
@@ -801,7 +815,7 @@ Design: `docs/superpowers/specs/2026-07-29-benchmark-driven-perf-loop-design.md`
 
 ## Before anything else
 
-Read `.perf-loop/journal.md` in full. It is the only memory that survives between
+Read `$LOOPDIR/journal.md` in full. It is the only memory that survives between
 wake-ups. Note the current "consecutive iterations with no accepted win" counter.
 
 ## Stop conditions — check these FIRST
@@ -818,8 +832,8 @@ Stop the loop (call ScheduleWakeup with `stop: true`) and go to "On stop" if eit
    that benchmark with profiling:
 
        CGO_ENABLED=1 go test ./<pkg>/ -run='^$' -bench=<Name> -benchmem \
-         -cpuprofile=.perf-loop/cpu-<n>.prof -memprofile=.perf-loop/mem-<n>.prof -count=5
-       go tool pprof -top -nodecount=25 .perf-loop/cpu-<n>.prof
+         -cpuprofile=$LOOPDIR/cpu-<n>.prof -memprofile=$LOOPDIR/mem-<n>.prof -count=5
+       go tool pprof -top -nodecount=25 $LOOPDIR/cpu-<n>.prof
 
 2. **Choose exactly one hotspot** and write the hypothesis into the journal before
    changing any code. One unknown per change.
@@ -840,8 +854,8 @@ Stop the loop (call ScheduleWakeup with `stop: true`) and go to "On stop" if eit
 
 5. **Verify the win.**
 
-       make bench-save FILE=.perf-loop/bench-<n>.txt
-       benchstat .perf-loop/bench-<n-1>.txt .perf-loop/bench-<n>.txt
+       make bench-save FILE=$LOOPDIR/bench-<n>.txt
+       benchstat $LOOPDIR/bench-<n-1>.txt $LOOPDIR/bench-<n>.txt
 
 6. **Accept or revert.** Accept only if ALL hold:
    - the target metric improves by >= 10%,
@@ -880,12 +894,12 @@ Stop the loop (call ScheduleWakeup with `stop: true`) and go to "On stop" if eit
 
 - [ ] **Step 4: Record the baseline in the journal**
 
-Append to `.perf-loop/journal.md`:
+Append to `$LOOPDIR/journal.md`:
 
 ```markdown
 ### Iteration 0 — baseline
 
-- Captured: .perf-loop/bench-0.txt
+- Captured: $LOOPDIR/bench-0.txt
 - Targets present: (paste the sorted unique benchmark names from Step 1)
 - Verdict: baseline only, exempt from the win requirement
 - No-win counter: 0
@@ -897,7 +911,7 @@ Append to `.perf-loop/journal.md`:
 git status --porcelain
 ```
 
-Expected: empty. All of Task 7's artifacts are under the git-excluded `.perf-loop/`.
+Expected: empty. All of Task 7's artifacts are under `$LOOPDIR/`, outside the working tree.
 
 ---
 
@@ -906,23 +920,23 @@ Expected: empty. All of Task 7's artifacts are under the git-excluded `.perf-loo
 **Files:** none — this task runs the loop built by Tasks 1–7.
 
 **Interfaces:**
-- Consumes: `.perf-loop/ITERATION.md`, `.perf-loop/journal.md`, `.perf-loop/bench-0.txt`.
+- Consumes: `$LOOPDIR/ITERATION.md`, `$LOOPDIR/journal.md`, `$LOOPDIR/bench-0.txt`.
 - Produces: `perf:` commits on `perf/benchmark-driven-optimization`, and a final report to the user.
 
 - [ ] **Step 1: Confirm the working tree is clean and the baseline exists**
 
 ```bash
-git status --porcelain && ls -la .perf-loop/
+git status --porcelain && ls -la $LOOPDIR/
 ```
 
-Expected: no output from `git status`; `.perf-loop/` contains `journal.md`, `ITERATION.md`, and `bench-0.txt`.
+Expected: no output from `git status`; `$LOOPDIR/` contains `journal.md`, `ITERATION.md`, and `bench-0.txt`.
 
 - [ ] **Step 2: Start the loop**
 
 Invoke:
 
 ```
-/loop Execute one iteration of .perf-loop/ITERATION.md
+/loop Execute one iteration of $LOOPDIR/ITERATION.md
 ```
 
 No interval is given, so the loop runs in dynamic mode and paces itself with
