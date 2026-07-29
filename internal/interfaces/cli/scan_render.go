@@ -340,9 +340,20 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		return fmt.Errorf("write scan table header: %w", err)
 	}
 
+	// Rows are assembled into buffers that persist across iterations, then handed
+	// to the tabwriter in one Write. Allocating a fresh []string per row and
+	// joining it cost about six allocations per row for bytes the tabwriter
+	// consumes immediately.
+	//
+	// Why not write each cell straight to the tabwriter instead: tabwriter.Writer
+	// does not implement io.StringWriter, so io.WriteString falls back to
+	// Write([]byte(s)) and allocates a conversion per call. Measured, that traded
+	// one allocation per row for nine — fewer bytes, half again as many objects.
+	cols := make([]string, 0, maxTableColumns)
+	rowBuf := make([]byte, 0, 256)
 	for i := range displayEntries {
 		maintenance, _ := entryMaintenanceEOL(&displayEntries[i], "—")
-		var cols []string
+		cols = cols[:0]
 		cols = append(cols, tableVerdictDisplay(displayEntries[i].Verdict))
 		if showSource {
 			cols = append(cols, sourceDisplayName(displayEntries[i].Source))
@@ -353,7 +364,9 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		}
 		cols = append(cols, maintenance)
 		cols = append(cols, buildIntegrityDisplay(displayEntries[i].Analysis, displayEntries[i].Verdict))
-		if _, err := fmt.Fprintln(tw, strings.Join(cols, "\t")); err != nil {
+
+		rowBuf = appendTabbedRow(rowBuf[:0], cols)
+		if _, err := tw.Write(rowBuf); err != nil {
 			return fmt.Errorf("failed to write table row: %w", err)
 		}
 	}
@@ -365,6 +378,24 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		return fmt.Errorf("failed to write summary box: %w", err)
 	}
 	return nil
+}
+
+// maxTableColumns is the widest the scan table gets: STATUS, SOURCE, PURL,
+// RELATION, LIFECYCLE, BUILD. SOURCE and RELATION are conditional, so a given
+// run may use fewer — this is the row buffer's capacity, not its length.
+const maxTableColumns = 6
+
+// appendTabbedRow appends cells separated by tabs and terminated by a newline,
+// producing the same bytes as Fprintln of a tab-joined string. Callers pass
+// dst[:0] to reuse a buffer across rows.
+func appendTabbedRow(dst []byte, cells []string) []byte {
+	for i, c := range cells {
+		if i > 0 {
+			dst = append(dst, '\t')
+		}
+		dst = append(dst, c...)
+	}
+	return append(dst, '\n')
 }
 
 // renderSummaryBox renders the summary line in a left-border box.
