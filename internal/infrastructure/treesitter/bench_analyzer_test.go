@@ -10,23 +10,30 @@ import (
 	"testing"
 )
 
-// BenchmarkNewAnalyzer measures analyzer construction, which compiles the
-// import and call queries for every supported language.
+// BenchmarkNewAnalyzer measures analyzer construction on its own.
 //
-// This cost is invisible to BenchmarkAnalyzeCoupling: that benchmark builds its
-// analyzer before b.ResetTimer(), so query compilation never enters its timed
-// region. It is not invisible to users — uzomuzo-diet constructs one analyzer
-// per invocation and pays it in full before any file is read.
+// Read it together with BenchmarkSingleLanguageRepo, never alone: query
+// compilation is lazy, so this benchmark deliberately excludes it. A drop here
+// means work moved to first use, not that it disappeared.
+//
+// Neither cost is visible to BenchmarkAnalyzeCoupling, which builds its
+// analyzer before b.ResetTimer(). It is visible to users — uzomuzo-diet
+// constructs one analyzer per invocation.
 func BenchmarkNewAnalyzer(b *testing.B) {
-	// Guard: a construction that compiled nothing would benchmark an empty
-	// loop. Every language must arrive with both queries compiled.
+	// Guard: every language must arrive registered with a language handle and
+	// both query sources. Compiled queries are deliberately not asserted here —
+	// they are compiled on first use, and BenchmarkSingleLanguageRepo's guard
+	// covers the path that actually needs them.
 	a := NewAnalyzer()
+	if len(a.configs) == 0 {
+		b.Fatal("NewAnalyzer registered no languages")
+	}
 	for lid, cfg := range a.configs {
-		if cfg.compiledImport == nil {
-			b.Fatalf("lang %d has no compiled import query", lid)
+		if cfg.language == nil {
+			b.Fatalf("lang %d has no language handle", lid)
 		}
-		if cfg.compiledCall == nil {
-			b.Fatalf("lang %d has no compiled call query", lid)
+		if cfg.importQuery == "" || cfg.callQuery == "" {
+			b.Fatalf("lang %d has an empty query source", lid)
 		}
 	}
 	a.Close()

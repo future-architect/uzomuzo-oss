@@ -128,7 +128,6 @@ func newJSLikeConfig(lang *sitter.Language, includeJSX bool) *langConfig {
 			return importPath
 		},
 	}
-	compileQueries(cfg)
 
 	return cfg
 }

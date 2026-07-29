@@ -69,14 +69,31 @@ const blankImportAlias = "\x00blank"
 const wildcardImportAlias = "\x00wildcard"
 
 // langConfig holds the tree-sitter language and query patterns.
+//
+// Must not be copied: compileOnce carries a sync.Once. Configs are always held
+// and passed as pointers via Analyzer.configs.
 type langConfig struct {
 	language       *sitter.Language
 	importQuery    string
 	callQuery      string
-	compiledImport *sitter.Query // compiled once in NewAnalyzer
-	compiledCall   *sitter.Query // compiled once in NewAnalyzer
+	compileOnce    sync.Once
+	compiledImport *sitter.Query // nil until ensureCompiled runs
+	compiledCall   *sitter.Query // nil until ensureCompiled runs
 	stripQuotes    bool
 	aliasFromPkg   func(importPath string) string
+}
+
+// ensureCompiled compiles this language's queries on first use.
+//
+// Why not compile eagerly in NewAnalyzer: compiling all six languages costs
+// ~180ms, and a repository written in one language needs exactly one of them.
+// The cost is paid per analyzer construction, which uzomuzo-diet does once per
+// invocation before reading any file.
+//
+// Safe under the worker pool: several workers may reach the same language
+// simultaneously, and sync.Once serializes exactly one compilation.
+func (cfg *langConfig) ensureCompiled() {
+	cfg.compileOnce.Do(func() { compileQueries(cfg) })
 }
 
 // Analyzer implements SourceAnalyzer using tree-sitter for multi-language parsing.
@@ -110,8 +127,8 @@ func compileQueries(cfg *langConfig) {
 // tree-sitter Go bindings do not use runtime finalizers due to known CGO
 // interactions, so explicit cleanup is required. Multiple calls are safe.
 //
-// Close is idempotent: a nil compiledImport/compiledCall (compilation failure
-// at NewAnalyzer time) is treated as already-released, and calling Close
+// Close is idempotent: a nil compiledImport/compiledCall (compilation failure,
+// or a language never used) is treated as already-released, and calling Close
 // twice is safe because each compiled query is set to nil after release.
 //
 // Close must NOT be called concurrently with AnalyzeCoupling; the Analyzer
@@ -120,6 +137,12 @@ func compileQueries(cfg *langConfig) {
 // query is nil-guarded by the extractImports/countCallSites entry checks.
 func (a *Analyzer) Close() {
 	for _, cfg := range a.configs {
+		// Retire the compile latch without compiling. Without this, a language
+		// never used before Close would still have an unfired Once, and a later
+		// AnalyzeCoupling would compile fresh queries and return real results —
+		// contradicting the nil-result contract stated above.
+		cfg.compileOnce.Do(func() {})
+
 		if cfg.compiledImport != nil {
 			cfg.compiledImport.Close()
 			cfg.compiledImport = nil
@@ -353,6 +376,7 @@ func (a *Analyzer) analyzeFile(
 	if !ok {
 		return
 	}
+	cfg.ensureCompiled()
 
 	src, err := os.ReadFile(path)
 	if err != nil {
