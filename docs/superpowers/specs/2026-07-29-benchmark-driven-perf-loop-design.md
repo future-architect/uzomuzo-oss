@@ -58,7 +58,7 @@ Constraints that fall out of the repo's rules:
   (`testing-performance.md`, "Propagate Build Tags to Test Files").
 - Fixtures live under each package's `testdata/` (`project-conventions.md`), with one reasoned
   exception: target 1's multi-language source corpus is produced at run time by a **committed
-  deterministic generator** into `b.TempDir()`. `skipDirs` in `analyzer.go:34` contains
+  deterministic generator** into `b.TempDir()`. `skipDirs` in `analyzer.go` contains
   `"testdata"`, so a committed corpus risks being skipped by the very walker under test, and
   committing hundreds of synthetic source files into a dependency-analysis tool's own repository
   invites its scanners to treat them as real dependencies. The generator uses no randomness, so
@@ -73,13 +73,15 @@ Constraints that fall out of the repo's rules:
 construction — each one measures the tree the previous one produced — so no parallel fan-out.
 
 State lives in `perf-loop/journal.md` under the session scratchpad directory, outside the
-worktree entirely, so it never enters a commit. (`.git/info/exclude` was tried first but does not
-work for this: in a worktree, `.git` is a file and `git rev-parse --git-path info/exclude`
-resolves to the *shared* common gitdir, so an exclude rule written there is never actually
-honored for this worktree — confirmed with `git check-ignore`.) The scratchpad is the loop's
-memory across wake-ups and is re-read at the start of every iteration. Per iteration it records:
-target benchmark, hypothesis, the change made, `benchstat` delta, accept/revert verdict, commit
-SHA, and the running no-win counter.
+worktree entirely, so it never enters a commit. (`.git/info/exclude` was tried first and rejected:
+in a worktree, `.git` is a file, and the path that actually honors exclude rules —
+`git rev-parse --git-path info/exclude` — resolves to the *shared* common gitdir, not a
+worktree-local one. An exclude rule written there does take effect, confirmed with
+`git check-ignore`, but it is shared across the main checkout and every other worktree of this
+repository, not scoped to this one — undesirable for state that is per-session and ephemeral.) The
+scratchpad is the loop's memory across wake-ups and is re-read at the start of every iteration.
+Per iteration it records: target benchmark, hypothesis, the change made, `benchstat` delta,
+accept/revert verdict, commit SHA, and the running no-win counter.
 
 ### One iteration
 

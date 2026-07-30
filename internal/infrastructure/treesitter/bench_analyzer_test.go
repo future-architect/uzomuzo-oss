@@ -64,12 +64,7 @@ func BenchmarkSingleLanguageRepo(b *testing.B) {
 	probe := NewAnalyzer()
 	result, err := probe.AnalyzeCoupling(ctx, root, importPaths)
 	probe.Close()
-	if err != nil {
-		b.Fatalf("AnalyzeCoupling failed during setup: %v", err)
-	}
-	if len(result) == 0 {
-		b.Fatal("AnalyzeCoupling returned no coupling data; the benchmark would measure a no-op")
-	}
+	requireCouplingResult(b, result, err)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -89,6 +84,9 @@ func BenchmarkSingleLanguageRepo(b *testing.B) {
 func writeGoOnlyCorpus(tb testing.TB, files int) string {
 	tb.Helper()
 	root := tb.TempDir()
+	// The modulus only spreads files across directories; it is not required to
+	// match writeBenchCorpus's — each generator picks its own based on its own
+	// file count.
 	for i := 0; i < files; i++ {
 		mod := i % 8
 		dir := corpusModDir(tb, root, mod)

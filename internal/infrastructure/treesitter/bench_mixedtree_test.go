@@ -13,13 +13,14 @@ import (
 // contains files no parser handles.
 //
 // BenchmarkAnalyzeCoupling's corpus is 100% parseable source, which no
-// repository is. Measured on this one: 275 of 455 files are source, so 40% of
-// what the walker visits is Markdown, JSON, YAML, shell, and lockfiles. Work
-// spent per *rejected* file — the stat, the extension lookup, the ordering
-// between them — is invisible to a corpus where nothing is ever rejected.
+// repository is. Measured on this repository's own tracked files: 276 of 453
+// are source, so 39% of what the walker visits is Markdown, JSON, YAML,
+// shell, and lockfiles. Work spent per *rejected* file — the stat, the
+// extension lookup, the ordering between them — is invisible to a corpus
+// where nothing is ever rejected.
 //
-// The ratio here follows that observation: 3 non-source files for every 4
-// source files.
+// The synthetic corpus below follows that observation approximately, not
+// exactly: 3 non-source files for every 4 source files (43% non-source).
 func BenchmarkAnalyzeCouplingMixedTree(b *testing.B) {
 	root, importPaths := writeMixedCorpus(b, 50)
 	ctx := context.Background()
@@ -30,12 +31,7 @@ func BenchmarkAnalyzeCouplingMixedTree(b *testing.B) {
 	// Guard: the non-source files must not have displaced the source ones —
 	// coupling data still has to come out, or this measures an empty walk.
 	result, err := analyzer.AnalyzeCoupling(ctx, root, importPaths)
-	if err != nil {
-		b.Fatalf("AnalyzeCoupling failed during setup: %v", err)
-	}
-	if len(result) == 0 {
-		b.Fatal("AnalyzeCoupling returned no coupling data; the benchmark would measure a no-op")
-	}
+	requireCouplingResult(b, result, err)
 
 	b.ReportAllocs()
 	b.ResetTimer()

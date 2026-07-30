@@ -17,12 +17,7 @@ func BenchmarkAnalyzeCoupling(b *testing.B) {
 	b.Cleanup(analyzer.Close)
 
 	result, err := analyzer.AnalyzeCoupling(ctx, root, importPaths)
-	if err != nil {
-		b.Fatalf("AnalyzeCoupling failed during setup: %v", err)
-	}
-	if len(result) == 0 {
-		b.Fatal("AnalyzeCoupling returned no coupling data; the benchmark would measure a no-op")
-	}
+	requireCouplingResult(b, result, err)
 	b.Logf("setup: %d PURLs with coupling data", len(result))
 
 	b.ReportAllocs()

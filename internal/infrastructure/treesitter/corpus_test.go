@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
 )
 
 func writeBenchCorpus(tb testing.TB, filesPerLang int) (string, map[string][]string) {
@@ -93,5 +95,18 @@ func writeCorpusFile(tb testing.TB, path, content string) {
 	tb.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		tb.Fatalf("writing corpus file %s: %v", path, err)
+	}
+}
+
+// requireCouplingResult fails the benchmark's setup phase if AnalyzeCoupling
+// errored or produced no data, so a broken corpus is never silently measured
+// as a no-op.
+func requireCouplingResult(tb testing.TB, result map[string]*domaindiet.CouplingAnalysis, err error) {
+	tb.Helper()
+	if err != nil {
+		tb.Fatalf("AnalyzeCoupling failed during setup: %v", err)
+	}
+	if len(result) == 0 {
+		tb.Fatal("AnalyzeCoupling returned no coupling data; the benchmark would measure a no-op")
 	}
 }
