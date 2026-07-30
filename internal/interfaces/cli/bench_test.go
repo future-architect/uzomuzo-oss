@@ -40,6 +40,9 @@ func makeBenchEntries(n int) []domainaudit.AuditEntry {
 	return entries
 }
 
+// BenchmarkRenderScanOutput measures scan rendering for each output format over a
+// large entry set. Table and CSV build a row per entry, so their cost scales with
+// the dependency count.
 func BenchmarkRenderScanOutput(b *testing.B) {
 	entries := makeBenchEntries(1000)
 

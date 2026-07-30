@@ -350,7 +350,7 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 	// Write([]byte(s)) and allocates a conversion per call. Measured, that traded
 	// one allocation per row for nine — fewer bytes, half again as many objects.
 	cols := make([]string, 0, maxTableColumns)
-	rowBuf := make([]byte, 0, 256)
+	rowBuf := make([]byte, 0, initialRowBufBytes)
 	for i := range displayEntries {
 		maintenance, _ := entryMaintenanceEOL(&displayEntries[i], "—")
 		cols = cols[:0]
@@ -385,6 +385,12 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 // relation info are shorter — this is the buffer's capacity, not its length.
 // Keep in step with the header built in renderScanCSV.
 const maxCSVColumns = 18
+
+// initialRowBufBytes is the starting capacity of the reused table row buffer.
+// A row is a verdict cell, a PURL and four short fields, so most rows fit
+// without growing; the buffer grows once on the first longer row and is reused
+// from then on.
+const initialRowBufBytes = 256
 
 // maxTableColumns is the widest the scan table gets: STATUS, SOURCE, PURL,
 // RELATION, LIFECYCLE, BUILD. SOURCE and RELATION are conditional, so a given

@@ -10,6 +10,8 @@ var benchPURLs = []string{
 	"pkg:pypi/requests",
 }
 
+// BenchmarkParserParse measures PURL parsing, which runs once per component
+// in every code path, so its per-call cost is multiplied by the component count.
 func BenchmarkParserParse(b *testing.B) {
 	p := NewParser()
 	for _, s := range benchPURLs {
@@ -32,6 +34,8 @@ func BenchmarkParserParse(b *testing.B) {
 	}
 }
 
+// BenchmarkIsStableVersion measures the version-stability check, an allocation-free
+// string classification applied to every resolved version.
 func BenchmarkIsStableVersion(b *testing.B) {
 	versions := []string{"1.2.3", "v1.10.0", "2.0.0-rc.1", "0.0.0-20240101120000-abcdef123456", "7.24.0"}
 	b.ReportAllocs()

@@ -9,6 +9,8 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/cyclonedx"
 )
 
+// BenchmarkParseLargeSBOM measures CycloneDX parsing over a 2000-component SBOM,
+// the large-input path that runs once per invocation.
 func BenchmarkParseLargeSBOM(b *testing.B) {
 	data, err := os.ReadFile(filepath.Join("testdata", "large_sbom.json"))
 	if err != nil {

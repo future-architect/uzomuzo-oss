@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// BenchmarkAnalyzeCoupling measures the dominant CPU cost of uzomuzo-diet: walking
+// a source tree and tree-sitter-parsing every file a grammar handles.
 func BenchmarkAnalyzeCoupling(b *testing.B) {
 	root, importPaths := writeBenchCorpus(b, 50)
 	ctx := context.Background()

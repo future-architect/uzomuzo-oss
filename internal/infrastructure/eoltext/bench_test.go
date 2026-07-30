@@ -12,6 +12,9 @@ var benchReadme = strings.Repeat(
 	40,
 ) + "\n## Notice\n\nThis project is deprecated and no longer maintained. Please use example-lib-ng instead.\n"
 
+// BenchmarkDetectLifecycleReadme measures README lifecycle detection: a battery of
+// compiled regexes over repository prose. This is the pure-CPU core behind the EOL
+// evaluator's text rules.
 func BenchmarkDetectLifecycleReadme(b *testing.B) {
 	opts := LifecycleDetectOpts{
 		Source:   SourceReadme,
@@ -28,6 +31,8 @@ func BenchmarkDetectLifecycleReadme(b *testing.B) {
 	}
 }
 
+// BenchmarkDetectLifecyclePyPI measures the PyPI variant, which scans a merged
+// summary and description rather than a README.
 func BenchmarkDetectLifecyclePyPI(b *testing.B) {
 	opts := LifecycleDetectOpts{
 		Source:      SourcePyPI,
