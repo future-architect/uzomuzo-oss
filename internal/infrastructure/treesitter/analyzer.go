@@ -10,8 +10,10 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"unsafe"
 
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
@@ -67,14 +69,31 @@ const blankImportAlias = "\x00blank"
 const wildcardImportAlias = "\x00wildcard"
 
 // langConfig holds the tree-sitter language and query patterns.
+//
+// Must not be copied: compileOnce carries a sync.Once. Configs are always held
+// and passed as pointers via Analyzer.configs.
 type langConfig struct {
 	language       *sitter.Language
 	importQuery    string
 	callQuery      string
-	compiledImport *sitter.Query // compiled once in NewAnalyzer
-	compiledCall   *sitter.Query // compiled once in NewAnalyzer
+	compileOnce    sync.Once
+	compiledImport *sitter.Query // nil until ensureCompiled runs
+	compiledCall   *sitter.Query // nil until ensureCompiled runs
 	stripQuotes    bool
 	aliasFromPkg   func(importPath string) string
+}
+
+// ensureCompiled compiles this language's queries on first use.
+//
+// Why not compile eagerly in NewAnalyzer: compiling all six languages costs
+// ~190ms, and a repository written in one language needs exactly one of them.
+// The cost is paid per analyzer construction, which uzomuzo-diet does once per
+// invocation before reading any file.
+//
+// Safe under the worker pool: several workers may reach the same language
+// simultaneously, and sync.Once serializes exactly one compilation.
+func (cfg *langConfig) ensureCompiled() {
+	cfg.compileOnce.Do(func() { compileQueries(cfg) })
 }
 
 // Analyzer implements SourceAnalyzer using tree-sitter for multi-language parsing.
@@ -108,8 +127,8 @@ func compileQueries(cfg *langConfig) {
 // tree-sitter Go bindings do not use runtime finalizers due to known CGO
 // interactions, so explicit cleanup is required. Multiple calls are safe.
 //
-// Close is idempotent: a nil compiledImport/compiledCall (compilation failure
-// at NewAnalyzer time) is treated as already-released, and calling Close
+// Close is idempotent: a nil compiledImport/compiledCall (compilation failure,
+// or a language never used) is treated as already-released, and calling Close
 // twice is safe because each compiled query is set to nil after release.
 //
 // Close must NOT be called concurrently with AnalyzeCoupling; the Analyzer
@@ -118,6 +137,12 @@ func compileQueries(cfg *langConfig) {
 // query is nil-guarded by the extractImports/countCallSites entry checks.
 func (a *Analyzer) Close() {
 	for _, cfg := range a.configs {
+		// Retire the compile latch without compiling. Without this, a language
+		// never used before Close would still have an unfired Once, and a later
+		// AnalyzeCoupling would compile fresh queries and return real results —
+		// contradicting the nil-result contract stated above.
+		cfg.compileOnce.Do(func() {})
+
 		if cfg.compiledImport != nil {
 			cfg.compiledImport.Close()
 			cfg.compiledImport = nil
@@ -166,6 +191,18 @@ func extToLang(ext string) (langID, bool) {
 }
 
 // AnalyzeCoupling walks sourceRoot, parses source files, and returns coupling analysis per PURL.
+//
+// The walk only collects paths; parsing runs across a worker pool. Tree-sitter
+// parsing is CGO-bound and independent per file, so a single-threaded walk left
+// every core but one idle. Each worker owns its parser — SetLanguage mutates it —
+// and its own accumulator map, merged once after the pool drains. The compiled
+// queries are shared rather than duplicated per worker because a *sitter.Query is
+// never written after NewQuery; all mutable match state lives in the per-file
+// QueryCursor.
+//
+// Why the result stays deterministic even though completion order is not: every
+// accumulator field is order-independent (two set unions, a counter sum, three
+// OR-ed flags), and buildCouplingResults sorts the slices it emits.
 func (a *Analyzer) AnalyzeCoupling(
 	ctx context.Context,
 	sourceRoot string,
@@ -173,10 +210,8 @@ func (a *Analyzer) AnalyzeCoupling(
 ) (map[string]*domaindiet.CouplingAnalysis, error) {
 	importToPURL := buildImportToPURL(importPaths)
 
-	accum := make(map[string]*accumulator)
-
-	parser := sitter.NewParser()
-	defer parser.Close()
+	type fileJob struct{ path, relPath string }
+	var jobs []fileJob
 
 	err := filepath.WalkDir(sourceRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -199,13 +234,54 @@ func (a *Analyzer) AnalyzeCoupling(
 			relPath = path
 		}
 
-		a.analyzeFile(path, relPath, parser, importToPURL, accum)
+		jobs = append(jobs, fileJob{path: path, relPath: relPath})
 
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("walking source tree: %w", err)
 	}
+
+	if len(jobs) == 0 {
+		return nil, nil
+	}
+
+	workers := min(runtime.GOMAXPROCS(0), len(jobs))
+
+	partials := make([]map[string]*accumulator, workers)
+	jobCh := make(chan fileJob)
+	var wg sync.WaitGroup
+
+	for w := range workers {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			parser := sitter.NewParser()
+			defer parser.Close()
+			local := make(map[string]*accumulator)
+			for j := range jobCh {
+				a.analyzeFile(j.path, j.relPath, parser, importToPURL, local)
+			}
+			partials[idx] = local
+		}(w)
+	}
+
+dispatch:
+	for _, j := range jobs {
+		select {
+		case <-ctx.Done():
+			break dispatch
+		case jobCh <- j:
+		}
+	}
+	close(jobCh)
+	wg.Wait()
+
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("analyzing source files: %w", err)
+	}
+
+	accum := mergeAccumulators(partials)
 
 	// No coupling data collected — return nil so callers treat coupling as unavailable
 	// rather than misclassifying every dependency as unused.
@@ -214,6 +290,36 @@ func (a *Analyzer) AnalyzeCoupling(
 	}
 
 	return buildCouplingResults(accum), nil
+}
+
+// mergeAccumulators folds the per-worker accumulator maps into one.
+//
+// Every field is order-independent — set union, counter sum, flag OR — so the
+// merged result does not depend on which worker happened to see which file.
+// The first accumulator for a PURL is adopted by reference and mutated in place;
+// the partial maps are not read after merging.
+func mergeAccumulators(partials []map[string]*accumulator) map[string]*accumulator {
+	merged := make(map[string]*accumulator)
+	for _, part := range partials {
+		for purl, src := range part {
+			dst, ok := merged[purl]
+			if !ok {
+				merged[purl] = src
+				continue
+			}
+			for f := range src.importFiles {
+				dst.importFiles[f] = true
+			}
+			for s := range src.symbols {
+				dst.symbols[s] = true
+			}
+			dst.callSites += src.callSites
+			dst.hasDotImport = dst.hasDotImport || src.hasDotImport
+			dst.hasBlankImport = dst.hasBlankImport || src.hasBlankImport
+			dst.hasWildcardImport = dst.hasWildcardImport || src.hasWildcardImport
+		}
+	}
+	return merged
 }
 
 // buildImportToPURL builds the reverse map from import path to []PURL.
@@ -270,6 +376,7 @@ func (a *Analyzer) analyzeFile(
 	if !ok {
 		return
 	}
+	cfg.ensureCompiled()
 
 	src, err := os.ReadFile(path)
 	if err != nil {

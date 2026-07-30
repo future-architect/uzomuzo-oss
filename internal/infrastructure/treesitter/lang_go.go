@@ -21,7 +21,6 @@ func registerGoConfig(a *Analyzer) {
 		stripQuotes:  true,
 		aliasFromPkg: goAliasFromImportPath,
 	}
-	compileQueries(a.configs[langGo])
 }
 
 // goAliasFromImportPath derives the default Go package alias from an import path.

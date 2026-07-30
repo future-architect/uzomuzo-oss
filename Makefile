@@ -1,4 +1,4 @@
-.PHONY: build build-diet build-all test lint clean sync-instructions update-doc-examples check-doc-examples
+.PHONY: build build-diet build-all test lint bench bench-save clean sync-instructions update-doc-examples check-doc-examples
 
 # ── Build ──────────────────────────────────────────────────
 
@@ -17,6 +17,28 @@ test:
 
 lint:
 	go vet ./...
+
+# ── Benchmark ──────────────────────────────────────────────
+
+# BENCH_CMD: shared invocation for `bench` and `bench-save`, kept in one place
+# so the two targets can't drift apart on flags. CGO_ENABLED=1 is required
+# because the treesitter package is //go:build cgo; without it those
+# benchmarks are silently excluded from the run.
+BENCH_CMD = CGO_ENABLED=1 go test ./... -run='^$$' -bench=. -benchmem -count=10
+
+# bench: run every benchmark at 10 counts for benchstat comparison.
+bench:
+	$(BENCH_CMD)
+
+# bench-save: same run, captured to FILE for benchstat before/after comparison.
+# Usage: make bench-save FILE=bench-0.txt
+# Redirects to FILE and re-emits via cat rather than piping through tee, so a
+# failing `go test` still fails the target — under the default POSIX `/bin/sh`
+# (dash), `cmd | tee FILE` reports tee's exit status, not cmd's, and dash has
+# no `pipefail` to fix that.
+bench-save:
+	@test -n "$(FILE)" || (echo "FILE is required: make bench-save FILE=path" >&2; exit 1)
+	$(BENCH_CMD) > "$(FILE)"; status=$$?; cat -- "$(FILE)"; exit $$status
 
 # ── Clean ──────────────────────────────────────────────────
 

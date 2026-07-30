@@ -274,6 +274,36 @@ func renderScanDetailed(w io.Writer, allEntries, displayEntries []domainaudit.Au
 // The result is fixed-width padded so tabwriter aligns subsequent columns correctly
 // despite emoji taking variable display width.
 func tableVerdictDisplay(v domainaudit.Verdict) string {
+	if s, ok := tableVerdictCells[v]; ok {
+		return s
+	}
+	// Verdict added to the domain without being listed below: format on demand
+	// rather than rendering a blank cell.
+	return formatTableVerdictCell(v)
+}
+
+// tableVerdictCells holds the rendered cell for every known verdict.
+//
+// The cell depends only on the verdict, but renderScanTable formatted one per
+// row, which made this the single largest allocation source in table rendering.
+// Precomputing costs four strings at init.
+var tableVerdictCells = func() map[domainaudit.Verdict]string {
+	known := []domainaudit.Verdict{
+		domainaudit.VerdictOK,
+		domainaudit.VerdictCaution,
+		domainaudit.VerdictReplace,
+		domainaudit.VerdictReview,
+	}
+	m := make(map[domainaudit.Verdict]string, len(known))
+	for _, v := range known {
+		m[v] = formatTableVerdictCell(v)
+	}
+	return m
+}()
+
+// formatTableVerdictCell renders one verdict cell. Both the cache and the
+// unknown-verdict fallback go through here so the two cannot format differently.
+func formatTableVerdictCell(v domainaudit.Verdict) string {
 	icon := verdictIcon(v)
 	// Pad verdict text to 7 chars (length of "replace") so columns after it align.
 	return fmt.Sprintf("%s %-7s", icon, string(v))
@@ -310,9 +340,20 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		return fmt.Errorf("write scan table header: %w", err)
 	}
 
+	// Rows are assembled into buffers that persist across iterations, then handed
+	// to the tabwriter in one Write. Allocating a fresh []string per row and
+	// joining it cost about six allocations per row for bytes the tabwriter
+	// consumes immediately.
+	//
+	// Why not write each cell straight to the tabwriter instead: tabwriter.Writer
+	// does not implement io.StringWriter, so io.WriteString falls back to
+	// Write([]byte(s)) and allocates a conversion per call. Measured, that traded
+	// one allocation per row for nine — fewer bytes, half again as many objects.
+	cols := make([]string, 0, maxTableColumns)
+	rowBuf := make([]byte, 0, initialRowBufBytes)
 	for i := range displayEntries {
 		maintenance, _ := entryMaintenanceEOL(&displayEntries[i], "—")
-		var cols []string
+		cols = cols[:0]
 		cols = append(cols, tableVerdictDisplay(displayEntries[i].Verdict))
 		if showSource {
 			cols = append(cols, sourceDisplayName(displayEntries[i].Source))
@@ -323,7 +364,9 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		}
 		cols = append(cols, maintenance)
 		cols = append(cols, buildIntegrityDisplay(displayEntries[i].Analysis, displayEntries[i].Verdict))
-		if _, err := fmt.Fprintln(tw, strings.Join(cols, "\t")); err != nil {
+
+		rowBuf = appendTabbedRow(rowBuf[:0], cols)
+		if _, err := tw.Write(rowBuf); err != nil {
 			return fmt.Errorf("failed to write table row: %w", err)
 		}
 	}
@@ -335,6 +378,36 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		return fmt.Errorf("failed to write summary box: %w", err)
 	}
 	return nil
+}
+
+// maxCSVColumns is the widest a CSV row gets: verdict and purl, the two
+// conditional relation columns, then the fourteen fixed columns. Rows without
+// relation info are shorter — this is the buffer's capacity, not its length.
+// Keep in step with the header built in renderScanCSV.
+const maxCSVColumns = 18
+
+// initialRowBufBytes is the starting capacity of the reused table row buffer.
+// A row is a verdict cell, a PURL and four short fields, so most rows fit
+// without growing; the buffer grows once on the first longer row and is reused
+// from then on.
+const initialRowBufBytes = 256
+
+// maxTableColumns is the widest the scan table gets: STATUS, SOURCE, PURL,
+// RELATION, LIFECYCLE, BUILD. SOURCE and RELATION are conditional, so a given
+// run may use fewer — this is the row buffer's capacity, not its length.
+const maxTableColumns = 6
+
+// appendTabbedRow appends cells separated by tabs and terminated by a newline,
+// producing the same bytes as Fprintln of a tab-joined string. Callers pass
+// dst[:0] to reuse a buffer across rows.
+func appendTabbedRow(dst []byte, cells []string) []byte {
+	for i, c := range cells {
+		if i > 0 {
+			dst = append(dst, '\t')
+		}
+		dst = append(dst, c...)
+	}
+	return append(dst, '\n')
 }
 
 // renderSummaryBox renders the summary line in a left-border box.
@@ -519,6 +592,10 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
+	// Reused across rows: csv.Writer copies what it needs out of the slice and
+	// does not retain it, so one backing array serves every row.
+	row := make([]string, 0, maxCSVColumns)
+
 	for i := range entries {
 		e := &entries[i]
 		maintenance, _ := entryMaintenanceEOL(e, "")
@@ -565,7 +642,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 			}
 		}
 
-		row := []string{string(e.Verdict), e.PURL}
+		row = append(row[:0], string(e.Verdict), e.PURL)
 		if showRelation {
 			row = append(row, e.Relation.String(), strings.Join(e.ViaParents, ";"))
 		}

@@ -4,6 +4,7 @@ package treesitter
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"testing"
@@ -189,5 +190,122 @@ func main() {
 		if ca.CallSiteCount != 1 {
 			t.Errorf("%s: CallSiteCount = %d, want 1", purl, ca.CallSiteCount)
 		}
+	}
+}
+
+// TestMergeAccumulators exercises the worker-pool merge directly: the parallel
+// AnalyzeCoupling benchmarks only ever assert a non-empty result, which can't
+// tell a correct union apart from one that silently dropped a file, a symbol,
+// or a flag contributed by a different worker.
+func TestMergeAccumulators(t *testing.T) {
+	tests := []struct {
+		name     string
+		partials []map[string]*accumulator
+		want     map[string]*accumulator
+	}{
+		{
+			name:     "no partials",
+			partials: nil,
+			want:     map[string]*accumulator{},
+		},
+		{
+			name: "single partial, single PURL",
+			partials: []map[string]*accumulator{
+				{"pkg:golang/a@1": {importFiles: map[string]bool{"a.go": true}, callSites: 2, symbols: map[string]bool{"Foo": true}}},
+			},
+			want: map[string]*accumulator{
+				"pkg:golang/a@1": {importFiles: map[string]bool{"a.go": true}, callSites: 2, symbols: map[string]bool{"Foo": true}},
+			},
+		},
+		{
+			name: "disjoint PURLs across workers are not merged into each other",
+			partials: []map[string]*accumulator{
+				{"pkg:golang/a@1": {importFiles: map[string]bool{"a.go": true}, callSites: 1, symbols: map[string]bool{}}},
+				{"pkg:golang/b@1": {importFiles: map[string]bool{"b.go": true}, callSites: 3, symbols: map[string]bool{}}},
+			},
+			want: map[string]*accumulator{
+				"pkg:golang/a@1": {importFiles: map[string]bool{"a.go": true}, callSites: 1, symbols: map[string]bool{}},
+				"pkg:golang/b@1": {importFiles: map[string]bool{"b.go": true}, callSites: 3, symbols: map[string]bool{}},
+			},
+		},
+		{
+			name: "same PURL seen by two workers: file/symbol sets union, call sites sum, flags OR",
+			partials: []map[string]*accumulator{
+				{
+					"pkg:golang/a@1": {
+						importFiles:  map[string]bool{"a.go": true},
+						callSites:    2,
+						symbols:      map[string]bool{"Foo": true},
+						hasDotImport: true,
+					},
+				},
+				{
+					"pkg:golang/a@1": {
+						importFiles:       map[string]bool{"b.go": true},
+						callSites:         5,
+						symbols:           map[string]bool{"Bar": true},
+						hasWildcardImport: true,
+					},
+				},
+			},
+			want: map[string]*accumulator{
+				"pkg:golang/a@1": {
+					importFiles:       map[string]bool{"a.go": true, "b.go": true},
+					callSites:         7,
+					symbols:           map[string]bool{"Foo": true, "Bar": true},
+					hasDotImport:      true,
+					hasWildcardImport: true,
+				},
+			},
+		},
+		{
+			name: "same PURL seen by three workers: union and sum accumulate across all of them",
+			partials: []map[string]*accumulator{
+				{"pkg:golang/a@1": {importFiles: map[string]bool{"a.go": true}, callSites: 1, symbols: map[string]bool{"Foo": true}}},
+				{"pkg:golang/a@1": {importFiles: map[string]bool{"b.go": true}, callSites: 1, symbols: map[string]bool{"Bar": true}}},
+				{"pkg:golang/a@1": {importFiles: map[string]bool{"a.go": true}, callSites: 1, symbols: map[string]bool{"Foo": true}, hasBlankImport: true}},
+			},
+			want: map[string]*accumulator{
+				"pkg:golang/a@1": {
+					importFiles:    map[string]bool{"a.go": true, "b.go": true},
+					callSites:      3,
+					symbols:        map[string]bool{"Foo": true, "Bar": true},
+					hasBlankImport: true,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mergeAccumulators(tt.partials)
+			if len(got) != len(tt.want) {
+				t.Fatalf("mergeAccumulators() returned %d PURLs, want %d", len(got), len(tt.want))
+			}
+			for purl, wantAcc := range tt.want {
+				gotAcc, ok := got[purl]
+				if !ok {
+					t.Fatalf("missing merged accumulator for %s", purl)
+				}
+				if !maps.Equal(gotAcc.importFiles, wantAcc.importFiles) {
+					t.Errorf("%s: importFiles = %v, want %v", purl, gotAcc.importFiles, wantAcc.importFiles)
+				}
+				if !maps.Equal(gotAcc.symbols, wantAcc.symbols) {
+					t.Errorf("%s: symbols = %v, want %v", purl, gotAcc.symbols, wantAcc.symbols)
+				}
+				if gotAcc.callSites != wantAcc.callSites {
+					t.Errorf("%s: callSites = %d, want %d", purl, gotAcc.callSites, wantAcc.callSites)
+				}
+				if gotAcc.hasDotImport != wantAcc.hasDotImport {
+					t.Errorf("%s: hasDotImport = %v, want %v", purl, gotAcc.hasDotImport, wantAcc.hasDotImport)
+				}
+				if gotAcc.hasBlankImport != wantAcc.hasBlankImport {
+					t.Errorf("%s: hasBlankImport = %v, want %v", purl, gotAcc.hasBlankImport, wantAcc.hasBlankImport)
+				}
+				if gotAcc.hasWildcardImport != wantAcc.hasWildcardImport {
+					t.Errorf("%s: hasWildcardImport = %v, want %v", purl, gotAcc.hasWildcardImport, wantAcc.hasWildcardImport)
+				}
+			}
+		})
 	}
 }
