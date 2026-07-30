@@ -1,7 +1,7 @@
 # Benchmark-Driven Performance Loop — Design
 
 Date: 2026-07-29
-Status: Approved (design), pending implementation plan
+Status: Implemented — see PR #479
 
 ## 1. Problem
 
@@ -35,10 +35,15 @@ so `go test ./...` stays runnable in CI and restricted-network environments
 | # | Package | Benchmark | Why it is on the hot path |
 |---|---------|-----------|---------------------------|
 | 1 | `internal/infrastructure/treesitter` | `BenchmarkAnalyzeCoupling` | `AnalyzeCoupling` walks the entire source tree and tree-sitter-parses **every** matching file through a single `*sitter.Parser` in one sequential `filepath.WalkDir`. This is the dominant cost of `diet` coupling analysis on any real repository. |
-| 2 | `internal/infrastructure/depparser/cyclonedx` | `BenchmarkParse` | Parses SBOMs with thousands of components; runs once per invocation but over large input. |
-| 3 | `internal/common/purl` | `BenchmarkParse`, `BenchmarkNormalizeMavenCollapsedCoordinates` | Called once per component in every code path; small per-call cost multiplied by component count. |
+| 2 | `internal/infrastructure/depparser/cyclonedx` | `BenchmarkParseLargeSBOM` | Parses SBOMs with thousands of components; runs once per invocation but over large input. |
+| 3 | `internal/common/purl` | `BenchmarkParserParse`, `BenchmarkIsStableVersion` | Called once per component in every code path; small per-call cost multiplied by component count. |
 | 4 | `internal/infrastructure/eoltext` | `BenchmarkDetectLifecycleReadme`, `BenchmarkDetectLifecyclePyPI` | Regex battery over README / PyPI description text. This is the pure-CPU core behind the EOL evaluator's text rules, and it is reachable with no client at all. |
-| 5 | `internal/interfaces/cli` | `BenchmarkRenderScan` | Allocation-heavy string/box rendering over a large result set. |
+| 5 | `internal/interfaces/cli` | `BenchmarkRenderScanOutput` | Allocation-heavy string/box rendering over a large result set. |
+
+Target 3 shipped as `BenchmarkParserParse` (PURL parsing itself) and `BenchmarkIsStableVersion`
+rather than the originally planned `BenchmarkNormalizeMavenCollapsedCoordinates` — parsing and
+version-stability classification turned out to be the calls actually repeated per component on
+the hot path; Maven coordinate normalization was not benchmarked in this pass.
 
 Target 4 deliberately benchmarks `eoltext` rather than `eolevaluator.EvaluateBatch`. The
 evaluator's clients are concrete types (`*nuget.Client`, `*maven.Client`, `*pypi.Client`, …), not
@@ -67,10 +72,14 @@ Constraints that fall out of the repo's rules:
 `ScheduleWakeup` and one wake-up performs exactly one iteration. Iterations are sequential by
 construction — each one measures the tree the previous one produced — so no parallel fan-out.
 
-State lives in `.perf-loop/journal.md` inside the worktree, registered in `.git/info/exclude` so
-it never enters a commit. It is the loop's memory across wake-ups and is re-read at the start of
-every iteration. Per iteration it records: target benchmark, hypothesis, the change made,
-`benchstat` delta, accept/revert verdict, commit SHA, and the running no-win counter.
+State lives in `perf-loop/journal.md` under the session scratchpad directory, outside the
+worktree entirely, so it never enters a commit. (`.git/info/exclude` was tried first but does not
+work for this: in a worktree, `.git` is a file and `git rev-parse --git-path info/exclude`
+resolves to the *shared* common gitdir, so an exclude rule written there is never actually
+honored for this worktree — confirmed with `git check-ignore`.) The scratchpad is the loop's
+memory across wake-ups and is re-read at the start of every iteration. Per iteration it records:
+target benchmark, hypothesis, the change made, `benchstat` delta, accept/revert verdict, commit
+SHA, and the running no-win counter.
 
 ### One iteration
 
@@ -134,11 +143,11 @@ evidence that the remaining code paths were examined and found already adequate.
 | Noisy measurements on WSL2 | `-count=10` plus `benchstat` p-values rather than single runs; no other heavy work scheduled concurrently during a measurement. |
 | Optimizing something that is not really hot | Target selection is gated on `pprof` output from a realistic fixture, never on intuition about which code "looks slow". |
 | Concurrency change breaks deterministic output | Sort before emit; `-race` required; the existing test suite (which asserts exact rendered output) is the guard. |
-| Loop loses context across wake-ups | `.perf-loop/journal.md` is the single source of truth and is re-read at the start of each iteration. |
+| Loop loses context across wake-ups | The scratchpad `journal.md` is the single source of truth and is re-read at the start of each iteration. |
 | A "win" is really a benchmark artifact | The end-to-end binary timing in the PR is the cross-check; a microbenchmark win that does not move the real run is reported as such. |
 
 ## 8. Fixture Sizes
 
-Fixed by the implementation plan: 2000 components for the CycloneDX SBOM, 50 files per language
-(200 files total) for the tree-sitter corpus, 1000 entries for the CLI render benchmark. Each is
-sized so a single benchmark run takes seconds.
+Fixture sizes: 2000 components for the CycloneDX SBOM, 50 files per language (200 files total)
+for the tree-sitter corpus, 1000 entries for the CLI render benchmark. Each is sized so a single
+benchmark run takes seconds.

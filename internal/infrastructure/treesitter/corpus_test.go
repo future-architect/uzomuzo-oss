@@ -21,23 +21,9 @@ func writeBenchCorpus(tb testing.TB, filesPerLang int) (string, map[string][]str
 	}
 
 	for i := 0; i < filesPerLang; i++ {
-		dir := filepath.Join(root, "src", fmt.Sprintf("mod%d", i%10))
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			tb.Fatalf("creating corpus dir: %v", err)
-		}
-		writeCorpusFile(tb, filepath.Join(dir, fmt.Sprintf("file%d.go", i)), fmt.Sprintf(`package mod%d
-
-import (
-	"fmt"
-	"github.com/foo/bar"
-)
-
-func Run%d() {
-	bar.Do()
-	bar.Also()
-	fmt.Println(bar.Value())
-}
-`, i%10, i))
+		mod := i % 10
+		dir := corpusModDir(tb, root, mod)
+		writeGoCorpusFile(tb, dir, mod, i)
 		writeCorpusFile(tb, filepath.Join(dir, fmt.Sprintf("file%d.js", i)), fmt.Sprintf(`const _ = require('lodash');
 
 function run%d() {
@@ -64,9 +50,43 @@ public class File%d {
         return gson.toJson(new Object());
     }
 }
-`, i%10, i))
+`, mod, i))
 	}
 	return root, importPaths
+}
+
+// corpusModDir creates (if needed) and returns the per-module directory used
+// by every corpus generator in this package, so the mkdir scaffold has one
+// source of truth instead of being copy-pasted per generator.
+func corpusModDir(tb testing.TB, root string, mod int) string {
+	tb.Helper()
+	dir := filepath.Join(root, "src", fmt.Sprintf("mod%d", mod))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		tb.Fatalf("creating corpus dir: %v", err)
+	}
+	return dir
+}
+
+// writeGoCorpusFile writes the shared Go source template used by every
+// generator that needs a parseable .go file: one import plus one call site,
+// which is exactly what AnalyzeCoupling's import/call queries need to match.
+// mod names the package (must match the directory's mod%d suffix); i makes
+// the filename and function name unique within the corpus.
+func writeGoCorpusFile(tb testing.TB, dir string, mod, i int) {
+	tb.Helper()
+	writeCorpusFile(tb, filepath.Join(dir, fmt.Sprintf("file%d.go", i)), fmt.Sprintf(`package mod%d
+
+import (
+	"fmt"
+	"github.com/foo/bar"
+)
+
+func Run%d() {
+	bar.Do()
+	bar.Also()
+	fmt.Println(bar.Value())
+}
+`, mod, i))
 }
 
 func writeCorpusFile(tb testing.TB, path, content string) {

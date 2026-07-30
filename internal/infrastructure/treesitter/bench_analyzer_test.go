@@ -4,9 +4,6 @@ package treesitter
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -25,6 +22,7 @@ func BenchmarkNewAnalyzer(b *testing.B) {
 	// they are compiled on first use, and BenchmarkSingleLanguageRepo's guard
 	// covers the path that actually needs them.
 	a := NewAnalyzer()
+	b.Cleanup(a.Close)
 	if len(a.configs) == 0 {
 		b.Fatal("NewAnalyzer registered no languages")
 	}
@@ -36,7 +34,6 @@ func BenchmarkNewAnalyzer(b *testing.B) {
 			b.Fatalf("lang %d has an empty query source", lid)
 		}
 	}
-	a.Close()
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -86,28 +83,16 @@ func BenchmarkSingleLanguageRepo(b *testing.B) {
 	}
 }
 
-// writeGoOnlyCorpus generates a deterministic Go-only source tree.
+// writeGoOnlyCorpus generates a deterministic Go-only source tree, reusing
+// the same per-file template as writeBenchCorpus (corpus_test.go) so the two
+// benchmarks stay comparable on an equivalent per-file workload.
 func writeGoOnlyCorpus(tb testing.TB, files int) string {
 	tb.Helper()
 	root := tb.TempDir()
 	for i := 0; i < files; i++ {
-		dir := filepath.Join(root, "src", fmt.Sprintf("mod%d", i%8))
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			tb.Fatalf("creating corpus dir: %v", err)
-		}
-		writeCorpusFile(tb, filepath.Join(dir, fmt.Sprintf("file%d.go", i)), fmt.Sprintf(`package mod%d
-
-import (
-	"fmt"
-	"github.com/foo/bar"
-)
-
-func Run%d() {
-	bar.Do()
-	bar.Also()
-	fmt.Println(bar.Value())
-}
-`, i%8, i))
+		mod := i % 8
+		dir := corpusModDir(tb, root, mod)
+		writeGoCorpusFile(tb, dir, mod, i)
 	}
 	return root
 }

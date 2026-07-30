@@ -86,7 +86,7 @@ type langConfig struct {
 // ensureCompiled compiles this language's queries on first use.
 //
 // Why not compile eagerly in NewAnalyzer: compiling all six languages costs
-// ~180ms, and a repository written in one language needs exactly one of them.
+// ~190ms, and a repository written in one language needs exactly one of them.
 // The cost is paid per analyzer construction, which uzomuzo-diet does once per
 // invocation before reading any file.
 //
@@ -278,7 +278,7 @@ dispatch:
 	wg.Wait()
 
 	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("walking source tree: %w", err)
+		return nil, fmt.Errorf("analyzing source files: %w", err)
 	}
 
 	accum := mergeAccumulators(partials)

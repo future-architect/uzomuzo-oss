@@ -5,7 +5,6 @@ package treesitter
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -19,7 +18,7 @@ import (
 // spent per *rejected* file — the stat, the extension lookup, the ordering
 // between them — is invisible to a corpus where nothing is ever rejected.
 //
-// The ratio here follows that observation: 3 non-source files for every 5
+// The ratio here follows that observation: 3 non-source files for every 4
 // source files.
 func BenchmarkAnalyzeCouplingMixedTree(b *testing.B) {
 	root, importPaths := writeMixedCorpus(b, 50)
@@ -57,10 +56,7 @@ func writeMixedCorpus(tb testing.TB, filesPerLang int) (string, map[string][]str
 	// writeBenchCorpus emits 4 source files per iteration; 3 non-source files
 	// per iteration lands near the 60/40 split observed in a real tree.
 	for i := 0; i < filesPerLang; i++ {
-		dir := filepath.Join(root, "src", fmt.Sprintf("mod%d", i%10))
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			tb.Fatalf("creating corpus dir: %v", err)
-		}
+		dir := corpusModDir(tb, root, i%10)
 		writeCorpusFile(tb, filepath.Join(dir, fmt.Sprintf("README%d.md", i)), fmt.Sprintf(`# Module %d
 
 Describes what module %d does and how to use it.
