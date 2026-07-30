@@ -34,7 +34,7 @@ so `go test ./...` stays runnable in CI and restricted-network environments
 
 | # | Package | Benchmark | Why it is on the hot path |
 |---|---------|-----------|---------------------------|
-| 1 | `internal/infrastructure/treesitter` | `BenchmarkAnalyzeCoupling` | `AnalyzeCoupling` walks the entire source tree and tree-sitter-parses **every** matching file through a single `*sitter.Parser` in one sequential `filepath.WalkDir`. This is the dominant cost of `diet` coupling analysis on any real repository. |
+| 1 | `internal/infrastructure/treesitter` | `BenchmarkAnalyzeCoupling` | `AnalyzeCoupling` walks the entire source tree and tree-sitter-parses **every** matching file. This is the dominant cost of `diet` coupling analysis on any real repository. (At design time this ran through a single `*sitter.Parser` in one sequential `filepath.WalkDir`; the loop's first accepted change parallelized it across a worker pool — see the accepted-changes list in the PR.) |
 | 2 | `internal/infrastructure/depparser/cyclonedx` | `BenchmarkParseLargeSBOM` | Parses SBOMs with thousands of components; runs once per invocation but over large input. |
 | 3 | `internal/common/purl` | `BenchmarkParserParse`, `BenchmarkIsStableVersion` | Called once per component in every code path; small per-call cost multiplied by component count. |
 | 4 | `internal/infrastructure/eoltext` | `BenchmarkDetectLifecycleReadme`, `BenchmarkDetectLifecyclePyPI` | Regex battery over README / PyPI description text. This is the pure-CPU core behind the EOL evaluator's text rules, and it is reachable with no client at all. |
