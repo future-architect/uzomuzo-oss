@@ -38,7 +38,7 @@ bench:
 # no `pipefail` to fix that.
 bench-save:
 	@test -n "$(FILE)" || (echo "FILE is required: make bench-save FILE=path" >&2; exit 1)
-	$(BENCH_CMD) > $(FILE); status=$$?; cat $(FILE); exit $$status
+	$(BENCH_CMD) > "$(FILE)"; status=$$?; cat -- "$(FILE)"; exit $$status
 
 # ── Clean ──────────────────────────────────────────────────
 

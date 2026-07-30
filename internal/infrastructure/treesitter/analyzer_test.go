@@ -4,6 +4,7 @@ package treesitter
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"testing"
@@ -286,10 +287,10 @@ func TestMergeAccumulators(t *testing.T) {
 				if !ok {
 					t.Fatalf("missing merged accumulator for %s", purl)
 				}
-				if !mapsEqual(gotAcc.importFiles, wantAcc.importFiles) {
+				if !maps.Equal(gotAcc.importFiles, wantAcc.importFiles) {
 					t.Errorf("%s: importFiles = %v, want %v", purl, gotAcc.importFiles, wantAcc.importFiles)
 				}
-				if !mapsEqual(gotAcc.symbols, wantAcc.symbols) {
+				if !maps.Equal(gotAcc.symbols, wantAcc.symbols) {
 					t.Errorf("%s: symbols = %v, want %v", purl, gotAcc.symbols, wantAcc.symbols)
 				}
 				if gotAcc.callSites != wantAcc.callSites {
@@ -307,16 +308,4 @@ func TestMergeAccumulators(t *testing.T) {
 			}
 		})
 	}
-}
-
-func mapsEqual(a, b map[string]bool) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for k, v := range a {
-		if b[k] != v {
-			return false
-		}
-	}
-	return true
 }
