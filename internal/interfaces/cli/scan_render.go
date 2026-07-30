@@ -380,6 +380,12 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 	return nil
 }
 
+// maxCSVColumns is the widest a CSV row gets: verdict and purl, the two
+// conditional relation columns, then the fourteen fixed columns. Rows without
+// relation info are shorter — this is the buffer's capacity, not its length.
+// Keep in step with the header built in renderScanCSV.
+const maxCSVColumns = 18
+
 // maxTableColumns is the widest the scan table gets: STATUS, SOURCE, PURL,
 // RELATION, LIFECYCLE, BUILD. SOURCE and RELATION are conditional, so a given
 // run may use fewer — this is the row buffer's capacity, not its length.
@@ -580,6 +586,10 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
+	// Reused across rows: csv.Writer copies what it needs out of the slice and
+	// does not retain it, so one backing array serves every row.
+	row := make([]string, 0, maxCSVColumns)
+
 	for i := range entries {
 		e := &entries[i]
 		maintenance, _ := entryMaintenanceEOL(e, "")
@@ -626,7 +636,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 			}
 		}
 
-		row := []string{string(e.Verdict), e.PURL}
+		row = append(row[:0], string(e.Verdict), e.PURL)
 		if showRelation {
 			row = append(row, e.Relation.String(), strings.Join(e.ViaParents, ";"))
 		}
