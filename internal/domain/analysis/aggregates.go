@@ -14,15 +14,21 @@ type Analysis struct {
 	// Identification fields (externally observable)
 	// ---------------------------------------------------------------------------
 	// OriginalPURL:
-	//   - EXACT user / caller supplied identifier (or directly derived base when a non-PURL
-	//     input such as a GitHub URL is first converted).
+	//   - The coordinate supplied to the analysis layer. A PURL the caller passed directly
+	//     is preserved verbatim; a format-specific adapter may derive or normalize it (the
+	//     CycloneDX parser strips tool-added qualifiers and subpaths, go.mod applies replace
+	//     directives, a GitHub URL becomes its unversioned base PURL). Every such adapter
+	//     preserves the caller-selected version.
 	//   - Never rewritten for stylistic normalization (case, qualifier ordering, etc.).
-	//   - May be versionless even when a version is later resolved.
+	//   - May be versionless even when a version is later resolved. It must NOT be
+	//     back-filled with a version uzomuzo resolved on the caller's behalf: version-specific
+	//     EOL rules read this field precisely to tell a caller pin apart from uzomuzo's own
+	//     choice. See ADR-0021.
 	//   - Purpose: auditability, faithful echo-back, reproducibility of the *request*.
 	//   - Examples:
-	//       Input: "pkg:npm/React"            => OriginalPURL = "pkg:npm/React"
+	//       Input: "pkg:npm/React"             => OriginalPURL = "pkg:npm/React"
 	//       GitHub URL -> base:                => OriginalPURL = "pkg:golang/github.com/gin-gonic/gin"
-	//       Collapsed Maven coords input:      => OriginalPURL = "pkg:maven:org.slf4j:slf4j-api@2.0.16"
+	//       Collapsed Maven coords input:      => OriginalPURL = "pkg:maven/org.slf4j:slf4j-api@2.0.16"
 	OriginalPURL string
 
 	// EffectivePURL:

@@ -30,6 +30,13 @@ import (
 // putting it there would bake the concrete *github.Client infrastructure type
 // into the exported application contract and force every fake to import it.
 // ARCHITECT DECISION: keep GitHubClient() outside this interface.
+//
+// Contract: each returned Analysis must carry the caller's own coordinate in
+// OriginalPURL. Version-specific EOL rules read that field to distinguish a
+// caller pin from a version uzomuzo selected, and a rule that finds it empty
+// does nothing rather than guessing. ProcessBatchPURLs repairs an empty
+// OriginalPURL from the map key so a source that omits it degrades visibly
+// rather than silently. See ADR-0021.
 type AnalysisSource interface {
 	// AnalyzeFromPURLs fetches analysis data for a batch of PURLs.
 	AnalyzeFromPURLs(ctx context.Context, purls []string) (map[string]*domain.Analysis, error)
@@ -218,6 +225,19 @@ func (s *AnalysisService) ProcessBatchPURLs(ctx context.Context, purls []string)
 	analyses, err := s.integrationService.AnalyzeFromPURLs(ctx, purls)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch batch analyses: %w", err)
+	}
+
+	// Repair the AnalysisSource contract before Phase 1: the map key is the
+	// requested PURL, so it is the caller's coordinate by construction. The
+	// built-in IntegrationService always populates OriginalPURL, so this only
+	// fires for a source that omitted it. Deliberately NOT done inside
+	// applyRegistryYanked — a fallback there is what let a uzomuzo-selected
+	// version pose as a caller pin. See ADR-0021.
+	for key, analysis := range analyses {
+		if analysis != nil && analysis.OriginalPURL == "" {
+			slog.Debug("analysis_source_missing_original_purl", "purl", key)
+			analysis.OriginalPURL = key
+		}
 	}
 
 	if err := s.enrichAndAssess(ctx, analyses, "purl"); err != nil {

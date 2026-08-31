@@ -78,8 +78,12 @@ A yank is evidence about the version that was yanked, and about nothing else.
   into `OriginalPURL`: `fetchAndValidateGitHubAnalysis` takes the requested
   (unversioned) base PURL alongside the analyzed one and restores `OriginalPURL` to
   it, matching `aggregates.go`. `EffectivePURL` and `Package.PURL` keep the resolved
-  version, so analysis and display are unaffected. `CanonicalKey` is versionless and
-  therefore unchanged.
+  version, so analysis is unaffected, and `CanonicalKey` is versionless and therefore
+  unchanged. Display does change: `DisplayPURL()` prefers `OriginalPURL`, so the CLI's
+  `Package:` line for GitHub URL input now shows the unversioned base rather than the
+  synthesized version — which is what `aggregates.go` already specified, and the
+  resolved version remains visible on the `Stable:` line. A caller that needs the
+  analyzed coordinate must read `EffectivePURL`.
 - An `OriginalPURL` that is unversioned, empty, unparsable, or of another ecosystem
   makes the rule a **no-op**: it returns false and promotes
   nothing. It does not downgrade to a weaker EOL state either. Nothing else in the
@@ -132,13 +136,13 @@ Three deprecation rules still resolve a version the caller did not choose:
 and name). On the GitHub URL entry path each can therefore still act on a version
 uzomuzo selected.
 
-They are left as-is here. Registry deprecation is a different upstream signal from a
-yank: npm's `deprecated` field and deps.dev's `IsDeprecated` are commonly set at the
-package level and left on every release, so "the latest release is deprecated" is a
-far more defensible package-level claim than "the latest release is yanked". Whether
-they should nonetheless key on `OriginalPURL` is a separate behavior decision, not a
-consequence of this one. The asymmetry is deliberate and recorded here so a future
-reader does not mistake it for drift.
+They are left as-is here, and not because their inference is safer: both signals are
+version-scoped in the clients that read them (`npmjs.Client.GetDeprecation` takes a
+version argument and indexes `versions[version].deprecated`; `IsDeprecated` sits on
+`depsdev.Version`). Those rules deliberately infer a package-level verdict from a
+selected stable/effective version, and revisiting that inference is a separate
+behavior decision with its own blast radius — not a consequence of this one. The
+asymmetry is recorded here so a future reader does not mistake it for drift.
 
 ## Consequences
 
