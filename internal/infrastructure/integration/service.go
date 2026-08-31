@@ -14,6 +14,7 @@ import (
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/clearlydefined"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/crates"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
@@ -34,6 +35,7 @@ type IntegrationService struct {
 	rubygemsClient  *rubygems.Client
 	packagistClient *packagist.Client
 	pypiClient      *pypi.Client
+	cratesClient    *crates.Client
 	mavenClient     *maven.Client
 	cdClient        *clearlydefined.Client
 	vanityResolver  *govanityresolve.Resolver
@@ -62,6 +64,13 @@ func WithPackagistClient(c *packagist.Client) IntegrationOption {
 // the deps.dev / GitHub-derived value.
 func WithPyPIClient(c *pypi.Client) IntegrationOption {
 	return func(s *IntegrationService) { s.pypiClient = c }
+}
+
+// WithCratesClient injects a crates.io client used to populate
+// Analysis.RegistryState for cargo packages (see ADR-0022). Optional — when
+// unset, cargo analyses carry no registry-level withdrawal fact.
+func WithCratesClient(c *crates.Client) IntegrationOption {
+	return func(s *IntegrationService) { s.cratesClient = c }
 }
 
 // WithMavenClient injects a Maven client used by enrichLicenseFromManifest to

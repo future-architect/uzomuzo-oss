@@ -58,10 +58,15 @@ const (
 	SignalMaxAdvisorySeverity = domain.SignalMaxAdvisorySeverity
 	SignalDaysSinceRelease    = domain.SignalDaysSinceRelease
 	SignalEcosystemDelivery   = domain.SignalEcosystemDelivery
+	SignalAllReleasesYanked   = domain.SignalAllReleasesYanked
 )
 
 // RepoState contains repository activity & archive/disable flags.
 type RepoState = domain.RepoState
+
+// RegistryState contains package-level facts asserted by the package registry,
+// such as "every published release is yanked" (see ADR-0022).
+type RegistryState = domain.RegistryState
 
 // ReleaseInfo contains prioritized release channel/version metadata.
 type ReleaseInfo = domain.ReleaseInfo

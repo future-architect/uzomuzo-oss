@@ -99,6 +99,14 @@ type ProjectInfo struct {
 	Classifiers []string
 	ProjectURLs map[string]string // e.g. "Repository" -> "https://github.com/..."
 	HomePage    string
+	// Yanked mirrors info.yanked on the project endpoint. PyPI selects the
+	// project's reported release with non-yanked releases ordered first, so this
+	// is true only when every release of the project is yanked. It is a
+	// distribution-withdrawal fact, not end-of-life; see ADR-0022.
+	Yanked bool
+	// YankedReason mirrors info.yanked_reason. Empty when PyPI has none, which
+	// happens even for yanked releases.
+	YankedReason string
 }
 
 // VersionInfo is the minimal subset of PyPI version-level metadata we need.
@@ -211,24 +219,28 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 	}
 	var raw struct {
 		Info struct {
-			Name        string            `json:"name"`
-			Summary     string            `json:"summary"`
-			Description string            `json:"description"`
-			Classifiers []string          `json:"classifiers"`
-			ProjectURLs map[string]string `json:"project_urls"`
-			HomePage    string            `json:"home_page"`
+			Name         string            `json:"name"`
+			Summary      string            `json:"summary"`
+			Description  string            `json:"description"`
+			Classifiers  []string          `json:"classifiers"`
+			ProjectURLs  map[string]string `json:"project_urls"`
+			HomePage     string            `json:"home_page"`
+			Yanked       bool              `json:"yanked"`
+			YankedReason string            `json:"yanked_reason"`
 		} `json:"info"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&raw); err != nil {
 		return nil, false, fmt.Errorf("pypi decode failed: %w", err)
 	}
 	info := &ProjectInfo{
-		Name:        raw.Info.Name,
-		Summary:     raw.Info.Summary,
-		Description: raw.Info.Description,
-		Classifiers: raw.Info.Classifiers,
-		ProjectURLs: raw.Info.ProjectURLs,
-		HomePage:    raw.Info.HomePage,
+		Name:         raw.Info.Name,
+		Summary:      raw.Info.Summary,
+		Description:  raw.Info.Description,
+		Classifiers:  raw.Info.Classifiers,
+		ProjectURLs:  raw.Info.ProjectURLs,
+		HomePage:     raw.Info.HomePage,
+		Yanked:       raw.Info.Yanked,
+		YankedReason: raw.Info.YankedReason,
 	}
 	c.cache.Set(lower, info)
 	return info, true, nil

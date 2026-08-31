@@ -96,6 +96,11 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// over the repo-level value, and they should be ecosystem-gated like enrichPyPISummary.
 	s.enrichPyPISummary(ctx, analyses)
 
+	// Registry-level withdrawal facts (best-effort): record whether the registry
+	// reports every published release as yanked. Distinct from RepoState, which
+	// describes the source repository. See ADR-0022.
+	s.enrichRegistryState(ctx, analyses)
+
 	// Manifest-level license fallback (best-effort): when deps.dev and GitHub
 	// `licenseInfo` left ProjectLicense or RequestedVersionLicenses missing /
 	// non-SPDX, consult the package's own ecosystem manifest. Currently wires

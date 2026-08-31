@@ -60,6 +60,10 @@ type Analysis struct {
 	RepoState   *RepoState
 	CommitStats *CommitStats
 
+	// RegistryState holds package-level facts asserted by the package registry
+	// (distinct from RepoState, which describes the source repository host).
+	RegistryState *RegistryState
+
 	// Release information
 	ReleaseInfo *ReleaseInfo
 
@@ -290,6 +294,12 @@ func (a *Analysis) IsArchived() bool {
 		return false
 	}
 	return a.RepoState.IsArchived
+}
+
+// AllReleasesYanked reports whether the package registry has yanked every
+// published release of this package. See RegistryState.
+func (a *Analysis) AllReleasesYanked() bool {
+	return a != nil && a.RegistryState != nil && a.RegistryState.AllReleasesYanked
 }
 
 // IsDisabled returns whether the repository is disabled

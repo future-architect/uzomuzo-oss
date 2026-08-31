@@ -334,6 +334,28 @@ type CommitStats struct {
 	UserRatio   float64
 }
 
+// RegistryState captures package-level facts asserted by the package registry
+// itself, as opposed to RepoState which describes the source repository host.
+// The two can disagree: a repository may be actively developed while the
+// registry has withdrawn every published release (e.g. conda on PyPI).
+// A nil pointer means no registry-level facts were fetched.
+type RegistryState struct {
+	// AllReleasesYanked is true when the registry reports that every published
+	// release of the package is yanked. It is a distribution-withdrawal signal
+	// ("do not install this from here"), not end-of-life. See ADR-0022.
+	// False both when a non-yanked release exists and when the registry was not
+	// asked; the nil pointer above distinguishes "not fetched" from "fetched,
+	// nothing yanked".
+	AllReleasesYanked bool
+	// Registry names the asserting registry, e.g. "PyPI", "crates.io".
+	Registry string
+	// Reason is the registry-provided yank reason. Empty when the registry does
+	// not carry one: crates.io never does, and PyPI's yanked_reason may be null.
+	Reason string
+	// Reference is a registry UI URL where the fact can be verified.
+	Reference string
+}
+
 // RepoState represents repository state information
 type RepoState struct {
 	LatestHumanCommit   *time.Time
