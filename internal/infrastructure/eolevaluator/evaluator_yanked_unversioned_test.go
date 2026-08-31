@@ -126,9 +126,12 @@ func TestEvaluator_PyPI_Yanked_UnversionedPURL(t *testing.T) {
 			mu.Unlock()
 
 			if tt.wantNoVersionQuery {
+				// The project endpoint is expected (the inactive-classifier rule uses it).
+				// Any other path means a version endpoint was hit, whichever version it names.
+				const projectPath = "/pypi/pydantic-extra-types/json"
 				for _, p := range paths {
-					if strings.HasSuffix(p, "/2.11.2/json") {
-						t.Errorf("unversioned PURL must not query StableVersion 2.11.2; got path %q", p)
+					if p != projectPath {
+						t.Errorf("unversioned PURL must query only %s; got path %q", projectPath, p)
 					}
 				}
 			}

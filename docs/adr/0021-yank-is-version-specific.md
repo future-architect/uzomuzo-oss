@@ -6,9 +6,10 @@ Status: Accepted
 ## Context
 
 [ADR-0020](0020-archived-registry-liveness.md) established that `EOL-Confirmed`
-requires an explicit primary-source EOL signal, and listed PyPI `yanked` (and its
-crates.io equivalent) among the four signals that qualify. It did not say *which
-version's* yank flag counts.
+requires an explicit primary-source EOL signal, and listed PyPI `yanked` among the
+four signals that qualify (its list predates the crates.io rule, which is the same
+mechanism against a different registry). It did not say *which version's* yank flag
+counts.
 
 The shared helper `applyRegistryYanked`
 (`internal/infrastructure/eolevaluator/evaluator.go`) resolved the version to
@@ -54,11 +55,12 @@ A yank is evidence about the version that was yanked, and about nothing else.
 - The version checked by `applyRegistryYanked` is the **PURL version only**. The
   `ReleaseInfo.StableVersion` fallback is removed.
 - An unversioned PURL makes the rule a **no-op**: it returns false and promotes
-  nothing. It does not downgrade to a weaker EOL state either — the package
-  continues through the remaining rules (PyPI inactive classifier, the
-  archived/disabled → `Stalled` branch of ADR-0020, scorecard-driven
-  `EOL-Effective`), so a package that is genuinely end-of-life can still be
-  labelled by a signal that actually measures it.
+  nothing. It does not downgrade to a weaker EOL state either. Nothing else in the
+  chain is suppressed: the PyPI inactive classifier already ran ahead of this rule,
+  the remaining evaluator rules still run, and the lifecycle assessor still reaches
+  the archived/disabled → `Stalled` branch of ADR-0020, scorecard-driven
+  `EOL-Effective`, or `Review Needed`. A package that is genuinely end-of-life can
+  still be labelled by a signal that actually measures it.
 - A versioned PURL whose version is yanked still resolves to `EOLEndOfLife`,
   unchanged. This is the case ADR-0020 contemplated and the case the godoc always
   described: a user pinned to a yanked release.
@@ -69,15 +71,20 @@ it from that list.
 ### Rejected alternative — downgrade to a human-review state
 
 The consuming catalog proposed routing the unversioned case to a "Review Needed"
-label instead of suppressing it. Rejected on layering grounds: `EOLState`
-(`internal/domain/analysis/eol.go`) has exactly four values — `Unknown`,
-`NotEOL`, `EOL`, `Scheduled` — and "Review Needed" is not one of them. It exists
-only as the terminal fallback of `Analysis.FinalMaintenanceStatus()`, returned
-when there is no EOL state *and* no lifecycle label. Reaching it from the
-evaluator would mean adding an `EOLState` or suppressing the lifecycle assessment
-— a new public API surface, to express something the evaluator has no evidence
-for. Emitting nothing is the accurate statement: an unversioned PURL plus a yanked
-default release tells us nothing about the package.
+label instead of suppressing it. Rejected on layering grounds: "Review Needed" is
+a **lifecycle-axis label**, not an EOL state. `EOLState`
+(`internal/domain/analysis/eol.go`) has exactly four values — `Unknown`, `NotEOL`,
+`EOL`, `Scheduled` — so the evaluator has no way to express it. `LabelReviewNeeded`
+is reached either by the lifecycle assessor deciding the evidence is insufficient
+(`lifecycle_assessor.go`) or as the terminal fallback of
+`Analysis.FinalMaintenanceStatus()`; neither is the evaluator's to request. Doing
+so would mean adding an `EOLState` or having the evaluator drive the lifecycle
+axis — a new public API surface, to express something the evaluator has no
+evidence for. Emitting nothing is the accurate statement: an unversioned PURL plus
+a yanked default release tells us nothing about the package. Suppressing the
+verdict lets the assessor reach `Review Needed` on its own when no other signal
+fires, which is the outcome the request was after (observed on
+`pkg:pypi/python-apt`).
 
 ### Not addressed here — the stable-version source
 
