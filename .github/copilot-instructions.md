@@ -37,7 +37,8 @@ When performing code review on pull requests, **do not review or comment on Mark
 
 `.github/` is the **single source of truth** for all shared instructions, agents, and prompts.
 
-- **Instructions**: Edit `.github/instructions/`. Run `make sync-instructions` to regenerate `.claude/rules/`.
+- **Instructions**: Edit `.github/instructions/`. Run `make sync-instructions` to regenerate `.claude/rules/` and `AGENTS.md`.
+- **Codex entry point**: Edit `.github/AGENTS.base.md`. The root `AGENTS.md` is generated from it by `make sync-instructions` — never edit `AGENTS.md` directly.
 - **Agents**: Edit `.github/agents/`. `.claude/agents/` are thin shims that delegate here.
 - **Prompts**: Edit `.github/prompts/`. `.claude/skills/` are thin shims that delegate here.
 

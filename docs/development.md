@@ -46,25 +46,37 @@ Add organization-specific shorthands to `internal/domain/licenses/aliases.custom
 
 ## Instruction Sync (`sync-instructions` Subcommand)
 
-`.github/instructions/` is the **Single Source of Truth** for instruction / rules files. `.claude/rules/` contains auto-generated copies.
+`.github/` is the **Single Source of Truth** for instruction / rules files. Two derived targets are generated from it:
+
+| Generated file | Source | Read by |
+|---|---|---|
+| `.claude/rules/*.md` | `.github/instructions/*.instructions.md` | Claude Code |
+| `AGENTS.md` (repo root) | `.github/AGENTS.base.md` + an index of `.github/instructions/` | Codex CLI and other `AGENTS.md` readers |
 
 ```bash
-# Regenerate .claude/rules/ from .github/instructions/
+# Regenerate .claude/rules/ and AGENTS.md from .github/
 make sync-instructions
 ```
 
+Never edit a generated file directly — edit the `.github/` source and regenerate.
+
 ### Automatic Sync
 
-- **Claude Code**: Auto-runs after Edit/Write on files in `.github/instructions/` (hook in `.claude/settings.json`)
-- **Git pre-commit**: Auto-syncs and stages when `.github/instructions/` files are staged (`.githooks/pre-commit`)
+- **Claude Code**: Auto-runs after Edit/Write on `.github/instructions/` or `.github/AGENTS.base.md` (hook in `.claude/settings.json`)
+- **Git pre-commit**: Auto-syncs and stages when those files are staged (`.githooks/pre-commit`)
 
 ### Git Hooks Setup
 
-After cloning the repository, run:
+The pre-commit hook lives in `.githooks/`, which Git does not use by default.
+**After cloning the repository, run:**
 
 ```bash
 git config core.hooksPath .githooks
 ```
+
+Verify with `git config core.hooksPath` — if it prints nothing or `.git/hooks`,
+the sync hook is not active and you must run `make sync-instructions` yourself
+before committing a change to `.github/`.
 
 ### Details
 
@@ -92,7 +104,7 @@ See `.claude/rules/instruction-sync.md` for file structure and editing protocol.
 
 **Step 1**: Create `.github/instructions/<name>.instructions.md`
 
-**Step 2**: Run `make sync-instructions` — `.claude/rules/<name>.md` is auto-generated
+**Step 2**: Run `make sync-instructions` — `.claude/rules/<name>.md` is auto-generated, and the new file is added to the instruction index in `AGENTS.md`
 
 ### Checklist
 

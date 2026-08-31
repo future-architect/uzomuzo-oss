@@ -60,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -q '\\.github/instructions/'; then make -C \"$(git rev-parse --show-toplevel)\" sync-instructions >&2; fi"
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE '\\.github/(instructions/|AGENTS\\.base\\.md)'; then make -C \"$(git rev-parse --show-toplevel)\" sync-instructions >&2; fi"
           }
         ]
       }

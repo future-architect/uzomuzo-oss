@@ -3,12 +3,12 @@
 # Install: git config core.hooksPath .githooks
 
 # Check if any .github/instructions/ files are staged
-if git diff --cached --name-only | grep -q '^\.github/instructions/'; then
-  echo "Syncing .claude/rules/ from .github/instructions/..."
+if git diff --cached --name-only | grep -qE '^\.github/(instructions/|AGENTS\.base\.md)'; then
+  echo "Syncing .claude/rules/ and AGENTS.md from .github/..."
   make sync-instructions
 
   # Stage the regenerated files
-  git add .claude/rules/*.md
+  git add .claude/rules/*.md AGENTS.md
   # But don't stage instruction-sync.md if it wasn't already staged
   git diff --cached --name-only | grep -q '\.claude/rules/instruction-sync\.md' || git reset HEAD .claude/rules/instruction-sync.md 2>/dev/null
 fi

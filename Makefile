@@ -45,7 +45,7 @@ bench-save:
 clean:
 	rm -f uzomuzo uzomuzo-diet
 
-# sync-instructions: .github/instructions/ → .claude/rules/ generated copy
+# sync-instructions: .github/ → .claude/rules/ and AGENTS.md generated copies
 sync-instructions:
 	@for src in .github/instructions/*.instructions.md; do \
 		base=$$(basename "$$src" .instructions.md); \
@@ -56,6 +56,22 @@ sync-instructions:
 		cat "$$src" >> "$$dest"; \
 		echo "  $$src → $$dest"; \
 	done
+	@out="AGENTS.md"; \
+	echo "<!-- Generated from .github/AGENTS.base.md — DO NOT EDIT DIRECTLY -->" > "$$out"; \
+	echo "" >> "$$out"; \
+	while IFS= read -r line; do \
+		if [ "$$line" = "<!-- INSTRUCTION-INDEX -->" ]; then \
+			echo "| File | Topic |"; \
+			echo "|------|-------|"; \
+			for src in .github/instructions/*.instructions.md; do \
+				title=$$(grep -m1 '^# ' "$$src" | sed 's/^# //'); \
+				echo "| \`$$src\` | $$title |"; \
+			done; \
+		else \
+			echo "$$line"; \
+		fi; \
+	done < .github/AGENTS.base.md >> "$$out"; \
+	echo "  .github/AGENTS.base.md → $$out"
 
 # update-doc-examples: rebuild binary then refresh all doc output blocks.
 # Two-step build: "go build" produces the binary whose output we capture,
