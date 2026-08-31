@@ -56,7 +56,7 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 		slog.Debug("fetch_version_info_failed", "error", err)
 		// Fallback: proceed with base PURL without version
 		//TODO FetchFrom GrraphQL
-		return s.fetchAndValidateGitHubAnalysis(ctx, basePURL, githubURL)
+		return s.fetchAndValidateGitHubAnalysis(ctx, basePURL, basePURL, githubURL)
 	}
 
 	// Extract stable version from release info
@@ -65,7 +65,7 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 		slog.Debug("no_version_data", "purl", basePURL)
 		// Fallback: proceed with base PURL without version
 		//TODO FetchFrom GrraphQL
-		return s.fetchAndValidateGitHubAnalysis(ctx, basePURL, githubURL)
+		return s.fetchAndValidateGitHubAnalysis(ctx, basePURL, basePURL, githubURL)
 	}
 
 	// Step 3: Create versioned PURL if stable version is available
@@ -82,8 +82,10 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 		versionedPURL = basePURL
 	}
 
-	// Step 4: Perform full analysis with the versioned PURL, then validate
-	return s.fetchAndValidateGitHubAnalysis(ctx, versionedPURL, githubURL)
+	// Step 4: Perform full analysis with the versioned PURL, then validate.
+	// basePURL is the requested coordinate: a GitHub URL never carries a caller
+	// version, so versionedPURL is uzomuzo's own selection.
+	return s.fetchAndValidateGitHubAnalysis(ctx, versionedPURL, basePURL, githubURL)
 }
 
 // fetchAndValidateGitHubAnalysis fetches analysis for a PURL derived from a GitHub URL,
@@ -91,11 +93,16 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 // If the resolved repo URL points to a different repository, the deps.dev resolution is
 // discarded and a GitHub-only analysis is returned to prevent misattribution.
 //
+// analyzePURL is the coordinate actually analyzed (may carry a version uzomuzo
+// selected); requestedPURL is the unversioned base the caller's GitHub URL maps to.
+// On success OriginalPURL is set to requestedPURL so version-specific rules cannot
+// mistake a derived version for a caller pin. See ADR-0021 and aggregates.go.
+//
 // See: https://github.com/future-architect/uzomuzo-oss/issues/99
-func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context, purl, githubURL string) (*domain.Analysis, error) {
-	analysis, err := s.FetchAnalysisWithGitHub(ctx, purl)
+func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context, analyzePURL, requestedPURL, githubURL string) (*domain.Analysis, error) {
+	analysis, err := s.FetchAnalysisWithGitHub(ctx, analyzePURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch analysis for PURL %s (from %s): %w", purl, githubURL, err)
+		return nil, fmt.Errorf("failed to fetch analysis for PURL %s (from %s): %w", analyzePURL, githubURL, err)
 	}
 
 	// If the PURL was generated but the package is not found in deps.dev
@@ -108,7 +115,7 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 		depsdevErr.Type == common.ErrorTypeResourceNotFound &&
 		strings.Contains(depsdevErr.Message, "package not found in deps.dev") {
 		slog.Info("deps_dev_package_not_found_falling_back_to_github_only",
-			"purl", purl, "github_url", githubURL)
+			"purl", analyzePURL, "github_url", githubURL)
 		// Reuse the existing analysis if GitHub enrichment already populated RepoState
 		// for the same repository, avoiding a redundant GitHub API call.
 		if analysis.RepoState != nil && analysis.RepoURL != "" && s.validateRepoURLMatch(analysis.RepoURL, githubURL) {
@@ -130,12 +137,13 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 	if !s.validateRepoURLMatch(analysis.RepoURL, githubURL) {
 		slog.Warn("deps_dev_repo_mismatch_detected",
 			"github_url", githubURL,
-			"resolved_purl", purl,
+			"resolved_purl", analyzePURL,
 			"resolved_repo_url", analysis.RepoURL,
 		)
 		return s.buildGitHubOnlyAnalysis(ctx, githubURL)
 	}
 
+	analysis.OriginalPURL = requestedPURL
 	return analysis, nil
 }
 

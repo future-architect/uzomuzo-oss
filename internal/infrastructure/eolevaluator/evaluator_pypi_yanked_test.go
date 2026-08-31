@@ -35,7 +35,8 @@ func TestEvaluator_PyPI_InfoYanked(t *testing.T) {
 	ev.SetPyPIClient(pc)
 
 	analysis := &domain.Analysis{
-		Package: &domain.Package{PURL: "pkg:pypi/requests@2.30.0", Ecosystem: "pypi"},
+		OriginalPURL: "pkg:pypi/requests@2.30.0",
+		Package:      &domain.Package{PURL: "pkg:pypi/requests@2.30.0", Ecosystem: "pypi"},
 		ReleaseInfo: &domain.ReleaseInfo{
 			StableVersion: &domain.VersionDetail{Version: "2.30.0"},
 		},
@@ -83,8 +84,9 @@ func TestEvaluator_PyPI_AllUrlsYanked(t *testing.T) {
 	ev.SetPyPIClient(pc)
 
 	analysis := &domain.Analysis{
-		Package:     &domain.Package{PURL: "pkg:pypi/pkg@1.0.0", Ecosystem: "pypi"},
-		ReleaseInfo: &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Version: "1.0.0"}},
+		OriginalPURL: "pkg:pypi/pkg@1.0.0",
+		Package:      &domain.Package{PURL: "pkg:pypi/pkg@1.0.0", Ecosystem: "pypi"},
+		ReleaseInfo:  &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Version: "1.0.0"}},
 	}
 	out, err := ev.EvaluateBatch(context.Background(), map[string]*domain.Analysis{"k": analysis})
 	if err != nil {
@@ -114,8 +116,9 @@ func TestEvaluator_PyPI_NotYanked(t *testing.T) {
 	ev.SetPyPIClient(pc)
 
 	analysis := &domain.Analysis{
-		Package:     &domain.Package{PURL: "pkg:pypi/pkg@1.0.0", Ecosystem: "pypi"},
-		ReleaseInfo: &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Version: "1.0.0"}},
+		OriginalPURL: "pkg:pypi/pkg@1.0.0",
+		Package:      &domain.Package{PURL: "pkg:pypi/pkg@1.0.0", Ecosystem: "pypi"},
+		ReleaseInfo:  &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Version: "1.0.0"}},
 	}
 	out, err := ev.EvaluateBatch(context.Background(), map[string]*domain.Analysis{"k": analysis})
 	if err != nil {
@@ -162,7 +165,8 @@ func TestEvaluator_PyPI_Yanked_PreferPURLVersionOverStable(t *testing.T) {
 	ev.SetPyPIClient(pc)
 
 	analysis := &domain.Analysis{
-		Package: &domain.Package{PURL: "pkg:pypi/requests@2.30.0", Ecosystem: "pypi"},
+		OriginalPURL: "pkg:pypi/requests@2.30.0",
+		Package:      &domain.Package{PURL: "pkg:pypi/requests@2.30.0", Ecosystem: "pypi"},
 		ReleaseInfo: &domain.ReleaseInfo{
 			StableVersion: &domain.VersionDetail{Version: "2.31.0"}, // newer healthy version
 		},
