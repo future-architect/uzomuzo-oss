@@ -2,20 +2,32 @@ package depsdev
 
 import (
 	"github.com/Masterminds/semver/v3"
+	pep440 "github.com/aquasecurity/go-pep440-version"
+
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
 
 // pickStableDevAndMax selects Stable, Dev, and the maximum SemVer version from the list.
-// Stable:
-//  1. Prefer IsDefault=true (latest by PublishedAt)
-//  2. If none, latest IsStableVersion=true by PublishedAt
+//
+// preferredStable is the version the package's own registry presents as current,
+// empty when unavailable. It is an upper bound on Stable:
+//
+//	Stable:
+//	 1. preferredStable matches a version exactly -> that version
+//	 2. preferredStable set and PEP 440 parseable -> greatest version
+//	    <= preferredStable, ties broken by latest PublishedAt then version string.
+//	    No such version leaves Stable empty; the bound is never exceeded.
+//	 3. preferredStable empty or not PEP 440 parseable -> latest IsDefault=true by
+//	    PublishedAt, else latest purl.IsStableVersion by PublishedAt
 //
 // Dev:
 //   - Latest among non-stable by PublishedAt
 //
 // Max:
 //   - Highest SemVer using Masterminds semver; if none are valid SemVer, fallback to latest by PublishedAt
-func pickStableDevAndMax(versions []Version) (stable Version, dev Version, max Version) {
+//
+// See ADR-0023.
+func pickStableDevAndMax(versions []Version, preferredStable string) (stable Version, dev Version, max Version) {
 	if len(versions) == 0 {
 		return Version{}, Version{}, Version{}
 	}
@@ -39,7 +51,9 @@ func pickStableDevAndMax(versions []Version) (stable Version, dev Version, max V
 	}
 
 	// Stable selection
-	if len(defaults) > 0 {
+	if picked, governs := pickByRegistryStable(versions, preferredStable); governs {
+		stable = picked
+	} else if len(defaults) > 0 {
 		stable = latestByPublishedAt(defaults)
 	} else if len(stables) > 0 {
 		stable = latestByPublishedAt(stables)
@@ -58,6 +72,67 @@ func pickStableDevAndMax(versions []Version) (stable Version, dev Version, max V
 	}
 
 	return stable, dev, max
+}
+
+// pickByRegistryStable applies the bound. governs=false means the bound does not
+// apply — no hint was supplied, or it is not PEP 440 parseable — and the caller
+// must use the deps.dev rules. governs=true with a zero Version means the bound
+// applies and excludes every candidate, so Stable is left empty.
+func pickByRegistryStable(versions []Version, preferredStable string) (picked Version, governs bool) {
+	if preferredStable == "" {
+		return Version{}, false
+	}
+
+	var exact Version
+	exactFound := false
+	for _, v := range versions {
+		if v.VersionKey.Version != preferredStable {
+			continue
+		}
+		if !exactFound || v.PublishedAt.After(exact.PublishedAt) {
+			exact, exactFound = v, true
+		}
+	}
+	if exactFound {
+		return exact, true
+	}
+
+	bound, err := pep440.Parse(preferredStable)
+	if err != nil {
+		return Version{}, false
+	}
+
+	var best Version
+	var bestV pep440.Version
+	found := false
+	for _, v := range versions {
+		cur, err := pep440.Parse(v.VersionKey.Version)
+		if err != nil {
+			// Unparseable version strings cannot be ordered against the bound.
+			// They can still win the exact-match pass above.
+			continue
+		}
+		if cur.GreaterThan(bound) {
+			continue
+		}
+		if !found || betterStableCandidate(cur, v, bestV, best) {
+			best, bestV, found = v, cur, true
+		}
+	}
+	return best, true
+}
+
+// betterStableCandidate reports whether cand outranks best: the greater PEP 440
+// version wins, then the more recently published, then the greater version string
+// so the result does not depend on input order.
+func betterStableCandidate(candV pep440.Version, cand Version, bestV pep440.Version, best Version) bool {
+	if c := candV.Compare(bestV); c != 0 {
+		return c > 0
+	}
+	if !cand.PublishedAt.Equal(best.PublishedAt) {
+		return cand.PublishedAt.After(best.PublishedAt)
+	}
+	return cand.VersionKey.Version > best.VersionKey.Version
 }
 
 func latestByPublishedAt(vs []Version) Version {

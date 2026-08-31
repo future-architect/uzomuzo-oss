@@ -99,6 +99,12 @@ type ProjectInfo struct {
 	Classifiers []string
 	ProjectURLs map[string]string // e.g. "Repository" -> "https://github.com/..."
 	HomePage    string
+
+	// Version is info.version: the release PyPI presents as current. Empty when
+	// PyPI omits it.
+	Version string
+	// Yanked is info.yanked for Version — true when Version itself is yanked.
+	Yanked bool
 }
 
 // VersionInfo is the minimal subset of PyPI version-level metadata we need.
@@ -217,6 +223,8 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 			Classifiers []string          `json:"classifiers"`
 			ProjectURLs map[string]string `json:"project_urls"`
 			HomePage    string            `json:"home_page"`
+			Version     string            `json:"version"`
+			Yanked      bool              `json:"yanked"`
 		} `json:"info"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&raw); err != nil {
@@ -229,6 +237,8 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 		Classifiers: raw.Info.Classifiers,
 		ProjectURLs: raw.Info.ProjectURLs,
 		HomePage:    raw.Info.HomePage,
+		Version:     strings.TrimSpace(raw.Info.Version),
+		Yanked:      raw.Info.Yanked,
 	}
 	c.cache.Set(lower, info)
 	return info, true, nil

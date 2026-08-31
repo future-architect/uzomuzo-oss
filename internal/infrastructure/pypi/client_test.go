@@ -154,6 +154,67 @@ func TestGetProject_ClassifiersParsed(t *testing.T) {
 	}
 }
 
+// TestGetProject_VersionAndYankedDecoded verifies that info.version and
+// info.yanked populate ProjectInfo.Version and ProjectInfo.Yanked. See
+// ADR-0022: these two fields let depsdev bound Stable selection to a
+// version the registry has not yanked.
+func TestGetProject_VersionAndYankedDecoded(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		body        string
+		wantVersion string
+		wantYanked  bool
+	}{
+		{
+			name:        "current release not yanked",
+			body:        `{"info":{"name":"pydantic-extra-types","version":"2.11.1","yanked":false}}`,
+			wantVersion: "2.11.1",
+			wantYanked:  false,
+		},
+		{
+			name:        "current release yanked",
+			body:        `{"info":{"name":"all-yanked","version":"1.0.0","yanked":true}}`,
+			wantVersion: "1.0.0",
+			wantYanked:  true,
+		},
+		{
+			name:        "version omitted",
+			body:        `{"info":{"name":"no-version"}}`,
+			wantVersion: "",
+			wantYanked:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = fmt.Fprintln(w, tt.body)
+			}))
+			defer srv.Close()
+
+			c := NewClient()
+			c.SetBaseURL(srv.URL)
+			c.SetCacheTTL(0)
+
+			proj, found, err := c.GetProject(context.Background(), tt.name)
+			if err != nil {
+				t.Fatalf("GetProject failed: %v", err)
+			}
+			if !found || proj == nil {
+				t.Fatalf("expected found=true with non-nil proj, got found=%v proj=%v", found, proj)
+			}
+			if proj.Version != tt.wantVersion {
+				t.Errorf("Version = %q, want %q", proj.Version, tt.wantVersion)
+			}
+			if proj.Yanked != tt.wantYanked {
+				t.Errorf("Yanked = %v, want %v", proj.Yanked, tt.wantYanked)
+			}
+		})
+	}
+}
+
 func TestGetRepoURL(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

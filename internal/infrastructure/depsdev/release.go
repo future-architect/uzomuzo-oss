@@ -204,7 +204,11 @@ func (c *DepsDevClient) fetchLatestRelease(ctx context.Context, purlStr string) 
 	}
 
 	// Determine Stable/Dev/Max using unified selection logic
-	stable, dev, max := pickStableDevAndMax(builtVersions)
+	preferredStable, err := c.registryStableVersion(ctx, parsed)
+	if err != nil {
+		return ReleaseInfo{Endpoint: endpoint, Error: err}, err
+	}
+	stable, dev, max := pickStableDevAndMax(builtVersions, preferredStable)
 	releaseInfo.StableVersion = stable
 	if dev.VersionKey.Version != "" {
 		releaseInfo.PreReleaseVersion = dev
@@ -235,4 +239,39 @@ func (c *DepsDevClient) fetchReleaseInfoBatch(ctx context.Context, purls []strin
 	})
 
 	return results, nil
+}
+
+// registryStableVersion returns the version the package's own registry presents
+// as current, for use as the upper bound on Stable selection. An empty string
+// means "no usable hint" and leaves selection on the deps.dev rules.
+//
+// Only pypi is covered. Context cancellation and deadlines propagate; registry,
+// HTTP and decode failures are suppressed to ("", nil) and logged. See ADR-0023.
+func (c *DepsDevClient) registryStableVersion(ctx context.Context, parsed *commonpurl.ParsedPURL) (string, error) {
+	if c.pypi == nil || !strings.EqualFold(parsed.Ecosystem(), "pypi") {
+		return "", nil
+	}
+	name := strings.TrimSpace(parsed.PackageName())
+	if name == "" {
+		return "", nil
+	}
+
+	info, found, err := c.pypi.GetProject(ctx, name)
+	if err != nil {
+		// Classify from the error itself, not from ctx.Err(): a registry failure
+		// racing an unrelated cancellation must stay a suppressed registry failure.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return "", fmt.Errorf("pypi stable-version hint for %q: %w", name, err)
+		}
+		slog.Debug("pypi_stable_hint_fetch_failed", "name", name, "error", err)
+		return "", nil
+	}
+	if !found || info == nil || info.Version == "" {
+		return "", nil
+	}
+	if info.Yanked {
+		slog.Debug("pypi_stable_hint_yanked", "name", name, "version", info.Version)
+		return "", nil
+	}
+	return info.Version, nil
 }
