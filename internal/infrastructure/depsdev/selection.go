@@ -50,7 +50,8 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 		}
 	}
 
-	// Stable selection
+	// Stable selection. A zero picked with governs=true is intended: the bound
+	// applies and excludes every candidate, so Stable stays empty.
 	if picked, governs := pickByRegistryStable(versions, preferredStable); governs {
 		stable = picked
 	} else if len(defaults) > 0 {
@@ -102,37 +103,44 @@ func pickByRegistryStable(versions []Version, preferredStable string) (picked Ve
 		return Version{}, false
 	}
 
-	var best Version
-	var bestV pep440.Version
+	var best stableCandidate
 	found := false
 	for _, v := range versions {
-		cur, err := pep440.Parse(v.VersionKey.Version)
+		parsed, err := pep440.Parse(v.VersionKey.Version)
 		if err != nil {
 			// Unparseable version strings cannot be ordered against the bound.
 			// They can still win the exact-match pass above.
 			continue
 		}
-		if cur.GreaterThan(bound) {
+		if parsed.GreaterThan(bound) {
 			continue
 		}
-		if !found || betterStableCandidate(cur, v, bestV, best) {
-			best, bestV, found = v, cur, true
+		cur := stableCandidate{parsed: parsed, raw: v}
+		if !found || cur.outranks(best) {
+			best, found = cur, true
 		}
 	}
-	return best, true
+	return best.raw, true
 }
 
-// betterStableCandidate reports whether cand outranks best: the greater PEP 440
-// version wins, then the more recently published, then the greater version string
-// so the result does not depend on input order.
-func betterStableCandidate(candV pep440.Version, cand Version, bestV pep440.Version, best Version) bool {
-	if c := candV.Compare(bestV); c != 0 {
-		return c > 0
+// stableCandidate pairs a deps.dev version with its parsed PEP 440 form so the
+// two cannot be transposed at a call site.
+type stableCandidate struct {
+	parsed pep440.Version
+	raw    Version
+}
+
+// outranks reports whether c beats other: the greater PEP 440 version wins, then
+// the more recently published, then the greater version string so the result does
+// not depend on input order.
+func (c stableCandidate) outranks(other stableCandidate) bool {
+	if cmp := c.parsed.Compare(other.parsed); cmp != 0 {
+		return cmp > 0
 	}
-	if !cand.PublishedAt.Equal(best.PublishedAt) {
-		return cand.PublishedAt.After(best.PublishedAt)
+	if !c.raw.PublishedAt.Equal(other.raw.PublishedAt) {
+		return c.raw.PublishedAt.After(other.raw.PublishedAt)
 	}
-	return cand.VersionKey.Version > best.VersionKey.Version
+	return c.raw.VersionKey.Version > other.raw.VersionKey.Version
 }
 
 func latestByPublishedAt(vs []Version) Version {

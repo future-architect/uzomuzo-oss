@@ -73,30 +73,30 @@ func TestPickStableDevAndMax_NoStable_DefaultsAbsent(t *testing.T) {
 }
 
 // TestPickStableDevAndMax_HintEmpty_MatchesOldBehavior pins that an empty hint
-// produces byte-for-byte the same Stable/Dev/Max as before ADR-0022: the
+// produces byte-for-byte the same Stable/Dev/Max as before ADR-0023: the
 // registry-hint path (pickByRegistryStable) must be a no-op when there is no
-// hint, falling straight through to the deps.dev rules.
+// hint, falling straight through to the deps.dev rules. The expected values
+// below are literal, independently derived from the deps.dev rules
+// documented on pickStableDevAndMax — not computed by a second call to the
+// function under test, which would make this assertion unable to catch a
+// regression in the very function it is meant to pin.
 func TestPickStableDevAndMax_HintEmpty_MatchesOldBehavior(t *testing.T) {
 	versions := []Version{
-		v("1.0.0-rc1", "2024-01-01T00:00:00Z", false),
-		v("1.0.0", "2024-02-01T00:00:00Z", true),
-		v("2.0.0", "2024-03-01T00:00:00Z", false),
+		v("1.0.0-rc1", "2024-01-01T00:00:00Z", false), // non-stable (contains "rc") -> Dev candidate
+		v("1.0.0", "2024-02-01T00:00:00Z", true),       // isDefault=true -> Stable
+		v("2.0.0", "2024-03-01T00:00:00Z", false),      // highest valid SemVer -> Max
 	}
 
-	wantStable, wantDev, wantMax := pickStableDevAndMax(versions, "")
-	gotStable, gotDev, gotMax := pickStableDevAndMax(versions, "")
+	stable, dev, max := pickStableDevAndMax(versions, "")
 
-	if gotStable.VersionKey.Version != wantStable.VersionKey.Version {
-		t.Fatalf("stable=%s, want %s", gotStable.VersionKey.Version, wantStable.VersionKey.Version)
+	if stable.VersionKey.Version != "1.0.0" {
+		t.Fatalf("stable=%s, want 1.0.0 (deps.dev isDefault rule)", stable.VersionKey.Version)
 	}
-	if gotDev.VersionKey.Version != wantDev.VersionKey.Version {
-		t.Fatalf("dev=%s, want %s", gotDev.VersionKey.Version, wantDev.VersionKey.Version)
+	if dev.VersionKey.Version != "1.0.0-rc1" {
+		t.Fatalf("dev=%s, want 1.0.0-rc1 (only non-stable candidate)", dev.VersionKey.Version)
 	}
-	if gotMax.VersionKey.Version != wantMax.VersionKey.Version {
-		t.Fatalf("max=%s, want %s", gotMax.VersionKey.Version, wantMax.VersionKey.Version)
-	}
-	if gotStable.VersionKey.Version != "1.0.0" {
-		t.Fatalf("stable=%s, want 1.0.0 (deps.dev isDefault rule)", gotStable.VersionKey.Version)
+	if max.VersionKey.Version != "2.0.0" {
+		t.Fatalf("max=%s, want 2.0.0 (highest valid SemVer)", max.VersionKey.Version)
 	}
 }
 
@@ -121,7 +121,7 @@ func TestPickStableDevAndMax_Hint_ExactMatchWins(t *testing.T) {
 // indexed, or vice versa), and a strictly newer version IS present. That newer
 // version must not be selected — rule 2 bounds selection to versions <= hint.
 func TestPickStableDevAndMax_Hint_RegressionGuard490(t *testing.T) {
-	// Mirrors the pydantic-extra-types case from ADR-0022: PyPI's info.version
+	// Mirrors the pydantic-extra-types case from ADR-0023: PyPI's info.version
 	// (2.11.1) is not itself in the deps.dev list, and deps.dev's isDefault
 	// (2.11.2) is newer than the hint and yanked in the real-world case.
 	versions := []Version{
@@ -157,6 +157,40 @@ func TestPickStableDevAndMax_Hint_NothingBelowBound_LeavesStableEmpty(t *testing
 	}
 	if dev.VersionKey.Version != "2.0.0-rc1" {
 		t.Fatalf("dev=%s, want 2.0.0-rc1 (Dev is unaffected by the bound: it is the latest non-stable by purl.IsStableVersion)", dev.VersionKey.Version)
+	}
+	if max.VersionKey.Version != "3.0.0" {
+		t.Fatalf("max=%s, want 3.0.0 (Max is unaffected by the bound)", max.VersionKey.Version)
+	}
+}
+
+// TestPickStableDevAndMax_Hint_AllCandidatesKeywordFreeFinal_LeavesStableAndDevEmpty
+// is the regression guard for issue #490's gate-fix scenario, distinct from
+// TestPickStableDevAndMax_Hint_NothingBelowBound_LeavesStableEmpty above:
+// that test uses "2.0.0-rc1" as one of the excluded candidates, which keeps
+// Dev non-empty and so never exercises the case where BOTH Stable and Dev
+// come back empty. Before the HasAnyVersion fix (see api_types.go and
+// ADR-0023), a bug existed where every deps.dev version was excluded by the
+// PyPI bound AND every excluded version was a keyword-free final release
+// (e.g. "2.0.0", "3.0.0" — no alpha/beta/rc/dev/snapshot/pre/preview
+// substring, so purl.IsStableVersion classifies both as "stable" and neither
+// lands in the Dev/non-stable bucket). That combination made Stable AND Dev
+// both empty while Max stayed populated — the exact state the old
+// `Stable != "" || PreRelease != ""` gate in batch_details.go dropped
+// entirely. This test proves that state is reachable from
+// pickStableDevAndMax; TestBuildFinalResults_StableAndDevEmpty_MaxPopulated_ReleaseInfoAttached
+// and its buildCompleteResult sibling in batch_details_test.go prove the gate
+// itself no longer drops it.
+func TestPickStableDevAndMax_Hint_AllCandidatesKeywordFreeFinal_LeavesStableAndDevEmpty(t *testing.T) {
+	versions := []Version{
+		v("2.0.0", "2024-01-01T00:00:00Z", false),
+		v("3.0.0", "2024-02-01T00:00:00Z", false),
+	}
+	stable, dev, max := pickStableDevAndMax(versions, "1.0.0")
+	if stable.VersionKey.Version != "" {
+		t.Fatalf("stable=%s, want empty (bound governs, both candidates are above it)", stable.VersionKey.Version)
+	}
+	if dev.VersionKey.Version != "" {
+		t.Fatalf("dev=%s, want empty (both candidates are keyword-free finals classified as stable, not Dev)", dev.VersionKey.Version)
 	}
 	if max.VersionKey.Version != "3.0.0" {
 		t.Fatalf("max=%s, want 3.0.0 (Max is unaffected by the bound)", max.VersionKey.Version)

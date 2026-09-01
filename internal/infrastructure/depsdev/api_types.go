@@ -199,6 +199,16 @@ type ReleaseInfo struct {
 	Error    error
 }
 
+// HasAnyVersion reports whether any of the four version slots is populated.
+// Stable alone is not a sufficient test: the registry bound can leave Stable and
+// PreRelease both empty while MaxSemver and Requested still carry data. See ADR-0023.
+func (r ReleaseInfo) HasAnyVersion() bool {
+	return r.StableVersion.VersionKey.Version != "" ||
+		r.PreReleaseVersion.VersionKey.Version != "" ||
+		r.MaxSemverVersion.VersionKey.Version != "" ||
+		r.RequestedVersion.VersionKey.Version != ""
+}
+
 // BatchResult represents the result of a batch operation
 type BatchResult struct {
 	PURL        string      `json:"purl"`

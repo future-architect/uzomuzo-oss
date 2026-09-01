@@ -206,7 +206,10 @@ func (c *DepsDevClient) fetchLatestRelease(ctx context.Context, purlStr string) 
 	// Determine Stable/Dev/Max using unified selection logic
 	preferredStable, err := c.registryStableVersion(ctx, parsed)
 	if err != nil {
-		return ReleaseInfo{Endpoint: endpoint, Error: err}, err
+		// Keep what the loop above already resolved (Endpoint, RequestedVersion)
+		// rather than replacing it with a bare error value.
+		releaseInfo.Error = err
+		return releaseInfo, err
 	}
 	stable, dev, max := pickStableDevAndMax(builtVersions, preferredStable)
 	releaseInfo.StableVersion = stable
@@ -258,8 +261,7 @@ func (c *DepsDevClient) registryStableVersion(ctx context.Context, parsed *commo
 
 	info, found, err := c.pypi.GetProject(ctx, name)
 	if err != nil {
-		// Classify from the error itself, not from ctx.Err(): a registry failure
-		// racing an unrelated cancellation must stay a suppressed registry failure.
+		// Classify from the error value, not ctx.Err(). See ADR-0023.
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return "", fmt.Errorf("pypi stable-version hint for %q: %w", name, err)
 		}

@@ -15,13 +15,13 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
 )
 
-// This file exercises the ADR-0022 contract end to end: fetchLatestRelease
+// This file exercises the ADR-0023 contract end to end: fetchLatestRelease
 // combines deps.dev's versions listing with PyPI's own current-release field
 // to bound Stable selection. All servers are httptest-local; nothing here
 // touches the network.
 //
 // Fixture mirrors pkg:pypi/pydantic-extra-types as observed 2026-08-31 (see
-// ADR-0022): deps.dev lists 2.11.0/2.11.1/2.11.2 with 2.11.2 isDefault=true,
+// ADR-0023): deps.dev lists 2.11.0/2.11.1/2.11.2 with 2.11.2 isDefault=true,
 // while PyPI's info.version is 2.11.1 (2.11.2 having been yanked in the real
 // case that motivated the fix).
 const pydanticExtraTypesVersionsJSON = `{
@@ -49,6 +49,9 @@ func newDepsDevTestServer(t *testing.T, path, body string) *httptest.Server {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		// Write error intentionally ignored: this is a local httptest response
+		// writer, and the test that consumes the (broken) client connection
+		// will surface any real failure as a request error instead.
 		_, _ = fmt.Fprint(w, body)
 	}))
 	t.Cleanup(srv.Close)
@@ -91,6 +94,9 @@ func pypiCountingServer(t *testing.T, expectedPath string, status int, body stri
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		if body != "" {
+			// Write error intentionally ignored: a local httptest response
+			// writer; a broken write shows up as a request-level failure on
+			// the client side, which the calling test already checks.
 			_, _ = fmt.Fprint(w, body)
 		}
 	}))
@@ -104,9 +110,7 @@ func TestFetchLatestRelease_PyPIHint_Applied(t *testing.T) {
 	depsDevSrv := newDepsDevTestServer(t, "/v3alpha/systems/pypi/packages/pydantic-extra-types", pydanticExtraTypesVersionsJSON)
 	pypiSrv, hits := pypiCountingServer(t, pydanticExtraTypesPyPIPath, http.StatusOK, pydanticExtraTypesPyPIBody)
 
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(0)
+	pypiClient := newTestPyPIClient(pypiSrv.URL, 0, false)
 
 	client := newDepsDevClient(depsDevSrv).WithPyPI(pypiClient)
 
@@ -122,48 +126,72 @@ func TestFetchLatestRelease_PyPIHint_Applied(t *testing.T) {
 	}
 }
 
-func TestFetchLatestRelease_PyPI404_FallsBackToDepsDevDefault(t *testing.T) {
-	depsDevSrv := newDepsDevTestServer(t, "/v3alpha/systems/pypi/packages/pydantic-extra-types", pydanticExtraTypesVersionsJSON)
-	pypiSrv, hits := pypiCountingServer(t, pydanticExtraTypesPyPIPath, http.StatusNotFound, "")
-
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(0)
-
-	client := newDepsDevClient(depsDevSrv).WithPyPI(pypiClient)
-
-	info, err := client.fetchLatestRelease(context.Background(), "pkg:pypi/pydantic-extra-types@2.11.0")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+// TestFetchLatestRelease_PyPIFallback_Table covers four distinct PyPI failure
+// modes that must all produce the identical, documented fallback: Stable
+// stays on the deps.dev isDefault rule (2.11.2), fetchLatestRelease returns no
+// error, and PyPI is contacted exactly once. Each row differs only in the
+// PyPI response and whether a no-retry client is required to keep the test
+// from waiting through real retry backoff:
+//   - PyPI 404 (documented fallback, no retry configured for 4xx)
+//   - PyPI 500 (RetryOn5xx is on by default, so this row needs the no-retry
+//     client, or the deliberately-failing server would be retried)
+//   - malformed PyPI JSON body (GetProject's decode fails with a plain,
+//     non-context error, suppressed per ADR-0023)
+//   - a syntactically valid but empty "info" object (info.Version == "" is
+//     "no usable hint", handled before the yanked check)
+func TestFetchLatestRelease_PyPIFallback_Table(t *testing.T) {
+	tests := []struct {
+		name       string
+		pypiStatus int
+		pypiBody   string
+		noRetry    bool
+	}{
+		{
+			name:       "PyPI 404 falls back to deps.dev default",
+			pypiStatus: http.StatusNotFound,
+			pypiBody:   "",
+			noRetry:    false,
+		},
+		{
+			name:       "PyPI 500 falls back without error",
+			pypiStatus: http.StatusInternalServerError,
+			pypiBody:   "",
+			noRetry:    true,
+		},
+		{
+			name:       "malformed PyPI JSON falls back without error",
+			pypiStatus: http.StatusOK,
+			pypiBody:   `{"info": not valid json`,
+			noRetry:    false,
+		},
+		{
+			name:       "empty PyPI info object falls back without error",
+			pypiStatus: http.StatusOK,
+			pypiBody:   `{"info":{}}`,
+			noRetry:    false,
+		},
 	}
-	if info.StableVersion.VersionKey.Version != "2.11.2" {
-		t.Fatalf("StableVersion=%s, want 2.11.2 (documented fallback on PyPI 404)", info.StableVersion.VersionKey.Version)
-	}
-	if got := atomic.LoadInt32(hits); got != 1 {
-		t.Fatalf("expected exactly 1 PyPI request, got %d", got)
-	}
-}
 
-func TestFetchLatestRelease_PyPI500_FallsBackWithoutError(t *testing.T) {
-	depsDevSrv := newDepsDevTestServer(t, "/v3alpha/systems/pypi/packages/pydantic-extra-types", pydanticExtraTypesVersionsJSON)
-	pypiSrv, hits := pypiCountingServer(t, pydanticExtraTypesPyPIPath, http.StatusInternalServerError, "")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			depsDevSrv := newDepsDevTestServer(t, "/v3alpha/systems/pypi/packages/pydantic-extra-types", pydanticExtraTypesVersionsJSON)
+			pypiSrv, hits := pypiCountingServer(t, pydanticExtraTypesPyPIPath, tt.pypiStatus, tt.pypiBody)
 
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(0)
-	pypiClient.SetRetryConfig(noRetryConfig())
+			pypiClient := newTestPyPIClient(pypiSrv.URL, 0, tt.noRetry)
 
-	client := newDepsDevClient(depsDevSrv).WithPyPI(pypiClient)
+			client := newDepsDevClient(depsDevSrv).WithPyPI(pypiClient)
 
-	info, err := client.fetchLatestRelease(context.Background(), "pkg:pypi/pydantic-extra-types@2.11.0")
-	if err != nil {
-		t.Fatalf("fetchLatestRelease must not return an error on a suppressed PyPI failure, got: %v", err)
-	}
-	if info.StableVersion.VersionKey.Version != "2.11.2" {
-		t.Fatalf("StableVersion=%s, want 2.11.2 (fallback on PyPI 500)", info.StableVersion.VersionKey.Version)
-	}
-	if got := atomic.LoadInt32(hits); got != 1 {
-		t.Fatalf("expected exactly 1 PyPI request, got %d", got)
+			info, err := client.fetchLatestRelease(context.Background(), "pkg:pypi/pydantic-extra-types@2.11.0")
+			if err != nil {
+				t.Fatalf("fetchLatestRelease must not return an error on a suppressed PyPI failure, got: %v", err)
+			}
+			if info.StableVersion.VersionKey.Version != "2.11.2" {
+				t.Fatalf("StableVersion=%s, want 2.11.2 (documented fallback to deps.dev isDefault)", info.StableVersion.VersionKey.Version)
+			}
+			if got := atomic.LoadInt32(hits); got != 1 {
+				t.Fatalf("expected exactly 1 PyPI request, got %d", got)
+			}
+		})
 	}
 }
 
@@ -171,9 +199,7 @@ func TestFetchLatestRelease_PyPIYanked_HintRejected(t *testing.T) {
 	depsDevSrv := newDepsDevTestServer(t, "/v3alpha/systems/pypi/packages/pydantic-extra-types", pydanticExtraTypesVersionsJSON)
 	pypiSrv, hits := pypiCountingServer(t, pydanticExtraTypesPyPIPath, http.StatusOK, `{"info":{"name":"pydantic-extra-types","version":"2.11.1","yanked":true}}`)
 
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(0)
+	pypiClient := newTestPyPIClient(pypiSrv.URL, 0, false)
 
 	client := newDepsDevClient(depsDevSrv).WithPyPI(pypiClient)
 
@@ -196,6 +222,9 @@ func TestFetchLatestRelease_NoPyPIClientWired_SkipsPyPIEntirely(t *testing.T) {
 	pypiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&contacted, 1)
 		w.WriteHeader(http.StatusOK)
+		// Write error intentionally ignored: this handler is only reached if
+		// the "must never be contacted" assertion below is about to fail
+		// anyway, so a broken write here would not hide a real regression.
 		_, _ = fmt.Fprint(w, pydanticExtraTypesPyPIBody)
 	}))
 	defer pypiSrv.Close()
@@ -222,13 +251,14 @@ func TestFetchLatestRelease_NonPyPIPURL_PyPINeverContacted(t *testing.T) {
 	pypiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&contacted, 1)
 		w.WriteHeader(http.StatusOK)
+		// Write error intentionally ignored: this handler is only reached if
+		// the "must never be contacted" assertion below is about to fail
+		// anyway, so a broken write here would not hide a real regression.
 		_, _ = fmt.Fprint(w, pydanticExtraTypesPyPIBody)
 	}))
 	defer pypiSrv.Close()
 
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(0)
+	pypiClient := newTestPyPIClient(pypiSrv.URL, 0, false)
 
 	client := newDepsDevClient(depsDevSrv).WithPyPI(pypiClient)
 
@@ -250,9 +280,7 @@ func TestFetchLatestRelease_NonPyPIPURL_PyPINeverContacted(t *testing.T) {
 // context-propagation contract from deps.dev's own request timing.
 func TestRegistryStableVersion_ContextCancelled_PropagatesCanceled(t *testing.T) {
 	pypiSrv, hits := pypiCountingServer(t, pydanticExtraTypesPyPIPath, http.StatusOK, pydanticExtraTypesPyPIBody)
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(0)
+	pypiClient := newTestPyPIClient(pypiSrv.URL, 0, false)
 
 	client := (&DepsDevClient{}).WithPyPI(pypiClient)
 
@@ -281,9 +309,7 @@ func TestRegistryStableVersion_ContextCancelled_PropagatesCanceled(t *testing.T)
 
 func TestRegistryStableVersion_ContextDeadlineExceeded_PropagatesDeadlineExceeded(t *testing.T) {
 	pypiSrv, hits := pypiCountingServer(t, pydanticExtraTypesPyPIPath, http.StatusOK, pydanticExtraTypesPyPIBody)
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(0)
+	pypiClient := newTestPyPIClient(pypiSrv.URL, 0, false)
 
 	client := (&DepsDevClient{}).WithPyPI(pypiClient)
 
@@ -318,9 +344,7 @@ func TestFetchLatestRelease_ContextCancelled_PropagatesError(t *testing.T) {
 	depsDevSrv := newDepsDevTestServer(t, "/v3alpha/systems/pypi/packages/pydantic-extra-types", pydanticExtraTypesVersionsJSON)
 	pypiSrv, _ := pypiCountingServer(t, pydanticExtraTypesPyPIPath, http.StatusOK, pydanticExtraTypesPyPIBody)
 
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(0)
+	pypiClient := newTestPyPIClient(pypiSrv.URL, 0, false)
 
 	client := newDepsDevClient(depsDevSrv).WithPyPI(pypiClient)
 
@@ -333,6 +357,79 @@ func TestFetchLatestRelease_ContextCancelled_PropagatesError(t *testing.T) {
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("errors.Is(err, context.Canceled) = false; err = %v", err)
+	}
+}
+
+// TestFetchLatestRelease_CancelledDuringPyPICall_PreservesEndpointAndRequestedVersion
+// covers the production change in fetchLatestRelease's registryStableVersion
+// error branch: on cancellation, the function must return the ReleaseInfo the
+// deps.dev loop had already built (Endpoint and RequestedVersion), with Error
+// set on it, rather than a stripped ReleaseInfo{Endpoint, Error} literal.
+//
+// Unlike TestFetchLatestRelease_ContextCancelled_PropagatesError above (which
+// cancels before either call and so never reaches the deps.dev loop that
+// populates RequestedVersion), this test needs the deps.dev call to SUCCEED
+// and the cancellation to land specifically during the later PyPI call. That
+// requires the same ctx to behave differently at two points in one
+// synchronous function call, which is only achievable with real timing: a
+// goroutine cancels the context after a short delay, while the PyPI server
+// deliberately sleeps well past that delay before responding, so the
+// cancellation reliably lands mid-PyPI-request. The deps.dev server responds
+// immediately (no delay), so it reliably completes before the 20ms mark. The
+// margin (20ms cancel vs 200ms PyPI delay, both against a local loopback
+// deps.dev round trip) mirrors the timing margin already used by
+// TestDo_RateLimitContextCancellationDuringWait in
+// internal/infrastructure/httpclient/client_test.go.
+func TestFetchLatestRelease_CancelledDuringPyPICall_PreservesEndpointAndRequestedVersion(t *testing.T) {
+	depsDevSrv := newDepsDevTestServer(t, "/v3alpha/systems/pypi/packages/pydantic-extra-types", pydanticExtraTypesVersionsJSON)
+
+	var pypiHits int32
+	pypiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pydanticExtraTypesPyPIPath {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		atomic.AddInt32(&pypiHits, 1)
+		time.Sleep(200 * time.Millisecond) // outlasts the 20ms cancellation below
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// Write error intentionally ignored: the request is cancelled before
+		// this handler returns, so the client never reads this body anyway.
+		_, _ = fmt.Fprint(w, pydanticExtraTypesPyPIBody)
+	}))
+	t.Cleanup(pypiSrv.Close)
+
+	pypiClient := newTestPyPIClient(pypiSrv.URL, 0, true)
+
+	client := newDepsDevClient(depsDevSrv).WithPyPI(pypiClient)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+	defer cancel()
+
+	// The requested version (2.11.0) must be present in the deps.dev fixture
+	// so the loop in fetchLatestRelease populates RequestedVersion before the
+	// PyPI call runs.
+	const purlStr = "pkg:pypi/pydantic-extra-types@2.11.0"
+
+	info, err := client.fetchLatestRelease(ctx, purlStr)
+	if err == nil {
+		t.Fatalf("expected an error from a cancellation mid-PyPI-call, got info=%+v", info)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("errors.Is(err, context.Canceled) = false; err = %v", err)
+	}
+	if info.Error == nil || !errors.Is(info.Error, context.Canceled) {
+		t.Fatalf("info.Error = %v, want it to wrap context.Canceled", info.Error)
+	}
+	if info.Endpoint == "" {
+		t.Fatalf("Endpoint was dropped, want the deps.dev endpoint the loop above already resolved")
+	}
+	if info.RequestedVersion.VersionKey.Version != "2.11.0" {
+		t.Fatalf("RequestedVersion=%q, want 2.11.0 (populated by the deps.dev loop before the PyPI call ran)", info.RequestedVersion.VersionKey.Version)
 	}
 }
 
@@ -360,9 +457,7 @@ func TestFetchReleaseInfoBatch_DuplicateAndCaseVariantPyPIPURLs_ConcurrentMiss(t
 	depsDevSrv := newDepsDevTestServer(t, "/v3alpha/systems/pypi/packages/pydantic-extra-types", pydanticExtraTypesVersionsJSON)
 	pypiSrv, hits := pypiCountingServer(t, pydanticExtraTypesPyPIPath, http.StatusOK, pydanticExtraTypesPyPIBody)
 
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(10 * time.Minute)
+	pypiClient := newTestPyPIClient(pypiSrv.URL, 10*time.Minute, false)
 
 	client := newDepsDevClient(depsDevSrv).WithPyPI(pypiClient)
 
@@ -413,59 +508,6 @@ func resultKeys(results map[string]ReleaseInfo) []string {
 	return keys
 }
 
-// TestFetchLatestRelease_PyPIMalformedJSON_FallsBackWithoutError covers the
-// PyPI response body being malformed JSON: GetProject's decode fails with a
-// plain (non-context) error, which registryStableVersion suppresses per
-// ADR-0023, falling back to the deps.dev isDefault rule.
-func TestFetchLatestRelease_PyPIMalformedJSON_FallsBackWithoutError(t *testing.T) {
-	depsDevSrv := newDepsDevTestServer(t, "/v3alpha/systems/pypi/packages/pydantic-extra-types", pydanticExtraTypesVersionsJSON)
-	pypiSrv, hits := pypiCountingServer(t, pydanticExtraTypesPyPIPath, http.StatusOK, `{"info": not valid json`)
-
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(0)
-
-	client := newDepsDevClient(depsDevSrv).WithPyPI(pypiClient)
-
-	info, err := client.fetchLatestRelease(context.Background(), "pkg:pypi/pydantic-extra-types@2.11.0")
-	if err != nil {
-		t.Fatalf("fetchLatestRelease must not return an error on a suppressed PyPI decode failure, got: %v", err)
-	}
-	if info.StableVersion.VersionKey.Version != "2.11.2" {
-		t.Fatalf("StableVersion=%s, want 2.11.2 (fallback on malformed PyPI JSON)", info.StableVersion.VersionKey.Version)
-	}
-	if got := atomic.LoadInt32(hits); got != 1 {
-		t.Fatalf("expected exactly 1 PyPI request, got %d", got)
-	}
-}
-
-// TestFetchLatestRelease_PyPIEmptyInfoObject_FallsBackWithoutError covers a
-// syntactically valid PyPI response whose "info" object is empty: decoding
-// succeeds, but info.Version is "", which registryStableVersion treats as
-// "no usable hint" (found=true, but info.Version == "" short-circuits before
-// the yanked check) and falls back to the deps.dev isDefault rule.
-func TestFetchLatestRelease_PyPIEmptyInfoObject_FallsBackWithoutError(t *testing.T) {
-	depsDevSrv := newDepsDevTestServer(t, "/v3alpha/systems/pypi/packages/pydantic-extra-types", pydanticExtraTypesVersionsJSON)
-	pypiSrv, hits := pypiCountingServer(t, pydanticExtraTypesPyPIPath, http.StatusOK, `{"info":{}}`)
-
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(0)
-
-	client := newDepsDevClient(depsDevSrv).WithPyPI(pypiClient)
-
-	info, err := client.fetchLatestRelease(context.Background(), "pkg:pypi/pydantic-extra-types@2.11.0")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if info.StableVersion.VersionKey.Version != "2.11.2" {
-		t.Fatalf("StableVersion=%s, want 2.11.2 (empty info.version is not a usable hint)", info.StableVersion.VersionKey.Version)
-	}
-	if got := atomic.LoadInt32(hits); got != 1 {
-		t.Fatalf("expected exactly 1 PyPI request, got %d", got)
-	}
-}
-
 // racedCancelContext wraps a live, working context but reports itself as
 // already cancelled through Err(), while its Done() channel is the
 // embedded context's — never closed here. This deterministically simulates
@@ -497,10 +539,7 @@ func (racedCancelContext) Err() error { return context.Canceled }
 // error.
 func TestRegistryStableVersion_HTTPErrorRacesUnrelatedCancellation_Suppressed(t *testing.T) {
 	pypiSrv, hits := pypiCountingServer(t, pydanticExtraTypesPyPIPath, http.StatusInternalServerError, "")
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(0)
-	pypiClient.SetRetryConfig(noRetryConfig())
+	pypiClient := newTestPyPIClient(pypiSrv.URL, 0, true)
 
 	client := (&DepsDevClient{}).WithPyPI(pypiClient)
 
@@ -532,10 +571,7 @@ func TestFetchLatestRelease_HTTPErrorRacesUnrelatedCancellation_Suppressed(t *te
 	depsDevSrv := newDepsDevTestServer(t, "/v3alpha/systems/pypi/packages/pydantic-extra-types", pydanticExtraTypesVersionsJSON)
 	pypiSrv, hits := pypiCountingServer(t, pydanticExtraTypesPyPIPath, http.StatusInternalServerError, "")
 
-	pypiClient := pypi.NewClient()
-	pypiClient.SetBaseURL(pypiSrv.URL)
-	pypiClient.SetCacheTTL(0)
-	pypiClient.SetRetryConfig(noRetryConfig())
+	pypiClient := newTestPyPIClient(pypiSrv.URL, 0, true)
 
 	client := newDepsDevClient(depsDevSrv).WithPyPI(pypiClient)
 
@@ -557,4 +593,22 @@ func TestFetchLatestRelease_HTTPErrorRacesUnrelatedCancellation_Suppressed(t *te
 // deliberately-500ing test server is hit exactly once.
 func noRetryConfig() httpclient.RetryConfig {
 	return httpclient.RetryConfig{MaxRetries: 0}
+}
+
+// newTestPyPIClient builds a *pypi.Client pointed at baseURL for tests. cacheTTL
+// is passed straight through to SetCacheTTL (0 in most tests, so every call
+// reaches the test server; TestFetchReleaseInfoBatch_DuplicateAndCaseVariantPyPIPURLs_ConcurrentMiss
+// is the one caller that needs a real TTL). noRetry, when true, installs
+// noRetryConfig() so a deliberately-failing server (e.g. a 500) is hit exactly
+// once instead of being retried — this is the one setting that actually varies
+// across call sites, so it is a named parameter rather than folded into a
+// fixed setup sequence.
+func newTestPyPIClient(baseURL string, cacheTTL time.Duration, noRetry bool) *pypi.Client {
+	c := pypi.NewClient()
+	c.SetBaseURL(baseURL)
+	c.SetCacheTTL(cacheTTL)
+	if noRetry {
+		c.SetRetryConfig(noRetryConfig())
+	}
+	return c
 }

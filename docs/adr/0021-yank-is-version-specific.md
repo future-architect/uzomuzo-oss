@@ -127,6 +127,10 @@ maxima) are still computed against it. Fixing that means preferring PyPI's PEP
 change in a different layer, tracked separately. It is deliberately out of scope:
 this ADR's decision alone stops the false end-of-life verdict.
 
+Addressed in [ADR-0023](0023-stable-version-source.md), built as an upper bound on
+selection rather than the preference this paragraph anticipated — a preference
+still selects the yanked release while deps.dev has not indexed the newer one.
+
 ### Not addressed here — rules that still read the analyzed coordinate
 
 Three deprecation rules still resolve a version the caller did not choose:

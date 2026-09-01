@@ -156,7 +156,7 @@ func TestGetProject_ClassifiersParsed(t *testing.T) {
 
 // TestGetProject_VersionAndYankedDecoded verifies that info.version and
 // info.yanked populate ProjectInfo.Version and ProjectInfo.Yanked. See
-// ADR-0022: these two fields let depsdev bound Stable selection to a
+// ADR-0023: these two fields let depsdev bound Stable selection to a
 // version the registry has not yanked.
 func TestGetProject_VersionAndYankedDecoded(t *testing.T) {
 	t.Parallel()
