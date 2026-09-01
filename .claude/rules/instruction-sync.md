@@ -39,7 +39,10 @@ See `.github/instructions/base/README.md` for the admission bar (a file enters
 `base/` only when two or more repositories would inherit it verbatim) and for
 what must stay out. In particular: **this repository is public, so `base/` must
 not name a non-public repository or describe its internal conventions.** Refer
-to consumers generically and keep the specifics on the consuming side.
+to consumers generically and keep the specifics on the consuming side. Existing
+documents are not retro-edited to satisfy this — `docs/adr/` is append-only
+history, and older files that name siblings are left alone deliberately, which
+is not permission to write new ones.
 
 ## Rules: Generated via Script
 

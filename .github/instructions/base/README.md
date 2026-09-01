@@ -50,6 +50,12 @@ consumer actually exists.
   the specifics on the consuming side.
 - Anything else that cannot be published.
 
+Existing documents are not retro-edited to satisfy this. `docs/adr/` is
+append-only decision history, and a handful of older files here name sibling
+repositories; leaving them is deliberate, not permission. The rule binds what
+you write now.
+
+
 ## Editing
 
 `base/` is a source, not an output. Edit the files here directly, then run

@@ -57,6 +57,11 @@ this organization. Two consequences bind every change you make:
   repositories, so the same restriction applies with more force there. See
   `.github/instructions/base/README.md`.
 
+Existing documents are not retro-edited to satisfy this. `docs/adr/` is
+append-only decision history, and a handful of older files name sibling
+repositories; leaving them is deliberate, not permission. The rule binds what
+you write now.
+
 ## Rules — Read Before You Write Code
 
 `.github/instructions/` is the single source of truth. Read the file that
