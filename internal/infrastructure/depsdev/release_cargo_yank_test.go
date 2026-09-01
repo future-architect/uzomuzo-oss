@@ -17,8 +17,8 @@ import (
 // crates.io reports max_stable_version 4.4.0.
 const owoColorsVersionsJSON = `{
   "versions": [
-    {"versionKey": {"version": "4.4.0"}, "publishedAt": "2026-08-27T00:00:00Z", "isDefault": false, "isDeprecated": false, "deprecatedReason": ""},
-    {"versionKey": {"version": "5.0.0"}, "publishedAt": "2024-09-10T00:00:00Z", "isDefault": true,  "isDeprecated": true,  "deprecatedReason": "yanked"}
+    {"versionKey": {"version": "4.4.0"}, "publishedAt": "2026-08-27T17:55:12Z", "isDefault": false, "isDeprecated": false, "deprecatedReason": ""},
+    {"versionKey": {"version": "5.0.0"}, "publishedAt": "2024-09-10T16:07:38Z", "isDefault": true,  "isDeprecated": true,  "deprecatedReason": "yanked"}
   ]
 }`
 
@@ -77,6 +77,11 @@ func TestFetchLatestRelease_CargoAllReleasesYanked(t *testing.T) {
 
 	if got := info.StableVersion.VersionKey.Version; got != "" {
 		t.Errorf("StableVersion = %q, want empty when every release is yanked", got)
+	}
+	// batch_details.go falls back to MaxSemverVersion when StableVersion is
+	// empty, so an all-yanked crate must still surface one.
+	if got, want := info.MaxSemverVersion.VersionKey.Version, "1.1.0"; got != want {
+		t.Errorf("MaxSemverVersion = %q, want %q", got, want)
 	}
 }
 

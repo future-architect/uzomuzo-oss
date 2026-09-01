@@ -36,7 +36,7 @@ const depsDevYankedReason = "yanked"
 // Max:
 //   - Highest SemVer using Masterminds semver; if none are valid SemVer, fallback to latest by PublishedAt
 //
-// See ADR-0023.
+// See ADR-0023 and ADR-0024.
 func pickStableDevAndMax(versions []Version, preferredStable string) (stable Version, dev Version, max Version) {
 	if len(versions) == 0 {
 		return Version{}, Version{}, Version{}

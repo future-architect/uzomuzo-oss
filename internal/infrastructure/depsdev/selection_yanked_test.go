@@ -58,10 +58,8 @@ func TestPickStableDevAndMax_CargoAllStableYanked(t *testing.T) {
 	}
 }
 
-// TestWithdrawnFromStable pins our reading of the deps.dev deprecatedReason
-// value. The fixtures are local, so this cannot detect an upstream rename — the
-// WARN branch does that at runtime. It guards the literal against local edits.
-// See ADR-0024.
+// TestWithdrawnFromStable pins the reason-string match against local edits.
+// See ADR-0024 for what the literal is and how upstream drift surfaces.
 func TestWithdrawnFromStable(t *testing.T) {
 	tests := []struct {
 		name    string
