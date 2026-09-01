@@ -4,8 +4,12 @@
 
 set -eo pipefail
 
-# Check whether any generator input under .github/ is staged
-if git diff --cached --name-only | grep -qE '^\.github/(instructions/|AGENTS\.base\.md$)'; then
+# Check whether any generator input under .github/ is staged.
+# `grep` without -q deliberately: -q exits at the first match and closes the
+# pipe, and under `set -o pipefail` the resulting SIGPIPE on `git diff` makes
+# the whole pipeline non-zero, which would read as "nothing staged" and skip
+# the sync. Reading the full stream avoids that.
+if git diff --cached --name-only | grep -E '^\.github/(instructions/|AGENTS\.base\.md$)' >/dev/null; then
   echo "Syncing .claude/rules/ and AGENTS.md from .github/..."
   # Abort the commit if generation fails — otherwise the `git add` below would
   # stage whatever stale output is still on disk.

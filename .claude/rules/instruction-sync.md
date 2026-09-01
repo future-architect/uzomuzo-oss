@@ -31,8 +31,10 @@ Rename mapping:
 
 The root `AGENTS.md` is what OpenAI Codex CLI (and compatible tools) read; it is
 the Codex counterpart of `CLAUDE.md` and `.github/copilot-instructions.md`. It is
-**generated** by `make sync-instructions` from `.github/AGENTS.base.md`, so the
-rule text is never duplicated:
+**generated** by `make sync-instructions` from `.github/AGENTS.base.md`. The
+instruction corpus is indexed rather than copied, so no rule file's text is
+duplicated (the short orientation preamble is a deliberate exception — see
+below):
 
 - Static prose (build commands, DDD summary, language policy, Codex-specific
   constraints) lives in `.github/AGENTS.base.md`.
@@ -60,8 +62,9 @@ the rules that apply to what it is changing.
 
 `AGENTS.base.md` restates the build commands, the Go version policy, the DDD
 layer list and the language policy that also appear in `CLAUDE.md`. That
-overlap is deliberate and unavoidable: Codex reads only `AGENTS.md`, so a
-pointer to `CLAUDE.md` would reach nothing. **Both files must be updated
+overlap is deliberate: Codex loads `AGENTS.md` automatically and `CLAUDE.md`
+not at all, so orientation a session needs before it decides what to read has
+to be present in `AGENTS.md` itself. **Both files must be updated
 together** when any of those facts change. Keep the overlap to orientation
 only — the canonical rule text stays in `.github/instructions/` and is
 referenced by the index, never inlined.
@@ -70,12 +73,12 @@ referenced by the index, never inlined.
 
 `make sync-instructions` creates and overwrites; it never deletes. If an
 instruction file is removed from `.github/instructions/`, its generated
-`.claude/rules/<name>.md` stays behind, and the CI freshness gate will not
-notice — regeneration simply leaves that file untouched. Delete the generated
-file by hand in the same commit. Automatic pruning is deliberately not
-implemented: everything under `.claude/rules/` except `instruction-sync.md` is
-generated, so a buggy prune would delete real content, and no instruction file
-has ever been removed in this repository.
+`.claude/rules/<name>.md` stays behind — regeneration simply leaves that file
+untouched, so it does not show up as drift. Delete the generated file by hand in
+the same commit. CI reports the orphan (`instruction-sync-freshness.yml` checks
+that every generated rule still maps to a source) but never deletes it:
+everything under `.claude/rules/` except `instruction-sync.md` is generated, so
+a buggy prune would destroy real content.
 
 ### Codex does not run the Claude Code hooks
 

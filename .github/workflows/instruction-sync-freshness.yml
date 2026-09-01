@@ -46,6 +46,31 @@ jobs:
       - name: Regenerate
         run: make sync-instructions
 
+      # Detection only, never deletion: `make sync-instructions` creates and
+      # overwrites but never removes, so a rule file whose instruction source
+      # was deleted or renamed survives regeneration and leaves `git status`
+      # clean. Pruning automatically would risk deleting real content, so CI
+      # reports the orphan and a human removes it.
+      - name: Fail if a generated rule file has no source
+        run: |
+          orphans=""
+          for dest in .claude/rules/*.md; do
+            base=$(basename "$dest" .md)
+            if [ "$base" = "instruction-sync" ]; then
+              continue
+            fi
+            if [ "$base" = "agents" ]; then
+              base=agent-orchestration
+            fi
+            if [ ! -e ".github/instructions/$base.instructions.md" ]; then
+              orphans="$orphans $dest"
+            fi
+          done
+          if [ -n "$orphans" ]; then
+            echo "::error::Generated rule files with no instruction source:$orphans — delete them, or restore the source." >&2
+            exit 1
+          fi
+
       # `git status --porcelain` rather than `git diff --exit-code`: the latter
       # cannot see an untracked file, so adding an instruction file and
       # forgetting to commit its generated rule would pass the gate.
