@@ -57,7 +57,7 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			name: "registry asked, nothing yanked, branch never fires",
 			analysis: &Analysis{
 				RepoState:     activeRepo(),
-				RegistryState: &RegistryState{Registry: "crates.io"},
+				RegistryState: &RegistryState{Registry: RegistryCrates},
 				ReleaseInfo:   &ReleaseInfo{StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: recent}},
 			},
 			scores: map[string]*ScoreEntity{

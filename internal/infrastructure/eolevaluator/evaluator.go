@@ -353,7 +353,7 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 	if hasPyPIInactiveClassifier(info.Classifiers) { // explicit EOL
 		status.State = domain.EOLEndOfLife
 		status.Evidences = append(status.Evidences, domain.EOLEvidence{
-			Source:     "PyPI",
+			Source:     domain.RegistryPyPI,
 			Summary:    "Classifier: Development Status :: 7 - Inactive",
 			Reference:  "https://pypi.org/project/" + info.Name + "/",
 			Confidence: 1.0,

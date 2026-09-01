@@ -21,7 +21,7 @@ flagged. Four are in this state (verified live 2026-08-31):
 | `pkg:pypi/python-apt` | 2 | 2 | Review Needed |
 | `pkg:cargo/normal` | 1 | 1 | **Legacy-Safe** (rendered as a green "ok") |
 
-`pkg:cargo/normal` has no installable release at all and was reported as healthy.
+`pkg:cargo/normal` offers no release to a resolver at all and was reported as healthy.
 
 Before #489 these four came out `EOL-Confirmed`, because the removed
 `ReleaseInfo.StableVersion` fallback happened to pick a yanked release when every
@@ -80,14 +80,18 @@ installing conda leads to broken UX; please install using miniconda or miniforge
 conda is very much alive and simply not meant to be installed from PyPI. Nothing in
 the yank mechanism distinguishes the two, and [ADR-0020](0020-archived-registry-liveness.md)
 reserves `EOL-Confirmed` for an explicit primary-source end-of-life signal. Emitting
-`Review Needed` states exactly what is known: the package cannot be installed from
-its registry, and a human has to decide what that means.
+`Review Needed` states exactly what is known: the registry offers no version of this
+package to normal dependency resolution, and a human has to decide what that means.
+Yanking does not make a release unreachable — PEP 592 still serves a yanked release
+to a requirement that pins its exact version, and Cargo still installs one already
+recorded in a lockfile — so "yanked" is a statement about resolution, not removal.
 
 ### Why not `Stalled`
 
 `Stalled` means "development has slowed or ceased" and its rationale explicitly
 assumes the package "remains installable under the same PURL". Full withdrawal
-falsifies that assumption, and `conda` shows the label can be plainly wrong: an
+falsifies that assumption for anyone resolving a version rather than restoring a
+pinned one, and `conda` shows the label can be plainly wrong: an
 actively developed project would be reported as stalled.
 
 ### Why not a new label

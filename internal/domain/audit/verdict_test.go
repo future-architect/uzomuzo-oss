@@ -123,7 +123,7 @@ func TestDeriveVerdict_IgnoresBuildIntegrity(t *testing.T) {
 func TestDeriveVerdict_AllReleasesYanked(t *testing.T) {
 	withdrawn := func(archived bool) *analysis.Analysis {
 		a := makeAnalysisWithLabel(analysis.LabelReviewNeeded)
-		a.RegistryState = &analysis.RegistryState{AllReleasesYanked: true, Registry: "PyPI"}
+		a.RegistryState = &analysis.RegistryState{AllReleasesYanked: true, Registry: analysis.RegistryPyPI}
 		if archived {
 			a.RepoState = &analysis.RepoState{IsArchived: true}
 		}
