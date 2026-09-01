@@ -156,8 +156,9 @@ func TestGetProject_ClassifiersParsed(t *testing.T) {
 
 // TestGetProject_VersionAndYankedDecoded verifies that info.version and
 // info.yanked populate ProjectInfo.Version and ProjectInfo.Yanked. See
-// ADR-0023: these two fields let depsdev bound Stable selection to a
-// version the registry has not yanked.
+// ADR-0023: these two fields let depsdev keep Stable from exceeding the
+// version PyPI currently presents. They do not prove the selected version
+// is itself un-yanked.
 func TestGetProject_VersionAndYankedDecoded(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -190,6 +191,8 @@ func TestGetProject_VersionAndYankedDecoded(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				// best-effort: a write failure here means the client hung up,
+				// which the assertions below already surface.
 				_, _ = fmt.Fprintln(w, tt.body)
 			}))
 			defer srv.Close()

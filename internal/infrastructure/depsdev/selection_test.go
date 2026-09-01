@@ -485,7 +485,7 @@ func TestPickStableDevAndMax_Hint_DuplicateVersionStrings_LatestPublishedAtWins(
 }
 
 // TestPickStableDevAndMax_Hint_PEP440EquivalentSpellingsTie_EqualTimestamps_Deterministic
-// covers betterStableCandidate's final tie-break: two PEP 440-equal-ordered
+// covers stableCandidate.outranks's final tie-break: two PEP 440-equal-ordered
 // candidates (neither strictly greater under Compare) with identical
 // PublishedAt must resolve deterministically by the greater version string,
 // not by input order.

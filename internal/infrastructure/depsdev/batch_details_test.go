@@ -78,6 +78,9 @@ func TestBuildCompleteResult_StableAndDevEmpty_MaxPopulated_ReleaseInfoAttached(
 	if res.ReleaseInfo.StableVersion.VersionKey.Version != "" {
 		t.Fatalf("StableVersion=%s, want empty", res.ReleaseInfo.StableVersion.VersionKey.Version)
 	}
+	if res.ReleaseInfo.PreReleaseVersion.VersionKey.Version != "" {
+		t.Fatalf("PreReleaseVersion=%s, want empty", res.ReleaseInfo.PreReleaseVersion.VersionKey.Version)
+	}
 	if res.ReleaseInfo.MaxSemverVersion.VersionKey.Version != "3.0.0" {
 		t.Fatalf("MaxSemverVersion=%s, want 3.0.0", res.ReleaseInfo.MaxSemverVersion.VersionKey.Version)
 	}
