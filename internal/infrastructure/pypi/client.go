@@ -230,6 +230,11 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&raw); err != nil {
 		return nil, false, fmt.Errorf("pypi decode failed: %w", err)
 	}
+	// A 200 whose body names no project is not an answer about the project.
+	// Reporting it as found would assert "nothing yanked" from an empty body.
+	if strings.TrimSpace(raw.Info.Name) == "" {
+		return nil, false, fmt.Errorf("pypi project response for %q carried no project name", n)
+	}
 	info := &ProjectInfo{
 		Name:         raw.Info.Name,
 		Summary:      raw.Info.Summary,

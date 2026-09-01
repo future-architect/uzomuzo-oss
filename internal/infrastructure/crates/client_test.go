@@ -187,3 +187,25 @@ func TestGetVersion_HTTPError(t *testing.T) {
 		t.Errorf("expected found=false on error")
 	}
 }
+
+// TestGetVersion_EmptyCrateName pins that a 200 whose body names no crate is an
+// error rather than a cached "not yanked".
+func TestGetVersion_EmptyCrateName(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintln(w, `{"version":{"crate":"","num":"1.0.0","yanked":true}}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient()
+	c.SetBaseURL(srv.URL)
+	c.SetCacheTTL(0)
+
+	info, found, err := c.GetVersion(context.Background(), "openssl", "1.0.0")
+	if err == nil {
+		t.Fatalf("expected an error, got info=%v found=%v", info, found)
+	}
+	if found {
+		t.Errorf("found = true, want false")
+	}
+}

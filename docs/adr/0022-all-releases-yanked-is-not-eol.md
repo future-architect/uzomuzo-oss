@@ -37,9 +37,9 @@ The two registries expose the fact differently:
   (`warehouse/legacy/api/json.py`), so a non-yanked release always wins when one
   exists. `info.yanked == true` is therefore equivalent to "every release row is
   yanked". `info.yanked_reason` may be null even so (`conda-build`), and it is
-  free text written by the package maintainer, so it is stripped of control
-  characters and collapsed to one line before it reaches the domain — the CLI
-  prints it verbatim. The same PyPI client instance and its cache are shared by
+  free text written by the package maintainer, so it is stripped of control and
+  format characters and collapsed to one line before it reaches the domain — the
+  CLI prints it verbatim, and either class can repaint or visually reorder it. The same PyPI client instance and its cache are shared by
   `enrichPyPISummary`, which runs earlier in the same pass for packages with a
   resolved repository, and by `applyPyPIClassifier`, which runs later during EOL
   evaluation; whichever fires first pays for the fetch.

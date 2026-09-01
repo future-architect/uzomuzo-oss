@@ -1,9 +1,12 @@
-// Package crates provides a minimal crates.io metadata client used for
-// detecting yanked versions during EOL evaluation.
+// Package crates provides a minimal crates.io metadata client for the two yank
+// questions the analysis pipeline asks: whether one version is yanked, and
+// whether every version of a crate is.
 //
 // DDD Layer: Infrastructure
-// Responsibility: External HTTP call to https://crates.io/api/v1/crates/<name>/<version>
-// with narrow field extraction (yanked flag) required by the EOL evaluator.
+// Responsibility: External HTTP calls to
+// https://crates.io/api/v1/crates/<name>/<version> (read by the EOL evaluator)
+// and https://crates.io/api/v1/crates/<name> (read by the registry-state
+// enrichment behind Analysis.RegistryState), extracting only the yanked flag.
 package crates
 
 import (
@@ -29,7 +32,7 @@ const cratesUserAgent = "uzomuzo-crates-client/1.0 (+https://github.com/future-a
 // crates.io version responses are typically <10 KB.
 const maxJSONResponseSize = 1 << 20
 
-// Client fetches crates.io version metadata.
+// Client fetches crates.io version-level and crate-level metadata.
 type Client struct {
 	http       *httpclient.Client
 	baseURL    string

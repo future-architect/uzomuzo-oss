@@ -70,3 +70,25 @@ func TestGetProject_Yanked(t *testing.T) {
 		})
 	}
 }
+
+// TestGetProject_EmptyProjectName pins that a 200 whose body names no project is
+// an error rather than a cached "nothing yanked".
+func TestGetProject_EmptyProjectName(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintln(w, `{}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient()
+	c.SetBaseURL(srv.URL)
+	c.SetCacheTTL(0)
+
+	info, found, err := c.GetProject(context.Background(), "pkg")
+	if err == nil {
+		t.Fatalf("expected an error, got info=%v found=%v", info, found)
+	}
+	if found {
+		t.Errorf("found = true, want false")
+	}
+}

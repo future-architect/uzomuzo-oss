@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"log/slog"
+	"net/url"
 	"strings"
 	"sync"
 	"unicode"
@@ -145,7 +146,7 @@ func (s *IntegrationService) fetchPyPIRegistryState(ctx context.Context, name st
 		AllReleasesYanked: info.Yanked,
 		Registry:          domain.RegistryPyPI,
 		Reason:            sanitizeRegistryReason(info.YankedReason),
-		Reference:         "https://pypi.org/project/" + name + "/",
+		Reference:         "https://pypi.org/project/" + url.PathEscape(name) + "/",
 	}, true, nil
 }
 
@@ -159,7 +160,7 @@ func (s *IntegrationService) fetchCratesRegistryState(ctx context.Context, name 
 	return &domain.RegistryState{
 		AllReleasesYanked: info.Yanked,
 		Registry:          domain.RegistryCrates,
-		Reference:         "https://crates.io/crates/" + name,
+		Reference:         "https://crates.io/crates/" + url.PathEscape(name),
 	}, true, nil
 }
 

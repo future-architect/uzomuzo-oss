@@ -51,6 +51,13 @@ func TestGetCrate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:    "200 carrying no crate name is not an answer",
+			status:  http.StatusOK,
+			body:    `{"crate":{"name":"","yanked":true}}`,
+			crate:   "normal",
+			wantErr: true,
+		},
+		{
 			name:    "malformed json",
 			status:  http.StatusOK,
 			body:    `{"crate":{"name":`,
