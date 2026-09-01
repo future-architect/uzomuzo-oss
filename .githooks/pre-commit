@@ -1,14 +1,26 @@
 #!/usr/bin/env bash
-# Pre-commit hook: auto-sync .github/instructions/ → .claude/rules/
+# Pre-commit hook: auto-sync .github/ → .claude/rules/*.md and AGENTS.md
 # Install: git config core.hooksPath .githooks
 
-# Check if any .github/instructions/ files are staged
+# Check whether any generator input under .github/ is staged
 if git diff --cached --name-only | grep -qE '^\.github/(instructions/|AGENTS\.base\.md)'; then
   echo "Syncing .claude/rules/ and AGENTS.md from .github/..."
   make sync-instructions
 
+  # Whether instruction-sync.md was already staged must be sampled BEFORE the
+  # `git add` below, which would otherwise stage it and make the check vacuous.
+  if git diff --cached --name-only | grep -q '\.claude/rules/instruction-sync\.md'; then
+    sync_md_was_staged=yes
+  else
+    sync_md_was_staged=no
+  fi
+
   # Stage the regenerated files
   git add .claude/rules/*.md AGENTS.md
-  # But don't stage instruction-sync.md if it wasn't already staged
-  git diff --cached --name-only | grep -q '\.claude/rules/instruction-sync\.md' || git reset HEAD .claude/rules/instruction-sync.md 2>/dev/null
+
+  # instruction-sync.md is hand-maintained, not generated. Don't sweep an
+  # unstaged edit of it into an instructions-only commit.
+  if [ "$sync_md_was_staged" = "no" ]; then
+    git reset HEAD .claude/rules/instruction-sync.md 2>/dev/null
+  fi
 fi

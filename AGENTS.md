@@ -7,8 +7,8 @@ compatible tools). Claude Code reads `CLAUDE.md` and `.claude/rules/`; GitHub
 Copilot reads `.github/copilot-instructions.md`. All three are derived from the
 same source of truth: **`.github/`**.
 
-This file is generated. Do not edit it by hand — edit `.github/AGENTS.base.md`
-and run `make sync-instructions`.
+The root `AGENTS.md` is generated from `.github/AGENTS.base.md` by
+`make sync-instructions`. Edit that template; never edit `AGENTS.md` directly.
 
 ## Build & Test
 
@@ -19,8 +19,8 @@ goimports -w . && golangci-lint run # format & lint
 go run ./cmd/uzomuzo update-spdx    # regenerate SPDX license list
 ```
 
-Team uses Go 1.26.1. The `go 1.25.0` line in `go.mod` is the dependency
-minimum — do not downgrade it.
+Team uses Go 1.26.1. The `go 1.25.0` line in `go.mod` is the module's minimum
+supported Go version — do not downgrade it.
 
 ## Architecture (DDD)
 
@@ -90,12 +90,13 @@ Two rules the hooks would otherwise enforce, which you must honor manually:
 
 ## Instruction Sync
 
-`.github/` is canonical. `.claude/rules/*.md`, `AGENTS.md`, and the
-`.claude/agents/` and `.claude/skills/` shims are derived from it.
+`.github/` is canonical. Two targets are **generated** from it:
 
 ```bash
-make sync-instructions   # regenerate .claude/rules/ and AGENTS.md from .github/
+make sync-instructions   # regenerate .claude/rules/*.md and AGENTS.md from .github/
 ```
 
-Edit the `.github/` side first, then regenerate. Never edit a generated file
-directly. See `.claude/rules/instruction-sync.md` for the full mapping.
+Never edit those generated files directly — edit the `.github/` source and
+regenerate. The `.claude/agents/` and `.claude/skills/` shims also delegate to
+`.github/`, but they are **hand-maintained**, not produced by that command. See
+`.claude/rules/instruction-sync.md` for the full mapping.

@@ -50,7 +50,7 @@ Add organization-specific shorthands to `internal/domain/licenses/aliases.custom
 
 | Generated file | Source | Read by |
 |---|---|---|
-| `.claude/rules/*.md` | `.github/instructions/*.instructions.md` | Claude Code |
+| `.claude/rules/*.md` (except `instruction-sync.md`, which is hand-maintained and has no `.github/` counterpart) | `.github/instructions/*.instructions.md` | Claude Code |
 | `AGENTS.md` (repo root) | `.github/AGENTS.base.md` + an index of `.github/instructions/` | Codex CLI and other `AGENTS.md` readers |
 
 ```bash

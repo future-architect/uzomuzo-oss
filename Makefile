@@ -59,18 +59,20 @@ sync-instructions:
 	@out="AGENTS.md"; \
 	echo "<!-- Generated from .github/AGENTS.base.md — DO NOT EDIT DIRECTLY -->" > "$$out"; \
 	echo "" >> "$$out"; \
-	while IFS= read -r line; do \
+	while IFS= read -r line || [ -n "$$line" ]; do \
 		if [ "$$line" = "<!-- INSTRUCTION-INDEX -->" ]; then \
-			echo "| File | Topic |"; \
-			echo "|------|-------|"; \
+			printf '%s\n' "| File | Topic |" "|------|-------|"; \
 			for src in .github/instructions/*.instructions.md; do \
-				title=$$(grep -m1 '^# ' "$$src" | sed 's/^# //'); \
-				echo "| \`$$src\` | $$title |"; \
+				[ -e "$$src" ] || continue; \
+				title=$$(grep -m1 '^# ' "$$src" | sed 's/^# //; s/|/\\|/g'); \
+				[ -n "$$title" ] || { echo "ERROR: $$src has no '# ' heading — cannot build the instruction index" >&2; exit 1; }; \
+				printf '| `%s` | %s |\n' "$$src" "$$title"; \
 			done; \
 		else \
-			echo "$$line"; \
+			printf '%s\n' "$$line"; \
 		fi; \
 	done < .github/AGENTS.base.md >> "$$out"; \
+	grep -q '^| File | Topic |$$' "$$out" || { echo "ERROR: the <!-- INSTRUCTION-INDEX --> marker was not substituted; $$out has no index table. Check the marker line in .github/AGENTS.base.md (exact match, no leading/trailing whitespace)." >&2; exit 1; }; \
 	echo "  .github/AGENTS.base.md → $$out"
 
 # update-doc-examples: rebuild binary then refresh all doc output blocks.

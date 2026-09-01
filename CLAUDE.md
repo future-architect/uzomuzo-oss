@@ -21,7 +21,7 @@ Copy `config.template.env` to `.env` (auto-loaded via godotenv). Key vars: `GITH
 
 ## Go Version Policy
 
-Team uses **Go 1.26.1**. `go.mod` `go 1.25.0` is the dependency minimum — do not downgrade.
+Team uses **Go 1.26.1**. The `go 1.25.0` line in `go.mod` is the module's minimum supported Go version — do not downgrade.
 
 ## Architecture (DDD)
 

@@ -44,9 +44,10 @@ rule text is never duplicated:
 `AGENTS.md` must NOT be edited directly. Edit `.github/AGENTS.base.md` and
 regenerate.
 
-`.github/AGENTS.base.md` deliberately sits outside `.github/instructions/` so it
-does not match the `*.instructions.md` glob and is not copied into
-`.claude/rules/`.
+`.github/AGENTS.base.md` deliberately sits outside `.github/instructions/`
+because it is a different kind of artifact — a template carrying an index
+marker, not a standalone rule file to be copied 1:1 — and must not be
+enumerated by the instruction-index loop that reads that directory.
 
 ### Why an index, not a concatenation
 
@@ -54,6 +55,16 @@ does not match the `*.instructions.md` glob and is not copied into
 is ~68 KB). Inlining it would load the whole corpus into every Codex session.
 `AGENTS.md` stays a few KB and points at the canonical files, so an agent reads
 the rules that apply to what it is changing.
+
+### The preamble intentionally repeats a little of CLAUDE.md
+
+`AGENTS.base.md` restates the build commands, the Go version policy, the DDD
+layer list and the language policy that also appear in `CLAUDE.md`. That
+overlap is deliberate and unavoidable: Codex reads only `AGENTS.md`, so a
+pointer to `CLAUDE.md` would reach nothing. **Both files must be updated
+together** when any of those facts change. Keep the overlap to orientation
+only — the canonical rule text stays in `.github/instructions/` and is
+referenced by the index, never inlined.
 
 ### Codex does not run the Claude Code hooks
 
