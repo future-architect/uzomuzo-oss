@@ -163,24 +163,28 @@ func TestGetProject_VersionAndYankedDecoded(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name        string
+		pkgName     string
 		body        string
 		wantVersion string
 		wantYanked  bool
 	}{
 		{
 			name:        "current release not yanked",
+			pkgName:     "pydantic-extra-types",
 			body:        `{"info":{"name":"pydantic-extra-types","version":"2.11.1","yanked":false}}`,
 			wantVersion: "2.11.1",
 			wantYanked:  false,
 		},
 		{
 			name:        "current release yanked",
+			pkgName:     "all-yanked",
 			body:        `{"info":{"name":"all-yanked","version":"1.0.0","yanked":true}}`,
 			wantVersion: "1.0.0",
 			wantYanked:  true,
 		},
 		{
 			name:        "version omitted",
+			pkgName:     "no-version",
 			body:        `{"info":{"name":"no-version"}}`,
 			wantVersion: "",
 			wantYanked:  false,
@@ -190,7 +194,12 @@ func TestGetProject_VersionAndYankedDecoded(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			wantPath := "/pypi/" + tt.pkgName + "/json"
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != wantPath {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
 				// best-effort: a write failure here means the client hung up,
 				// which the assertions below already surface.
 				_, _ = fmt.Fprintln(w, tt.body)
@@ -201,7 +210,7 @@ func TestGetProject_VersionAndYankedDecoded(t *testing.T) {
 			c.SetBaseURL(srv.URL)
 			c.SetCacheTTL(0)
 
-			proj, found, err := c.GetProject(context.Background(), tt.name)
+			proj, found, err := c.GetProject(context.Background(), tt.pkgName)
 			if err != nil {
 				t.Fatalf("GetProject failed: %v", err)
 			}
