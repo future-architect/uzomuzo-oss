@@ -99,8 +99,13 @@ type ProjectInfo struct {
 	Classifiers []string
 	ProjectURLs map[string]string // e.g. "Repository" -> "https://github.com/..."
 	HomePage    string
-	// Yanked mirrors info.yanked on the project endpoint, which is true only
-	// when every release of the project is yanked. See ADR-0022.
+
+	// Version is info.version: the release PyPI presents as current. Empty when
+	// PyPI omits it.
+	Version string
+	// Yanked is info.yanked for Version. PyPI orders non-yanked releases first
+	// when choosing the release it reports, so a true here also means every
+	// release of the project is yanked. See ADR-0022.
 	Yanked bool
 	// YankedReason mirrors info.yanked_reason. Empty when PyPI has none, which
 	// happens even for yanked releases.
@@ -228,6 +233,7 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 			Classifiers  []string          `json:"classifiers"`
 			ProjectURLs  map[string]string `json:"project_urls"`
 			HomePage     string            `json:"home_page"`
+			Version      string            `json:"version"`
 			Yanked       bool              `json:"yanked"`
 			YankedReason string            `json:"yanked_reason"`
 		} `json:"info"`
@@ -247,6 +253,7 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 		Classifiers:  raw.Info.Classifiers,
 		ProjectURLs:  raw.Info.ProjectURLs,
 		HomePage:     raw.Info.HomePage,
+		Version:      strings.TrimSpace(raw.Info.Version),
 		Yanked:       raw.Info.Yanked,
 		YankedReason: raw.Info.YankedReason,
 	}

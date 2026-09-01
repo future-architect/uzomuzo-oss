@@ -1,4 +1,4 @@
-<!-- Generated from .github/instructions/coding-standards.instructions.md — DO NOT EDIT DIRECTLY -->
+<!-- Generated from .github/instructions/base/core/coding-standards.instructions.md — DO NOT EDIT DIRECTLY -->
 
 # Coding Standards
 

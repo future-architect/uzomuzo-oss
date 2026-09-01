@@ -1,4 +1,4 @@
-<!-- Generated from .github/instructions/testing-performance.instructions.md — DO NOT EDIT DIRECTLY -->
+<!-- Generated from .github/instructions/base/core/testing-performance.instructions.md — DO NOT EDIT DIRECTLY -->
 
 # Testing & Performance
 
