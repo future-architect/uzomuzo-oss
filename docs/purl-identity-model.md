@@ -36,10 +36,18 @@ byte-identical to what the user typed:
 | PURL passed directly (CLI arg, PURL list) | verbatim |
 | `go.mod` | PURL constructed from the module path, with `replace` directives applied |
 | CycloneDX SBOM | component PURL with tool-added qualifiers and subpath stripped |
-| GitHub URL | the derived **unversioned** base PURL |
+| GitHub URL, package resolved | the derived **unversioned** base PURL |
+| GitHub URL, no package identity | the raw GitHub URL |
 
 Every adapter preserves the caller-selected version. None of them writes a version
 uzomuzo resolved.
+
+The last row is the case where no PURL exists to record: the repository has no
+registry package, or deps.dev does not know the derived one, so `Package` and
+`ReleaseInfo` are nil and the analysis is GitHub-only (`buildGitHubOnlyAnalysis`
+and the not-found branch of `fetchAndValidateGitHubAnalysis`). A raw URL does not
+parse as a PURL, so version-specific rules stay a no-op on it — which is the right
+answer when there is no package coordinate at all.
 
 ## OriginalPURL is load-bearing, not decorative
 
@@ -52,9 +60,12 @@ uzomuzo resolved.
   GitHub URL path — see [ADR-0021](adr/0021-yank-is-version-specific.md).
 - **Every entry path must populate it.** A source that leaves it empty silently
   loses yank detection rather than failing loudly. As a safety net,
-  `AnalysisService.enrichAndAssess` repairs an empty value from the map key — the
-  coordinate the caller requested — on both the PURL and the GitHub URL path, and
-  logs a warning, because reaching it means an `AnalysisSource` broke its contract.
+  `AnalysisService.enrichAndAssess` repairs an empty value from the map key and logs
+  a warning, because reaching it means an `AnalysisSource` broke its contract. The
+  map key is what the caller requested, so the repair reproduces the table above: a
+  PURL on the PURL path, the raw URL on the GitHub URL path. It cannot recover the
+  derived base PURL — only the adapter that resolved it knows that — so a source
+  that wants the resolved identity must set the field itself.
 
 Rules that need the coordinate actually analyzed must read `EffectivePURL` instead.
 

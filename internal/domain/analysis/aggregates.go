@@ -26,6 +26,7 @@ type Analysis struct {
 	//   - Examples:
 	//       Input: "pkg:npm/React"             => OriginalPURL = "pkg:npm/React"
 	//       GitHub URL -> base:                => OriginalPURL = "pkg:golang/github.com/gin-gonic/gin"
+	//       GitHub URL, no package identity:   => OriginalPURL = "https://github.com/owner/repo"
 	//       Collapsed Maven coords input:      => OriginalPURL = "pkg:maven/org.slf4j:slf4j-api@2.0.16"
 	OriginalPURL string
 
