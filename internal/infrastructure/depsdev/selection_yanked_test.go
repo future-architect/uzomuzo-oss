@@ -6,14 +6,15 @@ import (
 )
 
 // cargoVersion builds a cargo deps.dev version entry.
-func cargoVersion(version, publishedAt string, isDefault, isDeprecated bool, reason string) Version {
-	t, err := time.Parse(time.RFC3339, publishedAt)
+func cargoVersion(t testing.TB, version, publishedAt string, isDefault, isDeprecated bool, reason string) Version {
+	t.Helper()
+	published, err := time.Parse(time.RFC3339, publishedAt)
 	if err != nil {
-		panic(err)
+		t.Fatalf("parse publishedAt %q: %v", publishedAt, err)
 	}
 	return Version{
 		VersionKey:       VersionKey{System: "cargo", Name: "example", Version: version},
-		PublishedAt:      t,
+		PublishedAt:      published,
 		IsDefault:        isDefault,
 		IsDeprecated:     isDeprecated,
 		DeprecatedReason: reason,
@@ -21,21 +22,21 @@ func cargoVersion(version, publishedAt string, isDefault, isDeprecated bool, rea
 }
 
 // TestPickStableDevAndMax_CargoYankedDefaultIsNotStable mirrors
-// pkg:cargo/promptforge-gateway-config as observed 2026-09-01: deps.dev marks the
-// yanked 1.1.0 isDefault=true, so the pre-fix selection returned it as Stable.
+// pkg:cargo/owo-colors as observed 2026-09-02: deps.dev marks the yanked 5.0.0
+// isDefault=true, so the pre-fix selection returned it as Stable.
 func TestPickStableDevAndMax_CargoYankedDefaultIsNotStable(t *testing.T) {
 	versions := []Version{
-		cargoVersion("0.2.0", "2026-08-31T16:02:26Z", false, false, ""),
-		cargoVersion("1.1.0", "2026-08-31T15:42:53Z", true, true, "yanked"),
+		cargoVersion(t, "4.4.0", "2026-08-27T17:55:12Z", false, false, ""),
+		cargoVersion(t, "5.0.0", "2024-09-10T16:07:38Z", true, true, "yanked"),
 	}
 
 	stable, _, max := pickStableDevAndMax(versions, "")
 
-	if got, want := stable.VersionKey.Version, "0.2.0"; got != want {
+	if got, want := stable.VersionKey.Version, "4.4.0"; got != want {
 		t.Errorf("Stable = %q, want %q (the yanked isDefault release must not win)", got, want)
 	}
-	// Max is deliberately unbounded: a yanked release still exists. See ADR-0024.
-	if got, want := max.VersionKey.Version, "1.1.0"; got != want {
+	// Max is deliberately unfiltered. See ADR-0024.
+	if got, want := max.VersionKey.Version, "5.0.0"; got != want {
 		t.Errorf("Max = %q, want %q (Max is not filtered)", got, want)
 	}
 }
@@ -44,7 +45,7 @@ func TestPickStableDevAndMax_CargoYankedDefaultIsNotStable(t *testing.T) {
 // (observed on gap and minae-term, where crates.io reports max_stable_version=null).
 func TestPickStableDevAndMax_CargoAllStableYanked(t *testing.T) {
 	versions := []Version{
-		cargoVersion("0.1.0", "2026-08-31T10:00:00Z", true, true, "yanked"),
+		cargoVersion(t, "0.1.0", "2026-08-31T10:00:00Z", true, true, "yanked"),
 	}
 
 	stable, _, max := pickStableDevAndMax(versions, "")
@@ -57,9 +58,10 @@ func TestPickStableDevAndMax_CargoAllStableYanked(t *testing.T) {
 	}
 }
 
-// TestWithdrawnFromStable pins the deps.dev deprecatedReason contract. The literal
-// "yanked" is an observed, undocumented upstream value: if deps.dev changes it,
-// this test fails rather than the filter silently going quiet. See ADR-0024.
+// TestWithdrawnFromStable pins our reading of the deps.dev deprecatedReason
+// value. The fixtures are local, so this cannot detect an upstream rename — the
+// WARN branch does that at runtime. It guards the literal against local edits.
+// See ADR-0024.
 func TestWithdrawnFromStable(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -68,32 +70,32 @@ func TestWithdrawnFromStable(t *testing.T) {
 	}{
 		{
 			name:    "cargo yanked",
-			version: cargoVersion("1.0.0", "2026-01-01T00:00:00Z", false, true, "yanked"),
+			version: cargoVersion(t, "1.0.0", "2026-01-01T00:00:00Z", false, true, "yanked"),
 			want:    true,
 		},
 		{
 			name:    "cargo yanked, mixed case",
-			version: cargoVersion("1.0.0", "2026-01-01T00:00:00Z", false, true, "Yanked"),
+			version: cargoVersion(t, "1.0.0", "2026-01-01T00:00:00Z", false, true, "Yanked"),
 			want:    true,
 		},
 		{
 			name:    "cargo yanked, surrounding whitespace",
-			version: cargoVersion("1.0.0", "2026-01-01T00:00:00Z", false, true, " yanked "),
+			version: cargoVersion(t, "1.0.0", "2026-01-01T00:00:00Z", false, true, " yanked "),
 			want:    true,
 		},
 		{
 			name:    "cargo deprecated for an unknown reason is not withdrawn",
-			version: cargoVersion("1.0.0", "2026-01-01T00:00:00Z", false, true, "retired"),
+			version: cargoVersion(t, "1.0.0", "2026-01-01T00:00:00Z", false, true, "retired"),
 			want:    false,
 		},
 		{
 			name:    "cargo deprecated with no reason is not withdrawn",
-			version: cargoVersion("1.0.0", "2026-01-01T00:00:00Z", false, true, ""),
+			version: cargoVersion(t, "1.0.0", "2026-01-01T00:00:00Z", false, true, ""),
 			want:    false,
 		},
 		{
 			name:    "cargo not deprecated",
-			version: cargoVersion("1.0.0", "2026-01-01T00:00:00Z", false, false, ""),
+			version: cargoVersion(t, "1.0.0", "2026-01-01T00:00:00Z", false, false, ""),
 			want:    false,
 		},
 		{

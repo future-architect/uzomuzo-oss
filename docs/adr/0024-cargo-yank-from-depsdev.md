@@ -27,12 +27,17 @@ Observed 2026-09-01 on `pkg:cargo/promptforge-gateway-config`, from
 0.2.0   isDefault=false   isDeprecated=false  deprecatedReason=""
 ```
 
-crates.io agrees that 1.1.0 is yanked and reports `max_stable_version: "0.2.0"`.
-deps.dev nonetheless marks the yanked 1.1.0 as the default version, so stable
+crates.io agreed that 1.1.0 was yanked and reported `max_stable_version: "0.2.0"`.
+deps.dev nonetheless marked the yanked 1.1.0 as the default version, so stable
 selection returned it — the same class of bug ADR-0023 fixed for pypi, with the
 same downstream consequences: the internal deps.dev package lookup, direct and
 transitive advisory aggregates, and the lifecycle assessor all described a release
 nobody should install.
+
+0.2.0 was itself yanked on 2026-09-02, hours after this observation, leaving the
+crate with no un-yanked release. It therefore appears in the tests only as the
+all-yanked specimen; the ordinary case is pinned with `owo-colors`, whose 5.0.0 is
+`isDefault` and yanked while 4.4.0 is clean.
 
 The field was invisible to us only because the decode struct in `fetchLatestRelease`
 (`internal/infrastructure/depsdev/release.go`) enumerated four fields and
@@ -69,7 +74,9 @@ The reason string is matched with `strings.EqualFold` after trimming. A cargo
 release that is `isDeprecated` with an **unrecognised** reason is logged at WARN
 and treated as not withdrawn. The string is an observed value, not a contract: if
 deps.dev renames it, the filter must degrade to the previous behaviour audibly
-rather than going quiet. A unit test pins the literal so the same drift fails CI.
+rather than going quiet. The WARN log is what surfaces that drift at runtime; the
+unit tests pin our reading of the string against accidental local edits, but they
+run on fixtures and cannot observe upstream change.
 
 Dev and `MaxSemverVersion` keep the unfiltered candidate list. Max's purpose is
 "highest version that exists", and a yanked release does still exist — that

@@ -44,21 +44,20 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 
 	var defaults, stables, nonStables []Version
 	var semverCandidates []Version
-	// Stable is chosen only from releases the registry still stands behind.
-	// Dev and Max keep the full list: a withdrawn release does still exist.
 	stableEligible := make([]Version, 0, len(versions))
 
 	for _, v := range versions {
+		isStable := purl.IsStableVersion(v.VersionKey.Version)
 		if !withdrawnFromStable(v) {
 			stableEligible = append(stableEligible, v)
 			if v.IsDefault {
 				defaults = append(defaults, v)
 			}
-			if purl.IsStableVersion(v.VersionKey.Version) {
+			if isStable {
 				stables = append(stables, v)
 			}
 		}
-		if !purl.IsStableVersion(v.VersionKey.Version) {
+		if !isStable {
 			nonStables = append(nonStables, v)
 		}
 
@@ -143,11 +142,9 @@ func pickByRegistryStable(versions []Version, preferredStable string) (picked Ve
 // withdrawnFromStable reports whether the registry has withdrawn v, making it
 // ineligible as Stable.
 //
-// deps.dev reports cargo yanks as IsDeprecated with a deprecatedReason of
-// "yanked"; no other ecosystem we consume reports yanks through this field, so
-// the check is cargo-scoped. An unrecognised reason on a deprecated cargo
-// release is logged and treated as not withdrawn, so a change in the upstream
-// string degrades to the previous behaviour loudly rather than silently.
+// Only cargo is covered: deps.dev reports a cargo yank as IsDeprecated with a
+// deprecatedReason of depsDevYankedReason. An unrecognised reason on a
+// deprecated cargo release is logged and treated as not withdrawn.
 // See ADR-0024.
 func withdrawnFromStable(v Version) bool {
 	if !v.IsDeprecated || !strings.EqualFold(v.VersionKey.System, "cargo") {
