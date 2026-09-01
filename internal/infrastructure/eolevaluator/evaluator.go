@@ -366,11 +366,19 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 
 // applyRegistryYanked is the shared core for yanked-version rules.
 //
-// It parses the PURL for the given ecosystem, optionally lowercases the name,
-// resolves the version (PURL version preferred, StableVersion as fallback), then
-// calls fetch to determine whether that version is yanked. On confirmation it
+// The coordinate it reads is OriginalPURL — the version the caller actually asked
+// about. It parses that for the given ecosystem, optionally lowercases the name,
+// then calls fetch to determine whether that version is yanked. On confirmation it
 // appends the evidence (using source and confidence) and promotes status to
 // EOLEndOfLife.
+//
+// An OriginalPURL that is unversioned, empty, unparsable, or of another ecosystem
+// is a no-op. See ADR-0021.
+//
+// EffectivePURL and Package.PURL are deliberately NOT read here — on the GitHub URL
+// entry path they carry a version uzomuzo picked, not one the caller pinned.
+// applyNpmPURLDeprecation still reads EffectivePURL and so does not yet honour this
+// distinction; see ADR-0021 "Not addressed here".
 //
 // Parameters:
 //   - eco: PURL ecosystem type to match (e.g. "pypi", "cargo")
@@ -390,11 +398,11 @@ func (e *Evaluator) applyRegistryYanked(
 	confidence float64,
 	logEvent string,
 ) bool {
-	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" {
+	if status.State == domain.EOLEndOfLife || a == nil || a.OriginalPURL == "" {
 		return false
 	}
 	pp := purl.NewParser()
-	parsed, err := pp.Parse(a.Package.PURL)
+	parsed, err := pp.Parse(a.OriginalPURL)
 	if err != nil || parsed.Ecosystem() != eco {
 		return false
 	}
@@ -403,9 +411,6 @@ func (e *Evaluator) applyRegistryYanked(
 		name = strings.ToLower(name)
 	}
 	version := parsed.Version()
-	if version == "" && a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
-		version = a.ReleaseInfo.StableVersion.Version
-	}
 	if name == "" || version == "" {
 		return false
 	}
@@ -428,11 +433,9 @@ func (e *Evaluator) applyRegistryYanked(
 	return true
 }
 
-// applyPyPIYanked checks if the PyPI version requested by the user (PURL version,
-// falling back to StableVersion when PURL is unversioned) is yanked on PyPI and
-// promotes to EOL on confirmation. PURL version is preferred because yanking is a
-// version-specific signal — checking the latest stable version would silently miss
-// a user's pinned-to-yanked dependency.
+// applyPyPIYanked checks whether the PyPI version the caller requested (the version
+// in OriginalPURL) is yanked on PyPI and promotes to EOL on confirmation. An
+// unversioned OriginalPURL is a no-op. See ADR-0021.
 //
 // Yanked semantics: see pypi.Client.GetVersion (info.yanked OR all urls[].yanked).
 func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) bool {
@@ -455,10 +458,10 @@ func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, sta
 		0.95, "eol: pypi version yanked")
 }
 
-// applyCargoYanked checks if the Cargo PURL version (falling back to StableVersion
-// when PURL is unversioned) is yanked on crates.io. Same precedence rationale as
-// applyPyPIYanked. crates.io yanks have no upstream successor, so status.Successor
-// is left untouched.
+// applyCargoYanked checks whether the Cargo version the caller requested (the
+// version in OriginalPURL) is yanked on crates.io. An unversioned OriginalPURL is
+// a no-op, as in applyPyPIYanked. See ADR-0021.
+// crates.io yanks have no upstream successor, so status.Successor is left untouched.
 func (e *Evaluator) applyCargoYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) bool {
 	if e.crates == nil {
 		return false
