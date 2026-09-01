@@ -1,4 +1,4 @@
-<!-- Generated from .github/instructions/project-conventions.instructions.md — DO NOT EDIT DIRECTLY -->
+<!-- Generated from .github/instructions/base/core/project-conventions.instructions.md — DO NOT EDIT DIRECTLY -->
 
 # Project Conventions
 

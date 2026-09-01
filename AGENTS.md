@@ -75,12 +75,12 @@ summary would drift from the source.
 | `.github/instructions/base/core/coding-standards.instructions.md` | Coding Standards |
 | `.github/instructions/base/core/error-handling.instructions.md` | Error Handling |
 | `.github/instructions/base/core/git-workflow.instructions.md` | Git Workflow |
-| `.github/instructions/base/core/language-policy.instructions.md` | Language Policy |
+| `.github/instructions/base/core/project-conventions.instructions.md` | Project Conventions |
 | `.github/instructions/base/core/security.instructions.md` | Security Guidelines |
+| `.github/instructions/base/core/testing-performance.instructions.md` | Testing & Performance |
 | `.github/instructions/copilot-learned-coding.instructions.md` | Coding Standards — Learned from Copilot Reviews |
-| `.github/instructions/project-conventions.instructions.md` | Project Conventions |
+| `.github/instructions/language-policy.instructions.md` | Language Policy |
 | `.github/instructions/test-design.instructions.md` | Test Design — pre-PR lens |
-| `.github/instructions/testing-performance.instructions.md` | Testing & Performance |
 
 ## Codex Has No Guardrail Hooks — Hand Off Writes to Claude Code
 
