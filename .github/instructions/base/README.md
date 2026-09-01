@@ -1,9 +1,9 @@
 # Shared instruction base
 
-Rule files in here are **not only uzomuzo-oss's**. They are the canonical copy
-for the sibling repositories too — `uzomuzo-catalog` and `vuls-reach` sync from
-this directory. Everything directly under `.github/instructions/` (outside
-`base/`) is uzomuzo-oss-local and is never synced.
+Rule files in here are **not only this repository's**. They are the canonical
+copy that sibling repositories in this organization sync from. Everything
+directly under `.github/instructions/` (outside `base/`) is local to this
+repository and is never synced.
 
 Editing a file in here changes what other repositories will be told to do.
 
@@ -13,21 +13,21 @@ One directory per profile. A consuming repository opts in to a profile; files in
 a profile it did not select are **not candidates at all**, so no per-file "skip"
 entry has to be remembered.
 
-| Profile | Contents | Consumers |
-|---|---|---|
-| `core/` | Language policy, coding standards, error handling, git workflow, security | every repository |
-| `arch-ddd/` | DDD layering and its enforcement rules | uzomuzo-oss, uzomuzo-catalog |
+| Profile | Contents |
+|---|---|
+| `core/` | Language policy, coding standards, error handling, git workflow, security |
+| `arch-ddd/` | DDD layering and its enforcement rules |
 
-`arch-ddd` is a separate profile for a specific reason: **vuls-reach is Ports &
-Adapters (Hexagonal), not DDD** — its own rules open by saying so. Its
-architecture document stays local to that repository. If DDD lived in `core/`, a
-missing opt-out would silently hand a Hexagonal repository a document telling it
-to follow DDD, and because that document is generated, the mistake would be easy
-to miss in review.
+**Architecture is a separate profile because consumers do not all share one
+architecture.** If DDD lived in `core/`, the only thing standing between a
+repository built on a different pattern and a document telling it to follow DDD
+would be someone remembering to write an opt-out — and because that document is
+generated, the mistake would be easy to miss in review. Opt-in by profile
+removes the chance to forget.
 
-There is deliberately no `arch-hexagonal` profile: one consumer does not meet the
-admission bar below, and an almost-empty profile is an invitation to dump things
-in it.
+For the same reason, a profile is not created speculatively for every pattern
+someone might use. A profile needs consumers, per the bar below; an almost-empty
+profile is an invitation to dump things into it.
 
 ## Admission bar
 
@@ -35,7 +35,7 @@ A file belongs in `base/` only when **two or more repositories would inherit it
 verbatim**. Until then it stays local to the repository that needs it. The same
 bar applies to creating a profile.
 
-A pull request that adds a file here must name the repositories that will consume
+A pull request that adds a file here must say how many repositories will consume
 it. "We might share this later" is not a reason — move it when the second
 consumer actually exists.
 
@@ -43,9 +43,12 @@ consumer actually exists.
 
 - Anything naming this repository's own packages, commands, or domain types.
   Those belong in the repository-local files outside `base/`.
-- Anything that cannot be published: uzomuzo-oss is a **public** repository, so
-  every byte in here is public the moment it is committed, including for the
-  private repositories that consume it.
+- **Anything about a non-public repository** — its name, its internal
+  conventions, its architecture, or quotations from its documents. This
+  repository is public, so every byte here is published the moment it is
+  committed. Describe consumers generically ("a consuming repository") and keep
+  the specifics on the consuming side.
+- Anything else that cannot be published.
 
 ## Editing
 

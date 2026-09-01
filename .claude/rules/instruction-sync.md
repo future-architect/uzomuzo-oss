@@ -20,7 +20,7 @@ difference matters when you edit one:
 | Location | Whose rule is it | Editing it affects |
 |---|---|---|
 | `.github/instructions/*.instructions.md` | uzomuzo-oss only | this repository |
-| `.github/instructions/base/<profile>/*.instructions.md` | the organization | **uzomuzo-catalog and vuls-reach too** — they sync from here |
+| `.github/instructions/base/<profile>/*.instructions.md` | the organization | **sibling repositories too** — they sync from here |
 
 Both trees feed the same generator, so `.claude/rules/<name>.md` is produced from
 whichever tree holds `<name>`; the generated file's first line names the actual
@@ -31,12 +31,15 @@ depend on directory-listing order.
 Profiles are directories under `base/`. A consuming repository opts in to a
 profile, so files in a profile it did not select never enter its candidate set —
 there is no per-file opt-out to forget. `arch-ddd` is separate from `core`
-precisely because **vuls-reach is Hexagonal, not DDD**, and a missed opt-out
-would otherwise hand it a generated document contradicting its own architecture.
+because **consumers do not all share one architecture**: a missed opt-out would
+otherwise hand a repository a generated document contradicting the pattern it
+actually uses.
 
 See `.github/instructions/base/README.md` for the admission bar (a file enters
 `base/` only when two or more repositories would inherit it verbatim) and for
-what must stay out of a public repository's shared base.
+what must stay out. In particular: **this repository is public, so `base/` must
+not name a non-public repository or describe its internal conventions.** Refer
+to consumers generically and keep the specifics on the consuming side.
 
 ## Rules: Generated via Script
 
