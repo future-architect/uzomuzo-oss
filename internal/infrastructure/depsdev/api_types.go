@@ -167,6 +167,7 @@ type Version struct {
 	PublishedAt         time.Time            `json:"publishedAt"`
 	IsDefault           bool                 `json:"isDefault"`
 	IsDeprecated        bool                 `json:"isDeprecated"`
+	DeprecatedReason    string               `json:"deprecatedReason"`
 	Licenses            []string             `json:"licenses"`
 	LicenseDetails      []LicenseDetail      `json:"licenseDetails"`
 	AdvisoryKeys        []AdvisoryKey        `json:"advisoryKeys"`
