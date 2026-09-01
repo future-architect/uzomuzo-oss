@@ -113,11 +113,7 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 		// for the same repository, avoiding a redundant GitHub API call.
 		if analysis.RepoState != nil && analysis.RepoURL != "" && s.validateRepoURLMatch(analysis.RepoURL, githubURL) {
 			analysis.Error = nil
-			analysis.OriginalPURL = githubURL
-			analysis.EffectivePURL = githubURL
-			analysis.Package = nil
-			analysis.ReleaseInfo = nil
-			analysis.EnsureCanonical()
+			detachPackageIdentity(analysis, githubURL)
 			return analysis, nil
 		}
 		return s.buildGitHubOnlyAnalysis(ctx, githubURL)
@@ -444,4 +440,17 @@ func (s *IntegrationService) generatePURLForEcosystem(ecosystem, owner, repo str
 			"repo", repo)
 		return ""
 	}
+}
+
+// detachPackageIdentity re-points an analysis at the GitHub URL after the
+// synthesized PURL turned out not to name a published package. Every field that
+// described that package is dropped: keeping one would attribute a fact about a
+// package to a repository the caller asked about instead.
+func detachPackageIdentity(analysis *domain.Analysis, githubURL string) {
+	analysis.OriginalPURL = githubURL
+	analysis.EffectivePURL = githubURL
+	analysis.Package = nil
+	analysis.ReleaseInfo = nil
+	analysis.RegistryState = nil
+	analysis.EnsureCanonical()
 }

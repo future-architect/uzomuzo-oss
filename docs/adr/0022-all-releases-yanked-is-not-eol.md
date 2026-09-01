@@ -39,10 +39,11 @@ The two registries expose the fact differently:
   yanked". `info.yanked_reason` may be null even so (`conda-build`), and it is
   free text written by the package maintainer, so it is stripped of control and
   format characters and collapsed to one line before it reaches the domain — the
-  CLI prints it verbatim, and either class can repaint or visually reorder it. The same PyPI client instance and its cache are shared by
-  `enrichPyPISummary`, which runs earlier in the same pass for packages with a
-  resolved repository, and by `applyPyPIClassifier`, which runs later during EOL
-  evaluation; whichever fires first pays for the fetch.
+  CLI prints it verbatim, and either class can repaint or visually reorder it.
+  The same PyPI client instance and its cache are shared by `enrichPyPISummary`,
+  which runs earlier in the same pass for packages with a resolved repository,
+  and by `applyPyPIClassifier`, which runs later during EOL evaluation;
+  whichever fires first pays for the fetch.
 - **crates.io** — `GET /api/v1/crates/{name}` carries a top-level `crate.yanked`
   that the server defines as "every published version is yanked". The empty
   `include=` parameter suppresses the versions array, cutting a popular crate's

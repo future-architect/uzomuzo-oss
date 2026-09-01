@@ -176,6 +176,11 @@ func (c *Client) GetVersion(ctx context.Context, name, version string) (*Version
 		}
 		yanked = allYanked
 	}
+	// A 200 whose body names no project is not an answer about the version.
+	// Reporting it as found would assert "not yanked" from an empty body.
+	if strings.TrimSpace(raw.Info.Name) == "" {
+		return nil, false, fmt.Errorf("pypi version response for %q@%q carried no project name", n, v)
+	}
 	info := &VersionInfo{
 		Name:         raw.Info.Name,
 		Version:      raw.Info.Version,

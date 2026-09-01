@@ -92,3 +92,24 @@ func TestGetProject_EmptyProjectName(t *testing.T) {
 		t.Errorf("found = true, want false")
 	}
 }
+
+// TestGetVersion_EmptyProjectName pins the same guard on the version endpoint.
+func TestGetVersion_EmptyProjectName(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintln(w, `{"info":{},"urls":[]}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient()
+	c.SetBaseURL(srv.URL)
+	c.SetCacheTTL(0)
+
+	info, found, err := c.GetVersion(context.Background(), "pkg", "1.0.0")
+	if err == nil {
+		t.Fatalf("expected an error, got info=%v found=%v", info, found)
+	}
+	if found {
+		t.Errorf("found = true, want false")
+	}
+}
