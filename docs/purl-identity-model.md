@@ -51,8 +51,10 @@ uzomuzo resolved.
   version then marks the whole package end-of-life. This was a real defect on the
   GitHub URL path — see [ADR-0021](adr/0021-yank-is-version-specific.md).
 - **Every entry path must populate it.** A source that leaves it empty silently
-  loses yank detection rather than failing loudly. `AnalysisService.ProcessBatchPURLs`
-  repairs an empty value from the requested PURL as a safety net.
+  loses yank detection rather than failing loudly. As a safety net,
+  `AnalysisService.enrichAndAssess` repairs an empty value from the map key — the
+  coordinate the caller requested — on both the PURL and the GitHub URL path, and
+  logs a warning, because reaching it means an `AnalysisSource` broke its contract.
 
 Rules that need the coordinate actually analyzed must read `EffectivePURL` instead.
 

@@ -22,32 +22,66 @@ func (r *recordingEOLEvaluator) EvaluateBatch(_ context.Context, analyses map[st
 	return map[string]domain.EOLStatus{}, nil
 }
 
-// TestProcessBatchPURLs_RepairsMissingOriginalPURL pins the AnalysisSource contract
+// TestEnrichAndAssess_RepairsMissingOriginalPURL pins the AnalysisSource contract
 // repair. Version-specific EOL rules read OriginalPURL and do nothing when it is
 // empty, so a source that returns only Package.PURL would silently lose yank
-// detection. ProcessBatchPURLs fills the field from the map key, which is the
-// requested PURL by construction. See ADR-0021.
-func TestProcessBatchPURLs_RepairsMissingOriginalPURL(t *testing.T) {
+// detection. Both entry paths repair the field from the map key, which is the
+// caller's requested coordinate by construction. See ADR-0021.
+func TestEnrichAndAssess_RepairsMissingOriginalPURL(t *testing.T) {
+	const (
+		purlKey = "pkg:cargo/sha-1@0.10.1"
+		urlKey  = "https://github.com/pydantic/pydantic-extra-types"
+	)
+
 	tests := []struct {
-		name             string
+		name string
+		// gitHubPath selects ProcessBatchGitHubURLs over ProcessBatchPURLs.
+		gitHubPath       bool
+		key              string
 		analysis         *domain.Analysis
 		wantOriginalPURL string
 	}{
 		{
-			name: "source omitted OriginalPURL — repaired from the map key",
+			name: "PURL path: source omitted OriginalPURL — repaired from the map key",
+			key:  purlKey,
 			analysis: &domain.Analysis{
-				Package: &domain.Package{PURL: "pkg:cargo/sha-1@0.10.1", Ecosystem: "cargo"},
+				Package: &domain.Package{PURL: purlKey, Ecosystem: "cargo"},
 			},
-			wantOriginalPURL: "pkg:cargo/sha-1@0.10.1",
+			wantOriginalPURL: purlKey,
 		},
 		{
-			name: "source supplied OriginalPURL — left alone",
+			name: "PURL path: source supplied OriginalPURL — left alone",
+			key:  purlKey,
 			analysis: &domain.Analysis{
 				OriginalPURL:  "pkg:cargo/sha-1",
-				EffectivePURL: "pkg:cargo/sha-1@0.10.1",
-				Package:       &domain.Package{PURL: "pkg:cargo/sha-1@0.10.1", Ecosystem: "cargo"},
+				EffectivePURL: purlKey,
+				Package:       &domain.Package{PURL: purlKey, Ecosystem: "cargo"},
 			},
 			wantOriginalPURL: "pkg:cargo/sha-1",
+		},
+		{
+			name:       "GitHub URL path: source omitted OriginalPURL — repaired from the map key",
+			gitHubPath: true,
+			key:        urlKey,
+			analysis: &domain.Analysis{
+				EffectivePURL: "pkg:pypi/pydantic-extra-types@2.11.2",
+				Package:       &domain.Package{PURL: "pkg:pypi/pydantic-extra-types@2.11.2", Ecosystem: "pypi"},
+			},
+			// A GitHub URL is the established OriginalPURL value for an analysis
+			// with no caller-supplied PURL — see buildGitHubOnlyAnalysis. It does
+			// not parse as a PURL, so version-specific rules stay a no-op.
+			wantOriginalPURL: urlKey,
+		},
+		{
+			name:       "GitHub URL path: source supplied OriginalPURL — left alone",
+			gitHubPath: true,
+			key:        urlKey,
+			analysis: &domain.Analysis{
+				OriginalPURL:  "pkg:pypi/pydantic-extra-types",
+				EffectivePURL: "pkg:pypi/pydantic-extra-types@2.11.2",
+				Package:       &domain.Package{PURL: "pkg:pypi/pydantic-extra-types@2.11.2", Ecosystem: "pypi"},
+			},
+			wantOriginalPURL: "pkg:pypi/pydantic-extra-types",
 		},
 	}
 
@@ -55,18 +89,23 @@ func TestProcessBatchPURLs_RepairsMissingOriginalPURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			const key = "pkg:cargo/sha-1@0.10.1"
 			rec := &recordingEOLEvaluator{}
 			svc := NewAnalysisService(&fakeAnalysisSource{
-				analyses: map[string]*domain.Analysis{key: tt.analysis},
+				analyses: map[string]*domain.Analysis{tt.key: tt.analysis},
 			})
 			svc.newEOLEvaluator = func() eolBatchEvaluator { return rec }
 
-			if _, err := svc.ProcessBatchPURLs(context.Background(), []string{key}); err != nil {
-				t.Fatalf("ProcessBatchPURLs failed: %v", err)
+			var err error
+			if tt.gitHubPath {
+				_, err = svc.ProcessBatchGitHubURLs(context.Background(), []string{tt.key})
+			} else {
+				_, err = svc.ProcessBatchPURLs(context.Background(), []string{tt.key})
+			}
+			if err != nil {
+				t.Fatalf("process failed: %v", err)
 			}
 
-			if got := rec.seen[key]; got != tt.wantOriginalPURL {
+			if got := rec.seen[tt.key]; got != tt.wantOriginalPURL {
 				t.Errorf("evaluator saw OriginalPURL = %q, want %q", got, tt.wantOriginalPURL)
 			}
 		})

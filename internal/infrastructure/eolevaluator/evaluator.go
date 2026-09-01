@@ -373,8 +373,7 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 // EOLEndOfLife.
 //
 // An OriginalPURL that is unversioned, empty, unparsable, or of another ecosystem
-// is a no-op: a yank applies to the requested version only and is never inherited
-// from a version the tool selected on the caller's behalf. See ADR-0021.
+// is a no-op. See ADR-0021.
 //
 // EffectivePURL and Package.PURL are deliberately NOT read here — on the GitHub URL
 // entry path they carry a version uzomuzo picked, not one the caller pinned.

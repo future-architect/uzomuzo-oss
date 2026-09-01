@@ -32,11 +32,8 @@ import (
 // ARCHITECT DECISION: keep GitHubClient() outside this interface.
 //
 // Contract: each returned Analysis must carry the caller's own coordinate in
-// OriginalPURL. Version-specific EOL rules read that field to distinguish a
-// caller pin from a version uzomuzo selected, and a rule that finds it empty
-// does nothing rather than guessing. ProcessBatchPURLs repairs an empty
-// OriginalPURL from the map key so a source that omits it degrades visibly
-// rather than silently. See ADR-0021.
+// OriginalPURL — see ADR-0021. enrichAndAssess repairs an empty value from the
+// map key and logs a warning.
 type AnalysisSource interface {
 	// AnalyzeFromPURLs fetches analysis data for a batch of PURLs.
 	AnalyzeFromPURLs(ctx context.Context, purls []string) (map[string]*domain.Analysis, error)
@@ -227,19 +224,6 @@ func (s *AnalysisService) ProcessBatchPURLs(ctx context.Context, purls []string)
 		return nil, fmt.Errorf("failed to fetch batch analyses: %w", err)
 	}
 
-	// Repair the AnalysisSource contract before Phase 1: the map key is the
-	// requested PURL, so it is the caller's coordinate by construction. The
-	// built-in IntegrationService always populates OriginalPURL, so this only
-	// fires for a source that omitted it. Deliberately NOT done inside
-	// applyRegistryYanked — a fallback there is what let a uzomuzo-selected
-	// version pose as a caller pin. See ADR-0021.
-	for key, analysis := range analyses {
-		if analysis != nil && analysis.OriginalPURL == "" {
-			slog.Debug("analysis_source_missing_original_purl", "purl", key)
-			analysis.OriginalPURL = key
-		}
-	}
-
 	if err := s.enrichAndAssess(ctx, analyses, "purl"); err != nil {
 		return nil, err
 	}
@@ -273,6 +257,18 @@ func (s *AnalysisService) ProcessBatchGitHubURLs(ctx context.Context, githubURLs
 // Phase 2: AnalysisEnricher hooks (e.g., catalog EOL override).
 // Phase 3: Composite lifecycle/build-health assessment.
 func (s *AnalysisService) enrichAndAssess(ctx context.Context, analyses map[string]*domain.Analysis, refLogKey string) error {
+	// Phase 0: repair the AnalysisSource contract. The map key is what the caller
+	// requested, so it is their coordinate by construction. Deliberately not a
+	// fallback inside applyRegistryYanked — a fallback there is what this PR's
+	// ADR-0021 removed. The built-in IntegrationService always populates the
+	// field, so a warning here means an AnalysisSource broke its contract.
+	for key, analysis := range analyses {
+		if analysis != nil && analysis.OriginalPURL == "" {
+			slog.Warn("analysis_source_missing_original_purl", refLogKey, key)
+			analysis.OriginalPURL = key
+		}
+	}
+
 	// Phase 1: Evaluate base EOL from primary (non-catalog) deterministic sources.
 	// newEOLEvaluator constructs a fresh per-call instance so its internal caches
 	// are not shared across concurrent batch calls.

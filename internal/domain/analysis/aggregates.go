@@ -21,9 +21,7 @@ type Analysis struct {
 	//     preserves the caller-selected version.
 	//   - Never rewritten for stylistic normalization (case, qualifier ordering, etc.).
 	//   - May be versionless even when a version is later resolved. It must NOT be
-	//     back-filled with a version uzomuzo resolved on the caller's behalf: version-specific
-	//     EOL rules read this field precisely to tell a caller pin apart from uzomuzo's own
-	//     choice. See ADR-0021.
+	//     back-filled with a version uzomuzo resolved on the caller's behalf. See ADR-0021.
 	//   - Purpose: auditability, faithful echo-back, reproducibility of the *request*.
 	//   - Examples:
 	//       Input: "pkg:npm/React"             => OriginalPURL = "pkg:npm/React"
