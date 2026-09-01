@@ -45,12 +45,21 @@ bench-save:
 clean:
 	rm -f uzomuzo uzomuzo-diet
 
+# INSTRUCTION_SOURCES: the canonical rule files, from two places.
+#   .github/instructions/*.instructions.md           — this repository's own rules
+#   .github/instructions/base/<profile>/*.md         — the shared base, one directory
+#                                                      per profile, consumed by sibling repos
+# `$(sort)` de-duplicates and imposes a deterministic order independent of
+# directory-listing order, which the generated index depends on.
+INSTRUCTION_SOURCES := $(sort $(wildcard .github/instructions/*.instructions.md) \
+                              $(wildcard .github/instructions/base/*/*.instructions.md))
+
 # sync-instructions: .github/ → .claude/rules/ and AGENTS.md generated copies
 sync-instructions:
 	@set -e; \
-	ls .github/instructions/*.instructions.md >/dev/null 2>&1 || { echo "ERROR: no .github/instructions/*.instructions.md found — refusing to generate an empty rule set" >&2; exit 1; }
+	[ -n "$(INSTRUCTION_SOURCES)" ] || { echo "ERROR: no instruction sources found under .github/instructions/ — refusing to generate an empty rule set" >&2; exit 1; }
 	@set -e; \
-	for src in .github/instructions/*.instructions.md; do \
+	for src in $(INSTRUCTION_SOURCES); do \
 		base=$$(basename "$$src" .instructions.md); \
 		dest=".claude/rules/$$base.md"; \
 		if [ "$$base" = "agent-orchestration" ]; then dest=".claude/rules/agents.md"; fi; \
@@ -70,7 +79,7 @@ sync-instructions:
 		if [ "$$line" = "<!-- INSTRUCTION-INDEX -->" ]; then \
 			markers=$$((markers + 1)); \
 			printf '%s\n' "| File | Topic |" "|------|-------|"; \
-			for src in .github/instructions/*.instructions.md; do \
+			for src in $(INSTRUCTION_SOURCES); do \
 				[ -e "$$src" ] || continue; \
 				title=$$(grep -m1 '^# ' "$$src" | sed 's/^# //; s/|/\\|/g'); \
 				[ -n "$$title" ] || { echo "ERROR: $$src has no '# ' heading — cannot build the instruction index" >&2; exit 1; }; \

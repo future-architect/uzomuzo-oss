@@ -53,14 +53,14 @@ summary would drift from the source.
 | File | Topic |
 |------|-------|
 | `.github/instructions/agent-orchestration.instructions.md` | Agent Orchestration |
-| `.github/instructions/coding-standards.instructions.md` | Coding Standards |
+| `.github/instructions/base/arch-ddd/ddd-architecture.instructions.md` | DDD Layered Architecture — Strict Enforcement |
+| `.github/instructions/base/core/coding-standards.instructions.md` | Coding Standards |
+| `.github/instructions/base/core/error-handling.instructions.md` | Error Handling |
+| `.github/instructions/base/core/git-workflow.instructions.md` | Git Workflow |
+| `.github/instructions/base/core/language-policy.instructions.md` | Language Policy |
+| `.github/instructions/base/core/security.instructions.md` | Security Guidelines |
 | `.github/instructions/copilot-learned-coding.instructions.md` | Coding Standards — Learned from Copilot Reviews |
-| `.github/instructions/ddd-architecture.instructions.md` | DDD Layered Architecture — Strict Enforcement |
-| `.github/instructions/error-handling.instructions.md` | Error Handling |
-| `.github/instructions/git-workflow.instructions.md` | Git Workflow |
-| `.github/instructions/language-policy.instructions.md` | Language Policy |
 | `.github/instructions/project-conventions.instructions.md` | Project Conventions |
-| `.github/instructions/security.instructions.md` | Security Guidelines |
 | `.github/instructions/test-design.instructions.md` | Test Design — pre-PR lens |
 | `.github/instructions/testing-performance.instructions.md` | Testing & Performance |
 
