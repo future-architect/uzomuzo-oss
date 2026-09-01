@@ -68,6 +68,12 @@ type RepoState = domain.RepoState
 // such as "every published release is yanked" (see ADR-0022).
 type RegistryState = domain.RegistryState
 
+// Registry names recorded in RegistryState.Registry.
+const (
+	RegistryPyPI   = domain.RegistryPyPI
+	RegistryCrates = domain.RegistryCrates
+)
+
 // ReleaseInfo contains prioritized release channel/version metadata.
 type ReleaseInfo = domain.ReleaseInfo
 

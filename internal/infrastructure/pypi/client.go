@@ -99,10 +99,8 @@ type ProjectInfo struct {
 	Classifiers []string
 	ProjectURLs map[string]string // e.g. "Repository" -> "https://github.com/..."
 	HomePage    string
-	// Yanked mirrors info.yanked on the project endpoint. PyPI selects the
-	// project's reported release with non-yanked releases ordered first, so this
-	// is true only when every release of the project is yanked. It is a
-	// distribution-withdrawal fact, not end-of-life; see ADR-0022.
+	// Yanked mirrors info.yanked on the project endpoint, which is true only
+	// when every release of the project is yanked. See ADR-0022.
 	Yanked bool
 	// YankedReason mirrors info.yanked_reason. Empty when PyPI has none, which
 	// happens even for yanked releases.

@@ -40,9 +40,8 @@ type Client struct {
 // CrateInfo is the crate-level subset of crates.io metadata we need.
 type CrateInfo struct {
 	Name string
-	// Yanked mirrors the top-level crate.yanked field, which crates.io defines
-	// as "every published version of this crate is yanked". It is a
-	// distribution-withdrawal fact, not end-of-life; see ADR-0022.
+	// Yanked mirrors the top-level crate.yanked field: every published version
+	// of this crate is yanked. See ADR-0022.
 	Yanked bool
 }
 
@@ -109,23 +108,6 @@ func (c *Client) GetVersion(ctx context.Context, name, version string) (*Version
 		return info, true, nil
 	}
 	apiURL := fmt.Sprintf("%s/api/v1/crates/%s/%s", c.resolvedBaseURL(), url.PathEscape(n), url.PathEscape(v))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		return nil, false, fmt.Errorf("crates request build failed: %w", err)
-	}
-	req.Header.Set("User-Agent", cratesUserAgent)
-	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(ctx, req)
-	if err != nil {
-		return nil, false, fmt.Errorf("crates http failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, false, nil
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("crates http status %d", resp.StatusCode)
-	}
 	var raw struct {
 		Version struct {
 			Crate  string `json:"crate"`
@@ -133,8 +115,9 @@ func (c *Client) GetVersion(ctx context.Context, name, version string) (*Version
 			Yanked bool   `json:"yanked"`
 		} `json:"version"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&raw); err != nil {
-		return nil, false, fmt.Errorf("crates decode failed: %w", err)
+	found, err := c.getJSON(ctx, apiURL, "version", &raw)
+	if err != nil || !found {
+		return nil, found, err
 	}
 	info := &VersionInfo{
 		Name:    raw.Version.Crate,
@@ -145,14 +128,15 @@ func (c *Client) GetVersion(ctx context.Context, name, version string) (*Version
 	return info, true, nil
 }
 
-// GetCrate retrieves crate-level metadata. Returns (info, found, err).
+// GetCrate retrieves crate-level metadata, whose yanked flag reports whether
+// every published version of the crate is yanked. Returns (info, found, err).
 // On 404 -> (nil, false, nil). Other non-200 -> error; callers must treat that
 // as "unknown" and must not fall back to a heavier request shape.
 //
-// The request carries an empty include parameter (?include=), which crates.io
-// accepts to mean "no sub-resources": it suppresses the versions array, cutting
-// a popular crate's response from hundreds of KB to under 1 KB. This is a
-// crates.io-specific API, not part of the Cargo Registry Web API.
+// The empty include parameter suppresses the versions array, which keeps the
+// response under a kilobyte for crates with hundreds of releases. Both the
+// parameter and the crate-level yanked flag are crates.io's own API, not part
+// of the Cargo Registry Web API. See ADR-0022.
 func (c *Client) GetCrate(ctx context.Context, name string) (*CrateInfo, bool, error) {
 	n := strings.TrimSpace(name)
 	if n == "" {
@@ -164,33 +148,49 @@ func (c *Client) GetCrate(ctx context.Context, name string) (*CrateInfo, bool, e
 		return info, true, nil
 	}
 	apiURL := fmt.Sprintf("%s/api/v1/crates/%s?include=", c.resolvedBaseURL(), url.PathEscape(n))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		return nil, false, fmt.Errorf("crates crate request build failed: %w", err)
-	}
-	req.Header.Set("User-Agent", cratesUserAgent)
-	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(ctx, req)
-	if err != nil {
-		return nil, false, fmt.Errorf("crates crate http failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, false, nil
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("crates crate http status %d", resp.StatusCode)
-	}
 	var raw struct {
 		Crate struct {
 			Name   string `json:"name"`
 			Yanked bool   `json:"yanked"`
 		} `json:"crate"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&raw); err != nil {
-		return nil, false, fmt.Errorf("crates crate decode failed: %w", err)
+	found, err := c.getJSON(ctx, apiURL, "crate", &raw)
+	if err != nil || !found {
+		return nil, found, err
+	}
+	// A 200 whose body carries no crate name is not an answer about the crate.
+	// Reporting it as found would assert "nothing yanked" from an empty body.
+	if strings.TrimSpace(raw.Crate.Name) == "" {
+		return nil, false, fmt.Errorf("crates crate response for %q carried no crate name", n)
 	}
 	info := &CrateInfo{Name: raw.Crate.Name, Yanked: raw.Crate.Yanked}
 	c.crateCache.Set(key, info)
 	return info, true, nil
+}
+
+// getJSON issues a GET against apiURL and decodes the body into out.
+// Returns (found, err): 404 -> (false, nil); other non-200 -> (false, error).
+// Callers must treat an error as "unknown", never as a negative answer.
+func (c *Client) getJSON(ctx context.Context, apiURL, what string, out any) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return false, fmt.Errorf("crates %s request build failed: %w", what, err)
+	}
+	req.Header.Set("User-Agent", cratesUserAgent)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.http.Do(ctx, req)
+	if err != nil {
+		return false, fmt.Errorf("crates %s http failed: %w", what, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("crates %s http status %d", what, resp.StatusCode)
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(out); err != nil {
+		return false, fmt.Errorf("crates %s decode failed: %w", what, err)
+	}
+	return true, nil
 }

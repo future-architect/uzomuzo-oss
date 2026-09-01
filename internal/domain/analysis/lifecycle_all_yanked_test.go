@@ -9,7 +9,7 @@ import (
 	cfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
-// withdrawn builds an Analysis whose registry reports every release as yanked.
+// withdrawn builds a RegistryState reporting every release as yanked.
 func withdrawn(registry, reason string) *RegistryState {
 	return &RegistryState{AllReleasesYanked: true, Registry: registry, Reason: reason,
 		Reference: "https://example.test/pkg"}
@@ -48,8 +48,10 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 8, 10, "ok"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, "ok"),
 			},
-			eol:       EOLStatus{State: EOLNotEOL},
-			wantLabel: LabelActive,
+			eol:        EOLStatus{State: EOLNotEOL},
+			wantReason: "Actively maintained with recent releases",
+			wantTrace:  "active_path",
+			wantLabel:  LabelActive,
 		},
 		{
 			name: "registry asked, nothing yanked, branch never fires",
@@ -62,8 +64,10 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 				"Maintained":      NewScoreEntity("Maintained", 8, 10, "ok"),
 				"Vulnerabilities": NewScoreEntity("Vulnerabilities", 9, 10, "ok"),
 			},
-			eol:       EOLStatus{State: EOLNotEOL},
-			wantLabel: LabelActive,
+			eol:        EOLStatus{State: EOLNotEOL},
+			wantReason: "Actively maintained with recent releases",
+			wantTrace:  "active_path",
+			wantLabel:  LabelActive,
 		},
 		{
 			name: "every release yanked with a reason",
@@ -98,7 +102,9 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			eol: EOLStatus{State: EOLEndOfLife, Evidences: []EOLEvidence{
 				{Source: "PyPI", Summary: "Classifier: Development Status :: 7 - Inactive", Confidence: 1.0},
 			}},
-			wantLabel: LabelEOLConfirmed,
+			wantReason: "Classifier: Development Status :: 7 - Inactive",
+			wantTrace:  "primary_source_eol override",
+			wantLabel:  LabelEOLConfirmed,
 		},
 		{
 			name: "archived repository still yields Review Needed, not Stalled",
@@ -108,6 +114,7 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			},
 			eol:        EOLStatus{State: EOLNotEOL},
 			wantLabel:  LabelReviewNeeded,
+			wantReason: "All releases yanked on PyPI: Unmaintained",
 			wantTrace:  "all_releases_yanked_review_needed",
 			wantSignal: true,
 		},
@@ -119,6 +126,8 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			},
 			eol:        EOLStatus{State: EOLNotEOL},
 			wantLabel:  LabelReviewNeeded,
+			wantReason: "All releases yanked on crates.io",
+			wantTrace:  "all_releases_yanked_review_needed",
 			wantSignal: true,
 		},
 		{
@@ -134,6 +143,8 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			},
 			eol:        EOLStatus{State: EOLNotEOL},
 			wantLabel:  LabelReviewNeeded,
+			wantReason: "All releases yanked on PyPI: Pip installing conda leads to broken UX",
+			wantTrace:  "all_releases_yanked_review_needed",
 			wantSignal: true,
 		},
 		{
@@ -149,6 +160,8 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			scores:     map[string]*ScoreEntity{},
 			eol:        EOLStatus{State: EOLNotEOL},
 			wantLabel:  LabelReviewNeeded,
+			wantReason: "All releases yanked on PyPI: Unmaintained",
+			wantTrace:  "all_releases_yanked_review_needed",
 			wantSignal: true,
 		},
 	}
@@ -167,10 +180,10 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			if MaintenanceStatus(res.Label) != tt.wantLabel {
 				t.Fatalf("Label: got %q, want %q (reason %q)", res.Label, tt.wantLabel, res.Reason)
 			}
-			if tt.wantReason != "" && res.Reason != tt.wantReason {
+			if res.Reason != tt.wantReason {
 				t.Errorf("Reason: got %q, want %q", res.Reason, tt.wantReason)
 			}
-			if tt.wantTrace != "" && !containsString(res.Trace, tt.wantTrace) {
+			if !containsString(res.Trace, tt.wantTrace) {
 				t.Errorf("Trace: got %v, want it to contain %q", res.Trace, tt.wantTrace)
 			}
 			if got := hasSignal(res.Signals, SignalAllReleasesYanked); got != tt.wantSignal {

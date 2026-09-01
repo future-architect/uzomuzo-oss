@@ -36,8 +36,13 @@ The two registries expose the fact differently:
   Release.is_prerelease.nullslast(), Release._pypi_ordering.desc())`
   (`warehouse/legacy/api/json.py`), so a non-yanked release always wins when one
   exists. `info.yanked == true` is therefore equivalent to "every release row is
-  yanked". `info.yanked_reason` may be null even so (`conda-build`). The endpoint
-  is already fetched by `applyPyPIClassifier`, so this costs no extra request.
+  yanked". `info.yanked_reason` may be null even so (`conda-build`), and it is
+  free text written by the package maintainer, so it is stripped of control
+  characters and collapsed to one line before it reaches the domain — the CLI
+  prints it verbatim. The same PyPI client instance and its cache are shared by
+  `enrichPyPISummary`, which runs earlier in the same pass for packages with a
+  resolved repository, and by `applyPyPIClassifier`, which runs later during EOL
+  evaluation; whichever fires first pays for the fetch.
 - **crates.io** — `GET /api/v1/crates/{name}` carries a top-level `crate.yanked`
   that the server defines as "every published version is yanked". The empty
   `include=` parameter suppresses the versions array, cutting a popular crate's
@@ -91,6 +96,16 @@ A new `MaintenanceStatus` value (e.g. `Withdrawn`) is the most precise answer, b
 downstream. Adding a value forces every consumer's switch to handle it. `Review
 Needed` already means "a human must look at this", which is the accurate outcome.
 
+### Depends on ADR-0021 landing first
+
+Until [ADR-0021](0021-yank-is-version-specific.md)'s change is on `main`,
+`applyRegistryYanked` still falls back to `ReleaseInfo.StableVersion` for an
+unversioned PURL. That fallback resolves to a yanked release for exactly the
+packages this ADR is about, so the EOL branch fires first and the withdrawal
+branch is never reached. The two changes are independent in code and touch no
+common file, but the order matters: this decision only takes effect once ADR-0021
+has landed.
+
 ### Relationship to ADR-0021
 
 ADR-0021 rejected routing the unversioned-yank case to `Review Needed`, on
@@ -119,11 +134,18 @@ Versioned PURLs are untouched: a user pinned to a yanked release still resolves 
 - **Behavior change**: `pkg:cargo/normal` moves off `Legacy-Safe`, and the audit
   verdict for it moves from `OK` to `Review`. `conda` and `conda-build` move off
   `Stalled`. Consumers that stored the old label must re-derive.
-- **Cost**: no extra request for PyPI (the project endpoint is already fetched and
-  cached); one sub-kilobyte request per cargo package. The cargo fetch is not
+- **Cost**: for a PyPI package whose repository was resolved, no extra request —
+  `enrichPyPISummary` has already fetched and cached the same project endpoint in
+  the same pass. For one with no resolved repository, which `enrichPyPISummary`
+  skips, this is the first fetch of that endpoint and a genuine additional
+  request. One sub-kilobyte request per cargo package. The cargo fetch is not
   restricted to unversioned PURLs, because `AnalyzeFromGitHubURL` synthesises a
-  version from the deps.dev stable release — gating on "unversioned only" would
-  drop the fact for that entry path alone.
+  version from the deps.dev stable release and reaches the same enrichment
+  through `FetchAnalysis` — gating on "unversioned only" would drop the fact for
+  that entry path alone.
+- **Concurrency**: lookups are deduplicated by ecosystem and lowercased package
+  name and run under a bounded worker pool, with dispatch stopping on context
+  cancellation.
 - **Known limitation**: a project whose newest non-yanked release has no files left
   reports `info.yanked = false` on PyPI. That is a different condition ("no
   installable file") and is not detected here. Deriving it would mean walking every
