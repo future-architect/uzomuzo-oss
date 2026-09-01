@@ -36,7 +36,7 @@ Team uses **Go 1.26.1**. The `go 1.25.0` line in `go.mod` is the module's minimu
 ## Key Concepts
 
 - **PURL Identity**: `OriginalPURL` (caller input) / `EffectivePURL` (resolved) / `CanonicalKey` (dedup key)
-- **Generated**: `internal/domain/licenses/spdx_generated.go` — never edit, use `go run . update-spdx`
+- **Generated**: `internal/domain/licenses/spdx_generated.go` — never edit, use `go run ./cmd/uzomuzo update-spdx`
 
 ## Rules & Docs
 

@@ -57,10 +57,14 @@ sync-instructions:
 		echo "  $$src → $$dest"; \
 	done
 	@out="AGENTS.md"; \
-	echo "<!-- Generated from .github/AGENTS.base.md — DO NOT EDIT DIRECTLY -->" > "$$out"; \
-	echo "" >> "$$out"; \
+	tmp=$$(mktemp ./AGENTS.md.tmp.XXXXXX); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	echo "<!-- Generated from .github/AGENTS.base.md — DO NOT EDIT DIRECTLY -->" > "$$tmp"; \
+	echo "" >> "$$tmp"; \
+	markers=0; \
 	while IFS= read -r line || [ -n "$$line" ]; do \
 		if [ "$$line" = "<!-- INSTRUCTION-INDEX -->" ]; then \
+			markers=$$((markers + 1)); \
 			printf '%s\n' "| File | Topic |" "|------|-------|"; \
 			for src in .github/instructions/*.instructions.md; do \
 				[ -e "$$src" ] || continue; \
@@ -71,8 +75,9 @@ sync-instructions:
 		else \
 			printf '%s\n' "$$line"; \
 		fi; \
-	done < .github/AGENTS.base.md >> "$$out"; \
-	grep -q '^| File | Topic |$$' "$$out" || { echo "ERROR: the <!-- INSTRUCTION-INDEX --> marker was not substituted; $$out has no index table. Check the marker line in .github/AGENTS.base.md (exact match, no leading/trailing whitespace)." >&2; exit 1; }; \
+	done < .github/AGENTS.base.md >> "$$tmp"; \
+	[ "$$markers" = "1" ] || { echo "ERROR: expected exactly one <!-- INSTRUCTION-INDEX --> marker line in .github/AGENTS.base.md, substituted $$markers. The match is exact — a typo or leading/trailing whitespace on that line will not be recognised." >&2; exit 1; }; \
+	mv "$$tmp" "$$out"; \
 	echo "  .github/AGENTS.base.md → $$out"
 
 # update-doc-examples: rebuild binary then refresh all doc output blocks.
