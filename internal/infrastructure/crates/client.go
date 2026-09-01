@@ -119,6 +119,11 @@ func (c *Client) GetVersion(ctx context.Context, name, version string) (*Version
 	if err != nil || !found {
 		return nil, found, err
 	}
+	// A 200 whose body names no crate is not an answer about this version.
+	// Reporting it as found would assert "not yanked" from an empty body.
+	if strings.TrimSpace(raw.Version.Crate) == "" {
+		return nil, false, fmt.Errorf("crates version response for %q@%q carried no crate name", n, v)
+	}
 	info := &VersionInfo{
 		Name:    raw.Version.Crate,
 		Version: raw.Version.Num,
@@ -170,7 +175,9 @@ func (c *Client) GetCrate(ctx context.Context, name string) (*CrateInfo, bool, e
 
 // getJSON issues a GET against apiURL and decodes the body into out.
 // Returns (found, err): 404 -> (false, nil); other non-200 -> (false, error).
-// Callers must treat an error as "unknown", never as a negative answer.
+// Callers must treat an error as "unknown", never as a negative answer, and
+// remain responsible for validating the decoded value: a 200 carrying a body of
+// the wrong shape decodes into a zero value without error.
 func (c *Client) getJSON(ctx context.Context, apiURL, what string, out any) (bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {

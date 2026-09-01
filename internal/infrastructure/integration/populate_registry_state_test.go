@@ -80,27 +80,27 @@ func TestEnrichRegistryState(t *testing.T) {
 		{
 			name: "pypi every release yanked", purl: "pkg:pypi/python-apt", ecosystem: "pypi",
 			pypiBody:  allYankedPyPI,
-			wantState: true, wantYanked: true, wantReason: "Unmaintained", wantReg: "PyPI",
+			wantState: true, wantYanked: true, wantReason: "Unmaintained", wantReg: domain.RegistryPyPI,
 		},
 		{
 			name: "pypi with a non-yanked release still records the fact", purl: "pkg:pypi/requests", ecosystem: "pypi",
 			pypiBody:  partialPyPI,
-			wantState: true, wantYanked: false, wantReg: "PyPI",
+			wantState: true, wantYanked: false, wantReg: domain.RegistryPyPI,
 		},
 		{
 			name: "cargo unversioned every release yanked", purl: "pkg:cargo/normal", ecosystem: "cargo",
 			cratesBody: allYankedCrate,
-			wantState:  true, wantYanked: true, wantReg: "crates.io",
+			wantState:  true, wantYanked: true, wantReg: domain.RegistryCrates,
 		},
 		{
 			name: "cargo versioned is fetched too", purl: "pkg:cargo/normal@0.0.0", ecosystem: "cargo",
 			cratesBody: allYankedCrate,
-			wantState:  true, wantYanked: true, wantReg: "crates.io",
+			wantState:  true, wantYanked: true, wantReg: domain.RegistryCrates,
 		},
 		{
 			name: "cargo healthy", purl: "pkg:cargo/serde@1.0.197", ecosystem: "cargo",
 			cratesBody: healthyCrate,
-			wantState:  true, wantYanked: false, wantReg: "crates.io",
+			wantState:  true, wantYanked: false, wantReg: domain.RegistryCrates,
 		},
 		{
 			name: "package not found leaves the state unfetched", purl: "pkg:pypi/ghost", ecosystem: "pypi",
@@ -239,6 +239,16 @@ func TestSanitizeRegistryReason(t *testing.T) {
 			want: "safe[2J[31mDANGER[0m",
 		},
 		{name: "carriage return cannot overwrite the line", raw: "real reason\rspoofed", want: "real reason spoofed"},
+		{
+			name: "bidirectional override cannot reorder the line",
+			raw:  "safe\u202edangerous",
+			want: "safedangerous",
+		},
+		{
+			name: "zero-width characters are dropped",
+			raw:  "py\u200bthon-apt",
+			want: "python-apt",
+		},
 		{name: "empty stays empty", raw: "   ", want: ""},
 	}
 	for _, tt := range tests {

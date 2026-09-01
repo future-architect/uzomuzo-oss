@@ -73,7 +73,7 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			name: "every release yanked with a reason",
 			analysis: &Analysis{
 				RepoState:     activeRepo(),
-				RegistryState: withdrawn("PyPI", "Unmaintained"),
+				RegistryState: withdrawn(RegistryPyPI, "Unmaintained"),
 			},
 			eol:        EOLStatus{State: EOLNotEOL},
 			wantLabel:  LabelReviewNeeded,
@@ -85,7 +85,7 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			name: "every release yanked without a reason",
 			analysis: &Analysis{
 				RepoState:     activeRepo(),
-				RegistryState: withdrawn("crates.io", ""),
+				RegistryState: withdrawn(RegistryCrates, ""),
 			},
 			eol:        EOLStatus{State: EOLNotEOL},
 			wantLabel:  LabelReviewNeeded,
@@ -97,7 +97,7 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			name: "an explicit primary-source EOL outranks the withdrawal fact",
 			analysis: &Analysis{
 				RepoState:     activeRepo(),
-				RegistryState: withdrawn("PyPI", "Unmaintained"),
+				RegistryState: withdrawn(RegistryPyPI, "Unmaintained"),
 			},
 			eol: EOLStatus{State: EOLEndOfLife, Evidences: []EOLEvidence{
 				{Source: "PyPI", Summary: "Classifier: Development Status :: 7 - Inactive", Confidence: 1.0},
@@ -110,7 +110,7 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			name: "archived repository still yields Review Needed, not Stalled",
 			analysis: &Analysis{
 				RepoState:     &RepoState{DaysSinceLastCommit: 5, LatestHumanCommit: &recent, CommitStats: &CommitStats{}, IsArchived: true},
-				RegistryState: withdrawn("PyPI", "Unmaintained"),
+				RegistryState: withdrawn(RegistryPyPI, "Unmaintained"),
 			},
 			eol:        EOLStatus{State: EOLNotEOL},
 			wantLabel:  LabelReviewNeeded,
@@ -122,7 +122,7 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			name: "disabled repository still yields Review Needed",
 			analysis: &Analysis{
 				RepoState:     &RepoState{DaysSinceLastCommit: 5, LatestHumanCommit: &recent, CommitStats: &CommitStats{}, IsDisabled: true},
-				RegistryState: withdrawn("crates.io", ""),
+				RegistryState: withdrawn(RegistryCrates, ""),
 			},
 			eol:        EOLStatus{State: EOLNotEOL},
 			wantLabel:  LabelReviewNeeded,
@@ -134,7 +134,7 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			name: "an actively developed project whose distribution is withdrawn (conda)",
 			analysis: &Analysis{
 				RepoState:     activeRepo(),
-				RegistryState: withdrawn("PyPI", "Pip installing conda leads to broken UX"),
+				RegistryState: withdrawn(RegistryPyPI, "Pip installing conda leads to broken UX"),
 				ReleaseInfo:   &ReleaseInfo{StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: recent}},
 			},
 			scores: map[string]*ScoreEntity{
@@ -153,7 +153,7 @@ func TestLifecycleAssessor_AllReleasesYanked(t *testing.T) {
 			name: "dormant with unpatched advisories is Review Needed, not EOL-Effective",
 			analysis: &Analysis{
 				RepoState:     &RepoState{DaysSinceLastCommit: inactivity + 10, LatestHumanCommit: &dormant, CommitStats: &CommitStats{}},
-				RegistryState: withdrawn("PyPI", "Unmaintained"),
+				RegistryState: withdrawn(RegistryPyPI, "Unmaintained"),
 				ReleaseInfo: &ReleaseInfo{StableVersion: &VersionDetail{Version: "1.2.3", PublishedAt: now.AddDate(-2, 0, 0),
 					Advisories: []Advisory{{ID: "GHSA-XXX", Source: "GHSA", URL: "https://github.com/advisories/GHSA-XXX"}}}},
 			},
@@ -200,7 +200,7 @@ func TestLifecycleAssessor_AllReleasesYankedKeepsArchiveSignal(t *testing.T) {
 	recent := time.Now().AddDate(0, 0, -10)
 	a := &Analysis{
 		RepoState:     &RepoState{DaysSinceLastCommit: 5, LatestHumanCommit: &recent, CommitStats: &CommitStats{}, IsArchived: true},
-		RegistryState: withdrawn("PyPI", "Unmaintained"),
+		RegistryState: withdrawn(RegistryPyPI, "Unmaintained"),
 	}
 	res, err := NewLifecycleAssessorService().Assess(context.Background(), AssessmentInput{Analysis: a, EOL: EOLStatus{State: EOLNotEOL}})
 	if err != nil {

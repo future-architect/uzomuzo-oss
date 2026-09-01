@@ -21,6 +21,19 @@ const maxRegistryStateWorkers = 16
 // failed; err is non-nil only for a failed lookup.
 type registryFetch func(ctx context.Context, name string) (state *domain.RegistryState, found bool, err error)
 
+// registryJobKey identifies one registry lookup. The name is lowercased so
+// case-variant PURLs for the same package share a single lookup.
+type registryJobKey struct {
+	ecosystem string
+	name      string
+}
+
+// registryJob is one lookup and every analysis waiting on its result.
+type registryJob struct {
+	fetch   registryFetch
+	targets []*domain.Analysis
+}
+
 // enrichRegistryState populates Analysis.RegistryState for pypi and cargo
 // analyses with the registry's package-level withdrawal fact ("every published
 // release is yanked"). No-op when the corresponding client is unwired.
@@ -44,8 +57,7 @@ func (s *IntegrationService) enrichRegistryState(ctx context.Context, analyses m
 	}
 	// Deduplicate by lowercased package name: one lookup serves every analysis
 	// that shares it, including case-variant PURLs.
-	jobs := map[string][]*domain.Analysis{}
-	fetches := map[string]registryFetch{}
+	jobs := map[registryJobKey]*registryJob{}
 	parser := purl.NewParser()
 	for _, a := range analyses {
 		if a == nil || a.Package == nil {
@@ -79,11 +91,13 @@ func (s *IntegrationService) enrichRegistryState(ctx context.Context, analyses m
 		if fetch == nil {
 			continue
 		}
-		key := parsed.Ecosystem() + ":" + strings.ToLower(name)
-		if _, seen := jobs[key]; !seen {
-			fetches[key] = fetch
+		key := registryJobKey{ecosystem: parsed.Ecosystem(), name: strings.ToLower(name)}
+		job, seen := jobs[key]
+		if !seen {
+			job = &registryJob{fetch: fetch}
+			jobs[key] = job
 		}
-		jobs[key] = append(jobs[key], a)
+		job.targets = append(job.targets, a)
 	}
 	if len(jobs) == 0 {
 		return
@@ -91,7 +105,7 @@ func (s *IntegrationService) enrichRegistryState(ctx context.Context, analyses m
 
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, maxRegistryStateWorkers)
-	for key, targets := range jobs {
+	for key, job := range jobs {
 		// Acquire before launching so a cancelled context stops dispatch instead
 		// of parking a goroutine per remaining package.
 		select {
@@ -100,8 +114,6 @@ func (s *IntegrationService) enrichRegistryState(ctx context.Context, analyses m
 			wg.Wait()
 			return
 		}
-		name := strings.SplitN(key, ":", 2)[1]
-		fetch := fetches[key]
 		wg.Add(1)
 		go func(name string, fetch registryFetch, targets []*domain.Analysis) {
 			defer wg.Done()
@@ -118,7 +130,7 @@ func (s *IntegrationService) enrichRegistryState(ctx context.Context, analyses m
 				cp := *state
 				a.RegistryState = &cp
 			}
-		}(name, fetch, targets)
+		}(key.name, job.fetch, job.targets)
 	}
 	wg.Wait()
 }
@@ -152,12 +164,19 @@ func (s *IntegrationService) fetchCratesRegistryState(ctx context.Context, name 
 }
 
 // sanitizeRegistryReason makes a package maintainer's free-text yank reason safe
-// to print: control characters (which include ANSI escape introducers) are
-// dropped so the reason cannot repaint or spoof the terminal, and the remainder
-// is collapsed to a single capped line.
+// to print, then collapses it to a single capped line.
+//
+// Both control characters (Cc, which carry the ANSI escape introducer and the
+// carriage return) and format characters (Cf, which carry the bidirectional
+// overrides and zero-width characters) are dropped: the CLI prints the reason
+// verbatim, and either class can repaint or visually reorder the surrounding
+// output. Whitespace is exempt so ordinary line breaks survive to be collapsed.
 func sanitizeRegistryReason(raw string) string {
 	stripped := strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) && !unicode.IsSpace(r) {
+		if unicode.IsSpace(r) {
+			return r
+		}
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
 			return -1
 		}
 		return r
