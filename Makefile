@@ -45,9 +45,12 @@ bench-save:
 clean:
 	rm -f uzomuzo uzomuzo-diet
 
-# sync-instructions: .github/instructions/ → .claude/rules/ generated copy
+# sync-instructions: .github/ → .claude/rules/ and AGENTS.md generated copies
 sync-instructions:
-	@for src in .github/instructions/*.instructions.md; do \
+	@set -e; \
+	ls .github/instructions/*.instructions.md >/dev/null 2>&1 || { echo "ERROR: no .github/instructions/*.instructions.md found — refusing to generate an empty rule set" >&2; exit 1; }
+	@set -e; \
+	for src in .github/instructions/*.instructions.md; do \
 		base=$$(basename "$$src" .instructions.md); \
 		dest=".claude/rules/$$base.md"; \
 		if [ "$$base" = "agent-orchestration" ]; then dest=".claude/rules/agents.md"; fi; \
@@ -56,6 +59,31 @@ sync-instructions:
 		cat "$$src" >> "$$dest"; \
 		echo "  $$src → $$dest"; \
 	done
+	@set -e; \
+	out="AGENTS.md"; \
+	tmp=$$(mktemp ./AGENTS.md.tmp.XXXXXX); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	echo "<!-- Generated from .github/AGENTS.base.md — DO NOT EDIT DIRECTLY -->" > "$$tmp"; \
+	echo "" >> "$$tmp"; \
+	markers=0; \
+	while IFS= read -r line || [ -n "$$line" ]; do \
+		if [ "$$line" = "<!-- INSTRUCTION-INDEX -->" ]; then \
+			markers=$$((markers + 1)); \
+			printf '%s\n' "| File | Topic |" "|------|-------|"; \
+			for src in .github/instructions/*.instructions.md; do \
+				[ -e "$$src" ] || continue; \
+				title=$$(grep -m1 '^# ' "$$src" | sed 's/^# //; s/|/\\|/g'); \
+				[ -n "$$title" ] || { echo "ERROR: $$src has no '# ' heading — cannot build the instruction index" >&2; exit 1; }; \
+				printf '| `%s` | %s |\n' "$$src" "$$title"; \
+			done; \
+		else \
+			printf '%s\n' "$$line"; \
+		fi; \
+	done < .github/AGENTS.base.md >> "$$tmp"; \
+	[ "$$markers" = "1" ] || { echo "ERROR: expected exactly one <!-- INSTRUCTION-INDEX --> marker line in .github/AGENTS.base.md, substituted $$markers. The match is exact — a typo or leading/trailing whitespace on that line will not be recognised." >&2; exit 1; }; \
+	chmod 0644 "$$tmp"; \
+	mv "$$tmp" "$$out"; \
+	echo "  .github/AGENTS.base.md → $$out"
 
 # update-doc-examples: rebuild binary then refresh all doc output blocks.
 # Two-step build: "go build" produces the binary whose output we capture,

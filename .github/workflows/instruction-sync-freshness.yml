@@ -1,0 +1,84 @@
+name: Instruction Sync Freshness
+
+# Fail a PR whose committed generated files do not match what `make
+# sync-instructions` produces from `.github/`.
+#
+# Why this exists: every other trigger that keeps `.claude/rules/*.md` and the
+# root `AGENTS.md` in sync is client-side and opt-in — a Claude Code PostToolUse
+# hook, and `.githooks/pre-commit`, which only fires for contributors who ran
+# `git config core.hooksPath .githooks`. Codex CLI has no local hook at all.
+# This job is the only server-side enforcement of the invariant.
+#
+# Scope: only the inputs and outputs of the generator, so unrelated PRs skip it.
+
+on:
+  pull_request:
+    paths:
+      - '.github/instructions/**'
+      - '.github/AGENTS.base.md'
+      - '.claude/rules/**'
+      - 'AGENTS.md'
+      - 'Makefile'
+      - '.github/workflows/instruction-sync-freshness.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/instructions/**'
+      - '.github/AGENTS.base.md'
+      - '.claude/rules/**'
+      - 'AGENTS.md'
+      - 'Makefile'
+      - '.github/workflows/instruction-sync-freshness.yml'
+
+permissions: {}
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # No Go toolchain needed: the sync-instructions recipe is pure shell.
+      - name: Regenerate
+        run: make sync-instructions
+
+      # Detection only, never deletion: `make sync-instructions` creates and
+      # overwrites but never removes, so a rule file whose instruction source
+      # was deleted or renamed survives regeneration and leaves `git status`
+      # clean. Pruning automatically would risk deleting real content, so CI
+      # reports the orphan and a human removes it.
+      - name: Fail if a generated rule file has no source
+        run: |
+          orphans=""
+          for dest in .claude/rules/*.md; do
+            base=$(basename "$dest" .md)
+            if [ "$base" = "instruction-sync" ]; then
+              continue
+            fi
+            if [ "$base" = "agents" ]; then
+              base=agent-orchestration
+            fi
+            if [ ! -e ".github/instructions/$base.instructions.md" ]; then
+              orphans="$orphans $dest"
+            fi
+          done
+          if [ -n "$orphans" ]; then
+            echo "::error::Generated rule files with no instruction source:$orphans — delete them, or restore the source." >&2
+            exit 1
+          fi
+
+      # `git status --porcelain` rather than `git diff --exit-code`: the latter
+      # cannot see an untracked file, so adding an instruction file and
+      # forgetting to commit its generated rule would pass the gate.
+      - name: Fail if the committed output is stale
+        run: |
+          drift=$(git status --porcelain --untracked-files=all -- AGENTS.md .claude/rules/)
+          if [ -n "$drift" ]; then
+            echo "$drift"
+            echo "::error::Generated files are stale or uncommitted. Run 'make sync-instructions' and commit the result." >&2
+            exit 1
+          fi

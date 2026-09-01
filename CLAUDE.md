@@ -21,7 +21,7 @@ Copy `config.template.env` to `.env` (auto-loaded via godotenv). Key vars: `GITH
 
 ## Go Version Policy
 
-Team uses **Go 1.26.1**. `go.mod` `go 1.25.0` is the dependency minimum — do not downgrade.
+Team uses **Go 1.26.1**. The `go 1.25.0` line in `go.mod` is the module's minimum supported Go version — do not downgrade.
 
 ## Architecture (DDD)
 
@@ -36,10 +36,11 @@ Team uses **Go 1.26.1**. `go.mod` `go 1.25.0` is the dependency minimum — do n
 ## Key Concepts
 
 - **PURL Identity**: `OriginalPURL` (caller input) / `EffectivePURL` (resolved) / `CanonicalKey` (dedup key)
-- **Generated**: `internal/domain/licenses/spdx_generated.go` — never edit, use `go run . update-spdx`
+- **Generated**: `internal/domain/licenses/spdx_generated.go` — never edit, use `go run ./cmd/uzomuzo update-spdx`
 
 ## Rules & Docs
 
 - Coding: `.claude/rules/coding-standards.md`, `.claude/rules/copilot-learned-coding.md`, `.claude/rules/project-conventions.md`
 - Language: English only (source + docs). See `.claude/rules/language-policy.md`
+- Other agents: root `AGENTS.md` (generated from `.github/AGENTS.base.md`) is the Codex CLI entry point — see `.claude/rules/instruction-sync.md`
 - Docs: `docs/data-flow.md`, `docs/development.md`, `docs/library-usage.md`, `docs/purl-identity-model.md`, `docs/license-resolution.md`
