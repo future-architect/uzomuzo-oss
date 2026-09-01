@@ -444,7 +444,7 @@ func (c *DepsDevClient) buildFinalResults(purls []string, packageInfoMap map[str
 		packageResp := packageInfoMap[purl]
 		basicResult := c.buildBasicResult(purl, packageResp)
 		if releaseInfo, exists := releaseInfoMap[purl]; exists {
-			if releaseInfo.StableVersion.VersionKey.Version != "" || releaseInfo.PreReleaseVersion.VersionKey.Version != "" {
+			if releaseInfo.HasAnyVersion() {
 				basicResult.ReleaseInfo = releaseInfo
 			}
 		}
@@ -506,7 +506,7 @@ func (c *DepsDevClient) buildCompleteResult(purl string, packageResp *PackageRes
 	}
 
 	// Add release information if available
-	if releaseInfo.StableVersion.VersionKey.Version != "" || releaseInfo.PreReleaseVersion.VersionKey.Version != "" {
+	if releaseInfo.HasAnyVersion() {
 		result.ReleaseInfo = releaseInfo
 	}
 
