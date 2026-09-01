@@ -1,4 +1,4 @@
-<!-- Generated from .github/instructions/language-policy.instructions.md — DO NOT EDIT DIRECTLY -->
+<!-- Generated from .github/instructions/base/core/language-policy.instructions.md — DO NOT EDIT DIRECTLY -->
 
 # Language Policy
 

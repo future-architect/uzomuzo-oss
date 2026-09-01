@@ -1,4 +1,4 @@
-<!-- Generated from .github/instructions/ddd-architecture.instructions.md — DO NOT EDIT DIRECTLY -->
+<!-- Generated from .github/instructions/base/arch-ddd/ddd-architecture.instructions.md — DO NOT EDIT DIRECTLY -->
 
 # DDD Layered Architecture — Strict Enforcement
 

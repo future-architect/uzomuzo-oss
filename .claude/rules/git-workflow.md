@@ -1,4 +1,4 @@
-<!-- Generated from .github/instructions/git-workflow.instructions.md — DO NOT EDIT DIRECTLY -->
+<!-- Generated from .github/instructions/base/core/git-workflow.instructions.md — DO NOT EDIT DIRECTLY -->
 
 # Git Workflow
 

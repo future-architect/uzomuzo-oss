@@ -44,6 +44,24 @@ test code and fixtures, and all documentation (`README.md`, `docs/*.md`).
 Japanese text must not appear in source comments or identifiers. Reply to a
 chat message in the language the human used.
 
+## This Repository Is Public
+
+Everything committed here is published immediately, including to people outside
+this organization. Two consequences bind every change you make:
+
+- **Do not name a non-public sibling repository**, describe its internal
+  conventions or architecture, or quote its documents — in code, comments, docs,
+  commit messages, or pull request text. Refer to such repositories generically
+  ("a consuming repository", "a sibling repository").
+- Shared rule files under `.github/instructions/base/` are consumed by other
+  repositories, so the same restriction applies with more force there. See
+  `.github/instructions/base/README.md`.
+
+Existing documents are not retro-edited to satisfy this. `docs/adr/` is
+append-only decision history, and a handful of older files name sibling
+repositories; leaving them is deliberate, not permission. The rule binds what
+you write now.
+
 ## Rules — Read Before You Write Code
 
 `.github/instructions/` is the single source of truth. Read the file that
@@ -53,14 +71,14 @@ summary would drift from the source.
 | File | Topic |
 |------|-------|
 | `.github/instructions/agent-orchestration.instructions.md` | Agent Orchestration |
-| `.github/instructions/coding-standards.instructions.md` | Coding Standards |
+| `.github/instructions/base/arch-ddd/ddd-architecture.instructions.md` | DDD Layered Architecture — Strict Enforcement |
+| `.github/instructions/base/core/coding-standards.instructions.md` | Coding Standards |
+| `.github/instructions/base/core/error-handling.instructions.md` | Error Handling |
+| `.github/instructions/base/core/git-workflow.instructions.md` | Git Workflow |
+| `.github/instructions/base/core/language-policy.instructions.md` | Language Policy |
+| `.github/instructions/base/core/security.instructions.md` | Security Guidelines |
 | `.github/instructions/copilot-learned-coding.instructions.md` | Coding Standards — Learned from Copilot Reviews |
-| `.github/instructions/ddd-architecture.instructions.md` | DDD Layered Architecture — Strict Enforcement |
-| `.github/instructions/error-handling.instructions.md` | Error Handling |
-| `.github/instructions/git-workflow.instructions.md` | Git Workflow |
-| `.github/instructions/language-policy.instructions.md` | Language Policy |
 | `.github/instructions/project-conventions.instructions.md` | Project Conventions |
-| `.github/instructions/security.instructions.md` | Security Guidelines |
 | `.github/instructions/test-design.instructions.md` | Test Design — pre-PR lens |
 | `.github/instructions/testing-performance.instructions.md` | Testing & Performance |
 

@@ -42,6 +42,24 @@ test code and fixtures, and all documentation (`README.md`, `docs/*.md`).
 Japanese text must not appear in source comments or identifiers. Reply to a
 chat message in the language the human used.
 
+## This Repository Is Public
+
+Everything committed here is published immediately, including to people outside
+this organization. Two consequences bind every change you make:
+
+- **Do not name a non-public sibling repository**, describe its internal
+  conventions or architecture, or quote its documents — in code, comments, docs,
+  commit messages, or pull request text. Refer to such repositories generically
+  ("a consuming repository", "a sibling repository").
+- Shared rule files under `.github/instructions/base/` are consumed by other
+  repositories, so the same restriction applies with more force there. See
+  `.github/instructions/base/README.md`.
+
+Existing documents are not retro-edited to satisfy this. `docs/adr/` is
+append-only decision history, and a handful of older files name sibling
+repositories; leaving them is deliberate, not permission. The rule binds what
+you write now.
+
 ## Rules — Read Before You Write Code
 
 `.github/instructions/` is the single source of truth. Read the file that

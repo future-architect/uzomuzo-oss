@@ -6,14 +6,47 @@
 
 | File type | `.github/` (canonical) | `.claude/` (derived) | Sync method |
 |-----------|------------------------|----------------------|-------------|
-| **Rules** | `.github/instructions/*.instructions.md` | `.claude/rules/*.md` | `make sync-instructions` (generated copy) |
+| **Rules (repo-local)** | `.github/instructions/*.instructions.md` | `.claude/rules/*.md` | `make sync-instructions` (generated copy) |
+| **Rules (shared base)** | `.github/instructions/base/<profile>/*.instructions.md` | `.claude/rules/*.md` | `make sync-instructions` (generated copy) |
 | **Agents** | `.github/agents/*.agent.md` | `.claude/agents/*.md` | Thin shim with delegation (hand-maintained) |
 | **Skills/Prompts** | `.github/prompts/*.prompt.md` | `.claude/skills/*.md` | Thin shim with delegation (hand-maintained) |
 | **Codex entry point** | `.github/AGENTS.base.md` | `AGENTS.md` (repo root) | `make sync-instructions` (generated copy) |
 
+## Two source trees: repo-local and shared base
+
+`.github/instructions/` now holds two kinds of canonical file, and the
+difference matters when you edit one:
+
+| Location | Whose rule is it | Editing it affects |
+|---|---|---|
+| `.github/instructions/*.instructions.md` | uzomuzo-oss only | this repository |
+| `.github/instructions/base/<profile>/*.instructions.md` | the organization | **sibling repositories too** — they sync from here |
+
+Both trees feed the same generator, so `.claude/rules/<name>.md` is produced from
+whichever tree holds `<name>`; the generated file's first line names the actual
+source path. `Makefile`'s `INSTRUCTION_SOURCES` is the single list both the rules
+loop and the `AGENTS.md` index read, `$(sort)`ed so the index order does not
+depend on directory-listing order.
+
+Profiles are directories under `base/`. A consuming repository opts in to a
+profile, so files in a profile it did not select never enter its candidate set —
+there is no per-file opt-out to forget. `arch-ddd` is separate from `core`
+because **consumers do not all share one architecture**: a missed opt-out would
+otherwise hand a repository a generated document contradicting the pattern it
+actually uses.
+
+See `.github/instructions/base/README.md` for the admission bar (a file enters
+`base/` only when two or more repositories would inherit it verbatim) and for
+what must stay out. In particular: **this repository is public, so `base/` must
+not name a non-public repository or describe its internal conventions.** Refer
+to consumers generically and keep the specifics on the consuming side. Existing
+documents are not retro-edited to satisfy this — `docs/adr/` is append-only
+history, and older files that name siblings are left alone deliberately, which
+is not permission to write new ones.
+
 ## Rules: Generated via Script
 
-`.claude/rules/` files (except this file) are **auto-generated** from `.github/instructions/`. Do NOT edit them directly.
+`.claude/rules/` files (except this file) are **auto-generated** from both instruction trees above. Do NOT edit them directly.
 
 ```bash
 make sync-instructions   # regenerate .claude/rules/ and AGENTS.md from .github/

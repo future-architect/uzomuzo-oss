@@ -1,4 +1,4 @@
-<!-- Generated from .github/instructions/error-handling.instructions.md — DO NOT EDIT DIRECTLY -->
+<!-- Generated from .github/instructions/base/core/error-handling.instructions.md — DO NOT EDIT DIRECTLY -->
 
 # Error Handling
 

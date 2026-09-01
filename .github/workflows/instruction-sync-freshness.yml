@@ -62,7 +62,10 @@ jobs:
             if [ "$base" = "agents" ]; then
               base=agent-orchestration
             fi
-            if [ ! -e ".github/instructions/$base.instructions.md" ]; then
+            # Sources live in two trees now — repo-local `.github/instructions/`
+            # and the shared `base/<profile>/` — so search rather than assume a
+            # fixed path.
+            if [ -z "$(find .github/instructions -type f -name "$base.instructions.md" -print -quit)" ]; then
               orphans="$orphans $dest"
             fi
           done

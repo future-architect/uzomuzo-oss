@@ -45,12 +45,31 @@ bench-save:
 clean:
 	rm -f uzomuzo uzomuzo-diet
 
+# AGENTS_MD_MAX_BYTES: budget for the generated AGENTS.md.
+# Codex reads AGENTS.md files from the repository root downwards, concatenates
+# them, and stops adding content once the combined size reaches
+# `project_doc_max_bytes` (32 KiB by default) — silently, with no error. Nothing
+# else in CI can see that happen: the file would still match its source, so the
+# freshness gate stays green while agents receive a truncated document.
+# Half the cap leaves room for the user's own ~/.codex/AGENTS.md and for any
+# nested AGENTS.md added later. Currently ~6 KB.
+AGENTS_MD_MAX_BYTES := 16384
+
+# INSTRUCTION_SOURCES: the canonical rule files, from two places.
+#   .github/instructions/*.instructions.md           — this repository's own rules
+#   .github/instructions/base/<profile>/*.md         — the shared base, one directory
+#                                                      per profile, consumed by sibling repos
+# `$(sort)` de-duplicates and imposes a deterministic order independent of
+# directory-listing order, which the generated index depends on.
+INSTRUCTION_SOURCES := $(sort $(wildcard .github/instructions/*.instructions.md) \
+                              $(wildcard .github/instructions/base/*/*.instructions.md))
+
 # sync-instructions: .github/ → .claude/rules/ and AGENTS.md generated copies
 sync-instructions:
 	@set -e; \
-	ls .github/instructions/*.instructions.md >/dev/null 2>&1 || { echo "ERROR: no .github/instructions/*.instructions.md found — refusing to generate an empty rule set" >&2; exit 1; }
+	[ -n "$(INSTRUCTION_SOURCES)" ] || { echo "ERROR: no instruction sources found under .github/instructions/ — refusing to generate an empty rule set" >&2; exit 1; }
 	@set -e; \
-	for src in .github/instructions/*.instructions.md; do \
+	for src in $(INSTRUCTION_SOURCES); do \
 		base=$$(basename "$$src" .instructions.md); \
 		dest=".claude/rules/$$base.md"; \
 		if [ "$$base" = "agent-orchestration" ]; then dest=".claude/rules/agents.md"; fi; \
@@ -70,7 +89,7 @@ sync-instructions:
 		if [ "$$line" = "<!-- INSTRUCTION-INDEX -->" ]; then \
 			markers=$$((markers + 1)); \
 			printf '%s\n' "| File | Topic |" "|------|-------|"; \
-			for src in .github/instructions/*.instructions.md; do \
+			for src in $(INSTRUCTION_SOURCES); do \
 				[ -e "$$src" ] || continue; \
 				title=$$(grep -m1 '^# ' "$$src" | sed 's/^# //; s/|/\\|/g'); \
 				[ -n "$$title" ] || { echo "ERROR: $$src has no '# ' heading — cannot build the instruction index" >&2; exit 1; }; \
@@ -81,6 +100,8 @@ sync-instructions:
 		fi; \
 	done < .github/AGENTS.base.md >> "$$tmp"; \
 	[ "$$markers" = "1" ] || { echo "ERROR: expected exactly one <!-- INSTRUCTION-INDEX --> marker line in .github/AGENTS.base.md, substituted $$markers. The match is exact — a typo or leading/trailing whitespace on that line will not be recognised." >&2; exit 1; }; \
+	size=$$(wc -c < "$$tmp"); \
+	[ "$$size" -le "$(AGENTS_MD_MAX_BYTES)" ] || { echo "ERROR: $$out would be $$size bytes, over the $(AGENTS_MD_MAX_BYTES)-byte budget. Codex concatenates AGENTS.md files and silently DISCARDS everything past project_doc_max_bytes (32 KiB by default) — an oversized file loses its tail with no error. Shorten .github/AGENTS.base.md; the rule text belongs in .github/instructions/, which the index points at rather than inlining." >&2; exit 1; }; \
 	chmod 0644 "$$tmp"; \
 	mv "$$tmp" "$$out"; \
 	echo "  .github/AGENTS.base.md → $$out"
