@@ -2,8 +2,10 @@
 # Pre-commit hook: auto-sync .github/ → .claude/rules/*.md and AGENTS.md
 # Install: git config core.hooksPath .githooks
 
+set -e
+
 # Check whether any generator input under .github/ is staged
-if git diff --cached --name-only | grep -qE '^\.github/(instructions/|AGENTS\.base\.md)'; then
+if git diff --cached --name-only | grep -qE '^\.github/(instructions/|AGENTS\.base\.md$)'; then
   echo "Syncing .claude/rules/ and AGENTS.md from .github/..."
   # Abort the commit if generation fails — otherwise the `git add` below would
   # stage whatever stale output is still on disk.
@@ -14,7 +16,9 @@ if git diff --cached --name-only | grep -qE '^\.github/(instructions/|AGENTS\.ba
   # entirely — touching it would sweep the author's unstaged edits into an
   # instructions-only commit.
   for f in .claude/rules/*.md; do
-    [ "$(basename "$f")" = "instruction-sync.md" ] && continue
+    if [ "$(basename "$f")" = "instruction-sync.md" ]; then
+      continue
+    fi
     git add "$f"
   done
   git add AGENTS.md

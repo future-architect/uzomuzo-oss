@@ -2,8 +2,10 @@
 
 Entry point for coding agents that read `AGENTS.md` (OpenAI Codex CLI and
 compatible tools). Claude Code reads `CLAUDE.md` and `.claude/rules/`; GitHub
-Copilot reads `.github/copilot-instructions.md`. All three are derived from the
-same source of truth: **`.github/`**.
+Copilot reads `.github/copilot-instructions.md`. The canonical rule text for all
+of them lives in **`.github/`** — `.claude/rules/*.md` and this file's rendered
+output are generated from it, while `CLAUDE.md` and
+`.github/copilot-instructions.md` are hand-maintained entry points.
 
 The root `AGENTS.md` is generated from `.github/AGENTS.base.md` by
 `make sync-instructions`. Edit that template; never edit `AGENTS.md` directly.

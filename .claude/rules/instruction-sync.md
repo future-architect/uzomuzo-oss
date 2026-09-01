@@ -72,8 +72,9 @@ referenced by the index, never inlined.
 (`adr-check.sh`, `check-new-deps.sh`, `pre-push-review.sh`, `pr-body-review.sh`,
 `plan-mode-architect-check.sh`, `readme-walkthrough.sh`) are wired as
 `PreToolUse` hooks in `.claude/settings.json` and fire only inside Claude Code.
-Codex is told to leave `git commit` / `git push` / `gh pr create` to a Claude
-Code session so those checks actually run.
+Codex is told to leave `git push` and `gh pr create` to a Claude Code session
+so those checks actually run before anything leaves the machine; a local commit
+is allowed.
 
 ## Agents: Delegation Pattern
 

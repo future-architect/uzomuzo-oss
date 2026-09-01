@@ -47,7 +47,10 @@ clean:
 
 # sync-instructions: .github/ → .claude/rules/ and AGENTS.md generated copies
 sync-instructions:
-	@for src in .github/instructions/*.instructions.md; do \
+	@set -e; \
+	ls .github/instructions/*.instructions.md >/dev/null 2>&1 || { echo "ERROR: no .github/instructions/*.instructions.md found — refusing to generate an empty rule set" >&2; exit 1; }
+	@set -e; \
+	for src in .github/instructions/*.instructions.md; do \
 		base=$$(basename "$$src" .instructions.md); \
 		dest=".claude/rules/$$base.md"; \
 		if [ "$$base" = "agent-orchestration" ]; then dest=".claude/rules/agents.md"; fi; \
@@ -56,7 +59,8 @@ sync-instructions:
 		cat "$$src" >> "$$dest"; \
 		echo "  $$src → $$dest"; \
 	done
-	@out="AGENTS.md"; \
+	@set -e; \
+	out="AGENTS.md"; \
 	tmp=$$(mktemp ./AGENTS.md.tmp.XXXXXX); \
 	trap 'rm -f "$$tmp"' EXIT; \
 	echo "<!-- Generated from .github/AGENTS.base.md — DO NOT EDIT DIRECTLY -->" > "$$tmp"; \

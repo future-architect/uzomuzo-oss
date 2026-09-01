@@ -1,0 +1,54 @@
+name: Instruction Sync Freshness
+
+# Fail a PR whose committed generated files do not match what `make
+# sync-instructions` produces from `.github/`.
+#
+# Why this exists: every other trigger that keeps `.claude/rules/*.md` and the
+# root `AGENTS.md` in sync is client-side and opt-in — a Claude Code PostToolUse
+# hook, and `.githooks/pre-commit`, which only fires for contributors who ran
+# `git config core.hooksPath .githooks`. Codex CLI has no local hook at all.
+# This job is the only server-side enforcement of the invariant.
+#
+# Scope: only the inputs and outputs of the generator, so unrelated PRs skip it.
+
+on:
+  pull_request:
+    paths:
+      - '.github/instructions/**'
+      - '.github/AGENTS.base.md'
+      - '.claude/rules/**'
+      - 'AGENTS.md'
+      - 'Makefile'
+      - '.github/workflows/instruction-sync-freshness.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/instructions/**'
+      - '.github/AGENTS.base.md'
+      - '.claude/rules/**'
+      - 'AGENTS.md'
+      - 'Makefile'
+      - '.github/workflows/instruction-sync-freshness.yml'
+
+permissions: {}
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # No Go toolchain needed: the sync-instructions recipe is pure shell.
+      - name: Regenerate
+        run: make sync-instructions
+
+      - name: Fail if the committed output is stale
+        run: |
+          if ! git diff --exit-code -- AGENTS.md .claude/rules/; then
+            echo "::error::Generated files are stale. Run 'make sync-instructions' and commit the result." >&2
+            exit 1
+          fi
