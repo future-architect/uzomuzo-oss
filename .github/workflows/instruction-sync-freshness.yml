@@ -46,9 +46,14 @@ jobs:
       - name: Regenerate
         run: make sync-instructions
 
+      # `git status --porcelain` rather than `git diff --exit-code`: the latter
+      # cannot see an untracked file, so adding an instruction file and
+      # forgetting to commit its generated rule would pass the gate.
       - name: Fail if the committed output is stale
         run: |
-          if ! git diff --exit-code -- AGENTS.md .claude/rules/; then
-            echo "::error::Generated files are stale. Run 'make sync-instructions' and commit the result." >&2
+          drift=$(git status --porcelain --untracked-files=all -- AGENTS.md .claude/rules/)
+          if [ -n "$drift" ]; then
+            echo "$drift"
+            echo "::error::Generated files are stale or uncommitted. Run 'make sync-instructions' and commit the result." >&2
             exit 1
           fi

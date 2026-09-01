@@ -66,6 +66,17 @@ together** when any of those facts change. Keep the overlap to orientation
 only — the canonical rule text stays in `.github/instructions/` and is
 referenced by the index, never inlined.
 
+### Known limitation: orphaned rule files
+
+`make sync-instructions` creates and overwrites; it never deletes. If an
+instruction file is removed from `.github/instructions/`, its generated
+`.claude/rules/<name>.md` stays behind, and the CI freshness gate will not
+notice — regeneration simply leaves that file untouched. Delete the generated
+file by hand in the same commit. Automatic pruning is deliberately not
+implemented: everything under `.claude/rules/` except `instruction-sync.md` is
+generated, so a buggy prune would delete real content, and no instruction file
+has ever been removed in this repository.
+
 ### Codex does not run the Claude Code hooks
 
 `AGENTS.md` states this explicitly. The repository's guardrails

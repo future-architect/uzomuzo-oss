@@ -81,6 +81,7 @@ sync-instructions:
 		fi; \
 	done < .github/AGENTS.base.md >> "$$tmp"; \
 	[ "$$markers" = "1" ] || { echo "ERROR: expected exactly one <!-- INSTRUCTION-INDEX --> marker line in .github/AGENTS.base.md, substituted $$markers. The match is exact — a typo or leading/trailing whitespace on that line will not be recognised." >&2; exit 1; }; \
+	chmod 0644 "$$tmp"; \
 	mv "$$tmp" "$$out"; \
 	echo "  .github/AGENTS.base.md → $$out"
 

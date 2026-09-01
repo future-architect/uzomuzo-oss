@@ -2,7 +2,7 @@
 # Pre-commit hook: auto-sync .github/ → .claude/rules/*.md and AGENTS.md
 # Install: git config core.hooksPath .githooks
 
-set -e
+set -eo pipefail
 
 # Check whether any generator input under .github/ is staged
 if git diff --cached --name-only | grep -qE '^\.github/(instructions/|AGENTS\.base\.md$)'; then
