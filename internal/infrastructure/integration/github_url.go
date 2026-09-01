@@ -95,8 +95,10 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 //
 // The two PURL parameters are not interchangeable: analyzePURL is the coordinate
 // actually analyzed and may carry a version uzomuzo selected, while requestedPURL is
-// the unversioned base the caller's GitHub URL maps to. On success OriginalPURL is
-// set to requestedPURL. See ADR-0021.
+// the unversioned base the caller's GitHub URL maps to. OriginalPURL is set to
+// requestedPURL on the resolved-package path only; the two GitHub-only paths below
+// (deps.dev has no such package, or the resolved repo does not match) store
+// githubURL instead, because no package coordinate applies. See ADR-0021.
 //
 // See: https://github.com/future-architect/uzomuzo-oss/issues/99
 func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context, analyzePURL, requestedPURL, githubURL string) (*domain.Analysis, error) {

@@ -27,7 +27,10 @@ func TestEvaluator_Cargo_Yanked(t *testing.T) {
 	ev.SetMaxWorkers(1)
 	ev.SetCratesClient(cc)
 
-	analysis := &domain.Analysis{OriginalPURL: "pkg:cargo/openssl@0.10.45", Package: &domain.Package{PURL: "pkg:cargo/openssl@0.10.45", Ecosystem: "cargo"}}
+	analysis := &domain.Analysis{
+		OriginalPURL: "pkg:cargo/openssl@0.10.45",
+		Package:      &domain.Package{PURL: "pkg:cargo/openssl@0.10.45", Ecosystem: "cargo"},
+	}
 	out, err := ev.EvaluateBatch(context.Background(), map[string]*domain.Analysis{"k": analysis})
 	if err != nil {
 		t.Fatalf("EvaluateBatch failed: %v", err)
@@ -65,7 +68,10 @@ func TestEvaluator_Cargo_NotYanked(t *testing.T) {
 	ev.SetMaxWorkers(1)
 	ev.SetCratesClient(cc)
 
-	analysis := &domain.Analysis{OriginalPURL: "pkg:cargo/serde@1.0.197", Package: &domain.Package{PURL: "pkg:cargo/serde@1.0.197", Ecosystem: "cargo"}}
+	analysis := &domain.Analysis{
+		OriginalPURL: "pkg:cargo/serde@1.0.197",
+		Package:      &domain.Package{PURL: "pkg:cargo/serde@1.0.197", Ecosystem: "cargo"},
+	}
 	out, err := ev.EvaluateBatch(context.Background(), map[string]*domain.Analysis{"k": analysis})
 	if err != nil {
 		t.Fatalf("EvaluateBatch failed: %v", err)
@@ -90,7 +96,10 @@ func TestEvaluator_Cargo_NonCargoPURL_NoFetch(t *testing.T) {
 	ev.SetMaxWorkers(1)
 	ev.SetCratesClient(cc)
 
-	analysis := &domain.Analysis{OriginalPURL: "pkg:npm/foo@1.0.0", Package: &domain.Package{PURL: "pkg:npm/foo@1.0.0", Ecosystem: "npm"}}
+	analysis := &domain.Analysis{
+		OriginalPURL: "pkg:npm/foo@1.0.0",
+		Package:      &domain.Package{PURL: "pkg:npm/foo@1.0.0", Ecosystem: "npm"},
+	}
 	if _, err := ev.EvaluateBatch(context.Background(), map[string]*domain.Analysis{"k": analysis}); err != nil {
 		t.Fatalf("EvaluateBatch failed: %v", err)
 	}
