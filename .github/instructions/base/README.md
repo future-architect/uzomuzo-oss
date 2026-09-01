@@ -15,7 +15,7 @@ entry has to be remembered.
 
 | Profile | Contents |
 |---|---|
-| `core/` | Language policy, coding standards, error handling, git workflow, security |
+| `core/` | Coding standards, error handling, git workflow, project conventions, security, testing & performance |
 | `arch-ddd/` | DDD layering and its enforcement rules |
 
 **Architecture is a separate profile because consumers do not all share one
@@ -31,13 +31,22 @@ profile is an invitation to dump things into it.
 
 ## Admission bar
 
-A file belongs in `base/` only when **two or more repositories would inherit it
-verbatim**. Until then it stays local to the repository that needs it. The same
-bar applies to creating a profile.
+A file belongs in `base/` only when **two or more repositories inherit it
+verbatim today**. Until then it stays local to the repository that needs it. The
+same bar applies to creating a profile.
 
-A pull request that adds a file here must say how many repositories will consume
-it. "We might share this later" is not a reason — move it when the second
-consumer actually exists.
+**Decide membership from consumption, not from reading the text.** Whether a file
+"looks generic" is not the question — the question is whether another repository
+actually takes it byte for byte. The first cut of this directory was made by
+scanning files for repository-specific words, and it got two files wrong in each
+direction: two that another repository was already inheriting verbatim were left
+out, and one that every other consumer overrides was put in. Diff against the
+consuming repositories instead.
+
+A pull request that adds a file here must say how many repositories consume it
+today. "We might share this later" is not a reason — move it when the second
+consumer actually exists. By the same token, a file every consumer overrides
+belongs back in the repository that still wants it.
 
 ## What must stay out
 
