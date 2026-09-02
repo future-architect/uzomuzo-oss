@@ -1,7 +1,24 @@
 # 0023. The registry's own current release bounds stable-version selection
 
 Date: 2026-09-01
-Status: Accepted
+Status: Accepted — two cargo premises corrected, see [ADR-0024](0024-cargo-yank-from-depsdev.md)
+
+> **Corrections.** Two statements below about cargo were later found wrong. Both are
+> marked inline where they appear. **The decision this ADR records — bounding PyPI
+> stable selection by PyPI's own current release — is unaffected**, because it never
+> depended on either.
+>
+> 1. deps.dev does **not** lack yank data. For cargo it reports yanks as
+>    `isDeprecated=true` with `deprecatedReason="yanked"`, and that is what
+>    [ADR-0024](0024-cargo-yank-from-depsdev.md) acts on. [ADR-0021](0021-yank-is-version-specific.md)
+>    carried the same wrong premise and has its own amendment.
+> 2. crates.io's `max_stable_version` **does** exclude yanked releases. Confirmed in
+>    crates.io's source on both paths that build it — `Krate::top_versions` filters
+>    with `versions::yanked.eq(false)` and its doc comment says "where all top
+>    versions are not yanked", and the `/api/v1/crates/{name}` handler filters again
+>    before constructing the response. What was true is narrower than what was
+>    written: the exclusion is not stated in crates.io's *published* API
+>    documentation, only in its implementation.
 
 ## Context
 
@@ -17,6 +34,10 @@ payload is decoded in `fetchLatestRelease`
 fields — `versionKey.version`, `publishedAt`, `isDefault`, `isDeprecated`. deps.dev
 publishes no yank data at all, for any ecosystem. PyPI does: `info.yanked` per
 release, and an `info.version` that in practice excludes yanked releases.
+
+*(Correction 1: the claim in the previous sentence is false for cargo. The
+four-field decode struct named just above is exactly why it went unnoticed —
+deps.dev's fifth field, `deprecatedReason`, was never read.)*
 
 Observed 2026-08-31 on `pkg:pypi/pydantic-extra-types`:
 
@@ -113,6 +134,12 @@ what cargo will need, because crates.io exposes per-version `yanked` but its
 unbounded number of registry requests per package and needs a call budget and a
 negative-caching policy. PyPI hands us a usable bound in one request; paying for
 the general mechanism to solve the pypi case would be premature.
+
+*(Correction 2: `max_stable_version` does exclude yanked releases — the exclusion
+is in crates.io's implementation but not in its published API documentation. The
+conclusion to reject this alternative still stands, and cargo did not end up
+needing it: [ADR-0024](0024-cargo-yank-from-depsdev.md) uses the yank data deps.dev
+already returns, at zero additional requests.)*
 
 ## Not addressed here
 
