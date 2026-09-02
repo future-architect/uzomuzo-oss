@@ -86,6 +86,8 @@ func TestFetchLatestRelease_CargoAllReleasesYanked(t *testing.T) {
 }
 
 func TestFetchLatestRelease_CargoUnknownDeprecatedReasonStaysEligible(t *testing.T) {
+	quietWarnLogs(t)
+
 	srv := newDepsDevTestServer(t, "/v3alpha/systems/cargo/packages/example", unknownReasonVersionsJSON)
 	c := newDepsDevClient(srv)
 

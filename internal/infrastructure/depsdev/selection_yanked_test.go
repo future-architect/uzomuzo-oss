@@ -1,9 +1,21 @@
 package depsdev
 
 import (
+	"io"
+	"log/slog"
 	"testing"
 	"time"
 )
+
+// quietWarnLogs silences slog for a test that deliberately exercises a WARN
+// branch, so a passing -v run stays readable. Safe because these tests do not
+// call t.Parallel and so cannot race on the process-global default logger.
+func quietWarnLogs(t testing.TB) {
+	t.Helper()
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+}
 
 // cargoVersion builds a cargo deps.dev version entry.
 func cargoVersion(t testing.TB, version, publishedAt string, isDefault, isDeprecated bool, reason string) Version {
@@ -61,6 +73,8 @@ func TestPickStableDevAndMax_CargoAllStableYanked(t *testing.T) {
 // TestWithdrawnFromStable pins the reason-string match against local edits.
 // See ADR-0024 for what the literal is and how upstream drift surfaces.
 func TestWithdrawnFromStable(t *testing.T) {
+	quietWarnLogs(t)
+
 	tests := []struct {
 		name    string
 		version Version
