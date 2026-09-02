@@ -23,15 +23,13 @@ confidence 0.95 for PyPI, 1.0 for crates.io.
 
 Two facts make that resolution wrong rather than merely conservative:
 
-1. **deps.dev cannot see yanks.** `depsdev.Version`
-   (`internal/infrastructure/depsdev/api_types.go`) exposes no yank field at all;
-   the nearest thing it carries is `IsDeprecated`, which is a different claim.
-   PyPI follows PEP 592 and excludes yanked releases from
-   `info.version`; deps.dev does not, and `pickStableDevAndMax`
+1. **Stable selection ignores yank state.** `pickStableDevAndMax`
    (`internal/infrastructure/depsdev/selection.go`) takes `IsDefault=true`
-   unconditionally. So `StableVersion` can *be* the yanked release, and the rule
-   then re-queries the registry about precisely the version that was yanked — a
-   self-fulfilling loop.
+   unconditionally. PyPI follows PEP 592 and excludes yanked releases from
+   `info.version`; deps.dev's `isDefault` carries no such rule, so `StableVersion`
+   can *be* the yanked release, and the rule then re-queries the registry about
+   precisely the version that was yanked — a self-fulfilling loop. See the
+   amendment below for what deps.dev does and does not expose here.
 2. **The resulting verdict is not a lifecycle measurement.** It tracks whichever
    release the registry currently calls default, so it toggles as new releases
    ship. Verified downstream: `cargo/aws-smithy-query` and `aws-smithy-xml` were
@@ -143,6 +141,39 @@ version argument and indexes `versions[version].deprecated`; `IsDeprecated` sits
 selected stable/effective version, and revisiting that inference is a separate
 behavior decision with its own blast radius — not a consequence of this one. The
 asymmetry is recorded here so a future reader does not mistake it for drift.
+
+## Amendments
+
+### 2026-09-02 — corrected: deps.dev does expose cargo yanks
+
+As first written, fact 1 above claimed "deps.dev cannot see yanks — `depsdev.Version`
+exposes no yank field at all; the nearest thing it carries is `IsDeprecated`, which
+is a different claim." That is **false for cargo**, and the sentence has been
+replaced. The original wording is quoted here so the record is not erased.
+
+deps.dev publishes cargo yanks through the fields it already returns. Raw response
+for `systems/cargo/packages/promptforge-gateway-config`:
+
+```
+1.1.0  isDefault=true   isDeprecated=true   deprecatedReason="yanked"
+0.2.0  isDefault=false  isDeprecated=false  deprecatedReason=""
+```
+
+For cargo, `IsDeprecated` **is** the yank signal rather than a different claim. It
+went unnoticed because the decode struct in
+`internal/infrastructure/depsdev/release.go` does not read `deprecatedReason`.
+Measured against crates.io across 17 crates and 2819 versions — including `clap`
+(92 yanks), `num` (35), `futures` (23) and `chrono` (22) — the two sources
+disagreed on zero versions (investigation under #494).
+
+Whether deps.dev carries an equivalent signal for PyPI or any other ecosystem was
+not verified; this correction is deliberately scoped to cargo.
+
+**The decision in this ADR is unaffected.** The conclusion that `StableVersion` can
+be the yanked release still holds for cargo — `pickStableDevAndMax` reads
+`IsDefault` and never consults `IsDeprecated`. Only the reason changes: not that
+deps.dev lacks the data, but that we do not use the data it gives us. Acting on it
+is #494's subject, not this ADR's.
 
 ## Consequences
 
