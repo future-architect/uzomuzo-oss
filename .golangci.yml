@@ -4,6 +4,10 @@
 # These are deterministic correctness/quality checks that run cleanly on
 # the existing codebase.
 #
+# Formatting is enforced by the `formatters` section below rather than by
+# a linter — in golangci-lint v2, gofmt/goimports moved out of `linters`.
+# `golangci-lint fmt` rewrites; `golangci-lint run` reports.
+#
 # `gosec` (security smells) is NOT enabled in this initial setup. A full
 # scan reports 8 findings on existing code that warrant project-owner
 # triage before fixing or suppressing — see PR description for the list.
@@ -52,3 +56,19 @@ linters:
           - ineffassign
           - staticcheck
           - unused
+
+# Formatting. Both are already satisfied by the whole tree, so enabling them
+# changes no Go source — it only stops the next unformatted file from landing.
+#
+# goimports is not given `local-prefixes`. Grouping this module's own imports
+# into a third block would be a style change touching six files, and it would
+# put the linter at odds with the plain `goimports -w .` documented in
+# CLAUDE.md as the project's format command.
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+  exclusions:
+    paths:
+      - _generated\.go$
