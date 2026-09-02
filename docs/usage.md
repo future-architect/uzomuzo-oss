@@ -402,7 +402,13 @@ Exit with code 1 when any dependency matches the specified lifecycle labels:
 ./uzomuzo scan --sbom bom.json --fail-on eol-confirmed,eol-effective,stalled
 ```
 
-Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `legacy-safe`
+Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `legacy-safe`, `review-needed`
+
+`review-needed` covers the cases uzomuzo cannot decide on its own — including a
+package whose every published release is yanked (see
+[ADR-0022](adr/0022-all-releases-yanked-is-not-eol.md)). Add it to `--fail-on`
+when CI should stop for a human to look, rather than only for a confirmed
+end-of-life.
 
 Without `--fail-on`, exit code is always 0 regardless of scan results.
 
@@ -609,7 +615,8 @@ CSV output comprehensively covers security metrics:
 - **Basic info**: PURL, repository URL, package metadata
 - **Scorecard metrics**: All OpenSSF Scorecard check results
 - **Security assessment**: Vulnerability scores, maintenance status
-- **Lifecycle assessment**: Automatic classification (Active / Stalled / Legacy-Safe / EOL)
+- **Lifecycle assessment**: Automatic classification into one of the seven
+  lifecycle states in [Lifecycle Classification](../README.md#lifecycle-classification)
 - **Repository status**: Stars, forks, archive status, last commit
 
 ### CLI Display Order
