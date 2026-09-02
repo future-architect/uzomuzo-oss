@@ -83,7 +83,7 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 
 #### deps.dev — Releases (GET /v3alpha/systems/{ecosystem}/packages/{name})
 
-- Returns: Versions list (`versionKey.version`, `publishedAt`, `isDefault`, `isDeprecated`) — no yank data, see [ADR-0023](adr/0023-stable-version-source.md)
+- Returns: Versions list (`versionKey.version`, `publishedAt`, `isDefault`, `isDeprecated`, `deprecatedReason`) — no yank data except cargo, which reports yanks as `isDeprecated` with `deprecatedReason` `"yanked"`; see [ADR-0024](adr/0024-cargo-yank-from-depsdev.md) and [ADR-0023](adr/0023-stable-version-source.md)
 - Purpose: Identify latest stable/dev/requested version and freshness
 - Code: `DepsDevClient.fetchLatestRelease`, `DepsDevClient.fetchReleaseInfoBatch` (`internal/infrastructure/depsdev/release.go`)
 - Docs: <https://docs.deps.dev/api/v3alpha/>

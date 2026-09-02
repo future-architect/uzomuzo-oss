@@ -1,13 +1,23 @@
 package depsdev
 
 import (
+	"log/slog"
+	"strings"
+
 	"github.com/Masterminds/semver/v3"
 	pep440 "github.com/aquasecurity/go-pep440-version"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
 
+// depsDevYankedReason is the deps.dev deprecatedReason value marking a cargo
+// release the registry has withdrawn. See ADR-0024.
+const depsDevYankedReason = "yanked"
+
 // pickStableDevAndMax selects Stable, Dev, and the maximum SemVer version from the list.
+//
+// Versions the registry has withdrawn are excluded from Stable selection before
+// any rule below applies; see withdrawnFromStable. Dev and Max are unaffected.
 //
 // preferredStable is the version the package's own registry presents as current,
 // empty when unavailable. It is an upper bound on Stable:
@@ -26,7 +36,7 @@ import (
 // Max:
 //   - Highest SemVer using Masterminds semver; if none are valid SemVer, fallback to latest by PublishedAt
 //
-// See ADR-0023.
+// See ADR-0023 and ADR-0024.
 func pickStableDevAndMax(versions []Version, preferredStable string) (stable Version, dev Version, max Version) {
 	if len(versions) == 0 {
 		return Version{}, Version{}, Version{}
@@ -34,14 +44,20 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 
 	var defaults, stables, nonStables []Version
 	var semverCandidates []Version
+	stableEligible := make([]Version, 0, len(versions))
 
 	for _, v := range versions {
-		if v.IsDefault {
-			defaults = append(defaults, v)
+		isStable := purl.IsStableVersion(v.VersionKey.Version)
+		if !withdrawnFromStable(v) {
+			stableEligible = append(stableEligible, v)
+			if v.IsDefault {
+				defaults = append(defaults, v)
+			}
+			if isStable {
+				stables = append(stables, v)
+			}
 		}
-		if purl.IsStableVersion(v.VersionKey.Version) {
-			stables = append(stables, v)
-		} else {
+		if !isStable {
 			nonStables = append(nonStables, v)
 		}
 
@@ -52,7 +68,7 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 
 	// Stable selection. A zero picked with governs=true is intended: the bound
 	// applies and excludes every candidate, so Stable stays empty.
-	if picked, governs := pickByRegistryStable(versions, preferredStable); governs {
+	if picked, governs := pickByRegistryStable(stableEligible, preferredStable); governs {
 		stable = picked
 	} else if len(defaults) > 0 {
 		stable = latestByPublishedAt(defaults)
@@ -121,6 +137,27 @@ func pickByRegistryStable(versions []Version, preferredStable string) (picked Ve
 		}
 	}
 	return best.raw, true
+}
+
+// withdrawnFromStable reports whether the registry has withdrawn v, making it
+// ineligible as Stable.
+//
+// Only cargo is covered: deps.dev reports a cargo yank as IsDeprecated with a
+// deprecatedReason of depsDevYankedReason. An unrecognised reason on a
+// deprecated cargo release is logged and treated as not withdrawn.
+// See ADR-0024.
+func withdrawnFromStable(v Version) bool {
+	if !v.IsDeprecated || !strings.EqualFold(v.VersionKey.System, "cargo") {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(v.DeprecatedReason), depsDevYankedReason) {
+		return true
+	}
+	slog.Warn("depsdev_cargo_unknown_deprecated_reason",
+		"name", v.VersionKey.Name,
+		"version", v.VersionKey.Version,
+		"deprecated_reason", v.DeprecatedReason)
+	return false
 }
 
 // stableCandidate pairs a deps.dev version with its parsed PEP 440 form so the

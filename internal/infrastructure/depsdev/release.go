@@ -133,9 +133,10 @@ func (c *DepsDevClient) fetchLatestRelease(ctx context.Context, purlStr string) 
 			VersionKey struct {
 				Version string `json:"version"`
 			} `json:"versionKey"`
-			PublishedAt  string `json:"publishedAt"`
-			IsDefault    bool   `json:"isDefault"`
-			IsDeprecated bool   `json:"isDeprecated"`
+			PublishedAt      string `json:"publishedAt"`
+			IsDefault        bool   `json:"isDefault"`
+			IsDeprecated     bool   `json:"isDeprecated"`
+			DeprecatedReason string `json:"deprecatedReason"`
 		} `json:"versions"`
 	}
 
@@ -195,6 +196,7 @@ func (c *DepsDevClient) fetchLatestRelease(ctx context.Context, purlStr string) 
 		// carry flags
 		versionInfo.IsDefault = version.IsDefault
 		versionInfo.IsDeprecated = version.IsDeprecated
+		versionInfo.DeprecatedReason = version.DeprecatedReason
 
 		if version.VersionKey.Version == requestedVersion {
 			releaseInfo.RequestedVersion = versionInfo
