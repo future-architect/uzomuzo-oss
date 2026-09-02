@@ -120,7 +120,14 @@ unknown-value branch somewhere to report.
   on where the yank data comes from. ADR-0023's PyPI bound is still required,
   because deps.dev does not see PyPI yanks.
 - **`MaxSemverVersion` can still be a yanked release**, in cargo as in every other
-  ecosystem. See ADR-0023's "Not addressed here".
+  ecosystem. See ADR-0023's "Not addressed here". This bounds what an empty Stable
+  buys on its own: `batch_details.go` resolves the effective PURL as
+  Stable -> MaxSemver -> PreRelease -> original, so for a crate whose every release
+  is yanked, resolution still lands on the yanked max-semver release. That is not a
+  regression — before this change the same crate selected the yanked release as
+  Stable outright — but closing it needs the max-semver decision ADR-0023 deferred,
+  not this one. Where an un-yanked release exists, which is the common case, Stable
+  now selects it and the fallback never runs.
 - **Ecosystems other than cargo.** Whether deps.dev's `deprecatedReason` carries
   registry-withdrawal values for any other system was not surveyed beyond the pypi
   check above.
