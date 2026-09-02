@@ -30,7 +30,9 @@ syft . -o cyclonedx-json | ./uzomuzo scan --sbom -
 ### CI Pipeline Example
 
 ```bash
-# Fail the build if any dependency is EOL or archived
+# Fail the build if any dependency is end-of-life.
+# An archived repository with no EOL signal is labelled Stalled, not EOL (ADR-0020),
+# so add `stalled` to --fail-on if the build should stop for those too.
 trivy fs . --format cyclonedx | ./uzomuzo scan --sbom - --fail-on eol-confirmed,eol-effective --format json
 # Exit code 0 = no dependencies matched --fail-on policy
 # Exit code 1 = at least one dependency matched --fail-on policy

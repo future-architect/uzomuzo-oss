@@ -18,11 +18,19 @@ var labelMap = map[string]analysis.MaintenanceStatus{
 	"eol-scheduled": analysis.LabelEOLScheduled,
 	"stalled":       analysis.LabelStalled,
 	"legacy-safe":   analysis.LabelLegacySafe,
+	"review-needed": analysis.LabelReviewNeeded,
 }
 
-// ValidFailLabels returns the list of valid --fail-on label strings.
+// ValidFailLabels returns the valid --fail-on label strings, ordered for display
+// rather than sorted: descending severity first, then the two non-severity
+// buckets. Map iteration order cannot be used because this feeds user-visible
+// help and error text.
+//
+// This slice and labelMap must hold the same keys; Test_ValidFailLabels_MatchesLabelMap
+// fails if they drift. A label present in one but not the other is how
+// review-needed was left un-gatable after it became reachable (#498).
 func ValidFailLabels() []string {
-	return []string{"eol-confirmed", "eol-effective", "eol-scheduled", "stalled", "legacy-safe"}
+	return []string{"eol-confirmed", "eol-effective", "eol-scheduled", "stalled", "legacy-safe", "review-needed"}
 }
 
 // FailPolicy determines which lifecycle labels trigger a non-zero exit.

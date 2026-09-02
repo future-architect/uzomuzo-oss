@@ -15,6 +15,7 @@ import (
 	scanapp "github.com/future-architect/uzomuzo-oss/internal/application/scan"
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
+	domainscan "github.com/future-architect/uzomuzo-oss/internal/domain/scan"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/actionscan"
 	infradepparser "github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/cyclonedx"
@@ -34,7 +35,7 @@ func scanFlags() []urfcli.Flag {
 		&urfcli.StringFlag{Name: "format", Aliases: []string{"f"}, Usage: "Output format: detailed, table, json, csv (default: auto)"},
 
 		// CI gate
-		&urfcli.StringFlag{Name: "fail-on", Usage: "Comma-separated lifecycle labels that trigger exit 1 (eol-confirmed,eol-effective,eol-scheduled,stalled,legacy-safe)"},
+		&urfcli.StringFlag{Name: "fail-on", Usage: "Comma-separated lifecycle labels that trigger exit 1 (" + strings.Join(domainscan.ValidFailLabels(), ",") + ")"},
 
 		// File mode options
 		&urfcli.IntFlag{Name: "sample", Usage: "Randomly sample up to N PURLs and N GitHub URLs (file mode only)"},

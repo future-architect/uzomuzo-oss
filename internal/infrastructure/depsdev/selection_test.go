@@ -83,8 +83,8 @@ func TestPickStableDevAndMax_NoStable_DefaultsAbsent(t *testing.T) {
 func TestPickStableDevAndMax_HintEmpty_MatchesOldBehavior(t *testing.T) {
 	versions := []Version{
 		v("1.0.0-rc1", "2024-01-01T00:00:00Z", false), // non-stable (contains "rc") -> Dev candidate
-		v("1.0.0", "2024-02-01T00:00:00Z", true),       // isDefault=true -> Stable
-		v("2.0.0", "2024-03-01T00:00:00Z", false),      // highest valid SemVer -> Max
+		v("1.0.0", "2024-02-01T00:00:00Z", true),      // isDefault=true -> Stable
+		v("2.0.0", "2024-03-01T00:00:00Z", false),     // highest valid SemVer -> Max
 	}
 
 	stable, dev, max := pickStableDevAndMax(versions, "")
