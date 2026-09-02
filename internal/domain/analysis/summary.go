@@ -6,7 +6,9 @@ import (
 	"unicode/utf8"
 )
 
-// MaxSummaryLen is the maximum rune length of Repository.Summary.
+// MaxSummaryLen is the maximum rune length of the short free-text fields
+// normalized by NormalizeSummary, currently Repository.Summary and
+// RegistryState.Reason.
 // Exported for consumers that want to validate ingest-side values against the same cap.
 const MaxSummaryLen = 200
 

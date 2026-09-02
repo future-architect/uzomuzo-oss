@@ -103,8 +103,13 @@ type ProjectInfo struct {
 	// Version is info.version: the release PyPI presents as current. Empty when
 	// PyPI omits it.
 	Version string
-	// Yanked is info.yanked for Version — true when Version itself is yanked.
+	// Yanked is info.yanked for Version. PyPI orders non-yanked releases first
+	// when choosing the release it reports, so a true here also means every
+	// release of the project is yanked. See ADR-0022.
 	Yanked bool
+	// YankedReason mirrors info.yanked_reason. Empty when PyPI has none, which
+	// happens even for yanked releases.
+	YankedReason string
 }
 
 // VersionInfo is the minimal subset of PyPI version-level metadata we need.
@@ -176,6 +181,11 @@ func (c *Client) GetVersion(ctx context.Context, name, version string) (*Version
 		}
 		yanked = allYanked
 	}
+	// A 200 whose body names no project is not an answer about the version.
+	// Reporting it as found would assert "not yanked" from an empty body.
+	if strings.TrimSpace(raw.Info.Name) == "" {
+		return nil, false, fmt.Errorf("pypi version response for %q@%q carried no project name", n, v)
+	}
 	info := &VersionInfo{
 		Name:         raw.Info.Name,
 		Version:      raw.Info.Version,
@@ -217,28 +227,35 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 	}
 	var raw struct {
 		Info struct {
-			Name        string            `json:"name"`
-			Summary     string            `json:"summary"`
-			Description string            `json:"description"`
-			Classifiers []string          `json:"classifiers"`
-			ProjectURLs map[string]string `json:"project_urls"`
-			HomePage    string            `json:"home_page"`
-			Version     string            `json:"version"`
-			Yanked      bool              `json:"yanked"`
+			Name         string            `json:"name"`
+			Summary      string            `json:"summary"`
+			Description  string            `json:"description"`
+			Classifiers  []string          `json:"classifiers"`
+			ProjectURLs  map[string]string `json:"project_urls"`
+			HomePage     string            `json:"home_page"`
+			Version      string            `json:"version"`
+			Yanked       bool              `json:"yanked"`
+			YankedReason string            `json:"yanked_reason"`
 		} `json:"info"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&raw); err != nil {
 		return nil, false, fmt.Errorf("pypi decode failed: %w", err)
 	}
+	// A 200 whose body names no project is not an answer about the project.
+	// Reporting it as found would assert "nothing yanked" from an empty body.
+	if strings.TrimSpace(raw.Info.Name) == "" {
+		return nil, false, fmt.Errorf("pypi project response for %q carried no project name", n)
+	}
 	info := &ProjectInfo{
-		Name:        raw.Info.Name,
-		Summary:     raw.Info.Summary,
-		Description: raw.Info.Description,
-		Classifiers: raw.Info.Classifiers,
-		ProjectURLs: raw.Info.ProjectURLs,
-		HomePage:    raw.Info.HomePage,
-		Version:     strings.TrimSpace(raw.Info.Version),
-		Yanked:      raw.Info.Yanked,
+		Name:         raw.Info.Name,
+		Summary:      raw.Info.Summary,
+		Description:  raw.Info.Description,
+		Classifiers:  raw.Info.Classifiers,
+		ProjectURLs:  raw.Info.ProjectURLs,
+		HomePage:     raw.Info.HomePage,
+		Version:      strings.TrimSpace(raw.Info.Version),
+		Yanked:       raw.Info.Yanked,
+		YankedReason: raw.Info.YankedReason,
 	}
 	c.cache.Set(lower, info)
 	return info, true, nil

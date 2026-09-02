@@ -99,6 +99,27 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLConfirmed), Reason: reason, Trace: trace, Signals: []Signal{sig(SignalEOLSource, signalSource)}}, nil
 	}
 
+	// 1.25 Package-level distribution withdrawal (every published release yanked).
+	// Placed before the archive branch: Stalled's rationale below assumes the package
+	// "remains installable under the same PURL", which this fact falsifies. It is not
+	// EOL either — the project may be alive and distributed elsewhere. See ADR-0022.
+	if analysis != nil && analysis.AllReleasesYanked() {
+		rs := analysis.RegistryState
+		reason := "All releases yanked on " + rs.Registry
+		if rs.Reason != "" {
+			reason += ": " + rs.Reason
+		}
+		signals := []Signal{sig(SignalAllReleasesYanked, rs.Registry)}
+		if analysis.IsArchived() {
+			signals = append(signals, sig(SignalRepoArchived, "true"))
+		}
+		if analysis.IsDisabled() {
+			signals = append(signals, sig(SignalRepoDisabled, "true"))
+		}
+		trace = append(trace, "all_releases_yanked_review_needed")
+		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelReviewNeeded), Reason: reason, Trace: trace, Signals: signals}, nil
+	}
+
 	// 1.5 Archive/disable check (reached only when there is no primary-source EOL).
 	// An archived/disabled repository is a "development ceased" signal, but archive alone is NOT
 	// end-of-life: a monorepo-consolidated package can keep publishing (e.g. google-auth-library,

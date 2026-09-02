@@ -52,6 +52,9 @@ const (
 	SignalMaxAdvisorySeverity = "max_advisory_severity"
 	SignalDaysSinceRelease    = "days_since_release"
 	SignalEcosystemDelivery   = "ecosystem_delivery"
+	// SignalAllReleasesYanked carries the registry name asserting that every
+	// published release is yanked (see RegistryState).
+	SignalAllReleasesYanked = "all_releases_yanked"
 )
 
 // AssessmentResult is the normalized output for a single axis assessment.

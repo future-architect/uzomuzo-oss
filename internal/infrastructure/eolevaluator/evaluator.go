@@ -353,7 +353,7 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 	if hasPyPIInactiveClassifier(info.Classifiers) { // explicit EOL
 		status.State = domain.EOLEndOfLife
 		status.Evidences = append(status.Evidences, domain.EOLEvidence{
-			Source:     "PyPI",
+			Source:     domain.RegistryPyPI,
 			Summary:    "Classifier: Development Status :: 7 - Inactive",
 			Reference:  "https://pypi.org/project/" + info.Name + "/",
 			Confidence: 1.0,
@@ -442,7 +442,7 @@ func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, sta
 	if e.pypi == nil {
 		return false
 	}
-	return e.applyRegistryYanked(ctx, a, status, "pypi", "PyPI", true,
+	return e.applyRegistryYanked(ctx, a, status, "pypi", domain.RegistryPyPI, true,
 		func(ctx context.Context, name, version string) (bool, string, string, bool, error) {
 			info, found, err := e.pypi.GetVersion(ctx, name, version)
 			if err != nil || !found || info == nil {
@@ -466,7 +466,7 @@ func (e *Evaluator) applyCargoYanked(ctx context.Context, a *domain.Analysis, st
 	if e.crates == nil {
 		return false
 	}
-	return e.applyRegistryYanked(ctx, a, status, "cargo", "crates.io", false,
+	return e.applyRegistryYanked(ctx, a, status, "cargo", domain.RegistryCrates, false,
 		func(ctx context.Context, name, version string) (bool, string, string, bool, error) {
 			info, found, err := e.crates.GetVersion(ctx, name, version)
 			if err != nil || !found || info == nil {
