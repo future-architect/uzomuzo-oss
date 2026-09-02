@@ -52,8 +52,18 @@ checksum:
 changelog:
   sort: asc
   filters:
+    # The optional `(scope)` group is what makes these fire. Conventional
+    # Commits puts the scope between the type and the colon, so a pattern
+    # ending in a bare `type:` matches only unscoped subjects — it lets every
+    # `chore(deps):` and `docs(adr):` through. v0.3.0 shipped with 106 of its
+    # 111 commits in the changelog for that reason.
     exclude:
-      - "^docs:"
-      - "^chore:"
-      - "^ci:"
-      - "^test:"
+      - '^docs(\([^)]+\))?:'
+      - '^chore(\([^)]+\))?:'
+      - '^ci(\([^)]+\))?:'
+      - '^test(\([^)]+\))?:'
+      # Repo-internal scopes, whatever the type. A change to the agent rules or
+      # the review pipeline is a `feat`/`fix` by Conventional Commits but never
+      # reaches the binary, so type alone cannot separate it from a real change.
+      # `deps` is deliberately absent: a module bump does ship.
+      - '^[a-z]+\((ci|claude|instructions|skill|skills)\):'
