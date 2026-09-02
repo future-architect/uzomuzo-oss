@@ -615,7 +615,8 @@ CSV output comprehensively covers security metrics:
 - **Basic info**: PURL, repository URL, package metadata
 - **Scorecard metrics**: All OpenSSF Scorecard check results
 - **Security assessment**: Vulnerability scores, maintenance status
-- **Lifecycle assessment**: Automatic classification (Active / Stalled / Legacy-Safe / EOL)
+- **Lifecycle assessment**: Automatic classification into one of the maintenance
+  statuses listed above, including `Review Needed` when uzomuzo cannot decide
 - **Repository status**: Stars, forks, archive status, last commit
 
 ### CLI Display Order

@@ -11,26 +11,43 @@ import (
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 )
 
-// labelMap maps CLI label strings to domain MaintenanceStatus values.
-var labelMap = map[string]analysis.MaintenanceStatus{
-	"eol-confirmed": analysis.LabelEOLConfirmed,
-	"eol-effective": analysis.LabelEOLEffective,
-	"eol-scheduled": analysis.LabelEOLScheduled,
-	"stalled":       analysis.LabelStalled,
-	"legacy-safe":   analysis.LabelLegacySafe,
-	"review-needed": analysis.LabelReviewNeeded,
+// failLabels is the single source of the --fail-on vocabulary: which CLI label
+// strings exist, which MaintenanceStatus each names, and the order they appear
+// in. The order is deliberate, not sorted — it feeds user-visible help and error
+// text, so it runs by descending severity and ends with the labels that are not
+// a severity at all.
+//
+// One literal rather than a list plus a map: the vocabulary used to be written
+// out three times, and a label added to one copy but not the others is how
+// review-needed became reachable but not gatable (#498).
+var failLabels = []struct {
+	label  string
+	status analysis.MaintenanceStatus
+}{
+	{"eol-confirmed", analysis.LabelEOLConfirmed},
+	{"eol-effective", analysis.LabelEOLEffective},
+	{"eol-scheduled", analysis.LabelEOLScheduled},
+	{"stalled", analysis.LabelStalled},
+	{"legacy-safe", analysis.LabelLegacySafe},
+	{"review-needed", analysis.LabelReviewNeeded},
 }
 
-// ValidFailLabels returns the valid --fail-on label strings, ordered for display
-// rather than sorted: descending severity first, then the two non-severity
-// buckets. Map iteration order cannot be used because this feeds user-visible
-// help and error text.
-//
-// This slice and labelMap must hold the same keys; Test_ValidFailLabels_MatchesLabelMap
-// fails if they drift. A label present in one but not the other is how
-// review-needed was left un-gatable after it became reachable (#498).
+// labelMap indexes failLabels for lookup while parsing.
+var labelMap = func() map[string]analysis.MaintenanceStatus {
+	m := make(map[string]analysis.MaintenanceStatus, len(failLabels))
+	for _, fl := range failLabels {
+		m[fl.label] = fl.status
+	}
+	return m
+}()
+
+// ValidFailLabels returns the valid --fail-on label strings in display order.
 func ValidFailLabels() []string {
-	return []string{"eol-confirmed", "eol-effective", "eol-scheduled", "stalled", "legacy-safe", "review-needed"}
+	out := make([]string, 0, len(failLabels))
+	for _, fl := range failLabels {
+		out = append(out, fl.label)
+	}
+	return out
 }
 
 // FailPolicy determines which lifecycle labels trigger a non-zero exit.

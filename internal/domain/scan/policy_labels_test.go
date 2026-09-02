@@ -1,71 +1,82 @@
 package scan
 
 import (
-	"sort"
 	"testing"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
-// Test_ValidFailLabels_MatchesLabelMap pins the two halves of the --fail-on
-// vocabulary together. ValidFailLabels feeds the CLI help text and the parse
-// error message; labelMap decides what actually parses. A label in one but not
-// the other is either a label users are told about but cannot use, or one that
-// works but is never advertised.
-//
-// This is the drift that left review-needed un-gatable after ADR-0022 made it
-// reachable (#498).
-func Test_ValidFailLabels_MatchesLabelMap(t *testing.T) {
+// wantFailLabels is an independent statement of the --fail-on vocabulary and its
+// display order. It is written out by hand on purpose: deriving it from
+// failLabels would only compare the production table with itself, and a wrong
+// MaintenanceStatus on either side would pass.
+var wantFailLabels = []struct {
+	label  string
+	status analysis.MaintenanceStatus
+}{
+	{"eol-confirmed", analysis.LabelEOLConfirmed},
+	{"eol-effective", analysis.LabelEOLEffective},
+	{"eol-scheduled", analysis.LabelEOLScheduled},
+	{"stalled", analysis.LabelStalled},
+	{"legacy-safe", analysis.LabelLegacySafe},
+	{"review-needed", analysis.LabelReviewNeeded},
+}
+
+// Test_ValidFailLabels_ContentAndOrder pins what --fail-on accepts and the order
+// users see it in. Order is part of the contract: ValidFailLabels feeds the CLI
+// help text and the parse error message, so a reordering is user-visible.
+func Test_ValidFailLabels_ContentAndOrder(t *testing.T) {
 	t.Parallel()
 
-	listed := append([]string(nil), ValidFailLabels()...)
-	mapped := make([]string, 0, len(labelMap))
-	for k := range labelMap {
-		mapped = append(mapped, k)
+	got := ValidFailLabels()
+	if len(got) != len(wantFailLabels) {
+		t.Fatalf("label count: got %d %v, want %d", len(got), got, len(wantFailLabels))
 	}
-	sort.Strings(listed)
-	sort.Strings(mapped)
-
-	if len(listed) != len(mapped) {
-		t.Fatalf("label count: ValidFailLabels has %d, labelMap has %d\n  listed=%v\n  mapped=%v",
-			len(listed), len(mapped), listed, mapped)
-	}
-	for i := range listed {
-		if listed[i] != mapped[i] {
-			t.Errorf("label mismatch at %d: ValidFailLabels=%q, labelMap=%q\n  listed=%v\n  mapped=%v",
-				i, listed[i], mapped[i], listed, mapped)
+	for i, want := range wantFailLabels {
+		if got[i] != want.label {
+			t.Errorf("label %d: got %q, want %q (full: %v)", i, got[i], want.label, got)
 		}
 	}
 }
 
-// Test_ValidFailLabels_AllParse asserts every advertised label round-trips
-// through ParseFailPolicy and lands on the MaintenanceStatus it names, so a
-// label cannot be advertised while mapping to the wrong status.
-func Test_ValidFailLabels_AllParse(t *testing.T) {
+// Test_ParseFailPolicy_EachLabelTriggersItsOwnStatus pins the label-to-status
+// mapping against hand-written expectations rather than against the production
+// table, so a label wired to the wrong MaintenanceStatus is caught. Each case
+// also asserts the policy does not trigger on some other status, so a policy
+// that matched everything would fail.
+func Test_ParseFailPolicy_EachLabelTriggersItsOwnStatus(t *testing.T) {
 	t.Parallel()
 
-	for _, label := range ValidFailLabels() {
-		t.Run(label, func(t *testing.T) {
+	for _, tt := range wantFailLabels {
+		t.Run(tt.label, func(t *testing.T) {
 			t.Parallel()
 
-			p, err := ParseFailPolicy(label)
+			p, err := ParseFailPolicy(tt.label)
 			if err != nil {
-				t.Fatalf("ParseFailPolicy(%q) failed: %v", label, err)
+				t.Fatalf("ParseFailPolicy(%q) failed: %v", tt.label, err)
 			}
-			want, ok := labelMap[label]
-			if !ok {
-				t.Fatalf("labelMap has no entry for advertised label %q", label)
+			if !p.IsTriggered(tt.status) {
+				t.Errorf("%q does not trigger on %v", tt.label, tt.status)
 			}
-			if !p.IsTriggered(want) {
-				t.Errorf("ParseFailPolicy(%q) does not trigger on %v", label, want)
+			for _, other := range wantFailLabels {
+				if other.status == tt.status {
+					continue
+				}
+				if p.IsTriggered(other.status) {
+					t.Errorf("%q also triggers on %v; a single label must select a single status",
+						tt.label, other.status)
+				}
+			}
+			if p.IsTriggered(analysis.LabelActive) {
+				t.Errorf("%q triggers on Active; no fail label maps to a healthy package", tt.label)
 			}
 		})
 	}
 }
 
-// Test_ParseFailPolicy_ReviewNeeded pins the label added for ADR-0022: a package
-// whose every release is yanked is assessed Review Needed, and CI must be able
-// to stop on it. Before #498 the label was reachable but not gatable.
+// Test_ParseFailPolicy_ReviewNeeded is the regression pin for #498: ADR-0022
+// made Review Needed reachable for a package whose every release is yanked, but
+// --fail-on could not gate on it, so CI had no way to stop.
 func Test_ParseFailPolicy_ReviewNeeded(t *testing.T) {
 	t.Parallel()
 
@@ -75,8 +86,5 @@ func Test_ParseFailPolicy_ReviewNeeded(t *testing.T) {
 	}
 	if !p.IsTriggered(analysis.LabelReviewNeeded) {
 		t.Error("review-needed does not trigger on LabelReviewNeeded")
-	}
-	if p.IsTriggered(analysis.LabelActive) {
-		t.Error("review-needed must not trigger on Active")
 	}
 }
