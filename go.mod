@@ -8,7 +8,7 @@ require github.com/package-url/packageurl-go v0.1.6
 
 require github.com/Masterminds/semver/v3 v3.5.0
 
-require golang.org/x/mod v0.39.0
+require golang.org/x/mod v0.40.0
 
 require github.com/urfave/cli/v3 v3.10.1
 
