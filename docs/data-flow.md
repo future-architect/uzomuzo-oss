@@ -4,7 +4,7 @@
 
 ## Data Flow Diagram
 
-Visualizes how PURL arrays are processed, external API calls (deps.dev / GitHub GraphQL & REST / OpenSSF Scorecard) are made, and results are assembled respecting Clean Architecture (DDD) boundaries.
+Visualizes how PURL arrays are processed, external API calls (deps.dev / GitHub GraphQL & REST / OpenSSF Scorecard / OSV.dev) are made, and results are assembled respecting Clean Architecture (DDD) boundaries.
 
 ### PURL Batch Processing — External API Calls and Data
 
@@ -87,6 +87,14 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 - Purpose: Identify latest stable/dev/requested version and freshness
 - Code: `DepsDevClient.fetchLatestRelease`, `DepsDevClient.fetchReleaseInfoBatch` (`internal/infrastructure/depsdev/release.go`)
 - Docs: <https://docs.deps.dev/api/v3alpha/>
+
+#### OSV.dev — Query (POST https://api.osv.dev/v1/query)
+
+- Request body: `{"package":{"name":"<crate>","ecosystem":"crates.io"}}`; paginated via the response's `next_page_token`
+- Fields consumed: per advisory — `id`, `summary`, `published`, `withdrawn`, `references[]` (the entry whose `type` is `ADVISORY`); per affected entry — `package.name`, `package.ecosystem`, `ranges[].type`, `ranges[].events[]`, `versions[]`, `database_specific.informational`
+- Purpose: detect the RustSec `unmaintained` marker for cargo packages and record it as a package-level fact (`Analysis.AdvisoryDBState`); queried only for cargo — no other ecosystem is asked. Classification (package-wide range check, withdrawal check, publication-age cooldown) happens in the domain layer (`analysis.ClassifyUnmaintained`), not in the client
+- Code: `osv.Client.QueryPackage` (`internal/infrastructure/osv/client.go`), `IntegrationService.enrichAdvisoryDBState` (`internal/infrastructure/integration/populate_advisorydb_state.go`), `analysis.ClassifyUnmaintained` (`internal/domain/analysis/advisorydb.go`). See [ADR-0025](adr/0025-rustsec-unmaintained-is-a-weak-cargo-signal.md)
+- Docs: <https://google.github.io/osv.dev/post-v1-query/>
 
 #### GitHub — GraphQL (POST https://api.github.com/graphql)
 

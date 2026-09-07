@@ -21,6 +21,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/govanityresolve"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/links"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/osv"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
@@ -36,6 +37,7 @@ type IntegrationService struct {
 	packagistClient *packagist.Client
 	pypiClient      *pypi.Client
 	cratesClient    *crates.Client
+	osvClient       *osv.Client
 	mavenClient     *maven.Client
 	cdClient        *clearlydefined.Client
 	vanityResolver  *govanityresolve.Resolver
@@ -71,6 +73,13 @@ func WithPyPIClient(c *pypi.Client) IntegrationOption {
 // unset, cargo analyses carry no registry-level withdrawal fact.
 func WithCratesClient(c *crates.Client) IntegrationOption {
 	return func(s *IntegrationService) { s.cratesClient = c }
+}
+
+// WithOSVClient injects an OSV.dev client used to populate
+// Analysis.AdvisoryDBState for cargo packages (see ADR-0025). Optional — when
+// unset, cargo analyses carry no advisory-database maintenance fact.
+func WithOSVClient(c *osv.Client) IntegrationOption {
+	return func(s *IntegrationService) { s.osvClient = c }
 }
 
 // WithMavenClient injects a Maven client used by enrichLicenseFromManifest to

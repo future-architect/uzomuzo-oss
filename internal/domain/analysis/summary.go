@@ -51,6 +51,26 @@ func NormalizeSummary(raw string) string {
 	return truncateSummary(collapsed)
 }
 
+// SanitizeExternalSummary normalizes free text that arrived from an external
+// service and is about to be shown in a terminal: it drops control and format
+// runes (which can reposition the cursor or hide characters) before applying
+// NormalizeSummary's whitespace collapsing and rune-count cap. Whitespace is
+// kept so NormalizeSummary can collapse it.
+func SanitizeExternalSummary(raw string) string {
+	stripped := strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return r
+		}
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, raw)
+	// NormalizeSummary caps the length by rune count; capping by byte here as
+	// well would split a multi-byte rune.
+	return NormalizeSummary(stripped)
+}
+
 // truncateSummary truncates s to MaxSummaryLen runes with an ellipsis by iterating
 // runes up to the cutoff point — avoids materializing the full []rune slice for
 // large inputs where only the first 199 runes are needed.

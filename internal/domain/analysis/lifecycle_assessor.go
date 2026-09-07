@@ -120,6 +120,33 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelReviewNeeded), Reason: reason, Trace: trace, Signals: signals}, nil
 	}
 
+	// 1.4 Advisory-database maintenance warning (RustSec's unmaintained marker).
+	// A single branch owns the outcome so "a flagged package is never reported
+	// Active and never Legacy-Safe" is a property of one place rather than of
+	// every exit below remembering to check. Placed before the archive branch on
+	// purpose: that branch returns Stalled unconditionally and would otherwise
+	// mask the EOL-Effective case. Never EOL-Confirmed — see ADR-0025.
+	if analysis != nil && analysis.AdvisoryDBUnmaintained() {
+		ad := analysis.AdvisoryDBState
+		reason := "Flagged unmaintained by " + ad.AdvisoryID
+		if ad.Summary != "" {
+			reason += ": " + ad.Summary
+		}
+		signals := []Signal{sig(SignalAdvisoryDBUnmaintained, ad.AdvisoryID), commitSignal(analysis)}
+		signals = append(signals, s.collectAdvisorySignals(analysis)...)
+		if analysis.IsArchived() {
+			signals = append(signals, sig(SignalRepoArchived, "true"))
+		}
+		label, t := s.severityAwareLabel(s.hasHighSeverityAdvisoriesExcluding(analysis, ad.AdvisoryID),
+			LabelEOLEffective, "advisory_db_unmaintained_unpatched_vulns",
+			LabelStalled, "advisory_db_unmaintained")
+		if label == string(LabelEOLEffective) {
+			reason = "Unmaintained per " + ad.AdvisoryID + ", unpatched vulnerabilities"
+		}
+		trace = append(trace, t)
+		return &AssessmentResult{Axis: LifecycleAxis, Label: label, Reason: reason, Trace: trace, Signals: signals}, nil
+	}
+
 	// 1.5 Archive/disable check (reached only when there is no primary-source EOL).
 	// An archived/disabled repository is a "development ceased" signal, but archive alone is NOT
 	// end-of-life: a monorepo-consolidated package can keep publishing (e.g. google-auth-library,
@@ -264,16 +291,37 @@ func (s *LifecycleAssessorService) getStableOrMaxVersionDetail(a *Analysis) *Ver
 // hasHighSeverityAdvisories returns true if the analysis has any advisory with CVSS3 >= threshold,
 // or if any advisory severity is unavailable and advisories exist (conservative fallback).
 func (s *LifecycleAssessorService) hasHighSeverityAdvisories(a *Analysis) bool {
+	return s.hasHighSeverityAdvisoriesExcluding(a, "")
+}
+
+// hasHighSeverityAdvisoriesExcluding answers hasHighSeverityAdvisories while
+// ignoring one advisory ID. An empty excludeID ignores nothing.
+//
+// Why not call hasHighSeverityAdvisories directly from branch 1.4: RustSec files
+// its unmaintained marker as an advisory of its own, and deps.dev lists it on the
+// version with no CVSS score. The conservative "unknown severity counts as
+// potentially high" fallback would then read the branch's own evidence back as a
+// vulnerability, so every flagged crate would reach EOL-Effective and the Stalled
+// outcome would be unreachable. See ADR-0025.
+func (s *LifecycleAssessorService) hasHighSeverityAdvisoriesExcluding(a *Analysis, excludeID string) bool {
 	vd := s.getStableOrMaxVersionDetail(a)
-	if vd == nil || len(vd.Advisories) == 0 {
+	if vd == nil {
 		return false
 	}
-	unknownCount := vd.UnknownSeverityAdvisoryCount()
-	if unknownCount > 0 {
-		// Any unknown severity triggers conservative fallback (treated as potentially high).
-		return true
+	high := 0
+	for _, adv := range vd.Advisories {
+		if excludeID != "" && strings.EqualFold(adv.ID, excludeID) {
+			continue
+		}
+		if adv.CVSS3Score <= 0 {
+			// Any unknown severity triggers conservative fallback (treated as potentially high).
+			return true
+		}
+		if adv.CVSS3Score >= s.rules.HighSeverityCVSSThreshold {
+			high++
+		}
 	}
-	return vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) > 0
+	return high > 0
 }
 
 // severityAwareLabel returns the appropriate label and trace based on whether HIGH+ advisories exist.

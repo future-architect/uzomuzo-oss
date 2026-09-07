@@ -55,6 +55,9 @@ const (
 	// SignalAllReleasesYanked carries the registry name asserting that every
 	// published release is yanked (see RegistryState).
 	SignalAllReleasesYanked = "all_releases_yanked"
+	// SignalAdvisoryDBUnmaintained carries the advisory ID of a third-party
+	// advisory database's unmaintained marker (see AdvisoryDBState).
+	SignalAdvisoryDBUnmaintained = "advisory_db_unmaintained"
 )
 
 // AssessmentResult is the normalized output for a single axis assessment.

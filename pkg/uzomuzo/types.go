@@ -59,6 +59,8 @@ const (
 	SignalDaysSinceRelease    = domain.SignalDaysSinceRelease
 	SignalEcosystemDelivery   = domain.SignalEcosystemDelivery
 	SignalAllReleasesYanked   = domain.SignalAllReleasesYanked
+
+	SignalAdvisoryDBUnmaintained = domain.SignalAdvisoryDBUnmaintained
 )
 
 // RepoState contains repository activity & archive/disable flags.
@@ -67,6 +69,12 @@ type RepoState = domain.RepoState
 // RegistryState contains package-level facts asserted by the package registry,
 // such as "every published release is yanked" (see ADR-0022).
 type RegistryState = domain.RegistryState
+
+// AdvisoryDBState contains package-level maintenance facts asserted by a
+// third-party advisory database, such as RustSec's unmaintained marker for a
+// cargo crate (see ADR-0025). Nil means the lookup did not run or failed, which
+// is a different claim from "ran and found nothing".
+type AdvisoryDBState = domain.AdvisoryDBState
 
 // Registry names recorded in RegistryState.Registry.
 const (
