@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -245,6 +246,29 @@ func TestQueryPackage_DropsVulnsWithMalformedID(t *testing.T) {
 	}
 	if len(recs) != 1 || recs[0].ID != "RUSTSEC-2024-0379" {
 		t.Fatalf("got %+v, want only RUSTSEC-2024-0379 (surrounding whitespace trimmed)", recs)
+	}
+}
+
+func TestQueryPackage_DecodesAliases(t *testing.T) {
+	t.Parallel()
+	const page = `{"vulns":[{"id":"RUSTSEC-2022-0054",
+	 "aliases":["GHSA-rc23-xxgq-x27g"," CVE-2022-0001 ","GHSA-bad\u001b[31m",""]}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, page)
+	}))
+	defer srv.Close()
+
+	recs, err := newTestClient(t, srv.URL).QueryPackage(context.Background(), "crates.io", "wee_alloc")
+	if err != nil {
+		t.Fatalf("QueryPackage failed: %v", err)
+	}
+	if len(recs) != 1 {
+		t.Fatalf("got %d records, want 1", len(recs))
+	}
+	// Malformed aliases are dropped for the same reason malformed IDs are;
+	// dropping an alias only costs an exclusion, never a false match.
+	if want := []string{"GHSA-rc23-xxgq-x27g", "CVE-2022-0001"}; !slices.Equal(recs[0].Aliases, want) {
+		t.Errorf("Aliases: got %v, want %v", recs[0].Aliases, want)
 	}
 }
 

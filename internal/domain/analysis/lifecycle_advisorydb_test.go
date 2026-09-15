@@ -186,6 +186,56 @@ func TestLifecycleAssessor_AdvisoryDBUnmaintained(t *testing.T) {
 			wantSignal: true,
 		},
 		{
+			// wee_alloc@0.4.5: deps.dev lists the one marker under its RustSec
+			// ID and its GHSA alias. The alias is the same marker.
+			name: "an alias of the marker is not a vulnerability",
+			analysis: &Analysis{
+				RepoState: activeRepo(),
+				AdvisoryDBState: func() *AdvisoryDBState {
+					st := flagged("RUSTSEC-2022-0054", "wee_alloc is unmaintained")
+					st.MarkerIDs = []string{"GHSA-rc23-xxgq-x27g", "RUSTSEC-2022-0054"}
+					return st
+				}(),
+				ReleaseInfo: &ReleaseInfo{StableVersion: &VersionDetail{Version: "0.4.5", PublishedAt: recent,
+					Advisories: []Advisory{
+						{ID: "GHSA-rc23-xxgq-x27g", Source: "GHSA"},
+						{ID: "RUSTSEC-2022-0054", Source: "RUSTSEC"},
+					}}},
+			},
+			scores:     healthyScores(),
+			eol:        EOLStatus{State: EOLNotEOL},
+			wantLabel:  LabelStalled,
+			wantReason: "Flagged unmaintained by RUSTSEC-2022-0054: wee_alloc is unmaintained",
+			wantTrace:  "advisory_db_unmaintained",
+			wantSignal: true,
+		},
+		{
+			// failure@0.1.8: the marker is excluded, but the unsound advisory
+			// RUSTSEC-2019-0036 and its GHSA mirrors still count.
+			name: "a separate advisory the marker lists as an alias still counts",
+			analysis: &Analysis{
+				RepoState: activeRepo(),
+				AdvisoryDBState: func() *AdvisoryDBState {
+					st := flagged("RUSTSEC-2020-0036", "failure is officially deprecated/unmaintained")
+					st.MarkerIDs = []string{"RUSTSEC-2020-0036"}
+					return st
+				}(),
+				ReleaseInfo: &ReleaseInfo{StableVersion: &VersionDetail{Version: "0.1.8", PublishedAt: recent,
+					Advisories: []Advisory{
+						{ID: "GHSA-jq66-xh47-j9f3", Source: "GHSA"},
+						{ID: "GHSA-r98r-j25q-rmpr", Source: "GHSA"},
+						{ID: "RUSTSEC-2019-0036", Source: "RUSTSEC"},
+						{ID: "RUSTSEC-2020-0036", Source: "RUSTSEC"},
+					}}},
+			},
+			scores:     healthyScores(),
+			eol:        EOLStatus{State: EOLNotEOL},
+			wantLabel:  LabelEOLEffective,
+			wantReason: "Unmaintained per RUSTSEC-2020-0036, unpatched vulnerabilities",
+			wantTrace:  "advisory_db_unmaintained_unpatched_vulns",
+			wantSignal: true,
+		},
+		{
 			// Exclusion is scoped to the branch's own evidence: a real
 			// vulnerability alongside the marker still reaches EOL-Effective.
 			name: "the marker alongside a real advisory is still EOL-Effective",

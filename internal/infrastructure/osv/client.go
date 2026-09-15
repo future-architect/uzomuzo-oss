@@ -195,8 +195,9 @@ type queryResponse struct {
 }
 
 type wireVuln struct {
-	ID      string `json:"id"`
-	Summary string `json:"summary"`
+	ID      string   `json:"id"`
+	Aliases []string `json:"aliases"`
+	Summary string   `json:"summary"`
 	// Published is RFC3339. An unparseable or absent value leaves the record's
 	// Published zero, which the domain treats as a non-match.
 	Published string `json:"published"`
@@ -272,6 +273,13 @@ func toRecord(v *wireVuln) (domain.AdvisoryRecord, bool) {
 		Summary:   sanitizeSummary(v.Summary),
 		Reference: advisoryReference(v.References),
 		Withdrawn: strings.TrimSpace(v.Withdrawn) != "",
+	}
+	for _, alias := range v.Aliases {
+		// A malformed alias is dropped like a malformed ID; losing one only
+		// costs the assessor an exclusion.
+		if alias = strings.TrimSpace(alias); isPlainAdvisoryID(alias) {
+			rec.Aliases = append(rec.Aliases, alias)
+		}
 	}
 	if ts, err := time.Parse(time.RFC3339, strings.TrimSpace(v.Published)); err == nil {
 		rec.Published = ts

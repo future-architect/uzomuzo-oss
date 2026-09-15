@@ -481,6 +481,49 @@ func TestClassifyUnmaintained_ReturnedEvidence(t *testing.T) {
 		}
 	})
 
+	t.Run("match: aliases of an admitted marker are marker IDs too", func(t *testing.T) {
+		t.Parallel()
+		// deps.dev lists wee_alloc@0.4.5's marker under both identities.
+		r := goodAtty()
+		r.ID = "RUSTSEC-2022-0054"
+		r.Aliases = []string{"GHSA-rc23-xxgq-x27g", "RUSTSEC-2022-0054"}
+		got := ClassifyUnmaintained([]AdvisoryRecord{r}, "crates.io", "atty", unmaintainedNow)
+
+		if want := []string{"GHSA-rc23-xxgq-x27g", "RUSTSEC-2022-0054"}; !slices.Equal(got.MarkerIDs, want) {
+			t.Errorf("MarkerIDs: got %v, want %v (sorted, deduplicated)", got.MarkerIDs, want)
+		}
+		if got.AdvisoryID != "RUSTSEC-2022-0054" {
+			t.Errorf("AdvisoryID: got %q, want the RustSec record's own ID", got.AdvisoryID)
+		}
+	})
+
+	t.Run("match: an alias set naming another RustSec advisory is not trusted", func(t *testing.T) {
+		t.Parallel()
+		// failure@0.1.8: the unmaintained marker lists the separate unsound
+		// advisory RUSTSEC-2019-0036 and its CVEs and GHSAs as aliases.
+		// Trusting them would stop counting a real vulnerability.
+		r := goodAtty()
+		r.ID = "RUSTSEC-2020-0036"
+		r.Aliases = []string{"CVE-2019-25010", "CVE-2020-25575", "GHSA-jq66-xh47-j9f3",
+			"GHSA-r98r-j25q-rmpr", "RUSTSEC-2019-0036"}
+		got := ClassifyUnmaintained([]AdvisoryRecord{r}, "crates.io", "atty", unmaintainedNow)
+
+		if want := []string{"RUSTSEC-2020-0036"}; !slices.Equal(got.MarkerIDs, want) {
+			t.Errorf("MarkerIDs: got %v, want %v", got.MarkerIDs, want)
+		}
+	})
+
+	t.Run("no match: aliases of a rejected record are not marker IDs", func(t *testing.T) {
+		t.Parallel()
+		r := goodAtty()
+		r.Withdrawn = true
+		r.Aliases = []string{"GHSA-rc23-xxgq-x27g"}
+		got := ClassifyUnmaintained([]AdvisoryRecord{r}, "crates.io", "atty", unmaintainedNow)
+		if got.MarkerIDs != nil {
+			t.Errorf("MarkerIDs: got %v, want nil", got.MarkerIDs)
+		}
+	})
+
 	t.Run("no match: zero-value AdvisoryDBState", func(t *testing.T) {
 		t.Parallel()
 		r := goodAtty()

@@ -65,7 +65,9 @@ type AdvisoryRecord struct {
 	Published time.Time
 	// Withdrawn is true when the advisory database has retracted the advisory.
 	Withdrawn bool
-	Affected  []AdvisoryAffected
+	// Aliases are other identifiers of the same advisory (a GHSA or CVE ID).
+	Aliases  []string
+	Affected []AdvisoryAffected
 }
 
 // AdvisoryDBState captures package-level maintenance facts asserted by a
@@ -96,9 +98,11 @@ type AdvisoryDBState struct {
 	Reference string
 	// Published is the advisory's publication date.
 	Published time.Time
-	// MarkerIDs lists every admitted advisory, sorted, AdvisoryID first. Nil
-	// when Unmaintained is false. The assessor excludes each of them when
-	// weighing vulnerabilities: a marker is filed as an advisory but is not one.
+	// MarkerIDs lists the IDs of every admitted advisory, plus their aliases
+	// when those name no other RustSec advisory, sorted and deduplicated. Nil
+	// when Unmaintained is false. The assessor excludes
+	// each of them when weighing vulnerabilities: a marker is filed as an
+	// advisory, sometimes under several identities, but is not one.
 	MarkerIDs []string
 }
 
@@ -122,6 +126,9 @@ func ClassifyUnmaintained(recs []AdvisoryRecord, ecosystem, name string, now tim
 			continue
 		}
 		markerIDs = append(markerIDs, rec.ID)
+		if aliasesAreOneAdvisory(rec) {
+			markerIDs = append(markerIDs, rec.Aliases...)
+		}
 		// Deterministic across runs: the same input set always yields the same
 		// evidence, whatever order the database returned it in.
 		if best == nil || rec.ID < best.ID {
@@ -140,6 +147,24 @@ func ClassifyUnmaintained(recs []AdvisoryRecord, ecosystem, name string, now tim
 		Published:    best.Published,
 		MarkerIDs:    slices.Compact(markerIDs),
 	}
+}
+
+// aliasesAreOneAdvisory reports whether rec's aliases can be read as other
+// names for rec itself.
+//
+// Why not trust aliases unconditionally: OSV defines an alias as the same
+// advisory, but upstream sometimes merges separate advisories into one alias
+// set. failure's unmaintained marker lists the unsound advisory
+// RUSTSEC-2019-0036 and its CVEs and GHSAs; excluding them would stop counting
+// a real vulnerability. A second RustSec ID in the set is the tell. See
+// ADR-0025.
+func aliasesAreOneAdvisory(rec *AdvisoryRecord) bool {
+	for _, alias := range rec.Aliases {
+		if alias != rec.ID && strings.HasPrefix(alias, rustsecIDPrefix) {
+			return false
+		}
+	}
+	return true
 }
 
 // admitsUnmaintained reports whether one advisory may assert that the whole

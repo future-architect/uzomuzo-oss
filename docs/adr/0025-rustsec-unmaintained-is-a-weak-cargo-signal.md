@@ -160,7 +160,20 @@ Branch 1.4 therefore evaluates severity with every admitted marker excluded
 (`AdvisoryDBState.MarkerIDs`, passed to `hasHighSeverityAdvisoriesExcluding`).
 All of them, not only the one chosen as evidence: a crate can carry more than
 one qualifying marker, and each would otherwise count as an unknown-severity
-vulnerability. The exclusion is scoped to those admitted markers and to nothing
+vulnerability.
+
+A marker's aliases are excluded too, but only when they name no other RustSec
+advisory. deps.dev can list one marker under two identities: `wee_alloc@0.4.5`
+shows `RUSTSEC-2022-0054` and its GitHub mirror `GHSA-rc23-xxgq-x27g`, and
+counting the mirror put the crate at `EOL-Effective` on the marker alone. But
+OSV alias sets are not always one advisory. `failure`'s marker
+`RUSTSEC-2020-0036` lists the separate unsound advisory `RUSTSEC-2019-0036`, its
+two CVEs and both GHSAs as aliases; trusting that set dropped `failure@0.1.8`
+from `EOL-Effective` to `Stalled` and hid a real type-confusion bug. OSV defines
+an alias as the same advisory, so a set containing a second RustSec ID breaks
+that definition and cannot be used to discount anything; for such a marker only
+its own ID is excluded. A missed alias costs a `Stalled` verdict at worst, never
+a hidden vulnerability. The exclusion is scoped to those admitted markers and to nothing
 else: a genuine advisory alongside the marker still
 yields `EOL-Effective`, and other RustSec informational records (`unsound`,
 `notice`) keep counting exactly as they did before, since changing that would be
