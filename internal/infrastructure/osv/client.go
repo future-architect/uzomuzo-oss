@@ -236,6 +236,33 @@ type wireEvent struct {
 	Fixed        string `json:"fixed"`
 	LastAffected string `json:"last_affected"`
 	Limit        string `json:"limit"`
+	// unrecognized is set when the event object carries a key outside the four
+	// above. Such an event is passed on with every field empty, which the
+	// domain rejects, rather than decoded as whatever subset it happens to share.
+	unrecognized bool
+}
+
+// UnmarshalJSON decodes an OSV range event and records whether it carried any
+// key this client does not know.
+func (e *wireEvent) UnmarshalJSON(data []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return fmt.Errorf("decode osv range event: %w", err)
+	}
+	type plain wireEvent
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return fmt.Errorf("decode osv range event: %w", err)
+	}
+	*e = wireEvent(p)
+	for k := range keys {
+		switch k {
+		case "introduced", "fixed", "last_affected", "limit":
+		default:
+			e.unrecognized = true
+		}
+	}
+	return nil
 }
 
 // isPlainAdvisoryID reports whether id is a non-empty run of ASCII letters,
@@ -300,6 +327,10 @@ func toRecord(v *wireVuln) (domain.AdvisoryRecord, bool) {
 		for _, r := range af.Ranges {
 			dr := domain.AdvisoryRange{Type: r.Type}
 			for _, ev := range r.Events {
+				if ev.unrecognized {
+					dr.Events = append(dr.Events, domain.AdvisoryRangeEvent{})
+					continue
+				}
 				dr.Events = append(dr.Events, domain.AdvisoryRangeEvent{
 					Introduced:   ev.Introduced,
 					Fixed:        ev.Fixed,

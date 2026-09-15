@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
@@ -47,6 +48,7 @@ func (s *IntegrationService) enrichAdvisoryDBState(ctx context.Context, analyses
 	})
 	runPackageJobs(ctx, "advisory_db_state", jobs, func(a *domain.Analysis, state domain.AdvisoryDBState) {
 		cp := state
+		cp.MarkerIDs = slices.Clone(state.MarkerIDs)
 		a.AdvisoryDBState = &cp
 	})
 }

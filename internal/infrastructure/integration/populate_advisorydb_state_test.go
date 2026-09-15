@@ -170,7 +170,12 @@ func TestEnrichAdvisoryDBState_OneRequestPerCrateAcrossVersions(t *testing.T) {
 	}
 	// Each analysis must own its copy, so a later per-analysis edit cannot leak.
 	if analyses["v1"].AdvisoryDBState == analyses["v2"].AdvisoryDBState {
-		t.Error("two analyses share one AdvisoryDBState pointer")
+		t.Fatal("two analyses share one AdvisoryDBState pointer")
+	}
+	// Distinct pointers are not enough: the slice inside must not share storage.
+	analyses["v1"].AdvisoryDBState.MarkerIDs[0] = "MUTATED"
+	if got := analyses["v2"].AdvisoryDBState.MarkerIDs[0]; got == "MUTATED" {
+		t.Error("two analyses share one MarkerIDs backing array")
 	}
 }
 

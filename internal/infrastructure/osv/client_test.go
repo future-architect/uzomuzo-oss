@@ -272,6 +272,36 @@ func TestQueryPackage_DecodesAliases(t *testing.T) {
 	}
 }
 
+func TestQueryPackage_UnrecognizedEventsAreNotSilentlyDropped(t *testing.T) {
+	t.Parallel()
+	// A future event key, a known key sharing an object with an unknown one,
+	// and an empty object must each reach the domain as an event with no
+	// recognized field, so the package-wide check rejects the range instead
+	// of reading it as open-ended.
+	const page = `{"vulns":[{"id":"RUSTSEC-2024-0375","affected":[{"package":{"name":"atty","ecosystem":"crates.io"},
+	 "ranges":[{"type":"SEMVER","events":[
+	   {"introduced":"0"},
+	   {"future_bound":"1.0.0"},
+	   {"introduced":"0","future_bound":"1.0.0"},
+	   {}]}]}]}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, page)
+	}))
+	defer srv.Close()
+
+	recs, err := newTestClient(t, srv.URL).QueryPackage(context.Background(), "crates.io", "atty")
+	if err != nil {
+		t.Fatalf("QueryPackage failed: %v", err)
+	}
+	if len(recs) != 1 || len(recs[0].Affected) != 1 || len(recs[0].Affected[0].Ranges) != 1 {
+		t.Fatalf("unexpected record shape: %+v", recs)
+	}
+	want := []domain.AdvisoryRangeEvent{{Introduced: "0"}, {}, {}, {}}
+	if got := recs[0].Affected[0].Ranges[0].Events; !slices.Equal(got, want) {
+		t.Errorf("Events: got %+v, want %+v", got, want)
+	}
+}
+
 func TestQueryPackage_SanitizesSummary(t *testing.T) {
 	t.Parallel()
 	// \u001b is the ANSI escape introducer and \u200b a zero-width space; both

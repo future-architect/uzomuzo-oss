@@ -231,6 +231,11 @@ func coversWholePackage(af *AdvisoryAffected) bool {
 		}
 		introduced := 0
 		for _, ev := range r.Events {
+			if ev == (AdvisoryRangeEvent{}) {
+				// An event naming nothing this code recognizes; skipping it
+				// could hide a bound.
+				return false
+			}
 			if ev.Fixed != "" || ev.LastAffected != "" || ev.Limit != "" {
 				return false
 			}

@@ -93,6 +93,18 @@ func TestClassifyUnmaintained_PackageWideQuantifier(t *testing.T) {
 			want: false,
 		},
 		{
+			// An OSV event this code does not recognize reaches the domain as
+			// an event with every field empty; it must not be skipped over.
+			name: "introduced 0 plus an event with no recognized field",
+			rec: func() AdvisoryRecord {
+				r := goodAtty()
+				r.Affected[0].Ranges[0].Events = append(r.Affected[0].Ranges[0].Events,
+					AdvisoryRangeEvent{})
+				return r
+			},
+			want: false,
+		},
+		{
 			name: "range with two introduced events",
 			rec: func() AdvisoryRecord {
 				r := goodAtty()
