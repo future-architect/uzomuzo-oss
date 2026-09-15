@@ -170,6 +170,12 @@ func (c *Client) queryPage(ctx context.Context, ecosystem, name, pageToken strin
 	if len(raw) > maxJSONResponseSize {
 		return nil, fmt.Errorf("osv query response exceeded %d bytes", maxJSONResponseSize)
 	}
+	// A top-level `null` or a JSON scalar decodes into a zero queryResponse
+	// without error, which would be cached as "this package has no advisories".
+	// Only an object is an answer.
+	if trimmed := bytes.TrimLeft(raw, " \t\r\n"); len(trimmed) == 0 || trimmed[0] != '{' {
+		return nil, fmt.Errorf("osv query response was not a JSON object")
+	}
 	var out queryResponse
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil, fmt.Errorf("osv query decode failed: %w", err)

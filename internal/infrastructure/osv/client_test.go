@@ -537,7 +537,19 @@ func TestQueryPackage_TransportFailuresAreUnknownNotNegative(t *testing.T) {
 		{
 			name:    "html_error_page_200",
 			serve:   func(w http.ResponseWriter, r *http.Request) { _, _ = fmt.Fprint(w, `<html>nope</html>`) },
-			wantSub: "decode failed",
+			wantSub: "not a JSON object",
+		},
+		{
+			// `null` unmarshals into a zero queryResponse without error, which
+			// would otherwise be cached as "this package has no advisories".
+			name:    "json_null_200",
+			serve:   func(w http.ResponseWriter, r *http.Request) { _, _ = fmt.Fprint(w, `null`) },
+			wantSub: "not a JSON object",
+		},
+		{
+			name:    "json_array_200",
+			serve:   func(w http.ResponseWriter, r *http.Request) { _, _ = fmt.Fprint(w, `[]`) },
+			wantSub: "not a JSON object",
 		},
 		{
 			name: "oversized_body",

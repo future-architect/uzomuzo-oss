@@ -86,7 +86,8 @@ func collectPackageJobs[T any](
 //
 // Best-effort: a failed or empty lookup applies nothing, leaving the target
 // field at its zero value, which the lifecycle assessor reads as "not asked"
-// rather than as a negative answer. what names the enrichment in debug logs.
+// rather than as a negative answer. The what argument names the enrichment in
+// debug logs.
 //
 // DDD Layer: Infrastructure (parallel enrichment).
 func runPackageJobs[T any](
@@ -103,9 +104,21 @@ func runPackageJobs[T any](
 	for key, job := range jobs {
 		// Acquire before launching so a cancelled context stops dispatch instead
 		// of parking a goroutine per remaining package.
+		// A closed ctx.Done() and a free slot are both ready cases, and select
+		// picks at random, so cancellation is checked explicitly rather than
+		// relied on to win the race.
+		if ctx.Err() != nil {
+			wg.Wait()
+			return
+		}
 		select {
 		case sem <- struct{}{}:
 		case <-ctx.Done():
+			wg.Wait()
+			return
+		}
+		if ctx.Err() != nil {
+			<-sem
 			wg.Wait()
 			return
 		}

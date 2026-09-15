@@ -2,6 +2,7 @@ package osv
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -103,64 +104,80 @@ func FuzzDecodeAndClassify(f *testing.F) {
 			return
 		}
 
-		src := findRecord(recs, state.AdvisoryID)
-		if src == nil {
-			t.Fatalf("verdict cites %q, which is not in the input", state.AdvisoryID)
-		}
-		if !strings.HasPrefix(src.ID, "RUSTSEC-") {
-			t.Fatalf("non-RustSec advisory %q was admitted", src.ID)
-		}
-		if src.Withdrawn {
-			t.Fatalf("withdrawn advisory %q was admitted", src.ID)
-		}
-		if src.Published.IsZero() || now.Sub(src.Published) < domain.UnmaintainedCooldown {
-			t.Fatalf("advisory %q was admitted before the cooldown elapsed (published %v)", src.ID, src.Published)
-		}
-		matched := 0
-		for _, af := range src.Affected {
-			if !strings.EqualFold(strings.TrimSpace(af.Name), strings.TrimSpace(name)) ||
-				!strings.EqualFold(strings.TrimSpace(af.Ecosystem), "crates.io") {
+		// Duplicate IDs are legal input, and the classifier may admit a later
+		// record carrying an ID an earlier one also carries. The invariant is
+		// that SOME record with the cited ID is admissible, not that the first
+		// one is.
+		admissible := false
+		var why string
+		for i := range recs {
+			if recs[i].ID != state.AdvisoryID {
 				continue
 			}
-			matched++
-			if af.Informational != domain.InformationalUnmaintained {
-				t.Fatalf("advisory %q admitted with informational %q", src.ID, af.Informational)
+			if err := checkAdmissible(&recs[i], name, now); err != nil {
+				why = err.Error()
+				continue
 			}
-			if len(af.Versions) > 0 {
-				t.Fatalf("advisory %q admitted with an explicit versions list", src.ID)
-			}
-			if len(af.Ranges) == 0 {
-				t.Fatalf("advisory %q admitted with no ranges", src.ID)
-			}
-			for _, r := range af.Ranges {
-				if r.Type != "SEMVER" {
-					t.Fatalf("advisory %q admitted with range type %q", src.ID, r.Type)
-				}
-				introduced := 0
-				for _, ev := range r.Events {
-					if ev.Fixed != "" || ev.LastAffected != "" || ev.Limit != "" {
-						t.Fatalf("advisory %q admitted with a bounded range %+v", src.ID, ev)
-					}
-					if ev.Introduced != "" {
-						introduced++
-					}
-				}
-				if introduced != 1 {
-					t.Fatalf("advisory %q admitted with %d introduced events", src.ID, introduced)
-				}
-			}
+			admissible = true
+			break
 		}
-		if matched == 0 {
-			t.Fatalf("advisory %q was admitted without naming the queried package %q", src.ID, name)
+		if !admissible {
+			if why == "" {
+				t.Fatalf("verdict cites %q, which is not in the input", state.AdvisoryID)
+			}
+			t.Fatalf("verdict cites %q, but no record with that ID is admissible: %s", state.AdvisoryID, why)
 		}
 	})
 }
 
-func findRecord(recs []domain.AdvisoryRecord, id string) *domain.AdvisoryRecord {
-	for i := range recs {
-		if recs[i].ID == id {
-			return &recs[i]
+// checkAdmissible restates every admission rule ClassifyUnmaintained applies,
+// so a positive verdict can be checked against the input that produced it.
+func checkAdmissible(rec *domain.AdvisoryRecord, name string, now time.Time) error {
+	if !strings.HasPrefix(rec.ID, "RUSTSEC-") {
+		return fmt.Errorf("non-RustSec advisory %q", rec.ID)
+	}
+	if rec.Withdrawn {
+		return fmt.Errorf("advisory %q is withdrawn", rec.ID)
+	}
+	if rec.Published.IsZero() || now.Sub(rec.Published) < domain.UnmaintainedCooldown {
+		return fmt.Errorf("advisory %q is inside the cooldown (published %v)", rec.ID, rec.Published)
+	}
+	matched := 0
+	for _, af := range rec.Affected {
+		if !strings.EqualFold(strings.TrimSpace(af.Name), strings.TrimSpace(name)) ||
+			!strings.EqualFold(strings.TrimSpace(af.Ecosystem), "crates.io") {
+			continue
 		}
+		matched++
+		if af.Informational != domain.InformationalUnmaintained {
+			return fmt.Errorf("advisory %q carries informational %q", rec.ID, af.Informational)
+		}
+		if len(af.Versions) > 0 {
+			return fmt.Errorf("advisory %q carries an explicit versions list", rec.ID)
+		}
+		if len(af.Ranges) == 0 {
+			return fmt.Errorf("advisory %q carries no ranges", rec.ID)
+		}
+		for _, r := range af.Ranges {
+			if r.Type != "SEMVER" {
+				return fmt.Errorf("advisory %q carries range type %q", rec.ID, r.Type)
+			}
+			introduced := 0
+			for _, ev := range r.Events {
+				if ev.Fixed != "" || ev.LastAffected != "" || ev.Limit != "" {
+					return fmt.Errorf("advisory %q carries a bounded range %+v", rec.ID, ev)
+				}
+				if ev.Introduced != "" {
+					introduced++
+				}
+			}
+			if introduced != 1 {
+				return fmt.Errorf("advisory %q carries %d introduced events", rec.ID, introduced)
+			}
+		}
+	}
+	if matched == 0 {
+		return fmt.Errorf("advisory %q names no affected entry for %q", rec.ID, name)
 	}
 	return nil
 }

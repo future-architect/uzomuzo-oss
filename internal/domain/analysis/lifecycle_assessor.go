@@ -83,9 +83,10 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLScheduled), Reason: reason, Trace: trace, Signals: signals}, nil
 	}
 	// 1. Primary-source EOL status override.
-	// EOL-Confirmed is driven ONLY by an explicit primary-source signal (npm deprecated /
-	// PyPI classifier or yank / Packagist abandoned / NuGet deprecation / Maven relocation;
-	// Evaluator.ensureRuleChain is the full list). Checked before the archive branch so
+	// EOL-Confirmed is driven ONLY by an explicit primary-source signal, for example
+	// npm deprecated, a PyPI classifier or yank, Packagist abandoned, NuGet deprecation
+	// or Maven relocation. Evaluator.ensureRuleChain holds the rules that can set it;
+	// this list is not that chain. Checked before the archive branch so
 	// the EOL verdict and its reason are attributed to that signal, not to the archive flag.
 	if in.EOL.IsEOL() {
 		reason := in.EOL.FinalReason()
