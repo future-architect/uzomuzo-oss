@@ -170,6 +170,10 @@ func TestEnrichRegistryState_NoRepositoryRequired(t *testing.T) {
 
 // TestEnrichRegistryState_DeduplicatesByName pins that duplicate PURLs for one
 // package collapse into a single request while every analysis is updated.
+//
+// A case-variant name is a separate request on purpose: the name is sent to the
+// source verbatim, because not every source matches names case-insensitively
+// (api.osv.dev does not), and a folded name would return a silent empty answer.
 func TestEnrichRegistryState_DeduplicatesByName(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
@@ -189,8 +193,8 @@ func TestEnrichRegistryState_DeduplicatesByName(t *testing.T) {
 			t.Errorf("%s: expected AllReleasesYanked=true, got %+v", k, a.RegistryState)
 		}
 	}
-	if got := calls.Load(); got != 1 {
-		t.Errorf("http calls: got %d, want 1", got)
+	if got := calls.Load(); got != 2 {
+		t.Errorf("http calls: got %d, want 2 (one per distinct spelling)", got)
 	}
 	if analyses["a"].RegistryState == analyses["b"].RegistryState {
 		t.Error("expected each analysis to own its RegistryState copy")

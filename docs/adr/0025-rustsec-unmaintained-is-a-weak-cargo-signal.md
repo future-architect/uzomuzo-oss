@@ -5,7 +5,8 @@ Status: Accepted
 
 ## Context
 
-uzomuzo's EOL rule chain (`internal/infrastructure/eolevaluator/evaluator.go:92-121`)
+uzomuzo's EOL rule chain (`Evaluator.ensureRuleChain` in
+`internal/infrastructure/eolevaluator/evaluator.go`)
 has a registry-deprecation rule for every ecosystem whose registry publishes one: npm
 `deprecated`, PyPI `Development Status :: 7 - Inactive`, Packagist `abandoned`, NuGet
 deprecation, Maven relocation. Cargo has no such rule, because crates.io has no
@@ -32,7 +33,7 @@ found no single class of evidence behind it:
 | author action only (repo archived, crate deleted) | 15 |
 | "deprecated", no attribution given | 13 |
 | rename/merge/superseded by another crate | 58 |
-| explicitly implicit (author unresponsive, contact attempt failed) | 35 |
+| curator's inference (author unresponsive, contact attempt failed) | 35 |
 | unattributed "is no longer maintained" | 77 |
 
 No structured field separates these anywhere in the pipeline: not in OSV, not in
@@ -68,7 +69,8 @@ and no human judgement is reopened because of it.
 ### Why never EOL-Confirmed
 
 `EOLEndOfLife` is defined as "primary sources mark the package/project as
-EOL/abandoned/sunset" (`internal/domain/analysis/eol.go:17`). RustSec is a
+EOL/abandoned/sunset" (the godoc on `EOLEndOfLife` in
+`internal/domain/analysis/eol.go`). RustSec is a
 third-party curator forming an inference about a crate, not a primary source
 making a statement about itself. [ADR-0020](0020-archived-registry-liveness.md)
 reserves `EOL-Confirmed` for an explicit primary-source signal, and
@@ -133,8 +135,8 @@ The fact is read by a single new branch in `assessInternal`
 (`internal/domain/analysis/lifecycle_assessor.go`), numbered 1.4, between the
 all-releases-yanked branch (1.25, [ADR-0022](0022-all-releases-yanked-is-not-eol.md))
 and the archive/disable branch (1.5, [ADR-0020](0020-archived-registry-liveness.md)).
-A single branch, rather than a condition threaded through the five exits
-that can return `Active` or `Legacy-Safe`, keeps "a flagged package is never
+A single branch, rather than a condition threaded through the nine exits
+below it that can return `Active` or `Legacy-Safe`, keeps "a flagged package is never
 Active and never Legacy-Safe" a property of one place instead of an emergent
 property of several branches that a later lifecycle edit could forget to
 update. It runs before the archive branch deliberately: the archive branch

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -28,7 +29,7 @@ func unmaintainedPage(name string) string {
 }
 
 // newAdvisoryDBService wires an IntegrationService whose OSV client points at
-// srv and records every package name it was asked about.
+// srv, with caching disabled so each test counts real requests.
 func newAdvisoryDBService(t *testing.T, srvURL string) *IntegrationService {
 	t.Helper()
 	c := osv.NewClient()
@@ -148,8 +149,9 @@ func TestEnrichAdvisoryDBState_OneRequestPerCrateAcrossVersions(t *testing.T) {
 	srv := httptest.NewServer(rec.handler(unmaintainedPage))
 	defer srv.Close()
 
-	// Three versions of one crate, plus a case-variant name: a batch must not
-	// turn them into four lookups.
+	// Three versions of one crate must not turn into three lookups. A
+	// case-variant name is a different package to OSV, which matches names
+	// exactly, so it gets its own lookup rather than borrowing this one.
 	analyses := map[string]*domain.Analysis{
 		"v1":   analysisFor("pkg:cargo/atty@0.2.14", "cargo"),
 		"v2":   analysisFor("pkg:cargo/atty@0.2.13", "cargo"),
@@ -160,8 +162,14 @@ func TestEnrichAdvisoryDBState_OneRequestPerCrateAcrossVersions(t *testing.T) {
 	// deduplication rather than the client's cache.
 	newAdvisoryDBService(t, srv.URL).enrichAdvisoryDBState(context.Background(), analyses)
 
-	if got := rec.calls.Load(); got != 1 {
-		t.Errorf("OSV requests: got %d, want 1 (requested %v)", got, rec.requested())
+	if got := rec.calls.Load(); got != 2 {
+		t.Errorf("OSV requests: got %d, want 2 (requested %v)", got, rec.requested())
+	}
+	// The name reaches OSV exactly as written: api.osv.dev matches crates.io
+	// names case-sensitively, so a lowercased "Atty" would silently return
+	// nothing.
+	if got := rec.requested(); !slices.Contains(got, "crates.io/Atty") {
+		t.Errorf("requested: got %v, want it to include crates.io/Atty", got)
 	}
 	for k, a := range analyses {
 		if a.AdvisoryDBState == nil || !a.AdvisoryDBState.Unmaintained {

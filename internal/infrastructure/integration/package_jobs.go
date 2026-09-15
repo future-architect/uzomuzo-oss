@@ -15,8 +15,13 @@ import (
 // in-flight request per unique package name.
 const maxPackageFactWorkers = 16
 
-// packageJobKey identifies one package-level lookup. The name is lowercased so
-// case-variant PURLs for the same package share a single lookup.
+// packageJobKey identifies one package-level lookup.
+//
+// The name is the one written in the PURL, not a lowercased form: it is sent
+// verbatim to the source, and api.osv.dev matches crates.io names
+// case-sensitively (a query for "Atty" returns nothing where "atty" returns
+// three advisories). Folding case here would turn that into a silent empty
+// answer, so two casings of one name cost one extra lookup instead.
 type packageJobKey struct {
 	ecosystem string
 	name      string
@@ -65,7 +70,7 @@ func collectPackageJobs[T any](
 		if fetch == nil {
 			continue
 		}
-		key := packageJobKey{ecosystem: parsed.Ecosystem(), name: strings.ToLower(name)}
+		key := packageJobKey{ecosystem: parsed.Ecosystem(), name: name}
 		job, seen := jobs[key]
 		if !seen {
 			job = &packageJob[T]{fetch: fetch}

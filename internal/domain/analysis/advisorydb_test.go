@@ -509,6 +509,18 @@ func TestClassifyUnmaintained_ReturnedEvidence(t *testing.T) {
 		}
 	})
 
+	t.Run("match: the summary is sanitized by the classifier itself", func(t *testing.T) {
+		t.Parallel()
+		// Not every producer of an AdvisoryRecord is the OSV client; the field
+		// reaches a terminal, so the domain strips control runes itself.
+		r := goodAtty()
+		r.Summary = "atty\u001b[31m is\n\n  unmaintained\u200b"
+		got := ClassifyUnmaintained([]AdvisoryRecord{r}, "crates.io", "atty", unmaintainedNow)
+		if want := "atty[31m is unmaintained"; got.Summary != want {
+			t.Errorf("Summary: got %q, want %q", got.Summary, want)
+		}
+	})
+
 	t.Run("match: an alias set naming another RustSec advisory is not trusted", func(t *testing.T) {
 		t.Parallel()
 		// failure@0.1.8: the unmaintained marker lists the separate unsound

@@ -73,12 +73,10 @@ type AdvisoryRecord struct {
 // AdvisoryDBState captures package-level maintenance facts asserted by a
 // third-party advisory database (today: RustSec, reached through OSV).
 //
-// It is deliberately NOT part of EOLStatus. An advisory curator is not a
-// primary source: 35 of the 269 RustSec unmaintained advisories are explicitly
-// third-party inferences drawn after the author did not respond, and a further
-// 77 carry no attribution at all. Downstream consumers treat a primary-source
-// EOL as authoritative enough to overrule a human judgement, which this fact
-// must never do. See ADR-0025.
+// It is deliberately NOT part of EOLStatus: an advisory curator is not a
+// primary source, and consumers may treat a primary-source EOL as authoritative
+// enough to reopen a human decision. See ADR-0025 for the measurement behind
+// that call.
 //
 // A nil *AdvisoryDBState means the databases were not asked — the ecosystem is
 // not one we query, the client is unwired, the PURL was unparseable, or the
@@ -142,7 +140,7 @@ func ClassifyUnmaintained(recs []AdvisoryRecord, ecosystem, name string, now tim
 	return AdvisoryDBState{
 		Unmaintained: true,
 		AdvisoryID:   best.ID,
-		Summary:      NormalizeSummary(best.Summary),
+		Summary:      SanitizeExternalSummary(best.Summary),
 		Reference:    best.Reference,
 		Published:    best.Published,
 		MarkerIDs:    slices.Compact(markerIDs),
@@ -238,9 +236,6 @@ func coversWholePackage(af *AdvisoryAffected) bool {
 			}
 			if ev.Fixed != "" || ev.LastAffected != "" || ev.Limit != "" {
 				return false
-			}
-			if ev.Introduced == "" {
-				continue
 			}
 			if ev.Introduced != "0" && ev.Introduced != "0.0.0-0" {
 				return false

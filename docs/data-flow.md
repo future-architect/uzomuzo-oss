@@ -91,7 +91,7 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 #### OSV.dev — Query (POST https://api.osv.dev/v1/query)
 
 - Request body: `{"package":{"name":"<crate>","ecosystem":"crates.io"}}`; paginated via the response's `next_page_token`
-- Fields consumed: per advisory — `id`, `summary`, `published`, `withdrawn`, `references[]` (the entry whose `type` is `ADVISORY`); per affected entry — `package.name`, `package.ecosystem`, `ranges[].type`, `ranges[].events[]`, `versions[]`, `database_specific.informational`
+- Fields consumed: per advisory — `id`, `aliases[]`, `summary`, `published`, `withdrawn`, `references[]` (the entry whose `type` is `ADVISORY`); per affected entry — `package.name`, `package.ecosystem`, `ranges[].type`, `ranges[].events[]`, `versions[]`, `database_specific.informational`
 - Purpose: detect the RustSec `unmaintained` marker for cargo packages and record it as a package-level fact (`Analysis.AdvisoryDBState`); queried only for cargo — no other ecosystem is asked. Classification (package-wide range check, withdrawal check, publication-age cooldown) happens in the domain layer (`analysis.ClassifyUnmaintained`), not in the client
 - Code: `osv.Client.QueryPackage` (`internal/infrastructure/osv/client.go`), `IntegrationService.enrichAdvisoryDBState` (`internal/infrastructure/integration/populate_advisorydb_state.go`), `analysis.ClassifyUnmaintained` (`internal/domain/analysis/advisorydb.go`). See [ADR-0025](adr/0025-rustsec-unmaintained-is-a-weak-cargo-signal.md)
 - Docs: <https://google.github.io/osv.dev/post-v1-query/>

@@ -19,8 +19,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common/ttlcache"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
@@ -148,6 +150,8 @@ func (c *Client) queryPage(ctx context.Context, ecosystem, name, pageToken strin
 	if err != nil {
 		return nil, fmt.Errorf("osv query http failed: %w", err)
 	}
+	// best-effort cleanup; the body is fully read below and any close error
+	// would only mask the decode error this function returns.
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("osv query http status %d", resp.StatusCode)
@@ -352,7 +356,7 @@ func advisoryReference(refs []wireReference) string {
 	fallback := ""
 	for _, r := range refs {
 		u := strings.TrimSpace(r.URL)
-		if u == "" {
+		if !isPlainWebURL(u) {
 			continue
 		}
 		if strings.EqualFold(strings.TrimSpace(r.Type), advisoryReferenceType) {
@@ -363,6 +367,29 @@ func advisoryReference(refs []wireReference) string {
 		}
 	}
 	return fallback
+}
+
+// isPlainWebURL reports whether u is an absolute http(s) URL carrying no
+// control or format runes.
+//
+// Why not pass the URL through as written: it is published as the evidence a
+// reader opens, so a "javascript:" or "data:" URL, or one hiding an ANSI escape,
+// would travel from an advisory database into a terminal or a consumer's UI.
+// Dropping it costs a link, never a verdict.
+func isPlainWebURL(u string) bool {
+	parsed, err := url.Parse(u)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	for _, r := range u {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || unicode.IsSpace(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // sanitizeSummary makes an advisory summary safe to print, then collapses it to

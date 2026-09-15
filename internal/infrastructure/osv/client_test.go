@@ -635,11 +635,18 @@ func TestAdvisoryReference(t *testing.T) {
 		refs []wireReference
 		want string
 	}{
-		{"advisory_type_wins", []wireReference{{Type: "PACKAGE", URL: "p"}, {Type: "ADVISORY", URL: "a"}}, "a"},
-		{"advisory_type_case_insensitive", []wireReference{{Type: "advisory", URL: "a"}}, "a"},
-		{"falls_back_to_first_url", []wireReference{{Type: "WEB", URL: "w"}, {Type: "REPORT", URL: "r"}}, "w"},
-		{"skips_empty_urls", []wireReference{{Type: "WEB", URL: "  "}, {Type: "REPORT", URL: "r"}}, "r"},
+		{"advisory_type_wins", []wireReference{{Type: "PACKAGE", URL: "https://crates.io/crates/atty"}, {Type: "ADVISORY", URL: "https://rustsec.org/a.html"}}, "https://rustsec.org/a.html"},
+		{"advisory_type_case_insensitive", []wireReference{{Type: "advisory", URL: "https://rustsec.org/a.html"}}, "https://rustsec.org/a.html"},
+		{"falls_back_to_first_url", []wireReference{{Type: "WEB", URL: "https://example.com/w"}, {Type: "REPORT", URL: "https://example.com/r"}}, "https://example.com/w"},
+		{"skips_empty_urls", []wireReference{{Type: "WEB", URL: "  "}, {Type: "REPORT", URL: "https://example.com/r"}}, "https://example.com/r"},
 		{"none", nil, ""},
+		// The URL is evidence a reader is expected to open, so anything that is
+		// not a plain http(s) URL is dropped rather than passed through.
+		{"rejects_javascript_scheme", []wireReference{{Type: "ADVISORY", URL: "javascript:alert(1)"}}, ""},
+		{"rejects_data_scheme", []wireReference{{Type: "WEB", URL: "data:text/html,x"}}, ""},
+		{"rejects_control_characters", []wireReference{{Type: "ADVISORY", URL: "https://rustsec.org/a\u001b[31m"}}, ""},
+		{"falls_back_past_a_rejected_url", []wireReference{{Type: "ADVISORY", URL: "javascript:alert(1)"}, {Type: "WEB", URL: "https://rustsec.org/a.html"}}, "https://rustsec.org/a.html"},
+		{"keeps_http", []wireReference{{Type: "ADVISORY", URL: "http://rustsec.org/a.html"}}, "http://rustsec.org/a.html"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

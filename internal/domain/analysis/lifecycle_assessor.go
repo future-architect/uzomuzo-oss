@@ -4,7 +4,6 @@ package analysis
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 
 	cfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
@@ -85,7 +84,8 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 	}
 	// 1. Primary-source EOL status override.
 	// EOL-Confirmed is driven ONLY by an explicit primary-source signal (npm deprecated /
-	// PyPI yanked / Packagist abandoned / Maven relocation). Checked before the archive branch so
+	// PyPI classifier or yank / Packagist abandoned / NuGet deprecation / Maven relocation;
+	// Evaluator.ensureRuleChain is the full list). Checked before the archive branch so
 	// the EOL verdict and its reason are attributed to that signal, not to the archive flag.
 	if in.EOL.IsEOL() {
 		reason := in.EOL.FinalReason()
@@ -141,6 +141,10 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		if analysis.IsDisabled() {
 			signals = append(signals, sig(SignalRepoDisabled, "true"))
 		}
+		// AdvisoryID is passed alongside MarkerIDs, which already contains it for
+		// any state ClassifyUnmaintained built: a caller of the library facade can
+		// hand-build a state with only the evidence ID set, and that one must still
+		// be excluded.
 		label, t := s.severityAwareLabel(s.hasHighSeverityAdvisoriesExcluding(analysis, append([]string{ad.AdvisoryID}, ad.MarkerIDs...)),
 			LabelEOLEffective, "advisory_db_unmaintained_unpatched_vulns",
 			LabelStalled, "advisory_db_unmaintained")
@@ -308,24 +312,15 @@ func (s *LifecycleAssessorService) hasHighSeverityAdvisories(a *Analysis) bool {
 // vulnerability, so every flagged crate would reach EOL-Effective and the Stalled
 // outcome would be unreachable. See ADR-0025.
 func (s *LifecycleAssessorService) hasHighSeverityAdvisoriesExcluding(a *Analysis, excludeIDs []string) bool {
-	vd := s.getStableOrMaxVersionDetail(a)
-	if vd == nil {
+	vd := s.getStableOrMaxVersionDetail(a).ExcludingAdvisories(excludeIDs)
+	if vd == nil || len(vd.Advisories) == 0 {
 		return false
 	}
-	high := 0
-	for _, adv := range vd.Advisories {
-		if slices.ContainsFunc(excludeIDs, func(id string) bool { return id != "" && strings.EqualFold(adv.ID, id) }) {
-			continue
-		}
-		if adv.CVSS3Score <= 0 {
-			// Any unknown severity triggers conservative fallback (treated as potentially high).
-			return true
-		}
-		if adv.CVSS3Score >= s.rules.HighSeverityCVSSThreshold {
-			high++
-		}
+	if vd.UnknownSeverityAdvisoryCount() > 0 {
+		// Any unknown severity triggers conservative fallback (treated as potentially high).
+		return true
 	}
-	return high > 0
+	return vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) > 0
 }
 
 // severityAwareLabel returns the appropriate label and trace based on whether HIGH+ advisories exist.
