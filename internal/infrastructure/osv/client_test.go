@@ -302,6 +302,29 @@ func TestQueryPackage_UnrecognizedEventsAreNotSilentlyDropped(t *testing.T) {
 	}
 }
 
+func TestQueryPackage_UnrecognizedRangeKeysAreNotSilentlyDropped(t *testing.T) {
+	t.Parallel()
+	// A future key on the range object could carry an upper bound, so the range
+	// must not read as open-ended just because this client cannot see it.
+	const page = `{"vulns":[{"id":"RUSTSEC-2024-0375","affected":[{"package":{"name":"atty","ecosystem":"crates.io"},
+	 "ranges":[{"type":"SEMVER","future_bound":"1.0.0","events":[{"introduced":"0"}]}]}]}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, page)
+	}))
+	defer srv.Close()
+
+	recs, err := newTestClient(t, srv.URL).QueryPackage(context.Background(), "crates.io", "atty")
+	if err != nil {
+		t.Fatalf("QueryPackage failed: %v", err)
+	}
+	if len(recs) != 1 || len(recs[0].Affected) != 1 || len(recs[0].Affected[0].Ranges) != 1 {
+		t.Fatalf("unexpected record shape: %+v", recs)
+	}
+	if got := recs[0].Affected[0].Ranges[0].Type; got == "SEMVER" {
+		t.Errorf("Type: got %q, want a type the domain does not recognize", got)
+	}
+}
+
 func TestQueryPackage_SanitizesSummary(t *testing.T) {
 	t.Parallel()
 	// \u001b is the ANSI escape introducer and \u200b a zero-width space; both

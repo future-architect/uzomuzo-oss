@@ -242,6 +242,34 @@ type wirePackage struct {
 type wireRange struct {
 	Type   string      `json:"type"`
 	Events []wireEvent `json:"events"`
+	// unrecognized is set when the range object carries a key outside the two
+	// above — a future key could bound the range, and reading the range as
+	// open-ended because this client cannot see the bound is the one mistake
+	// the package-wide check exists to avoid.
+	unrecognized bool
+}
+
+// UnmarshalJSON decodes an OSV range and records whether it carried any key
+// this client does not know.
+func (r *wireRange) UnmarshalJSON(data []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return fmt.Errorf("decode osv range: %w", err)
+	}
+	type plain wireRange
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return fmt.Errorf("decode osv range: %w", err)
+	}
+	*r = wireRange(p)
+	for k := range keys {
+		switch k {
+		case "type", "events":
+		default:
+			r.unrecognized = true
+		}
+	}
+	return nil
 }
 
 type wireEvent struct {
@@ -338,6 +366,12 @@ func toRecord(v *wireVuln) (domain.AdvisoryRecord, bool) {
 			Informational: strings.TrimSpace(af.DatabaseSpecific.Informational),
 		}
 		for _, r := range af.Ranges {
+			if r.unrecognized {
+				// An empty type is a type the domain rejects, which is the
+				// conservative reading of a range shape we cannot fully see.
+				out.Ranges = append(out.Ranges, domain.AdvisoryRange{})
+				continue
+			}
 			dr := domain.AdvisoryRange{Type: r.Type}
 			for _, ev := range r.Events {
 				if ev.unrecognized {

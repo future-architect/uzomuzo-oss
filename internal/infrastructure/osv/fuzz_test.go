@@ -167,9 +167,13 @@ func checkAdmissible(rec *domain.AdvisoryRecord, name string, now time.Time) err
 				if ev.Fixed != "" || ev.LastAffected != "" || ev.Limit != "" {
 					return fmt.Errorf("advisory %q carries a bounded range %+v", rec.ID, ev)
 				}
-				if ev.Introduced != "" {
-					introduced++
+				if ev == (domain.AdvisoryRangeEvent{}) {
+					return fmt.Errorf("advisory %q carries an event with no recognized field", rec.ID)
 				}
+				if ev.Introduced != "0" && ev.Introduced != "0.0.0-0" {
+					return fmt.Errorf("advisory %q carries introduced %q", rec.ID, ev.Introduced)
+				}
+				introduced++
 			}
 			if introduced != 1 {
 				return fmt.Errorf("advisory %q carries %d introduced events", rec.ID, introduced)

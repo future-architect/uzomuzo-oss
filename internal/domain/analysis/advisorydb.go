@@ -128,8 +128,9 @@ func ClassifyUnmaintained(recs []AdvisoryRecord, ecosystem, name string, now tim
 			markerIDs = append(markerIDs, rec.Aliases...)
 		}
 		// Deterministic across runs: the same input set always yields the same
-		// evidence, whatever order the database returned it in.
-		if best == nil || rec.ID < best.ID {
+		// evidence, whatever order the database returned it in. Two records can
+		// carry one ID and different evidence, so the ID alone is not an order.
+		if best == nil || recordOrder(rec) < recordOrder(best) {
 			best = rec
 		}
 	}
@@ -163,6 +164,13 @@ func aliasesAreOneAdvisory(rec *AdvisoryRecord) bool {
 		}
 	}
 	return true
+}
+
+// recordOrder is the total order the evidence winner is chosen by: the advisory
+// ID first, then the fields that would otherwise differ between two records
+// sharing one ID.
+func recordOrder(rec *AdvisoryRecord) string {
+	return rec.ID + "\x00" + rec.Published.UTC().Format(time.RFC3339Nano) + "\x00" + rec.Summary + "\x00" + rec.Reference
 }
 
 // admitsUnmaintained reports whether one advisory may assert that the whole

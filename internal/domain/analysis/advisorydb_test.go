@@ -509,6 +509,23 @@ func TestClassifyUnmaintained_ReturnedEvidence(t *testing.T) {
 		}
 	})
 
+	t.Run("match: duplicate IDs pick the same evidence in either order", func(t *testing.T) {
+		t.Parallel()
+		first := goodAtty()
+		first.Summary = "b summary"
+		first.Reference = "https://rustsec.org/b.html"
+		second := goodAtty()
+		second.Summary = "a summary"
+		second.Reference = "https://rustsec.org/a.html"
+
+		one := ClassifyUnmaintained([]AdvisoryRecord{first, second}, "crates.io", "atty", unmaintainedNow)
+		two := ClassifyUnmaintained([]AdvisoryRecord{second, first}, "crates.io", "atty", unmaintainedNow)
+		if one.Summary != two.Summary || one.Reference != two.Reference {
+			t.Errorf("evidence depends on input order: %q/%q vs %q/%q",
+				one.Summary, one.Reference, two.Summary, two.Reference)
+		}
+	})
+
 	t.Run("match: the summary is sanitized by the classifier itself", func(t *testing.T) {
 		t.Parallel()
 		// Not every producer of an AdvisoryRecord is the OSV client; the field

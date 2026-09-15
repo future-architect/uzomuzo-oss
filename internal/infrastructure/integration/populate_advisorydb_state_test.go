@@ -14,6 +14,8 @@ import (
 	"time"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/osv"
 )
 
@@ -251,5 +253,33 @@ func TestEnrichAdvisoryDBState_CancelledContextStopsDispatch(t *testing.T) {
 	// Dispatch stops on cancellation rather than parking a goroutine per package.
 	if got := rec.calls.Load(); got > maxPackageFactWorkers {
 		t.Errorf("OSV requests after cancellation: got %d, want at most %d", got, maxPackageFactWorkers)
+	}
+}
+
+// TestAnalyzeFromPURLs_PopulatesAdvisoryDBState drives the production path so
+// that deleting the enrichAdvisoryDBState call in purl_batch.go fails a test.
+func TestAnalyzeFromPURLs_PopulatesAdvisoryDBState(t *testing.T) {
+	t.Parallel()
+	rec := &osvRecorder{}
+	srv := httptest.NewServer(rec.handler(unmaintainedPage))
+	defer srv.Close()
+
+	oc := osv.NewClient()
+	oc.SetBaseURL(srv.URL)
+	oc.SetCacheTTL(0)
+	// A tokenless GitHub client short-circuits the repository-state fetch without
+	// any network call; a nil one would panic inside enhanceAnalysesWithGitHubBatch.
+	svc := NewIntegrationService(github.NewClient(&config.Config{}), &stubDepsDevClient{}, WithOSVClient(oc))
+
+	analyses, err := svc.AnalyzeFromPURLs(context.Background(), []string{"pkg:cargo/normal"})
+	if err != nil {
+		t.Fatalf("AnalyzeFromPURLs failed: %v", err)
+	}
+	a := analyses["pkg:cargo/normal"]
+	if a == nil {
+		t.Fatalf("expected an analysis for pkg:cargo/normal, got %v", analyses)
+	}
+	if !a.AdvisoryDBUnmaintained() {
+		t.Fatalf("expected the fact through the production path, got %+v", a.AdvisoryDBState)
 	}
 }
