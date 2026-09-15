@@ -91,8 +91,8 @@ func TestEnrichAdvisoryDBState_FlagsCargoPackage(t *testing.T) {
 	if got := rec.requested(); len(got) != 1 || got[0] != "crates.io/atty" {
 		t.Errorf("requested: got %v, want [crates.io/atty]", got)
 	}
-	// The fact must never reach EOLStatus — that is the field the downstream
-	// catalog treats as authoritative enough to overrule a human. See ADR-0025.
+	// The fact must never reach EOLStatus — consumers may treat that field as
+	// authoritative enough to reopen a human decision. See ADR-0025.
 	if a.EOL.State != "" {
 		t.Errorf("EOLStatus.State was set to %q by this path", a.EOL.State)
 	}

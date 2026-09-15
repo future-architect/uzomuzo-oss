@@ -47,11 +47,10 @@ undecidable share is growing, not shrinking.
 
 ### Why this matters downstream
 
-`uzomuzo-catalog` assigns `PrimarySourceEOL = a.EOL.IsEOL()` and treats a
-false-to-true flip of that field as authoritative: it demotes a human `not_eol`
-judgement back to `pending`, discarding the human's `reason`, `reason_ja`,
-`eol_date`, and `successor`. Any signal that sets `EOLState` to `EOLEndOfLife`
-therefore overrides a person's prior decision, not just a machine label.
+Consumers of this library can treat `EOL.IsEOL()` as a primary-source
+statement strong enough to reopen a decision a person has already made about a
+package. Any signal that sets `EOLState` to `EOLEndOfLife` can therefore
+override human review, not just a machine label.
 
 ## Decision
 
@@ -62,9 +61,9 @@ Query OSV.dev directly for cargo packages (`POST /v1/query`,
 yields `Stalled`. The fact combined with unpatched HIGH+ advisories yields
 `EOL-Effective` through the existing `severityAwareLabel` helper. It **never**
 yields `EOL-Confirmed`. Nothing is written to `EOLStatus`: `EOL.IsEOL()` stays
-false, so — mirroring [ADR-0022](0022-all-releases-yanked-is-not-eol.md) — the
-catalog's `PrimarySourceEOL` never flips to true on this fact alone, and no
-human `not_eol` judgement is demoted because of it.
+false, so — mirroring [ADR-0022](0022-all-releases-yanked-is-not-eol.md) — a
+consumer keying on it never sees a new primary-source EOL on this fact alone,
+and no human judgement is reopened because of it.
 
 ### Why never EOL-Confirmed
 
@@ -119,13 +118,13 @@ already set for withdrawal facts.
 
 ### The 14-day cooldown
 
-Withdrawn advisories can be re-filed, and a re-file re-triggers the
-false-to-true flip described above. `ring`'s RUSTSEC-2025-0007 was withdrawn two
+Withdrawn advisories can be re-filed, and a consumer that reacts to a newly
+appearing signal would react again to each re-filing. `ring`'s RUSTSEC-2025-0007 was withdrawn two
 days after filing. Nothing about a maintenance signal is urgent enough to
 justify propagating a filing that might not survive the week, so the fact is
-only admitted once the advisory has been published for at least 14 days. The
-downstream catalog has no buffer of its own for this, so holding the delay here
-is the one place it is guaranteed to apply. A missing or unparseable
+only admitted once the advisory has been published for at least 14 days.
+Holding the delay here means every consumer gets it, without each having to
+build its own. A missing or unparseable
 publication date is treated as a non-match, not as an already-aged one.
 
 ### Placement
