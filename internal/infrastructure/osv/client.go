@@ -90,7 +90,10 @@ func (c *Client) QueryPackage(ctx context.Context, ecosystem, name string) ([]do
 	if eco == "" || n == "" {
 		return nil, nil
 	}
-	key := strings.ToLower(eco) + "/" + strings.ToLower(n)
+	// The key keeps the exact spelling: api.osv.dev matches crates.io names
+	// case-sensitively, so a folded key would serve one package's advisories
+	// for another's name.
+	key := eco + "/" + n
 	if recs, ok := c.cache.Get(key); ok {
 		slog.Debug("osv_cache_hit", "ecosystem", eco, "name", n)
 		return recs, nil

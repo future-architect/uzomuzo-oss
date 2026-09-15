@@ -60,6 +60,8 @@ const (
 	SignalEcosystemDelivery   = domain.SignalEcosystemDelivery
 	SignalAllReleasesYanked   = domain.SignalAllReleasesYanked
 
+	// SignalAdvisoryDBUnmaintained carries the advisory ID that reported the
+	// whole package unmaintained (see AdvisoryDBState).
 	SignalAdvisoryDBUnmaintained = domain.SignalAdvisoryDBUnmaintained
 )
 

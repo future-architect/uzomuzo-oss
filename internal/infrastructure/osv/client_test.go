@@ -348,7 +348,7 @@ func TestQueryPackage_CachesNegativeResult(t *testing.T) {
 	}
 }
 
-func TestQueryPackage_CacheKeyIsCaseInsensitive(t *testing.T) {
+func TestQueryPackage_CacheKeyIsCaseSensitive(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -361,13 +361,16 @@ func TestQueryPackage_CacheKeyIsCaseInsensitive(t *testing.T) {
 	c.SetBaseURL(srv.URL)
 	c.SetCacheTTL(time.Minute)
 
-	for _, name := range []string{"Atty", "atty", "ATTY"} {
+	// OSV matches crates.io names case-sensitively, so case variants are
+	// different packages: sharing a cache entry between them would answer one
+	// name with another name's advisories.
+	for _, name := range []string{"Atty", "atty", "ATTY", "atty"} {
 		if _, err := c.QueryPackage(context.Background(), "crates.io", name); err != nil {
 			t.Fatalf("QueryPackage(%q) failed: %v", name, err)
 		}
 	}
-	if got := calls.Load(); got != 1 {
-		t.Errorf("HTTP calls: got %d, want 1 (case-variant names share one lookup)", got)
+	if got := calls.Load(); got != 3 {
+		t.Errorf("HTTP calls: got %d, want 3 (one per distinct spelling, the repeat served from cache)", got)
 	}
 }
 
