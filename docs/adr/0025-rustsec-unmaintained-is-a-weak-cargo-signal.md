@@ -173,7 +173,13 @@ from `EOL-Effective` to `Stalled` and hid a real type-confusion bug. OSV defines
 an alias as the same advisory, so a set containing a second RustSec ID breaks
 that definition and cannot be used to discount anything; for such a marker only
 its own ID is excluded. A missed alias costs a `Stalled` verdict at worst, never
-a hidden vulnerability. The exclusion is scoped to those admitted markers and to nothing
+a hidden vulnerability.
+
+The exclusion applies to the label decision only. The `advisory_count` signal
+and the JSON/CSV `advisory_count` columns keep reporting every advisory deps.dev
+lists, markers included: they count advisories, not vulnerabilities, and a
+signal that disagreed with the columns in the same output would be harder to
+trust than one that includes the marker whose ID the reason already names. The exclusion is scoped to those admitted markers and to nothing
 else: a genuine advisory alongside the marker still
 yields `EOL-Effective`, and other RustSec informational records (`unsound`,
 `notice`) keep counting exactly as they did before, since changing that would be
