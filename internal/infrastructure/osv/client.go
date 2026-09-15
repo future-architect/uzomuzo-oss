@@ -176,6 +176,16 @@ func (c *Client) queryPage(ctx context.Context, ecosystem, name, pageToken strin
 	if trimmed := bytes.TrimLeft(raw, " \t\r\n"); len(trimmed) == 0 || trimmed[0] != '{' {
 		return nil, fmt.Errorf("osv query response was not a JSON object")
 	}
+	// A package with no advisories answers `{}`, so an absent vulns field is a
+	// clean answer. An explicit null is not: the schema has an array there, and
+	// caching it as "no advisories" would hide one for the cache's lifetime.
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, fmt.Errorf("osv query decode failed: %w", err)
+	}
+	if v, ok := fields["vulns"]; ok && string(bytes.TrimSpace(v)) == "null" {
+		return nil, fmt.Errorf("osv query response carried a null vulns field")
+	}
 	var out queryResponse
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil, fmt.Errorf("osv query decode failed: %w", err)
@@ -296,12 +306,20 @@ func (e *wireEvent) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("decode osv range event: %w", err)
 	}
 	*e = wireEvent(p)
+	recognized := 0
 	for k := range keys {
 		switch k {
 		case "introduced", "fixed", "last_affected", "limit":
+			recognized++
 		default:
 			e.unrecognized = true
 		}
+	}
+	// An OSV event carries exactly one key. Two of them means one decoded to an
+	// empty string (`"fixed": null`), which would read as "no upper bound" and
+	// let a bounded range pass as package-wide.
+	if recognized != 1 {
+		e.unrecognized = true
 	}
 	return nil
 }

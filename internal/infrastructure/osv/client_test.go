@@ -302,6 +302,55 @@ func TestQueryPackage_UnrecognizedEventsAreNotSilentlyDropped(t *testing.T) {
 	}
 }
 
+func TestQueryPackage_EventsCarryingMoreThanOneBoundAreRejected(t *testing.T) {
+	t.Parallel()
+	// OSV events carry exactly one key. A second key that decodes to an empty
+	// string — `"fixed": null`, or an empty literal — would otherwise read as
+	// "no upper bound" and let a bounded range pass as package-wide.
+	const page = `{"vulns":[{"id":"RUSTSEC-2024-0375","affected":[{"package":{"name":"atty","ecosystem":"crates.io"},
+	 "ranges":[{"type":"SEMVER","events":[{"introduced":"0","fixed":null},{"introduced":"0","limit":""}]}]}]}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, page)
+	}))
+	defer srv.Close()
+
+	recs, err := newTestClient(t, srv.URL).QueryPackage(context.Background(), "crates.io", "atty")
+	if err != nil {
+		t.Fatalf("QueryPackage failed: %v", err)
+	}
+	if len(recs) != 1 || len(recs[0].Affected) != 1 || len(recs[0].Affected[0].Ranges) != 1 {
+		t.Fatalf("unexpected record shape: %+v", recs)
+	}
+	want := []domain.AdvisoryRangeEvent{{}, {}}
+	if got := recs[0].Affected[0].Ranges[0].Events; !slices.Equal(got, want) {
+		t.Errorf("Events: got %+v, want %+v", got, want)
+	}
+}
+
+func TestQueryPackage_ExplicitNullVulnsIsNotACleanAnswer(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		_, _ = fmt.Fprint(w, `{"vulns":null}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient()
+	c.SetBaseURL(srv.URL)
+	c.SetCacheTTL(time.Minute)
+	if _, err := c.QueryPackage(context.Background(), "crates.io", "atty"); err == nil {
+		t.Fatal("expected an error: a null vulns field is not the same answer as an absent one")
+	}
+	// An error is unknown, never a negative, so nothing may be cached.
+	if _, err := c.QueryPackage(context.Background(), "crates.io", "atty"); err == nil {
+		t.Fatal("expected the second call to fail too")
+	}
+	if got := calls.Load(); got != 2 {
+		t.Errorf("HTTP calls: got %d, want 2 (an error must not be cached)", got)
+	}
+}
+
 func TestQueryPackage_UnrecognizedRangeKeysAreNotSilentlyDropped(t *testing.T) {
 	t.Parallel()
 	// A future key on the range object could carry an upper bound, so the range
