@@ -137,6 +137,9 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		if analysis.IsArchived() {
 			signals = append(signals, sig(SignalRepoArchived, "true"))
 		}
+		if analysis.IsDisabled() {
+			signals = append(signals, sig(SignalRepoDisabled, "true"))
+		}
 		label, t := s.severityAwareLabel(s.hasHighSeverityAdvisoriesExcluding(analysis, ad.AdvisoryID),
 			LabelEOLEffective, "advisory_db_unmaintained_unpatched_vulns",
 			LabelStalled, "advisory_db_unmaintained")

@@ -237,12 +237,34 @@ type wireEvent struct {
 	Limit        string `json:"limit"`
 }
 
+// isPlainAdvisoryID reports whether id is a non-empty run of ASCII letters,
+// digits and hyphens, the shape every OSV database uses (RUSTSEC-2024-0375,
+// GHSA-mc8h-8q98-g5hr).
+//
+// Why not strip the offending characters as sanitizeSummary does: the ID is
+// printed as the name of the advisory, and a repaired ID would name one that
+// does not exist. Rejecting the record fails safe — it can only cost a
+// detection.
+func isPlainAdvisoryID(id string) bool {
+	if id == "" {
+		return false
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // toRecord maps one OSV vuln onto the domain's neutral record. Reports false
-// when the response carried no advisory ID, which is not an advisory we could
-// attribute a fact to.
+// when the response carried no usable advisory ID, which is not an advisory we
+// could attribute a fact to.
 func toRecord(v *wireVuln) (domain.AdvisoryRecord, bool) {
 	id := strings.TrimSpace(v.ID)
-	if id == "" {
+	if !isPlainAdvisoryID(id) {
 		return domain.AdvisoryRecord{}, false
 	}
 	rec := domain.AdvisoryRecord{

@@ -296,7 +296,7 @@ func TestLifecycleAssessor_AdvisoryDBUnmaintainedCarriesEvidence(t *testing.T) {
 	t.Parallel()
 	recent := time.Now().AddDate(0, 0, -10)
 	a := &Analysis{
-		RepoState:       &RepoState{DaysSinceLastCommit: 5, LatestHumanCommit: &recent, CommitStats: &CommitStats{}, IsArchived: true},
+		RepoState:       &RepoState{DaysSinceLastCommit: 5, LatestHumanCommit: &recent, CommitStats: &CommitStats{}, IsArchived: true, IsDisabled: true},
 		AdvisoryDBState: flagged("RUSTSEC-2024-0375", "atty is unmaintained"),
 		ReleaseInfo: &ReleaseInfo{StableVersion: &VersionDetail{Version: "0.2.14", PublishedAt: recent,
 			Advisories: []Advisory{{ID: "RUSTSEC-2099-0001", Source: "RUSTSEC", CVSS3Score: 9.1}}}},
@@ -317,6 +317,11 @@ func TestLifecycleAssessor_AdvisoryDBUnmaintainedCarriesEvidence(t *testing.T) {
 	}
 	if !hasSignal(res.Signals, SignalRepoArchived) {
 		t.Errorf("expected the archived signal to be retained, got %+v", res.Signals)
+	}
+	// Branch 1.4 returns before the archive/disable branch, so it must carry
+	// both repository-state signals that branch would have reported.
+	if !hasSignal(res.Signals, SignalRepoDisabled) {
+		t.Errorf("expected the disabled signal to be retained, got %+v", res.Signals)
 	}
 	if !hasSignal(res.Signals, SignalAdvisoryCount) {
 		t.Errorf("expected the advisory signals to be collected, got %+v", res.Signals)

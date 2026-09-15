@@ -222,6 +222,32 @@ func TestQueryPackage_DropsVulnsWithoutIdentity(t *testing.T) {
 	}
 }
 
+func TestQueryPackage_DropsVulnsWithMalformedID(t *testing.T) {
+	t.Parallel()
+	// The ID is printed verbatim in the lifecycle reason and a CLI signal, so
+	// an ID carrying escape, bidi, whitespace or other punctuation is rejected
+	// rather than repaired: a repaired ID would name an advisory that does not
+	// exist.
+	const page = `{"vulns":[
+	 {"id":"RUSTSEC-2024-0375\u001b[31m"},
+	 {"id":"RUSTSEC-2024\u202e-0376"},
+	 {"id":"RUSTSEC-2024-0377\nforged line"},
+	 {"id":"RUSTSEC/../2024-0378"},
+	 {"id":"  RUSTSEC-2024-0379  "}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, page)
+	}))
+	defer srv.Close()
+
+	recs, err := newTestClient(t, srv.URL).QueryPackage(context.Background(), "crates.io", "atty")
+	if err != nil {
+		t.Fatalf("QueryPackage failed: %v", err)
+	}
+	if len(recs) != 1 || recs[0].ID != "RUSTSEC-2024-0379" {
+		t.Fatalf("got %+v, want only RUSTSEC-2024-0379 (surrounding whitespace trimmed)", recs)
+	}
+}
+
 func TestQueryPackage_SanitizesSummary(t *testing.T) {
 	t.Parallel()
 	// \u001b is the ANSI escape introducer and \u200b a zero-width space; both
