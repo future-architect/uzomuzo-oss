@@ -161,6 +161,31 @@ func TestLifecycleAssessor_AdvisoryDBUnmaintained(t *testing.T) {
 			wantSignal: true,
 		},
 		{
+			// A crate can carry more than one admitted marker (a re-filing, or
+			// a second advisory for a renamed repository). Only one becomes the
+			// evidence, but none of them is a vulnerability.
+			name: "every admitted marker is excluded, not only the evidence",
+			analysis: &Analysis{
+				RepoState: activeRepo(),
+				AdvisoryDBState: func() *AdvisoryDBState {
+					st := flagged("RUSTSEC-2020-0163", "term_size is unmaintained")
+					st.MarkerIDs = []string{"RUSTSEC-2020-0163", "RUSTSEC-2024-0500"}
+					return st
+				}(),
+				ReleaseInfo: &ReleaseInfo{StableVersion: &VersionDetail{Version: "0.3.2", PublishedAt: recent,
+					Advisories: []Advisory{
+						{ID: "RUSTSEC-2020-0163", Source: "RUSTSEC"},
+						{ID: "RUSTSEC-2024-0500", Source: "RUSTSEC"},
+					}}},
+			},
+			scores:     healthyScores(),
+			eol:        EOLStatus{State: EOLNotEOL},
+			wantLabel:  LabelStalled,
+			wantReason: "Flagged unmaintained by RUSTSEC-2020-0163: term_size is unmaintained",
+			wantTrace:  "advisory_db_unmaintained",
+			wantSignal: true,
+		},
+		{
 			// Exclusion is scoped to the branch's own evidence: a real
 			// vulnerability alongside the marker still reaches EOL-Effective.
 			name: "the marker alongside a real advisory is still EOL-Effective",

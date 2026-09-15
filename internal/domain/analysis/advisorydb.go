@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"slices"
 	"strings"
 	"time"
 )
@@ -95,6 +96,10 @@ type AdvisoryDBState struct {
 	Reference string
 	// Published is the advisory's publication date.
 	Published time.Time
+	// MarkerIDs lists every admitted advisory, sorted, AdvisoryID first. Nil
+	// when Unmaintained is false. The assessor excludes each of them when
+	// weighing vulnerabilities: a marker is filed as an advisory but is not one.
+	MarkerIDs []string
 }
 
 // ClassifyUnmaintained decides whether any of recs marks the package
@@ -110,11 +115,13 @@ type AdvisoryDBState struct {
 // records were read and nothing qualified, never "not asked".
 func ClassifyUnmaintained(recs []AdvisoryRecord, ecosystem, name string, now time.Time) AdvisoryDBState {
 	var best *AdvisoryRecord
+	var markerIDs []string
 	for i := range recs {
 		rec := &recs[i]
 		if !admitsUnmaintained(rec, ecosystem, name, now) {
 			continue
 		}
+		markerIDs = append(markerIDs, rec.ID)
 		// Deterministic across runs: the same input set always yields the same
 		// evidence, whatever order the database returned it in.
 		if best == nil || rec.ID < best.ID {
@@ -124,12 +131,14 @@ func ClassifyUnmaintained(recs []AdvisoryRecord, ecosystem, name string, now tim
 	if best == nil {
 		return AdvisoryDBState{}
 	}
+	slices.Sort(markerIDs)
 	return AdvisoryDBState{
 		Unmaintained: true,
 		AdvisoryID:   best.ID,
 		Summary:      NormalizeSummary(best.Summary),
 		Reference:    best.Reference,
 		Published:    best.Published,
+		MarkerIDs:    slices.Compact(markerIDs),
 	}
 }
 

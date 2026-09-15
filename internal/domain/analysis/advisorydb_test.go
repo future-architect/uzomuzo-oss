@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -439,6 +440,11 @@ func TestClassifyUnmaintained_DeterministicWinner(t *testing.T) {
 			if !got.Published.Equal(winner.Published) {
 				t.Fatalf("Published: got %v, want %v", got.Published, winner.Published)
 			}
+			// Every admitted marker is kept, not only the winner, so the
+			// assessor can stop counting each of them as a vulnerability.
+			if want := []string{winner.ID, other.ID}; !slices.Equal(got.MarkerIDs, want) {
+				t.Fatalf("MarkerIDs: got %v, want %v", got.MarkerIDs, want)
+			}
 		})
 	}
 }
@@ -470,6 +476,9 @@ func TestClassifyUnmaintained_ReturnedEvidence(t *testing.T) {
 		if !got.Published.Equal(r.Published) {
 			t.Errorf("Published: got %v, want %v", got.Published, r.Published)
 		}
+		if want := []string{r.ID}; !slices.Equal(got.MarkerIDs, want) {
+			t.Errorf("MarkerIDs: got %v, want %v", got.MarkerIDs, want)
+		}
 	})
 
 	t.Run("no match: zero-value AdvisoryDBState", func(t *testing.T) {
@@ -483,6 +492,9 @@ func TestClassifyUnmaintained_ReturnedEvidence(t *testing.T) {
 		}
 		if got.AdvisoryID != "" {
 			t.Errorf("AdvisoryID: got %q, want empty", got.AdvisoryID)
+		}
+		if got.MarkerIDs != nil {
+			t.Errorf("MarkerIDs: got %v, want nil", got.MarkerIDs)
 		}
 	})
 }

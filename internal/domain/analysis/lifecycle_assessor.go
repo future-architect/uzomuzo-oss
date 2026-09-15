@@ -4,6 +4,7 @@ package analysis
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	cfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
@@ -140,7 +141,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		if analysis.IsDisabled() {
 			signals = append(signals, sig(SignalRepoDisabled, "true"))
 		}
-		label, t := s.severityAwareLabel(s.hasHighSeverityAdvisoriesExcluding(analysis, ad.AdvisoryID),
+		label, t := s.severityAwareLabel(s.hasHighSeverityAdvisoriesExcluding(analysis, append([]string{ad.AdvisoryID}, ad.MarkerIDs...)),
 			LabelEOLEffective, "advisory_db_unmaintained_unpatched_vulns",
 			LabelStalled, "advisory_db_unmaintained")
 		if label == string(LabelEOLEffective) {
@@ -294,11 +295,11 @@ func (s *LifecycleAssessorService) getStableOrMaxVersionDetail(a *Analysis) *Ver
 // hasHighSeverityAdvisories returns true if the analysis has any advisory with CVSS3 >= threshold,
 // or if any advisory severity is unavailable and advisories exist (conservative fallback).
 func (s *LifecycleAssessorService) hasHighSeverityAdvisories(a *Analysis) bool {
-	return s.hasHighSeverityAdvisoriesExcluding(a, "")
+	return s.hasHighSeverityAdvisoriesExcluding(a, nil)
 }
 
 // hasHighSeverityAdvisoriesExcluding answers hasHighSeverityAdvisories while
-// ignoring one advisory ID. An empty excludeID ignores nothing.
+// ignoring the advisories named in excludeIDs (compared case-insensitively).
 //
 // Why not call hasHighSeverityAdvisories directly from branch 1.4: RustSec files
 // its unmaintained marker as an advisory of its own, and deps.dev lists it on the
@@ -306,14 +307,14 @@ func (s *LifecycleAssessorService) hasHighSeverityAdvisories(a *Analysis) bool {
 // potentially high" fallback would then read the branch's own evidence back as a
 // vulnerability, so every flagged crate would reach EOL-Effective and the Stalled
 // outcome would be unreachable. See ADR-0025.
-func (s *LifecycleAssessorService) hasHighSeverityAdvisoriesExcluding(a *Analysis, excludeID string) bool {
+func (s *LifecycleAssessorService) hasHighSeverityAdvisoriesExcluding(a *Analysis, excludeIDs []string) bool {
 	vd := s.getStableOrMaxVersionDetail(a)
 	if vd == nil {
 		return false
 	}
 	high := 0
 	for _, adv := range vd.Advisories {
-		if excludeID != "" && strings.EqualFold(adv.ID, excludeID) {
+		if slices.ContainsFunc(excludeIDs, func(id string) bool { return id != "" && strings.EqualFold(adv.ID, id) }) {
 			continue
 		}
 		if adv.CVSS3Score <= 0 {

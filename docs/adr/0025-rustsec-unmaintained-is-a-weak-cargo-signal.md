@@ -156,9 +156,12 @@ flagged crate would reach `EOL-Effective`, and the `Stalled` outcome decided
 above would be unreachable. `term_size@0.3.2` has exactly this shape in
 production: one advisory, `RUSTSEC-2020-0163`, which is the marker itself.
 
-Branch 1.4 therefore evaluates severity with that one advisory ID excluded
-(`hasHighSeverityAdvisoriesExcluding`). The exclusion is scoped to the branch's
-own evidence and to nothing else: a genuine advisory alongside the marker still
+Branch 1.4 therefore evaluates severity with every admitted marker excluded
+(`AdvisoryDBState.MarkerIDs`, passed to `hasHighSeverityAdvisoriesExcluding`).
+All of them, not only the one chosen as evidence: a crate can carry more than
+one qualifying marker, and each would otherwise count as an unknown-severity
+vulnerability. The exclusion is scoped to those admitted markers and to nothing
+else: a genuine advisory alongside the marker still
 yields `EOL-Effective`, and other RustSec informational records (`unsound`,
 `notice`) keep counting exactly as they did before, since changing that would be
 a separate decision about the residual-vulnerability path.
