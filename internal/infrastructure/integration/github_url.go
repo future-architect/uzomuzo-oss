@@ -462,5 +462,6 @@ func detachPackageIdentity(analysis *domain.Analysis, githubURL string) {
 	analysis.Package = nil
 	analysis.ReleaseInfo = nil
 	analysis.RegistryState = nil
+	analysis.AdvisoryDBState = nil
 	analysis.EnsureCanonical()
 }

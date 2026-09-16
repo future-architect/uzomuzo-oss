@@ -69,6 +69,11 @@ type Analysis struct {
 	// (distinct from RepoState, which describes the source repository host).
 	RegistryState *RegistryState
 
+	// AdvisoryDBState holds package-level maintenance facts asserted by a
+	// third-party advisory database, distinct from RegistryState (the registry's
+	// own assertions) and from EOL (primary-source lifecycle declarations).
+	AdvisoryDBState *AdvisoryDBState
+
 	// Release information
 	ReleaseInfo *ReleaseInfo
 
@@ -299,6 +304,12 @@ func (a *Analysis) IsArchived() bool {
 		return false
 	}
 	return a.RepoState.IsArchived
+}
+
+// AdvisoryDBUnmaintained reports whether a third-party advisory database has
+// flagged this package as unmaintained as a whole. See AdvisoryDBState.
+func (a *Analysis) AdvisoryDBUnmaintained() bool {
+	return a != nil && a.AdvisoryDBState != nil && a.AdvisoryDBState.Unmaintained
 }
 
 // AllReleasesYanked reports whether the package registry has yanked every

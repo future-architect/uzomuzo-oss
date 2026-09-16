@@ -223,9 +223,9 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | --- | --- | --- |
 | **Active** | Recent human commits + releases + healthy maintenance score | No action needed |
 | **Legacy-Safe** | No recent activity, but zero vulnerabilities — frozen and stable | Accept risk or pin version |
-| **Stalled** | Maintenance declining: low score or commits stopped; or repository archived/disabled without an explicit end-of-life signal | Monitor; plan migration |
+| **Stalled** | Maintenance declining: low score or commits stopped; repository archived/disabled without an explicit end-of-life signal; or an advisory database reports the whole package unmaintained | Monitor; plan migration |
 | **EOL-Confirmed** | Registry explicitly declares end-of-life (deprecated / yanked / abandoned / relocation) | Migrate immediately |
-| **EOL-Effective** | No official EOL, but 2+ yrs without human commits AND HIGH/CRITICAL unpatched vulns | Migrate; treat as EOL |
+| **EOL-Effective** | No official EOL, but HIGH/CRITICAL unpatched vulns together with either 2+ yrs without human commits or an advisory database reporting the package unmaintained | Migrate; treat as EOL |
 | **EOL-Scheduled** | Future EOL date announced (not yet reached) | Plan migration before EOL date |
 | **Review Needed** | Insufficient data for automated classification, or the registry has yanked every release, so no version is offered to normal dependency resolution | Manual investigation required |
 

@@ -109,6 +109,10 @@ func signalDisplayName(name string) string {
 		return "Days Since Release"
 	case analysispkg.SignalEcosystemDelivery:
 		return "Ecosystem Delivery"
+	case analysispkg.SignalAllReleasesYanked:
+		return "All Releases Yanked"
+	case analysispkg.SignalAdvisoryDBUnmaintained:
+		return "Advisory DB: Unmaintained"
 	default:
 		return name
 	}

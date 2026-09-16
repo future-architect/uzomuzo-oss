@@ -2,6 +2,8 @@
 package analysis
 
 import (
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -281,6 +283,25 @@ func (vd *VersionDetail) HighSeverityAdvisoryCount(threshold float64) int {
 		}
 	}
 	return count
+}
+
+// ExcludingAdvisories returns a copy of vd holding only the advisories whose ID
+// is not in ids (compared case-insensitively). Returns vd unchanged when ids is
+// empty, and never mutates the receiver.
+func (vd *VersionDetail) ExcludingAdvisories(ids []string) *VersionDetail {
+	if vd == nil || len(ids) == 0 || len(vd.Advisories) == 0 {
+		return vd
+	}
+	kept := make([]Advisory, 0, len(vd.Advisories))
+	for _, a := range vd.Advisories {
+		if slices.ContainsFunc(ids, func(id string) bool { return id != "" && strings.EqualFold(a.ID, id) }) {
+			continue
+		}
+		kept = append(kept, a)
+	}
+	out := *vd
+	out.Advisories = kept
+	return &out
 }
 
 // UnknownSeverityAdvisoryCount returns the count of advisories without severity data (CVSS3Score == 0).

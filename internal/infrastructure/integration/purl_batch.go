@@ -101,6 +101,11 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// describes the source repository. See ADR-0022.
 	s.enrichRegistryState(ctx, analyses)
 
+	// Advisory-database maintenance facts (best-effort): record whether a
+	// third-party advisory curator has flagged the package as unmaintained.
+	// Cargo only, and deliberately never an EOL state. See ADR-0025.
+	s.enrichAdvisoryDBState(ctx, analyses)
+
 	// Manifest-level license fallback (best-effort): when deps.dev and GitHub
 	// `licenseInfo` left ProjectLicense or RequestedVersionLicenses missing /
 	// non-SPDX, consult the package's own ecosystem manifest. Currently wires

@@ -83,8 +83,10 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLScheduled), Reason: reason, Trace: trace, Signals: signals}, nil
 	}
 	// 1. Primary-source EOL status override.
-	// EOL-Confirmed is driven ONLY by an explicit primary-source signal (npm deprecated /
-	// PyPI yanked / Packagist abandoned / Maven relocation). Checked before the archive branch so
+	// EOL-Confirmed is driven ONLY by an explicit primary-source signal, for example
+	// npm deprecated, a PyPI classifier or yank, Packagist abandoned, NuGet deprecation
+	// or Maven relocation. Evaluator.ensureRuleChain holds the rules that can set it;
+	// this list is not that chain. Checked before the archive branch so
 	// the EOL verdict and its reason are attributed to that signal, not to the archive flag.
 	if in.EOL.IsEOL() {
 		reason := in.EOL.FinalReason()
@@ -118,6 +120,40 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		}
 		trace = append(trace, "all_releases_yanked_review_needed")
 		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelReviewNeeded), Reason: reason, Trace: trace, Signals: signals}, nil
+	}
+
+	// 1.4 Advisory-database maintenance warning (RustSec's unmaintained marker).
+	// A single branch owns the outcome so "a flagged package is never reported
+	// Active and never Legacy-Safe" is a property of one place rather than of
+	// every exit below remembering to check. Placed before the archive branch on
+	// purpose: that branch returns Stalled unconditionally and would otherwise
+	// mask the EOL-Effective case. Never EOL-Confirmed — see ADR-0025.
+	if analysis != nil && analysis.AdvisoryDBUnmaintained() {
+		ad := analysis.AdvisoryDBState
+		reason := "Flagged unmaintained by " + ad.AdvisoryID
+		if ad.Summary != "" {
+			reason += ": " + ad.Summary
+		}
+		signals := []Signal{sig(SignalAdvisoryDBUnmaintained, ad.AdvisoryID), commitSignal(analysis)}
+		signals = append(signals, s.collectAdvisorySignals(analysis)...)
+		if analysis.IsArchived() {
+			signals = append(signals, sig(SignalRepoArchived, "true"))
+		}
+		if analysis.IsDisabled() {
+			signals = append(signals, sig(SignalRepoDisabled, "true"))
+		}
+		// AdvisoryID is passed alongside MarkerIDs, which already contains it for
+		// any state ClassifyUnmaintained built: a caller of the library facade can
+		// hand-build a state with only the evidence ID set, and that one must still
+		// be excluded.
+		label, t := s.severityAwareLabel(s.hasHighSeverityAdvisoriesExcluding(analysis, append([]string{ad.AdvisoryID}, ad.MarkerIDs...)),
+			LabelEOLEffective, "advisory_db_unmaintained_unpatched_vulns",
+			LabelStalled, "advisory_db_unmaintained")
+		if label == string(LabelEOLEffective) {
+			reason = "Unmaintained per " + ad.AdvisoryID + ", unpatched vulnerabilities"
+		}
+		trace = append(trace, t)
+		return &AssessmentResult{Axis: LifecycleAxis, Label: label, Reason: reason, Trace: trace, Signals: signals}, nil
 	}
 
 	// 1.5 Archive/disable check (reached only when there is no primary-source EOL).
@@ -264,12 +300,24 @@ func (s *LifecycleAssessorService) getStableOrMaxVersionDetail(a *Analysis) *Ver
 // hasHighSeverityAdvisories returns true if the analysis has any advisory with CVSS3 >= threshold,
 // or if any advisory severity is unavailable and advisories exist (conservative fallback).
 func (s *LifecycleAssessorService) hasHighSeverityAdvisories(a *Analysis) bool {
-	vd := s.getStableOrMaxVersionDetail(a)
+	return s.hasHighSeverityAdvisoriesExcluding(a, nil)
+}
+
+// hasHighSeverityAdvisoriesExcluding answers hasHighSeverityAdvisories while
+// ignoring the advisories named in excludeIDs (compared case-insensitively).
+//
+// Why not call hasHighSeverityAdvisories directly from branch 1.4: RustSec files
+// its unmaintained marker as an advisory of its own, and deps.dev lists it on the
+// version with no CVSS score. The conservative "unknown severity counts as
+// potentially high" fallback would then read the branch's own evidence back as a
+// vulnerability, so every flagged crate would reach EOL-Effective and the Stalled
+// outcome would be unreachable. See ADR-0025.
+func (s *LifecycleAssessorService) hasHighSeverityAdvisoriesExcluding(a *Analysis, excludeIDs []string) bool {
+	vd := s.getStableOrMaxVersionDetail(a).ExcludingAdvisories(excludeIDs)
 	if vd == nil || len(vd.Advisories) == 0 {
 		return false
 	}
-	unknownCount := vd.UnknownSeverityAdvisoryCount()
-	if unknownCount > 0 {
+	if vd.UnknownSeverityAdvisoryCount() > 0 {
 		// Any unknown severity triggers conservative fallback (treated as potentially high).
 		return true
 	}
