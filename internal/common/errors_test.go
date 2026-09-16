@@ -59,6 +59,19 @@ func TestScorecardError_Error(t *testing.T) {
 	}
 }
 
+// TestScorecardError_UnwrapExposesCause pins the cause chain that callers rely on
+// through errors.Is (e.g. classifying a wrapped context.DeadlineExceeded as a timeout).
+func TestScorecardError_UnwrapExposesCause(t *testing.T) {
+	cause := errors.New("network timeout")
+	err := NewFetchError("failed to fetch data", cause)
+	if !errors.Is(err, cause) {
+		t.Errorf("errors.Is(err, cause) = false, want true")
+	}
+	if errors.Is(NewFetchError("no cause", nil), cause) {
+		t.Errorf("errors.Is on an error without a cause matched an unrelated error")
+	}
+}
+
 func TestScorecardError_WithContext(t *testing.T) {
 	tests := []struct {
 		name        string

@@ -114,7 +114,9 @@ func TestE2E_DietTable(t *testing.T) {
 		t.Skip("skipping E2E test in short mode")
 	}
 
-	out := runDiet(t, "table")
+	// An empty format is the CLI default (the --format flag has no default value),
+	// so this run pins both the table renderer and the "" -> table fallback in RunDiet.
+	out := runDiet(t, "")
 
 	// Should contain the header line
 	if !strings.Contains(out, "Diet Plan") {

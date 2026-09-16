@@ -1211,3 +1211,35 @@ func TestPackageEcoName(t *testing.T) {
 		})
 	}
 }
+func TestWriteBoxHealth_NormalState(t *testing.T) {
+	var buf bytes.Buffer
+	entry := &domainaudit.AuditEntry{
+		PURL:    "pkg:npm/test@1.0.0",
+		Verdict: domainaudit.VerdictOK,
+		Analysis: &analysis.Analysis{
+			RepoURL: "github.com/test/repo",
+			RepoState: &analysis.RepoState{
+				IsArchived: false,
+				IsDisabled: false,
+				IsFork:     false,
+			},
+			Repository: &analysis.Repository{
+				StarsCount: 500,
+			},
+		},
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxHealth(ctx); err != nil {
+		t.Fatalf("writeBoxHealth() error = %v", err)
+	}
+	output := buf.String()
+	if strings.Contains(output, "Normal") {
+		t.Error("Normal state should not be displayed")
+	}
+	if strings.Contains(output, "GitHub:") {
+		t.Error("GitHub: label should not be displayed for normal repos")
+	}
+	if !strings.Contains(output, "500 stars") {
+		t.Error("missing star count")
+	}
+}
