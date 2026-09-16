@@ -67,3 +67,7 @@ changelog:
       # reaches the binary, so type alone cannot separate it from a real change.
       # `deps` is deliberately absent: a module bump does ship.
       - '^[a-z]+\((ci|claude|instructions|skill|skills)\):'
+      # None of these patterns allow the breaking-change marker before the
+      # colon, so `chore(deps)!:` and `docs!:` stay in the notes. That is the
+      # point: a commit its author marked as breaking is the one thing a reader
+      # upgrading must not miss, whatever its type says.
