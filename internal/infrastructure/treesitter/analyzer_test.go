@@ -267,6 +267,7 @@ func TestMergeAccumulators(t *testing.T) {
 		})
 	}
 }
+
 func TestAnalyzer_ImportToPURLCollision_DuplicateImportPath(t *testing.T) {
 	// Tests that duplicate import-path candidates from different PURLs are handled correctly.
 	// Uses Go syntax, but the scenario is ecosystem-agnostic: two PURLs map to the same path.
@@ -308,8 +309,3 @@ func main() {
 		}
 	}
 }
-
-// TestMergeAccumulators exercises the worker-pool merge directly: the parallel
-// AnalyzeCoupling benchmarks only ever assert a non-empty result, which can't
-// tell a correct union apart from one that silently dropped a file, a symbol,
-// or a flag contributed by a different worker.

@@ -351,6 +351,9 @@ func TestDo_408RetriesThenSucceeds(t *testing.T) {
 		t.Errorf("server call count = %d, want 2 (one 408, one success)", got)
 	}
 }
+
+// TestDo_RateLimitNoHeaderUsesBackoff verifies that a 429 response without a
+// Retry-After header still retries (using the configured exponential backoff).
 func TestDo_RateLimitNoHeaderUsesBackoff(t *testing.T) {
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

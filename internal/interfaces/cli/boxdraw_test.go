@@ -1211,6 +1211,7 @@ func TestPackageEcoName(t *testing.T) {
 		})
 	}
 }
+
 func TestWriteBoxHealth_NormalState(t *testing.T) {
 	var buf bytes.Buffer
 	entry := &domainaudit.AuditEntry{

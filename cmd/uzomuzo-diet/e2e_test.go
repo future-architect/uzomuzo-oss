@@ -109,7 +109,7 @@ func runDiet(t *testing.T, format string) string {
 	return buf.String()
 }
 
-func TestE2E_DietTable(t *testing.T) {
+func TestE2E_DietDefaultFormatIsTable(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping E2E test in short mode")
 	}
