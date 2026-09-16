@@ -401,6 +401,45 @@ func TestAnalyzer_GoHyphenatedPackageName(t *testing.T) {
 		wantBreadth int
 	}{
 		{
+			name: ".go suffix stripped (miscreant.go)",
+			code: `package main
+
+import "github.com/miscreant/miscreant.go"
+
+func main() {
+	miscreant.NewAEAD("AES-SIV", nil)
+	miscreant.NewAEAD("AES-PMAC-SIV", nil)
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/miscreant/miscreant.go@v0.3.0": {"github.com/miscreant/miscreant.go"},
+			},
+			purl:        "pkg:golang/github.com/miscreant/miscreant.go@v0.3.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 1,
+		},
+		{
+			name: "-golang suffix stripped (geoip2-golang)",
+			code: `package main
+
+import "github.com/oschwald/geoip2-golang"
+
+func main() {
+	geoip2.Open("test.mmdb")
+	geoip2.FromBytes(nil)
+	geoip2.Open("test2.mmdb")
+}
+`,
+			importPaths: map[string][]string{
+				"pkg:golang/github.com/oschwald/geoip2-golang@v1.9.0": {"github.com/oschwald/geoip2-golang"},
+			},
+			purl:        "pkg:golang/github.com/oschwald/geoip2-golang@v1.9.0",
+			wantImports: 1,
+			wantCalls:   3,
+			wantBreadth: 2,
+		},
+		{
 			name: "suffix -go stripped (opentracing-go)",
 			code: `package main
 

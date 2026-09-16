@@ -1244,3 +1244,18 @@ func TestWriteBoxHealth_NormalState(t *testing.T) {
 		t.Error("missing star count")
 	}
 }
+
+// TestWriteBoxOrigin_DirectPURL pins the zero-value relation (RelationUnknown)
+// half of writeBoxOrigin's documented contract: no Origin section for direct
+// entries whose relation is unknown.
+func TestWriteBoxOrigin_DirectPURL(t *testing.T) {
+	var buf bytes.Buffer
+	entry := &domainaudit.AuditEntry{PURL: "pkg:npm/express@4.18.2"}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxOrigin(ctx); err != nil {
+		t.Fatalf("writeBoxOrigin() error = %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Error("writeBoxOrigin should produce no output for direct PURL with unknown relation")
+	}
+}

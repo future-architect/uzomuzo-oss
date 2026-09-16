@@ -167,3 +167,33 @@ func TestPopulateLicenses_NOASSERTION_NotPromoted(t *testing.T) {
 		t.Fatalf("NOASSERTION must NOT promote to project, got %+v", analysis.ProjectLicense)
 	}
 }
+
+// TestPopulateLicenses_RawVersionReplacedByProjectSPDX exercises step 4 of
+// populateLicenses through the real pipeline: a requested-version license that
+// is raw-only (non-SPDX) is replaced by the project's usable SPDX expression.
+func TestPopulateLicenses_RawVersionReplacedByProjectSPDX(t *testing.T) {
+	svc := &IntegrationService{}
+	analysis := &domain.Analysis{OriginalPURL: "pkg:npm/example@1.0.0", EffectivePURL: "pkg:npm/example@1.0.0"}
+	analysis.EnsureCanonical()
+	analysis.ReleaseInfo = &domain.ReleaseInfo{RequestedVersion: &domain.VersionDetail{Version: "1.0.0"}}
+
+	batch := &depsdev.BatchResult{
+		Package: &depsdev.Package{
+			Versions: []depsdev.Version{{
+				VersionKey: depsdev.VersionKey{Version: "1.0.0"},
+				Licenses:   []string{"custom-non-spdx"},
+			}},
+		},
+		Project: &depsdev.Project{License: "MIT"},
+	}
+
+	svc.populateLicenses(context.Background(), analysis, batch)
+
+	got := analysis.RequestedVersionLicense
+	if got.Expression != "MIT" {
+		t.Fatalf("expected raw-only version license to be replaced by project SPDX MIT, got Expression=%q Raw=%q Source=%q", got.Expression, got.Raw, got.Source)
+	}
+	if got.Source != domain.LicenseSourceProjectFallback {
+		t.Fatalf("expected source ProjectFallback, got %q", got.Source)
+	}
+}
