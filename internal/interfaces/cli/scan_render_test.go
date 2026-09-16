@@ -213,6 +213,11 @@ func TestRenderScanJSON_WithSource(t *testing.T) {
 			Verdict: domainaudit.VerdictReview,
 			Source:  domainaudit.SourceActionsTransitive,
 		},
+		{
+			PURL:    "https://github.com/some/local",
+			Verdict: domainaudit.VerdictOK,
+			Source:  domainaudit.SourceActionsLocal,
+		},
 	}
 
 	var buf bytes.Buffer
@@ -225,8 +230,8 @@ func TestRenderScanJSON_WithSource(t *testing.T) {
 		t.Fatalf("JSON unmarshal error = %v", err)
 	}
 
-	if len(out.Entries) != 3 {
-		t.Fatalf("got %d entries, want 3", len(out.Entries))
+	if len(out.Entries) != 4 {
+		t.Fatalf("got %d entries, want 4", len(out.Entries))
 	}
 	// Direct entry should have empty source (omitempty).
 	if out.Entries[0].Source != "" {
@@ -239,6 +244,10 @@ func TestRenderScanJSON_WithSource(t *testing.T) {
 	// Transitive entry should have "actions-transitive" source.
 	if out.Entries[2].Source != "actions-transitive" {
 		t.Errorf("transitive entry source = %q, want %q", out.Entries[2].Source, "actions-transitive")
+	}
+	// Local composite-action entry should have "actions-local" source (machine-readable contract).
+	if out.Entries[3].Source != "actions-local" {
+		t.Errorf("local entry source = %q, want %q", out.Entries[3].Source, "actions-local")
 	}
 }
 
