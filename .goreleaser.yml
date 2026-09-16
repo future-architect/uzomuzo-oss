@@ -78,7 +78,7 @@ changelog:
       # merge commit is repository history rather than a change to the binary.
       # Squash merges are the norm here, so this catches the older shape and
       # anything merged with the GitHub default message.
-      - '^Merge (pull request|branch|remote-tracking branch|tag) '
+      - '^Merge (pull request|branch|branches|remote-tracking branch|tag) '
       # None of these patterns allow the breaking-change marker before the
       # colon, so `chore(deps)!:` and `docs!:` stay in the notes. That is the
       # point: a commit its author marked as breaking is the one thing a reader
