@@ -99,8 +99,13 @@ func TestGetVersion_Cache(t *testing.T) {
 	c.SetCacheTTL(5 * time.Minute)
 
 	ctx := context.Background()
-	if _, _, err := c.GetVersion(ctx, "tokio", "1.0.0"); err != nil {
+	info, found, err := c.GetVersion(ctx, "tokio", "1.0.0")
+	if err != nil {
 		t.Fatalf("first GetVersion failed: %v", err)
+	}
+	// The successful path must carry the decoded yanked:false through unchanged.
+	if !found || info == nil || info.Yanked {
+		t.Fatalf("first GetVersion = (info=%+v, found=%v), want found and not yanked", info, found)
 	}
 	if got := atomic.LoadInt32(&hits); got != 1 {
 		t.Fatalf("expected 1 hit, got %d", got)

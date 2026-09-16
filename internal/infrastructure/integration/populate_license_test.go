@@ -169,25 +169,30 @@ func TestPopulateLicenses_NOASSERTION_NotPromoted(t *testing.T) {
 }
 
 // TestPopulateLicenses_RawVersionReplacedByProjectSPDX exercises step 4 of
-// populateLicenses through the real pipeline: a requested-version license that
-// is raw-only (non-SPDX) is replaced by the project's usable SPDX expression.
+// populateLicenses (a raw-only, non-SPDX requested-version license is replaced
+// by the project's usable SPDX expression) through populateAnalysisFromBatchResult,
+// the production entry point, so a regression in the wiring fails it too.
 func TestPopulateLicenses_RawVersionReplacedByProjectSPDX(t *testing.T) {
 	svc := &IntegrationService{}
 	analysis := &domain.Analysis{OriginalPURL: "pkg:npm/example@1.0.0", EffectivePURL: "pkg:npm/example@1.0.0"}
 	analysis.EnsureCanonical()
-	analysis.ReleaseInfo = &domain.ReleaseInfo{RequestedVersion: &domain.VersionDetail{Version: "1.0.0"}}
 
+	version := depsdev.Version{
+		VersionKey: depsdev.VersionKey{Version: "1.0.0"},
+		Licenses:   []string{"custom-non-spdx"},
+	}
 	batch := &depsdev.BatchResult{
+		PURL: "pkg:npm/example@1.0.0",
 		Package: &depsdev.Package{
-			Versions: []depsdev.Version{{
-				VersionKey: depsdev.VersionKey{Version: "1.0.0"},
-				Licenses:   []string{"custom-non-spdx"},
-			}},
+			PackageKey: depsdev.PackageKey{System: "npm", Name: "example"},
+			PURL:       "pkg:npm/example",
+			Versions:   []depsdev.Version{version},
 		},
-		Project: &depsdev.Project{License: "MIT"},
+		ReleaseInfo: depsdev.ReleaseInfo{StableVersion: version, RequestedVersion: version},
+		Project:     &depsdev.Project{License: "MIT"},
 	}
 
-	svc.populateLicenses(context.Background(), analysis, batch)
+	svc.populateAnalysisFromBatchResult(context.Background(), analysis, batch)
 
 	got := analysis.RequestedVersionLicense
 	if got.Expression != "MIT" {
