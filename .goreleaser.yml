@@ -52,11 +52,10 @@ checksum:
 changelog:
   sort: asc
   filters:
-    # The optional `(scope)` group is what makes these fire. Conventional
+    # v0.3.0 shipped with 106 of its 111 commits in the changelog. Conventional
     # Commits puts the scope between the type and the colon, so a pattern
-    # ending in a bare `type:` matches only unscoped subjects — it lets every
-    # `chore(deps):` and `docs(adr):` through. v0.3.0 shipped with 106 of its
-    # 111 commits in the changelog for that reason.
+    # ending in a bare `type:` matches only unscoped subjects and let every
+    # `chore(deps):` and `docs(adr):` through.
     # Lowercase only, deliberately. Conventional Commits does not require the
     # type to be lowercase, but no commit here uses another casing, and the two
     # errors are not equally cheap: a subject a human wrote as prose, such as
