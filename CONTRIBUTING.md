@@ -69,7 +69,7 @@ Key points:
 Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-<type>: <description>
+<type>(<optional scope>): <description>
 
 <optional body>
 ```
@@ -85,7 +85,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 | `test` | Adding or updating tests |
 | `chore` | Maintenance tasks |
 | `perf` | Performance improvements |
-| `ci` | CI/CD changes |
+| `ci` | This repository's own build/release pipeline. The scanner also reads GitHub Actions workflows — for a change to **that**, use `feat(actions)` / `fix(actions)` or `feat(scan)` instead |
 
 Examples:
 
@@ -93,7 +93,31 @@ Examples:
 feat: add CycloneDX SBOM export
 fix: resolve incorrect license mapping for dual-licensed packages
 docs: update library usage guide
+fix(actions): resolve reusable workflow references when scanning
 ```
+
+**The type and scope decide whether a commit reaches the release notes.**
+Pull requests are squash-merged, so the subject the release notes see is the
+**pull request title** — it has to follow this format too.
+`.goreleaser.yml` builds them from commit subjects, and drops:
+
+- the `docs`, `chore`, `ci` and `test` types, with or without a scope
+- any type scoped `ci`, `claude`, `instructions`, `skill` or `skills` — a change
+  to this repository's own pipeline or agent rules is a `feat` or `fix` by
+  Conventional Commits, but never reaches the binary
+- merge subjects that git or GitHub generated
+
+A commit marked breaking with `!` before the colon is always listed, whatever
+its type says, because that is the line a reader upgrading must not miss.
+
+Two consequences when choosing a scope:
+
+- `ci` means this repository's pipeline. The scanner also reads GitHub Actions
+  workflows, so a change to **that** is user-facing: scope it `scan` or
+  `actions`, or it disappears from the notes.
+- A commit typed `chore` or `test` that also changes shipped behaviour is
+  mis-typed. The filter trusts the type, so fix the type rather than expecting
+  the release notes to notice.
 
 ## Pull Request Guidelines
 
