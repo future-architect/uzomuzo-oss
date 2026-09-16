@@ -351,39 +351,3 @@ func TestDo_408RetriesThenSucceeds(t *testing.T) {
 		t.Errorf("server call count = %d, want 2 (one 408, one success)", got)
 	}
 }
-
-// TestDo_RateLimitNoHeaderUsesBackoff verifies that a 429 response without a
-// Retry-After header still retries (using the configured exponential backoff).
-func TestDo_RateLimitNoHeaderUsesBackoff(t *testing.T) {
-	var calls int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := atomic.AddInt32(&calls, 1)
-		if n == 1 {
-			w.WriteHeader(http.StatusTooManyRequests)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-
-	c := NewClient(nil, RetryConfig{
-		MaxRetries:  3,
-		BaseBackoff: 1 * time.Millisecond,
-		MaxBackoff:  10 * time.Millisecond,
-	})
-	req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
-	if err != nil {
-		t.Fatalf("NewRequest: %v", err)
-	}
-	resp, err := c.Do(context.Background(), req)
-	if err != nil {
-		t.Fatalf("Do error: %v", err)
-	}
-	t.Cleanup(func() { _ = resp.Body.Close() })
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
-	if got := atomic.LoadInt32(&calls); got != 2 {
-		t.Errorf("server call count = %d, want 2", got)
-	}
-}

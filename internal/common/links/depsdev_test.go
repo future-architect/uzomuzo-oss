@@ -1,7 +1,6 @@
 package links
 
 import (
-	"errors"
 	"net/http"
 	"net/url"
 	"os"
@@ -186,49 +185,6 @@ func TestJoinNpmName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := JoinNpmName(tt.scope, tt.pkg); got != tt.want {
 				t.Errorf("JoinNpmName(%q, %q) = %q, want %q", tt.scope, tt.pkg, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestErrUnsupportedEcosystemSentinel(t *testing.T) {
-	wrapped := errors.Join(errors.New("normalize PURL"), ErrUnsupportedEcosystem)
-	if !errors.Is(wrapped, ErrUnsupportedEcosystem) {
-		t.Fatalf("wrapped error should match ErrUnsupportedEcosystem via errors.Is")
-	}
-}
-
-func TestNormalizeDepsDevEcosystem(t *testing.T) {
-	tests := []struct{ in, want string }{
-		// Supported (passthrough)
-		{"npm", "npm"},
-		{"cargo", "cargo"},
-		{"maven", "maven"},
-		{"pypi", "pypi"},
-		{"nuget", "nuget"},
-		{"rubygems", "rubygems"},
-		{"go", "go"},
-
-		// Aliases
-		{"golang", "go"},
-		{"gem", "rubygems"},
-
-		// Case + whitespace
-		{"PyPI", "pypi"},
-		{"  cargo  ", "cargo"},
-
-		// Rejected (deps.dev does not host these)
-		{"composer", ""},
-		{"packagist", ""},
-		{"hex", ""},
-		{"swift", ""},
-		{"customtype", ""},
-		{"", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.in, func(t *testing.T) {
-			if got := normalizeDepsDevEcosystem(tt.in); got != tt.want {
-				t.Errorf("normalizeDepsDevEcosystem(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}

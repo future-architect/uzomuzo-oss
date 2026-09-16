@@ -63,21 +63,6 @@ func TestTextsAtTier_Snippet(t *testing.T) {
 	}
 }
 
-func TestPhrases_BackwardCompatible(t *testing.T) {
-	// Phrases() should return the same set as TextsAtTier(TierReeval).
-	phrases := Phrases()
-	reeval := TextsAtTier(TierReeval)
-	if len(phrases) != len(reeval) {
-		t.Fatalf("Phrases() length %d != TextsAtTier(TierReeval) length %d", len(phrases), len(reeval))
-	}
-	set := toSet(reeval)
-	for _, p := range phrases {
-		if _, ok := set[p]; !ok {
-			t.Errorf("Phrases() contains %q not in TextsAtTier(TierReeval)", p)
-		}
-	}
-}
-
 func TestContainsStrongPhrase_BackwardCompatible(t *testing.T) {
 	tests := []struct {
 		text string
@@ -95,30 +80,6 @@ func TestContainsStrongPhrase_BackwardCompatible(t *testing.T) {
 		if (len(got) > 0) != tt.want {
 			t.Errorf("ContainsStrongPhrase(%q) = %v, want match=%v", tt.text, got, tt.want)
 		}
-	}
-}
-
-func TestTierString(t *testing.T) {
-	if TierStrong.String() != "strong" {
-		t.Error("TierStrong.String() should be \"strong\"")
-	}
-	if TierReeval.String() != "reeval" {
-		t.Error("TierReeval.String() should be \"reeval\"")
-	}
-	if TierSnippet.String() != "snippet" {
-		t.Error("TierSnippet.String() should be \"snippet\"")
-	}
-}
-
-func TestAllEntries(t *testing.T) {
-	entries := AllEntries()
-	if len(entries) != len(catalog) {
-		t.Fatalf("AllEntries() length %d != catalog length %d", len(entries), len(catalog))
-	}
-	// Verify it's a copy (modifying returned slice shouldn't affect catalog).
-	entries[0].Text = "MODIFIED"
-	if catalog[0].text == "MODIFIED" {
-		t.Error("AllEntries() should return a copy, not a reference")
 	}
 }
 

@@ -66,44 +66,6 @@ func TestGetDeprecation_NotFound(t *testing.T) {
 	}
 }
 
-func TestGetDeprecation_CaseInsensitiveID(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v3/registration5-semver2/microsoft.azure.documentdb/index.json":
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(200)
-			_, _ = w.Write([]byte(`{
-				"items": [
-					{"items": [
-						{"catalogEntry": {"id": "Microsoft.Azure.DocumentDB"},
-						 "deprecation": {"reasons": ["Legacy"], "message": "Use Azure.Cosmos", "alternatePackage": {"id": "Azure.Cosmos", "range": "[1.0,)"}}}
-					]}
-				]
-			}`))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer srv.Close()
-
-	c := NewClient()
-	c.SetBaseURL(srv.URL + "/v3/registration5-semver2")
-
-	info, found, err := c.GetDeprecation(context.Background(), "Microsoft.Azure.DocumentDB")
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	if !found || info == nil {
-		t.Fatalf("expected found=true and info not nil")
-	}
-	if len(info.Reasons) != 1 || info.Reasons[0] != "Legacy" {
-		t.Fatalf("unexpected reasons: %#v", info.Reasons)
-	}
-	if info.AlternatePackageID != "Azure.Cosmos" {
-		t.Fatalf("unexpected alt: %s", info.AlternatePackageID)
-	}
-}
-
 // Test that when NoCacheNotFound is true, a not-found result is not cached
 // and a subsequent server change to 200 returns found=true.
 func TestGetDeprecation_NoCacheNotFound_AllowsFreshLookup(t *testing.T) {

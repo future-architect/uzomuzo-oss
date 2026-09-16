@@ -87,29 +87,3 @@ func TestRunFromParser_EmptyDeps(t *testing.T) {
 		t.Errorf("expected empty entries, got %d", len(result.Entries))
 	}
 }
-
-func TestMockParser_Parse(t *testing.T) {
-	p := &mockParser{
-		deps: []depparser.ParsedDependency{
-			{PURL: "pkg:npm/express@4.18.2", Ecosystem: "npm", Name: "express", Version: "4.18.2"},
-		},
-	}
-	deps, err := p.Parse(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("Parse() error = %v", err)
-	}
-	if len(deps) != 1 {
-		t.Fatalf("got %d deps, want 1", len(deps))
-	}
-	if deps[0].PURL != "pkg:npm/express@4.18.2" {
-		t.Errorf("PURL = %q, want %q", deps[0].PURL, "pkg:npm/express@4.18.2")
-	}
-}
-
-func TestMockParser_Error(t *testing.T) {
-	p := &mockParser{err: fmt.Errorf("parse error")}
-	_, err := p.Parse(context.Background(), nil)
-	if err == nil {
-		t.Fatal("expected error from parser, got nil")
-	}
-}

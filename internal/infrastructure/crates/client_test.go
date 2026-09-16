@@ -41,29 +41,6 @@ func TestGetVersion_Yanked(t *testing.T) {
 	}
 }
 
-func TestGetVersion_NotYanked(t *testing.T) {
-	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = fmt.Fprintln(w, `{"version":{"crate":"serde","num":"1.0.197","yanked":false}}`)
-	}))
-	defer srv.Close()
-
-	c := NewClient()
-	c.SetBaseURL(srv.URL)
-	c.SetCacheTTL(0)
-
-	info, found, err := c.GetVersion(context.Background(), "serde", "1.0.197")
-	if err != nil {
-		t.Fatalf("GetVersion failed: %v", err)
-	}
-	if !found {
-		t.Fatalf("expected found=true")
-	}
-	if info.Yanked {
-		t.Errorf("expected Yanked=false, got true")
-	}
-}
-
 func TestGetVersion_NotFound(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

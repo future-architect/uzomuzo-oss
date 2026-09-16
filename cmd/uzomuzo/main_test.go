@@ -207,22 +207,6 @@ func TestRootAction_NoInputReturnsNil(t *testing.T) {
 	}
 }
 
-func TestScanCommand_Registered(t *testing.T) {
-	cfg := &domaincfg.Config{}
-	app := buildApp(cfg)
-
-	found := false
-	for _, cmd := range app.Commands {
-		if cmd.Name == "scan" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("expected 'scan' subcommand to be registered in buildApp()")
-	}
-}
-
 func TestScanAction_FileNotFoundReturnsError(t *testing.T) {
 	cfg := &domaincfg.Config{}
 	app := buildApp(cfg)

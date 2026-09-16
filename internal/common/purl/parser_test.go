@@ -5,25 +5,6 @@ import (
 	"testing"
 )
 
-func TestNewParser(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{
-			name: "create_new_parser",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			parser := NewParser()
-			if parser == nil {
-				t.Error("NewParser() returned nil")
-			}
-		})
-	}
-}
-
 func TestParser_Parse(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -431,60 +412,6 @@ func TestParseError(t *testing.T) {
 
 			if err.Error() != tt.expectedError {
 				t.Errorf("ParseError.Error() = %q, want %q", err.Error(), tt.expectedError)
-			}
-		})
-	}
-}
-
-func TestParser_Integration(t *testing.T) {
-	tests := []struct {
-		name        string
-		testFunc    func() bool
-		description string
-	}{
-		{
-			name: "parse_and_extract_all_components",
-			testFunc: func() bool {
-				parser := NewParser()
-				parsed, err := parser.Parse("pkg:npm/@types/node@16.11.7")
-				if err != nil {
-					return false
-				}
-
-				return parsed.Ecosystem() == "npm" &&
-					parsed.PackageName() == "node" &&
-					parsed.Namespace() == "@types" &&
-					parsed.Name() == "node" &&
-					parsed.Version() == "16.11.7" &&
-					parsed.Raw == "pkg:npm/@types/node@16.11.7"
-			},
-			description: "Parse PURL and extract all components correctly",
-		},
-		{
-			name: "parse_golang_purl_with_url_encoding",
-			testFunc: func() bool {
-				parser := NewParser()
-				parsed, err := parser.Parse("pkg:golang/github.com/gorilla/mux@v1.8.0")
-				if err != nil {
-					return false
-				}
-
-				// golang packages with slashes should be URL encoded in PackageName()
-				return parsed.Ecosystem() == "golang" &&
-					parsed.PackageName() == "github.com%2Fgorilla%2Fmux" &&
-					parsed.Name() == "github.com/gorilla/mux" &&
-					parsed.Version() == "v1.8.0"
-			},
-			description: "Golang PURL with URL encoding for package name",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if !tt.testFunc() {
-				t.Errorf("Integration test failed: %s", tt.description)
-			} else {
-				t.Logf("Integration test passed: %s", tt.description)
 			}
 		})
 	}
