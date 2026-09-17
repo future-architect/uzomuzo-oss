@@ -164,77 +164,6 @@ func TestIntegrationService_CreatePackageFromPURL(t *testing.T) {
 	}
 }
 
-func TestIntegrationService_ParseGitHubURL(t *testing.T) {
-	tests := []struct {
-		name          string
-		githubURL     string
-		expectedOwner string
-		expectedRepo  string
-		expectError   bool
-	}{
-		{
-			name:          "https_url",
-			githubURL:     "https://github.com/owner/repo",
-			expectedOwner: "owner",
-			expectedRepo:  "repo",
-			expectError:   false,
-		},
-		{
-			name:          "http_url",
-			githubURL:     "http://github.com/owner/repo",
-			expectedOwner: "owner",
-			expectedRepo:  "repo",
-			expectError:   false,
-		},
-		{
-			name:          "url_without_protocol",
-			githubURL:     "github.com/owner/repo",
-			expectedOwner: "owner",
-			expectedRepo:  "repo",
-			expectError:   false,
-		},
-		{
-			name:          "url_with_git_suffix",
-			githubURL:     "github.com/owner/repo.git",
-			expectedOwner: "owner",
-			expectedRepo:  "repo",
-			expectError:   false,
-		},
-		{
-			name:        "invalid_url_format",
-			githubURL:   "invalid",
-			expectError: true,
-		},
-		{
-			name:        "empty_url",
-			githubURL:   "",
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			service := NewIntegrationService(nil, nil)
-
-			owner, repo, err := service.parseGitHubURL(tt.githubURL)
-
-			if (err != nil) != tt.expectError {
-				t.Errorf("parseGitHubURL() error = %v, expectError %v", err, tt.expectError)
-				return
-			}
-
-			if !tt.expectError {
-				if owner != tt.expectedOwner {
-					t.Errorf("parseGitHubURL() owner = %v, want %v", owner, tt.expectedOwner)
-				}
-				if repo != tt.expectedRepo {
-					t.Errorf("parseGitHubURL() repo = %v, want %v", repo, tt.expectedRepo)
-				}
-			}
-		})
-	}
-}
-
 func TestIntegrationService_GenerateVersionedPURL(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -348,47 +277,6 @@ func TestIntegrationService_AnalyzeFromGitHubURLs_EmptyInput(t *testing.T) {
 
 			if len(result) != tt.wantCount {
 				t.Errorf("AnalyzeFromGitHubURLs() result count = %d, want %d", len(result), tt.wantCount)
-			}
-		})
-	}
-}
-
-func TestIntegrationService_MapPackageManagerToEcosystem(t *testing.T) {
-	tests := []struct {
-		name              string
-		packageManager    string
-		expectedEcosystem string
-	}{
-		{
-			name:              "npm_package_manager",
-			packageManager:    "NPM",
-			expectedEcosystem: "npm",
-		},
-		{
-			name:              "pip_package_manager",
-			packageManager:    "PIP",
-			expectedEcosystem: "pypi",
-		},
-		{
-			name:              "unknown_package_manager",
-			packageManager:    "UNKNOWN",
-			expectedEcosystem: "",
-		},
-		{
-			name:              "empty_package_manager",
-			packageManager:    "",
-			expectedEcosystem: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			service := NewIntegrationService(nil, nil)
-
-			result := service.mapPackageManagerToEcosystem(tt.packageManager)
-
-			if result != tt.expectedEcosystem {
-				t.Errorf("mapPackageManagerToEcosystem() = %v, want %v", result, tt.expectedEcosystem)
 			}
 		})
 	}

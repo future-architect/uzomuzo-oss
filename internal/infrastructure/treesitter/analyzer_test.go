@@ -151,48 +151,6 @@ public class Main {
 	}
 }
 
-func TestAnalyzer_ImportToPURLCollision_DuplicateImportPath(t *testing.T) {
-	// Tests that duplicate import-path candidates from different PURLs are handled correctly.
-	// Uses Go syntax, but the scenario is ecosystem-agnostic: two PURLs map to the same path.
-	dir := t.TempDir()
-	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
-
-import "github.com/foo/bar"
-
-func main() {
-	bar.DoSomething()
-}
-`), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	analyzer := NewAnalyzer()
-	t.Cleanup(analyzer.Close)
-	importPaths := map[string][]string{
-		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
-		"pkg:golang/github.com/foo/bar@v2.0.0": {"github.com/foo/bar"},
-	}
-	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for purl := range importPaths {
-		ca, ok := result[purl]
-		if !ok {
-			t.Errorf("missing coupling analysis for %s (collision dropped it)", purl)
-			continue
-		}
-		if ca.ImportFileCount != 1 {
-			t.Errorf("%s: ImportFileCount = %d, want 1", purl, ca.ImportFileCount)
-		}
-		if ca.CallSiteCount != 1 {
-			t.Errorf("%s: CallSiteCount = %d, want 1", purl, ca.CallSiteCount)
-		}
-	}
-}
-
 // TestMergeAccumulators exercises the worker-pool merge directly: the parallel
 // AnalyzeCoupling benchmarks only ever assert a non-empty result, which can't
 // tell a correct union apart from one that silently dropped a file, a symbol,
@@ -307,5 +265,47 @@ func TestMergeAccumulators(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAnalyzer_ImportToPURLCollision_DuplicateImportPath(t *testing.T) {
+	// Tests that duplicate import-path candidates from different PURLs are handled correctly.
+	// Uses Go syntax, but the scenario is ecosystem-agnostic: two PURLs map to the same path.
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
+
+import "github.com/foo/bar"
+
+func main() {
+	bar.DoSomething()
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
+	importPaths := map[string][]string{
+		"pkg:golang/github.com/foo/bar@v1.0.0": {"github.com/foo/bar"},
+		"pkg:golang/github.com/foo/bar@v2.0.0": {"github.com/foo/bar"},
+	}
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for purl := range importPaths {
+		ca, ok := result[purl]
+		if !ok {
+			t.Errorf("missing coupling analysis for %s (collision dropped it)", purl)
+			continue
+		}
+		if ca.ImportFileCount != 1 {
+			t.Errorf("%s: ImportFileCount = %d, want 1", purl, ca.ImportFileCount)
+		}
+		if ca.CallSiteCount != 1 {
+			t.Errorf("%s: CallSiteCount = %d, want 1", purl, ca.CallSiteCount)
+		}
 	}
 }

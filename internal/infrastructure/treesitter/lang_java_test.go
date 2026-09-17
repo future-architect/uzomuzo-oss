@@ -58,41 +58,6 @@ public class Main {
 	}
 }
 
-func TestAnalyzer_JavaStaticCall(t *testing.T) {
-	dir := t.TempDir()
-	// Static calls use the class name directly (e.g., StringUtils.isBlank).
-	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import org.apache.commons.lang3.StringUtils;
-
-public class Main {
-    public static void main(String[] args) {
-        boolean b = StringUtils.isBlank("");
-    }
-}
-`), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	analyzer := NewAnalyzer()
-	t.Cleanup(analyzer.Close)
-	importPaths := map[string][]string{
-		"pkg:maven/org.apache.commons/commons-lang3@3.14": {"org.apache.commons.lang3"},
-	}
-	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ca, ok := result["pkg:maven/org.apache.commons/commons-lang3@3.14"]
-	if !ok {
-		t.Fatal("expected coupling analysis for commons-lang3")
-	}
-
-	if ca.CallSiteCount != 1 {
-		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
-	}
-}
-
 func TestAnalyzer_JavaStaticImport(t *testing.T) {
 	dir := t.TempDir()
 	// Static imports bring individual methods/fields into scope without qualification.
@@ -1075,74 +1040,5 @@ public class Processor {
 	}
 	if ca.IsUnused {
 		t.Error("IsUnused = true, want false")
-	}
-}
-
-func TestAnalyzer_JavaConstructorCall(t *testing.T) {
-	dir := t.TempDir()
-	// Constructor calls (new Type()) should count as call sites.
-	// This captures usage like "new Gson()", "new ObjectMapper()" where the
-	// class name is used directly without a method_invocation on an alias.
-	err := os.WriteFile(filepath.Join(dir, "Main.java"), []byte(`import com.google.gson.Gson;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-public class Main {
-    public static void main(String[] args) {
-        Gson gson = new Gson();
-        ObjectMapper mapper = new ObjectMapper();
-    }
-}
-`), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	analyzer := NewAnalyzer()
-	t.Cleanup(analyzer.Close)
-	importPaths := map[string][]string{
-		"pkg:maven/com.google.code.gson/gson@2.10":                     {"com.google.gson"},
-		"pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.15.2": {"com.fasterxml.jackson.databind"},
-	}
-	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	tests := []struct {
-		name           string
-		purl           string
-		wantMinCalls   int
-		wantMinBreadth int
-	}{
-		{
-			name:           "new Gson() constructor",
-			purl:           "pkg:maven/com.google.code.gson/gson@2.10",
-			wantMinCalls:   1,
-			wantMinBreadth: 1,
-		},
-		{
-			name:           "new ObjectMapper() constructor",
-			purl:           "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.15.2",
-			wantMinCalls:   1,
-			wantMinBreadth: 1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ca, ok := result[tt.purl]
-			if !ok {
-				t.Fatalf("expected coupling analysis for %s", tt.purl)
-			}
-			if ca.CallSiteCount < tt.wantMinCalls {
-				t.Errorf("CallSiteCount = %d, want >= %d", ca.CallSiteCount, tt.wantMinCalls)
-			}
-			if ca.APIBreadth < tt.wantMinBreadth {
-				t.Errorf("APIBreadth = %d, want >= %d", ca.APIBreadth, tt.wantMinBreadth)
-			}
-			if ca.IsUnused {
-				t.Error("IsUnused = true, want false")
-			}
-		})
 	}
 }

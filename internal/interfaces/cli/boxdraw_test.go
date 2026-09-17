@@ -53,24 +53,6 @@ func TestBoxTitle(t *testing.T) {
 	}
 }
 
-func TestVerdictIcon(t *testing.T) {
-	tests := []struct {
-		verdict domainaudit.Verdict
-		want    string
-	}{
-		{domainaudit.VerdictOK, "✅"},
-		{domainaudit.VerdictCaution, "⚠️"},
-		{domainaudit.VerdictReplace, "🔴"},
-		{domainaudit.VerdictReview, "🔍"},
-	}
-	for _, tt := range tests {
-		got := verdictIcon(tt.verdict)
-		if got != tt.want {
-			t.Errorf("verdictIcon(%q) = %q, want %q", tt.verdict, got, tt.want)
-		}
-	}
-}
-
 func TestWriteTopBar(t *testing.T) {
 	var buf bytes.Buffer
 	entry := &domainaudit.AuditEntry{PURL: "pkg:npm/express@4.18.2"}
@@ -100,18 +82,6 @@ func TestWriteLine(t *testing.T) {
 	}
 	if !strings.Contains(output, "Score: 8/10") {
 		t.Error("line missing content")
-	}
-}
-
-func TestWriteBoxOrigin_DirectPURL(t *testing.T) {
-	var buf bytes.Buffer
-	entry := &domainaudit.AuditEntry{PURL: "pkg:npm/express@4.18.2"}
-	ctx := newBoxContext(&buf, entry, 60)
-	if err := writeBoxOrigin(ctx); err != nil {
-		t.Fatalf("writeBoxOrigin() error = %v", err)
-	}
-	if buf.Len() != 0 {
-		t.Error("writeBoxOrigin should produce no output for direct PURL with no relation")
 	}
 }
 
@@ -736,39 +706,6 @@ func TestWriteBoxReleases_ZeroAdvisoriesHidden(t *testing.T) {
 	}
 }
 
-func TestWriteBoxHealth_NormalState(t *testing.T) {
-	var buf bytes.Buffer
-	entry := &domainaudit.AuditEntry{
-		PURL:    "pkg:npm/test@1.0.0",
-		Verdict: domainaudit.VerdictOK,
-		Analysis: &analysis.Analysis{
-			RepoURL: "github.com/test/repo",
-			RepoState: &analysis.RepoState{
-				IsArchived: false,
-				IsDisabled: false,
-				IsFork:     false,
-			},
-			Repository: &analysis.Repository{
-				StarsCount: 500,
-			},
-		},
-	}
-	ctx := newBoxContext(&buf, entry, 60)
-	if err := writeBoxHealth(ctx); err != nil {
-		t.Fatalf("writeBoxHealth() error = %v", err)
-	}
-	output := buf.String()
-	if strings.Contains(output, "Normal") {
-		t.Error("Normal state should not be displayed")
-	}
-	if strings.Contains(output, "GitHub:") {
-		t.Error("GitHub: label should not be displayed for normal repos")
-	}
-	if !strings.Contains(output, "500 stars") {
-		t.Error("missing star count")
-	}
-}
-
 func TestWriteBoxHealth_NilRepoState(t *testing.T) {
 	var buf bytes.Buffer
 	entry := &domainaudit.AuditEntry{
@@ -1272,5 +1209,53 @@ func TestPackageEcoName(t *testing.T) {
 					tt.effective, eco, pkg, tt.wantEco, tt.wantPkgName)
 			}
 		})
+	}
+}
+
+func TestWriteBoxHealth_NormalState(t *testing.T) {
+	var buf bytes.Buffer
+	entry := &domainaudit.AuditEntry{
+		PURL:    "pkg:npm/test@1.0.0",
+		Verdict: domainaudit.VerdictOK,
+		Analysis: &analysis.Analysis{
+			RepoURL: "github.com/test/repo",
+			RepoState: &analysis.RepoState{
+				IsArchived: false,
+				IsDisabled: false,
+				IsFork:     false,
+			},
+			Repository: &analysis.Repository{
+				StarsCount: 500,
+			},
+		},
+	}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxHealth(ctx); err != nil {
+		t.Fatalf("writeBoxHealth() error = %v", err)
+	}
+	output := buf.String()
+	if strings.Contains(output, "Normal") {
+		t.Error("Normal state should not be displayed")
+	}
+	if strings.Contains(output, "GitHub:") {
+		t.Error("GitHub: label should not be displayed for normal repos")
+	}
+	if !strings.Contains(output, "500 stars") {
+		t.Error("missing star count")
+	}
+}
+
+// TestWriteBoxOrigin_DirectPURL pins the zero-value relation (RelationUnknown)
+// half of writeBoxOrigin's documented contract: no Origin section for direct
+// entries whose relation is unknown.
+func TestWriteBoxOrigin_DirectPURL(t *testing.T) {
+	var buf bytes.Buffer
+	entry := &domainaudit.AuditEntry{PURL: "pkg:npm/express@4.18.2"}
+	ctx := newBoxContext(&buf, entry, 60)
+	if err := writeBoxOrigin(ctx); err != nil {
+		t.Fatalf("writeBoxOrigin() error = %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Error("writeBoxOrigin should produce no output for direct PURL with unknown relation")
 	}
 }

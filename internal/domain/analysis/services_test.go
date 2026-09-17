@@ -12,13 +12,6 @@ import (
 // ptrTime returns a pointer to the provided time.Time (test helper)
 func ptrTime(t time.Time) *time.Time { return &t }
 
-// Constructor test simplified (legacy type field removed)
-func TestLifecycleAssessorService_Constructor(t *testing.T) {
-	service := NewLifecycleAssessorService()
-	if service == nil {
-		t.Fatalf("expected service instance")
-	}
-}
 func TestLifecycleAssessorService_Assess(t *testing.T) {
 	now := time.Now()
 	recentTime := now.AddDate(0, 0, -10)

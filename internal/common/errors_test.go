@@ -59,45 +59,16 @@ func TestScorecardError_Error(t *testing.T) {
 	}
 }
 
-func TestScorecardError_Unwrap(t *testing.T) {
-	tests := []struct {
-		name          string
-		error         *ScorecardError
-		expectedCause error
-	}{
-		{
-			name: "error_with_cause",
-			error: &ScorecardError{
-				Type:    ErrorTypeFetch,
-				Message: "fetch failed",
-				Cause:   errors.New("network error"),
-			},
-			expectedCause: errors.New("network error"),
-		},
-		{
-			name: "error_without_cause",
-			error: &ScorecardError{
-				Type:    ErrorTypeValidation,
-				Message: "validation failed",
-				Cause:   nil,
-			},
-			expectedCause: nil,
-		},
+// TestScorecardError_UnwrapExposesCause pins the cause chain that callers rely on
+// through errors.Is (e.g. classifying a wrapped context.DeadlineExceeded as a timeout).
+func TestScorecardError_UnwrapExposesCause(t *testing.T) {
+	cause := errors.New("network timeout")
+	err := NewFetchError("failed to fetch data", cause)
+	if !errors.Is(err, cause) {
+		t.Errorf("errors.Is(err, cause) = false, want true")
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.error.Unwrap()
-			if tt.expectedCause == nil {
-				if result != nil {
-					t.Errorf("Unwrap() = %v, want nil", result)
-				}
-			} else {
-				if result == nil || result.Error() != tt.expectedCause.Error() {
-					t.Errorf("Unwrap() = %v, want %v", result, tt.expectedCause)
-				}
-			}
-		})
+	if got := NewFetchError("no cause", nil).Unwrap(); got != nil {
+		t.Errorf("Unwrap() on an error without a cause = %v, want nil", got)
 	}
 }
 
