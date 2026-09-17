@@ -67,8 +67,8 @@ func TestScorecardError_UnwrapExposesCause(t *testing.T) {
 	if !errors.Is(err, cause) {
 		t.Errorf("errors.Is(err, cause) = false, want true")
 	}
-	if errors.Is(NewFetchError("no cause", nil), cause) {
-		t.Errorf("errors.Is on an error without a cause matched an unrelated error")
+	if got := NewFetchError("no cause", nil).Unwrap(); got != nil {
+		t.Errorf("Unwrap() on an error without a cause = %v, want nil", got)
 	}
 }
 
