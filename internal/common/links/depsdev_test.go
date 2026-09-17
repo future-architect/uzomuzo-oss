@@ -105,6 +105,8 @@ func TestEncodeDepsDevPath(t *testing.T) {
 
 		// Aliases
 		{"PyPI uppercase normalizes", "PyPI", "requests", "pypi", "requests"},
+		{"surrounding whitespace trimmed", "  cargo  ", "serde", "cargo", "serde"},
+		{"packagist not hosted", "packagist", "symfony/console", "", ""},
 		{"golang -> go", "golang", "golang.org/x/sys", "go", "golang.org%2Fx%2Fsys"},
 		{"gem -> rubygems", "gem", "rails", "rubygems", "rails"},
 
