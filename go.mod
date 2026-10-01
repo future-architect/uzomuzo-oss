@@ -1,14 +1,14 @@
 module github.com/future-architect/uzomuzo-oss
 
-go 1.25.0
+go 1.26.0
 
 require github.com/joho/godotenv v1.5.1
 
-require github.com/package-url/packageurl-go v0.1.6
+require github.com/package-url/packageurl-go v0.1.7
 
 require github.com/Masterminds/semver/v3 v3.5.0
 
-require golang.org/x/mod v0.40.0
+require golang.org/x/mod v0.41.0
 
 require github.com/urfave/cli/v3 v3.11.0
 
