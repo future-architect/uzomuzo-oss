@@ -167,3 +167,38 @@ func TestPopulateLicenses_NOASSERTION_NotPromoted(t *testing.T) {
 		t.Fatalf("NOASSERTION must NOT promote to project, got %+v", analysis.ProjectLicense)
 	}
 }
+
+// TestPopulateLicenses_RawVersionReplacedByProjectSPDX exercises step 4 of
+// populateLicenses (a raw-only, non-SPDX requested-version license is replaced
+// by the project's usable SPDX expression) through populateAnalysisFromBatchResult,
+// the production entry point, so a regression in the wiring fails it too.
+func TestPopulateLicenses_RawVersionReplacedByProjectSPDX(t *testing.T) {
+	svc := &IntegrationService{}
+	analysis := &domain.Analysis{OriginalPURL: "pkg:npm/example@1.0.0", EffectivePURL: "pkg:npm/example@1.0.0"}
+	analysis.EnsureCanonical()
+
+	version := depsdev.Version{
+		VersionKey: depsdev.VersionKey{Version: "1.0.0"},
+		Licenses:   []string{"custom-non-spdx"},
+	}
+	batch := &depsdev.BatchResult{
+		PURL: "pkg:npm/example@1.0.0",
+		Package: &depsdev.Package{
+			PackageKey: depsdev.PackageKey{System: "npm", Name: "example"},
+			PURL:       "pkg:npm/example",
+			Versions:   []depsdev.Version{version},
+		},
+		ReleaseInfo: depsdev.ReleaseInfo{StableVersion: version, RequestedVersion: version},
+		Project:     &depsdev.Project{License: "MIT"},
+	}
+
+	svc.populateAnalysisFromBatchResult(context.Background(), analysis, batch)
+
+	got := analysis.RequestedVersionLicense
+	if got.Expression != "MIT" {
+		t.Fatalf("expected raw-only version license to be replaced by project SPDX MIT, got Expression=%q Raw=%q Source=%q", got.Expression, got.Raw, got.Source)
+	}
+	if got.Source != domain.LicenseSourceProjectFallback {
+		t.Fatalf("expected source ProjectFallback, got %q", got.Source)
+	}
+}

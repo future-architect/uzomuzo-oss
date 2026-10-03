@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	urfcli "github.com/urfave/cli/v3"
@@ -207,27 +208,16 @@ func TestRootAction_NoInputReturnsNil(t *testing.T) {
 	}
 }
 
-func TestScanCommand_Registered(t *testing.T) {
-	cfg := &domaincfg.Config{}
-	app := buildApp(cfg)
-
-	found := false
-	for _, cmd := range app.Commands {
-		if cmd.Name == "scan" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("expected 'scan' subcommand to be registered in buildApp()")
-	}
-}
-
 func TestScanAction_FileNotFoundReturnsError(t *testing.T) {
 	cfg := &domaincfg.Config{}
 	app := buildApp(cfg)
 	err := app.Run(context.Background(), []string{"uzomuzo", "scan", "--file", "nonexistent.txt"})
 	if err == nil {
 		t.Fatal("expected error for nonexistent file, got nil")
+	}
+	// The error must come from opening the file, not from an unregistered
+	// "scan" command (which would surface as a command-not-found error).
+	if !strings.Contains(err.Error(), "nonexistent.txt") {
+		t.Errorf("error = %q, want it to name the missing file", err.Error())
 	}
 }

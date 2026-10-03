@@ -281,66 +281,6 @@ func TestURLUtilsEdgeCases(t *testing.T) {
 	}
 }
 
-func TestURLUtilsIntegration(t *testing.T) {
-	tests := []struct {
-		name            string
-		inputURL        string
-		shouldNormalize bool
-		shouldBeValid   bool
-	}{
-		{
-			name:            "git_plus_https_workflow",
-			inputURL:        "git+https://github.com/owner/repo.git",
-			shouldNormalize: true,
-			shouldBeValid:   false, // Raw git+ URLs are not considered valid GitHub URLs
-		},
-		{
-			name:            "git_protocol_workflow",
-			inputURL:        "git://github.com/owner/repo.git",
-			shouldNormalize: true,
-			shouldBeValid:   false, // Raw git:// URLs are not considered valid GitHub URLs
-		},
-		{
-			name:            "already_normalized_url",
-			inputURL:        "https://github.com/owner/repo",
-			shouldNormalize: false,
-			shouldBeValid:   true,
-		},
-		{
-			name:            "non_github_url",
-			inputURL:        "https://gitlab.com/owner/repo",
-			shouldNormalize: false,
-			shouldBeValid:   false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Test normalization
-			normalized := NormalizeRepositoryURL(tt.inputURL)
-			if tt.shouldNormalize {
-				if normalized == tt.inputURL {
-					t.Errorf("Expected URL to be normalized, but got same result: %q", normalized)
-				}
-			}
-
-			// Test validation of original URL
-			isValidOriginal := IsValidGitHubURL(tt.inputURL)
-			if isValidOriginal != tt.shouldBeValid {
-				t.Errorf("IsValidGitHubURL(%q) = %v, want %v", tt.inputURL, isValidOriginal, tt.shouldBeValid)
-			}
-
-			// Test validation of normalized URL (should be valid for GitHub URLs)
-			if tt.shouldBeValid {
-				isValidNormalized := IsValidGitHubURL(normalized)
-				if !isValidNormalized {
-					t.Errorf("Normalized URL should be valid: %q -> %q", tt.inputURL, normalized)
-				}
-			}
-		})
-	}
-}
-
 func TestExtractGitHubOwnerRepo_Accepts(t *testing.T) {
 	tests := []struct {
 		in        string

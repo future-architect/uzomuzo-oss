@@ -73,20 +73,6 @@ const (
 	KindExplicit
 )
 
-// String returns a lowercase label suitable for JSON serialization.
-func (k DetectionKind) String() string {
-	switch k {
-	case KindStrong:
-		return "strong"
-	case KindContextual:
-		return "contextual"
-	case KindExplicit:
-		return "explicit"
-	default:
-		return ""
-	}
-}
-
 // DetectionResult contains match details.
 type DetectionResult struct {
 	Matched   bool
@@ -158,13 +144,6 @@ var negativeContexts = []string{
 	"still maintained",
 }
 
-// LabeledPattern pairs a human-readable label with a compiled regex.
-// Used by keyword-stats to report per-pattern effectiveness.
-type LabeledPattern struct {
-	Label string
-	Rx    *regexp.Regexp
-}
-
 var contextualEOLPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\b(has\s+(reached|entered)|reaches|entered|is|are|becomes|becoming|will\s+(be|reach|enter)|was|were|has\s+been|have\s+been)\s+(end[\s-]?of[\s-]?life|eol)\b`),
 	regexp.MustCompile(`\b(end[\s-]?of[\s-]?life|eol)\s+(for|of|on)\s+(this|the)\s+(project|artifact|library|module|package|component|release|version)\b`),
@@ -178,37 +157,8 @@ var contextualEOLPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\bafter\s+(\d{4}[-/]\d{2}[-/]\d{2}|\w+\s+\d{1,2},?\s+\d{4})\s+(no|without)\s+(support|updates)`),
 }
 
-// ContextualPatternsForStats returns labeled contextual EOL regex patterns
-// for keyword effectiveness analysis. Each pattern is paired with a descriptive label.
-func ContextualPatternsForStats() []LabeledPattern {
-	labels := []string{
-		"verb + end-of-life/eol",
-		"end-of-life for/of this project",
-		"end-of-life near project/package",
-		"moved into read-only mode",
-		"will be retired/removed on DATE",
-		"support continues/provided until DATE",
-		"security fixes until DATE",
-		"after DATE no support/updates",
-	}
-	out := make([]LabeledPattern, len(contextualEOLPatterns))
-	for i, rx := range contextualEOLPatterns {
-		out[i] = LabeledPattern{Label: labels[i], Rx: rx}
-	}
-	return out
-}
-
 // rxReadmeExplicit is the broadest explicit EOL regex (Readme variant).
-// Promoted to package level so it can be shared between DetectLifecycle and stats.
 var rxReadmeExplicit = regexp.MustCompile(`(?i)\b(this (project|package|repository|repo) (is )?(now )?(deprecated|unmaintained|abandoned|dead|sunset|sunsetted|decommissioned|obsoleted)|sunsetting this (project|package|repository)|consider this (project|package|repository|repo) (obsolete|archived|deprecated)|no longer (maintained|supported)|reached end of life|final release)\b`)
-
-// ExplicitPatternsForStats returns the broadest explicit EOL regex (Readme variant)
-// for keyword effectiveness analysis.
-func ExplicitPatternsForStats() []LabeledPattern {
-	return []LabeledPattern{
-		{Label: "this project/package is deprecated/...", Rx: rxReadmeExplicit},
-	}
-}
 
 // componentAtStart detects lines that begin with a component-level deprecation notice
 // (e.g., "Deprecated function foo() ...") which should not be escalated to a

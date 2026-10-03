@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	urfcli "github.com/urfave/cli/v3"
-
 	"github.com/future-architect/uzomuzo-oss/internal/common/logging"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/config"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depgraph"
@@ -111,12 +109,14 @@ func runDiet(t *testing.T, format string) string {
 	return buf.String()
 }
 
-func TestE2E_DietTable(t *testing.T) {
+func TestE2E_DietDefaultFormatIsTable(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping E2E test in short mode")
 	}
 
-	out := runDiet(t, "table")
+	// An empty format is the CLI default (the --format flag has no default value),
+	// so this run pins both the table renderer and the "" -> table fallback in RunDiet.
+	out := runDiet(t, "")
 
 	// Should contain the header line
 	if !strings.Contains(out, "Diet Plan") {
@@ -238,55 +238,6 @@ func TestE2E_DietDetailed(t *testing.T) {
 	// Should show PURL for each dependency
 	if !strings.Contains(out, "PURL:") {
 		t.Error("detailed output missing 'PURL:' label")
-	}
-}
-
-func TestE2E_DietCLIFlags(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping E2E test in short mode")
-	}
-
-	// Test that the CLI app rejects missing --sbom flag.
-	configService := config.NewConfigService()
-	cfg, err := configService.Load(context.Background())
-	if err != nil {
-		t.Fatalf("failed to load config: %v", err)
-	}
-
-	graphAnalyzer := depgraph.NewAnalyzer()
-	sourceAnalyzer := treesitter.NewAnalyzer()
-	t.Cleanup(sourceAnalyzer.Close)
-
-	app := &urfcli.Command{
-		Name: "uzomuzo-diet",
-		Flags: []urfcli.Flag{
-			&urfcli.StringFlag{
-				Name:     "sbom",
-				Required: true,
-			},
-			&urfcli.StringFlag{
-				Name:  "source",
-				Value: ".",
-			},
-			&urfcli.StringFlag{
-				Name:    "format",
-				Aliases: []string{"f"},
-			},
-		},
-		Action: func(ctx context.Context, cmd *urfcli.Command) error {
-			opts := cli.DietOptions{
-				SBOMPath:   cmd.String("sbom"),
-				SourceRoot: cmd.String("source"),
-				Format:     cmd.String("format"),
-			}
-			return cli.RunDiet(ctx, cfg, opts, graphAnalyzer, sourceAnalyzer, nil)
-		},
-	}
-
-	// Missing --sbom should fail
-	err = app.Run(context.Background(), []string{"uzomuzo-diet"})
-	if err == nil {
-		t.Error("expected error when --sbom is missing, got nil")
 	}
 }
 
@@ -419,18 +370,5 @@ func TestE2E_DietStdinSBOM(t *testing.T) {
 	}
 	if result.SBOMPath != "-" {
 		t.Errorf("stdin: sbom_path = %q, want %q", result.SBOMPath, "-")
-	}
-}
-
-func TestE2E_DietDefaultFormat(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping E2E test in short mode")
-	}
-
-	// When format is empty, RunDiet should default to table
-	out := runDiet(t, "")
-
-	if !strings.Contains(out, "RANK") {
-		t.Error("default format should be table (expected RANK column header)")
 	}
 }

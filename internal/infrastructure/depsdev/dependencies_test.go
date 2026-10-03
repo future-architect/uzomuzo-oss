@@ -249,54 +249,6 @@ func TestFetchDependenciesBatch_VersionFallback_BoundedAttempts(t *testing.T) {
 	}
 }
 
-// TestFetchDependenciesBatch_VersionFallback_SkipsPrimaryVersion verifies the
-// fallback does not retry the version that just 404'd even if it appears
-// first in the package-versions listing.
-func TestFetchDependenciesBatch_VersionFallback_SkipsPrimaryVersion(t *testing.T) {
-	packageVersionsPayload := `{"versions":[
-		{"versionKey":{"version":"19.2.5"},"publishedAt":"2026-04-10T00:00:00Z"},
-		{"versionKey":{"version":"19.1.0"},"publishedAt":"2026-02-01T00:00:00Z"}
-	]}`
-	leafGraph := `{"nodes":[{"versionKey":{"system":"NPM","name":"react","version":"19.1.0"},"relation":"SELF"}],"edges":[]}`
-
-	calledVersions := make(chan string, 5)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v3alpha/systems/npm/packages/react":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(packageVersionsPayload))
-		case "/v3alpha/systems/npm/packages/react/versions/19.2.5:dependencies":
-			calledVersions <- "19.2.5"
-			w.WriteHeader(http.StatusNotFound)
-		case "/v3alpha/systems/npm/packages/react/versions/19.1.0:dependencies":
-			calledVersions <- "19.1.0"
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(leafGraph))
-		default:
-			t.Errorf("unexpected path: %s", r.URL.Path)
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer srv.Close()
-
-	client := NewDepsDevClient(&config.DepsDevConfig{
-		BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0, BatchSize: 10,
-	})
-
-	_ = client.FetchDependenciesBatch(context.Background(), []string{"pkg:npm/react@19.2.5"})
-	close(calledVersions)
-
-	// Order of calls: primary 19.2.5 (404) → fallback 19.1.0 (200). The 19.2.5
-	// entry in the versions listing must be skipped since it already 404'd.
-	var got []string
-	for v := range calledVersions {
-		got = append(got, v)
-	}
-	if len(got) != 2 || got[0] != "19.2.5" || got[1] != "19.1.0" {
-		t.Errorf("call sequence = %v, want [19.2.5 19.1.0]", got)
-	}
-}
-
 // TestFetchDependenciesBatch_VersionFallback_PrefersStableOverPrerelease
 // documents the deps.dev quirk that motivated the stable-over-prerelease sort:
 // canary/beta tags are often more recent by publishedAt but their

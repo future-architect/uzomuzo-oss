@@ -116,11 +116,6 @@ func TextsAtTier(minTier Tier) []string {
 	return out
 }
 
-// Phrases returns all phrases at TierReeval or above.
-func Phrases() []string {
-	return TextsAtTier(TierReeval)
-}
-
 // ContainsStrongPhrase returns the de-duplicated set of TierReeval+ phrases
 // found in text (case-insensitive). Returns nil when no match.
 // Backward compatible with the original signature.
@@ -136,36 +131,4 @@ func ContainsStrongPhrase(text string) []string {
 		}
 	}
 	return found
-}
-
-// AllEntries returns a copy of the full catalog for inspection (e.g. keyword-stats).
-func AllEntries() []struct {
-	Text string
-	Tier Tier
-} {
-	out := make([]struct {
-		Text string
-		Tier Tier
-	}, len(catalog))
-	for i, e := range catalog {
-		out[i] = struct {
-			Text string
-			Tier Tier
-		}{Text: e.text, Tier: e.tier}
-	}
-	return out
-}
-
-// TierString returns a human-readable label for the tier.
-func (t Tier) String() string {
-	switch t {
-	case TierSnippet:
-		return "snippet"
-	case TierReeval:
-		return "reeval"
-	case TierStrong:
-		return "strong"
-	default:
-		return "unknown"
-	}
 }
