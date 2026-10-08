@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -382,12 +383,24 @@ func (c *Client) GetPublishHistory(ctx context.Context, fullName string) (*Publi
 	if resp.StatusCode != http.StatusOK {
 		return nil, false, fmt.Errorf("npm HTTP %d", resp.StatusCode)
 	}
+	h, err := parsePublishHistory(resp.Body)
+	if err != nil {
+		return nil, false, err
+	}
+	return h, true, nil
+}
+
+// parsePublishHistory decodes the "time" and "versions" keys of a packument.
+// Version manifests are decoded into empty structs so that only their keys are
+// kept: a packument with thousands of versions runs to megabytes, and the
+// manifests are not needed here.
+func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
 	var doc struct {
 		Time     map[string]json.RawMessage `json:"time"`
-		Versions map[string]json.RawMessage `json:"versions"`
+		Versions map[string]struct{}        `json:"versions"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
-		return nil, false, fmt.Errorf("npm decode failed: %w", err)
+	if err := json.NewDecoder(r).Decode(&doc); err != nil {
+		return nil, fmt.Errorf("npm decode failed: %w", err)
 	}
 	h := &PublishHistory{
 		PublishedAt: make(map[string]time.Time, len(doc.Time)),
@@ -412,5 +425,5 @@ func (c *Client) GetPublishHistory(ctx context.Context, fullName string) (*Publi
 	for v := range doc.Versions {
 		h.Installable[v] = struct{}{}
 	}
-	return h, true, nil
+	return h, nil
 }

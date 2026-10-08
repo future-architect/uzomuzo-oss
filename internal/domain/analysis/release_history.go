@@ -16,7 +16,8 @@ const RegistryNpm = "npm"
 // window is wide enough for the slowest of these. See ADR-0026.
 const DormantBurstWindow = 24 * time.Hour
 
-// DormantBurstMinLines is how many release lines a burst must touch. A single
+// DormantBurstMinLines is how many release lines a burst must touch; a
+// prerelease touches none. A single
 // release after a long silence is common and legitimate — a quarter of the
 // entries in two real lockfiles were such releases — while a release on two or
 // more lines at once after the same silence was about 1% of them. See ADR-0026.
@@ -142,6 +143,11 @@ func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSil
 	lineSet := map[string]struct{}{}
 	for _, r := range all[first : last+1] {
 		versions = append(versions, r.v)
+		// A prerelease opens no line: "^2" never resolves to "2.0.0-alpha.0",
+		// so a patch plus a next-major preview reaches one set of users.
+		if isPrerelease(r.v) {
+			continue
+		}
 		if l, ok := releaseLine(r.v); ok {
 			lineSet[l] = struct{}{}
 		}
@@ -191,6 +197,13 @@ func releaseLine(v string) (string, bool) {
 		return "", false
 	}
 	return "0." + strconv.Itoa(minor), true
+}
+
+// isPrerelease reports whether v carries a semver prerelease suffix
+// ("2.0.0-alpha.0"). Build metadata ("+build") alone is not a prerelease.
+func isPrerelease(v string) bool {
+	core, _, _ := strings.Cut(v, "+")
+	return strings.Contains(core, "-")
 }
 
 // lineLess orders release lines numerically ("0.2" < "0.10" < "1" < "9" < "12").

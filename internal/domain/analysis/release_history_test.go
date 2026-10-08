@@ -32,8 +32,9 @@ func history(t *testing.T, published map[string]string, removed ...string) *Rele
 
 const year = 365 * 24 * time.Hour
 
-// TestDetectDormantBurst replays registry timestamps of real incidents
-// (registry.npmjs.org "time", fetched 2026-10-08) and of legitimate releases
+// TestDetectDormantBurst replays the burst timestamps of real incidents
+// (registry.npmjs.org "time", fetched 2026-10-08; the release before each
+// silence is rounded to midnight, so silences differ from ADR-0026 by a day) and of legitimate releases
 // that the rule must leave alone. See ADR-0026.
 func TestDetectDormantBurst(t *testing.T) {
 	t.Parallel()
@@ -197,6 +198,12 @@ func TestDetectDormantBurst_Boundaries(t *testing.T) {
 		{name: "two patches on one line are one line",
 			pub:     map[string]string{"1.0.0": at(0), "1.0.1": at(2 * year), "1.0.2": at(2*year + time.Minute)},
 			version: "1.0.1", want: false},
+		{name: "a next-major prerelease opens no line",
+			pub:     map[string]string{"1.0.0": at(0), "1.0.1": at(2 * year), "2.0.0-alpha.0": at(2*year + time.Hour)},
+			version: "1.0.1", want: false},
+		{name: "build metadata is not a prerelease",
+			pub:     map[string]string{"1.0.0": at(0), "1.0.1": at(2 * year), "2.0.1+build.5": at(2*year + time.Hour)},
+			version: "1.0.1", want: true},
 		{name: "non-numeric versions count as no line",
 			pub:     map[string]string{"1.0.0": at(0), "1.0.1": at(2 * year), "next": at(2*year + time.Minute)},
 			version: "1.0.1", want: false},
@@ -265,4 +272,17 @@ func TestLineLess(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("order = %v, want %v", got, want)
 	}
+}
+
+func FuzzReleaseLine(f *testing.F) {
+	for _, s := range []string{"12.0.1", "0.7.29", "0.1-alpha", "v2", "0", "", "0.", "-1.0.0", "1e9.0.0", "99999999999999999999.0.0"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, v string) {
+		l, ok := releaseLine(v)
+		if ok && l == "" {
+			t.Fatalf("releaseLine(%q) = ok with empty line", v)
+		}
+		_ = isPrerelease(v)
+	})
 }

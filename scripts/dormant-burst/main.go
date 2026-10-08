@@ -161,7 +161,7 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 		}
 		return entries[i].version < entries[j].version
 	})
-	var evaluated, anyAge, fresh int
+	var evaluated, silenceOnly, anyAge, fresh int
 	var hits []string
 	for _, e := range entries {
 		h := hist[e.name]
@@ -172,6 +172,9 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 			continue
 		}
 		evaluated++
+		if afterSilence(h, e.version) {
+			silenceOnly++
+		}
 		b := domain.DetectDormantBurst(h, e.version, now, year, 0)
 		if b == nil {
 			continue
@@ -185,11 +188,28 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 		hits = append(hits, fmt.Sprintf("%s@%s published %s, silent %d days, burst %s%s",
 			e.name, e.version, b.PublishedAt.Format("2006-01-02"), b.SilentDays, strings.Join(b.Versions, ", "), mark))
 	}
-	fmt.Printf("%s at %s: %d entries with a publish time; %d in a burst after silence (any age); %d also within the 365-day age limit\n",
-		path, now.Format("2006-01-02"), evaluated, anyAge, fresh)
+	fmt.Printf("%s at %s: %d distinct name@version pairs with a publish time (of %d in the lockfile)\n"+
+		"  published after >=365 days without any release (silence alone, any age): %d\n"+
+		"  ... and in a burst across >=2 release lines (any age): %d\n"+
+		"  ... and within the 365-day age limit (what uzomuzo reports): %d\n",
+		path, now.Format("2006-01-02"), evaluated, len(entries), silenceOnly, anyAge, fresh)
 	for _, h := range hits {
 		fmt.Println("  " + h)
 	}
+}
+
+// afterSilence reports whether version was published at least a year after
+// the release before it, ignoring the line condition: the rule ADR-0026
+// rejected as too broad.
+func afterSilence(h *domain.ReleaseHistory, version string) bool {
+	at := h.PublishedAt[version]
+	var prev time.Time
+	for _, t := range h.PublishedAt {
+		if t.Before(at) && t.After(prev) {
+			prev = t
+		}
+	}
+	return !prev.IsZero() && at.Sub(prev) >= year
 }
 
 func must(err error) {

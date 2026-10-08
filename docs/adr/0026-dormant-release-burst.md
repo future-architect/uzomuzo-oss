@@ -41,7 +41,8 @@ the registry.
 
 ## Decision
 
-Add branch 1.2 to the lifecycle assessor: when the analysed version was published
+After the lifecycle decision tree has produced its label, apply one more rule.
+When the label is **Active or Legacy-Safe** and the analysed version was published
 
 1. after at least `RecentStableWindowDays` (365 by default) without any release,
 2. in a burst — every release within `DormantBurstWindow` (24 hours) of the first
@@ -49,8 +50,16 @@ Add branch 1.2 to the lifecycle assessor: when the analysed version was publishe
    release lines (the major version, or `0.minor` below 1.0), and
 3. no more than `RecentStableWindowDays` ago,
 
-the label is **Review Needed**, with the silence, the lines and the burst in the
-reason and signals. If the registry no longer serves the version, that is added
+the label becomes **Review Needed**, with the silence, the lines and the burst in
+the reason and signals. Prereleases (`2.0.0-alpha.0`) open no line: `^2` never
+resolves to them.
+
+The rule only replaces an ok outcome. Stalled, EOL-Effective, EOL-Confirmed,
+EOL-Scheduled and Review Needed for another reason are left as they are, so a
+`--fail-on stalled,eol-effective` gate keeps firing for a burst version; a gate
+that should also catch bursts adds `review-needed`. An earlier draft placed the
+rule before the archive branch and turned an archived (Stalled) or EOL-Effective
+package into Review Needed, which silently disarmed those gates. If the registry no longer serves the version, that is added
 to the reason for display; it is never part of the decision.
 
 npm only. The publish times come from the full packument
@@ -62,8 +71,8 @@ times. A failed fetch leaves `Analysis.ReleaseHistory` nil and the branch silent
 
 A single release after a year of silence is ordinary. Mature small packages ship
 a fix every few years (`braces` 3.0.3 came five years after 3.0.2). Measured on
-two real lockfiles, the silence alone matched about a quarter of all entries
-(VS Code: 331 of 1,353; npm CLI: 256 of 968, first prototype, 2026-10-08) and is
+two real lockfiles, the silence alone matched about a fifth of all entries
+(VS Code: 289 of 1,414; npm CLI: 230 of 993; see the evidence below) and is
 unusable.
 
 What separates the takeovers is that the attacker publishes to *every line in
@@ -110,10 +119,13 @@ the intended scope: those packages were never silent.
 
 ### False positives on real lockfiles, evaluated on 2026-10-08
 
-| lockfile | entries | burst after silence, any age | also within the age limit |
-|---|---|---|---|
-| microsoft/vscode `package-lock.json` (b99bfafc0a36) | 1,414 | 15 | **1** (`test-exclude@7.0.2`) |
-| npm/cli `package-lock.json` (b317f16c80df) | 993 | 9 | **1** (`minipass-flush@1.0.6`) |
+"Entries" are the distinct `name@version` pairs in the lockfile for which the
+registry returned a publish time (VS Code: 1,414 of 1,425; 11 not found).
+
+| lockfile | entries | after a year's silence (silence alone) | and in a burst across lines, any age | and within the age limit (reported) |
+|---|---|---|---|---|
+| microsoft/vscode `package-lock.json` (b99bfafc0a36) | 1,414 | 289 | 15 | **1** (`test-exclude@7.0.2`) |
+| npm/cli `package-lock.json` (b317f16c80df) | 993 | 230 | 9 | **1** (`minipass-flush@1.0.6`) |
 
 Both remaining hits are legitimate: a final patch on the old line published
 together with a new major. They are the cost of the rule. Both lockfiles are
@@ -127,12 +139,26 @@ tooling-heavy; other populations will differ.
   registry".
 - **The rule fires once the second line is published, not at the first.** On
   2026-05-14 it would have become true at 14:26:01, 31 seconds after 12.0.1.
+- Every version of the burst is flagged, including the maintainer's clean
+  follow-up when it lands inside the window (`is@3.3.2`, published 37 minutes
+  after the malicious 5.0.0). The reason text cannot tell them apart; a person
+  has to.
+- Date-based versions (`20220101.0.0`, `20220102.0.0`) are separate majors, so
+  two of them published within a day after a year's silence fire. Not seen in
+  the measured lockfiles.
+- The rule reads the version in the PURL. A GitHub-URL input is analysed at
+  deps.dev's latest stable release, so `node-ipc`'s repository URL evaluates
+  14.0.0 and does not fire.
 - **It is evadable.** An attacker who publishes on one line only (event-stream)
   passes. This is one signal, not a defence against takeovers.
 - The malicious versions' publish times stay in the history, so the next
   legitimate release (`node-ipc@14.0.0`, 102 days later) does not look like a
   return from silence.
-- One extra full-packument request per distinct npm package per scan.
+- One extra full-packument request per distinct npm package per scan. A failed
+  or timed-out fetch is logged at debug level only and leaves the label as the
+  tree decided it.
+- The assessor now reads the clock (`AssessmentInput.Now`, wall clock when
+  zero) for the age limit.
 - Not covered, and left for later: other registries (RubyGems removes yanked
   versions from its API, so SleeperGem's malicious releases cannot be replayed);
   publisher changes (`_npmUser`), new dependencies and new install scripts in the

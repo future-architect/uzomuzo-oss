@@ -23,11 +23,14 @@ func burstHistory(now time.Time) *ReleaseHistory {
 	}
 }
 
-// TestLifecycleAssessor_DormantBurst is the decision table for branch 1.2
+// TestLifecycleAssessor_DormantBurst is the end-to-end decision table for the
+// dormant-burst rule
 // (ADR-0026): which version is analysed × what else is true of the package.
 func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 	t.Parallel()
-	now := time.Now()
+	// A fixed UTC instant: with a local wall clock, AddDate across a DST change
+	// shifts the silence by an hour and the day count by one.
+	now := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
 	recent := now.AddDate(0, 0, -10)
 	activeRepo := &RepoState{DaysSinceLastCommit: 5, LatestHumanCommit: &recent, CommitStats: &CommitStats{}}
 	healthy := map[string]*ScoreEntity{
@@ -72,11 +75,10 @@ func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 			wantLabel: LabelActive,
 		},
 		{
-			name: "takes precedence over an archived repository",
+			name: "an archived repository stays Stalled, so a --fail-on stalled gate keeps firing",
 			analysis: &Analysis{Package: pkg("1.0.1"), ReleaseInfo: stable, ReleaseHistory: burstHistory(now),
 				RepoState: &RepoState{IsArchived: true, DaysSinceLastCommit: 5, LatestHumanCommit: &recent, CommitStats: &CommitStats{}}},
-			wantLabel: LabelReviewNeeded,
-			wantTrace: "dormant_release_burst_review_needed",
+			wantLabel: LabelStalled,
 		},
 		{
 			name:      "a primary-source EOL still wins",
@@ -89,7 +91,7 @@ func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			res, err := svc.Assess(context.Background(), AssessmentInput{Analysis: tt.analysis, Scores: healthy, EOL: tt.eol})
+			res, err := svc.Assess(context.Background(), AssessmentInput{Analysis: tt.analysis, Scores: healthy, EOL: tt.eol, Now: now})
 			if err != nil {
 				t.Fatalf("Assess: %v", err)
 			}
@@ -111,3 +113,40 @@ func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 	}
 }
 
+// TestApplyDormantBurst pins that the burst only replaces an ok outcome: every
+// other label passes through unchanged, so a --fail-on gate on it still fires.
+func TestApplyDormantBurst(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
+	a := &Analysis{Package: &Package{PURL: "pkg:npm/example@1.0.1", Ecosystem: "npm", Version: "1.0.1"}, ReleaseHistory: burstHistory(now)}
+	svc := NewLifecycleAssessorService()
+	for _, tc := range []struct {
+		in   MaintenanceStatus
+		want MaintenanceStatus
+	}{
+		{LabelActive, LabelReviewNeeded},
+		{LabelLegacySafe, LabelReviewNeeded},
+		{LabelStalled, LabelStalled},
+		{LabelEOLEffective, LabelEOLEffective},
+		{LabelEOLConfirmed, LabelEOLConfirmed},
+		{LabelEOLScheduled, LabelEOLScheduled},
+		{LabelReviewNeeded, LabelReviewNeeded},
+	} {
+		orig := &AssessmentResult{Axis: LifecycleAxis, Label: string(tc.in), Reason: "orig", Trace: []string{"x"}}
+		got := svc.applyDormantBurst(AssessmentInput{Analysis: a, Now: now}, orig)
+		if MaintenanceStatus(got.Label) != tc.want {
+			t.Errorf("%s -> %s, want %s", tc.in, got.Label, tc.want)
+		}
+		if tc.in == tc.want && got != orig {
+			t.Errorf("%s: result must be returned unchanged", tc.in)
+		}
+		if tc.in == LabelActive && !strings.Contains(strings.Join(got.Trace, " "), "was Active") {
+			t.Errorf("trace %v does not record the replaced label", got.Trace)
+		}
+	}
+	// The same burst a year and a day later is past the age limit.
+	late := svc.applyDormantBurst(AssessmentInput{Analysis: a, Now: now.AddDate(1, 0, 1)}, &AssessmentResult{Label: string(LabelActive)})
+	if MaintenanceStatus(late.Label) != LabelActive {
+		t.Errorf("past the age limit: %s, want Active", late.Label)
+	}
+}

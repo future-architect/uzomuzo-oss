@@ -1,6 +1,9 @@
 package analysis
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // AssessmentAxis enumerates supported assessment dimensions (extensible).
 type AssessmentAxis string
@@ -17,6 +20,9 @@ type AssessmentInput struct {
 	Analysis *Analysis
 	Scores   map[string]*ScoreEntity
 	EOL      EOLStatus
+	// Now is the evaluation time for time-dependent rules (ADR-0026). Zero
+	// means the wall clock.
+	Now time.Time
 }
 
 // SignalRole classifies how a signal contributed to the assessment decision.

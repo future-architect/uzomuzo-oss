@@ -55,7 +55,42 @@ func NewLifecycleAssessorServiceWithConfig(c cfg.LifecycleAssessmentConfig) *Lif
 
 // Assess performs lifecycle assessment and returns an AssessmentResult using the lifecycle decision tree logic.
 func (s *LifecycleAssessorService) Assess(ctx context.Context, in AssessmentInput) (*AssessmentResult, error) {
-	return s.assessInternal(ctx, in)
+	res, err := s.assessInternal(ctx, in)
+	if err != nil || res == nil {
+		return res, err
+	}
+	return s.applyDormantBurst(in, res), nil
+}
+
+// applyDormantBurst turns an ok outcome (Active or Legacy-Safe) into Review
+// Needed when the analysed version came out in a burst across release lines
+// after a long silence. A dormant package that suddenly publishes on several
+// lines at once is the shape a takeover leaves, and the burst itself is what
+// makes the project look Active; a person decides whether the release is the
+// maintainer's.
+//
+// It only ever replaces an ok outcome. Stalled, EOL-*, and Review Needed for
+// another reason are left as they are, so a --fail-on gate on those labels
+// keeps firing for a burst version. Silence and age both use
+// RecentStableWindowDays: the burst is a return from the state this assessor
+// already calls "no recent release". See ADR-0026.
+func (s *LifecycleAssessorService) applyDormantBurst(in AssessmentInput, res *AssessmentResult) *AssessmentResult {
+	switch MaintenanceStatus(res.Label) {
+	case LabelActive, LabelLegacySafe:
+	default:
+		return res
+	}
+	now := in.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	window := time.Duration(s.rules.RecentStableWindowDays) * 24 * time.Hour
+	b := in.Analysis.DormantBurst(now, window, window)
+	if b == nil {
+		return res
+	}
+	trace := append(append([]string(nil), res.Trace...), "dormant_release_burst_review_needed (was "+res.Label+")")
+	return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelReviewNeeded), Reason: dormantBurstReason(b), Trace: trace, Signals: dormantBurstSignals(b)}
 }
 
 // sig creates a Signal with Role=SignalUsed.
@@ -100,22 +135,6 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		signalSource := eolEvidenceSource(in.EOL)
 		trace = append(trace, "primary_source_eol override")
 		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLConfirmed), Reason: reason, Trace: trace, Signals: []Signal{sig(SignalEOLSource, signalSource)}}, nil
-	}
-
-	// 1.2 Release burst after a long silence (the analysed version itself).
-	// A dormant package that suddenly publishes on several release lines at once
-	// is the shape a takeover leaves; a person decides whether this release is
-	// the maintainer's. Placed before the archive and activity branches, which
-	// describe the project and would otherwise report the burst itself as
-	// "recent release, Active". Silence and age both use RecentStableWindowDays:
-	// the burst is a return from the state this assessor already calls "no
-	// recent release". See ADR-0026.
-	if analysis != nil {
-		window := time.Duration(s.rules.RecentStableWindowDays) * 24 * time.Hour
-		if b := analysis.DormantBurst(time.Now(), window, window); b != nil {
-			trace = append(trace, "dormant_release_burst_review_needed")
-			return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelReviewNeeded), Reason: dormantBurstReason(b), Trace: trace, Signals: dormantBurstSignals(b)}, nil
-		}
 	}
 
 	// 1.25 Package-level distribution withdrawal (every published release yanked).
