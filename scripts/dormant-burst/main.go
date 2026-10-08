@@ -113,6 +113,7 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 	must(err)
 	var lock struct {
 		Packages map[string]struct {
+			Name    string `json:"name"`
 			Version string `json:"version"`
 			Link    bool   `json:"link"`
 		} `json:"packages"`
@@ -126,7 +127,13 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 		if i < 0 || p.Version == "" || p.Link {
 			continue
 		}
-		e := entry{k[i+len("node_modules/"):], p.Version}
+		// An npm alias ("string-width-cjs": "npm:string-width@4.2.3") installs
+		// under the alias path and records the registry package in "name".
+		name := p.Name
+		if name == "" {
+			name = k[i+len("node_modules/"):]
+		}
+		e := entry{name, p.Version}
 		seen[e] = struct{}{}
 		names[e.name] = struct{}{}
 	}
@@ -168,7 +175,9 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 		if h == nil {
 			continue
 		}
-		if _, ok := h.PublishedAt[e.version]; !ok {
+		// A version published after now did not exist yet; DetectDormantBurst
+		// rejects it too, so every count uses the same cutoff.
+		if at, ok := h.PublishedAt[e.version]; !ok || at.After(now) {
 			continue
 		}
 		evaluated++

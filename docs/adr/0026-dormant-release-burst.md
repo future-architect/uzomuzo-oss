@@ -75,7 +75,7 @@ times. A failed fetch leaves `Analysis.ReleaseHistory` nil and the branch silent
 A single release after a year of silence is ordinary. Mature small packages ship
 a fix every few years (`braces` 3.0.3 came five years after 3.0.2). Measured on
 two real lockfiles, the silence alone matched about a fifth of all entries
-(VS Code: 289 of 1,414; npm CLI: 230 of 993; see the evidence below) and is
+(VS Code: 289 of 1,422; npm CLI: 230 of 993; see the evidence below) and is
 unusable.
 
 What separates the takeovers is that the attacker publishes to *every line in
@@ -123,11 +123,12 @@ the intended scope: those packages were never silent.
 ### False positives on real lockfiles, evaluated on 2026-10-08
 
 "Entries" are the distinct `name@version` pairs in the lockfile for which the
-registry returned a publish time (VS Code: 1,414 of 1,425; 11 not found).
+registry returned a publish time (every pair in both lockfiles). An npm alias
+entry is looked up under the registry package it installs, not its alias path.
 
 | lockfile | entries | after a year's silence (silence alone) | and in a burst across lines, any age | and within the age limit (reported) |
 |---|---|---|---|---|
-| microsoft/vscode `package-lock.json` (b99bfafc0a36) | 1,414 | 289 | 15 | **1** (`test-exclude@7.0.2`) |
+| microsoft/vscode `package-lock.json` (b99bfafc0a36) | 1,422 | 289 | 15 | **1** (`test-exclude@7.0.2`) |
 | npm/cli `package-lock.json` (b317f16c80df) | 993 | 230 | 9 | **1** (`minipass-flush@1.0.6`) |
 
 Both remaining hits are legitimate: a final patch on the old line published
