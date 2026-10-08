@@ -37,8 +37,10 @@ type ReleaseHistory struct {
 	Installable map[string]struct{}
 }
 
-// DormantBurst describes a release that came out after a long silence together
-// with releases on other release lines. See ADR-0026.
+// DormantBurst describes a release that came out after a long silence, together
+// with any releases published within DormantBurstWindow of the first one.
+// Lines holds a single line when DetectFreshDormantRelease returns it. See
+// ADR-0026 and ADR-0028.
 type DormantBurst struct {
 	// Version is the version being assessed.
 	Version string

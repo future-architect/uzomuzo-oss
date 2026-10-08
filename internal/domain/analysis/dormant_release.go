@@ -73,8 +73,8 @@ func (a *Analysis) DormantReleaseNotice() string {
 		return dormantBurstReason(d.Burst)
 	}
 	b := d.Burst
-	reason := fmt.Sprintf("Possible hijacked release. This version came out %s, after %d days with no release. "+
-		"Takeovers of npm packages that had gone quiet looked like this, but so does a maintainer who ships again after a break.",
+	reason := fmt.Sprintf("This version came out %s, after %d days with no release. "+
+		"Takeovers of npm packages that had gone quiet looked like this, and so does a maintainer who ships again after a break.",
 		b.PublishedAt.UTC().Format(time.DateOnly), b.SilentDays)
 	if a.MaliciousState != nil {
 		switch a.MaliciousState.Status {

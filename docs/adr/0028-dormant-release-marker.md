@@ -22,8 +22,8 @@ malicious-packages data (commit `5d18840712`, 2026-10-08) has npm records that
 name only some versions of a package. 1,556 of them are packages that existed
 for at least a year and had at least three non-malicious releases before the
 first malicious one. In 737 of those (47%), the malicious version came at least
-365 days after the previous non-malicious release. Only 58 of the 1,556 touched
-two or more lines within a day. The 737 are not 737 incidents: 724 fall in 13
+365 days after the previous non-malicious release. Of those 737, only 58 also
+touched two or more lines within a day. The 737 are not 737 incidents: 724 fall in 13
 bulk account-compromise waves (Shai-Hulud and others), and 13 are single
 incidents. They include the packages hit in the 2025-09-08 chalk incident
 (`ansi-styles`, `strip-ansi` and others), which ADR-0026 classed as takeovers of
