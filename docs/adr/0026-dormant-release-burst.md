@@ -97,6 +97,29 @@ keeps a one-time publication pattern from labelling a version forever. Without
 it, a legitimate pair from 2018 (`extend` 3.0.2 and 2.0.2) would stay in Review
 Needed indefinitely.
 
+### Why one day, and not a wider window
+
+The window does not make a release suspicious; the silence and the second line
+do. The window only decides which releases count as one set, so that a return
+with 3.0 and a 2.x fix six months later are not read as one burst.
+
+Measured on 2026-10-09 with the same lockfiles and cases as the Evidence
+section, changing only `DormantBurstWindow`:
+
+| window | incidents that fire | VS Code reported | npm CLI reported |
+|---|---|---|---|
+| 1 day | node-ipc, rc, coa, is | 1 | 1 |
+| 3 days | same | 1 (same) | 1 (same) |
+| 7 days | same | 3 (+ `ajv@8.18.0`, `opentype.js@2.0.0`) | 4 (+ `isexe@3.1.5`, `isexe@4.0.0`, `yargs@17.7.3`) |
+
+A wider window caught no further incident: event-stream's second release is on
+the same line, and rand-user-agent's silence is 195 days, so no width changes
+them. The seven-day additions are maintainers backporting to an old line within
+the week of a new major (`ajv` 8.18.0 on 2026-02-14, then 6.14.0 on 2026-02-20,
+both published by the account that published 8.17.1). Three days changes nothing
+on this data, so one day stays. These measurements do not show whether any
+attack has spread its releases over more than a day.
+
 ### Why Review Needed, and not a new label or verdict
 
 A person has to decide whether the release is the maintainer's; nothing in the
