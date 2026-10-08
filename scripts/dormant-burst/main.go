@@ -143,6 +143,7 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 		names[e.name] = struct{}{}
 	}
 	hist := map[string]*domain.ReleaseHistory{}
+	var failed []string
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 16)
@@ -153,12 +154,13 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 			defer wg.Done()
 			defer func() { <-sem }()
 			h, err := history(ctx, c, n)
+			mu.Lock()
+			defer mu.Unlock()
 			if err != nil {
+				failed = append(failed, err.Error())
 				return
 			}
-			mu.Lock()
 			hist[n] = h
-			mu.Unlock()
 		}(n)
 	}
 	wg.Wait()
@@ -209,6 +211,14 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 		path, now.Format(time.DateOnly), evaluated, len(entries), silenceOnly, anyAge, fresh)
 	for _, h := range hits {
 		fmt.Println("  " + h)
+	} // A lookup failure shrinks the counts above; list it so a partial run is
+	// not mistaken for a complete one.
+	if len(failed) > 0 {
+		sort.Strings(failed)
+		fmt.Printf("  %d registry lookups failed and are not counted:\n", len(failed))
+		for _, f := range failed {
+			fmt.Println("    " + f)
+		}
 	}
 }
 

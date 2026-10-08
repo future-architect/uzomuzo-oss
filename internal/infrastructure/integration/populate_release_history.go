@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common/links"
@@ -55,9 +56,11 @@ func (s *IntegrationService) enrichReleaseHistory(ctx context.Context, analyses 
 		if h == nil {
 			return
 		}
-		// Analyses of one package share the maps read-only; nothing writes them
-		// after this point.
+		// Each analysis owns its maps: the history is returned to library
+		// callers, and an edit to one version's copy must not change another's.
 		cp := *h
+		cp.PublishedAt = maps.Clone(h.PublishedAt)
+		cp.Installable = maps.Clone(h.Installable)
 		a.ReleaseHistory = &cp
 	})
 }

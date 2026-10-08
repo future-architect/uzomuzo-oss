@@ -59,6 +59,16 @@ func TestEnrichReleaseHistory(t *testing.T) {
 			t.Errorf("%s: want nil ReleaseHistory", k)
 		}
 	}
+	// Two versions of one package must not share maps: an edit to one copy
+	// would change the other's burst result.
+	analyses["a"].ReleaseHistory.PublishedAt["9.9.9"] = time.Time{}
+	delete(analyses["a"].ReleaseHistory.Installable, "1.0.0")
+	if _, leaked := analyses["b"].ReleaseHistory.PublishedAt["9.9.9"]; leaked {
+		t.Error("two analyses share one PublishedAt map")
+	}
+	if _, ok := analyses["b"].ReleaseHistory.Installable["1.0.0"]; !ok {
+		t.Error("two analyses share one Installable map")
+	}
 	if paths["/left-pad"] != 1 {
 		t.Errorf("left-pad fetched %d times, want once for two versions", paths["/left-pad"])
 	}
