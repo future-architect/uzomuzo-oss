@@ -159,8 +159,11 @@ tooling-heavy; other populations will differ.
   two of them published within a day after a year's silence fire. Not seen in
   the measured lockfiles.
 - The rule reads the version in the PURL. A GitHub-URL input is analysed at
-  deps.dev's latest stable release, so `node-ipc`'s repository URL evaluates
-  14.0.0 and does not fire.
+  deps.dev's latest stable release, so it fires when that release is in a
+  burst (an attack still in progress) and never for a version already removed,
+  which deps.dev no longer lists. Today `node-ipc`'s repository URL evaluates
+  14.0.0 and does not fire. A GitHub URL whose package is not found is analysed
+  without a package and never reaches the rule.
 - **It is evadable.** An attacker who publishes on one line only, or who first
   publishes a harmless release and waits more than a day, passes. event-stream
   did both: the attacker's clean 3.3.5 ended the silence, and the malicious

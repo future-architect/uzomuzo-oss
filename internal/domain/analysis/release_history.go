@@ -24,7 +24,8 @@ const DormantBurstMinLines = 2
 // A nil pointer means the record was not obtained: the ecosystem is not npm,
 // the npm client is unwired, the PURL did not parse, has an empty name or has
 // no version, the package was not found, the request or decode failed, or the
-// analysis was detached from its package identity (GitHub-URL input).
+// analysis was detached from its package identity (a GitHub-URL input whose
+// package was not found).
 type ReleaseHistory struct {
 	// Registry names the source: RegistryNpm.
 	Registry string
