@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -80,6 +81,38 @@ func TestGetPublishHistory(t *testing.T) {
 	}
 	if _, found, err := c.GetPublishHistory(context.Background(), "  "); err != nil || found {
 		t.Errorf("blank: found=%v err=%v", found, err)
+	}
+}
+
+// TestParsePublishHistory_Versions pins that a missing or null "versions"
+// leaves Installable nil (unknown), while "{}" is a known-empty set.
+func TestParsePublishHistory_Versions(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		body    string
+		wantNil bool
+		wantLen int
+	}{
+		{name: "missing", body: `{"time":{"1.0.0":"2020-01-01T00:00:00Z"}}`, wantNil: true},
+		{name: "null", body: `{"time":{"1.0.0":"2020-01-01T00:00:00Z"},"versions":null}`, wantNil: true},
+		{name: "empty object", body: `{"time":{"1.0.0":"2020-01-01T00:00:00Z"},"versions":{}}`, wantLen: 0},
+		{name: "one version", body: `{"time":{"1.0.0":"2020-01-01T00:00:00Z"},"versions":{"1.0.0":{}}}`, wantLen: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			h, err := parsePublishHistory(strings.NewReader(tt.body))
+			if err != nil {
+				t.Fatalf("parsePublishHistory: %v", err)
+			}
+			if got := h.Installable == nil; got != tt.wantNil {
+				t.Fatalf("Installable nil = %v, want %v", got, tt.wantNil)
+			}
+			if !tt.wantNil && len(h.Installable) != tt.wantLen {
+				t.Errorf("len(Installable) = %d, want %d", len(h.Installable), tt.wantLen)
+			}
+		})
 	}
 }
 

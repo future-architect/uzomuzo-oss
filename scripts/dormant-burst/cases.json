@@ -3,7 +3,7 @@
   {"package": "rc", "version": "1.2.9", "kind": "dormant-takeover", "note": "account takeover, same day as coa", "source": "https://www.rapid7.com/blog/post/2021/11/05/new-npm-library-hijacks-coa-and-rc/"},
   {"package": "coa", "version": "2.0.3", "kind": "dormant-takeover", "note": "account takeover", "source": "https://www.rapid7.com/blog/post/2021/11/05/new-npm-library-hijacks-coa-and-rc/"},
   {"package": "is", "version": "3.3.1", "kind": "dormant-takeover", "note": "stale maintainer access re-granted via a phished maintainer", "source": "https://snyk.io/blog/npm-supply-chain-attack-via-open-source-maintainer-compromise/"},
-  {"package": "event-stream", "version": "3.3.5", "kind": "dormant-takeover", "note": "maintainership handed to the attacker; one line only", "source": "https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident"},
+  {"package": "event-stream", "version": "3.3.6", "kind": "dormant-takeover", "note": "maintainership handed to the attacker; a clean 3.3.5 four days earlier ended the silence; one line only", "source": "https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident"},
   {"package": "rand-user-agent", "version": "2.0.83", "kind": "dormant-takeover", "note": "leaked automation token; silence was 195 days", "source": "https://www.bleepingcomputer.com/news/security/supply-chain-attack-hits-npm-package-with-45-000-weekly-downloads/"},
   {"package": "colors", "version": "1.4.1", "kind": "maintainer-sabotage", "note": "the maintainer's own release", "source": ""},
   {"package": "faker", "version": "6.6.6", "kind": "maintainer-sabotage", "note": "the maintainer's own release", "source": ""},

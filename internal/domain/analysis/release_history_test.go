@@ -70,13 +70,14 @@ func TestDetectDormantBurst(t *testing.T) {
 	}, "3.3.1", "5.0.0")
 	afterIs := mustTime(t, "2025-07-20T00:00:00Z")
 
-	// event-stream 3.3.5 (2018-09-05): a takeover on one line only. The rule
-	// is not meant to see it; this pins the documented miss.
+	// event-stream: the attacker's clean 3.3.5 (2018-09-05) ended the silence,
+	// and the malicious 3.3.6 followed four days later on the same line, since
+	// removed. The rule is not meant to see it; this pins the documented miss.
 	eventStream := history(t, map[string]string{
 		"3.3.4": "2016-07-17T00:00:00Z",
 		"3.3.5": "2018-09-05T00:00:00Z",
 		"3.3.6": "2018-09-09T08:28:59Z",
-	})
+	}, "3.3.6")
 
 	// axios (2026-03-31): a hijack of an active package — no silence.
 	axios := history(t, map[string]string{
@@ -117,7 +118,7 @@ func TestDetectDormantBurst(t *testing.T) {
 			wantSilent: 1258, wantLines: []string{"1", "2"}, wantVers: []string{"1.2.9", "1.3.9", "2.3.9"}, wantRemoved: true},
 		{name: "is 3.3.2, the clean follow-up, is inside the same burst", h: is, version: "3.3.2", now: afterIs, maxAge: year,
 			wantSilent: 2409, wantLines: []string{"3", "5"}, wantVers: []string{"3.3.1", "5.0.0", "3.3.2"}, wantRemoved: false},
-		{name: "event-stream: one line only is a documented miss", h: eventStream, version: "3.3.5", now: mustTime(t, "2018-09-10T00:00:00Z"), maxAge: year, wantNil: true},
+		{name: "event-stream 3.3.6: four days after a clean release, one line, is a documented miss", h: eventStream, version: "3.3.6", now: mustTime(t, "2018-09-10T00:00:00Z"), maxAge: year, wantNil: true},
 		{name: "axios: active package, no silence", h: axios, version: "1.14.1", now: mustTime(t, "2026-04-01T00:00:00Z"), maxAge: year, wantNil: true},
 		{name: "single release after five years does not fire", h: singleLine, version: "3.0.3", now: mustTime(t, "2024-06-01T00:00:00Z"), maxAge: year, wantNil: true},
 		{name: "older than maxAge does not fire", h: rc, version: "1.2.9", now: mustTime(t, "2022-11-05T00:00:00Z"), maxAge: year, wantNil: true},

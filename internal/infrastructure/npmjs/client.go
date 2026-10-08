@@ -320,6 +320,7 @@ type PublishHistory struct {
 	// versions that are no longer installable.
 	PublishedAt map[string]time.Time
 	// Installable holds the versions present in the packument's "versions".
+	// It is nil when "versions" is missing or null, meaning unknown.
 	Installable map[string]struct{}
 }
 
@@ -407,9 +408,11 @@ func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
 	if err := json.NewDecoder(r).Decode(&doc); err != nil {
 		return nil, fmt.Errorf("npm decode failed: %w", err)
 	}
-	h := &PublishHistory{
-		PublishedAt: make(map[string]time.Time, len(doc.Time)),
-		Installable: make(map[string]struct{}, len(doc.Versions)),
+	h := &PublishHistory{PublishedAt: make(map[string]time.Time, len(doc.Time))}
+	// A missing or null "versions" leaves Installable nil (unknown), so a
+	// burst is not reported as removed without evidence; "{}" stays known-empty.
+	if doc.Versions != nil {
+		h.Installable = make(map[string]struct{}, len(doc.Versions))
 	}
 	for v, raw := range doc.Time {
 		// "created" and "modified" are package-level; "unpublished" is an object

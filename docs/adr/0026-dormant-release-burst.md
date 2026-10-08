@@ -112,7 +112,7 @@ data drifts; the figures below were taken on 2026-10-08.
 | rc@1.2.9 (2021-11) | dormant takeover | **yes** | 1,257 | 1, 2 |
 | coa@2.0.3 (2021-11) | dormant takeover | **yes** | 1,059 | 2, 3 |
 | is@3.3.1 (2025-07) | dormant takeover | **yes** | 2,408 | 3, 5 |
-| event-stream@3.3.5 (2018-09) | dormant takeover | no — one line | | |
+| event-stream@3.3.6 (2018-09) | dormant takeover | no — 4-day silence, one line | | |
 | rand-user-agent@2.0.83 (2025-04) | dormant takeover | no — 195-day silence | | |
 | colors@1.4.1, faker@6.6.6 (2022-01) | maintainer's own release | no | | |
 | ua-parser-js, eslint-scope, eslint-config-prettier, chalk, debug, axios, @solana/web3.js | takeover of an active package | no (by design) | | |
@@ -153,8 +153,10 @@ tooling-heavy; other populations will differ.
 - The rule reads the version in the PURL. A GitHub-URL input is analysed at
   deps.dev's latest stable release, so `node-ipc`'s repository URL evaluates
   14.0.0 and does not fire.
-- **It is evadable.** An attacker who publishes on one line only (event-stream)
-  passes. This is one signal, not a defence against takeovers.
+- **It is evadable.** An attacker who publishes on one line only, or who first
+  publishes a harmless release and waits more than a day, passes. event-stream
+  did both: the attacker's clean 3.3.5 ended the silence, and the malicious
+  3.3.6 came four days later on the same line. This is one signal, not a defence against takeovers.
 - The malicious versions' publish times stay in the history, so the next
   legitimate release (`node-ipc@14.0.0`, 102 days later) does not look like a
   return from silence.
