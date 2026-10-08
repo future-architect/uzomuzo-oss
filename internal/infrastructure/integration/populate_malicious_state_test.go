@@ -10,6 +10,9 @@ import (
 	"time"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/osv"
 )
 
 func TestEnrichMaliciousStateScopedNamesAndVersion(t *testing.T) {
@@ -30,6 +33,40 @@ func TestEnrichMaliciousStateScopedNamesAndVersion(t *testing.T) {
 	}
 	if !analyses["a1"].Malicious() || analyses["a2"].Malicious() || !analyses["b"].Malicious() {
 		t.Fatalf("states: %+v %+v %+v", analyses["a1"].MaliciousState, analyses["a2"].MaliciousState, analyses["b"].MaliciousState)
+	}
+}
+
+// TestAnalyzeFromPURLs_PopulatesMaliciousState drives the production path so
+// that deleting the enrichMaliciousState call in purl_batch.go fails a test.
+func TestAnalyzeFromPURLs_PopulatesMaliciousState(t *testing.T) {
+	t.Parallel()
+	rec := &osvRecorder{}
+	srv := httptest.NewServer(rec.handler(func(name string) string {
+		return fmt.Sprintf(`{"vulns":[{"id":"MAL-1","affected":[{"package":{"ecosystem":"npm","name":%q},"versions":["5.6.1"]}]}]}`, name)
+	}))
+	defer srv.Close()
+
+	oc := osv.NewClient()
+	oc.SetBaseURL(srv.URL)
+	oc.SetCacheTTL(0)
+	// A tokenless GitHub client short-circuits the repository-state fetch without
+	// any network call; a nil one would panic inside enhanceAnalysesWithGitHubBatch.
+	svc := NewIntegrationService(github.NewClient(&config.Config{}), &stubDepsDevClient{}, WithOSVClient(oc))
+
+	const key = "pkg:npm/chalk@5.6.1"
+	analyses, err := svc.AnalyzeFromPURLs(context.Background(), []string{key})
+	if err != nil {
+		t.Fatalf("AnalyzeFromPURLs failed: %v", err)
+	}
+	a := analyses[key]
+	if a == nil {
+		t.Fatalf("expected an analysis for %s, got %v", key, analyses)
+	}
+	if !a.Malicious() {
+		t.Fatalf("expected the malicious fact through the production path, got %+v", a.MaliciousState)
+	}
+	if a.MaliciousState.AdvisoryID != "MAL-1" {
+		t.Errorf("AdvisoryID = %q, want MAL-1", a.MaliciousState.AdvisoryID)
 	}
 }
 
