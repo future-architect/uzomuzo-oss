@@ -67,6 +67,11 @@ func NewClient() *Client {
 // versions runs to megabytes.
 const packumentTimeout = 20 * time.Second
 
+// maxPackumentBytes caps a packument read. The largest seen, react-native and
+// typescript, are about 16 MB uncompressed; a body cut at the cap fails to
+// decode and the package is treated as not asked.
+const maxPackumentBytes = 64 << 20
+
 // NewPackumentClient creates a Client for GetPublishHistory, whose full-packument
 // responses need a longer timeout than NewClient's metadata lookups.
 func NewPackumentClient() *Client {
@@ -307,42 +312,6 @@ func (c *Client) GetDeprecation(ctx context.Context, namespace, name, version st
 	return info, true, nil
 }
 
-// extractNpmSuccessor tries to extract a successor package name from a deprecated message.
-//
-// Intentional limitations:
-//   - We intentionally match only high-confidence phrases ("use ", "moved to ", "replaced by ")
-//     to avoid false positives.
-//   - Broader phrases like "migrate to" are NOT matched on purpose because they often point to
-//     non-package targets (e.g., "migrate to ESM", "migrate to Node 18", "migrate to v3").
-//     Allowing them would increase noise and degrade result quality.
-//
-// If we expand supported phrases in the future, we should validate the extracted token against
-// npm package naming rules (optionally scoped "@scope/name") and add unit tests to lock in the
-// intended behavior. See successor_test.go for negative cases that document this policy.
-var npmPkgNamePattern = regexp.MustCompile(`^(?:@[-a-z0-9_.]+/)?[A-Za-z0-9][A-Za-z0-9._-]*$`)
-
-func extractNpmSuccessor(msg string) string {
-	raw := msg
-	lower := strings.ToLower(msg)
-	phrases := []string{"use ", "moved to ", "replaced by "}
-	for _, p := range phrases {
-		idx := strings.Index(lower, p)
-		if idx >= 0 {
-			rest := raw[idx+len(p):]
-			fields := strings.Fields(rest)
-			if len(fields) == 0 {
-				continue
-			}
-			candidate := strings.Trim(fields[0], ".,;:!?()[]{}")
-			if candidate == "" || !npmPkgNamePattern.MatchString(candidate) {
-				continue
-			}
-			return candidate
-		}
-	}
-	return ""
-}
-
 // PublishHistory is the publish time of every version npm has recorded for a
 // package, and the subset it still serves.
 type PublishHistory struct {
@@ -383,11 +352,47 @@ func (c *Client) GetPublishHistory(ctx context.Context, fullName string) (*Publi
 	if resp.StatusCode != http.StatusOK {
 		return nil, false, fmt.Errorf("npm HTTP %d", resp.StatusCode)
 	}
-	h, err := parsePublishHistory(resp.Body)
+	h, err := parsePublishHistory(io.LimitReader(resp.Body, maxPackumentBytes))
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("npm packument %q: %w", fullName, err)
 	}
 	return h, true, nil
+}
+
+// extractNpmSuccessor tries to extract a successor package name from a deprecated message.
+//
+// Intentional limitations:
+//   - We intentionally match only high-confidence phrases ("use ", "moved to ", "replaced by ")
+//     to avoid false positives.
+//   - Broader phrases like "migrate to" are NOT matched on purpose because they often point to
+//     non-package targets (e.g., "migrate to ESM", "migrate to Node 18", "migrate to v3").
+//     Allowing them would increase noise and degrade result quality.
+//
+// If we expand supported phrases in the future, we should validate the extracted token against
+// npm package naming rules (optionally scoped "@scope/name") and add unit tests to lock in the
+// intended behavior. See successor_test.go for negative cases that document this policy.
+var npmPkgNamePattern = regexp.MustCompile(`^(?:@[-a-z0-9_.]+/)?[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+func extractNpmSuccessor(msg string) string {
+	raw := msg
+	lower := strings.ToLower(msg)
+	phrases := []string{"use ", "moved to ", "replaced by "}
+	for _, p := range phrases {
+		idx := strings.Index(lower, p)
+		if idx >= 0 {
+			rest := raw[idx+len(p):]
+			fields := strings.Fields(rest)
+			if len(fields) == 0 {
+				continue
+			}
+			candidate := strings.Trim(fields[0], ".,;:!?()[]{}")
+			if candidate == "" || !npmPkgNamePattern.MatchString(candidate) {
+				continue
+			}
+			return candidate
+		}
+	}
+	return ""
 }
 
 // parsePublishHistory decodes the "time" and "versions" keys of a packument.
@@ -412,6 +417,8 @@ func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
 		if v == "created" || v == "modified" || v == "unpublished" {
 			continue
 		}
+		// An entry that is not an RFC 3339 string carries no publish time; it is
+		// skipped rather than failing the whole package.
 		var s string
 		if err := json.Unmarshal(raw, &s); err != nil {
 			continue

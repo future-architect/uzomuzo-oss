@@ -7,27 +7,24 @@ import (
 	"time"
 )
 
-// Registry name recorded in ReleaseHistory.Registry.
+// RegistryNpm identifies registry.npmjs.org in ReleaseHistory.Registry.
 const RegistryNpm = "npm"
 
-// DormantBurstWindow is how close together releases must be published to count
-// as one burst. Hijacked dormant packages put every line out within minutes
-// (node-ipc 55 seconds, rc 28 seconds, coa 46 minutes, is about 7 hours); the
-// window is wide enough for the slowest of these. See ADR-0026.
+// DormantBurstWindow bounds a burst: every release published within this long
+// of the burst's first release belongs to it. See ADR-0026.
 const DormantBurstWindow = 24 * time.Hour
 
 // DormantBurstMinLines is how many release lines a burst must touch; a
-// prerelease touches none. A single
-// release after a long silence is common and legitimate — a quarter of the
-// entries in two real lockfiles were such releases — while a release on two or
-// more lines at once after the same silence was about 1% of them. See ADR-0026.
+// prerelease touches none. See ADR-0026.
 const DormantBurstMinLines = 2
 
 // ReleaseHistory is the registry's record of when each version of a package was
 // published, including versions that have since been removed.
 //
-// A nil pointer means the record was not obtained — the ecosystem is not one we
-// ask, the client is unwired, the package was not found, or the request failed.
+// A nil pointer means the record was not obtained: the ecosystem is not npm,
+// the npm client is unwired, the PURL did not parse or has an empty name, the
+// package was not found, the request or decode failed, or the analysis was
+// detached from its package identity (GitHub-URL input).
 type ReleaseHistory struct {
 	// Registry names the source: RegistryNpm.
 	Registry string
@@ -40,9 +37,7 @@ type ReleaseHistory struct {
 }
 
 // DormantBurst describes a release that came out after a long silence together
-// with releases on other lines — the shape left by a takeover of a dormant
-// package, where the attacker publishes to every line so that each semver range
-// in use picks up the new version.
+// with releases on other release lines. See ADR-0026.
 type DormantBurst struct {
 	// Version is the version being assessed.
 	Version string
@@ -65,11 +60,9 @@ type DormantBurst struct {
 
 // DetectDormantBurst reports whether version was published as part of a burst
 // that followed at least minSilence without any release and touched at least
-// DormantBurstMinLines release lines. A release older than maxAge at now is not
-// reported: the signal describes the moment of publication, and a version that
-// has stayed published for that long is no longer that moment. Returns nil when
-// the history is missing, the version has no publish time, or the condition is
-// not met.
+// DormantBurstMinLines release lines, and is no older than maxAge at now
+// (maxAge <= 0 disables the age limit). Returns nil when the history is
+// missing, the version has no publish time, or the condition is not met.
 //
 // The burst starts at the earliest release reachable from version through gaps
 // of at most DormantBurstWindow, and holds every release published within
@@ -143,8 +136,6 @@ func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSil
 	lineSet := map[string]struct{}{}
 	for _, r := range all[first : last+1] {
 		versions = append(versions, r.v)
-		// A prerelease opens no line: "^2" never resolves to "2.0.0-alpha.0",
-		// so a patch plus a next-major preview reaches one set of users.
 		if isPrerelease(r.v) {
 			continue
 		}
@@ -201,6 +192,8 @@ func releaseLine(v string) (string, bool) {
 
 // isPrerelease reports whether v carries a semver prerelease suffix
 // ("2.0.0-alpha.0"). Build metadata ("+build") alone is not a prerelease.
+// Not purl.IsStableVersion: it matches keywords, so "1.0.0-next.3" passes as
+// stable there, while semver ranges never select any "-" version.
 func isPrerelease(v string) bool {
 	core, _, _ := strings.Cut(v, "+")
 	return strings.Contains(core, "-")

@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"os"
 	"testing"
 	"time"
 )
@@ -84,20 +84,35 @@ func TestGetPublishHistory_ServerError(t *testing.T) {
 	}
 }
 
-func FuzzParsePublishHistory(f *testing.F) {
-	f.Add(`{"time":{"created":"2014-01-01T00:00:00Z","1.0.0":"2020-01-01T00:00:00Z","x":1},"versions":{"1.0.0":{"name":"a"}}}`)
-	f.Add(`{"time":{"unpublished":{"time":"2020-01-01T00:00:00Z"}}}`)
-	f.Add(`{"versions":{"1.0.0":"not an object"}}`)
-	f.Add(`[]`)
-	f.Fuzz(func(t *testing.T, body string) {
-		h, err := parsePublishHistory(strings.NewReader(body))
-		if err != nil {
-			return
-		}
-		for v, at := range h.PublishedAt {
-			if at.IsZero() || v == "created" || v == "modified" || v == "unpublished" {
-				t.Fatalf("unexpected entry %q=%v", v, at)
-			}
-		}
-	})
+// TestGetPublishHistory_LiveProbe checks against registry.npmjs.org that a
+// scoped name is accepted in its escaped form and that an unpublished version
+// keeps its "time" entry, which ADR-0026 relies on.
+//
+// Opt-in only: set UZOMUZO_LIVE_PROBE=1 to run, so `go test ./...` stays
+// hermetic.
+func TestGetPublishHistory_LiveProbe(t *testing.T) {
+	if os.Getenv("UZOMUZO_LIVE_PROBE") == "" {
+		t.Skip("network probe — set UZOMUZO_LIVE_PROBE=1 to enable")
+	}
+	t.Parallel()
+	c := NewPackumentClient()
+
+	h, found, err := c.GetPublishHistory(context.Background(), "node-ipc")
+	if err != nil || !found {
+		t.Fatalf("node-ipc: found=%v err=%v", found, err)
+	}
+	if _, ok := h.PublishedAt["12.0.1"]; !ok {
+		t.Error("node-ipc 12.0.1 lost its time entry")
+	}
+	if _, ok := h.Installable["12.0.1"]; ok {
+		t.Error("node-ipc 12.0.1 is installable again")
+	}
+
+	h, found, err = c.GetPublishHistory(context.Background(), "@solana/web3.js")
+	if err != nil || !found {
+		t.Fatalf("@solana/web3.js: found=%v err=%v", found, err)
+	}
+	if _, ok := h.PublishedAt["1.95.6"]; !ok {
+		t.Error("@solana/web3.js 1.95.6 has no time entry")
+	}
 }

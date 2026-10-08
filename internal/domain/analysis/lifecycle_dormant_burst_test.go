@@ -24,13 +24,14 @@ func burstHistory(now time.Time) *ReleaseHistory {
 }
 
 // TestLifecycleAssessor_DormantBurst is the end-to-end decision table for the
-// dormant-burst rule
-// (ADR-0026): which version is analysed × what else is true of the package.
+// dormant-burst rule (ADR-0026): which version is analysed × what else is true
+// of the package.
 func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 	t.Parallel()
-	// A fixed UTC instant: with a local wall clock, AddDate across a DST change
-	// shifts the silence by an hour and the day count by one.
-	now := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
+	// UTC, not local time: AddDate across a DST change would shift the silence
+	// by an hour and the day count by one. Not a fixed date: the activity
+	// branches compare against the wall clock.
+	now := time.Now().UTC()
 	recent := now.AddDate(0, 0, -10)
 	activeRepo := &RepoState{DaysSinceLastCommit: 5, LatestHumanCommit: &recent, CommitStats: &CommitStats{}}
 	healthy := map[string]*ScoreEntity{
@@ -47,44 +48,48 @@ func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 		analysis   *Analysis
 		eol        EOLStatus
 		wantLabel  MaintenanceStatus
-		wantTrace  string
+		wantBurst  bool
 		wantReason string
 	}{
 		{
 			name:       "burst version on an active project is Review Needed, not Active",
 			analysis:   &Analysis{Package: pkg("1.0.1"), RepoState: activeRepo, ReleaseInfo: stable, ReleaseHistory: burstHistory(now)},
 			wantLabel:  LabelReviewNeeded,
-			wantTrace:  "dormant_release_burst_review_needed",
+			wantBurst:  true,
 			wantReason: "Released after 800 days without a release, in one burst across release lines 1, 2; this version has since been removed from the registry",
 		},
 		{
 			name:       "the other version of the same burst, still installable",
 			analysis:   &Analysis{Package: pkg("2.0.1"), RepoState: activeRepo, ReleaseInfo: stable, ReleaseHistory: burstHistory(now)},
 			wantLabel:  LabelReviewNeeded,
-			wantTrace:  "dormant_release_burst_review_needed",
+			wantBurst:  true,
 			wantReason: "Released after 800 days without a release, in one burst across release lines 1, 2",
 		},
 		{
-			name:      "the release before the silence is untouched",
-			analysis:  &Analysis{Package: pkg("1.0.0"), RepoState: activeRepo, ReleaseInfo: stable, ReleaseHistory: burstHistory(now)},
-			wantLabel: LabelActive,
+			name:       "the release before the silence is untouched",
+			analysis:   &Analysis{Package: pkg("1.0.0"), RepoState: activeRepo, ReleaseInfo: stable, ReleaseHistory: burstHistory(now)},
+			wantLabel:  LabelActive,
+			wantReason: "Actively maintained with recent releases",
 		},
 		{
-			name:      "no history means the branch never fires",
-			analysis:  &Analysis{Package: pkg("1.0.1"), RepoState: activeRepo, ReleaseInfo: stable},
-			wantLabel: LabelActive,
+			name:       "no history means the branch never fires",
+			analysis:   &Analysis{Package: pkg("1.0.1"), RepoState: activeRepo, ReleaseInfo: stable},
+			wantLabel:  LabelActive,
+			wantReason: "Actively maintained with recent releases",
 		},
 		{
 			name: "an archived repository stays Stalled, so a --fail-on stalled gate keeps firing",
 			analysis: &Analysis{Package: pkg("1.0.1"), ReleaseInfo: stable, ReleaseHistory: burstHistory(now),
 				RepoState: &RepoState{IsArchived: true, DaysSinceLastCommit: 5, LatestHumanCommit: &recent, CommitStats: &CommitStats{}}},
-			wantLabel: LabelStalled,
+			wantLabel:  LabelStalled,
+			wantReason: "Repository archived/disabled but not declared end-of-life",
 		},
 		{
-			name:      "a primary-source EOL still wins",
-			analysis:  &Analysis{Package: pkg("1.0.1"), RepoState: activeRepo, ReleaseInfo: stable, ReleaseHistory: burstHistory(now)},
-			eol:       EOLStatus{State: EOLEndOfLife, Evidences: []EOLEvidence{{Source: "npmjs", Summary: "Deprecated in npm registry"}}},
-			wantLabel: LabelEOLConfirmed,
+			name:       "a primary-source EOL still wins",
+			analysis:   &Analysis{Package: pkg("1.0.1"), RepoState: activeRepo, ReleaseInfo: stable, ReleaseHistory: burstHistory(now)},
+			eol:        EOLStatus{State: EOLEndOfLife, Evidences: []EOLEvidence{{Source: "npmjs", Summary: "Deprecated in npm registry"}}},
+			wantLabel:  LabelEOLConfirmed,
+			wantReason: "Deprecated in npm registry",
 		},
 	}
 	svc := NewLifecycleAssessorService()
@@ -98,16 +103,16 @@ func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 			if MaintenanceStatus(res.Label) != tt.wantLabel {
 				t.Fatalf("label = %q (%s), want %q", res.Label, res.Reason, tt.wantLabel)
 			}
-			if tt.wantTrace != "" && !strings.Contains(strings.Join(res.Trace, " "), tt.wantTrace) {
-				t.Errorf("trace %v lacks %q", res.Trace, tt.wantTrace)
-			}
-			if tt.wantReason != "" && res.Reason != tt.wantReason {
+			if res.Reason != tt.wantReason {
 				t.Errorf("reason = %q, want %q", res.Reason, tt.wantReason)
 			}
-			if tt.wantTrace == "dormant_release_burst_review_needed" {
-				if !hasSignal(res.Signals, SignalDormantReleaseBurst) || !hasSignal(res.Signals, SignalDaysSilentBeforeRelease) {
-					t.Errorf("signals %v lack the burst signals", res.Signals)
-				}
+			gotBurstTrace := strings.Contains(strings.Join(res.Trace, " "), "dormant_release_burst_review_needed")
+			if gotBurstTrace != tt.wantBurst {
+				t.Errorf("burst trace present = %v, want %v (trace %v)", gotBurstTrace, tt.wantBurst, res.Trace)
+			}
+			gotSignals := hasSignal(res.Signals, SignalDormantReleaseBurst) && hasSignal(res.Signals, SignalDaysSilentBeforeRelease)
+			if gotSignals != tt.wantBurst {
+				t.Errorf("burst signals present = %v, want %v (%v)", gotSignals, tt.wantBurst, res.Signals)
 			}
 		})
 	}

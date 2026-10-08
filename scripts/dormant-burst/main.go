@@ -53,7 +53,7 @@ func main() {
 	case "lockfile":
 		fs := flag.NewFlagSet("lockfile", flag.ExitOnError)
 		nowFlag := fs.String("now", time.Now().UTC().Format("2006-01-02"), "evaluation date")
-		_ = fs.Parse(os.Args[2:])
+		_ = fs.Parse(os.Args[2:]) // ExitOnError: Parse exits on failure and never returns an error
 		now, err := time.Parse("2006-01-02", *nowFlag)
 		if err != nil || fs.NArg() != 1 {
 			fmt.Fprintln(os.Stderr, "lockfile: need -now YYYY-MM-DD and one path")
@@ -69,10 +69,10 @@ func main() {
 func history(ctx context.Context, c *npmjs.Client, name string) (*domain.ReleaseHistory, error) {
 	h, found, err := c.GetPublishHistory(ctx, name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch %s: %w", name, err)
 	}
 	if !found {
-		return nil, fmt.Errorf("not found")
+		return nil, fmt.Errorf("%s: not found on npm", name)
 	}
 	return &domain.ReleaseHistory{Registry: domain.RegistryNpm, PublishedAt: h.PublishedAt, Installable: h.Installable}, nil
 }

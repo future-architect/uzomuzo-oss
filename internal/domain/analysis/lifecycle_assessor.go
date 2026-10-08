@@ -64,16 +64,9 @@ func (s *LifecycleAssessorService) Assess(ctx context.Context, in AssessmentInpu
 
 // applyDormantBurst turns an ok outcome (Active or Legacy-Safe) into Review
 // Needed when the analysed version came out in a burst across release lines
-// after a long silence. A dormant package that suddenly publishes on several
-// lines at once is the shape a takeover leaves, and the burst itself is what
-// makes the project look Active; a person decides whether the release is the
-// maintainer's.
-//
-// It only ever replaces an ok outcome. Stalled, EOL-*, and Review Needed for
-// another reason are left as they are, so a --fail-on gate on those labels
-// keeps firing for a burst version. Silence and age both use
-// RecentStableWindowDays: the burst is a return from the state this assessor
-// already calls "no recent release". See ADR-0026.
+// after RecentStableWindowDays without a release, and is no older than that.
+// Every other label is returned unchanged: replacing Stalled or EOL-* would
+// stop a --fail-on gate on those labels from firing. See ADR-0026.
 func (s *LifecycleAssessorService) applyDormantBurst(in AssessmentInput, res *AssessmentResult) *AssessmentResult {
 	switch MaintenanceStatus(res.Label) {
 	case LabelActive, LabelLegacySafe:

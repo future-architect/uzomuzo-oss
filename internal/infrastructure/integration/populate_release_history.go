@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common/links"
@@ -62,8 +63,11 @@ func (s *IntegrationService) enrichReleaseHistory(ctx context.Context, analyses 
 // fetchNpmReleaseHistory asks registry.npmjs.org for the package's publish times.
 func (s *IntegrationService) fetchNpmReleaseHistory(ctx context.Context, fullName string) (*domain.ReleaseHistory, bool, error) {
 	h, found, err := s.npmClient.GetPublishHistory(ctx, fullName)
-	if err != nil || !found || h == nil {
-		return nil, found, err
+	if err != nil {
+		return nil, false, fmt.Errorf("release history: %w", err)
+	}
+	if !found || h == nil {
+		return nil, false, nil
 	}
 	return &domain.ReleaseHistory{
 		Registry:    domain.RegistryNpm,
