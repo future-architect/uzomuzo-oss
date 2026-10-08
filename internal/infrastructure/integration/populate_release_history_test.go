@@ -11,6 +11,8 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
 )
 
+// TestEnrichReleaseHistory covers scoped names, one request per package,
+// and the analyses that must be skipped.
 func TestEnrichReleaseHistory(t *testing.T) {
 	t.Parallel()
 	const body = `{"time":{"1.0.0":"2020-01-01T00:00:00Z","1.0.1":"2023-01-01T00:00:00Z"},"versions":{"1.0.0":{}}}`
@@ -64,6 +66,7 @@ func TestEnrichReleaseHistory(t *testing.T) {
 	}
 }
 
+// TestEnrichReleaseHistory_NoClient pins the no-op without an npm client.
 func TestEnrichReleaseHistory_NoClient(t *testing.T) {
 	t.Parallel()
 	a := analysisFor("pkg:npm/left-pad@1.0.0", "npm")

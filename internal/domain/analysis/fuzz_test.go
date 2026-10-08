@@ -4,6 +4,8 @@ import (
 	"testing"
 )
 
+// FuzzReleaseLine checks that releaseLine and isPrerelease never panic on
+// registry-controlled version strings and never report an empty line as ok.
 func FuzzReleaseLine(f *testing.F) {
 	for _, s := range []string{"12.0.1", "0.7.29", "0.1-alpha", "v2", "0", "", "0.", "-1.0.0", "1e9.0.0", "99999999999999999999.0.0"} {
 		f.Add(s)

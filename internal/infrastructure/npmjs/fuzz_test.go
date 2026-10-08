@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// FuzzParsePublishHistory checks that packument decoding never panics and never
+// keeps a package-level key or a zero time as a version.
 func FuzzParsePublishHistory(f *testing.F) {
 	f.Add(`{"time":{"created":"2014-01-01T00:00:00Z","1.0.0":"2020-01-01T00:00:00Z","x":1},"versions":{"1.0.0":{"name":"a"}}}`)
 	f.Add(`{"time":{"unpublished":{"time":"2020-01-01T00:00:00Z"}}}`)

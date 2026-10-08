@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// TestGetPublishHistory covers a removed version, malformed time entries, a
+// scoped name and a missing package.
 func TestGetPublishHistory(t *testing.T) {
 	t.Parallel()
 	// Shape of https://registry.npmjs.org/node-ipc after the 2026-05 incident:
@@ -71,6 +73,7 @@ func TestGetPublishHistory(t *testing.T) {
 	}
 }
 
+// TestGetPublishHistory_ServerError pins that a non-404 failure is an error.
 func TestGetPublishHistory_ServerError(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

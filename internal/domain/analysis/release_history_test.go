@@ -219,6 +219,8 @@ func TestDetectDormantBurst_Boundaries(t *testing.T) {
 	}
 }
 
+// TestDetectDormantBurst_RemovedNeedsInstallableSet pins that Removed stays
+// false when the installable set is unknown.
 func TestDetectDormantBurst_RemovedNeedsInstallableSet(t *testing.T) {
 	t.Parallel()
 	h := history(t, map[string]string{"1.0.0": "2018-01-01T00:00:00Z", "1.0.1": "2021-01-01T00:00:00Z", "2.0.1": "2021-01-01T00:01:00Z"})
@@ -232,6 +234,8 @@ func TestDetectDormantBurst_RemovedNeedsInstallableSet(t *testing.T) {
 	}
 }
 
+// TestReleaseLine covers the release-line partitions: major, 0.minor,
+// prerelease and "v" prefixes, and strings with no numeric major.
 func TestReleaseLine(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -259,6 +263,7 @@ func TestReleaseLine(t *testing.T) {
 	}
 }
 
+// TestLineLess pins the numeric ordering of release lines.
 func TestLineLess(t *testing.T) {
 	t.Parallel()
 	in := []string{"12", "0.10", "9", "1", "0.2"}
