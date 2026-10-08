@@ -150,7 +150,11 @@ reports the check as unknown.
 
 - One `POST /v1/query` per distinct package per scan, paginated. Cargo packages
   cost nothing extra: the ADR-0025 lookup for the same package is cached.
-  (Measured on the ADR-0026 lockfiles before merge; figures to be added here.)
+  Measured on 2026-10-09 with the two lockfiles of ADR-0026, sending the
+  queries alone with 16 workers and no cache: microsoft/vscode (b99bfafc0a36)
+  needs 1,188 queries in 36 seconds, npm/cli (b317f16c80df) 839 queries in 25
+  seconds, with no failures. These are the OSV requests only, not a whole scan,
+  where they run alongside the other lookups.
 - **Not covered: takeovers recorded without a machine-readable marker.**
   ctx@0.2.6 (PyPI, 2022) is described as a takeover in PYSEC-2022-199's text,
   and its GitHub advisory has an empty `cwe_ids`. Neither is admitted, and
