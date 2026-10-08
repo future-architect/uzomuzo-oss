@@ -119,6 +119,11 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 		} `json:"packages"`
 	}
 	must(json.Unmarshal(raw, &lock))
+	if lock.Packages == nil {
+		// A v1 lockfile keeps its entries under nested "dependencies"; reading it
+		// here would report zero entries as if the evaluation had completed.
+		must(fmt.Errorf("%s: no \"packages\" map; lockfileVersion 2 or 3 is required", path))
+	}
 	type entry struct{ name, version string }
 	seen := map[entry]struct{}{}
 	names := map[string]struct{}{}
