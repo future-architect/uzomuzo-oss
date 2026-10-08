@@ -13,7 +13,7 @@ import (
 )
 
 func TestMaliciousScanOutputs(t *testing.T) {
-	flagged := audit.AuditEntry{PURL: "pkg:npm/chalk@5.6.1", Verdict: audit.VerdictReplace, Analysis: &analysis.Analysis{MaliciousState: &analysis.MaliciousState{Status: analysis.MaliciousStatusFlagged, Malicious: true, AdvisoryID: "MAL-1", Summary: "Bad release", Scope: analysis.MaliciousScopeVersion}, AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{analysis.LifecycleAxis: {Label: string(analysis.LabelActive)}}}}
+	flagged := audit.AuditEntry{PURL: "pkg:npm/chalk@5.6.1", Verdict: audit.VerdictReplace, Analysis: &analysis.Analysis{MaliciousState: &analysis.MaliciousState{Status: analysis.MaliciousStatusFlagged, AdvisoryID: "MAL-1", Summary: "Bad release", Scope: analysis.MaliciousScopeVersion}, AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{analysis.LifecycleAxis: {Label: string(analysis.LabelActive)}}}}
 	unknown := audit.AuditEntry{PURL: "pkg:npm/other@1.0.0", Verdict: audit.VerdictReview, Analysis: &analysis.Analysis{MaliciousState: &analysis.MaliciousState{Status: analysis.MaliciousStatusLookupFailed}}}
 	entries := []audit.AuditEntry{flagged, unknown}
 	var buf bytes.Buffer
@@ -52,10 +52,14 @@ func TestMaliciousScanOutputs(t *testing.T) {
 	}
 	buf.Reset()
 	flagged.Analysis.Error = errors.New("not found")
+	flagged.ErrorMsg = "not found"
 	if err := renderBoxEntry(&buf, &flagged); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "Malicious version: MAL-1") {
 		t.Fatalf("box: %s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "not found") {
+		t.Fatalf("box missing error: %s", buf.String())
 	}
 }

@@ -332,6 +332,11 @@ func renderBoxEntryError(ctx *boxContext) error {
 		if err := writeBoxVerdict(ctx); err != nil {
 			return wrap(err)
 		}
+		if ctx.entry.ErrorMsg != "" {
+			if err := writeLine(ctx, "Error: %s", ctx.entry.ErrorMsg); err != nil {
+				return wrap(err)
+			}
+		}
 		if err := writeBottomBar(ctx); err != nil {
 			return wrap(err)
 		}

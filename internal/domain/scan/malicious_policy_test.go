@@ -8,7 +8,7 @@ import (
 )
 
 func TestMaliciousFailPolicy(t *testing.T) {
-	entry := audit.AuditEntry{Analysis: &analysis.Analysis{MaliciousState: &analysis.MaliciousState{Status: analysis.MaliciousStatusFlagged, Malicious: true}}}
+	entry := audit.AuditEntry{Analysis: &analysis.Analysis{MaliciousState: &analysis.MaliciousState{Status: analysis.MaliciousStatusFlagged}}}
 	for _, raw := range []string{"malicious", "malicious,eol-confirmed", "eol-confirmed"} {
 		p, err := ParseFailPolicy(raw)
 		if err != nil {

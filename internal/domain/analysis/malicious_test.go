@@ -22,11 +22,15 @@ func TestClassifyMalicious(t *testing.T) {
 		{"ecosystem all", "npm", "chalk", "1.0", AdvisoryRecord{ID: base.ID, Affected: []AdvisoryAffected{{Ecosystem: "npm", Name: "chalk", Ranges: []AdvisoryRange{{Type: "ECOSYSTEM", Events: []AdvisoryRangeEvent{{Introduced: "0"}}}}}}}, true, MaliciousScopePackage},
 		{"ecosystem bounded", "npm", "chalk", "1.0.0", AdvisoryRecord{ID: base.ID, Affected: []AdvisoryAffected{{Ecosystem: "npm", Name: "chalk", Ranges: []AdvisoryRange{{Type: "ECOSYSTEM", Events: []AdvisoryRangeEvent{{Introduced: "0"}, {Fixed: "2.0.0"}}}}}}}, false, ""},
 		{"go leading v", "Go", "example.com/mod", "v1.2.3", AdvisoryRecord{ID: base.ID, Affected: []AdvisoryAffected{{Ecosystem: "Go", Name: "example.com/mod", Versions: []string{"1.2.3"}}}}, true, MaliciousScopeVersion},
+		{"second affected entry", "npm", "chalk", "5.6.1", AdvisoryRecord{ID: base.ID, Affected: []AdvisoryAffected{{Ecosystem: "npm", Name: "chalk", Versions: []string{"1.0.0"}}, {Ecosystem: "npm", Name: "chalk", Versions: []string{"5.6.1"}}}}, true, MaliciousScopeVersion},
+		{"PyPI separator variants", "PyPI", "friendly.bard", "1.0.0", AdvisoryRecord{ID: base.ID, Affected: []AdvisoryAffected{{Ecosystem: "PyPI", Name: "Friendly_Bard", Versions: []string{"1.0.0"}}}}, true, MaliciousScopeVersion},
+		{"PyPI hyphen variant", "PyPI", "friendly-bard", "1.0.0", AdvisoryRecord{ID: base.ID, Affected: []AdvisoryAffected{{Ecosystem: "PyPI", Name: "Friendly_Bard", Versions: []string{"1.0.0"}}}}, true, MaliciousScopeVersion},
+		{"versionless bounded range", "npm", "chalk", "", AdvisoryRecord{ID: base.ID, Affected: []AdvisoryAffected{{Ecosystem: "npm", Name: "chalk", Ranges: []AdvisoryRange{{Type: "SEMVER", Events: []AdvisoryRangeEvent{{Introduced: "1.0.0"}, {Fixed: "2.0.0"}}}}}}}, false, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ClassifyMalicious([]AdvisoryRecord{tt.record}, tt.eco, tt.pkg, tt.version)
-			if got.Malicious != tt.want || got.Scope != tt.scope {
+			if (got.Status == MaliciousStatusFlagged) != tt.want || got.Scope != tt.scope {
 				t.Fatalf("got %+v, want malicious=%v scope=%q", got, tt.want, tt.scope)
 			}
 		})
@@ -52,7 +56,7 @@ func TestMaliciousSemverRanges(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := AdvisoryRecord{ID: "MAL-1", Affected: []AdvisoryAffected{{Ecosystem: "npm", Name: "x", Ranges: []AdvisoryRange{{Type: "SEMVER", Events: tt.events}}}}}
-			if got := ClassifyMalicious([]AdvisoryRecord{rec}, "npm", "x", tt.version).Malicious; got != tt.want {
+			if got := ClassifyMalicious([]AdvisoryRecord{rec}, "npm", "x", tt.version).Status == MaliciousStatusFlagged; got != tt.want {
 				t.Fatalf("got %v want %v", got, tt.want)
 			}
 		})

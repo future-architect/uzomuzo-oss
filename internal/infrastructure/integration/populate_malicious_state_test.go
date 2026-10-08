@@ -1,15 +1,13 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
-	"strings"
 	"testing"
+	"time"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
@@ -36,10 +34,6 @@ func TestEnrichMaliciousStateScopedNamesAndVersion(t *testing.T) {
 }
 
 func TestEnrichMaliciousStateLookupFailed(t *testing.T) {
-	var logs bytes.Buffer
-	previous := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
-	t.Cleanup(func() { slog.SetDefault(previous) })
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) }))
 	defer srv.Close()
 	a := analysisFor("pkg:npm/chalk@5.6.1", "npm")
@@ -47,7 +41,23 @@ func TestEnrichMaliciousStateLookupFailed(t *testing.T) {
 	if a.MaliciousState == nil || a.MaliciousState.Status != domain.MaliciousStatusLookupFailed {
 		t.Fatalf("state: %+v", a.MaliciousState)
 	}
-	if got := strings.Count(logs.String(), "malicious check incomplete"); got != 1 {
-		t.Fatalf("warning count=%d, logs=%s", got, logs.String())
+}
+
+func TestCargoAnalysisSharesOSVFetch(t *testing.T) {
+	t.Parallel()
+	rec := &osvRecorder{}
+	srv := httptest.NewServer(rec.handler(func(string) string { return `{"vulns":[]}` }))
+	defer srv.Close()
+	s := newAdvisoryDBService(t, srv.URL)
+	s.osvClient.SetCacheTTL(10 * time.Minute)
+	a := analysisFor("pkg:cargo/x@1.0.0", "cargo")
+	analyses := map[string]*domain.Analysis{"pkg:cargo/x@1.0.0": a}
+	s.enrichAdvisoryDBState(context.Background(), analyses)
+	s.enrichMaliciousState(context.Background(), analyses)
+	if got := rec.requested(); len(got) != 1 || got[0] != "crates.io/x" {
+		t.Fatalf("OSV requests = %v, want one crates.io/x request", got)
+	}
+	if a.AdvisoryDBState == nil || a.MaliciousState == nil || a.MaliciousState.Status != domain.MaliciousStatusClean {
+		t.Fatalf("states: advisory=%+v malicious=%+v", a.AdvisoryDBState, a.MaliciousState)
 	}
 }

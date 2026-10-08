@@ -109,6 +109,7 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 		entries[i].ViaParents = viaParents[entries[i].PURL]
 	}
 	hasFailure := policy.Evaluate(entries)
+	warnMaliciousLookupFailures(analyses)
 
 	return &Result{Entries: entries, HasFailure: hasFailure}, nil
 }
@@ -231,8 +232,21 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 		}
 	}
 
+	warnMaliciousLookupFailures(allAnalyses)
 	hasFailure := policy.Evaluate(entries)
 	return &Result{Entries: entries, HasFailure: hasFailure}, nil
+}
+
+func warnMaliciousLookupFailures(analyses map[string]*analysis.Analysis) {
+	failed := 0
+	for _, a := range analyses {
+		if a != nil && a.MaliciousState != nil && a.MaliciousState.Status == analysis.MaliciousStatusLookupFailed {
+			failed++
+		}
+	}
+	if failed > 0 {
+		slog.Warn("malicious check incomplete: OSV lookup failed for packages", "count", failed)
+	}
 }
 
 // evaluateActionURLs filters, evaluates, and tags action URLs with the given source.

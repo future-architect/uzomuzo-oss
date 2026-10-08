@@ -95,13 +95,17 @@ type MaliciousStatus = domain.MaliciousStatus
 // MaliciousScope identifies whether an advisory covers one version or a whole package.
 type MaliciousScope = domain.MaliciousScope
 
-// Malicious check statuses and advisory scopes.
 const (
-	MaliciousStatusClean        = domain.MaliciousStatusClean
-	MaliciousStatusFlagged      = domain.MaliciousStatusFlagged
+	// MaliciousStatusClean means the OSV check found no matching advisory.
+	MaliciousStatusClean = domain.MaliciousStatusClean
+	// MaliciousStatusFlagged means an advisory covers the package or version.
+	MaliciousStatusFlagged = domain.MaliciousStatusFlagged
+	// MaliciousStatusLookupFailed means the OSV check did not complete.
 	MaliciousStatusLookupFailed = domain.MaliciousStatusLookupFailed
-	MaliciousScopeVersion       = domain.MaliciousScopeVersion
-	MaliciousScopePackage       = domain.MaliciousScopePackage
+	// MaliciousScopeVersion means the advisory covers the requested version.
+	MaliciousScopeVersion = domain.MaliciousScopeVersion
+	// MaliciousScopePackage means the advisory covers every version.
+	MaliciousScopePackage = domain.MaliciousScopePackage
 )
 
 // ReleaseHistory is the registry's publish time for every version of a

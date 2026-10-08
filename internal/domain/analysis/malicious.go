@@ -10,8 +10,11 @@ import (
 type MaliciousStatus string
 
 const (
-	MaliciousStatusClean        MaliciousStatus = "clean"
-	MaliciousStatusFlagged      MaliciousStatus = "flagged"
+	// MaliciousStatusClean means the OSV check completed without a match.
+	MaliciousStatusClean MaliciousStatus = "clean"
+	// MaliciousStatusFlagged means an advisory covers this package or version.
+	MaliciousStatusFlagged MaliciousStatus = "flagged"
+	// MaliciousStatusLookupFailed means the OSV check did not complete.
 	MaliciousStatusLookupFailed MaliciousStatus = "lookup_failed"
 )
 
@@ -19,7 +22,9 @@ const (
 type MaliciousScope string
 
 const (
+	// MaliciousScopeVersion means the advisory covers the requested version.
 	MaliciousScopeVersion MaliciousScope = "version"
+	// MaliciousScopePackage means the advisory covers every version.
 	MaliciousScopePackage MaliciousScope = "package"
 )
 
@@ -27,7 +32,6 @@ const (
 // A nil pointer means the package was not checked. See ADR-0027.
 type MaliciousState struct {
 	Status     MaliciousStatus
-	Malicious  bool
 	AdvisoryID string
 	Summary    string
 	Reference  string
@@ -37,7 +41,7 @@ type MaliciousState struct {
 
 // Malicious reports whether this analysis names a malicious package or version.
 func (a *Analysis) Malicious() bool {
-	return a != nil && a.MaliciousState != nil && a.MaliciousState.Status == MaliciousStatusFlagged && a.MaliciousState.Malicious
+	return a != nil && a.MaliciousState != nil && a.MaliciousState.Status == MaliciousStatusFlagged
 }
 
 // ClassifyMalicious checks admitted advisories against the requested package version.
@@ -53,7 +57,7 @@ func ClassifyMalicious(recs []AdvisoryRecord, ecosystem, name, version string) M
 			}
 			scope := affectedMaliciousScope(affected, ecosystem, version)
 			if scope != "" {
-				return MaliciousState{Status: MaliciousStatusFlagged, Malicious: true, AdvisoryID: rec.ID, Summary: rec.Summary, Reference: rec.Reference, Published: rec.Published, Scope: scope}
+				return MaliciousState{Status: MaliciousStatusFlagged, AdvisoryID: rec.ID, Summary: rec.Summary, Reference: rec.Reference, Published: rec.Published, Scope: scope}
 			}
 		}
 	}
@@ -77,12 +81,13 @@ func maliciousAdvisory(rec AdvisoryRecord) bool {
 
 func sameMaliciousPackageName(ecosystem, left, right string) bool {
 	if ecosystem == "PyPI" {
-		return normalizePyPIName(left) == normalizePyPIName(right)
+		return NormalizePyPIName(left) == NormalizePyPIName(right)
 	}
 	return left == right
 }
 
-func normalizePyPIName(name string) string {
+// NormalizePyPIName applies PEP 503 normalization to a PyPI package name.
+func NormalizePyPIName(name string) string {
 	return pep503Separators.ReplaceAllString(strings.ToLower(name), "-")
 }
 

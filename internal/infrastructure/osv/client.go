@@ -439,7 +439,7 @@ func OSVPackageFor(parsed *purl.ParsedPURL) (string, string, bool) {
 		if namespace != "" {
 			return "", "", false
 		}
-		name = pep503Separator.ReplaceAllString(strings.ToLower(name), "-")
+		name = domain.NormalizePyPIName(name)
 		return "PyPI", name, name != ""
 	case "cargo":
 		if namespace == "" {
@@ -466,8 +466,6 @@ func OSVPackageFor(parsed *purl.ParsedPURL) (string, string, bool) {
 	}
 	return "", "", false
 }
-
-var pep503Separator = regexp.MustCompile(`[-_.]+`)
 
 // advisoryReference returns the URL of the advisory's own page, preferring the
 // ADVISORY-typed reference OSV defines for exactly this purpose. Falls back to

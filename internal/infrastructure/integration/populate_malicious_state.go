@@ -2,8 +2,6 @@ package integration
 
 import (
 	"context"
-	"log/slog"
-	"sync/atomic"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
@@ -25,7 +23,6 @@ func (s *IntegrationService) enrichMaliciousState(ctx context.Context, analyses 
 			return records, true, err
 		}
 	})
-	var failed atomic.Int64
 	runPackageJobs(ctx, "malicious_state", jobs, func(a *domain.Analysis, records []domain.AdvisoryRecord) {
 		parsed, err := purl.NewParser().Parse(a.Package.PURL)
 		if err != nil {
@@ -38,12 +35,8 @@ func (s *IntegrationService) enrichMaliciousState(ctx context.Context, analyses 
 		state := domain.ClassifyMalicious(records, eco, name, parsed.Version())
 		a.MaliciousState = &state
 	}, func(_ packageJobKey, targets []*domain.Analysis) {
-		failed.Add(1)
 		for _, a := range targets {
 			a.MaliciousState = &domain.MaliciousState{Status: domain.MaliciousStatusLookupFailed}
 		}
 	})
-	if n := failed.Load(); n > 0 {
-		slog.Warn("malicious check incomplete: OSV lookup failed for packages", "count", n)
-	}
 }
