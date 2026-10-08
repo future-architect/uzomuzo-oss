@@ -52,6 +52,9 @@ import (
 type Client struct {
 	baseURL string
 	http    *httpclient.Client
+	// lookupTimeout, when positive, bounds one whole GetPublishHistory call:
+	// every retry and the body decode, not only a single attempt.
+	lookupTimeout time.Duration
 }
 
 // NewClient creates a new npmjs Client with sane defaults.
@@ -62,9 +65,9 @@ func NewClient() *Client {
 	}
 }
 
-// packumentTimeout bounds a full-packument fetch. NewClient's 3-second limit
-// covers the whole body, and the packument of a package with thousands of
-// versions runs to megabytes.
+// packumentTimeout bounds a full-packument lookup, retries and decoding
+// included. NewClient's 3-second limit covers the whole body, and the
+// packument of a package with thousands of versions runs to megabytes.
 const packumentTimeout = 20 * time.Second
 
 // maxPackumentBytes caps a packument read. The largest seen, react-native and
@@ -77,6 +80,9 @@ const maxPackumentBytes = 64 << 20
 func NewPackumentClient() *Client {
 	c := NewClient()
 	c.http = httpclient.NewClient(&http.Client{Timeout: packumentTimeout}, httpclient.RegistryRetryConfig())
+	// The per-attempt limit alone lets two retries stretch one lookup to about
+	// a minute, and the scan waits for it.
+	c.lookupTimeout = packumentTimeout
 	return c
 }
 
@@ -335,6 +341,11 @@ func (c *Client) GetPublishHistory(ctx context.Context, fullName string) (*Publi
 	fullName = strings.TrimSpace(fullName)
 	if fullName == "" {
 		return nil, false, nil
+	}
+	if c.lookupTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.lookupTimeout)
+		defer cancel()
 	}
 	endpoint := fmt.Sprintf("%s/%s", c.baseURL, url.PathEscape(fullName))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)

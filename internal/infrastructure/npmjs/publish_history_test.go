@@ -130,6 +130,30 @@ func TestGetPublishHistory_ServerError(t *testing.T) {
 	}
 }
 
+// TestGetPublishHistory_LookupTimeoutSpansRetries pins that lookupTimeout bounds
+// the whole lookup: a registry that never answers is retried, but the call
+// returns once the single deadline passes.
+func TestGetPublishHistory_LookupTimeoutSpansRetries(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	t.Cleanup(srv.Close)
+	c := NewClient()
+	c.SetBaseURL(srv.URL)
+	c.lookupTimeout = 200 * time.Millisecond
+	start := time.Now()
+	_, found, err := c.GetPublishHistory(context.Background(), "hang")
+	if err == nil || found {
+		t.Fatalf("want an error, got found=%v err=%v", found, err)
+	}
+	// NewClient's per-attempt limit is 3 s, so without the lookup deadline the
+	// call would take at least that long before its first retry.
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("lookup took %v, want it bounded by lookupTimeout", elapsed)
+	}
+}
+
 // TestGetPublishHistory_LiveProbe checks against registry.npmjs.org that a
 // scoped name is accepted in its escaped form and that an unpublished version
 // keeps its "time" entry, which ADR-0026 relies on.
