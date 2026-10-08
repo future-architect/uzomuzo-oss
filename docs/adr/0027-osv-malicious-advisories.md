@@ -143,8 +143,10 @@ outlives the package. rustdecimal@1.23.1 becomes `replace`.
 A failed or incomplete lookup (an error, or more than 10 pages of advisories) is
 "not checked", never "not malicious". It does not change any verdict, so an OSV
 outage cannot flip a whole scan. It is not silent either: the scan ends with one
-warning naming how many packages could not be checked, and the JSON entry
-reports the check as unknown.
+warning naming how many dependencies could not be checked, and the JSON entry
+reports the check as unknown. The count is of dependencies, the same entries
+the JSON marks unknown: chalk@5.6.1 and chalk@5.6.2 share one OSV query, and
+when it fails they count as two.
 
 ## Consequences
 

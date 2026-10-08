@@ -245,7 +245,7 @@ func warnMaliciousLookupFailures(analyses map[string]*analysis.Analysis) {
 		}
 	}
 	if failed > 0 {
-		slog.Warn("malicious check incomplete: OSV lookup failed for packages", "count", failed)
+		slog.Warn("malicious check incomplete: OSV lookup failed for dependencies", "count", failed)
 	}
 }
 

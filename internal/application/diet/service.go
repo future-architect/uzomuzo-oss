@@ -192,7 +192,7 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 		}
 	}
 	if failedMaliciousChecks > 0 {
-		slog.Warn("malicious check incomplete: OSV lookup failed for packages", "count", failedMaliciousChecks)
+		slog.Warn("malicious check incomplete: OSV lookup failed for dependencies", "count", failedMaliciousChecks)
 	}
 
 	// Phase 4: Scoring and prioritization
