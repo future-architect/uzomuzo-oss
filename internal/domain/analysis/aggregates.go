@@ -242,7 +242,7 @@ func (a *Analysis) GetLastHumanCommitYears() float64 {
 
 // HasPublishData returns true when at least one version slot has a non-zero publish date.
 func (a *Analysis) HasPublishData() bool {
-	return a.GetDaysSinceLatestPublish() != 9999
+	return a.hasPublishDataAt(time.Now())
 }
 
 // GetDaysSinceLatestPublish returns the number of days since the most recently
@@ -251,76 +251,6 @@ func (a *Analysis) HasPublishData() bool {
 func (a *Analysis) GetDaysSinceLatestPublish() int {
 	return a.daysSinceLatestPublishAt(time.Now())
 }
-
-// The *At variants below answer the exported time helpers at a given moment, so
-// the lifecycle assessor judges every age against one AssessmentInput.Now.
-
-func (a *Analysis) hasRecentStableReleaseAt(days int, now time.Time) bool {
-	if a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil {
-		return false
-	}
-	if a.ReleaseInfo.StableVersion.PublishedAt.IsZero() {
-		return false
-	}
-	return daysBetween(a.ReleaseInfo.StableVersion.PublishedAt, now) <= days
-}
-
-func (a *Analysis) hasRecentPrereleaseReleaseAt(days int, now time.Time) bool {
-	if a.ReleaseInfo == nil || a.ReleaseInfo.PreReleaseVersion == nil {
-		return false
-	}
-	if a.ReleaseInfo.PreReleaseVersion.PublishedAt.IsZero() {
-		return false
-	}
-	return daysBetween(a.ReleaseInfo.PreReleaseVersion.PublishedAt, now) <= days
-}
-
-func (a *Analysis) hasRecentHumanCommitAt(days int, now time.Time) bool {
-	if a.RepoState == nil {
-		return false
-	}
-	return a.daysSinceLastHumanCommitAt(now) <= days
-}
-
-func (a *Analysis) daysSinceLastHumanCommitAt(now time.Time) int {
-	if a.RepoState == nil || a.RepoState.LatestHumanCommit == nil {
-		return 9999 // Large number if no data
-	}
-	return daysBetween(*a.RepoState.LatestHumanCommit, now)
-}
-
-func (a *Analysis) lastHumanCommitYearsAt(now time.Time) float64 {
-	days := a.daysSinceLastHumanCommitAt(now)
-	if days == 9999 {
-		return 999.0 // Large number if no data
-	}
-	return float64(days) / 365.0
-}
-
-func (a *Analysis) daysSinceLatestPublishAt(now time.Time) int {
-	if a.ReleaseInfo == nil {
-		return 9999
-	}
-	minDays := 9999
-	candidates := []*VersionDetail{
-		a.ReleaseInfo.StableVersion,
-		a.ReleaseInfo.PreReleaseVersion,
-		a.ReleaseInfo.MaxSemverVersion,
-		a.ReleaseInfo.RequestedVersion,
-	}
-	for _, v := range candidates {
-		if v != nil && !v.PublishedAt.IsZero() {
-			days := daysBetween(v.PublishedAt, now)
-			if days < minDays {
-				minDays = days
-			}
-		}
-	}
-	return minDays
-}
-
-// daysBetween counts whole days from t to now.
-func daysBetween(t, now time.Time) int { return int(now.Sub(t).Hours() / 24) }
 
 // GetBotRatio gets the ratio of bot commits
 func (a *Analysis) GetBotRatio() float64 {
@@ -512,3 +442,82 @@ func (a *Analysis) EnsureCanonical() {
 	}
 	a.CanonicalKey = purl.CanonicalKey(raw)
 }
+
+// hasRecentStableReleaseAt is HasRecentStableRelease judged at now, so the
+// lifecycle assessor reads every age against one AssessmentInput.Now.
+func (a *Analysis) hasRecentStableReleaseAt(days int, now time.Time) bool {
+	if a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil {
+		return false
+	}
+	if a.ReleaseInfo.StableVersion.PublishedAt.IsZero() {
+		return false
+	}
+	return daysBetween(a.ReleaseInfo.StableVersion.PublishedAt, now) <= days
+}
+
+// hasRecentPrereleaseReleaseAt is HasRecentPrereleaseRelease judged at now.
+func (a *Analysis) hasRecentPrereleaseReleaseAt(days int, now time.Time) bool {
+	if a.ReleaseInfo == nil || a.ReleaseInfo.PreReleaseVersion == nil {
+		return false
+	}
+	if a.ReleaseInfo.PreReleaseVersion.PublishedAt.IsZero() {
+		return false
+	}
+	return daysBetween(a.ReleaseInfo.PreReleaseVersion.PublishedAt, now) <= days
+}
+
+// hasRecentHumanCommitAt is HasRecentHumanCommit judged at now.
+func (a *Analysis) hasRecentHumanCommitAt(days int, now time.Time) bool {
+	if a.RepoState == nil {
+		return false
+	}
+	return a.daysSinceLastHumanCommitAt(now) <= days
+}
+
+// daysSinceLastHumanCommitAt is GetDaysSinceLastHumanCommit judged at now.
+func (a *Analysis) daysSinceLastHumanCommitAt(now time.Time) int {
+	if a.RepoState == nil || a.RepoState.LatestHumanCommit == nil {
+		return 9999 // Large number if no data
+	}
+	return daysBetween(*a.RepoState.LatestHumanCommit, now)
+}
+
+// lastHumanCommitYearsAt is GetLastHumanCommitYears judged at now.
+func (a *Analysis) lastHumanCommitYearsAt(now time.Time) float64 {
+	days := a.daysSinceLastHumanCommitAt(now)
+	if days == 9999 {
+		return 999.0 // Large number if no data
+	}
+	return float64(days) / 365.0
+}
+
+// hasPublishDataAt is HasPublishData judged at now.
+func (a *Analysis) hasPublishDataAt(now time.Time) bool {
+	return a.daysSinceLatestPublishAt(now) != 9999
+}
+
+// daysSinceLatestPublishAt is GetDaysSinceLatestPublish judged at now.
+func (a *Analysis) daysSinceLatestPublishAt(now time.Time) int {
+	if a.ReleaseInfo == nil {
+		return 9999
+	}
+	minDays := 9999
+	candidates := []*VersionDetail{
+		a.ReleaseInfo.StableVersion,
+		a.ReleaseInfo.PreReleaseVersion,
+		a.ReleaseInfo.MaxSemverVersion,
+		a.ReleaseInfo.RequestedVersion,
+	}
+	for _, v := range candidates {
+		if v != nil && !v.PublishedAt.IsZero() {
+			days := daysBetween(v.PublishedAt, now)
+			if days < minDays {
+				minDays = days
+			}
+		}
+	}
+	return minDays
+}
+
+// daysBetween counts whole days from t to now.
+func daysBetween(t, now time.Time) int { return int(now.Sub(t).Hours() / 24) }

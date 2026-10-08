@@ -450,7 +450,7 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 				Trace:   []string{"inactive_commit_maintenance_ok_partial_scores"},
 				Signals: []Signal{cSig, mSig}}, nil
 		}
-		if analysis.HasPublishData() {
+		if analysis.hasPublishDataAt(now) {
 			daysSincePublish := analysis.daysSinceLatestPublishAt(now)
 			publishSig := sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))
 			if daysSincePublish <= s.rules.EolInactivityDays {
@@ -466,7 +466,7 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 					Signals: []Signal{cSig, publishSig, mSig}}, nil
 			}
 		}
-		if !analysis.HasPublishData() && !hasMaintainedScore {
+		if !analysis.hasPublishDataAt(now) && !hasMaintainedScore {
 			return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelStalled),
 				Reason:  "No recent activity, no registry data",
 				Trace:   []string{"inactive_github_only_stalled"},
@@ -495,7 +495,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	cSig := sigAbsent(SignalLastHumanCommit) // no commit data in this path
 	mSig := maintainedSignal(scores)
 	dSig := sigAbsent(SignalDaysSinceRelease)
-	if analysis.HasPublishData() {
+	if analysis.hasPublishDataAt(now) {
 		dSig = sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))
 	}
 
@@ -509,7 +509,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 
 	// C2: Scorecard Maintained < threshold
 	if hasMaintainedScore && !isMaintenanceOk {
-		if hasAdvisories && analysis.HasPublishData() && daysSincePublish > s.rules.EolInactivityDays {
+		if hasAdvisories && analysis.hasPublishDataAt(now) && daysSincePublish > s.rules.EolInactivityDays {
 			label, trace := s.severityAwareLabel(hasHighSeverity,
 				LabelEOLEffective, "inactive_no_commit_C2a_low_maint_advisory_old_publish",
 				LabelStalled, "inactive_no_commit_C2a_low_maint_advisory_low_severity")
@@ -527,7 +527,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 
 	// C3: No scorecard — deps.dev signals only
 	if hasAdvisories {
-		if analysis.HasPublishData() && daysSincePublish > s.rules.EolInactivityDays {
+		if analysis.hasPublishDataAt(now) && daysSincePublish > s.rules.EolInactivityDays {
 			label, trace := s.severityAwareLabel(hasHighSeverity,
 				LabelEOLEffective, "inactive_no_commit_C3a_advisory_old_publish",
 				LabelStalled, "inactive_no_commit_C3a_advisory_low_severity")
@@ -545,7 +545,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	}
 
 	// No advisories path — only use publish-age thresholds when publish data exists
-	if analysis.HasPublishData() {
+	if analysis.hasPublishDataAt(now) {
 		if daysSincePublish <= s.rules.RecentStableWindowDays {
 			return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelActive),
 				Reason:  "Recently published, no known vulnerabilities",

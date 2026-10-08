@@ -66,11 +66,11 @@ type DormantBurst struct {
 // after now, the version is in the package's first release burst, or the
 // condition is not met.
 //
-// Only releases published at or before now are considered. The burst starts at
-// the earliest release reachable from version through gaps of at most
-// DormantBurstWindow and shorter than minSilence, and holds every release published within
-// DormantBurstWindow of that start. Releases after version count, so a burst
-// becomes visible once its second line is published, not at the first.
+// Only releases published at or before now are considered. Oldest first, a
+// release opens a new burst when at least minSilence passed since the previous
+// release or it is more than DormantBurstWindow after the current burst's first
+// release; otherwise it joins that burst. Releases after version count, so a
+// burst becomes visible once its second line is published, not at the first.
 func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSilence, maxAge time.Duration) *DormantBurst {
 	if h == nil || version == "" {
 		return nil
@@ -111,24 +111,19 @@ func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSil
 	if idx < 0 {
 		return nil
 	}
-	first := idx
-	for first > 0 {
-		gap := all[first].at.Sub(all[first-1].at)
-		// A gap long enough to count as the silence ends the walk even when it
-		// also fits DormantBurstWindow (minSilence of a day or less).
-		if gap > DormantBurstWindow || (minSilence > 0 && gap >= minSilence) {
-			break
+	// Split the history into bursts oldest first, so every version of one burst
+	// resolves to the same burst whichever of them is asked about. Walking back
+	// from version instead disagrees when minSilence fits inside
+	// DormantBurstWindow: a gap of exactly a day would be the silence seen from
+	// one version and part of the burst seen from another.
+	first := 0
+	for i := 1; i <= idx; i++ {
+		if startsBurst(all[i-1].at, all[i].at, all[first].at, minSilence) {
+			first = i
 		}
-		first--
-	}
-	// The burst is bounded by DormantBurstWindow from its first release, so a
-	// package that resumes regular releases does not grow one unbounded burst.
-	end := all[first].at.Add(DormantBurstWindow)
-	if at.After(end) {
-		return nil
 	}
 	last := idx
-	for last+1 < len(all) && !all[last+1].at.After(end) {
+	for last+1 < len(all) && !startsBurst(all[last].at, all[last+1].at, all[first].at, minSilence) {
 		last++
 	}
 	if first == 0 {
@@ -172,6 +167,17 @@ func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSil
 		Lines:               lines,
 		Removed:             h.Installable != nil && !installable,
 	}
+}
+
+// startsBurst reports whether a release at cur, following one at prev, opens a
+// new burst rather than joining the burst that opened at start: either the gap
+// is long enough to be a silence, or cur is past DormantBurstWindow from start,
+// so a package that resumes regular releases does not grow one unbounded burst.
+func startsBurst(prev, cur, start time.Time, minSilence time.Duration) bool {
+	if minSilence > 0 && cur.Sub(prev) >= minSilence {
+		return true
+	}
+	return cur.After(start.Add(DormantBurstWindow))
 }
 
 // releaseLine returns the semver release line of v: the major version, or

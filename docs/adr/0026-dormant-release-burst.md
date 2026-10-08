@@ -164,10 +164,12 @@ tooling-heavy; other populations will differ.
 - One extra full-packument request per distinct npm package per scan. A failed
   or timed-out fetch is logged at debug level only and leaves the label as the
   tree decided it.
-- The lifecycle assessor now judges every age against one evaluation time
+- The lifecycle assessor now measures every age against one evaluation time
   (`AssessmentInput.Now`, wall clock when zero): release and commit recency,
-  days since publish, the burst's age limit, and which releases exist yet. So a
-  replay at a past date takes the same branches it took on that date.
+  days since publish, and the burst's age limit. The burst rule also ignores
+  releases published after that time. The inputs themselves (release info,
+  repository state, scores) are whatever was fetched, so a replay at a past
+  date is faithful only with data taken on that date.
 - Not covered, and left for later: other registries (RubyGems removes yanked
   versions from its API, so SleeperGem's malicious releases cannot be replayed);
   publisher changes (`_npmUser`), new dependencies and new install scripts in the
