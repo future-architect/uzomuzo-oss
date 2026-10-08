@@ -62,8 +62,9 @@ type DormantBurst struct {
 // that followed at least minSilence without any release and touched at least
 // DormantBurstMinLines release lines, and is no older than maxAge at now
 // (maxAge <= 0 disables the age limit). Returns nil when the history is
-// missing, the version has no publish time or was published after now, the
-// version is in the package's first release burst, or the condition is not met.
+// missing, version is empty, the version has no publish time or was published
+// after now, the version is in the package's first release burst, or the
+// condition is not met.
 //
 // Only releases published at or before now are considered. The burst starts at
 // the earliest release reachable from version through gaps of at most
