@@ -62,13 +62,14 @@ type DormantBurst struct {
 // that followed at least minSilence without any release and touched at least
 // DormantBurstMinLines release lines, and is no older than maxAge at now
 // (maxAge <= 0 disables the age limit). Returns nil when the history is
-// missing, the version has no publish time, or the condition is not met.
+// missing, the version has no publish time or was published after now, the
+// version is in the package's first release burst, or the condition is not met.
 //
-// The burst starts at the earliest release reachable from version through gaps
-// of at most DormantBurstWindow, and holds every release published within
+// Only releases published at or before now are considered. The burst starts at
+// the earliest release reachable from version through gaps of at most
+// DormantBurstWindow, and holds every release published within
 // DormantBurstWindow of that start. Releases after version count, so a burst
-// becomes visible once its second line is published, not at the first;
-// releases after now are ignored, as is a version published after now.
+// becomes visible once its second line is published, not at the first.
 func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSilence, maxAge time.Duration) *DormantBurst {
 	if h == nil || version == "" {
 		return nil

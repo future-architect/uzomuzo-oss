@@ -46,7 +46,8 @@ When the label is **Active or Legacy-Safe** and the analysed version was publish
 
 1. after at least `RecentStableWindowDays` (365 by default) without any release,
 2. in a burst — every release within `DormantBurstWindow` (24 hours) of the first
-   release after the silence — that touches at least `DormantBurstMinLines` (2)
+   release after the silence, counting only releases published by the moment
+   of evaluation — that touches at least `DormantBurstMinLines` (2)
    release lines (the major version, or `0.minor` below 1.0), and
 3. no more than `RecentStableWindowDays` ago,
 
@@ -160,7 +161,7 @@ tooling-heavy; other populations will differ.
   or timed-out fetch is logged at debug level only and leaves the label as the
   tree decided it.
 - The assessor now reads the clock (`AssessmentInput.Now`, wall clock when
-  zero) for the age limit.
+  zero) for the age limit, and ignores releases published after that moment.
 - Not covered, and left for later: other registries (RubyGems removes yanked
   versions from its API, so SleeperGem's malicious releases cannot be replayed);
   publisher changes (`_npmUser`), new dependencies and new install scripts in the
