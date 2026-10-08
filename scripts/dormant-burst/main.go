@@ -52,9 +52,9 @@ func main() {
 		runCases(ctx, client, os.Args[2])
 	case "lockfile":
 		fs := flag.NewFlagSet("lockfile", flag.ExitOnError)
-		nowFlag := fs.String("now", time.Now().UTC().Format("2006-01-02"), "evaluation date")
+		nowFlag := fs.String("now", time.Now().UTC().Format(time.DateOnly), "evaluation date")
 		_ = fs.Parse(os.Args[2:]) // ExitOnError: Parse exits on failure and never returns an error
-		now, err := time.Parse("2006-01-02", *nowFlag)
+		now, err := time.Parse(time.DateOnly, *nowFlag)
 		if err != nil || fs.NArg() != 1 {
 			fmt.Fprintln(os.Stderr, "lockfile: need -now YYYY-MM-DD and one path")
 			os.Exit(2)
@@ -186,13 +186,13 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 			mark = " (fires)"
 		}
 		hits = append(hits, fmt.Sprintf("%s@%s published %s, silent %d days, burst %s%s",
-			e.name, e.version, b.PublishedAt.Format("2006-01-02"), b.SilentDays, strings.Join(b.Versions, ", "), mark))
+			e.name, e.version, b.PublishedAt.Format(time.DateOnly), b.SilentDays, strings.Join(b.Versions, ", "), mark))
 	}
 	fmt.Printf("%s at %s: %d distinct name@version pairs with a publish time (of %d in the lockfile)\n"+
 		"  published after >=365 days without any release (silence alone, any age): %d\n"+
 		"  ... and in a burst across >=2 release lines (any age): %d\n"+
 		"  ... and within the 365-day age limit (what uzomuzo reports): %d\n",
-		path, now.Format("2006-01-02"), evaluated, len(entries), silenceOnly, anyAge, fresh)
+		path, now.Format(time.DateOnly), evaluated, len(entries), silenceOnly, anyAge, fresh)
 	for _, h := range hits {
 		fmt.Println("  " + h)
 	}
