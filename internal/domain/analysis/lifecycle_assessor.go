@@ -628,10 +628,12 @@ func eolEvidenceSource(eol EOLStatus) string {
 // "Released after 639 days without a release, in one burst across release
 // lines 9, 12".
 func dormantBurstReason(b *DormantBurst) string {
-	reason := fmt.Sprintf("Released after %d days without a release, in one burst across release lines %s",
-		b.SilentDays, strings.Join(b.Lines, ", "))
+	reason := fmt.Sprintf("Possible hijacked release: published after %d days without a release, "+
+		"together with releases on release lines %s, the pattern left when a dormant npm account is "+
+		"taken over (node-ipc, rc). Before using it, check who published it and what changed "+
+		"since the previous release.", b.SilentDays, strings.Join(b.Lines, ", "))
 	if b.Removed {
-		reason += "; this version has since been removed from the registry"
+		reason += " This version has since been removed from the registry."
 	}
 	return reason
 }

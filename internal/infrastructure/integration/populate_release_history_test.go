@@ -44,6 +44,7 @@ func TestEnrichReleaseHistory(t *testing.T) {
 		"d": analysisFor("pkg:npm/missing@1.0.0", "npm"),
 		"e": analysisFor("pkg:pypi/requests@2.0.0", "pypi"),
 		"f": analysisFor("not a purl", "npm"),
+		"g": analysisFor("pkg:npm/unversioned", "npm"),
 	}
 	s.enrichReleaseHistory(context.Background(), analyses)
 
@@ -53,7 +54,7 @@ func TestEnrichReleaseHistory(t *testing.T) {
 			t.Errorf("%s: ReleaseHistory = %+v", k, h)
 		}
 	}
-	for _, k := range []string{"d", "e", "f"} {
+	for _, k := range []string{"d", "e", "f", "g"} {
 		if analyses[k].ReleaseHistory != nil {
 			t.Errorf("%s: want nil ReleaseHistory", k)
 		}

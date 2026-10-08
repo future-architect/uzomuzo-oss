@@ -56,14 +56,14 @@ func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 			analysis:   &Analysis{Package: pkg("1.0.1"), RepoState: activeRepo, ReleaseInfo: stable, ReleaseHistory: burstHistory(now)},
 			wantLabel:  LabelReviewNeeded,
 			wantBurst:  true,
-			wantReason: "Released after 800 days without a release, in one burst across release lines 1, 2; this version has since been removed from the registry",
+			wantReason: "Possible hijacked release: published after 800 days without a release, together with releases on release lines 1, 2, the pattern left when a dormant npm account is taken over (node-ipc, rc). Before using it, check who published it and what changed since the previous release. This version has since been removed from the registry.",
 		},
 		{
 			name:       "the other version of the same burst, still installable",
 			analysis:   &Analysis{Package: pkg("2.0.1"), RepoState: activeRepo, ReleaseInfo: stable, ReleaseHistory: burstHistory(now)},
 			wantLabel:  LabelReviewNeeded,
 			wantBurst:  true,
-			wantReason: "Released after 800 days without a release, in one burst across release lines 1, 2",
+			wantReason: "Possible hijacked release: published after 800 days without a release, together with releases on release lines 1, 2, the pattern left when a dormant npm account is taken over (node-ipc, rc). Before using it, check who published it and what changed since the previous release.",
 		},
 		{
 			name:       "the release before the silence is untouched",

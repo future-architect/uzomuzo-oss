@@ -69,7 +69,8 @@ display; it is never part of the decision.
 npm only. The publish times come from the full packument
 (`GET https://registry.npmjs.org/<name>`, one request per distinct package,
 20-second timeout); the abbreviated install document carries no per-version
-times. A failed fetch leaves `Analysis.ReleaseHistory` nil and the branch silent.
+times. A PURL without a version is not fetched: the rule judges a version, so
+an unversioned input (`pkg:npm/node-ipc`) never reaches it. A failed fetch leaves `Analysis.ReleaseHistory` nil and the branch silent.
 
 ### Why lines, and not the silence alone
 
@@ -139,9 +140,13 @@ tooling-heavy; other populations will differ.
 ## Consequences
 
 - `pkg:npm/node-ipc@12.0.1` and its sibling versions are Review Needed until
-  2027-05-14, with the reason "Released after 639 days without a release, in one
-  burst across release lines 9, 12; this version has since been removed from the
-  registry".
+  2027-05-14, with the reason "Possible hijacked release: published after 639
+  days without a release, together with releases on release lines 9, 12, the
+  pattern left when a dormant npm account is taken over (node-ipc, rc). Before
+  using it, check who published it and what changed since the previous
+  release. This version has since been removed from the registry." The reason names the risk
+  and what to check, not only the observed dates: "released after 639 days"
+  alone does not tell a reader why the version needs a look.
 - **The rule fires once the second line is published, not at the first.** On
   2026-05-14 it would have become true at 14:26:01, 31 seconds after 12.0.1.
 - Every version of the burst is flagged, including the maintainer's clean

@@ -16,7 +16,7 @@ import (
 // burst after a long silence (ADR-0026). No-op when the npm client is unwired.
 //
 // Best-effort: a fetch failure leaves ReleaseHistory nil, which the assessor
-// reads as "not asked". One request per distinct package name.
+// reads as "not asked". One request per distinct package name, for versioned PURLs only.
 //
 // Unlike collectPackageJobs, scoped names are kept: npm namespaces are part of
 // the package name ("@solana/web3.js"), not a different package.
@@ -33,7 +33,9 @@ func (s *IntegrationService) enrichReleaseHistory(ctx context.Context, analyses 
 			continue
 		}
 		parsed, err := parser.Parse(a.Package.PURL)
-		if err != nil || parsed.Ecosystem() != "npm" {
+		// Without a version there is nothing to judge (Analysis.DormantBurst
+		// reads Package.Version), so skip the multi-megabyte packument fetch.
+		if err != nil || parsed.Ecosystem() != "npm" || parsed.Version() == "" {
 			continue
 		}
 		name := strings.TrimSpace(parsed.Name())

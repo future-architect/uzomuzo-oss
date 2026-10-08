@@ -100,7 +100,7 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 
 - Request: the full packument (scoped names as `@scope%2Fname`); the abbreviated install document has no per-version times
 - Fields consumed: `time` (per-version publish times, `created` / `modified` / `unpublished` skipped), the key set of `versions`
-- Purpose: record when every version was published, including unpublished ones whose `time` entry npm keeps (`Analysis.ReleaseHistory`); the lifecycle assessor reads it against the analysed version to detect a release burst across lines after a long silence. One request per distinct npm package
+- Purpose: record when every version was published, including unpublished ones whose `time` entry npm keeps (`Analysis.ReleaseHistory`); the lifecycle assessor reads it against the analysed version to detect a release burst across lines after a long silence. One request per distinct npm package, for versioned PURLs only
 - Code: `npmjs.Client.GetPublishHistory` (`internal/infrastructure/npmjs/client.go`), `IntegrationService.enrichReleaseHistory` (`internal/infrastructure/integration/populate_release_history.go`), `analysis.DetectDormantBurst` (`internal/domain/analysis/release_history.go`). See [ADR-0026](adr/0026-dormant-release-burst.md)
 - Docs: <https://github.com/npm/registry/blob/main/docs/responses/package-metadata.md>
 
