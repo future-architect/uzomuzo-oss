@@ -55,6 +55,9 @@ func NewLifecycleAssessorServiceWithConfig(c cfg.LifecycleAssessmentConfig) *Lif
 
 // Assess performs lifecycle assessment and returns an AssessmentResult using the lifecycle decision tree logic.
 func (s *LifecycleAssessorService) Assess(ctx context.Context, in AssessmentInput) (*AssessmentResult, error) {
+	if in.Now.IsZero() {
+		in.Now = time.Now()
+	}
 	res, err := s.assessInternal(ctx, in)
 	if err != nil || res == nil {
 		return res, err
@@ -73,12 +76,8 @@ func (s *LifecycleAssessorService) applyDormantBurst(in AssessmentInput, res *As
 	default:
 		return res
 	}
-	now := in.Now
-	if now.IsZero() {
-		now = time.Now()
-	}
 	window := time.Duration(s.rules.RecentStableWindowDays) * 24 * time.Hour
-	b := in.Analysis.DormantBurst(now, window, window)
+	b := in.Analysis.DormantBurst(in.Now, window, window)
 	if b == nil {
 		return res
 	}
@@ -96,6 +95,7 @@ func sigAbsent(name string) Signal { return Signal{Name: name, Role: SignalAbsen
 func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in AssessmentInput) (*AssessmentResult, error) {
 	analysis := in.Analysis
 	scores := in.Scores
+	now := in.Now
 	trace := []string{"start lifecycle assessment"}
 	// 0. Scheduled EOL (advance notice)
 	if in.EOL.IsPlannedEOL() {
@@ -204,7 +204,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 
 	// 2. Data validity check — residual vulnerability override
 	if len(scores) == 0 {
-		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis) {
+		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis, now) {
 			trace = append(trace, "scorecard_missing residual_vuln_override")
 			signals := []Signal{commitSignal(analysis), sigAbsent(SignalMaintainedScore)}
 			signals = append(signals, s.collectAdvisorySignals(analysis)...)
@@ -217,7 +217,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 	vulnScore := s.getScoreValue(scores, "Vulnerabilities")
 
 	if maintainedScore < 0 || vulnScore < 0 {
-		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis) {
+		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis, now) {
 			trace = append(trace, "scorecard_incomplete residual_vuln_override")
 			signals := []Signal{commitSignal(analysis), maintainedSignal(scores)}
 			signals = append(signals, s.collectAdvisorySignals(analysis)...)
@@ -228,13 +228,13 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 
 	// 3. Activity level determination
 	if analysis != nil {
-		hasRecentStable := analysis.HasRecentStableRelease(s.rules.RecentStableWindowDays)
-		hasRecentPrerelease := analysis.HasRecentPrereleaseRelease(s.rules.RecentPrereleaseWindowDays)
-		hasRecentHumanCommit := analysis.HasRecentHumanCommit(s.rules.MaxHumanCommitGapDays)
+		hasRecentStable := analysis.hasRecentStableReleaseAt(s.rules.RecentStableWindowDays, now)
+		hasRecentPrerelease := analysis.hasRecentPrereleaseReleaseAt(s.rules.RecentPrereleaseWindowDays, now)
+		hasRecentHumanCommit := analysis.hasRecentHumanCommitAt(s.rules.MaxHumanCommitGapDays, now)
 
 		if hasRecentStable || hasRecentPrerelease || hasRecentHumanCommit {
 			trace = append(trace, "active_path")
-			res, _ := s.assessActiveState(analysis, scores)
+			res, _ := s.assessActiveState(analysis, scores, now)
 			if res != nil {
 				res.Trace = append(trace, res.Trace...)
 			}
@@ -250,7 +250,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 
 		// 4. Detailed lifecycle classification of inactive state
 		trace = append(trace, "inactive_path")
-		res, _ := s.assessInactiveState(analysis, scores)
+		res, _ := s.assessInactiveState(analysis, scores, now)
 		if res != nil {
 			res.Trace = append(trace, res.Trace...)
 		}
@@ -269,19 +269,19 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 // - analysis not nil
 // - Days since last human commit > EolDays
 // - advisory count >= ResidualAdvisoryThreshold
-func (s *LifecycleAssessorService) shouldOverrideToEOLDueToResidualVulns(a *Analysis) bool {
+func (s *LifecycleAssessorService) shouldOverrideToEOLDueToResidualVulns(a *Analysis, now time.Time) bool {
 	if a == nil || a.RepoState == nil {
 		return false
 	}
 	// Require actual commit data to prove dormancy. When LatestHumanCommit is nil
-	// (e.g., no GITHUB_TOKEN), GetDaysSinceLastHumanCommit returns 9999 which
+	// (e.g., no GITHUB_TOKEN), daysSinceLastHumanCommitAt returns 9999 which
 	// would falsely satisfy the dormancy threshold — that is absence of evidence,
 	// not evidence of inactivity.
 	if a.RepoState.LatestHumanCommit == nil {
 		return false
 	}
 	// Commit dormancy check
-	if a.GetDaysSinceLastHumanCommit() <= s.rules.EolInactivityDays {
+	if a.daysSinceLastHumanCommitAt(now) <= s.rules.EolInactivityDays {
 		return false
 	}
 	count, _ := s.getStableOrMaxAdvisory(a)
@@ -365,9 +365,9 @@ func (s *LifecycleAssessorService) severityAwareLabel(hasHigh bool,
 }
 
 // assessActiveState handles active repository states using domain models
-func (s *LifecycleAssessorService) assessActiveState(analysis *Analysis, scores map[string]*ScoreEntity) (*AssessmentResult, error) {
-	hasRecentStable := analysis.HasRecentStableRelease(s.rules.RecentStableWindowDays)
-	hasRecentPrerelease := analysis.HasRecentPrereleaseRelease(s.rules.RecentPrereleaseWindowDays)
+func (s *LifecycleAssessorService) assessActiveState(analysis *Analysis, scores map[string]*ScoreEntity, now time.Time) (*AssessmentResult, error) {
+	hasRecentStable := analysis.hasRecentStableReleaseAt(s.rules.RecentStableWindowDays, now)
+	hasRecentPrerelease := analysis.hasRecentPrereleaseReleaseAt(s.rules.RecentPrereleaseWindowDays, now)
 	isMaintenanceOk := analysis.IsMaintenanceOk()
 
 	// A recent stable/prerelease publish is the strongest activity signal.
@@ -395,9 +395,9 @@ func (s *LifecycleAssessorService) assessActiveState(analysis *Analysis, scores 
 
 // assessInactiveState performs detailed lifecycle classification of inactive states using domain models.
 // The function branches on HasCommitData() to prevent sentinel values (9999/999.0) from
-// GetDaysSinceLastHumanCommit/GetLastHumanCommitYears leaking into commit-based comparisons
+// daysSinceLastHumanCommitAt/lastHumanCommitYearsAt leaking into commit-based comparisons
 // when GITHUB_TOKEN is absent.
-func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, scores map[string]*ScoreEntity) (*AssessmentResult, error) {
+func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, scores map[string]*ScoreEntity, now time.Time) (*AssessmentResult, error) {
 	vulnScore := s.getScoreValue(scores, "Vulnerabilities")
 	maintainedScore := s.getScoreValue(scores, "Maintained")
 	hasVulnScore := vulnScore >= 0
@@ -407,8 +407,8 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 
 	// ── Path A: Commit data available (GITHUB_TOKEN set) ──
 	if analysis.HasCommitData() {
-		daysSinceLastHumanCommit := analysis.GetDaysSinceLastHumanCommit()
-		lastHumanCommitYears := analysis.GetLastHumanCommitYears()
+		daysSinceLastHumanCommit := analysis.daysSinceLastHumanCommitAt(now)
+		lastHumanCommitYears := analysis.lastHumanCommitYearsAt(now)
 		cSig := commitSignal(analysis)
 		mSig := maintainedSignal(scores)
 
@@ -451,7 +451,7 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 				Signals: []Signal{cSig, mSig}}, nil
 		}
 		if analysis.HasPublishData() {
-			daysSincePublish := analysis.GetDaysSinceLatestPublish()
+			daysSincePublish := analysis.daysSinceLatestPublishAt(now)
 			publishSig := sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))
 			if daysSincePublish <= s.rules.EolInactivityDays {
 				return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelStalled),
@@ -476,7 +476,7 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 	}
 
 	// ── Path B: No commit data (no GITHUB_TOKEN) ──
-	return s.assessInactiveNoCommitData(analysis, scores, maintainedScore, hasMaintainedScore, isMaintenanceOk)
+	return s.assessInactiveNoCommitData(analysis, scores, maintainedScore, hasMaintainedScore, isMaintenanceOk, now)
 }
 
 // assessInactiveNoCommitData classifies inactive packages when commit data is unavailable.
@@ -486,8 +486,9 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	scores map[string]*ScoreEntity,
 	maintainedScore float64,
 	hasMaintainedScore, isMaintenanceOk bool,
+	now time.Time,
 ) (*AssessmentResult, error) {
-	daysSincePublish := analysis.GetDaysSinceLatestPublish()
+	daysSincePublish := analysis.daysSinceLatestPublishAt(now)
 	advisoryCount, _ := s.getStableOrMaxAdvisory(analysis)
 	hasAdvisories := advisoryCount >= s.rules.ResidualAdvisoryThreshold && advisoryCount > 0
 	hasHighSeverity := s.hasHighSeverityAdvisories(analysis)

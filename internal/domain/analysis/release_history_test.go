@@ -172,7 +172,9 @@ func TestDetectDormantBurst_Boundaries(t *testing.T) {
 		name    string
 		pub     map[string]string
 		version string
-		want    bool
+		// minSilence defaults to a year when zero.
+		minSilence time.Duration
+		want       bool
 	}{
 		{name: "silence exactly minSilence fires",
 			pub:     map[string]string{"1.0.0": at(0), "1.0.1": at(year), "2.0.1": at(year + time.Minute)},
@@ -209,6 +211,15 @@ func TestDetectDormantBurst_Boundaries(t *testing.T) {
 		{name: "build metadata is not a prerelease",
 			pub:     map[string]string{"1.0.0": at(0), "1.0.1": at(2 * year), "2.0.1+build.5": at(2*year + time.Hour)},
 			version: "1.0.1", want: true},
+		{name: "one-day silence: a gap of exactly a day is the silence, not part of the burst",
+			pub:     map[string]string{"1.0.0": at(0), "1.0.1": at(24 * time.Hour), "2.0.1": at(24*time.Hour + time.Minute)},
+			version: "1.0.1", minSilence: 24 * time.Hour, want: true},
+		{name: "one-day silence: second line exactly at the window edge still fires",
+			pub:     map[string]string{"1.0.0": at(0), "1.0.1": at(24 * time.Hour), "2.0.1": at(48 * time.Hour)},
+			version: "1.0.1", minSilence: 24 * time.Hour, want: true},
+		{name: "one-day silence: a 23-hour gap joins the burst, so there is no silence",
+			pub:     map[string]string{"1.0.0": at(0), "1.0.1": at(23 * time.Hour), "2.0.1": at(23*time.Hour + time.Minute)},
+			version: "1.0.1", minSilence: 24 * time.Hour, want: false},
 		{name: "non-numeric versions count as no line",
 			pub:     map[string]string{"1.0.0": at(0), "1.0.1": at(2 * year), "next": at(2*year + time.Minute)},
 			version: "1.0.1", want: false},
@@ -216,7 +227,11 @@ func TestDetectDormantBurst_Boundaries(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := DetectDormantBurst(history(t, tt.pub), tt.version, now, year, 0)
+			minSilence := tt.minSilence
+			if minSilence == 0 {
+				minSilence = year
+			}
+			got := DetectDormantBurst(history(t, tt.pub), tt.version, now, minSilence, 0)
 			if (got != nil) != tt.want {
 				t.Fatalf("fired = %v, want %v (%+v)", got != nil, tt.want, got)
 			}

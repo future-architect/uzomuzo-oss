@@ -28,10 +28,10 @@ func burstHistory(now time.Time) *ReleaseHistory {
 // of the package.
 func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 	t.Parallel()
-	// UTC, not local time: AddDate across a DST change would shift the silence
-	// by an hour and the day count by one. Not a fixed date: the activity
-	// branches compare against the wall clock.
-	now := time.Now().UTC()
+	// A fixed date years in the past: every age the assessor checks reads
+	// AssessmentInput.Now, so this table must not depend on the wall clock. UTC,
+	// so AddDate never crosses a DST change.
+	now := time.Date(2021, 11, 5, 0, 0, 0, 0, time.UTC)
 	recent := now.AddDate(0, 0, -10)
 	activeRepo := &RepoState{DaysSinceLastCommit: 5, LatestHumanCommit: &recent, CommitStats: &CommitStats{}}
 	healthy := map[string]*ScoreEntity{

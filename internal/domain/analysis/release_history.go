@@ -68,7 +68,7 @@ type DormantBurst struct {
 //
 // Only releases published at or before now are considered. The burst starts at
 // the earliest release reachable from version through gaps of at most
-// DormantBurstWindow, and holds every release published within
+// DormantBurstWindow and shorter than minSilence, and holds every release published within
 // DormantBurstWindow of that start. Releases after version count, so a burst
 // becomes visible once its second line is published, not at the first.
 func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSilence, maxAge time.Duration) *DormantBurst {
@@ -112,7 +112,13 @@ func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSil
 		return nil
 	}
 	first := idx
-	for first > 0 && all[first].at.Sub(all[first-1].at) <= DormantBurstWindow {
+	for first > 0 {
+		gap := all[first].at.Sub(all[first-1].at)
+		// A gap long enough to count as the silence ends the walk even when it
+		// also fits DormantBurstWindow (minSilence of a day or less).
+		if gap > DormantBurstWindow || (minSilence > 0 && gap >= minSilence) {
+			break
+		}
 		first--
 	}
 	// The burst is bounded by DormantBurstWindow from its first release, so a

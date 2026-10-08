@@ -20,8 +20,10 @@ type AssessmentInput struct {
 	Analysis *Analysis
 	Scores   map[string]*ScoreEntity
 	EOL      EOLStatus
-	// Now is the evaluation time for time-dependent rules (ADR-0026). Zero
-	// means the wall clock.
+	// Now is the evaluation time for every age the lifecycle assessor checks
+	// (release and commit recency, days since publish, the dormant burst of
+	// ADR-0026). Zero means the wall clock. RepoState.DaysSinceLastCommit is
+	// the exception: it is computed when the repository is fetched.
 	Now time.Time
 }
 
