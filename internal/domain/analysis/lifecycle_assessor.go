@@ -624,13 +624,13 @@ func eolEvidenceSource(eol EOLStatus) string {
 // severitySummary and buildReviewNeededReason removed — Reason text is now
 // concise one-line summaries; detailed data is in Signals.
 
-// dormantBurstReason names the silence and the lines the burst touched, e.g.
-// "Released after 639 days without a release, in one burst across release
-// lines 9, 12".
+// dormantBurstReason states the risk (a possible hijacked release), the facts
+// behind it (the silence and the release lines the burst touched) and what to
+// check before using the version.
 func dormantBurstReason(b *DormantBurst) string {
 	reason := fmt.Sprintf("Possible hijacked release: published after %d days without a release, "+
-		"together with releases on release lines %s, the pattern left when a dormant npm account is "+
-		"taken over (node-ipc, rc). Before using it, check who published it and what changed "+
+		"together with releases on release lines %s, the pattern seen in takeovers of dormant npm "+
+		"packages (node-ipc, rc). Before using it, check who published it and what changed "+
 		"since the previous release.", b.SilentDays, strings.Join(b.Lines, ", "))
 	if b.Removed {
 		reason += " This version has since been removed from the registry."

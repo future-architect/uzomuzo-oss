@@ -408,7 +408,7 @@ Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `leg
 package whose every published release is yanked (see
 [ADR-0022](adr/0022-all-releases-yanked-is-not-eol.md)), and an npm version
 released together with other release lines after a year without a release,
-which is how a takeover of a dormant maintainer account has looked in past
+which is how takeovers of dormant npm packages have looked in past
 incidents (see [ADR-0026](adr/0026-dormant-release-burst.md)). Add it to `--fail-on`
 when CI should stop for a human to look, rather than only for a confirmed
 end-of-life.

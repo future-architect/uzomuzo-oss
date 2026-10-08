@@ -142,11 +142,13 @@ tooling-heavy; other populations will differ.
 - `pkg:npm/node-ipc@12.0.1` and its sibling versions are Review Needed until
   2027-05-14, with the reason "Possible hijacked release: published after 639
   days without a release, together with releases on release lines 9, 12, the
-  pattern left when a dormant npm account is taken over (node-ipc, rc). Before
+  pattern seen in takeovers of dormant npm packages (node-ipc, rc). Before
   using it, check who published it and what changed since the previous
-  release. This version has since been removed from the registry." The reason names the risk
-  and what to check, not only the observed dates: "released after 639 days"
-  alone does not tell a reader why the version needs a look.
+  release. This version has since been removed from the registry." The reason
+  names the risk and what to check, not only the observed dates: "released
+  after 639 days" alone does not tell a reader why the version needs a look.
+  It says "dormant packages", not "dormant accounts": the rule sees release
+  dates only, never the publisher's account activity.
 - **The rule fires once the second line is published, not at the first.** On
   2026-05-14 it would have become true at 14:26:01, 31 seconds after 12.0.1.
 - Every version of the burst is flagged, including the maintainer's clean
