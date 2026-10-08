@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -27,9 +28,14 @@ func TestGetPublishHistory(t *testing.T) {
 	  },
 	  "versions": {"12.0.0": {"name": "node-ipc"}}
 	}`
-	var gotPath string
+	var (
+		mu      sync.Mutex
+		gotPath string
+	)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		gotPath = r.URL.EscapedPath()
+		mu.Unlock()
 		switch r.URL.EscapedPath() {
 		case "/node-ipc", "/@solana%2Fweb3.js":
 			_, _ = w.Write([]byte(body))
@@ -59,11 +65,15 @@ func TestGetPublishHistory(t *testing.T) {
 		t.Error("12.0.0 must be installable")
 	}
 
-	if _, found, err := c.GetPublishHistory(context.Background(), "@solana/web3.js"); err != nil || !found {
-		t.Errorf("scoped: found=%v err=%v path=%s", found, err, gotPath)
+	_, found, err = c.GetPublishHistory(context.Background(), "@solana/web3.js")
+	mu.Lock()
+	path := gotPath
+	mu.Unlock()
+	if err != nil || !found {
+		t.Errorf("scoped: found=%v err=%v path=%s", found, err, path)
 	}
-	if gotPath != "/@solana%2Fweb3.js" {
-		t.Errorf("scoped path = %s, want the slash escaped", gotPath)
+	if path != "/@solana%2Fweb3.js" {
+		t.Errorf("scoped path = %s, want the slash escaped", path)
 	}
 	if h, found, err := c.GetPublishHistory(context.Background(), "missing"); err != nil || found || h != nil {
 		t.Errorf("missing: h=%v found=%v err=%v", h, found, err)

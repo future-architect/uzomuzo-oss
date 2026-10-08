@@ -71,7 +71,7 @@ const (
 	// burst.
 	SignalDaysSilentBeforeRelease = "days_silent_before_release"
 	// SignalVersionRemoved is set when the registry no longer serves the
-	// analysed version. Reported for display only.
+	// analysed version. It is shown with the burst and never changes the label.
 	SignalVersionRemoved = "version_removed_from_registry"
 )
 

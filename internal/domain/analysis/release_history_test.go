@@ -107,6 +107,10 @@ func TestDetectDormantBurst(t *testing.T) {
 			wantSilent: 639, wantLines: []string{"9", "12"}, wantVers: []string{"12.0.1", "9.2.3", "9.1.6"}, wantRemoved: true},
 		{name: "node-ipc 9.1.6 (last of the burst) fires with the same burst", h: nodeIPC, version: "9.1.6", now: afterNodeIPC, maxAge: year,
 			wantSilent: 639, wantLines: []string{"9", "12"}, wantVers: []string{"12.0.1", "9.2.3", "9.1.6"}, wantRemoved: true},
+		{name: "node-ipc 12.0.1 before the second line exists does not fire", h: nodeIPC, version: "12.0.1", now: mustTime(t, "2026-05-14T14:25:45Z"), maxAge: year, wantNil: true},
+		{name: "node-ipc 12.0.1 at the second line's publication counts only releases up to now", h: nodeIPC, version: "12.0.1", now: mustTime(t, "2026-05-14T14:26:01Z"), maxAge: year,
+			wantSilent: 639, wantLines: []string{"9", "12"}, wantVers: []string{"12.0.1", "9.2.3"}, wantRemoved: true},
+		{name: "node-ipc 9.1.6 judged before its own publication does not fire", h: nodeIPC, version: "9.1.6", now: mustTime(t, "2026-05-14T14:26:01Z"), maxAge: year, wantNil: true},
 		{name: "node-ipc 12.0.0, a single release, does not fire", h: nodeIPC, version: "12.0.0", now: afterNodeIPC, maxAge: 0, wantNil: true},
 		{name: "node-ipc 14.0.0 follows the burst by 102 days and does not fire", h: nodeIPC, version: "14.0.0", now: afterNodeIPC, maxAge: year, wantNil: true},
 		{name: "rc fires across 1 and 2", h: rc, version: "1.2.9", now: afterRC, maxAge: year,
@@ -253,6 +257,8 @@ func TestReleaseLine(t *testing.T) {
 		{"0", "", false},
 		{"0.x", "", false},
 		{"latest", "", false},
+		{"+1.0.0", "", false},
+		{"-1.0.0", "", false},
 		{"", "", false},
 	}
 	for _, tt := range tests {

@@ -67,13 +67,14 @@ type DormantBurst struct {
 // The burst starts at the earliest release reachable from version through gaps
 // of at most DormantBurstWindow, and holds every release published within
 // DormantBurstWindow of that start. Releases after version count, so a burst
-// becomes visible once its second line is published, not at the first.
+// becomes visible once its second line is published, not at the first;
+// releases after now are ignored, as is a version published after now.
 func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSilence, maxAge time.Duration) *DormantBurst {
 	if h == nil || version == "" {
 		return nil
 	}
 	at, ok := h.PublishedAt[version]
-	if !ok || at.IsZero() {
+	if !ok || at.IsZero() || at.After(now) {
 		return nil
 	}
 	if maxAge > 0 && now.Sub(at) > maxAge {
@@ -86,7 +87,8 @@ func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSil
 	}
 	all := make([]rel, 0, len(h.PublishedAt))
 	for v, t := range h.PublishedAt {
-		if t.IsZero() {
+		// A release after now did not exist yet at the moment being judged.
+		if t.IsZero() || t.After(now) {
 			continue
 		}
 		all = append(all, rel{v, t})
@@ -168,7 +170,11 @@ func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSil
 // "0.minor" for versions below 1.0, where each minor is its own line under
 // caret ranges. ok is false when v does not start with a numeric major.
 func releaseLine(v string) (string, bool) {
-	parts := strings.SplitN(strings.TrimPrefix(v, "v"), ".", 3)
+	core := strings.TrimPrefix(v, "v")
+	if core == "" || core[0] < '0' || core[0] > '9' {
+		return "", false
+	}
+	parts := strings.SplitN(core, ".", 3)
 	major, err := strconv.Atoi(parts[0])
 	if err != nil {
 		return "", false
@@ -208,6 +214,8 @@ func lineLess(a, b string) bool {
 	return pa[1] < pb[1]
 }
 
+// lineKey splits a line produced by releaseLine, which is always numeric, so
+// the Atoi errors cannot occur.
 func lineKey(l string) [2]int {
 	if rest, ok := strings.CutPrefix(l, "0."); ok {
 		minor, _ := strconv.Atoi(rest)

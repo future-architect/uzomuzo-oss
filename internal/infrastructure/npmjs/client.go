@@ -424,7 +424,7 @@ func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
 			continue
 		}
 		t, err := time.Parse(time.RFC3339, s)
-		if err != nil {
+		if err != nil || t.IsZero() {
 			continue
 		}
 		h.PublishedAt[v] = t

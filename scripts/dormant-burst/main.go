@@ -2,7 +2,7 @@
 // the numbers in ADR-0026 can be reproduced. It does two things:
 //
 //   - cases: evaluate each incident version listed in cases.json, at the moment
-//     one hour after its publication (what was knowable on the day).
+//     one day after its publication (what was knowable on the day).
 //   - lockfile: evaluate every (name, version) in an npm package-lock.json at a
 //     given date, with and without the age limit, and print every hit.
 //

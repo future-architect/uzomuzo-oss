@@ -12,6 +12,7 @@ func FuzzParsePublishHistory(f *testing.F) {
 	f.Add(`{"time":{"unpublished":{"time":"2020-01-01T00:00:00Z"}}}`)
 	f.Add(`{"versions":{"1.0.0":"not an object"}}`)
 	f.Add(`[]`)
+	f.Add(`{"time":{"1.0.0":"0001-01-01T00:00:00Z"}}`)
 	f.Fuzz(func(t *testing.T, body string) {
 		h, err := parsePublishHistory(strings.NewReader(body))
 		if err != nil {

@@ -1,7 +1,7 @@
 # 0026. A release burst across lines after a long silence needs a human
 
 Date: 2026-10-08
-Status: Proposed
+Status: Accepted
 
 ## Context
 
@@ -59,8 +59,10 @@ EOL-Scheduled and Review Needed for another reason are left as they are, so a
 `--fail-on stalled,eol-effective` gate keeps firing for a burst version; a gate
 that should also catch bursts adds `review-needed`. An earlier draft placed the
 rule before the archive branch and turned an archived (Stalled) or EOL-Effective
-package into Review Needed, which silently disarmed those gates. If the registry no longer serves the version, that is added
-to the reason for display; it is never part of the decision.
+package into Review Needed, which silently disarmed those gates.
+
+If the registry no longer serves the version, that is added to the reason for
+display; it is never part of the decision.
 
 npm only. The publish times come from the full packument
 (`GET https://registry.npmjs.org/<name>`, one request per distinct package,
