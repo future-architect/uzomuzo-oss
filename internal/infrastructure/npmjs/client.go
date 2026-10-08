@@ -52,8 +52,9 @@ import (
 type Client struct {
 	baseURL string
 	http    *httpclient.Client
-	// lookupTimeout, when positive, bounds one whole GetPublishHistory call:
-	// every retry and the body decode, not only a single attempt.
+	// lookupTimeout, when positive, is one deadline for a GetPublishHistory
+	// call's HTTP work: every attempt, the waits between retries, and reading
+	// the body. Decoding a body already read is not interrupted.
 	lookupTimeout time.Duration
 }
 
@@ -65,7 +66,7 @@ func NewClient() *Client {
 	}
 }
 
-// packumentTimeout bounds a full-packument lookup, retries and decoding
+// packumentTimeout bounds a full-packument lookup's HTTP work, retries
 // included. NewClient's 3-second limit covers the whole body, and the
 // packument of a package with thousands of versions runs to megabytes.
 const packumentTimeout = 20 * time.Second

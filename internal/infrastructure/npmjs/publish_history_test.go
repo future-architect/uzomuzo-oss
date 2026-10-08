@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -130,27 +131,37 @@ func TestGetPublishHistory_ServerError(t *testing.T) {
 	}
 }
 
-// TestGetPublishHistory_LookupTimeoutSpansRetries pins that lookupTimeout bounds
-// the whole lookup: a registry that never answers is retried, but the call
-// returns once the single deadline passes.
+// TestGetPublishHistory_LookupTimeoutSpansRetries pins that lookupTimeout is one
+// deadline across retries: the first attempt gets a 503 and is retried, the
+// second never answers, and the call ends at the shared deadline instead of
+// starting a fresh per-attempt limit.
 func TestGetPublishHistory_LookupTimeoutSpansRetries(t *testing.T) {
 	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		<-r.Context().Done()
 	}))
 	t.Cleanup(srv.Close)
 	c := NewClient()
 	c.SetBaseURL(srv.URL)
-	c.lookupTimeout = 200 * time.Millisecond
+	c.lookupTimeout = time.Second
 	start := time.Now()
 	_, found, err := c.GetPublishHistory(context.Background(), "hang")
+	elapsed := time.Since(start)
 	if err == nil || found {
 		t.Fatalf("want an error, got found=%v err=%v", found, err)
 	}
-	// NewClient's per-attempt limit is 3 s, so without the lookup deadline the
-	// call would take at least that long before its first retry.
-	if elapsed := time.Since(start); elapsed > 2*time.Second {
-		t.Errorf("lookup took %v, want it bounded by lookupTimeout", elapsed)
+	if got := requests.Load(); got != 2 {
+		t.Errorf("requests = %d, want 2 (a retry, then the deadline)", got)
+	}
+	// A per-attempt limit of the same 1 s would let the second attempt run its
+	// full second after the retry wait and then try a third time.
+	if elapsed > 1800*time.Millisecond {
+		t.Errorf("lookup took %v, want it to end at the shared 1 s deadline", elapsed)
 	}
 }
 
