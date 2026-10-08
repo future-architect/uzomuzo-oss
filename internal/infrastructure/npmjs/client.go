@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -51,6 +52,10 @@ import (
 type Client struct {
 	baseURL string
 	http    *httpclient.Client
+	// lookupTimeout, when positive, is one deadline for a GetPublishHistory
+	// call's HTTP work: every attempt, the waits between retries, and reading
+	// the body. Decoding a body already read is not interrupted.
+	lookupTimeout time.Duration
 }
 
 // NewClient creates a new npmjs Client with sane defaults.
@@ -60,6 +65,30 @@ func NewClient() *Client {
 		http:    httpclient.NewClient(&http.Client{Timeout: 3 * time.Second}, httpclient.RegistryRetryConfig()),
 	}
 }
+
+// packumentTimeout bounds a full-packument lookup's HTTP work, retries
+// included. NewClient's 3-second limit covers the whole body, and the
+// packument of a package with thousands of versions runs to megabytes.
+const packumentTimeout = 20 * time.Second
+
+// maxPackumentBytes caps a packument read. The largest seen, react-native and
+// typescript, are about 16 MB uncompressed; a body cut at the cap fails to
+// decode and the package is treated as not asked.
+const maxPackumentBytes = 64 << 20
+
+// NewPackumentClient creates a Client for GetPublishHistory, whose full-packument
+// responses need a longer timeout than NewClient's metadata lookups.
+func NewPackumentClient() *Client {
+	c := NewClient()
+	c.http = httpclient.NewClient(&http.Client{Timeout: packumentTimeout}, httpclient.RegistryRetryConfig())
+	// The per-attempt limit alone lets two retries stretch one lookup to about
+	// a minute, and the scan waits for it.
+	c.lookupTimeout = packumentTimeout
+	return c
+}
+
+// SetBaseURL overrides the registry base URL (useful for tests).
+func (c *Client) SetBaseURL(u string) { c.baseURL = strings.TrimRight(u, "/") }
 
 // SetHTTPClient overrides the underlying HTTP client (useful for tests).
 // Uses RegistryRetryConfig so injected test clients exercise the same retry
@@ -290,6 +319,59 @@ func (c *Client) GetDeprecation(ctx context.Context, namespace, name, version st
 	return info, true, nil
 }
 
+// PublishHistory is the publish time of every version npm has recorded for a
+// package, and the subset it still serves.
+type PublishHistory struct {
+	// PublishedAt maps version to publish time. npm keeps an unpublished
+	// version's entry in the packument's "time" object, so this can list
+	// versions that are no longer installable.
+	PublishedAt map[string]time.Time
+	// Installable holds the versions present in the packument's "versions".
+	// It is nil when "versions" is missing or null, meaning unknown.
+	Installable map[string]struct{}
+}
+
+// GetPublishHistory fetches the full packument of the named package ("name" or
+// "@scope/name") and returns its per-version publish times. The abbreviated
+// install document has no per-version times, so the full one is needed.
+// Returns found=false when the package does not exist.
+//
+// Example: https://registry.npmjs.org/node-ipc lists 12.0.1 under "time"
+// (2026-05-14T14:25:30Z) but not under "versions", because it was removed.
+func (c *Client) GetPublishHistory(ctx context.Context, fullName string) (*PublishHistory, bool, error) {
+	fullName = strings.TrimSpace(fullName)
+	if fullName == "" {
+		return nil, false, nil
+	}
+	if c.lookupTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.lookupTimeout)
+		defer cancel()
+	}
+	endpoint := fmt.Sprintf("%s/%s", c.baseURL, url.PathEscape(fullName))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, false, fmt.Errorf("npm request build failed: %w", err)
+	}
+	req.Header.Set("User-Agent", "uzomuzo-npmjs-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
+	resp, err := c.http.Do(ctx, req)
+	if err != nil {
+		return nil, false, fmt.Errorf("npm http failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, false, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, fmt.Errorf("npm HTTP %d", resp.StatusCode)
+	}
+	h, err := parsePublishHistory(io.LimitReader(resp.Body, maxPackumentBytes))
+	if err != nil {
+		return nil, false, fmt.Errorf("npm packument %q: %w", fullName, err)
+	}
+	return h, true, nil
+}
+
 // extractNpmSuccessor tries to extract a successor package name from a deprecated message.
 //
 // Intentional limitations:
@@ -324,4 +406,46 @@ func extractNpmSuccessor(msg string) string {
 		}
 	}
 	return ""
+}
+
+// parsePublishHistory decodes the "time" and "versions" keys of a packument.
+// Version manifests are decoded into empty structs so that only their keys are
+// kept: a packument with thousands of versions runs to megabytes, and the
+// manifests are not needed here.
+func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
+	var doc struct {
+		Time     map[string]json.RawMessage `json:"time"`
+		Versions map[string]struct{}        `json:"versions"`
+	}
+	if err := json.NewDecoder(r).Decode(&doc); err != nil {
+		return nil, fmt.Errorf("npm decode failed: %w", err)
+	}
+	h := &PublishHistory{PublishedAt: make(map[string]time.Time, len(doc.Time))}
+	// A missing or null "versions" leaves Installable nil (unknown), so a
+	// burst is not reported as removed without evidence; "{}" stays known-empty.
+	if doc.Versions != nil {
+		h.Installable = make(map[string]struct{}, len(doc.Versions))
+	}
+	for v, raw := range doc.Time {
+		// "created" and "modified" are package-level; "unpublished" is an object
+		// written when the whole package is unpublished.
+		if v == "created" || v == "modified" || v == "unpublished" {
+			continue
+		}
+		// An entry that is not an RFC 3339 string carries no publish time; it is
+		// skipped rather than failing the whole package.
+		var s string
+		if err := json.Unmarshal(raw, &s); err != nil {
+			continue
+		}
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil || t.IsZero() {
+			continue
+		}
+		h.PublishedAt[v] = t
+	}
+	for v := range doc.Versions {
+		h.Installable[v] = struct{}{}
+	}
+	return h, nil
 }

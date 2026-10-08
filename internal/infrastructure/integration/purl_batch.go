@@ -106,6 +106,11 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// Cargo only, and deliberately never an EOL state. See ADR-0025.
 	s.enrichAdvisoryDBState(ctx, analyses)
 
+	// Registry release history (best-effort): npm's publish time for every
+	// version, removed ones included, read by the lifecycle assessor to detect a
+	// release burst after a long silence. See ADR-0026.
+	s.enrichReleaseHistory(ctx, analyses)
+
 	// Manifest-level license fallback (best-effort): when deps.dev and GitHub
 	// `licenseInfo` left ProjectLicense or RequestedVersionLicenses missing /
 	// non-SPDX, consult the package's own ecosystem manifest. Currently wires

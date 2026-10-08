@@ -96,6 +96,14 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 - Code: `osv.Client.QueryPackage` (`internal/infrastructure/osv/client.go`), `IntegrationService.enrichAdvisoryDBState` (`internal/infrastructure/integration/populate_advisorydb_state.go`), `analysis.ClassifyUnmaintained` (`internal/domain/analysis/advisorydb.go`). See [ADR-0025](adr/0025-rustsec-unmaintained-is-a-weak-cargo-signal.md)
 - Docs: <https://google.github.io/osv.dev/post-v1-query/>
 
+#### npm registry — Packument (GET https://registry.npmjs.org/<name>)
+
+- Request: the full packument (scoped names as `@scope%2Fname`); the abbreviated install document has no per-version times
+- Fields consumed: `time` (per-version publish times, `created` / `modified` / `unpublished` skipped), the key set of `versions`
+- Purpose: record when every version was published, including unpublished ones whose `time` entry npm keeps (`Analysis.ReleaseHistory`); the lifecycle assessor reads it against the analysed version to detect a release burst across lines after a long silence. One request per distinct npm package, for versioned PURLs only
+- Code: `npmjs.Client.GetPublishHistory` (`internal/infrastructure/npmjs/client.go`), `IntegrationService.enrichReleaseHistory` (`internal/infrastructure/integration/populate_release_history.go`), `analysis.DetectDormantBurst` (`internal/domain/analysis/release_history.go`). See [ADR-0026](adr/0026-dormant-release-burst.md)
+- Docs: <https://github.com/npm/registry/blob/main/docs/responses/package-metadata.md>
+
 #### GitHub — GraphQL (POST https://api.github.com/graphql)
 
 - Query repository(owner, name) fields: `isArchived`, `isDisabled`, `isFork`, `stargazerCount`, `forkCount`, `description`, `homepageUrl`, `primaryLanguage{name}`, `licenseInfo{spdxId, name}`, `repositoryTopics(first:20){nodes{topic{name}}}`, `defaultBranchRef{name, target{... on Commit { history(first:N){nodes{committedDate, author{user{login}}}}}}}`, `rateLimit{cost, remaining, resetAt}`

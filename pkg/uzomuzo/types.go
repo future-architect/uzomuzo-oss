@@ -63,6 +63,14 @@ const (
 	// SignalAdvisoryDBUnmaintained carries the advisory ID that reported the
 	// whole package unmaintained (see AdvisoryDBState).
 	SignalAdvisoryDBUnmaintained = domain.SignalAdvisoryDBUnmaintained
+
+	// SignalDormantReleaseBurst lists the releases published together across
+	// release lines after a long silence; SignalDaysSilentBeforeRelease is that
+	// silence in days; SignalVersionRemoved marks a version the registry no
+	// longer serves (see ADR-0026).
+	SignalDormantReleaseBurst     = domain.SignalDormantReleaseBurst
+	SignalDaysSilentBeforeRelease = domain.SignalDaysSilentBeforeRelease
+	SignalVersionRemoved          = domain.SignalVersionRemoved
 )
 
 // RepoState contains repository activity & archive/disable flags.
@@ -78,10 +86,20 @@ type RegistryState = domain.RegistryState
 // is a different claim from "ran and found nothing".
 type AdvisoryDBState = domain.AdvisoryDBState
 
+// ReleaseHistory is the registry's publish time for every version of a
+// package, including removed ones (npm only; see ADR-0026). Nil means the
+// lookup did not run or failed.
+type ReleaseHistory = domain.ReleaseHistory
+
+// DormantBurst describes a release published across release lines after a long
+// silence (see ADR-0026).
+type DormantBurst = domain.DormantBurst
+
 // Registry names recorded in RegistryState.Registry.
 const (
 	RegistryPyPI   = domain.RegistryPyPI
 	RegistryCrates = domain.RegistryCrates
+	RegistryNpm    = domain.RegistryNpm
 )
 
 // ReleaseInfo contains prioritized release channel/version metadata.
