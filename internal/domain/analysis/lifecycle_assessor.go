@@ -83,7 +83,7 @@ func (s *LifecycleAssessorService) applyDormantBurst(in AssessmentInput, res *As
 		return res
 	}
 	trace := append(append([]string(nil), res.Trace...), "dormant_release_burst_review_needed (was "+res.Label+")")
-	return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelReviewNeeded), Reason: dormantBurstReason(b), Trace: trace, Signals: dormantBurstSignals(b)}
+	return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelReviewNeeded), Reason: dormantBurstReason(b), Trace: trace, Signals: append(dormantBurstSignals(b), res.Signals...)}
 }
 
 // sig creates a Signal with Role=SignalUsed.

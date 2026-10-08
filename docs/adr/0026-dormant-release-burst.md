@@ -52,7 +52,8 @@ When the label is **Active or Legacy-Safe** and the analysed version was publish
 3. no more than `RecentStableWindowDays` ago,
 
 the label becomes **Review Needed**, with the silence, the lines and the burst in
-the reason and signals. Prereleases (`2.0.0-alpha.0`) open no line: `^2` never
+the reason and signals. The signals behind the replaced label are kept after
+them. Prereleases (`2.0.0-alpha.0`) open no line: `^2` never
 resolves to them.
 
 The rule only replaces an ok outcome. Stalled, EOL-Effective, EOL-Confirmed,

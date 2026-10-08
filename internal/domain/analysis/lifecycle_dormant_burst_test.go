@@ -114,6 +114,9 @@ func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 			if gotSignals != tt.wantBurst {
 				t.Errorf("burst signals present = %v, want %v (%v)", gotSignals, tt.wantBurst, res.Signals)
 			}
+			if tt.wantBurst && !hasSignal(res.Signals, SignalRecentStableRelease) {
+				t.Errorf("the replaced Active label's signals were dropped: %v", res.Signals)
+			}
 		})
 	}
 }
@@ -137,7 +140,8 @@ func TestApplyDormantBurst(t *testing.T) {
 		{LabelEOLScheduled, LabelEOLScheduled},
 		{LabelReviewNeeded, LabelReviewNeeded},
 	} {
-		orig := &AssessmentResult{Axis: LifecycleAxis, Label: string(tc.in), Reason: "orig", Trace: []string{"x"}}
+		orig := &AssessmentResult{Axis: LifecycleAxis, Label: string(tc.in), Reason: "orig", Trace: []string{"x"},
+			Signals: []Signal{sig(SignalRecentStableRelease, "true")}}
 		got := svc.applyDormantBurst(AssessmentInput{Analysis: a, Now: now}, orig)
 		if MaintenanceStatus(got.Label) != tc.want {
 			t.Errorf("%s -> %s, want %s", tc.in, got.Label, tc.want)
@@ -147,6 +151,11 @@ func TestApplyDormantBurst(t *testing.T) {
 		}
 		if tc.in == LabelActive && !strings.Contains(strings.Join(got.Trace, " "), "was Active") {
 			t.Errorf("trace %v does not record the replaced label", got.Trace)
+		}
+		if tc.want == LabelReviewNeeded && tc.in != tc.want {
+			if len(got.Signals) == 0 || got.Signals[0].Name != SignalDormantReleaseBurst || !hasSignal(got.Signals, SignalRecentStableRelease) {
+				t.Errorf("%s: signals = %v, want the burst first and the original signals kept", tc.in, got.Signals)
+			}
 		}
 	}
 	// The same burst a year and a day later is past the age limit.
