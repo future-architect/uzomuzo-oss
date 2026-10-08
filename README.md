@@ -227,7 +227,7 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | **EOL-Confirmed** | Registry explicitly declares end-of-life (deprecated / yanked / abandoned / relocation) | Migrate immediately |
 | **EOL-Effective** | No official EOL, but HIGH/CRITICAL unpatched vulns together with either 2+ yrs without human commits or an advisory database reporting the package unmaintained | Migrate; treat as EOL |
 | **EOL-Scheduled** | Future EOL date announced (not yet reached) | Plan migration before EOL date |
-| **Review Needed** | Insufficient data for automated classification; the registry has yanked every release, so no version is offered to normal dependency resolution; or (npm) the version was published after a year with no releases, together with versions on other major lines within a day: the way past takeovers of npm packages that had gone quiet have looked, and also how a returning maintainer's last fix to an old line can look ([ADR-0026](docs/adr/0026-dormant-release-burst.md)) | Manual investigation required |
+| **Review Needed** | Insufficient data for automated classification; the registry has yanked every release, so no version is offered to normal dependency resolution; or (npm) the version was published after a year with no releases, together with versions on other release lines (other major versions, or other minor versions below 1.0) within a day: the way past takeovers of npm packages that had gone quiet have looked, and also how a returning maintainer's last fix to an old line can look ([ADR-0026](docs/adr/0026-dormant-release-burst.md)) | Manual investigation required |
 
 <a id="assessment-precision-by-data-availability"></a>
 

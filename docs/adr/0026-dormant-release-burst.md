@@ -91,11 +91,11 @@ maintainer returning after years usually ships one release.
 The burst is a return from the state this assessor already calls "no recent
 stable release", so it reuses that threshold instead of inventing one.
 `EolInactivityDays` (730) would have missed node-ipc (639 days). The same 365
-days also cap how old a flagged version may be. The flag is about the moment of
-publication: a version that has stayed on the registry for a year has been
-installed and looked at by many people since, and the flag no longer tells the
-reader anything new. Without that cap, a legitimate pair from 2018 (`extend`
-3.0.2 and 2.0.2) would stay in Review Needed forever.
+days also cap how old a flagged version may be. This is a policy choice, not a
+measurement: the flag describes how a version was published, and a fixed cap
+keeps a one-time publication pattern from labelling a version forever. Without
+it, a legitimate pair from 2018 (`extend` 3.0.2 and 2.0.2) would stay in Review
+Needed indefinitely.
 
 ### Why Review Needed, and not a new label or verdict
 
