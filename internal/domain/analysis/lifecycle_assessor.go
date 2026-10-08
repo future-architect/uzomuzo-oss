@@ -625,17 +625,26 @@ func eolEvidenceSource(eol EOLStatus) string {
 // concise one-line summaries; detailed data is in Signals.
 
 // dormantBurstReason states the risk (a possible hijacked release), the facts
-// behind it (the silence and the release lines the burst touched) and what to
-// check before using the version.
+// behind it, the harmless reading that looks the same, and what to do: check
+// the publisher, or stay on the earlier release when the version was removed.
 func dormantBurstReason(b *DormantBurst) string {
-	reason := fmt.Sprintf("Possible hijacked release: published after %d days without a release, "+
-		"together with releases on release lines %s, the pattern seen in takeovers of dormant npm "+
-		"packages (node-ipc, rc). Before using it, check who published it and what changed "+
-		"since the previous release.", b.SilentDays, strings.Join(b.Lines, ", "))
-	if b.Removed {
-		reason += " This version has since been removed from the registry."
+	lines := make([]string, len(b.Lines))
+	for i, l := range b.Lines {
+		lines[i] = l + ".x"
 	}
-	return reason
+	reason := fmt.Sprintf("Possible hijacked release. This version came out after %d days with no release, "+
+		"as part of a set published within a day on the %s lines. Takeovers of npm packages that had "+
+		"gone quiet looked like this (node-ipc 2026, rc 2021), but so does a maintainer who returns "+
+		"and ships a last fix to an old line next to a new major.",
+		b.SilentDays, strings.Join(lines, ", "))
+	if b.Removed {
+		// npm drops the manifest of a removed version, _npmUser included, so
+		// the publisher check below is no longer possible.
+		return reason + " npm has since removed this version, so its publisher can no longer be " +
+			"looked up there; stay on the release before the silence unless the maintainer confirms this one."
+	}
+	return reason + " Before using it, check who published it (npm view <package>@<version> _npmUser) " +
+		"and what changed since the previous release."
 }
 
 func dormantBurstSignals(b *DormantBurst) []Signal {

@@ -407,9 +407,9 @@ Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `leg
 `review-needed` covers the cases uzomuzo cannot decide on its own — including a
 package whose every published release is yanked (see
 [ADR-0022](adr/0022-all-releases-yanked-is-not-eol.md)), and an npm version
-released together with other release lines after a year without a release,
-which is how takeovers of dormant npm packages have looked in past
-incidents (see [ADR-0026](adr/0026-dormant-release-burst.md)). Add it to `--fail-on`
+published after a year with no releases, together with versions on other major
+lines within a day: the way past takeovers of npm packages that had gone quiet
+(node-ipc, rc) have looked (see [ADR-0026](adr/0026-dormant-release-burst.md)). Add it to `--fail-on`
 when CI should stop for a human to look, rather than only for a confirmed
 end-of-life.
 

@@ -114,9 +114,9 @@ func signalDisplayName(name string) string {
 	case analysispkg.SignalAdvisoryDBUnmaintained:
 		return "Advisory DB: Unmaintained"
 	case analysispkg.SignalDormantReleaseBurst:
-		return "Release Burst After Silence"
+		return "Published Together After Silence"
 	case analysispkg.SignalDaysSilentBeforeRelease:
-		return "Days Silent Before Release"
+		return "Days Without Release Before"
 	case analysispkg.SignalVersionRemoved:
 		return "Version Removed From Registry"
 	default:

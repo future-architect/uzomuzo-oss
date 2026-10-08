@@ -33,6 +33,8 @@ func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 	// so AddDate never crosses a DST change.
 	now := time.Date(2021, 11, 5, 0, 0, 0, 0, time.UTC)
 	recent := now.AddDate(0, 0, -10)
+	dormant := now.AddDate(-3, 0, 0)
+	const removedReason = "Possible hijacked release. This version came out after 800 days with no release, as part of a set published within a day on the 1.x, 2.x lines. Takeovers of npm packages that had gone quiet looked like this (node-ipc 2026, rc 2021), but so does a maintainer who returns and ships a last fix to an old line next to a new major. npm has since removed this version, so its publisher can no longer be looked up there; stay on the release before the silence unless the maintainer confirms this one."
 	activeRepo := &RepoState{DaysSinceLastCommit: 5, LatestHumanCommit: &recent, CommitStats: &CommitStats{}}
 	healthy := map[string]*ScoreEntity{
 		"Maintained":      NewScoreEntity("Maintained", 10, 10, "ok"),
@@ -50,20 +52,34 @@ func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 		wantLabel  MaintenanceStatus
 		wantBurst  bool
 		wantReason string
+		// wantWasLegacy expects the trace to record a replaced Legacy-Safe label.
+		wantWasLegacy bool
 	}{
 		{
 			name:       "burst version on an active project is Review Needed, not Active",
 			analysis:   &Analysis{Package: pkg("1.0.1"), RepoState: activeRepo, ReleaseInfo: stable, ReleaseHistory: burstHistory(now)},
 			wantLabel:  LabelReviewNeeded,
 			wantBurst:  true,
-			wantReason: "Possible hijacked release: published after 800 days without a release, together with releases on release lines 1, 2, the pattern seen in takeovers of dormant npm packages (node-ipc, rc). Before using it, check who published it and what changed since the previous release. This version has since been removed from the registry.",
+			wantReason: removedReason,
 		},
 		{
 			name:       "the other version of the same burst, still installable",
 			analysis:   &Analysis{Package: pkg("2.0.1"), RepoState: activeRepo, ReleaseInfo: stable, ReleaseHistory: burstHistory(now)},
 			wantLabel:  LabelReviewNeeded,
 			wantBurst:  true,
-			wantReason: "Possible hijacked release: published after 800 days without a release, together with releases on release lines 1, 2, the pattern seen in takeovers of dormant npm packages (node-ipc, rc). Before using it, check who published it and what changed since the previous release.",
+			wantReason: "Possible hijacked release. This version came out after 800 days with no release, as part of a set published within a day on the 1.x, 2.x lines. Takeovers of npm packages that had gone quiet looked like this (node-ipc 2026, rc 2021), but so does a maintainer who returns and ships a last fix to an old line next to a new major. Before using it, check who published it (npm view <package>@<version> _npmUser) and what changed since the previous release.",
+		},
+		{
+			// During an attack deps.dev does not list the new versions yet, so the
+			// tree sees only the old stable release and an idle repository.
+			name: "a dormant repository the tree calls Legacy-Safe is Review Needed too",
+			analysis: &Analysis{Package: pkg("1.0.1"), ReleaseHistory: burstHistory(now),
+				ReleaseInfo: &ReleaseInfo{StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: now.AddDate(0, 0, -810)}},
+				RepoState:   &RepoState{DaysSinceLastCommit: 1200, LatestHumanCommit: &dormant, CommitStats: &CommitStats{}}},
+			wantLabel:     LabelReviewNeeded,
+			wantBurst:     true,
+			wantWasLegacy: true,
+			wantReason:    removedReason,
 		},
 		{
 			name:       "the release before the silence is untouched",
@@ -114,8 +130,11 @@ func TestLifecycleAssessor_DormantBurst(t *testing.T) {
 			if gotSignals != tt.wantBurst {
 				t.Errorf("burst signals present = %v, want %v (%v)", gotSignals, tt.wantBurst, res.Signals)
 			}
-			if tt.wantBurst && !hasSignal(res.Signals, SignalRecentStableRelease) {
-				t.Errorf("the replaced Active label's signals were dropped: %v", res.Signals)
+			if tt.wantBurst && !hasSignal(res.Signals, SignalLastHumanCommit) {
+				t.Errorf("the replaced label's signals were dropped: %v", res.Signals)
+			}
+			if tt.wantWasLegacy && !strings.Contains(strings.Join(res.Trace, " "), "was Legacy-Safe") {
+				t.Errorf("trace %v does not record the replaced Legacy-Safe label", res.Trace)
 			}
 		})
 	}
