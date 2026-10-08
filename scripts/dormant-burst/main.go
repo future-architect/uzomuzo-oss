@@ -1,10 +1,12 @@
-// dormant-burst replays DetectDormantBurst against live npm registry data, so
-// the numbers in ADR-0026 can be reproduced. It does two things:
+// dormant-burst replays DetectDormantBurst and DetectFreshDormantRelease
+// against live npm registry data, so the numbers in ADR-0026 and ADR-0028 can
+// be reproduced. It does two things:
 //
 //   - cases: evaluate each incident version listed in cases.json, at the moment
 //     one day after its publication (what was knowable on the day).
 //   - lockfile: evaluate every (name, version) in an npm package-lock.json at a
-//     given date, with and without the age limit, and print every hit.
+//     given date, with and without the age limit, and print every hit; then
+//     count what the fresh rule would flag.
 //
 // Usage:
 //
@@ -30,7 +32,10 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
 )
 
-const year = 365 * 24 * time.Hour
+const (
+	year = 365 * 24 * time.Hour
+	week = 7 * 24 * time.Hour
+)
 
 type testCase struct {
 	Package string `json:"package"`
@@ -39,6 +44,9 @@ type testCase struct {
 	Note    string `json:"note"`
 	Source  string `json:"source"`
 }
+
+// entry is one name@version pair from a lockfile.
+type entry struct{ name, version string }
 
 func main() {
 	if len(os.Args) < 3 {
@@ -82,28 +90,33 @@ func runCases(ctx context.Context, c *npmjs.Client, path string) {
 	must(err)
 	var cases []testCase
 	must(json.Unmarshal(raw, &cases))
-	fmt.Println("| package | version | kind | fires | silent days | lines | burst |")
-	fmt.Println("|---|---|---|---|---|---|---|")
+	fmt.Println("| package | version | kind | fires | fresh rule fires | silent days | lines | burst |")
+	fmt.Println("|---|---|---|---|---|---|---|---|")
 	for _, tc := range cases {
 		h, err := history(ctx, c, tc.Package)
 		if err != nil {
-			fmt.Printf("| %s | %s | %s | error: %v | | | |\n", tc.Package, tc.Version, tc.Kind, err)
+			fmt.Printf("| %s | %s | %s | error: %v | | | | |\n", tc.Package, tc.Version, tc.Kind, err)
 			continue
 		}
 		at, ok := h.PublishedAt[tc.Version]
 		if !ok {
-			fmt.Printf("| %s | %s | %s | no time entry | | | |\n", tc.Package, tc.Version, tc.Kind)
+			fmt.Printf("| %s | %s | %s | no time entry | | | | |\n", tc.Package, tc.Version, tc.Kind)
 			continue
 		}
 		// One day after publication: the burst window has closed, and the age
 		// limit is irrelevant. Releases published later are in the history but
 		// cannot be part of a burst that started before them.
-		b := domain.DetectDormantBurst(h, tc.Version, at.Add(24*time.Hour), year, year)
+		day := at.Add(24 * time.Hour)
+		freshMark := "no"
+		if domain.DetectFreshDormantRelease(h, tc.Version, day, year, week) != nil {
+			freshMark = "**yes**"
+		}
+		b := domain.DetectDormantBurst(h, tc.Version, day, year, year)
 		if b == nil {
-			fmt.Printf("| %s | %s | %s | no | | | |\n", tc.Package, tc.Version, tc.Kind)
+			fmt.Printf("| %s | %s | %s | no | %s | | | |\n", tc.Package, tc.Version, tc.Kind, freshMark)
 			continue
 		}
-		fmt.Printf("| %s | %s | %s | **yes** | %d | %s | %s |\n", tc.Package, tc.Version, tc.Kind,
+		fmt.Printf("| %s | %s | %s | **yes** | %s | %d | %s | %s |\n", tc.Package, tc.Version, tc.Kind, freshMark,
 			b.SilentDays, strings.Join(b.Lines, ", "), strings.Join(b.Versions, ", "))
 	}
 }
@@ -124,7 +137,6 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 		// here would report zero entries as if the evaluation had completed.
 		must(fmt.Errorf("%s: no \"packages\" map; lockfileVersion 2 or 3 is required", path))
 	}
-	type entry struct{ name, version string }
 	seen := map[entry]struct{}{}
 	names := map[string]struct{}{}
 	for k, p := range lock.Packages {
@@ -211,7 +223,9 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 		path, now.Format(time.DateOnly), evaluated, len(entries), silenceOnly, anyAge, fresh)
 	for _, h := range hits {
 		fmt.Println("  " + h)
-	} // A lookup failure shrinks the counts above; list it so a partial run is
+	}
+	printFresh(hist, entries, now)
+	// A lookup failure shrinks the counts above; list it so a partial run is
 	// not mistaken for a complete one.
 	if len(failed) > 0 {
 		sort.Strings(failed)
@@ -220,6 +234,43 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 			fmt.Println("    " + f)
 		}
 	}
+}
+
+// printFresh reports the fresh rule of ADR-0028 for the packages in the
+// lockfile. Alerts in a year: stable releases of those packages published in
+// the year before now that the rule flags at the moment they came out, which is
+// what a team adopting every release within the fresh period would see.
+// Snapshot: lockfile entries the rule flags at now, for several periods.
+func printFresh(hist map[string]*domain.ReleaseHistory, entries []entry, now time.Time) {
+	var releases, alerts int
+	for _, h := range hist {
+		for v, at := range h.PublishedAt {
+			if at.Before(now.Add(-year)) || !at.Before(now) || isPrerelease(v) {
+				continue
+			}
+			releases++
+			if domain.DetectFreshDormantRelease(h, v, at, year, week) != nil {
+				alerts++
+			}
+		}
+	}
+	fmt.Printf("  fresh rule (ADR-0028): %d of %d stable releases published in the year before %s would be flagged\n",
+		alerts, releases, now.Format(time.DateOnly))
+	for _, days := range []int{7, 30, 90} {
+		n := 0
+		for _, e := range entries {
+			if h := hist[e.name]; h != nil && domain.DetectFreshDormantRelease(h, e.version, now, year, time.Duration(days)*24*time.Hour) != nil {
+				n++
+			}
+		}
+		fmt.Printf("  fresh rule with a %d-day period: %d lockfile entries flagged at %s\n", days, n, now.Format(time.DateOnly))
+	}
+}
+
+// isPrerelease mirrors the domain rule: a "-" before any "+" build metadata.
+func isPrerelease(v string) bool {
+	core, _, _ := strings.Cut(v, "+")
+	return strings.Contains(core, "-")
 }
 
 // afterSilence reports whether version was published at least a year after
