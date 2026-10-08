@@ -58,6 +58,15 @@ const (
 	// SignalAdvisoryDBUnmaintained carries the advisory ID of a third-party
 	// advisory database's unmaintained marker (see AdvisoryDBState).
 	SignalAdvisoryDBUnmaintained = "advisory_db_unmaintained"
+	// SignalDormantReleaseBurst lists the releases published together, across
+	// release lines, after a long silence (see DormantBurst).
+	SignalDormantReleaseBurst = "dormant_release_burst"
+	// SignalDaysSilentBeforeRelease is the silence, in days, that preceded the
+	// burst.
+	SignalDaysSilentBeforeRelease = "days_silent_before_release"
+	// SignalVersionRemoved is set when the registry no longer serves the
+	// analysed version. Reported for display only.
+	SignalVersionRemoved = "version_removed_from_registry"
 )
 
 // AssessmentResult is the normalized output for a single axis assessment.

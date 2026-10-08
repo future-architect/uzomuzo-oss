@@ -74,6 +74,11 @@ type Analysis struct {
 	// own assertions) and from EOL (primary-source lifecycle declarations).
 	AdvisoryDBState *AdvisoryDBState
 
+	// ReleaseHistory holds the registry's publish time for every version of the
+	// package, including removed ones. Read against Package.Version to detect a
+	// release burst after a long silence (see DetectDormantBurst).
+	ReleaseHistory *ReleaseHistory
+
 	// Release information
 	ReleaseInfo *ReleaseInfo
 
@@ -316,6 +321,15 @@ func (a *Analysis) AdvisoryDBUnmaintained() bool {
 // published release of this package. See RegistryState.
 func (a *Analysis) AllReleasesYanked() bool {
 	return a != nil && a.RegistryState != nil && a.RegistryState.AllReleasesYanked
+}
+
+// DormantBurst reports whether the analysed version came out in a burst across
+// release lines after a long silence. See DetectDormantBurst for the parameters.
+func (a *Analysis) DormantBurst(now time.Time, minSilence, maxAge time.Duration) *DormantBurst {
+	if a == nil || a.Package == nil {
+		return nil
+	}
+	return DetectDormantBurst(a.ReleaseHistory, a.Package.Version, now, minSilence, maxAge)
 }
 
 // IsDisabled returns whether the repository is disabled

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	cfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
@@ -99,6 +100,22 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		signalSource := eolEvidenceSource(in.EOL)
 		trace = append(trace, "primary_source_eol override")
 		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLConfirmed), Reason: reason, Trace: trace, Signals: []Signal{sig(SignalEOLSource, signalSource)}}, nil
+	}
+
+	// 1.2 Release burst after a long silence (the analysed version itself).
+	// A dormant package that suddenly publishes on several release lines at once
+	// is the shape a takeover leaves; a person decides whether this release is
+	// the maintainer's. Placed before the archive and activity branches, which
+	// describe the project and would otherwise report the burst itself as
+	// "recent release, Active". Silence and age both use RecentStableWindowDays:
+	// the burst is a return from the state this assessor already calls "no
+	// recent release". See ADR-0026.
+	if analysis != nil {
+		window := time.Duration(s.rules.RecentStableWindowDays) * 24 * time.Hour
+		if b := analysis.DormantBurst(time.Now(), window, window); b != nil {
+			trace = append(trace, "dormant_release_burst_review_needed")
+			return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelReviewNeeded), Reason: dormantBurstReason(b), Trace: trace, Signals: dormantBurstSignals(b)}, nil
+		}
 	}
 
 	// 1.25 Package-level distribution withdrawal (every published release yanked).
@@ -593,3 +610,26 @@ func eolEvidenceSource(eol EOLStatus) string {
 
 // severitySummary and buildReviewNeededReason removed — Reason text is now
 // concise one-line summaries; detailed data is in Signals.
+
+// dormantBurstReason names the silence and the lines the burst touched, e.g.
+// "Released after 639 days without a release, in one burst across release
+// lines 9, 12".
+func dormantBurstReason(b *DormantBurst) string {
+	reason := fmt.Sprintf("Released after %d days without a release, in one burst across release lines %s",
+		b.SilentDays, strings.Join(b.Lines, ", "))
+	if b.Removed {
+		reason += "; this version has since been removed from the registry"
+	}
+	return reason
+}
+
+func dormantBurstSignals(b *DormantBurst) []Signal {
+	signals := []Signal{
+		sig(SignalDormantReleaseBurst, strings.Join(b.Versions, ", ")),
+		sig(SignalDaysSilentBeforeRelease, fmt.Sprintf("%d", b.SilentDays)),
+	}
+	if b.Removed {
+		signals = append(signals, sig(SignalVersionRemoved, "true"))
+	}
+	return signals
+}

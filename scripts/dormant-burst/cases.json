@@ -1,0 +1,17 @@
+[
+  {"package": "node-ipc", "version": "12.0.1", "kind": "dormant-takeover", "note": "expired maintainer e-mail domain re-registered, dormant co-maintainer account", "source": "https://depi.security/blog/20260514-node-ipc-compromised/"},
+  {"package": "rc", "version": "1.2.9", "kind": "dormant-takeover", "note": "account takeover, same day as coa", "source": "https://www.rapid7.com/blog/post/2021/11/05/new-npm-library-hijacks-coa-and-rc/"},
+  {"package": "coa", "version": "2.0.3", "kind": "dormant-takeover", "note": "account takeover", "source": "https://www.rapid7.com/blog/post/2021/11/05/new-npm-library-hijacks-coa-and-rc/"},
+  {"package": "is", "version": "3.3.1", "kind": "dormant-takeover", "note": "stale maintainer access re-granted via a phished maintainer", "source": "https://snyk.io/blog/npm-supply-chain-attack-via-open-source-maintainer-compromise/"},
+  {"package": "event-stream", "version": "3.3.5", "kind": "dormant-takeover", "note": "maintainership handed to the attacker; one line only", "source": "https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident"},
+  {"package": "rand-user-agent", "version": "2.0.83", "kind": "dormant-takeover", "note": "leaked automation token; silence was 195 days", "source": "https://www.bleepingcomputer.com/news/security/supply-chain-attack-hits-npm-package-with-45-000-weekly-downloads/"},
+  {"package": "colors", "version": "1.4.1", "kind": "maintainer-sabotage", "note": "the maintainer's own release", "source": ""},
+  {"package": "faker", "version": "6.6.6", "kind": "maintainer-sabotage", "note": "the maintainer's own release", "source": ""},
+  {"package": "ua-parser-js", "version": "0.7.29", "kind": "active-takeover", "note": "account takeover", "source": "https://github.com/advisories/GHSA-pjwm-rvh2-c87w"},
+  {"package": "eslint-scope", "version": "3.7.2", "kind": "active-takeover", "note": "reused password, no 2FA", "source": "https://eslint.org/blog/2018/07/postmortem-for-malicious-package-publishes/"},
+  {"package": "eslint-config-prettier", "version": "9.1.1", "kind": "active-takeover", "note": "phishing", "source": "https://snyk.io/blog/maintainers-of-eslint-prettier-plugin-attacked-via-npm-supply-chain-malware/"},
+  {"package": "chalk", "version": "5.6.1", "kind": "active-takeover", "note": "phishing (npmjs.help)", "source": ""},
+  {"package": "debug", "version": "4.4.2", "kind": "active-takeover", "note": "phishing (npmjs.help)", "source": ""},
+  {"package": "axios", "version": "1.14.1", "kind": "active-takeover", "note": "lead maintainer account takeover", "source": "https://www.trendmicro.com/en_us/research/26/c/axios-npm-package-compromised.html"},
+  {"package": "@solana/web3.js", "version": "1.95.6", "kind": "active-takeover", "note": "", "source": ""}
+]

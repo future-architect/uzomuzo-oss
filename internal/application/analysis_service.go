@@ -180,6 +180,7 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 		integration.WithPyPIClient(pyClient),
 		integration.WithCratesClient(crClient),
 		integration.WithOSVClient(osvClient),
+		integration.WithNpmClient(npmjs.NewPackumentClient()),
 		integration.WithMavenClient(mvClient),
 		integration.WithClearlyDefinedClient(cdClient),
 	)

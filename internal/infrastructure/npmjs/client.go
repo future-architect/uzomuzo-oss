@@ -61,6 +61,22 @@ func NewClient() *Client {
 	}
 }
 
+// packumentTimeout bounds a full-packument fetch. NewClient's 3-second limit
+// covers the whole body, and the packument of a package with thousands of
+// versions runs to megabytes.
+const packumentTimeout = 20 * time.Second
+
+// NewPackumentClient creates a Client for GetPublishHistory, whose full-packument
+// responses need a longer timeout than NewClient's metadata lookups.
+func NewPackumentClient() *Client {
+	c := NewClient()
+	c.http = httpclient.NewClient(&http.Client{Timeout: packumentTimeout}, httpclient.RegistryRetryConfig())
+	return c
+}
+
+// SetBaseURL overrides the registry base URL (useful for tests).
+func (c *Client) SetBaseURL(u string) { c.baseURL = strings.TrimRight(u, "/") }
+
 // SetHTTPClient overrides the underlying HTTP client (useful for tests).
 // Uses RegistryRetryConfig so injected test clients exercise the same retry
 // policy as production (DefaultRetryConfig was a prod/test parity gap).
@@ -324,4 +340,77 @@ func extractNpmSuccessor(msg string) string {
 		}
 	}
 	return ""
+}
+
+// PublishHistory is the publish time of every version npm has recorded for a
+// package, and the subset it still serves.
+type PublishHistory struct {
+	// PublishedAt maps version to publish time. npm keeps an unpublished
+	// version's entry in the packument's "time" object, so this can list
+	// versions that are no longer installable.
+	PublishedAt map[string]time.Time
+	// Installable holds the versions present in the packument's "versions".
+	Installable map[string]struct{}
+}
+
+// GetPublishHistory fetches the full packument of the named package ("name" or
+// "@scope/name") and returns its per-version publish times. The abbreviated
+// install document has no per-version times, so the full one is needed.
+// Returns found=false when the package does not exist.
+//
+// Example: https://registry.npmjs.org/node-ipc lists 12.0.1 under "time"
+// (2026-05-14T14:25:30Z) but not under "versions", because it was removed.
+func (c *Client) GetPublishHistory(ctx context.Context, fullName string) (*PublishHistory, bool, error) {
+	fullName = strings.TrimSpace(fullName)
+	if fullName == "" {
+		return nil, false, nil
+	}
+	endpoint := fmt.Sprintf("%s/%s", c.baseURL, url.PathEscape(fullName))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, false, fmt.Errorf("npm request build failed: %w", err)
+	}
+	req.Header.Set("User-Agent", "uzomuzo-npmjs-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
+	resp, err := c.http.Do(ctx, req)
+	if err != nil {
+		return nil, false, fmt.Errorf("npm http failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, false, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, fmt.Errorf("npm HTTP %d", resp.StatusCode)
+	}
+	var doc struct {
+		Time     map[string]json.RawMessage `json:"time"`
+		Versions map[string]json.RawMessage `json:"versions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
+		return nil, false, fmt.Errorf("npm decode failed: %w", err)
+	}
+	h := &PublishHistory{
+		PublishedAt: make(map[string]time.Time, len(doc.Time)),
+		Installable: make(map[string]struct{}, len(doc.Versions)),
+	}
+	for v, raw := range doc.Time {
+		// "created" and "modified" are package-level; "unpublished" is an object
+		// written when the whole package is unpublished.
+		if v == "created" || v == "modified" || v == "unpublished" {
+			continue
+		}
+		var s string
+		if err := json.Unmarshal(raw, &s); err != nil {
+			continue
+		}
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			continue
+		}
+		h.PublishedAt[v] = t
+	}
+	for v := range doc.Versions {
+		h.Installable[v] = struct{}{}
+	}
+	return h, true, nil
 }

@@ -113,6 +113,12 @@ func signalDisplayName(name string) string {
 		return "All Releases Yanked"
 	case analysispkg.SignalAdvisoryDBUnmaintained:
 		return "Advisory DB: Unmaintained"
+	case analysispkg.SignalDormantReleaseBurst:
+		return "Release Burst After Silence"
+	case analysispkg.SignalDaysSilentBeforeRelease:
+		return "Days Silent Before Release"
+	case analysispkg.SignalVersionRemoved:
+		return "Version Removed From Registry"
 	default:
 		return name
 	}
