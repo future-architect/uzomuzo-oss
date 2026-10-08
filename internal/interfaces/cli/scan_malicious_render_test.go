@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -40,7 +41,8 @@ func TestMaliciousScanOutputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if records[0][len(records[0])-1] != "malicious_advisory" || records[1][len(records[1])-1] != "MAL-1" {
+	col := slices.Index(records[0], "malicious_advisory")
+	if col < 0 || records[1][col] != "MAL-1" {
 		t.Fatalf("CSV: %v", records)
 	}
 	buf.Reset()

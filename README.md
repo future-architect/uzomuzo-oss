@@ -233,6 +233,8 @@ OSV malicious-package advisories are checked separately from the lifecycle label
 
 `--fail-on malicious` gates on these advisories. Any other non-empty `--fail-on` selection also fails when a malicious version is found, including a selection containing only `eol-confirmed`. See [ADR-0027](docs/adr/0027-osv-malicious-advisories.md) for the matching rules and limits.
 
+An npm version that came out after a year with no releases is marked as well, next to whatever lifecycle label it has: for a year when it came with versions on other release lines within a day, and for a week otherwise. The table view shows `⚠ 639d silence`, the detailed view explains the release and says whether an OSV malicious-package record names it yet, JSON includes a `dormant_release` object, and CSV ends with a `dormant_release` column. `--fail-on dormant-release` gates on the marker; no other `--fail-on` value implies it, because it is a heuristic, not a finding. See [ADR-0028](docs/adr/0028-dormant-release-marker.md).
+
 <a id="assessment-precision-by-data-availability"></a>
 
 ## What Makes uzomuzo Different

@@ -108,8 +108,8 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 
 - Request: the full packument (scoped names as `@scope%2Fname`); the abbreviated install document has no per-version times
 - Fields consumed: `time` (per-version publish times, `created` / `modified` / `unpublished` skipped), the key set of `versions`
-- Purpose: record when every version was published, including unpublished ones whose `time` entry npm keeps (`Analysis.ReleaseHistory`); the lifecycle assessor reads it against the analysed version to detect a release burst across lines after a long silence. One request per distinct npm package, for versioned PURLs only
-- Code: `npmjs.Client.GetPublishHistory` (`internal/infrastructure/npmjs/client.go`), `IntegrationService.enrichReleaseHistory` (`internal/infrastructure/integration/populate_release_history.go`), `analysis.DetectDormantBurst` (`internal/domain/analysis/release_history.go`). See [ADR-0026](adr/0026-dormant-release-burst.md)
+- Purpose: record when every version was published, including unpublished ones whose `time` entry npm keeps (`Analysis.ReleaseHistory`); the lifecycle assessor reads it against the analysed version to detect a release burst across lines after a long silence, and `Analysis.EvaluateDormantRelease` turns it into the dormant-release marker (`Analysis.DormantRelease`). One request per distinct npm package, for versioned PURLs only
+- Code: `npmjs.Client.GetPublishHistory` (`internal/infrastructure/npmjs/client.go`), `IntegrationService.enrichReleaseHistory` (`internal/infrastructure/integration/populate_release_history.go`), `analysis.DetectDormantBurst` and `analysis.DetectFreshDormantRelease` (`internal/domain/analysis/release_history.go`). See [ADR-0026](adr/0026-dormant-release-burst.md) and [ADR-0028](adr/0028-dormant-release-marker.md)
 - Docs: <https://github.com/npm/registry/blob/main/docs/responses/package-metadata.md>
 
 #### GitHub — GraphQL (POST https://api.github.com/graphql)

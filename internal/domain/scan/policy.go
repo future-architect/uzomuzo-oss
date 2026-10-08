@@ -41,21 +41,31 @@ var labelMap = func() map[string]analysis.MaintenanceStatus {
 	return m
 }()
 
+// failMalicious and failDormantRelease are --fail-on values that name a fact
+// carried next to the lifecycle label instead of a label.
+const (
+	failMalicious      = "malicious"
+	failDormantRelease = "dormant-release"
+)
+
 // ValidFailLabels returns the valid --fail-on label strings in display order.
 func ValidFailLabels() []string {
-	out := make([]string, 0, len(failLabels)+1)
+	out := make([]string, 0, len(failLabels)+2)
 	for _, fl := range failLabels {
 		out = append(out, fl.label)
 	}
-	out = append(out, "malicious")
+	out = append(out, failMalicious, failDormantRelease)
 	return out
 }
 
-// FailPolicy determines which lifecycle labels or malicious advisories trigger a non-zero exit.
+// FailPolicy determines which lifecycle labels, malicious advisories or dormant-release markers trigger a non-zero exit.
 // Zero value (empty triggers) means nothing triggers failure.
 type FailPolicy struct {
 	triggers  map[analysis.MaintenanceStatus]struct{}
 	malicious bool
+	// dormant is set only by an explicit "dormant-release"; no other trigger
+	// implies it. See ADR-0028.
+	dormant bool
 }
 
 // ParseFailPolicy parses a comma-separated --fail-on string into a FailPolicy.
@@ -69,13 +79,18 @@ func ParseFailPolicy(raw string) (FailPolicy, error) {
 	parts := strings.Split(raw, ",")
 	triggers := make(map[analysis.MaintenanceStatus]struct{}, len(parts))
 	malicious := false
+	dormant := false
 	for _, part := range parts {
 		label := strings.TrimSpace(strings.ToLower(part))
 		if label == "" {
 			continue
 		}
-		if label == "malicious" {
+		if label == failMalicious {
 			malicious = true
+			continue
+		}
+		if label == failDormantRelease {
+			dormant = true
 			continue
 		}
 		ms, ok := labelMap[label]
@@ -88,12 +103,12 @@ func ParseFailPolicy(raw string) (FailPolicy, error) {
 	if len(triggers) > 0 {
 		malicious = true
 	}
-	return FailPolicy{triggers: triggers, malicious: malicious}, nil
+	return FailPolicy{triggers: triggers, malicious: malicious, dormant: dormant}, nil
 }
 
 // IsEmpty returns true when no triggers are configured.
 func (p FailPolicy) IsEmpty() bool {
-	return len(p.triggers) == 0 && !p.malicious
+	return len(p.triggers) == 0 && !p.malicious && !p.dormant
 }
 
 // IsTriggered returns true if the given label is in the fail set.
@@ -106,7 +121,7 @@ func (p FailPolicy) IsTriggered(label analysis.MaintenanceStatus) bool {
 }
 
 // Evaluate checks whether any audit entry matches the fail policy.
-// Returns true if at least one entry's lifecycle label is in the trigger set.
+// Returns true if at least one entry matches: its lifecycle label is in the trigger set, or it carries a fact the policy selects.
 func (p FailPolicy) Evaluate(entries []domainaudit.AuditEntry) bool {
 	if p.IsEmpty() {
 		return false
@@ -117,6 +132,9 @@ func (p FailPolicy) Evaluate(entries []domainaudit.AuditEntry) bool {
 			continue
 		}
 		if p.malicious && e.Analysis.Malicious() {
+			return true
+		}
+		if p.dormant && e.Analysis.DormantRelease != nil {
 			return true
 		}
 		lr := e.Analysis.GetLifecycleResult()

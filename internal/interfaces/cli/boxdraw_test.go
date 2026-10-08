@@ -854,6 +854,7 @@ func TestIsWrappableLine(t *testing.T) {
 		{"⚠️ Stalled: Low maintenance; last human commit within 2 yrs", true},
 		{"🔍 Review Needed", true},
 		{"Catalog Reason: why this is EOL", true},
+		{"⚠ Release after silence: Possible hijacked release.", true},
 		{"Fast, unopinionated, minimalist web framework for node.", false},
 		{"[npmjs] Stable version is deprecated in npm registry.", false},
 		{"→ https://github.com/advisories/GHSA-xxxx", false},

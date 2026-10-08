@@ -1,7 +1,7 @@
 # 0026. A release burst across lines after a long silence needs a human
 
 Date: 2026-10-08
-Status: Accepted
+Status: Accepted (amended by [ADR-0028](0028-dormant-release-marker.md): the burst is also carried as a marker next to the label, and the thresholds moved to `DormantSilenceDays`)
 
 ## Context
 

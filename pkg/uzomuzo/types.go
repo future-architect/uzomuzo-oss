@@ -117,6 +117,21 @@ type ReleaseHistory = domain.ReleaseHistory
 // silence (see ADR-0026).
 type DormantBurst = domain.DormantBurst
 
+// DormantRelease marks an analysed version that followed a long silence. It is
+// carried next to the lifecycle label (see ADR-0028).
+type DormantRelease = domain.DormantRelease
+
+// DormantReleaseKind names the rule behind a DormantRelease.
+type DormantReleaseKind = domain.DormantReleaseKind
+
+// DormantRelease kinds.
+const (
+	// DormantReleaseBurstAcrossLines is a burst across release lines (ADR-0026).
+	DormantReleaseBurstAcrossLines = domain.DormantReleaseBurstAcrossLines
+	// DormantReleaseFresh is a recent return from silence on any line (ADR-0028).
+	DormantReleaseFresh = domain.DormantReleaseFresh
+)
+
 // Registry names recorded in RegistryState.Registry.
 const (
 	RegistryPyPI   = domain.RegistryPyPI

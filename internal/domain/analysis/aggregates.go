@@ -82,6 +82,11 @@ type Analysis struct {
 	// release burst after a long silence (see DetectDormantBurst).
 	ReleaseHistory *ReleaseHistory
 
+	// DormantRelease is set when the analysed version is a release that
+	// followed a long silence. Filled after enrichment by
+	// EvaluateDormantRelease. See ADR-0028.
+	DormantRelease *DormantRelease
+
 	// Release information
 	ReleaseInfo *ReleaseInfo
 

@@ -98,8 +98,8 @@ func writeLine(ctx *boxContext, format string, args ...any) error {
 }
 
 // isWrappableLine returns true only for the labeled free-text fields handled
-// by writeLine: verdict+reason lines (emoji prefix), Catalog Reason, and
-// Description: lines.
+// by writeLine: verdict+reason lines (emoji prefix), the dormant-release
+// notice, Catalog Reason, and Description: lines.
 // Unlabeled description text is wrapped separately by writeBoxIdentity.
 // Everything else — including URLs, identifiers, structured data, and
 // evidence summary lines — is left unwrapped.
@@ -119,6 +119,8 @@ func isWrappableLine(s string) bool {
 		// Verdict line: "icon Label: reason"
 		return true
 	case strings.HasPrefix(trimmed, "Catalog Reason:"):
+		return true
+	case strings.HasPrefix(trimmed, dormantReleasePrefix):
 		return true
 	case strings.HasPrefix(trimmed, "Description:"):
 		return true

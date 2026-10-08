@@ -289,6 +289,10 @@ func writeBoxOrigin(ctx *boxContext) error {
 	return nil
 }
 
+// dormantReleasePrefix starts the line that shows the dormant-release marker
+// (ADR-0028) in the detailed view.
+const dormantReleasePrefix = "⚠ Release after silence:"
+
 // writeBoxVerdict writes lifecycle verdict inline (no section bar).
 // Format: "icon Label: reason" on a single line (word-wrapped if long).
 // Displayed immediately after identity, before any section bars.
@@ -299,6 +303,11 @@ func writeBoxVerdict(ctx *boxContext) error {
 			label = "Malicious package"
 		}
 		if err := writeLine(ctx, "☠ %s: %s %s", label, ctx.analysis.MaliciousState.AdvisoryID, ctx.analysis.MaliciousState.Summary); err != nil {
+			return err
+		}
+	}
+	if notice := ctx.analysis.DormantReleaseNotice(); notice != "" {
+		if err := writeLine(ctx, "%s %s", dormantReleasePrefix, notice); err != nil {
 			return err
 		}
 	}

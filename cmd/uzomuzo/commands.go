@@ -35,7 +35,7 @@ func scanFlags() []urfcli.Flag {
 		&urfcli.StringFlag{Name: "format", Aliases: []string{"f"}, Usage: "Output format: detailed, table, json, csv (default: auto)"},
 
 		// CI gate
-		&urfcli.StringFlag{Name: "fail-on", Usage: "Comma-separated lifecycle labels or malicious that trigger exit 1; any selection also fails on malicious versions (" + strings.Join(domainscan.ValidFailLabels(), ",") + ")"},
+		&urfcli.StringFlag{Name: "fail-on", Usage: "Comma-separated lifecycle labels, malicious or dormant-release that trigger exit 1; any selection also fails on malicious versions, dormant-release only when named (" + strings.Join(domainscan.ValidFailLabels(), ",") + ")"},
 
 		// File mode options
 		&urfcli.IntFlag{Name: "sample", Usage: "Randomly sample up to N PURLs and N GitHub URLs (file mode only)"},

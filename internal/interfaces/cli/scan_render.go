@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
@@ -355,6 +356,8 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		maintenance, _ := entryMaintenanceEOL(&displayEntries[i], "—")
 		if a := displayEntries[i].Analysis; a != nil && a.Malicious() {
 			maintenance += " ☠ " + a.MaliciousState.AdvisoryID
+		} else if a != nil && a.DormantRelease != nil && a.DormantRelease.Burst != nil {
+			maintenance += fmt.Sprintf(" ⚠ %dd silence", a.DormantRelease.Burst.SilentDays)
 		}
 		cols = cols[:0]
 		cols = append(cols, tableVerdictDisplay(displayEntries[i].Verdict))
@@ -384,10 +387,10 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 }
 
 // maxCSVColumns is the widest a CSV row gets: verdict and purl, the two
-// conditional relation columns, then the fifteen fixed columns. Rows without
+// conditional relation columns, then the sixteen fixed columns. Rows without
 // relation info are shorter — this is the buffer's capacity, not its length.
 // Keep in step with the header built in renderScanCSV.
-const maxCSVColumns = 19
+const maxCSVColumns = 20
 
 // initialRowBufBytes is the starting capacity of the reused table row buffer.
 // A row is a verdict cell, a PURL and four short fields, so most rows fit
@@ -452,6 +455,7 @@ type enrichedJSONEntry struct {
 	Lifecycle           string         `json:"lifecycle"`
 	Malicious           *maliciousJSON `json:"malicious,omitempty"`
 	MaliciousCheck      string         `json:"malicious_check,omitempty"`
+	DormantRelease      *dormantJSON   `json:"dormant_release,omitempty"`
 	BuildIntegrity      string         `json:"build_integrity,omitempty"`
 	BuildIntegrityScore *float64       `json:"build_integrity_score,omitempty"`
 	Successor           string         `json:"successor,omitempty"`
@@ -489,6 +493,17 @@ type maliciousJSON struct {
 	Summary    string                `json:"summary"`
 	Reference  string                `json:"reference"`
 	Scope      domain.MaliciousScope `json:"scope"`
+}
+
+// dormantJSON is the dormant-release marker (ADR-0028) in --format json.
+type dormantJSON struct {
+	Kind          domain.DormantReleaseKind `json:"kind"`
+	PublishedAt   time.Time                 `json:"published_at"`
+	SilentDays    int                       `json:"silent_days"`
+	BurstVersions []string                  `json:"burst_versions"`
+	Lines         []string                  `json:"lines"`
+	Removed       bool                      `json:"removed"`
+	Until         time.Time                 `json:"until"`
 }
 
 type enrichedJSONOutput struct {
@@ -552,6 +567,10 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	} else if a.MaliciousState != nil && a.MaliciousState.Status == domain.MaliciousStatusLookupFailed {
 		je.MaliciousCheck = "unknown"
 	}
+	if d := a.DormantRelease; d != nil && d.Burst != nil {
+		je.DormantRelease = &dormantJSON{Kind: d.Kind, PublishedAt: d.Burst.PublishedAt, SilentDays: d.Burst.SilentDays,
+			BurstVersions: d.Burst.Versions, Lines: d.Burst.Lines, Removed: d.Burst.Removed, Until: d.Until}
+	}
 
 	if a.ReleaseInfo != nil {
 		if a.ReleaseInfo.StableVersion != nil {
@@ -605,7 +624,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	}
 	header = append(header, "lifecycle", "build_integrity", "build_integrity_score", "successor", "advisory_count", "max_advisory_severity", "max_cvss3_score",
 		"direct_advisory_count", "transitive_advisory_count", "max_transitive_advisory_severity", "max_transitive_cvss3_score",
-		"repo_url", "source", "via", "malicious_advisory")
+		"repo_url", "source", "via", "malicious_advisory", "dormant_release")
 	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
@@ -627,9 +646,13 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		maxTransitiveSeverity := ""
 		maxTransitiveCVSS3Score := ""
 		maliciousAdvisory := ""
+		dormantRelease := ""
 		if a := e.Analysis; a != nil {
 			if a.Malicious() {
 				maliciousAdvisory = a.MaliciousState.AdvisoryID
+			}
+			if a.DormantRelease != nil {
+				dormantRelease = string(a.DormantRelease.Kind)
 			}
 			successor = a.EOL.Successor
 			repoURL = a.RepoURL
@@ -669,7 +692,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		}
 		row = append(row, maintenance, buildIntegrity, buildIntegrityScore, successor, advisoryCount, maxSeverity, maxCVSS3Score,
 			directAdvisoryCount, transitiveAdvisoryCount, maxTransitiveSeverity, maxTransitiveCVSS3Score,
-			repoURL, string(e.Source), e.Via, maliciousAdvisory)
+			repoURL, string(e.Source), e.Via, maliciousAdvisory, dormantRelease)
 		if err := cw.Write(row); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}

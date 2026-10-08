@@ -73,14 +73,43 @@ type DormantBurst struct {
 // release; otherwise it joins that burst. Releases after version count, so a
 // burst becomes visible once its second line is published, not at the first.
 func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSilence, maxAge time.Duration) *DormantBurst {
+	b := detectDormantReturn(h, version, now, minSilence)
+	if b == nil || len(b.Lines) < DormantBurstMinLines {
+		return nil
+	}
+	if maxAge > 0 && now.Sub(b.PublishedAt) > maxAge {
+		return nil
+	}
+	return b
+}
+
+// DetectFreshDormantRelease reports whether version is a stable release from
+// the first burst after at least minSilence without any release, published no
+// more than freshFor before now. Unlike DetectDormantBurst it needs no second
+// release line. Returns nil when the history is missing, version is empty or a
+// prerelease, the version has no publish time or was published after now, the
+// version is in the package's first release burst, or the condition is not met.
+// See ADR-0028.
+func DetectFreshDormantRelease(h *ReleaseHistory, version string, now time.Time, minSilence, freshFor time.Duration) *DormantBurst {
+	if isPrerelease(version) {
+		return nil
+	}
+	b := detectDormantReturn(h, version, now, minSilence)
+	if b == nil || now.Sub(b.PublishedAt) > freshFor {
+		return nil
+	}
+	return b
+}
+
+// detectDormantReturn returns the burst holding version when that burst
+// followed at least minSilence without any release, whatever the number of
+// lines it touched. Lines is filled for the caller to check.
+func detectDormantReturn(h *ReleaseHistory, version string, now time.Time, minSilence time.Duration) *DormantBurst {
 	if h == nil || version == "" {
 		return nil
 	}
 	at, ok := h.PublishedAt[version]
 	if !ok || at.IsZero() || at.After(now) {
-		return nil
-	}
-	if maxAge > 0 && now.Sub(at) > maxAge {
 		return nil
 	}
 
@@ -148,9 +177,6 @@ func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSil
 		if l, ok := releaseLine(r.v); ok {
 			lineSet[l] = struct{}{}
 		}
-	}
-	if len(lineSet) < DormantBurstMinLines {
-		return nil
 	}
 	lines := make([]string, 0, len(lineSet))
 	for l := range lineSet {

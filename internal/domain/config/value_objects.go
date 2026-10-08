@@ -52,6 +52,8 @@ var DefaultValues = DefaultConfigValues{
 		ResidualAdvisoryThreshold:  1,
 		HighSeverityCVSSThreshold:  7.0,
 		CommitActivityWindowDays:   365,
+		DormantSilenceDays:         365,
+		DormantFreshDays:           7,
 	},
 	Maven: MavenConfig{
 		// Empty means use client default (repo1.maven.org/maven2). Override via MAVEN_BASE_URL.
@@ -136,6 +138,13 @@ type LifecycleAssessmentConfig struct {
 	ResidualAdvisoryThreshold  int     `yaml:"residual_advisory_threshold" json:"residual_advisory_threshold"`
 	HighSeverityCVSSThreshold  float64 `yaml:"high_severity_cvss_threshold" json:"high_severity_cvss_threshold"`
 	CommitActivityWindowDays   int     `yaml:"commit_activity_window_days" json:"commit_activity_window_days"`
+	// DormantSilenceDays is how long a package must go without any release for
+	// its next release to count as a return from silence, and how long a burst
+	// across release lines stays flagged. See ADR-0026 and ADR-0028.
+	DormantSilenceDays int `yaml:"dormant_silence_days" json:"dormant_silence_days"`
+	// DormantFreshDays is how long a return from silence stays flagged when it
+	// touched a single release line. See ADR-0028.
+	DormantFreshDays int `yaml:"dormant_fresh_days" json:"dormant_fresh_days"`
 }
 
 // NormalizeLifecycleConfig fills zero fields of c with defaults from DefaultValues.Lifecycle.
@@ -180,5 +189,11 @@ func NormalizeLifecycleConfig(c *LifecycleAssessmentConfig) {
 	}
 	if c.CommitActivityWindowDays == 0 {
 		c.CommitActivityWindowDays = def.CommitActivityWindowDays
+	}
+	if c.DormantSilenceDays == 0 {
+		c.DormantSilenceDays = def.DormantSilenceDays
+	}
+	if c.DormantFreshDays == 0 {
+		c.DormantFreshDays = def.DormantFreshDays
 	}
 }
