@@ -105,6 +105,7 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// third-party advisory curator has flagged the package as unmaintained.
 	// Cargo only, and deliberately never an EOL state. See ADR-0025.
 	s.enrichAdvisoryDBState(ctx, analyses)
+	s.enrichMaliciousState(ctx, analyses)
 
 	// Registry release history (best-effort): npm's publish time for every
 	// version, removed ones included, read by the lifecycle assessor to detect a

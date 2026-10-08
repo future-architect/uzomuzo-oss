@@ -3,8 +3,10 @@ package integration
 import (
 	"context"
 	"slices"
+	"strings"
 	"time"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
@@ -34,11 +36,12 @@ func (s *IntegrationService) enrichAdvisoryDBState(ctx context.Context, analyses
 	// One evaluation time for the whole batch, so two versions of the same crate
 	// cannot straddle the cooldown boundary within a single run.
 	now := time.Now()
-	jobs := collectPackageJobs(analyses, func(ecosystem string) packageFetch[domain.AdvisoryDBState] {
-		if ecosystem != "cargo" {
-			return nil
+	jobs := collectPackageJobs(analyses, func(parsed *purl.ParsedPURL) (packageJobKey, packageFetch[domain.AdvisoryDBState]) {
+		name := strings.TrimSpace(parsed.PackageName())
+		if parsed.Ecosystem() != "cargo" || parsed.Namespace() != "" || name == "" {
+			return packageJobKey{}, nil
 		}
-		return func(ctx context.Context, name string) (domain.AdvisoryDBState, bool, error) {
+		return packageJobKey{ecosystem: "cargo", name: name}, func(ctx context.Context, name string) (domain.AdvisoryDBState, bool, error) {
 			recs, err := s.osvClient.QueryPackage(ctx, osvCratesEcosystem, name)
 			if err != nil {
 				return domain.AdvisoryDBState{}, false, err

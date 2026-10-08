@@ -229,6 +229,10 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | **EOL-Scheduled** | Future EOL date announced (not yet reached) | Plan migration before EOL date |
 | **Review Needed** | Insufficient data for automated classification; the registry has yanked every release, so no version is offered to normal dependency resolution; or (npm) the version was published after a year with no releases, together with versions on other release lines (other major versions, or other minor versions below 1.0) within a day: the way past takeovers of npm packages that had gone quiet have looked, and also how a returning maintainer's last fix to an old line can look ([ADR-0026](docs/adr/0026-dormant-release-burst.md)) | Manual investigation required |
 
+OSV malicious-package advisories are checked separately from the lifecycle label. A version named by a `MAL-` advisory or a GHSA tagged CWE-506 has status `replace` even when its lifecycle is Active or the package has disappeared from a registry. The detailed and table views name the advisory; JSON includes a `malicious` object, and CSV ends with a `malicious_advisory` column. A failed lookup is shown as `malicious_check: "unknown"` in JSON and produces a warning.
+
+`--fail-on malicious` gates on these advisories. Any other non-empty `--fail-on` selection also fails when a malicious version is found, including a selection containing only `eol-confirmed`. See [ADR-0027](docs/adr/0027-osv-malicious-advisories.md) for the matching rules and limits.
+
 <a id="assessment-precision-by-data-availability"></a>
 
 ## What Makes uzomuzo Different

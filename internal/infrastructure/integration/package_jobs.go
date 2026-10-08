@@ -3,7 +3,6 @@ package integration
 import (
 	"context"
 	"log/slog"
-	"strings"
 	"sync"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
@@ -17,11 +16,9 @@ const maxPackageFactWorkers = 16
 
 // packageJobKey identifies one package-level lookup.
 //
-// The name is the one written in the PURL, not a lowercased form: it is sent
-// verbatim to the source, and api.osv.dev matches crates.io names
-// case-sensitively (a query for "Atty" returns nothing where "atty" returns
-// three advisories). Folding case here would turn that into a silent empty
-// answer, so two casings of one name cost one extra lookup instead.
+// The name is the one sent to the source. Each enrichment applies its own
+// normalization before building this key. OSV matches crates.io names
+// case-sensitively, so cargo names keep their original spelling.
 type packageJobKey struct {
 	ecosystem string
 	name      string
@@ -40,14 +37,12 @@ type packageJob[T any] struct {
 
 // collectPackageJobs groups analyses into one lookup per distinct package.
 //
-// pick chooses the fetch for an ecosystem and returns nil to skip it, which is
-// how each enrichment states both the ecosystems it covers and the clients it
-// needs wired. Analyses are also skipped when the PURL does not parse, when it
-// carries a namespace (the ecosystems asked here have none, so a namespaced
-// PURL would query a different package), or when the name is empty.
+// pick chooses the lookup key and fetch for a parsed PURL, returning nil to
+// skip it. Each enrichment decides how to handle namespaces and unsupported
+// ecosystems. Analyses with unparseable PURLs are skipped.
 func collectPackageJobs[T any](
 	analyses map[string]*domain.Analysis,
-	pick func(ecosystem string) packageFetch[T],
+	pick func(parsed *purl.ParsedPURL) (packageJobKey, packageFetch[T]),
 ) map[packageJobKey]*packageJob[T] {
 	jobs := map[packageJobKey]*packageJob[T]{}
 	parser := purl.NewParser()
@@ -59,18 +54,10 @@ func collectPackageJobs[T any](
 		if err != nil {
 			continue
 		}
-		if strings.TrimSpace(parsed.Namespace()) != "" {
+		key, fetch := pick(parsed)
+		if fetch == nil || key.ecosystem == "" || key.name == "" {
 			continue
 		}
-		name := strings.TrimSpace(parsed.PackageName())
-		if name == "" {
-			continue
-		}
-		fetch := pick(parsed.Ecosystem())
-		if fetch == nil {
-			continue
-		}
-		key := packageJobKey{ecosystem: parsed.Ecosystem(), name: name}
 		job, seen := jobs[key]
 		if !seen {
 			job = &packageJob[T]{fetch: fetch}
@@ -84,10 +71,8 @@ func collectPackageJobs[T any](
 // runPackageJobs runs each lookup under a bounded worker pool and hands the
 // result to apply for every analysis waiting on it.
 //
-// Best-effort: a failed or empty lookup applies nothing, leaving the target
-// field at its zero value, which the lifecycle assessor reads as "not asked"
-// rather than as a negative answer. The what argument names the enrichment in
-// debug logs.
+// A failed lookup invokes onFailure when provided; existing callers leave their
+// target field untouched. The what argument names the enrichment in debug logs.
 //
 // DDD Layer: Infrastructure (parallel enrichment).
 func runPackageJobs[T any](
@@ -95,6 +80,7 @@ func runPackageJobs[T any](
 	what string,
 	jobs map[packageJobKey]*packageJob[T],
 	apply func(a *domain.Analysis, value T),
+	onFailure ...func(key packageJobKey, targets []*domain.Analysis),
 ) {
 	if len(jobs) == 0 {
 		return
@@ -123,12 +109,15 @@ func runPackageJobs[T any](
 			return
 		}
 		wg.Add(1)
-		go func(name string, fetch packageFetch[T], targets []*domain.Analysis) {
+		go func(key packageJobKey, fetch packageFetch[T], targets []*domain.Analysis) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			value, found, err := fetch(ctx, name)
+			value, found, err := fetch(ctx, key.name)
 			if err != nil {
-				slog.Debug("package_fact_fetch_failed", "what", what, "name", name, "error", err)
+				slog.Debug("package_fact_fetch_failed", "what", what, "name", key.name, "error", err)
+				if len(onFailure) != 0 && onFailure[0] != nil {
+					onFailure[0](key, targets)
+				}
 				return
 			}
 			if !found {
@@ -137,7 +126,7 @@ func runPackageJobs[T any](
 			for _, a := range targets {
 				apply(a, value)
 			}
-		}(key.name, job.fetch, job.targets)
+		}(key, job.fetch, job.targets)
 	}
 	wg.Wait()
 }

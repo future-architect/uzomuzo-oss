@@ -43,17 +43,19 @@ var labelMap = func() map[string]analysis.MaintenanceStatus {
 
 // ValidFailLabels returns the valid --fail-on label strings in display order.
 func ValidFailLabels() []string {
-	out := make([]string, 0, len(failLabels))
+	out := make([]string, 0, len(failLabels)+1)
 	for _, fl := range failLabels {
 		out = append(out, fl.label)
 	}
+	out = append(out, "malicious")
 	return out
 }
 
-// FailPolicy determines which lifecycle labels trigger a non-zero exit.
+// FailPolicy determines which lifecycle labels or malicious advisories trigger a non-zero exit.
 // Zero value (empty triggers) means nothing triggers failure.
 type FailPolicy struct {
-	triggers map[analysis.MaintenanceStatus]struct{}
+	triggers  map[analysis.MaintenanceStatus]struct{}
+	malicious bool
 }
 
 // ParseFailPolicy parses a comma-separated --fail-on string into a FailPolicy.
@@ -66,9 +68,14 @@ func ParseFailPolicy(raw string) (FailPolicy, error) {
 
 	parts := strings.Split(raw, ",")
 	triggers := make(map[analysis.MaintenanceStatus]struct{}, len(parts))
+	malicious := false
 	for _, part := range parts {
 		label := strings.TrimSpace(strings.ToLower(part))
 		if label == "" {
+			continue
+		}
+		if label == "malicious" {
+			malicious = true
 			continue
 		}
 		ms, ok := labelMap[label]
@@ -78,12 +85,15 @@ func ParseFailPolicy(raw string) (FailPolicy, error) {
 		}
 		triggers[ms] = struct{}{}
 	}
-	return FailPolicy{triggers: triggers}, nil
+	if len(triggers) > 0 {
+		malicious = true
+	}
+	return FailPolicy{triggers: triggers, malicious: malicious}, nil
 }
 
 // IsEmpty returns true when no triggers are configured.
 func (p FailPolicy) IsEmpty() bool {
-	return len(p.triggers) == 0
+	return len(p.triggers) == 0 && !p.malicious
 }
 
 // IsTriggered returns true if the given label is in the fail set.
@@ -105,6 +115,9 @@ func (p FailPolicy) Evaluate(entries []domainaudit.AuditEntry) bool {
 		e := &entries[i]
 		if e.Analysis == nil {
 			continue
+		}
+		if p.malicious && e.Analysis.Malicious() {
+			return true
 		}
 		lr := e.Analysis.GetLifecycleResult()
 		if lr == nil {

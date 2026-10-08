@@ -86,6 +86,24 @@ type RegistryState = domain.RegistryState
 // is a different claim from "ran and found nothing".
 type AdvisoryDBState = domain.AdvisoryDBState
 
+// MaliciousState is the result of checking a package against OSV malicious advisories.
+type MaliciousState = domain.MaliciousState
+
+// MaliciousStatus distinguishes a completed malicious check from a failed lookup.
+type MaliciousStatus = domain.MaliciousStatus
+
+// MaliciousScope identifies whether an advisory covers one version or a whole package.
+type MaliciousScope = domain.MaliciousScope
+
+// Malicious check statuses and advisory scopes.
+const (
+	MaliciousStatusClean        = domain.MaliciousStatusClean
+	MaliciousStatusFlagged      = domain.MaliciousStatusFlagged
+	MaliciousStatusLookupFailed = domain.MaliciousStatusLookupFailed
+	MaliciousScopeVersion       = domain.MaliciousScopeVersion
+	MaliciousScopePackage       = domain.MaliciousScopePackage
+)
+
 // ReleaseHistory is the registry's publish time for every version of a
 // package, including removed ones (npm only; see ADR-0026). Nil means the
 // lookup did not run or failed.

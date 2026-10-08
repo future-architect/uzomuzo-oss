@@ -58,6 +58,7 @@ type AdvisoryAffected struct {
 type AdvisoryRecord struct {
 	ID      string
 	Summary string
+	CWEIDs  []string
 	// Reference is an advisory URL a human can open to verify the fact.
 	Reference string
 	// Published is zero when the advisory carried no publication date or the

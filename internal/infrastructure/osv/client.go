@@ -20,10 +20,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	"github.com/future-architect/uzomuzo-oss/internal/common/ttlcache"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
@@ -218,9 +220,12 @@ type queryResponse struct {
 }
 
 type wireVuln struct {
-	ID      string   `json:"id"`
-	Aliases []string `json:"aliases"`
-	Summary string   `json:"summary"`
+	ID               string   `json:"id"`
+	Aliases          []string `json:"aliases"`
+	Summary          string   `json:"summary"`
+	DatabaseSpecific struct {
+		CWEIDs []string `json:"cwe_ids"`
+	} `json:"database_specific"`
 	// Published is RFC3339. An unparseable or absent value leaves the record's
 	// Published zero, which the domain treats as a non-match.
 	Published string `json:"published"`
@@ -360,6 +365,11 @@ func toRecord(v *wireVuln) (domain.AdvisoryRecord, bool) {
 		Reference: advisoryReference(v.References),
 		Withdrawn: strings.TrimSpace(v.Withdrawn) != "",
 	}
+	for _, cwe := range v.DatabaseSpecific.CWEIDs {
+		if cweIDPattern.MatchString(cwe) {
+			rec.CWEIDs = append(rec.CWEIDs, cwe)
+		}
+	}
 	for _, alias := range v.Aliases {
 		// A malformed alias is dropped like a malformed ID; losing one only
 		// costs the assessor an exclusion.
@@ -409,6 +419,55 @@ func toRecord(v *wireVuln) (domain.AdvisoryRecord, bool) {
 	}
 	return rec, true
 }
+
+var cweIDPattern = regexp.MustCompile(`^CWE-[0-9]+$`)
+
+// OSVPackageFor maps a parsed PURL to the ecosystem and name used by OSV.
+func OSVPackageFor(parsed *purl.ParsedPURL) (string, string, bool) {
+	if parsed == nil {
+		return "", "", false
+	}
+	name := parsed.Name()
+	namespace := parsed.Namespace()
+	switch parsed.Ecosystem() {
+	case "npm":
+		if namespace != "" {
+			name = namespace + "/" + name
+		}
+		return "npm", name, name != ""
+	case "pypi":
+		if namespace != "" {
+			return "", "", false
+		}
+		name = pep503Separator.ReplaceAllString(strings.ToLower(name), "-")
+		return "PyPI", name, name != ""
+	case "cargo":
+		if namespace == "" {
+			return "crates.io", name, name != ""
+		}
+	case "golang":
+		return "Go", name, name != ""
+	case "maven":
+		if namespace != "" && name != "" {
+			return "Maven", namespace + ":" + name, true
+		}
+	case "nuget":
+		if namespace == "" {
+			return "NuGet", name, name != ""
+		}
+	case "gem":
+		if namespace == "" {
+			return "RubyGems", name, name != ""
+		}
+	case "composer":
+		if namespace != "" && name != "" {
+			return "Packagist", namespace + "/" + name, true
+		}
+	}
+	return "", "", false
+}
+
+var pep503Separator = regexp.MustCompile(`[-_.]+`)
 
 // advisoryReference returns the URL of the advisory's own page, preferring the
 // ADVISORY-typed reference OSV defines for exactly this purpose. Falls back to

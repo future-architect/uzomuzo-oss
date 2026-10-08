@@ -329,6 +329,9 @@ func computeHealthSignals(a *domain.Analysis) domaindiet.HealthSignals {
 			h.HealthRisk = math.Max(h.HealthRisk, 0.6)
 		}
 	}
+	if a.Malicious() {
+		h.HealthRisk = 1
+	}
 
 	// Vulnerability info from the latest version detail
 	if a.ReleaseInfo != nil {
