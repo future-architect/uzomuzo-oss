@@ -71,8 +71,9 @@ func collectPackageJobs[T any](
 // runPackageJobs runs each lookup under a bounded worker pool and hands the
 // result to apply for every analysis waiting on it.
 //
-// A failed lookup invokes onFailure when provided; existing callers leave their
-// target field untouched. The what argument names the enrichment in debug logs.
+// A failed lookup, and a lookup never started because ctx was cancelled, invokes
+// onFailure when provided; existing callers leave their target field untouched.
+// The what argument names the enrichment in debug logs.
 //
 // DDD Layer: Infrastructure (parallel enrichment).
 func runPackageJobs[T any](
@@ -85,7 +86,25 @@ func runPackageJobs[T any](
 	if len(jobs) == 0 {
 		return
 	}
+	var failed func(key packageJobKey, targets []*domain.Analysis)
+	if len(onFailure) != 0 {
+		failed = onFailure[0]
+	}
+	dispatched := make(map[packageJobKey]bool, len(jobs))
 	var wg sync.WaitGroup
+	// A cancelled scan must not leave undispatched packages looking unchecked
+	// by omission: they are reported through onFailure like a failed fetch.
+	stop := func() {
+		wg.Wait()
+		if failed == nil {
+			return
+		}
+		for key, job := range jobs {
+			if !dispatched[key] {
+				failed(key, job.targets)
+			}
+		}
+	}
 	sem := make(chan struct{}, maxPackageFactWorkers)
 	for key, job := range jobs {
 		// Acquire before launching so a cancelled context stops dispatch instead
@@ -94,20 +113,21 @@ func runPackageJobs[T any](
 		// picks at random, so cancellation is checked explicitly rather than
 		// relied on to win the race.
 		if ctx.Err() != nil {
-			wg.Wait()
+			stop()
 			return
 		}
 		select {
 		case sem <- struct{}{}:
 		case <-ctx.Done():
-			wg.Wait()
+			stop()
 			return
 		}
 		if ctx.Err() != nil {
 			<-sem
-			wg.Wait()
+			stop()
 			return
 		}
+		dispatched[key] = true
 		wg.Add(1)
 		go func(key packageJobKey, fetch packageFetch[T], targets []*domain.Analysis) {
 			defer wg.Done()
@@ -115,8 +135,8 @@ func runPackageJobs[T any](
 			value, found, err := fetch(ctx, key.name)
 			if err != nil {
 				slog.Debug("package_fact_fetch_failed", "what", what, "name", key.name, "error", err)
-				if len(onFailure) != 0 && onFailure[0] != nil {
-					onFailure[0](key, targets)
+				if failed != nil {
+					failed(key, targets)
 				}
 				return
 			}

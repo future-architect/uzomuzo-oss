@@ -64,8 +64,10 @@ through for exactly the days it matters. The cost is real and accepted:
 MAL-2024-2929 named `react@1.0.0` and `react@35.0.0` malicious on 2024-06-25 and
 was withdrawn on 2024-07-01 as "False positive caused by problematic ingestion".
 Under this rule a CI job pinned to one of those versions would have failed for
-those six days. Withdrawal clears the flag on the next scan; it does not undo a
-build that already failed.
+those six days. Withdrawal clears the flag on the next `uzomuzo` run; it does
+not undo a build that already failed. OSV answers are cached in memory for ten
+minutes, so a library caller that reuses one process can see a withdrawn record
+for up to that long.
 
 ### Which version is named
 
@@ -140,7 +142,8 @@ outlives the package. rustdecimal@1.23.1 becomes `replace`.
 
 ### When the lookup fails
 
-A failed or incomplete lookup (an error, or more than 10 pages of advisories) is
+A failed or incomplete lookup (an error, more than 10 pages of advisories, or a
+lookup never started because the scan was cancelled) is
 "not checked", never "not malicious". It does not change any verdict, so an OSV
 outage cannot flip a whole scan. It is not silent either: the scan ends with one
 warning naming how many dependencies could not be checked, and the JSON entry
@@ -169,6 +172,6 @@ when it fails they count as two.
 - Advisories arrive after the attack. During the first hours, before a record
   exists, this rule says nothing; ADR-0026 remains the only signal for that
   window, and only for dormant npm packages.
-- A withdrawn record stops flagging on the next scan. Until it is withdrawn, a
+- A withdrawn record stops flagging on the next run. Until it is withdrawn, a
   false record fails every armed gate that resolves the named versions
   (MAL-2024-2929 above).

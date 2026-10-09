@@ -80,6 +80,33 @@ func TestEnrichMaliciousStateLookupFailed(t *testing.T) {
 	}
 }
 
+// TestEnrichMaliciousStateCancelledMarksUndispatched: a cancelled scan must
+// leave no package with a nil state, which would read as "never asked".
+func TestEnrichMaliciousStateCancelledMarksUndispatched(t *testing.T) {
+	t.Parallel()
+	rec := &osvRecorder{}
+	srv := httptest.NewServer(rec.handler(func(string) string { return `{"vulns":[]}` }))
+	defer srv.Close()
+
+	analyses := map[string]*domain.Analysis{}
+	for i := 0; i < 3*maxPackageFactWorkers; i++ {
+		key := fmt.Sprintf("pkg:npm/pkg%02d@1.0.0", i)
+		analyses[key] = analysisFor(key, "npm")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	newAdvisoryDBService(t, srv.URL).enrichMaliciousState(ctx, analyses)
+
+	for key, a := range analyses {
+		if a.MaliciousState == nil {
+			t.Fatalf("%s: state is nil after a cancelled scan, want lookup_failed", key)
+		}
+		if a.MaliciousState.Status != domain.MaliciousStatusLookupFailed {
+			t.Errorf("%s: status = %q, want lookup_failed", key, a.MaliciousState.Status)
+		}
+	}
+}
+
 func TestCargoAnalysisSharesOSVFetch(t *testing.T) {
 	t.Parallel()
 	rec := &osvRecorder{}
