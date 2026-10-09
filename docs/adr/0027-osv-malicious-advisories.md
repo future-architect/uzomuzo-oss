@@ -147,9 +147,10 @@ lookup never started because the scan was cancelled) is
 "not checked", never "not malicious". It does not change any verdict, so an OSV
 outage cannot flip a whole scan. It is not silent either: the scan ends with one
 warning naming how many dependencies could not be checked, and the JSON entry
-reports the check as unknown. The count is of dependencies, the same entries
-the JSON marks unknown: chalk@5.6.1 and chalk@5.6.2 share one OSV query, and
-when it fails they count as two.
+reports the check as unknown. The count is of dependencies, not OSV queries:
+chalk@5.6.1 and chalk@5.6.2 share one query, and when it fails they count as
+two. It covers every dependency scanned, including entries a filter such as
+`--show-only replace` leaves out of the output.
 
 ## Consequences
 
