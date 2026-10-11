@@ -74,6 +74,9 @@ type Analysis struct {
 	// own assertions) and from EOL (primary-source lifecycle declarations).
 	AdvisoryDBState *AdvisoryDBState
 
+	// MaliciousState records the result of the OSV malicious advisory check.
+	MaliciousState *MaliciousState
+
 	// ReleaseHistory holds the registry's publish time for every version of the
 	// package, including removed ones. Read against Package.Version to detect a
 	// release burst after a long silence (see DetectDormantBurst).

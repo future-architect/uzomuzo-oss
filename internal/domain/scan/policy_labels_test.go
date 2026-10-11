@@ -29,13 +29,16 @@ func Test_ValidFailLabels_ContentAndOrder(t *testing.T) {
 	t.Parallel()
 
 	got := ValidFailLabels()
-	if len(got) != len(wantFailLabels) {
-		t.Fatalf("label count: got %d %v, want %d", len(got), got, len(wantFailLabels))
+	if len(got) != len(wantFailLabels)+1 {
+		t.Fatalf("label count: got %d %v, want %d", len(got), got, len(wantFailLabels)+1)
 	}
 	for i, want := range wantFailLabels {
 		if got[i] != want.label {
 			t.Errorf("label %d: got %q, want %q (full: %v)", i, got[i], want.label, got)
 		}
+	}
+	if got[len(got)-1] != "malicious" {
+		t.Errorf("last label = %q, want malicious", got[len(got)-1])
 	}
 }
 

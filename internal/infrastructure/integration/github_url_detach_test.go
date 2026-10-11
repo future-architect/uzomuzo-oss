@@ -26,6 +26,7 @@ func TestDetachPackageIdentity(t *testing.T) {
 		// A synthesized cargo PURL can pick up an advisory-database fact about
 		// an unrelated crate that happens to share the repository's name.
 		AdvisoryDBState: &domain.AdvisoryDBState{Unmaintained: true, AdvisoryID: "RUSTSEC-2020-0163"},
+		MaliciousState:  &domain.MaliciousState{Status: domain.MaliciousStatusFlagged},
 		ReleaseHistory:  &domain.ReleaseHistory{Registry: domain.RegistryNpm},
 		RepoState:       &domain.RepoState{},
 		RepoURL:         githubURL,
@@ -47,6 +48,9 @@ func TestDetachPackageIdentity(t *testing.T) {
 	}
 	if a.AdvisoryDBState != nil {
 		t.Errorf("AdvisoryDBState = %+v, want nil", a.AdvisoryDBState)
+	}
+	if a.MaliciousState != nil {
+		t.Errorf("MaliciousState = %+v, want nil", a.MaliciousState)
 	}
 	if a.ReleaseHistory != nil {
 		t.Errorf("ReleaseHistory = %+v, want nil", a.ReleaseHistory)

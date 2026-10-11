@@ -3,7 +3,9 @@ package integration
 import (
 	"context"
 	"net/url"
+	"strings"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
@@ -28,21 +30,26 @@ func (s *IntegrationService) enrichRegistryState(ctx context.Context, analyses m
 	if len(analyses) == 0 {
 		return
 	}
-	jobs := collectPackageJobs(analyses, func(ecosystem string) packageFetch[*domain.RegistryState] {
-		switch ecosystem {
+	jobs := collectPackageJobs(analyses, func(parsed *purl.ParsedPURL) (packageJobKey, packageFetch[*domain.RegistryState]) {
+		name := strings.TrimSpace(parsed.PackageName())
+		if parsed.Namespace() != "" || name == "" {
+			return packageJobKey{}, nil
+		}
+		key := packageJobKey{ecosystem: parsed.Ecosystem(), name: name}
+		switch parsed.Ecosystem() {
 		case "pypi":
 			if s.pypiClient != nil {
-				return s.fetchPyPIRegistryState
+				return key, s.fetchPyPIRegistryState
 			}
 		case "cargo":
 			if s.cratesClient != nil {
 				// Fetched for versioned PURLs too: AnalyzeFromGitHubURL synthesises
 				// a version from the deps.dev stable release, so gating on
 				// "unversioned only" would drop the fact for that entry path alone.
-				return s.fetchCratesRegistryState
+				return key, s.fetchCratesRegistryState
 			}
 		}
-		return nil
+		return packageJobKey{}, nil
 	})
 	runPackageJobs(ctx, "registry_state", jobs, func(a *domain.Analysis, state *domain.RegistryState) {
 		if state == nil {

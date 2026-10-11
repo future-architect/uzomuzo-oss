@@ -328,6 +328,20 @@ func renderBoxEntryError(ctx *boxContext) error {
 			return wrap(err)
 		}
 	}
+	if ctx.analysis != nil && ctx.analysis.Malicious() {
+		if err := writeBoxVerdict(ctx); err != nil {
+			return wrap(err)
+		}
+		if ctx.entry.ErrorMsg != "" {
+			if err := writeLine(ctx, "Error: %s", ctx.entry.ErrorMsg); err != nil {
+				return wrap(err)
+			}
+		}
+		if err := writeBottomBar(ctx); err != nil {
+			return wrap(err)
+		}
+		return nil
+	}
 	icon := verdictIcon(ctx.entry.Verdict)
 	label := verdictLabel(ctx.entry.Verdict)
 	if ctx.entry.ErrorMsg != "" {
