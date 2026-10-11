@@ -37,10 +37,15 @@ the packages in two real lockfiles, below) and common among malicious ones.
 
 [ADR-0027](0027-osv-malicious-advisories.md) replaces versions named in a
 malicious-package advisory. An advisory needs time to appear. Measured as the
-time from the first malicious publish to the OSV record, the median over the
-1,556 packages is about 6 hours, 89% appear within a day and 98–99% within 7
-days. Outside the bulk waves the tail is longer: 5 of the 13 single incidents
-took more than a day.
+time from the first malicious publish to the earliest detection recorded in
+the advisory, the median over the 1,515 packages with a timestamp is about 6
+hours, 89% within a day and 98% within 7 days. These are mostly the bulk waves
+(1,418 packages, 99% within 7 days). Outside the waves the tail is longer: 86%
+of the 97 single-incident packages within 7 days, and 8% after more than 30
+days. Including the import into the advisory data, the median is 12 hours.
+Takeovers that never received a `MAL-` record are not in these counts: older
+incidents such as event-stream (2018) and ua-parser-js, coa and rc (2021) have
+only a GHSA malware advisory, which ADR-0027 also reads.
 
 ## Decision
 
@@ -94,7 +99,8 @@ releases is known to be malicious.
 The 7 days are not the time until a malicious version is removed. npm does not
 record removal times, and some malicious versions are never removed: 30 of the
 1,556 packages still serve one. The 7 days are the time an OSV record usually
-takes to appear: 98–99% of the 1,556 had one within 7 days. Once a record
+takes to appear: 98% of the recorded takeovers, and 86% of the single
+incidents, had one within 7 days. Once a record
 appears, ADR-0027 takes over and the version becomes `replace`. A version that
 reaches 7 days without a record loses the `fresh` marker. The marker therefore
 covers the gap before the advisories have had time to look.
