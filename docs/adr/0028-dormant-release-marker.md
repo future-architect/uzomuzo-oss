@@ -212,7 +212,8 @@ implemented; recorded here so the next change starts from data.
 `versions[v]._npmUser.name` differs from the previous version's, against 0.9%
 and 1.4% of ordinary releases. Most of these are handovers: `content-type`
 2.0.0 came 1,197 days after 1.0.5, published by blakeembrey instead of
-dougwilson, as did `cors`, `http-errors` and `range-parser`. In the registry
+dougwilson; `cors`, `http-errors` and `range-parser` passed from dougwilson
+to ulisesgascon or blakeembrey the same way. In the registry
 data this looks the same as `is` 3.3.1 (ljharb, then enricomarino). Checking
 whether the new publisher was already in `maintainers` does not help: the
 accounts behind node-ipc 12.0.1 (atiertant) and `is` 3.3.1 (enricomarino) were
@@ -233,7 +234,7 @@ The e-mail also pointed the same way where it could be read. node-ipc's
 account had used `a.tiertant@atlantis-software.net`, and that domain was
 registered again on 2026-05-07T11:49:33Z, seven days before 12.0.1
 (<https://rdap.org/domain/atlantis-software.net>). `is`'s account changed from
-`enrico.marino@email.com` to `enrico.marino1@outlook.com`. No handover changed
+`enrico.marino@email.com` to `enrico.marino1@outlook.com`. None of the 19 handovers whose earlier e-mail could be read changed
 domain. Provenance (`dist.attestations`) was absent on all 23 versions.
 
 Limits, before anyone builds on this:
