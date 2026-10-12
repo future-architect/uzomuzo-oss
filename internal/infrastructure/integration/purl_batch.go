@@ -101,11 +101,18 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// describes the source repository. See ADR-0022.
 	s.enrichRegistryState(ctx, analyses)
 
+	// OSV.dev lookups (best-effort). One batch first asks which packages, in
+	// every OSV-supported ecosystem, have no advisory at all, so the two steps
+	// below query only the rest. See ADR-0027.
+	s.primeOSVNoAdvisories(ctx, analyses)
+
 	// Advisory-database maintenance facts (best-effort): record whether a
 	// third-party advisory curator has flagged the package as unmaintained.
 	// Cargo only, and deliberately never an EOL state. See ADR-0025.
-	s.primeOSVNoAdvisories(ctx, analyses)
 	s.enrichAdvisoryDBState(ctx, analyses)
+
+	// Malicious-package advisories (best-effort), every OSV-supported
+	// ecosystem. See ADR-0027.
 	s.enrichMaliciousState(ctx, analyses)
 
 	// Registry release history (best-effort): npm's publish time for every
