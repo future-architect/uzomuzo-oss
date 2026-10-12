@@ -351,6 +351,45 @@ func TestQueryPackage_ExplicitNullVulnsIsNotACleanAnswer(t *testing.T) {
 	}
 }
 
+// A body that spells one field two ways could drop advisories, a record's ID
+// or the next page under a lenient decode, so it must be an error, not a clean
+// answer. A single variant spelling without a null is still read.
+func TestQueryPackage_AmbiguousKeysAreNotAnAnswer(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		body    string
+		wantErr bool
+	}{
+		{"upper-case null vulns", `{"VULNS":null}`, true},
+		{"long-s null vulns", `{"vulnſ":null}`, true},
+		{"repeated vulns", `{"vulns":[{"id":"MAL-1"}],"vulns":[]}`, true},
+		{"variant vulns pair", `{"vulns":[{"id":"MAL-1"}],"Vulns":[]}`, true},
+		{"repeated next page token", `{"vulns":[{"id":"MAL-1"}],"next_page_token":"p","next_page_token":""}`, true},
+		{"repeated record id", `{"vulns":[{"id":"MAL-1","ID":""}]}`, true},
+		{"repeated package name deep inside", `{"vulns":[{"id":"MAL-1","affected":[{"package":{"name":"chalk","NAME":"x"}}]}]}`, true},
+		{"same key in sibling objects is fine", `{"vulns":[{"id":"MAL-1"},{"id":"MAL-2"}]}`, false},
+		{"empty object is fine", `{}`, false},
+		{"single upper-case vulns with records", `{"VULNS":[{"id":"MAL-1"}]}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = fmt.Fprint(w, tt.body)
+			}))
+			defer srv.Close()
+			c := NewClient()
+			c.SetBaseURL(srv.URL)
+			c.SetCacheTTL(time.Minute)
+			_, err := c.QueryPackage(context.Background(), "npm", "chalk")
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("error = %v, want error %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestQueryPackage_UnrecognizedRangeKeysAreNotSilentlyDropped(t *testing.T) {
 	t.Parallel()
 	// A future key on the range object could carry an upper bound, so the range

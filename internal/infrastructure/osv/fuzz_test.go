@@ -196,6 +196,39 @@ func FuzzDecodeBatchResults(f *testing.F) {
 	})
 }
 
+// FuzzFoldKey checks the property checkUnambiguousKeys relies on: two keys get
+// the same foldKey exactly when strings.EqualFold, the fold encoding/json uses
+// for field names, reports them equal.
+func FuzzFoldKey(f *testing.F) {
+	for _, p := range [][2]string{
+		{"vulns", "VULNS"}, {"vulns", "vulnſ"}, {"k", "K"}, {"id", "ID"},
+		{"vulns", "vulnz"}, {"", ""}, {"ß", "SS"}, {"\xff", "\xfe"},
+	} {
+		f.Add(p[0], p[1])
+	}
+	f.Fuzz(func(t *testing.T, a, b string) {
+		if got, want := foldKey(a) == foldKey(b), strings.EqualFold(a, b); got != want {
+			t.Fatalf("foldKey(%q)==foldKey(%q) is %v, EqualFold is %v", a, b, got, want)
+		}
+	})
+}
+
+// FuzzCheckUnambiguousKeys feeds arbitrary bodies through the key check, which
+// walks its own token stack: it must neither panic nor hang on malformed,
+// truncated or deeply nested input.
+func FuzzCheckUnambiguousKeys(f *testing.F) {
+	for _, s := range osvFuzzSeeds {
+		f.Add(s)
+	}
+	f.Add(`{"vulns":[{"id":"MAL-1","ID":""}]}`)
+	f.Add(`{"a":{"b":[{"c":1},{"c":2}]},"A":0}`)
+	f.Add(`{}}]]{`)
+	f.Add(strings.Repeat(`{"a":[`, 300))
+	f.Fuzz(func(t *testing.T, body string) {
+		_ = checkUnambiguousKeys([]byte(body)) // only panics and hangs are failures here
+	})
+}
+
 // checkAdmissible restates every admission rule ClassifyUnmaintained applies,
 // so a positive verdict can be checked against the input that produced it.
 func checkAdmissible(rec *domain.AdvisoryRecord, name string, now time.Time) error {
