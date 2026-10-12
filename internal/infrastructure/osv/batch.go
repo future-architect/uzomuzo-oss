@@ -122,8 +122,14 @@ func (c *Client) primeChunk(ctx context.Context, chunk []PackageRef) error {
 		if !r.clean {
 			continue
 		}
-		c.noAdvisory.Set(chunk[i].Ecosystem+"/"+chunk[i].Name, true)
-		empty++
+		key := chunk[i].Ecosystem + "/" + chunk[i].Name
+		c.storeMu.Lock()
+		// Records stored by a concurrent query are newer than this answer.
+		if _, has := c.cache.Get(key); !has {
+			c.noAdvisory.Set(key, true)
+			empty++
+		}
+		c.storeMu.Unlock()
 	}
 	slog.Debug("osv_querybatch_primed", "packages", len(chunk), "no_advisories", empty)
 	return nil

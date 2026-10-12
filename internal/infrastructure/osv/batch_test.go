@@ -195,6 +195,11 @@ func TestPrimeNoAdvisories_LateBatchAnswerDoesNotHideRecords(t *testing.T) {
 	if got := queryAll(t, c, "atty")["atty"]; got != 3 {
 		t.Errorf("records after a late clean batch answer: %d, want 3", got)
 	}
+	// The late answer must not be stored at all: stored, it would outlive the
+	// records and read as clean once they expire.
+	if _, ok := c.noAdvisory.Get("crates.io/atty"); ok {
+		t.Error("late clean batch answer was stored next to existing records")
+	}
 }
 
 // A batch slower than the /v1/query timeout but within batchTimeout still

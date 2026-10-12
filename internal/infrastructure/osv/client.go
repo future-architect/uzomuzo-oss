@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -59,6 +60,10 @@ type Client struct {
 	// advisory. It is kept apart from cache so that a late batch answer can
 	// never overwrite records a concurrent QueryPackage has stored.
 	noAdvisory ttlcache.Cache[bool]
+	// storeMu makes "records absent, so store no-advisory" one step against a
+	// concurrent records store. Without it a batch answer landing just after
+	// records were stored would outlive them and later read as clean.
+	storeMu sync.Mutex
 }
 
 // noRetry is the retry policy for the querybatch prime.
@@ -145,7 +150,9 @@ func (c *Client) QueryPackage(ctx context.Context, ecosystem, name string) ([]do
 		}
 		next := strings.TrimSpace(resp.NextPageToken)
 		if next == "" {
+			c.storeMu.Lock()
 			c.cache.Set(key, out)
+			c.storeMu.Unlock()
 			return out, nil
 		}
 		// A repeated token means the server is not advancing. Continuing would
