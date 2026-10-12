@@ -118,6 +118,10 @@ func TestPrimeNoAdvisories_UnclearAnswersFallBackToQuery(t *testing.T) {
 		{"results missing", func(int) (int, string) { return http.StatusOK, `{}` }, "a,b"},
 		{"explicit null vulns", func(int) (int, string) { return http.StatusOK, `{"results":[{"vulns":null},{}]}` }, "a"},
 		{"result not an object", func(int) (int, string) { return http.StatusOK, `{"results":[null,{}]}` }, "a"},
+		{"upper-case null vulns", func(int) (int, string) { return http.StatusOK, `{"results":[{"VULNS":null},{}]}` }, "a"},
+		{"repeated vulns key", func(int) (int, string) { return http.StatusOK, `{"results":[{"vulns":null,"vulns":[]},{}]}` }, "a"},
+		{"mixed-case advisory list", func(int) (int, string) { return http.StatusOK, `{"results":[{"Vulns":[{"id":"MAL-1"}]},{}]}` }, "a"},
+		{"mixed-case next page", func(int) (int, string) { return http.StatusOK, `{"results":[{"Next_Page_Token":"p"},{}]}` }, "a"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -199,6 +203,67 @@ func TestPrimeNoAdvisories_LateBatchAnswerDoesNotHideRecords(t *testing.T) {
 	// records and read as clean once they expire.
 	if _, ok := c.noAdvisory.Get("crates.io/atty"); ok {
 		t.Error("late clean batch answer was stored next to existing records")
+	}
+}
+
+// Records cached during a batch and then expired before its late clean answer
+// must not leave that answer serving the package as clean: the answer is as
+// old as its request, so it expires no later than the records did.
+func TestPrimeNoAdvisories_LateAnswerAfterRecordsExpired(t *testing.T) {
+	t.Parallel()
+	const ttl = 150 * time.Millisecond
+	release := make(chan struct{})
+	b := &batchServer{batchBody: func(int) (int, string) {
+		<-release
+		return http.StatusOK, `{"results":[{}]}`
+	}}
+	c := newBatchClient(t, b)
+	c.SetCacheTTL(ttl)
+
+	done := make(chan struct{})
+	go func() {
+		c.PrimeNoAdvisories(context.Background(), refs("atty"))
+		close(done)
+	}()
+	deadline := time.After(5 * time.Second)
+	for {
+		b.mu.Lock()
+		n := len(b.batches)
+		b.mu.Unlock()
+		if n == 1 {
+			break
+		}
+		select {
+		case <-deadline:
+			close(release)
+			t.Fatal("batch request was never sent")
+		case <-time.After(time.Millisecond):
+		}
+	}
+	if got := queryAll(t, c, "atty")["atty"]; got != 3 {
+		t.Fatalf("records before the batch answered: %d, want 3", got)
+	}
+	time.Sleep(2 * ttl) // the records expire while the batch is still out
+	close(release)
+	<-done
+	if got := queryAll(t, c, "atty")["atty"]; got != 3 {
+		t.Errorf("records after they expired and a late clean answer arrived: %d, want 3", got)
+	}
+}
+
+// Advisories found while caching is off are not stored, so turning caching
+// back on must not revive an older no-advisory answer.
+func TestPrimeNoAdvisories_ClearedWhenTTLChanges(t *testing.T) {
+	t.Parallel()
+	b := &batchServer{batchBody: func(int) (int, string) {
+		return http.StatusOK, `{"results":[{}]}`
+	}}
+	c := newBatchClient(t, b)
+	c.PrimeNoAdvisories(context.Background(), refs("atty"))
+	c.SetCacheTTL(0)
+	c.SetCacheTTL(time.Minute)
+	if got := queryAll(t, c, "atty")["atty"]; got != 3 {
+		t.Errorf("records after re-enabling the cache: %d, want 3 from a fresh query", got)
 	}
 }
 

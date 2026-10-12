@@ -64,6 +64,9 @@ type Client struct {
 	// concurrent records store. Without it a batch answer landing just after
 	// records were stored would outlive them and later read as clean.
 	storeMu sync.Mutex
+	// ttlChangedAt is the last SetCacheTTL call. A batch asked before it is not
+	// stored, for the reason SetCacheTTL clears noAdvisory. Guarded by storeMu.
+	ttlChangedAt time.Time
 }
 
 // noRetry is the retry policy for the querybatch prime.
@@ -102,8 +105,14 @@ func (c *Client) SetBaseURL(u string) { c.baseURL = strings.TrimRight(u, "/") }
 
 // SetCacheTTL sets the in-memory cache TTL (<=0 disables caching).
 func (c *Client) SetCacheTTL(d time.Duration) {
+	c.storeMu.Lock()
+	defer c.storeMu.Unlock()
 	c.cache.SetTTL(d)
+	// Advisories found while caching was off were never stored, so an older
+	// no-advisory answer must not come back when caching is turned on again.
+	c.noAdvisory.Clear()
 	c.noAdvisory.SetTTL(d)
+	c.ttlChangedAt = time.Now()
 }
 
 // QueryPackage returns every advisory OSV.dev holds for one package, reduced to
@@ -254,15 +263,6 @@ type queryResponse struct {
 
 type batchRequest struct {
 	Queries []queryRequest `json:"queries"`
-}
-
-// batchResult is one entry of a querybatch response's results array. It lists
-// only advisory IDs, never the records themselves.
-type batchResult struct {
-	Vulns []struct {
-		ID string `json:"id"`
-	} `json:"vulns"`
-	NextPageToken string `json:"next_page_token"`
 }
 
 type wireVuln struct {

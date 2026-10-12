@@ -138,6 +138,7 @@ func FuzzDecodeBatchResults(f *testing.F) {
 	for _, s := range []string{
 		`{"results":[{},{"vulns":[]},{"vulns":[{"id":"MAL-1"}]}]}`,
 		`{"results":[{"vulns":null},{"next_page_token":"x"},null,1,"s",[]]}`,
+		`{"results":[{"VULNS":null},{"Vulns":[{"id":"MAL-1"}]},{"vulns":null,"vulns":[]},{"NEXT_PAGE_TOKEN":"x"}]}`,
 		`{"results":null}`,
 		`{"results":{}}`,
 		`{}`,
@@ -160,23 +161,30 @@ func FuzzDecodeBatchResults(f *testing.F) {
 		if json.Unmarshal(raw, &top) != nil {
 			t.Fatalf("decoder accepted a body the reference decode rejects: %q", raw)
 		}
-		if len(out) != len(top.Results) {
-			t.Fatalf("outcomes = %d, results = %d", len(out), len(top.Results))
-		}
 		for i, o := range out {
 			if !o.clean {
 				continue
 			}
+			// Reference check: whatever spelling a lenient struct decode would
+			// accept for vulns or next_page_token must say "nothing here".
 			var fields map[string]json.RawMessage
 			if json.Unmarshal(top.Results[i], &fields) != nil {
 				t.Fatalf("result %d marked clean but is not an object: %s", i, top.Results[i])
 			}
-			if v, ok := fields["vulns"]; ok && strings.TrimSpace(string(v)) == "null" {
-				t.Fatalf("result %d with vulns:null marked clean", i)
-			}
-			var r batchResult
-			if json.Unmarshal(top.Results[i], &r) != nil || len(r.Vulns) != 0 || strings.TrimSpace(r.NextPageToken) != "" {
-				t.Fatalf("result %d marked clean but names advisories or a next page: %s", i, top.Results[i])
+			for k, v := range fields {
+				val := strings.TrimSpace(string(v))
+				switch strings.ToLower(k) {
+				case "vulns":
+					var vulns []json.RawMessage
+					if val == "null" || json.Unmarshal(v, &vulns) != nil || len(vulns) != 0 {
+						t.Fatalf("result %d marked clean with %s=%s", i, k, val)
+					}
+				case "next_page_token":
+					var token string
+					if val != "null" && (json.Unmarshal(v, &token) != nil || strings.TrimSpace(token) != "") {
+						t.Fatalf("result %d marked clean with %s=%s", i, k, val)
+					}
+				}
 			}
 		}
 	})

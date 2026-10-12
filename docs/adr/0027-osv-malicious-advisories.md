@@ -169,12 +169,14 @@ two. It covers every dependency scanned, including entries a filter such as
   `/v1/query`. The batch gets one attempt within 10 seconds and no retry; a
   failed or unclear batch answer falls back to one `/v1/query` per package.
   Its "no advisory" answers are kept apart from the records, so a late answer
-  cannot hide records a concurrent query stored, and a "no advisory" answer
-  is not stored for a package whose records are already cached. Correction
-  to the bullet above: the OSV lookups do not run alongside the others. They
-  run in sequence with the other enrichment steps, after the deps.dev,
-  GitHub and registry lookups and before the release-history and license
-  lookups, so their time adds to the scan. Measured on 2026-10-12 for npm/cli
+  cannot hide records a concurrent query stored: a "no advisory" answer is
+  not stored for a package whose records are cached, it expires counted from
+  when the batch was sent rather than when it answered, and changing the
+  cache TTL discards it. Correction to the bullet above: the OSV lookups do
+  not run alongside the others. They run in sequence with the other
+  enrichment steps, after the first deps.dev package lookup and the GitHub
+  and registry lookups, and before the release-history, license and
+  dependency-count lookups, so their time adds to the scan. Measured on 2026-10-12 for npm/cli
   (b317f16c80df): the 839 packages took one batch of 1.7 seconds, and 98 of
   them had an advisory and needed their own query; one `/v1/query` per package
   took 30.6 seconds with 16 workers.

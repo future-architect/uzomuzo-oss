@@ -92,6 +92,10 @@ func (c *Client) primeChunk(ctx context.Context, chunk []PackageRef) error {
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 
+	// Answers are stamped with the time they were asked, not received. Records
+	// a concurrent query stores describe a later moment, so they always outlive
+	// a no-advisory answer for the same package, whatever the TTL.
+	asked := time.Now()
 	resp, err := c.batchHTTP.Do(ctx, httpReq)
 	if err != nil {
 		return fmt.Errorf("osv querybatch http failed: %w", err)
@@ -125,8 +129,8 @@ func (c *Client) primeChunk(ctx context.Context, chunk []PackageRef) error {
 		key := chunk[i].Ecosystem + "/" + chunk[i].Name
 		c.storeMu.Lock()
 		// Records stored by a concurrent query are newer than this answer.
-		if _, has := c.cache.Get(key); !has {
-			c.noAdvisory.Set(key, true)
+		if _, has := c.cache.Get(key); !has && !asked.Before(c.ttlChangedAt) {
+			c.noAdvisory.SetAt(key, true, asked)
 			empty++
 		}
 		c.storeMu.Unlock()
@@ -156,21 +160,66 @@ func decodeBatchResults(raw []byte) ([]batchOutcome, error) {
 	}
 	out := make([]batchOutcome, len(items))
 	for i, item := range items {
-		if t := bytes.TrimLeft(item, " \t\r\n"); len(t) == 0 || t[0] != '{' {
-			continue
-		}
-		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(item, &fields); err != nil {
-			continue
-		}
-		if v, ok := fields["vulns"]; ok && string(bytes.TrimSpace(v)) == "null" {
-			continue
-		}
-		var r batchResult
-		if err := json.Unmarshal(item, &r); err != nil {
-			continue
-		}
-		out[i] = batchOutcome{clean: len(r.Vulns) == 0 && strings.TrimSpace(r.NextPageToken) == ""}
+		out[i] = batchOutcome{clean: cleanBatchResult(item)}
 	}
 	return out, nil
+}
+
+// cleanBatchResult reports whether one result is an unambiguous "no advisory":
+// an object whose vulns, if present, is an empty array and whose
+// next_page_token, if present, is an empty string or null.
+//
+// Keys are read one by one instead of through a struct because encoding/json
+// matches field names case-insensitively and lets a repeated key overwrite an
+// earlier one: {"VULNS":null} or {"vulns":null,"vulns":[]} would otherwise
+// decode as an empty list and read as clean.
+func cleanBatchResult(item json.RawMessage) bool {
+	var fields map[string]json.RawMessage
+	if t := bytes.TrimLeft(item, " \t\r\n"); len(t) == 0 || t[0] != '{' {
+		return false
+	}
+	dec := json.NewDecoder(bytes.NewReader(item))
+	if _, err := dec.Token(); err != nil { // opening brace
+		return false
+	}
+	seen := map[string]bool{}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return false
+		}
+		key, ok := tok.(string)
+		if !ok {
+			return false
+		}
+		var v json.RawMessage
+		if err := dec.Decode(&v); err != nil {
+			return false
+		}
+		folded := strings.ToLower(key)
+		if folded != "vulns" && folded != "next_page_token" {
+			continue
+		}
+		if seen[folded] {
+			return false
+		}
+		seen[folded] = true
+		if fields == nil {
+			fields = map[string]json.RawMessage{}
+		}
+		fields[folded] = v
+	}
+	if v, ok := fields["vulns"]; ok {
+		var vulns []json.RawMessage
+		if string(bytes.TrimSpace(v)) == "null" || json.Unmarshal(v, &vulns) != nil || len(vulns) != 0 {
+			return false
+		}
+	}
+	if v, ok := fields["next_page_token"]; ok && string(bytes.TrimSpace(v)) != "null" {
+		var token string
+		if json.Unmarshal(v, &token) != nil || strings.TrimSpace(token) != "" {
+			return false
+		}
+	}
+	return true
 }
