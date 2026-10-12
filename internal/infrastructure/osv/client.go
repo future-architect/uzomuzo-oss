@@ -150,12 +150,13 @@ func (c *Client) storeAnswer(key string, ans cachedAnswer, asked time.Time, from
 // replaces decides whether ans may overwrite the cached old for one package.
 //
 // The rule is "an answer naming an advisory is never replaced by one that
-// does not". OSV.dev keeps withdrawn advisories (marked withdrawn), so an
-// empty answer after records is almost always the stale one. When it is not,
-// because an advisory's affected list dropped the package, the cost is
-// reporting that advisory until the entry expires, not hiding one. Request
-// order is not used to settle this: a ticket is taken before the request is
-// built, so it does not prove which request reached OSV.dev first.
+// does not", because request order cannot tell which of two overlapping
+// answers is current: a ticket is taken before the request is built, so it
+// does not prove which request reached OSV.dev first. The cost: when an
+// advisory is withdrawn (OSV.dev then leaves it out of query answers) or its
+// affected list drops the package, the cached records keep reporting it until
+// the entry expires. That errs toward reporting an advisory, never toward
+// hiding one, and a new process starts with an empty cache.
 func replaces(ans, old cachedAnswer) bool {
 	oldHasRecords := !old.needsQuery && len(old.recs) > 0
 	switch {

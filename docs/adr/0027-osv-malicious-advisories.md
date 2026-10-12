@@ -178,9 +178,11 @@ two. It covers every dependency scanned, including entries a filter such as
   answer clears (an empty one only if it was sent after that batch). A batch "no advisory" is stored as an empty record list
   only over another empty answer. Request order is not used to settle these
   cases, because the order requests were numbered in does not prove the
-  order they reached OSV.dev. Since OSV.dev keeps withdrawn advisories, an
-  empty answer after records is almost always the stale one; when it is not,
-  the advisory keeps being reported until the entry expires.
+  order they reached OSV.dev. The cost: OSV.dev leaves a withdrawn advisory
+  out of query answers (MAL-2024-2929 is no longer returned for react), so
+  within one process a withdrawn advisory, or one that stops listing the
+  package, keeps being reported until its cached entry expires, ten minutes
+  by default. Each `uzomuzo` run starts with an empty cache.
   Changing the cache TTL empties the cache and drops answers to requests
   sent before the change. Correction to the bullet
   above: the OSV lookups do not run alongside the others. They run in
