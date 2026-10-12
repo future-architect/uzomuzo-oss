@@ -282,24 +282,13 @@ func (c *Client) queryPage(ctx context.Context, ecosystem, name, pageToken strin
 	if trimmed := bytes.TrimLeft(raw, " \t\r\n"); len(trimmed) == 0 || trimmed[0] != '{' {
 		return nil, fmt.Errorf("osv query response was not a JSON object")
 	}
-	// The struct decode below folds key case and lets a repeated key replace
-	// the first, so a body that spells one field two ways is ambiguous: it
-	// could drop advisories ({"vulns":[...],"vulns":[]}), a record's ID, or the
-	// next page token. Such a body is an error, not an answer.
+	// The struct decode below folds key case, lets a repeated key replace the
+	// first and turns null into an empty value, so such a body could read as
+	// fewer advisories than OSV.dev sent ({"vulns":null}, {"id":null}, a range
+	// key spelled "TYPE"). It is an error, not an answer. A package with no
+	// advisories answers `{}`, so an absent vulns field stays a clean answer.
 	if err := checkUnambiguousKeys(raw); err != nil {
 		return nil, fmt.Errorf("osv query decode failed: %w", err)
-	}
-	// A package with no advisories answers `{}`, so an absent vulns field is a
-	// clean answer. An explicit null is not: the schema has an array there, and
-	// caching it as "no advisories" would hide one for the cache's lifetime.
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return nil, fmt.Errorf("osv query decode failed: %w", err)
-	}
-	for k, v := range fields {
-		if strings.EqualFold(k, "vulns") && string(bytes.TrimSpace(v)) == "null" {
-			return nil, fmt.Errorf("osv query response carried a null vulns field")
-		}
 	}
 	var out queryResponse
 	if err := json.Unmarshal(raw, &out); err != nil {
@@ -308,15 +297,38 @@ func (c *Client) queryPage(ctx context.Context, ecosystem, name, pageToken strin
 	return &out, nil
 }
 
-// checkUnambiguousKeys fails when any object in the JSON document holds two
-// keys that encoding/json would match to the same struct field: the same key
-// twice, or two spellings that differ only by case folding (the Kelvin sign
-// and the long s included). It walks tokens rather than decoding, so its cost
-// is linear in the body size.
+// wireKeys are the keys this package reads from an OSV record, by folded form.
+// Any other spelling of one of them is rejected: encoding/json would accept it,
+// but the range and event checks compare keys exactly and would not.
+var wireKeys = foldedSet(
+	"vulns", "next_page_token", "id", "aliases", "summary", "database_specific",
+	"cwe_ids", "published", "withdrawn", "references", "type", "url", "affected",
+	"package", "name", "ecosystem", "ranges", "versions", "informational",
+	"events", "introduced", "fixed", "last_affected", "limit",
+)
+
+// nonNullKeys are the keys whose null value would silently drop an advisory
+// or a match: a record without its ID, a package without its name, a range
+// without its events. A null there makes the body a failed lookup.
+var nonNullKeys = map[string]bool{
+	"vulns": true, "id": true, "affected": true, "package": true, "name": true,
+	"ecosystem": true, "ranges": true, "type": true, "events": true,
+	"introduced": true, "fixed": true, "last_affected": true, "limit": true,
+	"versions": true, "database_specific": true, "cwe_ids": true,
+}
+
+// checkUnambiguousKeys fails when the JSON document could decode to less than
+// OSV.dev sent. That is when an object holds two keys encoding/json would
+// match to one struct field (the same key twice, or spellings that differ only
+// by case folding, the Kelvin sign and the long s included), when a key this
+// package reads is spelled other than exactly, or when one of nonNullKeys is
+// null. It walks tokens rather than decoding, so its cost is linear in the
+// body size.
 func checkUnambiguousKeys(raw []byte) error {
 	type frame struct {
 		object    bool
 		expectKey bool
+		lastKey   string
 		keys      map[string]bool
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
@@ -338,9 +350,16 @@ func checkUnambiguousKeys(raw []byte) error {
 			if top.keys[folded] {
 				return fmt.Errorf("object key %q is repeated or has a variant spelling", key)
 			}
+			if canonical, known := wireKeys[folded]; known && key != canonical {
+				return fmt.Errorf("object key %q is a variant spelling of %q", key, canonical)
+			}
 			top.keys[folded] = true
+			top.lastKey = key
 			top.expectKey = false
 			continue
+		}
+		if tok == nil && top != nil && top.object && nonNullKeys[top.lastKey] {
+			return fmt.Errorf("object key %q is null", top.lastKey)
 		}
 		switch tok {
 		case json.Delim('{'):
@@ -357,6 +376,14 @@ func checkUnambiguousKeys(raw []byte) error {
 			stack[len(stack)-1].expectKey = true
 		}
 	}
+}
+
+func foldedSet(names ...string) map[string]string {
+	out := make(map[string]string, len(names))
+	for _, n := range names {
+		out[foldKey(n)] = n
+	}
+	return out
 }
 
 // foldKey maps s to one representative of its case-folding class, so two keys
