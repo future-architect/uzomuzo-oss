@@ -175,8 +175,11 @@ two. It covers every dependency scanned, including entries a filter such as
   entry expires counted from when its request was sent. A batch "no
   advisory" is stored as an empty record list and never replaces records a
   query found; a batch result naming an advisory stores a mark that sends
-  the package to `/v1/query` and keeps any older "no advisory" out. A late
-  answer therefore never replaces or outlives what a later request found.
+  the package to `/v1/query`. Only a query answer clears that mark: no batch
+  "no advisory" replaces it, and it replaces any empty answer already stored,
+  whichever was sent first. A late answer therefore never replaces or
+  outlives what a later request found, and a package any batch named an
+  advisory for always gets its own query.
   Changing the cache TTL empties the cache and drops answers to requests
   sent before the change. Correction to the bullet
   above: the OSV lookups do not run alongside the others. They run in

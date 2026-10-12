@@ -136,7 +136,10 @@ func (c *Client) nextTicket() (uint64, time.Time) {
 // An answer is dropped when its request was numbered before the cached
 // answer's: a slow reply must not overwrite what a later request found. It is
 // also dropped when its request predates the last SetCacheTTL, and when it is
-// a querybatch "no advisory" and records a query found are cached.
+// a querybatch "no advisory" while query records with an advisory, or a
+// needs-query mark, are cached. A needs-query mark replaces any cached empty
+// answer regardless of order, so a package any batch named an advisory for is
+// settled only by its own query.
 func (c *Client) storeAnswer(key string, ans cachedAnswer, asked time.Time, fromBatch bool) bool {
 	c.storeMu.Lock()
 	defer c.storeMu.Unlock()
@@ -144,10 +147,19 @@ func (c *Client) storeAnswer(key string, ans cachedAnswer, asked time.Time, from
 		return false
 	}
 	if old, has := c.cache.Get(key); has {
-		if ans.ticket < old.ticket {
+		batchEmpty := fromBatch && !ans.needsQuery
+		oldBatchEmpty := !old.needsQuery && len(old.recs) == 0
+		switch {
+		case batchEmpty && old.needsQuery:
+			// A batch that named an advisory is settled only by a query, never
+			// by another batch, whichever batch was sent first.
 			return false
-		}
-		if fromBatch && !ans.needsQuery && !old.needsQuery && len(old.recs) > 0 {
+		case ans.needsQuery && oldBatchEmpty:
+			// Same rule from the other side: the mark wins over any empty answer
+			// already stored, so the package still gets its query.
+		case ans.ticket < old.ticket:
+			return false
+		case batchEmpty && len(old.recs) > 0:
 			return false
 		}
 	}
