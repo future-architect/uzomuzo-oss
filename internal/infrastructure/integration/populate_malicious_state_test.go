@@ -125,3 +125,41 @@ func TestCargoAnalysisSharesOSVFetch(t *testing.T) {
 		t.Fatalf("states: advisory=%+v malicious=%+v", a.AdvisoryDBState, a.MaliciousState)
 	}
 }
+
+// TestAnalyzeFromPURLs_QueriesOnlyPackagesWithAdvisories: the batch prime
+// answers for every package at once, and only a package OSV.dev lists an
+// advisory for gets its own /v1/query. A clean package is still recorded as
+// clean, not as an unknown lookup.
+func TestAnalyzeFromPURLs_QueriesOnlyPackagesWithAdvisories(t *testing.T) {
+	t.Parallel()
+	rec := &osvRecorder{}
+	srv := httptest.NewServer(rec.handler(func(name string) string {
+		if name != "chalk" {
+			return `{"vulns":[]}`
+		}
+		return `{"vulns":[{"id":"MAL-1","affected":[{"package":{"ecosystem":"npm","name":"chalk"},"versions":["5.6.1"]}]}]}`
+	}))
+	defer srv.Close()
+
+	oc := osv.NewClient()
+	oc.SetBaseURL(srv.URL)
+	oc.SetCacheTTL(time.Minute)
+	svc := NewIntegrationService(github.NewClient(&config.Config{}), &stubDepsDevClient{}, WithOSVClient(oc))
+
+	analyses, err := svc.AnalyzeFromPURLs(context.Background(), []string{"pkg:npm/chalk@5.6.1", "pkg:npm/left-pad@1.3.0", "pkg:npm/is-odd@3.0.1"})
+	if err != nil {
+		t.Fatalf("AnalyzeFromPURLs failed: %v", err)
+	}
+	if got := rec.batches.Load(); got != 1 {
+		t.Errorf("querybatch calls = %d, want 1", got)
+	}
+	if got := rec.requested(); !slices.Equal(got, []string{"npm/chalk"}) {
+		t.Errorf("/v1/query requests = %v, want only npm/chalk", got)
+	}
+	if a := analyses["pkg:npm/chalk@5.6.1"]; a == nil || !a.Malicious() {
+		t.Errorf("chalk not marked malicious: %+v", a)
+	}
+	if a := analyses["pkg:npm/left-pad@1.3.0"]; a == nil || a.MaliciousState == nil || a.MaliciousState.Status != domain.MaliciousStatusClean {
+		t.Errorf("left-pad state = %+v, want clean", a)
+	}
+}

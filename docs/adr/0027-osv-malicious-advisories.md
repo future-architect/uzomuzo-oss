@@ -154,13 +154,17 @@ two. It covers every dependency scanned, including entries a filter such as
 
 ## Consequences
 
-- One `POST /v1/query` per distinct package per scan, paginated. Cargo packages
-  cost nothing extra: the ADR-0025 lookup for the same package is cached.
-  Measured on 2026-10-09 with the two lockfiles of ADR-0026, sending the
-  queries alone with 16 workers and no cache: microsoft/vscode (b99bfafc0a36)
-  needs 1,188 queries in 36 seconds, npm/cli (b317f16c80df) 839 queries in 25
-  seconds, with no failures. These are the OSV requests only, not a whole scan,
-  where they run alongside the other lookups.
+- One `POST /v1/querybatch` per 1,000 distinct packages, then one
+  `POST /v1/query` (paginated) for each package the batch lists an advisory
+  for. The batch returns advisory IDs only, so it answers "no advisory" for
+  most packages and the full records still come from `/v1/query`. A failed or
+  unclear batch answer falls back to one `/v1/query` per package. Cargo
+  packages cost nothing extra: the ADR-0025 lookup for the same package is
+  cached. This step runs after the other package lookups, not alongside them,
+  so its time adds to the scan. Measured on 2026-10-12 for npm/cli
+  (b317f16c80df): the 839 packages took one batch of 1.7 seconds, and 98 of
+  them had an advisory and needed their own query; one `/v1/query` per
+  package took 30.6 seconds with 16 workers.
 - **Not covered: takeovers recorded without a machine-readable marker.**
   ctx@0.2.6 (PyPI, 2022) is described as a takeover in PYSEC-2022-199's text,
   and its GitHub advisory has an empty `cwe_ids`. Neither is admitted, and

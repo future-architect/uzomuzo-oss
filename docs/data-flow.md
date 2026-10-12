@@ -88,6 +88,14 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 - Code: `DepsDevClient.fetchLatestRelease`, `DepsDevClient.fetchReleaseInfoBatch` (`internal/infrastructure/depsdev/release.go`)
 - Docs: <https://docs.deps.dev/api/v3alpha/>
 
+#### OSV.dev — Query batch (POST https://api.osv.dev/v1/querybatch)
+
+- Request body: `{"queries":[{"package":{"name":"<name>","ecosystem":"<OSV ecosystem>"}}, ...]}`, at most 1,000 queries per request
+- Fields consumed: per result, in request order — whether `vulns[]` is empty and whether `next_page_token` is absent
+- Purpose: find, in one request, the packages OSV.dev has no advisory for, and cache that empty answer so the query below is issued only for packages that have one. Optimisation only: a failed or unclear batch leaves every package to its own query
+- Code: `osv.Client.PrimeNoAdvisories` (`internal/infrastructure/osv/batch.go`), `IntegrationService.primeOSVNoAdvisories` (`internal/infrastructure/integration/prime_osv.go`)
+- Docs: <https://google.github.io/osv.dev/post-v1-querybatch/>
+
 #### OSV.dev — Query (POST https://api.osv.dev/v1/query)
 
 - Request body: `{"package":{"name":"<crate>","ecosystem":"crates.io"}}`; paginated via the response's `next_page_token`

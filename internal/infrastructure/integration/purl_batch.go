@@ -104,6 +104,7 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// Advisory-database maintenance facts (best-effort): record whether a
 	// third-party advisory curator has flagged the package as unmaintained.
 	// Cargo only, and deliberately never an EOL state. See ADR-0025.
+	s.primeOSVNoAdvisories(ctx, analyses)
 	s.enrichAdvisoryDBState(ctx, analyses)
 	s.enrichMaliciousState(ctx, analyses)
 

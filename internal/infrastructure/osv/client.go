@@ -219,6 +219,23 @@ type queryResponse struct {
 	NextPageToken string     `json:"next_page_token"`
 }
 
+type batchRequest struct {
+	Queries []queryRequest `json:"queries"`
+}
+
+// batchResponse holds one result per query, in request order. A result lists
+// only advisory IDs, never the records themselves.
+type batchResponse struct {
+	Results []batchResult `json:"results"`
+}
+
+type batchResult struct {
+	Vulns []struct {
+		ID string `json:"id"`
+	} `json:"vulns"`
+	NextPageToken string `json:"next_page_token"`
+}
+
 type wireVuln struct {
 	ID               string   `json:"id"`
 	Aliases          []string `json:"aliases"`
