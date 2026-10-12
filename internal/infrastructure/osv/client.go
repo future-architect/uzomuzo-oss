@@ -297,39 +297,58 @@ func (c *Client) queryPage(ctx context.Context, ecosystem, name, pageToken strin
 	return &out, nil
 }
 
-// wireKeys are the keys this package reads from an OSV record, by folded form.
-// Any other spelling of one of them is rejected: encoding/json would accept it,
-// but the range and event checks compare keys exactly and would not.
-var wireKeys = foldedSet(
-	"vulns", "next_page_token", "id", "aliases", "summary", "database_specific",
-	"cwe_ids", "published", "withdrawn", "references", "type", "url", "affected",
-	"package", "name", "ecosystem", "ranges", "versions", "informational",
-	"events", "introduced", "fixed", "last_affected", "limit",
-)
-
-// nonNullKeys are the keys whose null value would silently drop an advisory
-// or a match: a record without its ID, a package without its name, a range
-// without its events. A null there makes the body a failed lookup.
-var nonNullKeys = map[string]bool{
-	"vulns": true, "id": true, "affected": true, "package": true, "name": true,
-	"ecosystem": true, "ranges": true, "type": true, "events": true,
-	"introduced": true, "fixed": true, "last_affected": true, "limit": true,
-	"versions": true, "database_specific": true, "cwe_ids": true,
+// readField is one key this package reads from a /v1/query body. nonNull marks
+// the keys whose null value would silently drop an advisory or a match (a
+// record without its ID, a range without its events, an unmaintained marker
+// turned into an empty string).
+type readField struct {
+	name    string
+	nonNull bool
 }
 
+// readFields lists every key queryPage and the range checks read, by parent
+// path (canonical key names joined by "/", arrays transparent) and folded key.
+// Only these keys are held to exact spelling, uniqueness and the null rule:
+// the OSV schema leaves database_specific and ecosystem_specific contents
+// open, so a key there that this package does not read must not fail a lookup.
+var readFields = func() map[string]readField {
+	byParent := map[string][]readField{
+		"":                             {{"vulns", true}, {"next_page_token", false}},
+		"vulns":                        {{"id", true}, {"aliases", false}, {"summary", false}, {"published", true}, {"withdrawn", false}, {"references", false}, {"database_specific", true}, {"affected", true}},
+		"vulns/references":             {{"type", false}, {"url", false}},
+		"vulns/database_specific":      {{"cwe_ids", true}},
+		"vulns/affected":               {{"package", true}, {"ranges", true}, {"versions", true}, {"database_specific", true}},
+		"vulns/affected/package":       {{"name", true}, {"ecosystem", true}},
+		"vulns/affected/ranges":        {{"type", true}, {"events", true}},
+		"vulns/affected/ranges/events": {{"introduced", true}, {"fixed", true}, {"last_affected", true}, {"limit", true}},
+		// RustSec sends "informational": null on every advisory that is not
+		// informational (RUSTSEC-2022-0042 does), so null here means "no marker".
+		"vulns/affected/database_specific": {{"informational", false}},
+	}
+	out := map[string]readField{}
+	for parent, fields := range byParent {
+		for _, f := range fields {
+			out[parent+"\x00"+foldKey(f.name)] = f
+		}
+	}
+	return out
+}()
+
 // checkUnambiguousKeys fails when the JSON document could decode to less than
-// OSV.dev sent. That is when an object holds two keys encoding/json would
-// match to one struct field (the same key twice, or spellings that differ only
-// by case folding, the Kelvin sign and the long s included), when a key this
-// package reads is spelled other than exactly, or when one of nonNullKeys is
-// null. It walks tokens rather than decoding, so its cost is linear in the
-// body size.
+// OSV.dev sent. For each key in readFields, that is when its object holds it
+// twice or under two spellings encoding/json would fold together (the Kelvin
+// sign and the long s included), when it is spelled other than exactly (the
+// struct decode would accept it, the exact-key range checks would not), or
+// when a nonNull key is null. Keys this package does not read are not checked.
+// It walks tokens rather than decoding, so its cost is linear in the body size.
 func checkUnambiguousKeys(raw []byte) error {
 	type frame struct {
 		object    bool
 		expectKey bool
+		path      string
+		seen      map[string]bool
 		lastKey   string
-		keys      map[string]bool
+		lastField *readField
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	var stack []*frame
@@ -346,27 +365,38 @@ func checkUnambiguousKeys(raw []byte) error {
 			top = stack[len(stack)-1]
 		}
 		if key, isKey := tok.(string); isKey && top != nil && top.object && top.expectKey {
-			folded := foldKey(key)
-			if top.keys[folded] {
-				return fmt.Errorf("object key %q is repeated or has a variant spelling", key)
-			}
-			if canonical, known := wireKeys[folded]; known && key != canonical {
-				return fmt.Errorf("object key %q is a variant spelling of %q", key, canonical)
-			}
-			top.keys[folded] = true
-			top.lastKey = key
 			top.expectKey = false
+			top.lastKey = key
+			top.lastField = nil
+			folded := foldKey(key)
+			f, read := readFields[top.path+"\x00"+folded]
+			if !read {
+				continue
+			}
+			if key != f.name {
+				return fmt.Errorf("object key %q is a variant spelling of %q", key, f.name)
+			}
+			if top.seen[folded] {
+				return fmt.Errorf("object key %q is repeated", key)
+			}
+			top.seen[folded] = true
+			top.lastField = &f
 			continue
 		}
-		if tok == nil && top != nil && top.object && nonNullKeys[top.lastKey] {
+		if tok == nil && top != nil && top.object && top.lastField != nil && top.lastField.nonNull {
 			return fmt.Errorf("object key %q is null", top.lastKey)
 		}
 		switch tok {
-		case json.Delim('{'):
-			stack = append(stack, &frame{object: true, expectKey: true, keys: map[string]bool{}})
-			continue
-		case json.Delim('['):
-			stack = append(stack, &frame{})
+		case json.Delim('{'), json.Delim('['):
+			path := ""
+			if top != nil {
+				path = top.path
+				if top.object {
+					path = strings.TrimPrefix(path+"/"+top.lastKey, "/")
+				}
+			}
+			isObject := tok == json.Delim('{')
+			stack = append(stack, &frame{object: isObject, expectKey: isObject, path: path, seen: map[string]bool{}})
 			continue
 		case json.Delim('}'), json.Delim(']'):
 			stack = stack[:len(stack)-1]
@@ -376,14 +406,6 @@ func checkUnambiguousKeys(raw []byte) error {
 			stack[len(stack)-1].expectKey = true
 		}
 	}
-}
-
-func foldedSet(names ...string) map[string]string {
-	out := make(map[string]string, len(names))
-	for _, n := range names {
-		out[foldKey(n)] = n
-	}
-	return out
 }
 
 // foldKey maps s to one representative of its case-folding class, so two keys

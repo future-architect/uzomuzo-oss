@@ -387,6 +387,12 @@ func TestQueryPackage_AmbiguousKeysAreNotAnAnswer(t *testing.T) {
 		{"null package name", `{"vulns":[{"id":"MAL-1","affected":[{"package":{"name":null,"ecosystem":"npm"}}]}]}`, true},
 		{"null versions", `{"vulns":[{"id":"MAL-1","affected":[{"package":{"name":"chalk","ecosystem":"npm"},"versions":null}]}]}`, true},
 		{"null in a field not read", `{"vulns":[{"id":"MAL-1","database_specific":{"nvd_published_at":null}}]}`, false},
+		{"read key name used in open metadata", `{"vulns":[{"id":"MAL-1","database_specific":{"type":null,"Name":"x","name":"y"}}]}`, false},
+		{"read key name in ecosystem_specific", `{"vulns":[{"id":"MAL-1","affected":[{"package":{"name":"chalk","ecosystem":"npm"},"ecosystem_specific":{"TYPE":null,"id":null}}]}]}`, false},
+		{"null published", `{"vulns":[{"id":"RUSTSEC-1","published":null}]}`, true},
+		// RustSec sends this on every advisory that is not informational.
+		{"null informational is no marker", `{"vulns":[{"id":"RUSTSEC-1","affected":[{"package":{"name":"atty","ecosystem":"crates.io"},"database_specific":{"informational":null}}]}]}`, false},
+		{"null cwe_ids", `{"vulns":[{"id":"GHSA-1","database_specific":{"cwe_ids":null}}]}`, true},
 		{"unknown key in another spelling", `{"vulns":[{"id":"MAL-1","Modified":"x"}]}`, false},
 	}
 	for _, tt := range tests {
