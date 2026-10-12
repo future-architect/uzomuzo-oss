@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 // batchServer answers /v1/querybatch with batchBody(queries) and /v1/query with
@@ -253,6 +255,33 @@ func TestPrimeNoAdvisories_LateAnswerAfterRecordsExpired(t *testing.T) {
 	<-done
 	if got := queryAll(t, c, "atty")["atty"]; got != 3 {
 		t.Errorf("records after they expired and a late clean answer arrived: %d, want 3", got)
+	}
+}
+
+// Two queries for one package overlap: the later request finds an advisory and
+// stores it first, then the earlier request's empty answer arrives. The older
+// answer must not replace the newer one.
+func TestStoreAnswer_OlderAnswerDoesNotReplaceNewer(t *testing.T) {
+	t.Parallel()
+	c := NewClient()
+	key := "npm/chalk"
+	earlier := time.Now()
+	later := earlier.Add(time.Second)
+	advisory := []domain.AdvisoryRecord{{ID: "MAL-1"}}
+
+	if !c.storeAnswer(key, advisory, later, false) {
+		t.Fatal("first store was refused")
+	}
+	if c.storeAnswer(key, []domain.AdvisoryRecord{}, earlier, false) {
+		t.Error("an answer asked earlier replaced the cached, later answer")
+	}
+	got, ok := c.cache.Get(key)
+	if !ok || len(got) != 1 || got[0].ID != "MAL-1" {
+		t.Errorf("cached = %+v, %v; want the MAL-1 record", got, ok)
+	}
+	// A later answer still replaces an earlier one, as a refresh should.
+	if !c.storeAnswer(key, []domain.AdvisoryRecord{}, later.Add(time.Second), false) {
+		t.Error("an answer asked later was refused")
 	}
 }
 

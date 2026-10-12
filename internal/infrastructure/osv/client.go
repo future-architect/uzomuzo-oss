@@ -114,15 +114,19 @@ func (c *Client) SetCacheTTL(d time.Duration) {
 // Dating an answer from its request means records found later always outlive
 // an earlier "no advisory" for the same package, whatever the TTL. onlyIfAbsent
 // is set for querybatch answers, which never replace records a query stored.
-// An answer to a request sent before the last SetCacheTTL is dropped.
+// An answer to a request sent before the cached answer's request, or before
+// the last SetCacheTTL, is dropped.
 func (c *Client) storeAnswer(key string, recs []domain.AdvisoryRecord, asked time.Time, onlyIfAbsent bool) bool {
 	c.storeMu.Lock()
 	defer c.storeMu.Unlock()
 	if asked.Before(c.ttlChangedAt) {
 		return false
 	}
-	if onlyIfAbsent {
-		if _, has := c.cache.Get(key); has {
+	if _, storedAt, has := c.cache.GetWithTime(key); has {
+		// A batch answer never replaces a cached one, and no answer replaces
+		// one asked later: a slow empty reply must not overwrite advisories a
+		// later request already found.
+		if onlyIfAbsent || asked.Before(storedAt) {
 			return false
 		}
 	}

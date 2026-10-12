@@ -92,6 +92,21 @@ func (c *Cache[V]) SetAt(key string, v V, ts time.Time) {
 	c.entries[key] = entry[V]{value: v, ts: ts}
 }
 
+// GetWithTime is Get that also returns the entry's timestamp: the time it was
+// stored, or the ts given to SetAt.
+func (c *Cache[V]) GetWithTime(key string) (V, time.Time, bool) {
+	c.mu.RLock()
+	ttl := c.ttl
+	ent, ok := c.entries[key]
+	c.mu.RUnlock()
+
+	if ttl <= 0 || !ok || time.Since(ent.ts) > ttl {
+		var zero V
+		return zero, time.Time{}, false
+	}
+	return ent.value, ent.ts, true
+}
+
 // Clear removes every entry.
 func (c *Cache[V]) Clear() {
 	c.mu.Lock()
