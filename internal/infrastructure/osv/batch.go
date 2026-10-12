@@ -9,12 +9,17 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-
-	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"time"
 )
 
 // maxBatchQueries is OSV.dev's limit on queries in one querybatch request.
 const maxBatchQueries = 1000
+
+// batchTimeout bounds one querybatch request, retries included (there are
+// none). OSV.dev's stated latency for querybatch is 4 s at P90 and 6 s at P95
+// (https://github.com/google/osv.dev/blob/master/docs/faq.md); past this the
+// per-package queries take over.
+var batchTimeout = 10 * time.Second
 
 // PackageRef names one package in OSV's spelling, as OSVPackageFor returns it.
 type PackageRef struct {
@@ -23,7 +28,7 @@ type PackageRef struct {
 }
 
 // PrimeNoAdvisories asks OSV.dev, through /v1/querybatch, which of pkgs have no
-// advisory at all, and caches an empty answer for each of them. A later
+// advisory at all, and records that answer for each of them. A later
 // QueryPackage for such a package is then served from the cache instead of
 // issuing its own request; a package with any advisory is left to
 // QueryPackage, which fetches the full records.
@@ -52,17 +57,25 @@ func (c *Client) PrimeNoAdvisories(ctx context.Context, pkgs []PackageRef) {
 		if _, ok := c.cache.Get(key); ok {
 			continue
 		}
+		if _, ok := c.noAdvisory.Get(key); ok {
+			continue
+		}
 		pending = append(pending, PackageRef{Ecosystem: eco, Name: n})
 	}
 	for start := 0; start < len(pending); start += maxBatchQueries {
 		chunk := pending[start:min(start+maxBatchQueries, len(pending))]
 		if err := c.primeChunk(ctx, chunk); err != nil {
+			// The remaining chunks would most likely fail the same way; leave
+			// them to their own queries rather than spend another timeout.
 			slog.Debug("osv_querybatch_failed", "packages", len(chunk), "error", err)
+			return
 		}
 	}
 }
 
 func (c *Client) primeChunk(ctx context.Context, chunk []PackageRef) error {
+	ctx, cancel := context.WithTimeout(ctx, batchTimeout)
+	defer cancel()
 	req := batchRequest{Queries: make([]queryRequest, len(chunk))}
 	for i, p := range chunk {
 		req.Queries[i] = queryRequest{Package: queryPackageRef{Name: p.Name, Ecosystem: p.Ecosystem}}
@@ -79,7 +92,7 @@ func (c *Client) primeChunk(ctx context.Context, chunk []PackageRef) error {
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 
-	resp, err := c.http.Do(ctx, httpReq)
+	resp, err := c.batchHTTP.Do(ctx, httpReq)
 	if err != nil {
 		return fmt.Errorf("osv querybatch http failed: %w", err)
 	}
@@ -109,7 +122,7 @@ func (c *Client) primeChunk(ctx context.Context, chunk []PackageRef) error {
 		if !r.clean {
 			continue
 		}
-		c.cache.Set(chunk[i].Ecosystem+"/"+chunk[i].Name, []domain.AdvisoryRecord{})
+		c.noAdvisory.Set(chunk[i].Ecosystem+"/"+chunk[i].Name, true)
 		empty++
 	}
 	slog.Debug("osv_querybatch_primed", "packages", len(chunk), "no_advisories", empty)

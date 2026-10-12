@@ -30,16 +30,19 @@ func (b *batchServer) handler(t *testing.T) http.Handler {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Errorf("decode request: %v", err)
 		}
-		b.mu.Lock()
-		defer b.mu.Unlock()
 		switch r.URL.Path {
 		case "/v1/querybatch":
+			b.mu.Lock()
 			b.batches = append(b.batches, len(body.Queries))
+			b.mu.Unlock()
+			// Not under the lock: a test may hold the answer back.
 			status, out := b.batchBody(len(body.Queries))
 			w.WriteHeader(status)
 			_, _ = fmt.Fprint(w, out)
 		case "/v1/query":
+			b.mu.Lock()
 			b.queried = append(b.queried, body.Package.Name)
+			b.mu.Unlock()
 			_, _ = fmt.Fprint(w, attyPage)
 		default:
 			t.Errorf("unexpected path %s", r.URL.Path)
@@ -149,5 +152,80 @@ func TestPrimeNoAdvisories_SplitsAtTheBatchLimitAndSkipsKnownPackages(t *testing
 
 	if fmt.Sprint(b.batches) != "[1000 1]" {
 		t.Errorf("batch sizes %v, want [1000 1]", b.batches)
+	}
+}
+
+// A batch answer that arrives after a concurrent QueryPackage stored records
+// for the same package must not hide them: the records win.
+func TestPrimeNoAdvisories_LateBatchAnswerDoesNotHideRecords(t *testing.T) {
+	t.Parallel()
+	release := make(chan struct{})
+	b := &batchServer{batchBody: func(int) (int, string) {
+		<-release
+		return http.StatusOK, `{"results":[{}]}`
+	}}
+	c := newBatchClient(t, b)
+
+	done := make(chan struct{})
+	go func() {
+		c.PrimeNoAdvisories(context.Background(), refs("atty"))
+		close(done)
+	}()
+	// Wait until the batch is in flight, then store atty's records.
+	for {
+		b.mu.Lock()
+		n := len(b.batches)
+		b.mu.Unlock()
+		if n == 1 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if got := queryAll(t, c, "atty")["atty"]; got != 3 {
+		t.Fatalf("records before the batch answered: %d, want 3", got)
+	}
+	close(release)
+	<-done
+	if got := queryAll(t, c, "atty")["atty"]; got != 3 {
+		t.Errorf("records after a late clean batch answer: %d, want 3", got)
+	}
+}
+
+// A slow or failing batch is sent once, not retried, and the packages are
+// then queried one by one as before.
+func TestPrimeNoAdvisories_FailureIsNotRetried(t *testing.T) {
+	saved := batchTimeout
+	t.Cleanup(func() { batchTimeout = saved })
+	tests := []struct {
+		name    string
+		timeout time.Duration
+		body    func(int) (int, string)
+	}{
+		{"server error", saved, func(int) (int, string) { return http.StatusInternalServerError, `{}` }},
+		{"slower than the timeout", 50 * time.Millisecond, func(int) (int, string) {
+			time.Sleep(200 * time.Millisecond)
+			return http.StatusOK, `{"results":[{},{}]}`
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			batchTimeout = tt.timeout
+			b := &batchServer{batchBody: tt.body}
+			c := newBatchClient(t, b)
+			start := time.Now()
+			c.PrimeNoAdvisories(context.Background(), refs("a", "b"))
+			if d := time.Since(start); d > time.Second {
+				t.Errorf("prime took %v, want the batch abandoned after one attempt", d)
+			}
+			queryAll(t, c, "a", "b")
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			if len(b.batches) != 1 {
+				t.Errorf("batch requests = %d, want 1 (no retry)", len(b.batches))
+			}
+			if got := strings.Join(b.queried, ","); got != "a,b" {
+				t.Errorf("queried %q, want a,b", got)
+			}
+		})
 	}
 }

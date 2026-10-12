@@ -52,16 +52,27 @@ type Client struct {
 	http    *httpclient.Client
 	baseURL string
 	cache   ttlcache.Cache[[]domain.AdvisoryRecord]
+	// batchHTTP sends /v1/querybatch without retries: the batch is an
+	// optimisation, and a retried timeout would only delay the fallback.
+	batchHTTP *httpclient.Client
+	// noAdvisory holds the packages a querybatch answered as having no
+	// advisory. It is kept apart from cache so that a late batch answer can
+	// never overwrite records a concurrent QueryPackage has stored.
+	noAdvisory ttlcache.Cache[bool]
 }
+
+// noRetry is the retry policy for the querybatch prime.
+var noRetry = httpclient.RetryConfig{}
 
 // NewClient returns an OSV.dev client with sensible HTTP defaults.
 func NewClient() *Client {
 	hc := &http.Client{Timeout: 5 * time.Second}
 	c := &Client{
-		http:    httpclient.NewClient(hc, httpclient.RegistryRetryConfig()),
-		baseURL: "https://api.osv.dev",
+		http:      httpclient.NewClient(hc, httpclient.RegistryRetryConfig()),
+		batchHTTP: httpclient.NewClient(hc, noRetry),
+		baseURL:   "https://api.osv.dev",
 	}
-	c.cache.SetTTL(10 * time.Minute)
+	c.SetCacheTTL(10 * time.Minute)
 	return c
 }
 
@@ -71,13 +82,17 @@ func (c *Client) SetHTTPClient(h *http.Client) {
 		return
 	}
 	c.http = httpclient.NewClient(h, httpclient.RegistryRetryConfig())
+	c.batchHTTP = httpclient.NewClient(h, noRetry)
 }
 
 // SetBaseURL overrides the base host (tests).
 func (c *Client) SetBaseURL(u string) { c.baseURL = strings.TrimRight(u, "/") }
 
 // SetCacheTTL sets the in-memory cache TTL (<=0 disables caching).
-func (c *Client) SetCacheTTL(d time.Duration) { c.cache.SetTTL(d) }
+func (c *Client) SetCacheTTL(d time.Duration) {
+	c.cache.SetTTL(d)
+	c.noAdvisory.SetTTL(d)
+}
 
 // QueryPackage returns every advisory OSV.dev holds for one package, reduced to
 // the fields the domain classifies.
@@ -99,6 +114,10 @@ func (c *Client) QueryPackage(ctx context.Context, ecosystem, name string) ([]do
 	if recs, ok := c.cache.Get(key); ok {
 		slog.Debug("osv_cache_hit", "ecosystem", eco, "name", n)
 		return recs, nil
+	}
+	if _, ok := c.noAdvisory.Get(key); ok {
+		slog.Debug("osv_batch_no_advisory", "ecosystem", eco, "name", n)
+		return []domain.AdvisoryRecord{}, nil
 	}
 
 	var out []domain.AdvisoryRecord

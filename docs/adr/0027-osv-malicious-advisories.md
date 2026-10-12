@@ -157,8 +157,11 @@ two. It covers every dependency scanned, including entries a filter such as
 - One `POST /v1/querybatch` per 1,000 distinct packages, then one
   `POST /v1/query` (paginated) for each package the batch lists an advisory
   for. The batch returns advisory IDs only, so it answers "no advisory" for
-  most packages and the full records still come from `/v1/query`. A failed or
-  unclear batch answer falls back to one `/v1/query` per package. Cargo
+  most packages and the full records still come from `/v1/query`. The batch
+  gets one attempt within 10 seconds and no retry; a failed or unclear batch
+  answer falls back to one `/v1/query` per package. Its "no advisory" answers
+  are kept apart from the records, so a late answer cannot hide records a
+  concurrent query stored. Cargo
   packages cost nothing extra: the ADR-0025 lookup for the same package is
   cached. This step runs after the other package lookups, not alongside them,
   so its time adds to the scan. Measured on 2026-10-12 for npm/cli
