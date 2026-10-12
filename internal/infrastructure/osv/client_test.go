@@ -361,9 +361,10 @@ func TestQueryPackage_ExplicitNullVulnsIsNotACleanAnswer(t *testing.T) {
 	}
 }
 
-// A body that spells one field two ways could drop advisories, a record's ID
-// or the next page under a lenient decode, so it must be an error, not a clean
-// answer. A single variant spelling without a null is still read.
+// A key this client reads that appears twice, is spelled other than exactly,
+// or is null where that would drop data could make a lenient decode lose
+// advisories, a record's ID or the next page, so the body must be an error,
+// not a clean answer. Keys the client does not read are not checked.
 func TestQueryPackage_AmbiguousKeysAreNotAnAnswer(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
