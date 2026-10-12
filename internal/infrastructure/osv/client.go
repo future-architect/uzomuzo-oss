@@ -169,8 +169,13 @@ func replaces(ans, old cachedAnswer) bool {
 		// A batch "no advisory" only refreshes another empty answer, and never
 		// clears a needs-query mark.
 		return !old.needsQuery
+	case old.needsQuery && len(ans.recs) == 0:
+		// An empty query clears a mark only if it was asked after the batch
+		// that set it; an older one may predate the advisory. Kept, the mark
+		// sends the next lookup to a fresh query.
+		return ans.ticket > old.ticket
 	default:
-		// A query answer settles a mark or an empty answer.
+		// Query records settle a mark; a query answer refreshes an empty one.
 		return true
 	}
 }

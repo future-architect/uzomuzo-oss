@@ -175,7 +175,7 @@ two. It covers every dependency scanned, including entries a filter such as
   records are never replaced by an empty answer, whatever order the
   requests were sent or answered in, and a batch result naming an advisory
   stores a mark that sends the package to `/v1/query` and that only a query
-  answer clears. A batch "no advisory" is stored as an empty record list
+  answer clears (an empty one only if it was sent after that batch). A batch "no advisory" is stored as an empty record list
   only over another empty answer. Request order is not used to settle these
   cases, because the order requests were numbered in does not prove the
   order they reached OSV.dev. Since OSV.dev keeps withdrawn advisories, an

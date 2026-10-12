@@ -274,27 +274,37 @@ func TestStoreAnswer_AdvisoryAnswersWin(t *testing.T) {
 		name    string
 		sent    int
 		stores  []answer
-		wantHit bool // QueryPackage would serve from cache
-		wantMAL bool // and the served answer names MAL-1
+		wantHit bool   // QueryPackage would serve from cache
+		wantID  string // and the advisory it serves ("" for none); MAL-<send>
 	}{
 		{"older empty query after newer advisory query", 2,
-			[]answer{{send: 1, advisory: true}, {send: 0}}, true, true},
+			[]answer{{send: 1, advisory: true}, {send: 0}}, true, "MAL-1"},
 		{"older empty batch after newer batch named an advisory", 2,
-			[]answer{{send: 1, batch: true, needQuery: true}, {send: 0, batch: true}}, false, false},
-		{"query answer settles a batch mark whatever the order", 2,
-			[]answer{{send: 1, batch: true, needQuery: true}, {send: 0}}, true, false},
+			[]answer{{send: 1, batch: true, needQuery: true}, {send: 0, batch: true}}, false, ""},
+		{"older empty query keeps a newer batch mark", 2,
+			[]answer{{send: 1, batch: true, needQuery: true}, {send: 0}}, false, ""},
+		{"newer empty query clears an older batch mark", 2,
+			[]answer{{send: 0, batch: true, needQuery: true}, {send: 1}}, true, ""},
+		{"older query records settle a newer batch mark", 2,
+			[]answer{{send: 1, batch: true, needQuery: true}, {send: 0, advisory: true}}, true, "MAL-0"},
+		{"batch mark does not replace query records", 2,
+			[]answer{{send: 0, advisory: true}, {send: 1, batch: true, needQuery: true}}, true, "MAL-0"},
+		{"older query records do not replace newer query records", 2,
+			[]answer{{send: 1, advisory: true}, {send: 0, advisory: true}}, true, "MAL-1"},
+		{"newer query records replace older query records", 2,
+			[]answer{{send: 0, advisory: true}, {send: 1, advisory: true}}, true, "MAL-1"},
 		{"query records after a newer-numbered batch no-advisory", 2,
-			[]answer{{send: 1, batch: true}, {send: 0, advisory: true}}, true, true},
+			[]answer{{send: 1, batch: true}, {send: 0, advisory: true}}, true, "MAL-0"},
 		{"newer batch empty does not replace query records", 2,
-			[]answer{{send: 0, advisory: true}, {send: 1, batch: true}}, true, true},
+			[]answer{{send: 0, advisory: true}, {send: 1, batch: true}}, true, "MAL-0"},
 		{"newer empty batch after older batch named an advisory", 2,
-			[]answer{{send: 0, batch: true, needQuery: true}, {send: 1, batch: true}}, false, false},
+			[]answer{{send: 0, batch: true, needQuery: true}, {send: 1, batch: true}}, false, ""},
 		{"older advisory mark after newer empty batch", 2,
-			[]answer{{send: 1, batch: true}, {send: 0, batch: true, needQuery: true}}, false, false},
+			[]answer{{send: 1, batch: true}, {send: 0, batch: true, needQuery: true}}, false, ""},
 		{"newer query replaces the needs-query mark", 2,
-			[]answer{{send: 0, batch: true, needQuery: true}, {send: 1, advisory: true}}, true, true},
+			[]answer{{send: 0, batch: true, needQuery: true}, {send: 1, advisory: true}}, true, "MAL-1"},
 		{"empty query never replaces advisory records", 2,
-			[]answer{{send: 0, advisory: true}, {send: 1}}, true, true},
+			[]answer{{send: 0, advisory: true}, {send: 1}}, true, "MAL-0"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -309,7 +319,7 @@ func TestStoreAnswer_AdvisoryAnswersWin(t *testing.T) {
 			for _, s := range tt.stores {
 				ans := cachedAnswer{ticket: tickets[s.send], needsQuery: s.needQuery, recs: []domain.AdvisoryRecord{}}
 				if s.advisory {
-					ans.recs = []domain.AdvisoryRecord{{ID: "MAL-1"}}
+					ans.recs = []domain.AdvisoryRecord{{ID: fmt.Sprintf("MAL-%d", s.send)}}
 				}
 				c.storeAnswer(key, ans, asked, s.batch)
 			}
@@ -318,8 +328,15 @@ func TestStoreAnswer_AdvisoryAnswersWin(t *testing.T) {
 			if hit != tt.wantHit {
 				t.Fatalf("served from cache = %v (%+v), want %v", hit, got, tt.wantHit)
 			}
-			if hit && (len(got.recs) == 1 && got.recs[0].ID == "MAL-1") != tt.wantMAL {
-				t.Errorf("served %+v, want MAL-1 = %v", got.recs, tt.wantMAL)
+			if !hit {
+				return
+			}
+			gotID := ""
+			if len(got.recs) > 0 {
+				gotID = got.recs[0].ID
+			}
+			if gotID != tt.wantID {
+				t.Errorf("served %+v, want advisory %q", got.recs, tt.wantID)
 			}
 		})
 	}
