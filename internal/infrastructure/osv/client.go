@@ -339,7 +339,7 @@ func checkUnambiguousKeys(raw []byte) error {
 			return nil
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("read JSON token: %w", err)
 		}
 		var top *frame
 		if len(stack) > 0 {
