@@ -122,6 +122,11 @@ func TestPrimeNoAdvisories_UnclearAnswersFallBackToQuery(t *testing.T) {
 		{"repeated vulns key", func(int) (int, string) { return http.StatusOK, `{"results":[{"vulns":null,"vulns":[]},{}]}` }, "a"},
 		{"mixed-case advisory list", func(int) (int, string) { return http.StatusOK, `{"results":[{"Vulns":[{"id":"MAL-1"}]},{}]}` }, "a"},
 		{"mixed-case next page", func(int) (int, string) { return http.StatusOK, `{"results":[{"Next_Page_Token":"p"},{}]}` }, "a"},
+		{"long-s vulns key", func(int) (int, string) { return http.StatusOK, `{"results":[{"vulnſ":[{"id":"MAL-1"}]},{}]}` }, "a"},
+		{"repeated results key", func(int) (int, string) {
+			return http.StatusOK, `{"results":[{"vulns":[{"id":"MAL-1"}]},{}],"results":[{},{}]}`
+		}, "a,b"},
+		{"long-s results key", func(int) (int, string) { return http.StatusOK, `{"results":[{},{}],"reſults":[{},{}]}` }, "a,b"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -199,10 +204,10 @@ func TestPrimeNoAdvisories_LateBatchAnswerDoesNotHideRecords(t *testing.T) {
 	if got := queryAll(t, c, "atty")["atty"]; got != 3 {
 		t.Errorf("records after a late clean batch answer: %d, want 3", got)
 	}
-	// The late answer must not be stored at all: stored, it would outlive the
-	// records and read as clean once they expire.
-	if _, ok := c.noAdvisory.Get("crates.io/atty"); ok {
-		t.Error("late clean batch answer was stored next to existing records")
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if got := strings.Join(b.queried, ","); got != "atty" {
+		t.Errorf("queried %q, want one query for atty served from the cache afterwards", got)
 	}
 }
 

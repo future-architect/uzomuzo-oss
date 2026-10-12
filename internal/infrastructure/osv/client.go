@@ -56,16 +56,12 @@ type Client struct {
 	// batchHTTP sends /v1/querybatch without retries: the batch is an
 	// optimisation, and a retried timeout would only delay the fallback.
 	batchHTTP *httpclient.Client
-	// noAdvisory holds the packages a querybatch answered as having no
-	// advisory. It is kept apart from cache so that a late batch answer can
-	// never overwrite records a concurrent QueryPackage has stored.
-	noAdvisory ttlcache.Cache[bool]
-	// storeMu makes "records absent, so store no-advisory" one step against a
-	// concurrent records store. Without it a batch answer landing just after
-	// records were stored would outlive them and later read as clean.
+	// storeMu serialises writes to cache. A querybatch "no advisory" answer is
+	// stored only when the key is absent, and that check and the store must be
+	// one step against a concurrent QueryPackage storing records.
 	storeMu sync.Mutex
-	// ttlChangedAt is the last SetCacheTTL call. A batch asked before it is not
-	// stored, for the reason SetCacheTTL clears noAdvisory. Guarded by storeMu.
+	// ttlChangedAt is the last SetCacheTTL call. An answer to a request sent
+	// before it is not stored. Guarded by storeMu.
 	ttlChangedAt time.Time
 }
 
@@ -107,12 +103,31 @@ func (c *Client) SetBaseURL(u string) { c.baseURL = strings.TrimRight(u, "/") }
 func (c *Client) SetCacheTTL(d time.Duration) {
 	c.storeMu.Lock()
 	defer c.storeMu.Unlock()
-	c.cache.SetTTL(d)
 	// Advisories found while caching was off were never stored, so an older
-	// no-advisory answer must not come back when caching is turned on again.
-	c.noAdvisory.Clear()
-	c.noAdvisory.SetTTL(d)
+	// clean answer must not come back when caching is turned on again.
+	c.cache.Clear()
+	c.cache.SetTTL(d)
 	c.ttlChangedAt = time.Now()
+}
+
+// storeAnswer caches recs for key as of asked, the time the request was sent.
+// Dating an answer from its request means records found later always outlive
+// an earlier "no advisory" for the same package, whatever the TTL. onlyIfAbsent
+// is set for querybatch answers, which never replace records a query stored.
+// An answer to a request sent before the last SetCacheTTL is dropped.
+func (c *Client) storeAnswer(key string, recs []domain.AdvisoryRecord, asked time.Time, onlyIfAbsent bool) bool {
+	c.storeMu.Lock()
+	defer c.storeMu.Unlock()
+	if asked.Before(c.ttlChangedAt) {
+		return false
+	}
+	if onlyIfAbsent {
+		if _, has := c.cache.Get(key); has {
+			return false
+		}
+	}
+	c.cache.SetAt(key, recs, asked)
+	return true
 }
 
 // QueryPackage returns every advisory OSV.dev holds for one package, reduced to
@@ -136,11 +151,9 @@ func (c *Client) QueryPackage(ctx context.Context, ecosystem, name string) ([]do
 		slog.Debug("osv_cache_hit", "ecosystem", eco, "name", n)
 		return recs, nil
 	}
-	if _, ok := c.noAdvisory.Get(key); ok {
-		slog.Debug("osv_batch_no_advisory", "ecosystem", eco, "name", n)
-		return []domain.AdvisoryRecord{}, nil
-	}
 
+	// Stored answers are dated from when they were asked; see storeAnswer.
+	started := time.Now()
 	var out []domain.AdvisoryRecord
 	seenTokens := map[string]bool{}
 	pageToken := ""
@@ -159,9 +172,7 @@ func (c *Client) QueryPackage(ctx context.Context, ecosystem, name string) ([]do
 		}
 		next := strings.TrimSpace(resp.NextPageToken)
 		if next == "" {
-			c.storeMu.Lock()
-			c.cache.Set(key, out)
-			c.storeMu.Unlock()
+			c.storeAnswer(key, out, started, false)
 			return out, nil
 		}
 		// A repeated token means the server is not advancing. Continuing would

@@ -139,6 +139,7 @@ func FuzzDecodeBatchResults(f *testing.F) {
 		`{"results":[{},{"vulns":[]},{"vulns":[{"id":"MAL-1"}]}]}`,
 		`{"results":[{"vulns":null},{"next_page_token":"x"},null,1,"s",[]]}`,
 		`{"results":[{"VULNS":null},{"Vulns":[{"id":"MAL-1"}]},{"vulns":null,"vulns":[]},{"NEXT_PAGE_TOKEN":"x"}]}`,
+		`{"results":[{"vulnſ":[{"id":"MAL-1"}]}],"results":[{}]}`,
 		`{"results":null}`,
 		`{"results":{}}`,
 		`{}`,
@@ -161,6 +162,11 @@ func FuzzDecodeBatchResults(f *testing.F) {
 		if json.Unmarshal(raw, &top) != nil {
 			t.Fatalf("decoder accepted a body the reference decode rejects: %q", raw)
 		}
+		// A lenient struct decode must see the same results; if it saw others
+		// (a repeated or variant-spelled key), the decoder read the wrong ones.
+		if len(out) != len(top.Results) {
+			t.Fatalf("outcomes = %d, reference results = %d: %q", len(out), len(top.Results), raw)
+		}
 		for i, o := range out {
 			if !o.clean {
 				continue
@@ -173,13 +179,13 @@ func FuzzDecodeBatchResults(f *testing.F) {
 			}
 			for k, v := range fields {
 				val := strings.TrimSpace(string(v))
-				switch strings.ToLower(k) {
-				case "vulns":
+				switch {
+				case strings.EqualFold(k, "vulns"):
 					var vulns []json.RawMessage
 					if val == "null" || json.Unmarshal(v, &vulns) != nil || len(vulns) != 0 {
 						t.Fatalf("result %d marked clean with %s=%s", i, k, val)
 					}
-				case "next_page_token":
+				case strings.EqualFold(k, "next_page_token"):
 					var token string
 					if val != "null" && (json.Unmarshal(v, &token) != nil || strings.TrimSpace(token) != "") {
 						t.Fatalf("result %d marked clean with %s=%s", i, k, val)

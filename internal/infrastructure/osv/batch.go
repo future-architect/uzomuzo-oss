@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 // maxBatchQueries is OSV.dev's limit on queries in one querybatch request.
@@ -36,9 +38,11 @@ type PackageRef struct {
 // Most packages have no advisory: on the npm CLI lockfile, 741 of 839. One
 // batch request replaces those 741 queries.
 //
-// The prime is an optimisation only. A failed or malformed batch is logged and
-// leaves the cache untouched, so every package falls back to its own query;
-// nothing is ever cached as clean unless OSV.dev said so for that package.
+// The prime is an optimisation only, sent in chunks of 1,000. A failed or
+// malformed chunk is logged and stores nothing, and the chunks after it are not
+// sent; their packages, and every package of the failed chunk, fall back to
+// their own query. Answers from chunks that succeeded before stay cached.
+// Nothing is cached as clean unless OSV.dev said so for that package.
 // With caching disabled (SetCacheTTL <= 0) the answers are dropped and every
 // package is queried on its own, as before.
 func (c *Client) PrimeNoAdvisories(ctx context.Context, pkgs []PackageRef) {
@@ -55,9 +59,6 @@ func (c *Client) PrimeNoAdvisories(ctx context.Context, pkgs []PackageRef) {
 		}
 		seen[key] = true
 		if _, ok := c.cache.Get(key); ok {
-			continue
-		}
-		if _, ok := c.noAdvisory.Get(key); ok {
 			continue
 		}
 		pending = append(pending, PackageRef{Ecosystem: eco, Name: n})
@@ -92,9 +93,6 @@ func (c *Client) primeChunk(ctx context.Context, chunk []PackageRef) error {
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 
-	// Answers are stamped with the time they were asked, not received. Records
-	// a concurrent query stores describe a later moment, so they always outlive
-	// a no-advisory answer for the same package, whatever the TTL.
 	asked := time.Now()
 	resp, err := c.batchHTTP.Do(ctx, httpReq)
 	if err != nil {
@@ -126,14 +124,9 @@ func (c *Client) primeChunk(ctx context.Context, chunk []PackageRef) error {
 		if !r.clean {
 			continue
 		}
-		key := chunk[i].Ecosystem + "/" + chunk[i].Name
-		c.storeMu.Lock()
-		// Records stored by a concurrent query are newer than this answer.
-		if _, has := c.cache.Get(key); !has && !asked.Before(c.ttlChangedAt) {
-			c.noAdvisory.SetAt(key, true, asked)
+		if c.storeAnswer(chunk[i].Ecosystem+"/"+chunk[i].Name, []domain.AdvisoryRecord{}, asked, true) {
 			empty++
 		}
-		c.storeMu.Unlock()
 	}
 	slog.Debug("osv_querybatch_primed", "packages", len(chunk), "no_advisories", empty)
 	return nil
@@ -143,15 +136,12 @@ func (c *Client) primeChunk(ctx context.Context, chunk []PackageRef) error {
 // answered with an object that names no advisory and has no further page.
 type batchOutcome struct{ clean bool }
 
-// decodeBatchResults applies the same strictness as queryPage: only a JSON
-// object is an answer, and a result whose vulns field is an explicit null, or
-// that is not an object at all, is not read as "no advisories".
+// decodeBatchResults reads a querybatch body. Only an unambiguous body is an
+// answer (see strictFields), and a result that is not an unambiguous "no
+// advisory" is reported as not clean, never as clean.
 func decodeBatchResults(raw []byte) ([]batchOutcome, error) {
-	if trimmed := bytes.TrimLeft(raw, " \t\r\n"); len(trimmed) == 0 || trimmed[0] != '{' {
-		return nil, fmt.Errorf("osv querybatch response was not a JSON object")
-	}
-	var top map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &top); err != nil {
+	top, err := strictFields(raw, "results")
+	if err != nil {
 		return nil, fmt.Errorf("osv querybatch decode failed: %w", err)
 	}
 	var items []json.RawMessage
@@ -168,46 +158,10 @@ func decodeBatchResults(raw []byte) ([]batchOutcome, error) {
 // cleanBatchResult reports whether one result is an unambiguous "no advisory":
 // an object whose vulns, if present, is an empty array and whose
 // next_page_token, if present, is an empty string or null.
-//
-// Keys are read one by one instead of through a struct because encoding/json
-// matches field names case-insensitively and lets a repeated key overwrite an
-// earlier one: {"VULNS":null} or {"vulns":null,"vulns":[]} would otherwise
-// decode as an empty list and read as clean.
 func cleanBatchResult(item json.RawMessage) bool {
-	var fields map[string]json.RawMessage
-	if t := bytes.TrimLeft(item, " \t\r\n"); len(t) == 0 || t[0] != '{' {
+	fields, err := strictFields(item, "vulns", "next_page_token")
+	if err != nil {
 		return false
-	}
-	dec := json.NewDecoder(bytes.NewReader(item))
-	if _, err := dec.Token(); err != nil { // opening brace
-		return false
-	}
-	seen := map[string]bool{}
-	for dec.More() {
-		tok, err := dec.Token()
-		if err != nil {
-			return false
-		}
-		key, ok := tok.(string)
-		if !ok {
-			return false
-		}
-		var v json.RawMessage
-		if err := dec.Decode(&v); err != nil {
-			return false
-		}
-		folded := strings.ToLower(key)
-		if folded != "vulns" && folded != "next_page_token" {
-			continue
-		}
-		if seen[folded] {
-			return false
-		}
-		seen[folded] = true
-		if fields == nil {
-			fields = map[string]json.RawMessage{}
-		}
-		fields[folded] = v
 	}
 	if v, ok := fields["vulns"]; ok {
 		var vulns []json.RawMessage
@@ -222,4 +176,57 @@ func cleanBatchResult(item json.RawMessage) bool {
 		}
 	}
 	return true
+}
+
+// strictFields reads a JSON object and returns the values of the named keys,
+// spelled exactly; other keys are ignored. It fails on anything but a single
+// object, on a named key that appears twice, and on a key that differs from a
+// name but that encoding/json would match to it, since that matching folds
+// case, the Kelvin sign and the long s included.
+//
+// A struct decode is not used because of that folding and because a repeated
+// key silently replaces the first: {"VULNS":null}, {"vulnſ":[...]} and
+// {"vulns":null,"vulns":[]} would each decode as an empty advisory list.
+func strictFields(raw []byte, names ...string) (map[string]json.RawMessage, error) {
+	if t := bytes.TrimLeft(raw, " \t\r\n"); len(t) == 0 || t[0] != '{' {
+		return nil, fmt.Errorf("not a JSON object")
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	if _, err := dec.Token(); err != nil { // opening brace
+		return nil, err
+	}
+	out := map[string]json.RawMessage{}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		key, ok := tok.(string)
+		if !ok {
+			return nil, fmt.Errorf("object key is not a string")
+		}
+		var v json.RawMessage
+		if err := dec.Decode(&v); err != nil {
+			return nil, err
+		}
+		for _, name := range names {
+			if !strings.EqualFold(key, name) {
+				continue
+			}
+			if key != name {
+				return nil, fmt.Errorf("key %q is a variant spelling of %q", key, name)
+			}
+			if _, dup := out[name]; dup {
+				return nil, fmt.Errorf("key %q appears twice", name)
+			}
+			out[name] = v
+		}
+	}
+	if _, err := dec.Token(); err != nil { // closing brace
+		return nil, err
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, fmt.Errorf("data after the JSON object")
+	}
+	return out, nil
 }
