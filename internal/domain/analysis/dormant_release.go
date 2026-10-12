@@ -43,12 +43,12 @@ func (a *Analysis) EvaluateDormantRelease(now time.Time, c cfg.LifecycleAssessme
 	}
 	cfg.NormalizeLifecycleConfig(&c)
 	silence := time.Duration(c.DormantSilenceDays) * 24 * time.Hour
-	fresh := time.Duration(c.DormantFreshDays) * 24 * time.Hour
-	if b := DetectDormantBurst(a.ReleaseHistory, a.Package.Version, now, silence, silence); b != nil {
-		return &DormantRelease{Kind: DormantReleaseBurstAcrossLines, Burst: b, Until: b.PublishedAt.Add(silence)}
+	flag := time.Duration(c.DormantFlagDays) * 24 * time.Hour
+	if b := DetectDormantBurst(a.ReleaseHistory, a.Package.Version, now, silence, flag); b != nil {
+		return &DormantRelease{Kind: DormantReleaseBurstAcrossLines, Burst: b, Until: b.PublishedAt.Add(flag)}
 	}
-	if b := DetectFreshDormantRelease(a.ReleaseHistory, a.Package.Version, now, silence, fresh); b != nil {
-		return &DormantRelease{Kind: DormantReleaseFresh, Burst: b, Until: b.PublishedAt.Add(fresh)}
+	if b := DetectFreshDormantRelease(a.ReleaseHistory, a.Package.Version, now, silence, flag); b != nil {
+		return &DormantRelease{Kind: DormantReleaseFresh, Burst: b, Until: b.PublishedAt.Add(flag)}
 	}
 	return nil
 }

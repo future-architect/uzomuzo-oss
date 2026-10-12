@@ -59,17 +59,22 @@ the output whatever the label is.
 
 | Kind | Condition | Flagged for |
 |---|---|---|
-| `burst_across_lines` | ADR-0026: a burst touching ≥ 2 lines after ≥ `DormantSilenceDays` | `DormantSilenceDays` after publication |
-| `fresh` | a stable version from the first burst after ≥ `DormantSilenceDays`, on any number of lines | `DormantFreshDays` after publication |
+| `burst_across_lines` | ADR-0026: a burst touching ≥ 2 lines after ≥ `DormantSilenceDays` | `DormantFlagDays` after publication |
+| `fresh` | a stable version from the first burst after ≥ `DormantSilenceDays`, on any number of lines | `DormantFlagDays` after publication |
 
 When both match, `burst_across_lines` wins. The silence is measured at the
 start of the burst. A follow-up released the next day therefore carries the
 same silence and is flagged too, instead of looking like a release one day
 after the previous one. A prerelease is never flagged as `fresh`.
 
-ADR-0026's label change stays as it was: an Active or Legacy-Safe outcome with
-a burst across lines still becomes Review Needed. The marker adds to it and
-does not replace it.
+ADR-0026's label change stays, with a shorter period: an Active or
+Legacy-Safe outcome with a burst across lines becomes Review Needed for
+`DormantFlagDays` (7) after publication, not for a year. The marker adds to
+the label change and does not replace it, and both clear on the same day.
+This changes released behaviour: under ADR-0026 alone, node-ipc 12.0.1 would
+have stayed in Review Needed until 2027-05-14; now it is Review Needed until
+2026-05-21 14:25:30 UTC, and a `--fail-on review-needed` gate stops failing on
+it after that.
 
 ### What the user sees
 
@@ -88,26 +93,73 @@ the marker clears.
 
 ### `--fail-on dormant-release` is opt-in
 
-Unlike `malicious`, no other `--fail-on` value implies it. A malicious advisory
+Unlike `malicious`, no other `--fail-on` value implies it. A burst across
+lines on an Active or Legacy-Safe package also fails `--fail-on review-needed`
+during its 7 days, through ADR-0026's label change; a single-line return
+fails only `dormant-release`. A malicious advisory
 is a public finding about one version. A return from silence is a heuristic:
 on the two lockfiles below, a team that adopts every release within a week
 would see the `fresh` rule fire 186 and 146 times a year, and none of those
 releases is known to be malicious.
 
-### Why 7 days
+### Why 7 days, on one line and across lines
 
 The 7 days are not the time until a malicious version is removed. npm does not
 record removal times, and some malicious versions are never removed: 30 of the
-1,556 packages still serve one. The 7 days are the time an OSV record usually
-takes to appear: 98% of the recorded takeovers, and 86% of the single
-incidents, had one within 7 days. Once a record
-appears, ADR-0027 takes over and the version becomes `replace`. A version that
-reaches 7 days without a record loses the `fresh` marker. The marker therefore
-covers the gap before the advisories have had time to look.
+1,556 packages still serve one. The 7 days are a bridge until an advisory can
+take over: once an OSV record names the version, ADR-0027 makes it `replace`
+whatever its age.
+
+The figure that matters is how long the record took for the incidents a
+marker would have caught, counted per incident, not per package. The 98% in
+the Context counts packages, most of them from bulk waves whose records come
+quickly, and includes packages that never returned from silence, which no
+marker period affects. Counting only incidents whose first malicious version
+returned from a year of silence, and measuring to the time the record entered
+the OpenSSF malicious-packages data (not the time OSV served it):
+
+| marker period | single-line incidents with a record by then (16) | across-lines incidents (7) |
+|---|---|---|
+| 1 day | 10 | 6 |
+| 3 days | 11 | 7 |
+| 7 days | 13 | 7 |
+| 14 days | 14 | 7 |
+| 60 days | 15 | 7 |
+| 365 days | 16 | 7 |
+
+The three single-line incidents past 7 days took 12.6 days
+(`@0l00000l/auth`), 57 days (`appauthhelper-enduser`) and 310 days
+(`@dydxprotocol/perpetual`). Every across-lines incident had a record within 3
+days. These are 23 incidents, and takeovers that never received a record are
+not in them, so the data does not fix the period. 7 days is a policy that
+covers 13 of the 16 and all 7 seen so far.
+
+ADR-0026 kept a burst across lines flagged for a year. That year was its
+silence threshold reused as a cap, "a policy choice, not a measurement", and
+nothing in the incidents argues for keeping the flag longer than the record
+takes. A longer flag also keeps ordinary releases in front of people. Counting
+the versions carrying the flag on each daily scan of the two lockfiles from
+2025-10-08 to 2026-10-08, averaged per scan and summed over both lockfiles
+(lower figure: the lockfile as it is; upper: every new release adopted on the
+day it came out):
+
+| marker period | across lines | single line |
+|---|---|---|
+| 7 days | 0.04–0.31 | 1.4–6.0 |
+| 14 days | 0.08–0.61 | 2.9–11.8 |
+| 30 days | 0.16–1.3 | 6.2–24.6 |
+| 365 days | 1.2–8.0 | 75–181 |
+
+The across-lines flag is cheap even at a year, so the reason for 7 days is not
+its cost but the absence of a reason for longer. One period for both kinds also
+means one sentence to explain.
+
+The incident counts, the per-scan burden and an independent recount are in
+vuls-lab (`events/ows-2026/data/marker-period-2026-10-11/`).
 
 ### Thresholds
 
-The settings `DormantSilenceDays` (365) and `DormantFreshDays` (7) are separate
+The settings `DormantSilenceDays` (365) and `DormantFlagDays` (7) are separate
 from `RecentStableWindowDays`. Under ADR-0026, `RecentStableWindowDays` set the
 lifecycle recency check, the silence and the burst's flag period all at once,
 so changing one moved the others. 365 days is not an optimum, and the trade-off
@@ -184,6 +236,10 @@ the defence.
 
 - A burst across lines shows up under every label. `--fail-on dormant-release`
   stops CI for it even when the label is Stalled.
+- A burst across lines is Review Needed for 7 days instead of a year. A
+  `--fail-on review-needed` gate that failed on such a version under ADR-0026
+  passes once the 7 days are over; the version is `replace` from then on only
+  if an advisory names it.
 - A release from a quiet package is marked for a week, and the marker's text
   says whether an OSV record exists yet.
 - About 3–6% of the releases in the two measured dependency sets are marked during

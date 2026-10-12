@@ -111,7 +111,7 @@ func runCases(ctx context.Context, c *npmjs.Client, path string) {
 		if domain.DetectFreshDormantRelease(h, tc.Version, day, year, week) != nil {
 			freshMark = "**yes**"
 		}
-		b := domain.DetectDormantBurst(h, tc.Version, day, year, year)
+		b := domain.DetectDormantBurst(h, tc.Version, day, year, week)
 		if b == nil {
 			fmt.Printf("| %s | %s | %s | no | %s | | | |\n", tc.Package, tc.Version, tc.Kind, freshMark)
 			continue
@@ -209,7 +209,7 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 		}
 		anyAge++
 		mark := ""
-		if domain.DetectDormantBurst(h, e.version, now, year, year) != nil {
+		if domain.DetectDormantBurst(h, e.version, now, year, week) != nil {
 			fresh++
 			mark = " (fires)"
 		}
@@ -219,7 +219,7 @@ func runLockfile(ctx context.Context, c *npmjs.Client, path string, now time.Tim
 	fmt.Printf("%s at %s: %d distinct name@version pairs with a publish time (of %d in the lockfile)\n"+
 		"  published after >=365 days without any release (silence alone, any age): %d\n"+
 		"  ... and in a burst across >=2 release lines (any age): %d\n"+
-		"  ... and within the 365-day age limit (what uzomuzo reports): %d\n",
+		"  ... and within the 7-day age limit (what uzomuzo reports): %d\n",
 		path, now.Format(time.DateOnly), evaluated, len(entries), silenceOnly, anyAge, fresh)
 	for _, h := range hits {
 		fmt.Println("  " + h)

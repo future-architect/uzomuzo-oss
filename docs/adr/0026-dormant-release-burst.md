@@ -1,7 +1,7 @@
 # 0026. A release burst across lines after a long silence needs a human
 
 Date: 2026-10-08
-Status: Accepted (amended by [ADR-0028](0028-dormant-release-marker.md): the burst is also carried as a marker next to the label, and the thresholds moved to `DormantSilenceDays`)
+Status: Accepted (amended by [ADR-0028](0028-dormant-release-marker.md): the burst is also carried as a marker next to the label, the silence moved to `DormantSilenceDays`, and a burst stays Review Needed for `DormantFlagDays` (7 days) instead of 365)
 
 ## Context
 
@@ -51,7 +51,8 @@ When the label is **Active or Legacy-Safe** and the analysed version was publish
    release after the silence, counting only releases published by the moment
    of evaluation — that touches at least `DormantBurstMinLines` (2)
    release lines (the major version, or `0.minor` below 1.0), and
-3. no more than `RecentStableWindowDays` ago,
+3. no more than `RecentStableWindowDays` ago (since ADR-0028: no more than
+   `DormantFlagDays`, 7 days, ago),
 
 the label becomes **Review Needed**, with the silence, the lines and the burst in
 the reason and signals. The signals behind the replaced label are kept after
@@ -167,7 +168,7 @@ tooling-heavy; other populations will differ.
 ## Consequences
 
 - `pkg:npm/node-ipc@12.0.1` and its sibling versions are Review Needed until
-  2027-05-14, with the reason "Possible hijacked release. This version came out
+  2027-05-14 (until 2026-05-21 since ADR-0028 shortened the period to 7 days), with the reason "Possible hijacked release. This version came out
   after 639 days with no release, as part of a set published within a day on
   the 9.x, 12.x lines. Takeovers of npm packages that had gone quiet looked like
   this (node-ipc 2026, rc 2021), but so does a maintainer who returns and ships

@@ -102,8 +102,8 @@ func TestEvaluateDormantRelease(t *testing.T) {
 		wantKind  DormantReleaseKind
 		wantUntil string
 	}{
-		{"burst across lines wins over fresh", nodeIPC, "12.0.1", "2026-05-15T00:00:00Z", DormantReleaseBurstAcrossLines, "2027-05-14T14:25:30Z"},
-		{"burst stays after the fresh period", nodeIPC, "12.0.1", "2026-10-08T00:00:00Z", DormantReleaseBurstAcrossLines, "2027-05-14T14:25:30Z"},
+		{"burst across lines wins over fresh", nodeIPC, "12.0.1", "2026-05-15T00:00:00Z", DormantReleaseBurstAcrossLines, "2026-05-21T14:25:30Z"},
+		{"burst clears after the same 7 days", nodeIPC, "12.0.1", "2026-05-21T14:25:31Z", "", ""},
 		{"single line is fresh", quiet, "6.2.2", "2025-09-09T00:00:00Z", DormantReleaseFresh, "2025-09-15T13:16:00Z"},
 		{"single line after the fresh period", quiet, "6.2.2", "2025-10-01T00:00:00Z", "", ""},
 	}

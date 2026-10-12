@@ -53,7 +53,7 @@ var DefaultValues = DefaultConfigValues{
 		HighSeverityCVSSThreshold:  7.0,
 		CommitActivityWindowDays:   365,
 		DormantSilenceDays:         365,
-		DormantFreshDays:           7,
+		DormantFlagDays:            7,
 	},
 	Maven: MavenConfig{
 		// Empty means use client default (repo1.maven.org/maven2). Override via MAVEN_BASE_URL.
@@ -139,12 +139,13 @@ type LifecycleAssessmentConfig struct {
 	HighSeverityCVSSThreshold  float64 `yaml:"high_severity_cvss_threshold" json:"high_severity_cvss_threshold"`
 	CommitActivityWindowDays   int     `yaml:"commit_activity_window_days" json:"commit_activity_window_days"`
 	// DormantSilenceDays is how long a package must go without any release for
-	// its next release to count as a return from silence, and how long a burst
-	// across release lines stays flagged. See ADR-0026 and ADR-0028.
+	// its next release to count as a return from silence. See ADR-0026 and
+	// ADR-0028.
 	DormantSilenceDays int `yaml:"dormant_silence_days" json:"dormant_silence_days"`
-	// DormantFreshDays is how long a return from silence stays flagged when it
-	// touched a single release line. See ADR-0028.
-	DormantFreshDays int `yaml:"dormant_fresh_days" json:"dormant_fresh_days"`
+	// DormantFlagDays is how long a return from silence stays flagged after
+	// publication, on one line or across lines. It also bounds how long
+	// ADR-0026 keeps a burst across lines in Review Needed. See ADR-0028.
+	DormantFlagDays int `yaml:"dormant_flag_days" json:"dormant_flag_days"`
 }
 
 // NormalizeLifecycleConfig fills zero fields of c with defaults from DefaultValues.Lifecycle.
@@ -193,7 +194,7 @@ func NormalizeLifecycleConfig(c *LifecycleAssessmentConfig) {
 	if c.DormantSilenceDays == 0 {
 		c.DormantSilenceDays = def.DormantSilenceDays
 	}
-	if c.DormantFreshDays == 0 {
-		c.DormantFreshDays = def.DormantFreshDays
+	if c.DormantFlagDays == 0 {
+		c.DormantFlagDays = def.DormantFlagDays
 	}
 }

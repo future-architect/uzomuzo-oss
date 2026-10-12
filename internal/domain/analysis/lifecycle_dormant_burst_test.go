@@ -8,10 +8,10 @@ import (
 )
 
 // burstHistory returns a history where "1.0.1" and "2.0.1" were published
-// minutes apart, 800 days after "1.0.0", and 10 days before now. "1.0.1" has
+// minutes apart, 800 days after "1.0.0", and 3 days before now. "1.0.1" has
 // since been removed.
 func burstHistory(now time.Time) *ReleaseHistory {
-	burst := now.AddDate(0, 0, -10)
+	burst := now.AddDate(0, 0, -3)
 	return &ReleaseHistory{
 		Registry: RegistryNpm,
 		PublishedAt: map[string]time.Time{
@@ -177,8 +177,14 @@ func TestApplyDormantBurst(t *testing.T) {
 			}
 		}
 	}
-	// The same burst a year and a day later is past the age limit.
-	late := svc.applyDormantBurst(AssessmentInput{Analysis: a, Now: now.AddDate(1, 0, 1)}, &AssessmentResult{Label: string(LabelActive)})
+	// The label follows the marker's 7 days (ADR-0028): Review Needed at
+	// exactly 7 days after the burst, Active one second later.
+	burst := a.ReleaseHistory.PublishedAt["1.0.1"]
+	edge := svc.applyDormantBurst(AssessmentInput{Analysis: a, Now: burst.Add(7 * 24 * time.Hour)}, &AssessmentResult{Label: string(LabelActive)})
+	if MaintenanceStatus(edge.Label) != LabelReviewNeeded {
+		t.Errorf("at 7 days: %s, want Review Needed", edge.Label)
+	}
+	late := svc.applyDormantBurst(AssessmentInput{Analysis: a, Now: burst.Add(7*24*time.Hour + time.Second)}, &AssessmentResult{Label: string(LabelActive)})
 	if MaintenanceStatus(late.Label) != LabelActive {
 		t.Errorf("past the age limit: %s, want Active", late.Label)
 	}

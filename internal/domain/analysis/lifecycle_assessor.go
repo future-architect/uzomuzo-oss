@@ -23,6 +23,7 @@ type LifecycleAssessmentRules struct {
 	ResidualAdvisoryThreshold  int
 	HighSeverityCVSSThreshold  float64
 	DormantSilenceDays         int
+	DormantFlagDays            int
 }
 
 // LifecycleAssessorService implements lifecycle/activity assessment logic.
@@ -51,6 +52,7 @@ func NewLifecycleAssessorServiceWithConfig(c cfg.LifecycleAssessmentConfig) *Lif
 		ResidualAdvisoryThreshold:  c.ResidualAdvisoryThreshold,
 		HighSeverityCVSSThreshold:  c.HighSeverityCVSSThreshold,
 		DormantSilenceDays:         c.DormantSilenceDays,
+		DormantFlagDays:            c.DormantFlagDays,
 	}
 	return &LifecycleAssessorService{rules: rules}
 }
@@ -69,7 +71,8 @@ func (s *LifecycleAssessorService) Assess(ctx context.Context, in AssessmentInpu
 
 // applyDormantBurst turns an ok outcome (Active or Legacy-Safe) into Review
 // Needed when the analysed version came out in a burst across release lines
-// after DormantSilenceDays without a release, and is no older than that.
+// after DormantSilenceDays without a release, and is no older than
+// DormantFlagDays (ADR-0028 shortened this from a year to the marker's period).
 // Every other label is returned unchanged: replacing Stalled or EOL-* would
 // stop a --fail-on gate on those labels from firing. See ADR-0026.
 func (s *LifecycleAssessorService) applyDormantBurst(in AssessmentInput, res *AssessmentResult) *AssessmentResult {
@@ -78,8 +81,9 @@ func (s *LifecycleAssessorService) applyDormantBurst(in AssessmentInput, res *As
 	default:
 		return res
 	}
-	window := time.Duration(s.rules.DormantSilenceDays) * 24 * time.Hour
-	b := in.Analysis.DormantBurst(in.Now, window, window)
+	silence := time.Duration(s.rules.DormantSilenceDays) * 24 * time.Hour
+	flag := time.Duration(s.rules.DormantFlagDays) * 24 * time.Hour
+	b := in.Analysis.DormantBurst(in.Now, silence, flag)
 	if b == nil {
 		return res
 	}
