@@ -40,10 +40,9 @@ func newAdvisoryDBService(t *testing.T, srvURL string) *IntegrationService {
 	return &IntegrationService{osvClient: c}
 }
 
-// osvRecorder answers every query with body and records the names requested.
-// osvRecorder fakes OSV.dev. calls and names record /v1/query only; a
-// /v1/querybatch is answered from the same body function, reduced to the IDs
-// the real endpoint returns, and counted in batches.
+// osvRecorder fakes OSV.dev. A /v1/query is answered with body and counted in
+// calls and names. A /v1/querybatch is answered from the same body, reduced to
+// the advisory IDs the real endpoint returns, and counted in batches only.
 type osvRecorder struct {
 	mu      sync.Mutex
 	names   []string
