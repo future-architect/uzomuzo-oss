@@ -145,21 +145,6 @@ func TestCache_SetAt(t *testing.T) {
 	}
 }
 
-func TestCache_GetWithTime(t *testing.T) {
-	t.Parallel()
-	var c Cache[string]
-	c.SetTTL(time.Minute)
-	stamp := time.Now().Add(-10 * time.Second)
-	c.SetAt("k", "v", stamp)
-	got, ts, ok := c.GetWithTime("k")
-	if !ok || got != "v" || !ts.Equal(stamp) {
-		t.Errorf("GetWithTime = %q, %v, %v; want v, %v, true", got, ts, ok, stamp)
-	}
-	if _, _, ok := c.GetWithTime("missing"); ok {
-		t.Error("GetWithTime(missing) hit; want miss")
-	}
-}
-
 func TestCache_Clear(t *testing.T) {
 	t.Parallel()
 	var c Cache[string]

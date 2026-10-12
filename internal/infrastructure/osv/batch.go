@@ -93,7 +93,7 @@ func (c *Client) primeChunk(ctx context.Context, chunk []PackageRef) error {
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 
-	asked := time.Now()
+	ticket, asked := c.nextTicket()
 	resp, err := c.batchHTTP.Do(ctx, httpReq)
 	if err != nil {
 		return fmt.Errorf("osv querybatch http failed: %w", err)
@@ -121,10 +121,14 @@ func (c *Client) primeChunk(ctx context.Context, chunk []PackageRef) error {
 	}
 	empty := 0
 	for i, r := range results {
+		key := chunk[i].Ecosystem + "/" + chunk[i].Name
 		if !r.clean {
+			// An advisory (or an unclear result): the package needs its own
+			// query, and no older "no advisory" may be stored in the meantime.
+			c.storeAnswer(key, cachedAnswer{ticket: ticket, needsQuery: true}, asked, true)
 			continue
 		}
-		if c.storeAnswer(chunk[i].Ecosystem+"/"+chunk[i].Name, []domain.AdvisoryRecord{}, asked, true) {
+		if c.storeAnswer(key, cachedAnswer{recs: []domain.AdvisoryRecord{}, ticket: ticket}, asked, true) {
 			empty++
 		}
 	}

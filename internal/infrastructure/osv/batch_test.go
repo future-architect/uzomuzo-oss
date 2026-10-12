@@ -258,30 +258,64 @@ func TestPrimeNoAdvisories_LateAnswerAfterRecordsExpired(t *testing.T) {
 	}
 }
 
-// Two queries for one package overlap: the later request finds an advisory and
-// stores it first, then the earlier request's empty answer arrives. The older
-// answer must not replace the newer one.
-func TestStoreAnswer_OlderAnswerDoesNotReplaceNewer(t *testing.T) {
+// Overlapping requests for one package answer out of order. Each case sends
+// requests in ticket order, then stores their answers in the listed order; the
+// cache must end up serving what the case names. All requests share one send
+// time, so only the ticket order decides.
+func TestStoreAnswer_RequestOrderDecides(t *testing.T) {
 	t.Parallel()
-	c := NewClient()
-	key := "npm/chalk"
-	earlier := time.Now()
-	later := earlier.Add(time.Second)
-	advisory := []domain.AdvisoryRecord{{ID: "MAL-1"}}
-
-	if !c.storeAnswer(key, advisory, later, false) {
-		t.Fatal("first store was refused")
+	type answer struct {
+		send      int // index into the sent tickets
+		advisory  bool
+		batch     bool
+		needQuery bool
 	}
-	if c.storeAnswer(key, []domain.AdvisoryRecord{}, earlier, false) {
-		t.Error("an answer asked earlier replaced the cached, later answer")
+	tests := []struct {
+		name    string
+		sent    int
+		stores  []answer
+		wantHit bool // QueryPackage would serve from cache
+		wantMAL bool // and the served answer names MAL-1
+	}{
+		{"older empty query after newer advisory query", 2,
+			[]answer{{send: 1, advisory: true}, {send: 0}}, true, true},
+		{"older empty batch after newer batch named an advisory", 2,
+			[]answer{{send: 1, batch: true, needQuery: true}, {send: 0, batch: true}}, false, false},
+		{"older empty query after newer batch named an advisory", 2,
+			[]answer{{send: 1, batch: true, needQuery: true}, {send: 0}}, false, false},
+		{"newer batch empty does not replace query records", 2,
+			[]answer{{send: 0, advisory: true}, {send: 1, batch: true}}, true, true},
+		{"newer query replaces the needs-query mark", 2,
+			[]answer{{send: 0, batch: true, needQuery: true}, {send: 1, advisory: true}}, true, true},
+		{"newer empty query refreshes older advisory", 2,
+			[]answer{{send: 0, advisory: true}, {send: 1}}, true, false},
 	}
-	got, ok := c.cache.Get(key)
-	if !ok || len(got) != 1 || got[0].ID != "MAL-1" {
-		t.Errorf("cached = %+v, %v; want the MAL-1 record", got, ok)
-	}
-	// A later answer still replaces an earlier one, as a refresh should.
-	if !c.storeAnswer(key, []domain.AdvisoryRecord{}, later.Add(time.Second), false) {
-		t.Error("an answer asked later was refused")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			c := NewClient()
+			const key = "npm/chalk"
+			asked := time.Now()
+			tickets := make([]uint64, tt.sent)
+			for i := range tickets {
+				tickets[i], _ = c.nextTicket()
+			}
+			for _, s := range tt.stores {
+				ans := cachedAnswer{ticket: tickets[s.send], needsQuery: s.needQuery, recs: []domain.AdvisoryRecord{}}
+				if s.advisory {
+					ans.recs = []domain.AdvisoryRecord{{ID: "MAL-1"}}
+				}
+				c.storeAnswer(key, ans, asked, s.batch)
+			}
+			got, ok := c.cache.Get(key)
+			hit := ok && !got.needsQuery
+			if hit != tt.wantHit {
+				t.Fatalf("served from cache = %v (%+v), want %v", hit, got, tt.wantHit)
+			}
+			if hit && (len(got.recs) == 1 && got.recs[0].ID == "MAL-1") != tt.wantMAL {
+				t.Errorf("served %+v, want MAL-1 = %v", got.recs, tt.wantMAL)
+			}
+		})
 	}
 }
 

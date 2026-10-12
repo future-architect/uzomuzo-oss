@@ -169,13 +169,16 @@ two. It covers every dependency scanned, including entries a filter such as
   `/v1/query`. The batch gets one attempt within 10 seconds and no retry; a
   failed or unclear batch answer falls back to one `/v1/query` per package;
   a result counts as "no advisory" only when each key it reads (`results`,
-  `vulns`, `next_page_token`) is spelled exactly and none repeats. A "no advisory" answer is stored as an empty record list,
-  only when the package has no cached entry, and dated from when the batch
-  was sent; `/v1/query` answers are likewise dated from their request, and an answer
-  never replaces one whose request was sent later. A late
-  batch answer therefore never replaces records a concurrent query stored and
-  never outlives them. Changing the cache TTL empties the cache and drops
-  answers to requests sent before the change. Correction to the bullet
+  `vulns`, `next_page_token`) is spelled exactly and none repeats. Both
+  endpoints' answers share one cache. Every request is numbered when it is
+  sent, and an answer never replaces one from a later-numbered request; each
+  entry expires counted from when its request was sent. A batch "no
+  advisory" is stored as an empty record list and never replaces records a
+  query found; a batch result naming an advisory stores a mark that sends
+  the package to `/v1/query` and keeps any older "no advisory" out. A late
+  answer therefore never replaces or outlives what a later request found.
+  Changing the cache TTL empties the cache and drops answers to requests
+  sent before the change. Correction to the bullet
   above: the OSV lookups do not run alongside the others. They run in
   sequence with the other enrichment steps, after the first deps.dev package
   lookup and the GitHub and registry lookups, and before the release-history,
