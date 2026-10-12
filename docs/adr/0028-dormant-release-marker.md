@@ -199,3 +199,65 @@ the defence.
   more than 65 hours). Others are still served today.
 - The marker is computed from the registry's publish times, not from
   deps.dev, so it is available for npm only.
+
+## Left for later: who published the return
+
+The marker says a quiet package released again. It does not say whether the
+person who released it is the maintainer. Measured on 2026-10-12, not
+implemented; recorded here so the next change starts from data.
+
+**A different publisher alone is not enough.** In the two lockfiles above, 186
+(VS Code) and 146 (npm CLI) versions released between 2025-10-08 and
+2026-10-08 returned from a year's silence. In 18 and 4 of them,
+`versions[v]._npmUser.name` differs from the previous version's, against 0.9%
+and 1.4% of ordinary releases. Most of these are handovers: `content-type`
+2.0.0 came 1,197 days after 1.0.5, published by blakeembrey instead of
+dougwilson, as did `cors`, `http-errors` and `range-parser`. In the registry
+data this looks the same as `is` 3.3.1 (ljharb, then enricomarino). Checking
+whether the new publisher was already in `maintainers` does not help: the
+accounts behind node-ipc 12.0.1 (atiertant) and `is` 3.3.1 (enricomarino) were
+both listed co-maintainers.
+
+**Three more facts separated the cases we have.** For the 20 handovers above
+(after removing the two packages present in both lockfiles) and the three
+dormant takeovers whose publisher could be recovered, each judged with what
+was visible before the release:
+
+| condition | handovers (20) | takeovers (3) |
+|---|---|---|
+| the publishing account released nothing in any other package in the previous 365 days | 3 | 3 |
+| no `<version>` or `v<version>` tag in the GitHub repository | 4 | 3 |
+| both | 0 | 3 |
+
+The e-mail also pointed the same way where it could be read. node-ipc's
+account had used `a.tiertant@atlantis-software.net`, and that domain was
+registered again on 2026-05-07T11:49:33Z, seven days before 12.0.1
+(<https://rdap.org/domain/atlantis-software.net>). `is`'s account changed from
+`enrico.marino@email.com` to `enrico.marino1@outlook.com`. No handover changed
+domain. Provenance (`dist.attestations`) was absent on all 23 versions.
+
+Limits, before anyone builds on this:
+
+- The combination was chosen after seeing the results, from three takeovers.
+  It is a hypothesis for the next incidents, not a measured detection rate.
+- npm removes a malicious version's manifest. The publishers were recovered
+  from ecosyste.ms (`is`), the Wayback Machine (`event-stream`) and incident
+  reports (node-ipc, whose manifest survives nowhere). rc 1.2.9 and coa 2.0.3
+  could not be recovered. To evaluate the idea on future incidents, the
+  scanner would have to keep the packument it saw when a return was marked.
+- npm has no complete per-account publish index; account activity was
+  counted from npm search and ecosyste.ms and undercounts removed packages.
+  event-stream's attacker account no longer appears in either, so its
+  "inactive" reading is weak.
+- A tag can be checked today but not proven to have existed before the
+  release. event-stream's attacker pushed a `3.3.5` commit 13 seconds before
+  publishing, so activity in the repository does not clear a release.
+- A stolen publish token keeps the publisher unchanged (rand-user-agent
+  2.0.83) and passes all of this.
+
+No published work evaluates a publisher change against real takeovers; the
+closest, Santos-Grueiro (2026, <https://arxiv.org/abs/2606.22593>, not peer
+reviewed), could not recover the publisher for 16 of its 23 malicious
+versions. Socket's "New author" alert has no published accuracy. The
+measurements, scripts and an independent recount are in vuls-lab
+(`events/ows-2026/data/publisher-change-2026-10-12/`).
