@@ -167,8 +167,9 @@ tooling-heavy; other populations will differ.
 
 ## Consequences
 
-- `pkg:npm/node-ipc@12.0.1` and its sibling versions are Review Needed until
-  2027-05-14 (until 2026-05-21 since ADR-0028 shortened the period to 7 days), with the reason "Possible hijacked release. This version came out
+- Under this ADR as first accepted, `pkg:npm/node-ipc@12.0.1` and its
+  sibling versions were Review Needed until 2027-05-14. Since ADR-0028 they
+  are Review Needed for 7 days, until 2026-05-21. The reason reads "Possible hijacked release. This version came out
   after 639 days with no release, as part of a set published within a day on
   the 9.x, 12.x lines. Takeovers of npm packages that had gone quiet looked like
   this (node-ipc 2026, rc 2021), but so does a maintainer who returns and ships

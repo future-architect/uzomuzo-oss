@@ -73,7 +73,7 @@ Legacy-Safe outcome with a burst across lines becomes Review Needed for
 the label change and does not replace it, and both clear on the same day.
 This changes released behaviour: under ADR-0026 alone, node-ipc 12.0.1 would
 have stayed in Review Needed until 2027-05-14; now it is Review Needed until
-2026-05-21 14:25:30 UTC, and a `--fail-on review-needed` gate stops failing on
+2026-05-21 14:25:30.311 UTC, and a `--fail-on review-needed` gate stops failing on
 it after that.
 
 ### What the user sees
@@ -118,26 +118,31 @@ marker period affects. Counting only incidents whose first malicious version
 returned from a year of silence, and measuring to the time the record entered
 the OpenSSF malicious-packages data (not the time OSV served it):
 
-| marker period | single-line incidents with a record by then (16) | across-lines incidents (7) |
-|---|---|---|
-| 1 day | 10 | 6 |
-| 3 days | 11 | 7 |
-| 7 days | 13 | 7 |
-| 14 days | 14 | 7 |
-| 60 days | 15 | 7 |
-| 365 days | 16 | 7 |
+27 incidents qualify: 20 that touched one line and 7 that touched two or more.
+An incident here is either one package or one bulk wave counted once.
 
-The three single-line incidents past 7 days took 12.6 days
+| marker period | one-line incidents with a record by then (20) | across-lines incidents with a record by then (7) |
+|---|---|---|
+| 1 day | 11 | 6 |
+| 3 days | 13 | 7 |
+| 7 days | 16 | 7 |
+| 14 days | 17 | 7 |
+| 60 days | 18 | 7 |
+| 365 days | 19 | 7 |
+
+Of the four one-line incidents not covered by 7 days, three took 12.6 days
 (`@0l00000l/auth`), 57 days (`appauthhelper-enduser`) and 310 days
-(`@dydxprotocol/perpetual`). Every across-lines incident had a record within 3
-days. These are 23 incidents, and takeovers that never received a record are
-not in them, so the data does not fix the period. 7 days is a policy that
-covers 13 of the 16 and all 7 seen so far.
+(`@dydxprotocol/perpetual`), and one (a bulk wave on 2025-07-20) has no
+import time. Every across-lines incident had a record within 3 days.
+Takeovers that never received a record are not in these counts, and seven
+across-lines incidents cannot show that 7 days will be enough next time. The
+data does not fix the period; 7 days is a policy that covered 16 of the 20
+one-line incidents and all 7 across lines seen so far.
 
 ADR-0026 kept a burst across lines flagged for a year. That year was its
-silence threshold reused as a cap, "a policy choice, not a measurement", and
-nothing in the incidents argues for keeping the flag longer than the record
-takes. A longer flag also keeps ordinary releases in front of people. Counting
+silence threshold reused as a cap, "a policy choice, not a measurement". In
+the seven incidents observed, the record arrived within 3 days, so the extra
+358 days covered no incident we know of. A longer flag also keeps ordinary releases in front of people. Counting
 the versions carrying the flag on each daily scan of the two lockfiles from
 2025-10-08 to 2026-10-08, averaged per scan and summed over both lockfiles
 (lower figure: the lockfile as it is; upper: every new release adopted on the
@@ -151,11 +156,12 @@ day it came out):
 | 365 days | 1.2–8.0 | 75–181 |
 
 The across-lines flag is cheap even at a year, so the reason for 7 days is not
-its cost but the absence of a reason for longer. One period for both kinds also
-means one sentence to explain.
+its cost. It is an operational choice: the same period as the one-line marker,
+with no observed incident that needed longer. If a future incident across lines
+goes more than 7 days without a record, this choice should be revisited.
 
-The incident counts, the per-scan burden and an independent recount are in
-vuls-lab (`events/ows-2026/data/marker-period-2026-10-11/`).
+The incident counts, the per-scan burden and an independent recount were
+measured outside this repository and are not published with it.
 
 ### Thresholds
 
@@ -208,8 +214,7 @@ adds is in the bulk waves: single-line releases of quiet packages, such as the
 chalk-incident packages above.
 
 The corpus counts, the removal-lag proxies and the per-incident primary
-sources were measured outside this repository. They are kept with the talk
-material in vuls-lab (`events/ows-2026/data/`).
+sources were measured outside this repository and are not published with it.
 
 ### Prior art
 
@@ -332,5 +337,4 @@ compares the publisher and other release facts with the previous version, but
 16 of the 23 malicious versions it aligned were missing from both its frozen
 snapshot and the current registry. We found no published accuracy for
 Socket's "New author" alert. The measurements, scripts and an independent
-recount are in vuls-lab PR #254
-(`events/ows-2026/data/publisher-change-2026-10-12/`).
+recount were made outside this repository and are not published with it.
