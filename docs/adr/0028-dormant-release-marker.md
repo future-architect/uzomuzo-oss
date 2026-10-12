@@ -208,57 +208,73 @@ implemented; recorded here so the next change starts from data.
 
 **A different publisher alone is not enough.** In the two lockfiles above, 186
 (VS Code) and 146 (npm CLI) versions released between 2025-10-08 and
-2026-10-08 returned from a year's silence. In 18 and 4 of them,
-`versions[v]._npmUser.name` differs from the previous version's, against 0.9%
-and 1.4% of ordinary releases. Most of these are handovers: `content-type`
-2.0.0 came 1,197 days after 1.0.5, published by blakeembrey instead of
-dougwilson; `cors`, `http-errors` and `range-parser` passed from dougwilson
-to ulisesgascon or blakeembrey the same way. In the registry
-data this looks the same as `is` 3.3.1 (ljharb, then enricomarino). Checking
-whether the new publisher was already in `maintainers` does not help: the
-accounts behind node-ipc 12.0.1 (atiertant) and `is` 3.3.1 (enricomarino) were
-both listed co-maintainers.
+2026-10-08 returned from a year's silence. Leaving out automated publishers
+(`trustedPublisher`, GitHub Actions and other bot accounts), the person in
+`versions[v]._npmUser.name` differs from the previous version's in 18 and 4
+of them, against 0.9% (54 of 5,841) and 1.4% (35 of 2,483) of ordinary
+releases. Counting every name change, automated ones included, gives 59 and
+48. The person-to-person changes look like ordinary handovers, though no one
+confirmed each one: `content-type` 2.0.0 came 1,197 days after 1.0.5,
+published by blakeembrey instead of dougwilson; `cors`, `http-errors` and
+`range-parser` passed from dougwilson to ulisesgascon or blakeembrey the same
+way. In the registry data this looks the same as `is` 3.3.1 (ljharb, then
+enricomarino). Requiring the new publisher to be absent from `maintainers`
+removes most ordinary changes (54 to 5, 35 to 3) but also both takeovers it
+could be checked on: the accounts behind node-ipc 12.0.1 (atiertant) and
+`is` 3.3.1 (enricomarino) were listed co-maintainers.
 
-**Three more facts separated the cases we have.** For the 20 handovers above
-(after removing the two packages present in both lockfiles) and the three
-dormant takeovers whose publisher could be recovered, each judged with what
-was visible before the release:
+**Two more facts separated the cases we have.** For the 20 likely handovers
+above (after removing the two packages present in both lockfiles) and the
+three dormant takeovers whose publisher could be recovered:
 
-| condition | handovers (20) | takeovers (3) |
+| condition | likely handovers (20) | takeovers (3) |
 |---|---|---|
-| the publishing account released nothing in any other package in the previous 365 days | 3 | 3 |
-| no `<version>` or `v<version>` tag in the GitHub repository | 4 | 3 |
+| the publishing account released nothing in any other package in the 365 days before the release | 3 | 3 |
+| no `<version>` or `v<version>` tag in the GitHub repository today | 4 | 3 |
 | both | 0 | 3 |
 
-The e-mail also pointed the same way where it could be read. node-ipc's
-account had used `a.tiertant@atlantis-software.net`, and that domain was
-registered again on 2026-05-07T11:49:33Z, seven days before 12.0.1
-(<https://rdap.org/domain/atlantis-software.net>). `is`'s account changed from
-`enrico.marino@email.com` to `enrico.marino1@outlook.com`. None of the 19 handovers whose earlier e-mail could be read changed
-domain. Provenance (`dist.attestations`) was absent on all 23 versions.
+Account activity is counted from releases before the version's publish time.
+Tags are read as they are today; the commit each tag points to predates the
+release in all 16 cases that have one, but a lightweight tag's creation time
+cannot be recovered.
+
+The e-mail address is a further lead in one case and a hint in another.
+`is`'s account changed from `enrico.marino@email.com` to
+`enrico.marino1@outlook.com`; none of the 19 handovers whose earlier address
+could be read changed domain. node-ipc's account had used
+`a.tiertant@atlantis-software.net`, and RDAP gives that domain's current
+registration as 2026-05-07T11:49:33Z, seven days before 12.0.1
+(<https://rdap.org/domain/atlantis-software.net>). That fits the reported
+takeover route but does not show who held the domain before, and 12.0.1's own
+address could not be recovered. Provenance (`dist.attestations`) was absent on
+all 22 versions whose manifest could be read.
 
 Limits, before anyone builds on this:
 
 - The combination was chosen after seeing the results, from three takeovers.
   It is a hypothesis for the next incidents, not a measured detection rate.
-- npm removes a malicious version's manifest. The publishers were recovered
-  from ecosyste.ms (`is`), the Wayback Machine (`event-stream`) and incident
-  reports (node-ipc, whose manifest survives nowhere). rc 1.2.9 and coa 2.0.3
-  could not be recovered. To evaluate the idea on future incidents, the
-  scanner would have to keep the packument it saw when a return was marked.
+- When npm removes a version, its manifest goes with it. The publishers were
+  recovered from ecosyste.ms (`is`), the Wayback Machine (`event-stream`) and
+  incident reports (node-ipc; the sources we tried had no manifest). rc 1.2.9
+  and coa 2.0.3 could not be recovered. To evaluate the idea on future
+  incidents, the scanner would have to keep the packument it saw when a
+  return was marked.
 - npm has no complete per-account publish index; account activity was
   counted from npm search and ecosyste.ms and undercounts removed packages.
   event-stream's attacker account no longer appears in either, so its
   "inactive" reading is weak.
-- A tag can be checked today but not proven to have existed before the
-  release. event-stream's attacker pushed a `3.3.5` commit 13 seconds before
-  publishing, so activity in the repository does not clear a release.
+- Activity in the repository does not clear a release: a commit titled
+  `3.3.5` by right9ctrl is dated 13 seconds before event-stream 3.3.5 was
+  published.
 - A stolen publish token keeps the publisher unchanged (rand-user-agent
-  2.0.83) and passes all of this.
+  2.0.83), so a check on the publisher never fires for it.
 
-No published work evaluates a publisher change against real takeovers; the
-closest, Santos-Grueiro (2026, <https://arxiv.org/abs/2606.22593>, not peer
-reviewed), could not recover the publisher for 16 of its 23 malicious
-versions. Socket's "New author" alert has no published accuracy. The
-measurements, scripts and an independent recount are in vuls-lab
+In the literature we reviewed (a web search, not a systematic one), no study
+evaluates publisher changes against confirmed takeovers. The closest,
+Santos-Grueiro (2026, arXiv preprint, <https://arxiv.org/abs/2606.22593>),
+compares the publisher and other release facts with the previous version, but
+16 of the 23 malicious versions it aligned were missing from both its frozen
+snapshot and the current registry. We found no published accuracy for
+Socket's "New author" alert. The measurements, scripts and an independent
+recount are in vuls-lab PR #254
 (`events/ows-2026/data/publisher-change-2026-10-12/`).
