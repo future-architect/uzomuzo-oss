@@ -388,6 +388,8 @@ func TestQueryPackage_AmbiguousKeysAreNotAnAnswer(t *testing.T) {
 		{"null versions", `{"vulns":[{"id":"MAL-1","affected":[{"package":{"name":"chalk","ecosystem":"npm"},"versions":null}]}]}`, true},
 		{"null in a field not read", `{"vulns":[{"id":"MAL-1","database_specific":{"nvd_published_at":null}}]}`, false},
 		{"read key name used in open metadata", `{"vulns":[{"id":"MAL-1","database_specific":{"type":null,"Name":"x","name":"y"}}]}`, false},
+		{"unknown key spelled like a path", `{"vulns":[{"id":"MAL-1"}],"vulns/affected":{"package":null}}`, false},
+		{"read names nested under an unknown key", `{"vulns":[{"id":"MAL-1","x":{"affected":[{"package":null}]}}]}`, false},
 		{"read key name in ecosystem_specific", `{"vulns":[{"id":"MAL-1","affected":[{"package":{"name":"chalk","ecosystem":"npm"},"ecosystem_specific":{"TYPE":null,"id":null}}]}]}`, false},
 		{"null published", `{"vulns":[{"id":"RUSTSEC-1","published":null}]}`, true},
 		// RustSec sends this on every advisory that is not informational.

@@ -346,6 +346,7 @@ func checkUnambiguousKeys(raw []byte) error {
 		object    bool
 		expectKey bool
 		path      string
+		unread    bool // inside a value this package does not read: no checks
 		seen      map[string]bool
 		lastKey   string
 		lastField *readField
@@ -368,6 +369,9 @@ func checkUnambiguousKeys(raw []byte) error {
 			top.expectKey = false
 			top.lastKey = key
 			top.lastField = nil
+			if top.unread {
+				continue
+			}
 			folded := foldKey(key)
 			f, read := readFields[top.path+"\x00"+folded]
 			if !read {
@@ -388,15 +392,19 @@ func checkUnambiguousKeys(raw []byte) error {
 		}
 		switch tok {
 		case json.Delim('{'), json.Delim('['):
-			path := ""
-			if top != nil {
-				path = top.path
-				if top.object {
-					path = strings.TrimPrefix(path+"/"+top.lastKey, "/")
-				}
+			// The child's path is built from readFields names only, never from
+			// raw keys, so a key such as "vulns/affected" cannot pose as a path.
+			child := &frame{object: tok == json.Delim('{'), expectKey: tok == json.Delim('{'), seen: map[string]bool{}}
+			switch {
+			case top == nil:
+			case top.unread || (top.object && top.lastField == nil):
+				child.unread = true
+			case top.object:
+				child.path = strings.TrimPrefix(top.path+"/"+top.lastField.name, "/")
+			default:
+				child.path = top.path // array elements share the array's path
 			}
-			isObject := tok == json.Delim('{')
-			stack = append(stack, &frame{object: isObject, expectKey: isObject, path: path, seen: map[string]bool{}})
+			stack = append(stack, child)
 			continue
 		case json.Delim('}'), json.Delim(']'):
 			stack = stack[:len(stack)-1]
