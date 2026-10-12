@@ -242,12 +242,8 @@ type batchRequest struct {
 	Queries []queryRequest `json:"queries"`
 }
 
-// batchResponse holds one result per query, in request order. A result lists
+// batchResult is one entry of a querybatch response's results array. It lists
 // only advisory IDs, never the records themselves.
-type batchResponse struct {
-	Results []batchResult `json:"results"`
-}
-
 type batchResult struct {
 	Vulns []struct {
 		ID string `json:"id"`
