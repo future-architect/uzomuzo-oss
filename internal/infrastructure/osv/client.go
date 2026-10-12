@@ -68,12 +68,13 @@ type Client struct {
 
 // cachedAnswer is one stored OSV answer for a package, numbered by the request
 // that produced it. needsQuery marks a querybatch result that named an
-// advisory: the records must come from /v1/query, and until they do no older
-// "no advisory" answer may be stored for the package.
+// advisory: the records must come from /v1/query, and until they do no
+// "no advisory" answer may be stored for the package. See replaces.
 type cachedAnswer struct {
 	recs       []domain.AdvisoryRecord
 	ticket     uint64
 	needsQuery bool
+	fromBatch  bool
 }
 
 // noRetry is the retry policy for the querybatch prime.
@@ -129,42 +130,49 @@ func (c *Client) nextTicket() (uint64, time.Time) {
 	return c.lastTicket, time.Now()
 }
 
-// storeAnswer caches ans for key. The entry's lifetime is counted from asked,
-// the time the request was sent, so records found later always outlive an
-// earlier "no advisory" for the same package, whatever the TTL.
-//
-// An answer is dropped when its request was numbered before the cached
-// answer's: a slow reply must not overwrite what a later request found. It is
-// also dropped when its request predates the last SetCacheTTL, and when it is
-// a querybatch "no advisory" while query records with an advisory, or a
-// needs-query mark, are cached. A needs-query mark replaces any cached empty
-// answer regardless of order, so a package any batch named an advisory for is
-// settled only by its own query.
+// storeAnswer caches ans for key unless replaces refuses it, or its request
+// predates the last SetCacheTTL. The entry's lifetime is counted from asked,
+// the time the request was sent.
 func (c *Client) storeAnswer(key string, ans cachedAnswer, asked time.Time, fromBatch bool) bool {
 	c.storeMu.Lock()
 	defer c.storeMu.Unlock()
 	if ans.ticket <= c.ttlTicket {
 		return false
 	}
-	if old, has := c.cache.Get(key); has {
-		batchEmpty := fromBatch && !ans.needsQuery
-		oldBatchEmpty := !old.needsQuery && len(old.recs) == 0
-		switch {
-		case batchEmpty && old.needsQuery:
-			// A batch that named an advisory is settled only by a query, never
-			// by another batch, whichever batch was sent first.
-			return false
-		case ans.needsQuery && oldBatchEmpty:
-			// Same rule from the other side: the mark wins over any empty answer
-			// already stored, so the package still gets its query.
-		case ans.ticket < old.ticket:
-			return false
-		case batchEmpty && len(old.recs) > 0:
-			return false
-		}
+	ans.fromBatch = fromBatch
+	if old, has := c.cache.Get(key); has && !replaces(ans, old) {
+		return false
 	}
 	c.cache.SetAt(key, ans, asked)
 	return true
+}
+
+// replaces decides whether ans may overwrite the cached old for one package.
+//
+// The rule is "an answer naming an advisory is never replaced by one that
+// does not". OSV.dev keeps withdrawn advisories (marked withdrawn), so an
+// empty answer after records is almost always the stale one. When it is not,
+// because an advisory's affected list dropped the package, the cost is
+// reporting that advisory until the entry expires, not hiding one. Request
+// order is not used to settle this: a ticket is taken before the request is
+// built, so it does not prove which request reached OSV.dev first.
+func replaces(ans, old cachedAnswer) bool {
+	oldHasRecords := !old.needsQuery && len(old.recs) > 0
+	switch {
+	case oldHasRecords:
+		// Only newer query records refresh query records.
+		return !ans.needsQuery && len(ans.recs) > 0 && ans.ticket > old.ticket
+	case ans.needsQuery:
+		// A batch named an advisory: the package must get its own query.
+		return true
+	case ans.fromBatch:
+		// A batch "no advisory" only refreshes another empty answer, and never
+		// clears a needs-query mark.
+		return !old.needsQuery
+	default:
+		// A query answer settles a mark or an empty answer.
+		return true
+	}
 }
 
 // QueryPackage returns every advisory OSV.dev holds for one package, reduced to

@@ -258,11 +258,11 @@ func TestPrimeNoAdvisories_LateAnswerAfterRecordsExpired(t *testing.T) {
 	}
 }
 
-// Overlapping requests for one package answer out of order. Each case sends
-// requests in ticket order, then stores their answers in the listed order; the
-// cache must end up serving what the case names. All requests share one send
-// time, so only the ticket order decides.
-func TestStoreAnswer_RequestOrderDecides(t *testing.T) {
+// Overlapping requests for one package answer out of order. Each case takes
+// tickets, then stores answers in the listed order; the cache must end up
+// serving what the case names. An answer naming an advisory must survive any
+// empty answer, and a batch mark must survive until a query answers.
+func TestStoreAnswer_AdvisoryAnswersWin(t *testing.T) {
 	t.Parallel()
 	type answer struct {
 		send      int // index into the sent tickets
@@ -281,8 +281,10 @@ func TestStoreAnswer_RequestOrderDecides(t *testing.T) {
 			[]answer{{send: 1, advisory: true}, {send: 0}}, true, true},
 		{"older empty batch after newer batch named an advisory", 2,
 			[]answer{{send: 1, batch: true, needQuery: true}, {send: 0, batch: true}}, false, false},
-		{"older empty query after newer batch named an advisory", 2,
-			[]answer{{send: 1, batch: true, needQuery: true}, {send: 0}}, false, false},
+		{"query answer settles a batch mark whatever the order", 2,
+			[]answer{{send: 1, batch: true, needQuery: true}, {send: 0}}, true, false},
+		{"query records after a newer-numbered batch no-advisory", 2,
+			[]answer{{send: 1, batch: true}, {send: 0, advisory: true}}, true, true},
 		{"newer batch empty does not replace query records", 2,
 			[]answer{{send: 0, advisory: true}, {send: 1, batch: true}}, true, true},
 		{"newer empty batch after older batch named an advisory", 2,
@@ -291,8 +293,8 @@ func TestStoreAnswer_RequestOrderDecides(t *testing.T) {
 			[]answer{{send: 1, batch: true}, {send: 0, batch: true, needQuery: true}}, false, false},
 		{"newer query replaces the needs-query mark", 2,
 			[]answer{{send: 0, batch: true, needQuery: true}, {send: 1, advisory: true}}, true, true},
-		{"newer empty query refreshes older advisory", 2,
-			[]answer{{send: 0, advisory: true}, {send: 1}}, true, false},
+		{"empty query never replaces advisory records", 2,
+			[]answer{{send: 0, advisory: true}, {send: 1}}, true, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

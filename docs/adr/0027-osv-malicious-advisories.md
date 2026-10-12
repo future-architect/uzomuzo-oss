@@ -170,16 +170,17 @@ two. It covers every dependency scanned, including entries a filter such as
   failed or unclear batch answer falls back to one `/v1/query` per package;
   a result counts as "no advisory" only when each key it reads (`results`,
   `vulns`, `next_page_token`) is spelled exactly and none repeats. Both
-  endpoints' answers share one cache. Every request is numbered when it is
-  sent, and an answer never replaces one from a later-numbered request; each
-  entry expires counted from when its request was sent. A batch "no
-  advisory" is stored as an empty record list and never replaces records a
-  query found; a batch result naming an advisory stores a mark that sends
-  the package to `/v1/query`. Only a query answer clears that mark: no batch
-  "no advisory" replaces it, and it replaces any empty answer already stored,
-  whichever was sent first. A late answer therefore never replaces or
-  outlives what a later request found, and a package any batch named an
-  advisory for always gets its own query.
+  endpoints' answers share one cache, and each entry expires counted from
+  when its request was sent. Answers that name an advisory win: query
+  records are never replaced by an empty answer, whatever order the
+  requests were sent or answered in, and a batch result naming an advisory
+  stores a mark that sends the package to `/v1/query` and that only a query
+  answer clears. A batch "no advisory" is stored as an empty record list
+  only over another empty answer. Request order is not used to settle these
+  cases, because the order requests were numbered in does not prove the
+  order they reached OSV.dev. Since OSV.dev keeps withdrawn advisories, an
+  empty answer after records is almost always the stale one; when it is not,
+  the advisory keeps being reported until the entry expires.
   Changing the cache TTL empties the cache and drops answers to requests
   sent before the change. Correction to the bullet
   above: the OSV lookups do not run alongside the others. They run in
