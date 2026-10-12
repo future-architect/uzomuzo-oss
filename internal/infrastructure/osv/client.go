@@ -66,10 +66,17 @@ var noRetry = httpclient.RetryConfig{}
 
 // NewClient returns an OSV.dev client with sensible HTTP defaults.
 func NewClient() *Client {
-	hc := &http.Client{Timeout: 5 * time.Second}
+	return newClient(5 * time.Second)
+}
+
+// newClient takes the per-request timeout of /v1/query so tests can shorten it.
+func newClient(queryTimeout time.Duration) *Client {
 	c := &Client{
-		http:      httpclient.NewClient(hc, httpclient.RegistryRetryConfig()),
-		batchHTTP: httpclient.NewClient(hc, noRetry),
+		http: httpclient.NewClient(&http.Client{Timeout: queryTimeout}, httpclient.RegistryRetryConfig()),
+		// No http.Client timeout here: batchTimeout bounds the batch through its
+		// context. Sharing the /v1/query client would cut a batch off at that
+		// client's shorter timeout, below OSV.dev's stated querybatch latency.
+		batchHTTP: httpclient.NewClient(&http.Client{}, noRetry),
 		baseURL:   "https://api.osv.dev",
 	}
 	c.SetCacheTTL(10 * time.Minute)

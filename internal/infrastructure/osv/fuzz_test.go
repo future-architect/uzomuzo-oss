@@ -130,6 +130,58 @@ func FuzzDecodeAndClassify(f *testing.F) {
 	})
 }
 
+// FuzzDecodeBatchResults exercises the querybatch decoder on attacker-shaped
+// input: it must never panic, must return one outcome per result, and must mark
+// a result clean only when that result is an object with no advisory, no
+// explicit null vulns, and no further page.
+func FuzzDecodeBatchResults(f *testing.F) {
+	for _, s := range []string{
+		`{"results":[{},{"vulns":[]},{"vulns":[{"id":"MAL-1"}]}]}`,
+		`{"results":[{"vulns":null},{"next_page_token":"x"},null,1,"s",[]]}`,
+		`{"results":null}`,
+		`{"results":{}}`,
+		`{}`,
+		``,
+		`null`,
+		`[]`,
+		`{"results":[{"vulns":[{"id":"MAL-1"}]`,
+		`{"results":[` + strings.Repeat(`[`, 512) + strings.Repeat(`]`, 512) + `]}`,
+	} {
+		f.Add([]byte(s))
+	}
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		out, err := decodeBatchResults(raw)
+		if err != nil {
+			return
+		}
+		var top struct {
+			Results []json.RawMessage `json:"results"`
+		}
+		if json.Unmarshal(raw, &top) != nil {
+			t.Fatalf("decoder accepted a body the reference decode rejects: %q", raw)
+		}
+		if len(out) != len(top.Results) {
+			t.Fatalf("outcomes = %d, results = %d", len(out), len(top.Results))
+		}
+		for i, o := range out {
+			if !o.clean {
+				continue
+			}
+			var fields map[string]json.RawMessage
+			if json.Unmarshal(top.Results[i], &fields) != nil {
+				t.Fatalf("result %d marked clean but is not an object: %s", i, top.Results[i])
+			}
+			if v, ok := fields["vulns"]; ok && strings.TrimSpace(string(v)) == "null" {
+				t.Fatalf("result %d with vulns:null marked clean", i)
+			}
+			var r batchResult
+			if json.Unmarshal(top.Results[i], &r) != nil || len(r.Vulns) != 0 || strings.TrimSpace(r.NextPageToken) != "" {
+				t.Fatalf("result %d marked clean but names advisories or a next page: %s", i, top.Results[i])
+			}
+		}
+	})
+}
+
 // checkAdmissible restates every admission rule ClassifyUnmaintained applies,
 // so a positive verdict can be checked against the input that produced it.
 func checkAdmissible(rec *domain.AdvisoryRecord, name string, now time.Time) error {

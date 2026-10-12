@@ -8,7 +8,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/osv"
 )
 
-// primeOSVNoAdvisories asks OSV.dev in one batch which of the analysed packages
+// primeOSVNoAdvisories asks OSV.dev in batches of up to 1,000 which of the analysed packages
 // have no advisory, so that enrichAdvisoryDBState and enrichMaliciousState
 // query only the packages that have one. Without it each distinct package costs
 // its own request: about 30 seconds for the 839 packages of the npm CLI

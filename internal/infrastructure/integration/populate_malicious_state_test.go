@@ -159,7 +159,14 @@ func TestAnalyzeFromPURLs_QueriesOnlyPackagesWithAdvisories(t *testing.T) {
 	if a := analyses["pkg:npm/chalk@5.6.1"]; a == nil || !a.Malicious() {
 		t.Errorf("chalk not marked malicious: %+v", a)
 	}
-	if a := analyses["pkg:npm/left-pad@1.3.0"]; a == nil || a.MaliciousState == nil || a.MaliciousState.Status != domain.MaliciousStatusClean {
-		t.Errorf("left-pad state = %+v, want clean", a)
+	for _, key := range []string{"pkg:npm/left-pad@1.3.0", "pkg:npm/is-odd@3.0.1"} {
+		a := analyses[key]
+		if a == nil {
+			t.Errorf("%s: no analysis", key)
+			continue
+		}
+		if a.MaliciousState == nil || a.MaliciousState.Status != domain.MaliciousStatusClean {
+			t.Errorf("%s state = %+v, want clean", key, a.MaliciousState)
+		}
 	}
 }

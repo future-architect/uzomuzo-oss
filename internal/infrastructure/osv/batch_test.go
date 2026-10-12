@@ -172,6 +172,7 @@ func TestPrimeNoAdvisories_LateBatchAnswerDoesNotHideRecords(t *testing.T) {
 		close(done)
 	}()
 	// Wait until the batch is in flight, then store atty's records.
+	deadline := time.After(5 * time.Second)
 	for {
 		b.mu.Lock()
 		n := len(b.batches)
@@ -179,7 +180,12 @@ func TestPrimeNoAdvisories_LateBatchAnswerDoesNotHideRecords(t *testing.T) {
 		if n == 1 {
 			break
 		}
-		time.Sleep(time.Millisecond)
+		select {
+		case <-deadline:
+			close(release)
+			t.Fatal("batch request was never sent")
+		case <-time.After(time.Millisecond):
+		}
 	}
 	if got := queryAll(t, c, "atty")["atty"]; got != 3 {
 		t.Fatalf("records before the batch answered: %d, want 3", got)
@@ -188,6 +194,28 @@ func TestPrimeNoAdvisories_LateBatchAnswerDoesNotHideRecords(t *testing.T) {
 	<-done
 	if got := queryAll(t, c, "atty")["atty"]; got != 3 {
 		t.Errorf("records after a late clean batch answer: %d, want 3", got)
+	}
+}
+
+// A batch slower than the /v1/query timeout but within batchTimeout still
+// answers: the batch must not inherit the shorter per-query timeout.
+func TestPrimeNoAdvisories_OutlivesQueryTimeout(t *testing.T) {
+	b := &batchServer{batchBody: func(int) (int, string) {
+		time.Sleep(200 * time.Millisecond)
+		return http.StatusOK, `{"results":[{},{}]}`
+	}}
+	srv := httptest.NewServer(b.handler(t))
+	t.Cleanup(srv.Close)
+	c := newClient(50 * time.Millisecond)
+	c.SetBaseURL(srv.URL)
+	c.SetCacheTTL(time.Minute)
+
+	c.PrimeNoAdvisories(context.Background(), refs("a", "b"))
+	queryAll(t, c, "a", "b")
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.queried) != 0 {
+		t.Errorf("queried %v after a slow but successful batch, want none", b.queried)
 	}
 }
 
