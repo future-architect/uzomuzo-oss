@@ -3,8 +3,6 @@ package analysis
 import (
 	"fmt"
 	"time"
-
-	cfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
 // DormantReleaseKind names which rule flagged a return from silence.
@@ -27,7 +25,9 @@ type DormantRelease struct {
 	// Kind names the rule that matched. A burst across lines takes precedence
 	// over a fresh release when both match.
 	Kind DormantReleaseKind
-	// Burst describes the release and the burst it belongs to.
+	// Burst describes the release and the burst it belongs to. Never nil on a
+	// value from EvaluateDormantRelease; a value without it is treated as no
+	// marker by every output and by the --fail-on policy.
 	Burst *DormantBurst
 	// Until is when the marker clears: the publish time plus the period the
 	// matching rule keeps a release flagged.
@@ -35,15 +35,14 @@ type DormantRelease struct {
 }
 
 // EvaluateDormantRelease applies the ADR-0026 and ADR-0028 rules to the
-// analysed version at now, with the thresholds from c. Returns nil when the
-// analysis, its package or its release history is missing, or no rule matches.
-func (a *Analysis) EvaluateDormantRelease(now time.Time, c cfg.LifecycleAssessmentConfig) *DormantRelease {
-	if a == nil || a.Package == nil {
+// analysed version at now: a return after at least silence without a release
+// is marked for flag after publication. flag must be positive; flag <= 0
+// marks nothing. Returns nil when the analysis, its package or its release
+// history is missing, or no rule matches.
+func (a *Analysis) EvaluateDormantRelease(now time.Time, silence, flag time.Duration) *DormantRelease {
+	if a == nil || a.Package == nil || flag <= 0 {
 		return nil
 	}
-	cfg.NormalizeLifecycleConfig(&c)
-	silence := time.Duration(c.DormantSilenceDays) * 24 * time.Hour
-	flag := time.Duration(c.DormantFlagDays) * 24 * time.Hour
 	if b := DetectDormantBurst(a.ReleaseHistory, a.Package.Version, now, silence, flag); b != nil {
 		return &DormantRelease{Kind: DormantReleaseBurstAcrossLines, Burst: b, Until: b.PublishedAt.Add(flag)}
 	}

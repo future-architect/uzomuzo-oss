@@ -39,7 +39,8 @@ type ReleaseHistory struct {
 
 // DormantBurst describes a release that came out after a long silence, together
 // with any releases published within DormantBurstWindow of the first one.
-// Lines holds a single line when DetectFreshDormantRelease returns it. See
+// DetectFreshDormantRelease does not check Lines, so a burst it returns can
+// touch any number of lines, or none when no version has a numeric major. See
 // ADR-0026 and ADR-0028.
 type DormantBurst struct {
 	// Version is the version being assessed.
@@ -88,12 +89,13 @@ func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSil
 // DetectFreshDormantRelease reports whether version is a stable release from
 // the first burst after at least minSilence without any release, published no
 // more than freshFor before now. Unlike DetectDormantBurst it needs no second
-// release line. Returns nil when the history is missing, version is empty or a
+// release line, and freshFor <= 0 matches nothing instead of disabling the age
+// limit. Returns nil when the history is missing, version is empty or a
 // prerelease, the version has no publish time or was published after now, the
 // version is in the package's first release burst, or the condition is not met.
 // See ADR-0028.
 func DetectFreshDormantRelease(h *ReleaseHistory, version string, now time.Time, minSilence, freshFor time.Duration) *DormantBurst {
-	if isPrerelease(version) {
+	if IsPrerelease(version) {
 		return nil
 	}
 	b := detectDormantReturn(h, version, now, minSilence)
@@ -173,7 +175,7 @@ func detectDormantReturn(h *ReleaseHistory, version string, now time.Time, minSi
 	lineSet := map[string]struct{}{}
 	for _, r := range all[first : last+1] {
 		versions = append(versions, r.v)
-		if isPrerelease(r.v) {
+		if IsPrerelease(r.v) {
 			continue
 		}
 		if l, ok := releaseLine(r.v); ok {
@@ -239,11 +241,11 @@ func releaseLine(v string) (string, bool) {
 	return "0." + strconv.Itoa(minor), true
 }
 
-// isPrerelease reports whether v carries a semver prerelease suffix
+// IsPrerelease reports whether v carries a semver prerelease suffix
 // ("2.0.0-alpha.0"). Build metadata ("+build") alone is not a prerelease.
 // Not purl.IsStableVersion: it matches keywords, so "1.0.0-next.3" passes as
 // stable there, while semver ranges never select any "-" version.
-func isPrerelease(v string) bool {
+func IsPrerelease(v string) bool {
 	core, _, _ := strings.Cut(v, "+")
 	return strings.Contains(core, "-")
 }

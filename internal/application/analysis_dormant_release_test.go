@@ -13,7 +13,7 @@ import (
 // ADR-0028 marker on the analyses it returns, including one whose deps.dev
 // lookup failed: the release history comes from the registry, not deps.dev.
 func TestProcessBatchPURLs_SetsDormantReleaseMarker(t *testing.T) {
-	now := time.Now()
+	now := time.Now().UTC()
 	tests := []struct {
 		name     string
 		version  string

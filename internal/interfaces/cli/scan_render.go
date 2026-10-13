@@ -651,7 +651,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 			if a.Malicious() {
 				maliciousAdvisory = a.MaliciousState.AdvisoryID
 			}
-			if a.DormantRelease != nil {
+			if a.DormantRelease != nil && a.DormantRelease.Burst != nil {
 				dormantRelease = string(a.DormantRelease.Kind)
 			}
 			successor = a.EOL.Successor

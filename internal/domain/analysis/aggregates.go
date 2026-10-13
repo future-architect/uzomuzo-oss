@@ -79,7 +79,8 @@ type Analysis struct {
 
 	// ReleaseHistory holds the registry's publish time for every version of the
 	// package, including removed ones. Read against Package.Version to detect a
-	// release burst after a long silence (see DetectDormantBurst).
+	// return from a long silence (see DetectDormantBurst and
+	// DetectFreshDormantRelease).
 	ReleaseHistory *ReleaseHistory
 
 	// DormantRelease is set when the analysed version is a release that

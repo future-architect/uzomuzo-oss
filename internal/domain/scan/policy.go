@@ -136,7 +136,7 @@ func (p FailPolicy) Evaluate(entries []domainaudit.AuditEntry) bool {
 		if p.malicious && e.Analysis.Malicious() {
 			return true
 		}
-		if p.dormant && e.Analysis.DormantRelease != nil {
+		if p.dormant && e.Analysis.DormantRelease != nil && e.Analysis.DormantRelease.Burst != nil {
 			return true
 		}
 		lr := e.Analysis.GetLifecycleResult()

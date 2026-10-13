@@ -344,17 +344,20 @@ func (s *AnalysisService) enrichAndAssess(ctx context.Context, analyses map[stri
 		domain.NewLifecycleAssessorService(),
 		domain.NewBuildHealthAssessorService(),
 	)
-	// One clock for the lifecycle rules and the dormant-release marker, so the
-	// two agree on whether a release is still fresh.
+	// One clock for the lifecycle rules and the dormant-release marker, and the
+	// same default thresholds the assessor reads, so the two agree on whether a
+	// release is still fresh.
 	now := time.Now()
 	lifecycleConfig := config.GetDefaultLifecycle()
+	config.NormalizeLifecycleConfig(&lifecycleConfig)
+	silence, flag := lifecycleConfig.DormantWindows()
 	for key, analysis := range analyses {
 		if analysis == nil {
 			continue
 		}
 		// Evaluated before the error check: the release history comes from the
 		// registry, not deps.dev, so it can be present when deps.dev failed.
-		analysis.DormantRelease = analysis.EvaluateDormantRelease(now, lifecycleConfig)
+		analysis.DormantRelease = analysis.EvaluateDormantRelease(now, silence, flag)
 		if analysis.Error != nil {
 			continue
 		}

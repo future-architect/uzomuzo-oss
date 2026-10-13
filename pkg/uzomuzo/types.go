@@ -113,8 +113,8 @@ const (
 // lookup did not run or failed.
 type ReleaseHistory = domain.ReleaseHistory
 
-// DormantBurst describes a release published across release lines after a long
-// silence (see ADR-0026).
+// DormantBurst describes a release that came out after a long silence, on one
+// release line or several (see ADR-0026 and ADR-0028).
 type DormantBurst = domain.DormantBurst
 
 // DormantRelease marks an analysed version that followed a long silence. It is

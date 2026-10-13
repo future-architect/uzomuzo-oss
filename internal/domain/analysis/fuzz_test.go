@@ -17,7 +17,7 @@ func FuzzReleaseLine(f *testing.F) {
 		if ok && l == "" {
 			t.Fatalf("releaseLine(%q) = ok with empty line", v)
 		}
-		_ = isPrerelease(v)
+		_ = IsPrerelease(v)
 	})
 }
 

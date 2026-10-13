@@ -84,7 +84,7 @@ func TestDetectFreshDormantRelease(t *testing.T) {
 func TestEvaluateDormantRelease(t *testing.T) {
 	t.Parallel()
 
-	c := cfg.GetDefaultLifecycle()
+	silence, flag := cfg.GetDefaultLifecycle().DormantWindows()
 	nodeIPC := history(t, map[string]string{
 		"12.0.0": "2024-08-12T16:28:35Z",
 		"12.0.1": "2026-05-14T14:25:30Z",
@@ -112,7 +112,7 @@ func TestEvaluateDormantRelease(t *testing.T) {
 			t.Parallel()
 			a := &Analysis{Package: &Package{Version: tt.version}, ReleaseHistory: tt.h,
 				AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: {Label: string(LabelStalled)}}}
-			got := a.EvaluateDormantRelease(mustTime(t, tt.now), c)
+			got := a.EvaluateDormantRelease(mustTime(t, tt.now), silence, flag)
 			if tt.wantKind == "" {
 				if got != nil {
 					t.Fatalf("got %+v, want nil", got)
@@ -130,8 +130,12 @@ func TestEvaluateDormantRelease(t *testing.T) {
 			}
 		})
 	}
-	if got := (&Analysis{}).EvaluateDormantRelease(time.Now(), c); got != nil {
+	if got := (&Analysis{}).EvaluateDormantRelease(time.Now(), silence, flag); got != nil {
 		t.Errorf("no package: got %+v, want nil", got)
+	}
+	fresh := &Analysis{Package: &Package{Version: "6.2.2"}, ReleaseHistory: quiet}
+	if got := fresh.EvaluateDormantRelease(mustTime(t, "2025-09-09T00:00:00Z"), silence, 0); got != nil {
+		t.Errorf("zero flag period: got %+v, want nil", got)
 	}
 }
 
@@ -155,17 +159,19 @@ func TestDormantReleaseNotice(t *testing.T) {
 		name     string
 		a        *Analysis
 		contains []string
+		absent   []string
 		empty    bool
 	}{
-		{"no marker", &Analysis{}, nil, true},
-		{"malicious takes priority", &Analysis{DormantRelease: fresh(false), MaliciousState: &MaliciousState{Status: MaliciousStatusFlagged}}, nil, true},
-		{"burst already explained by the label", &Analysis{DormantRelease: burst, AxisResults: overridden}, nil, true},
-		{"burst under Stalled is shown", &Analysis{DormantRelease: burst, AxisResults: stalled}, []string{"639 days", "9.x, 12.x"}, false},
+		{"no marker", &Analysis{}, nil, nil, true},
+		{"marker without a burst", &Analysis{DormantRelease: &DormantRelease{Kind: DormantReleaseFresh}}, nil, nil, true},
+		{"malicious takes priority", &Analysis{DormantRelease: fresh(false), MaliciousState: &MaliciousState{Status: MaliciousStatusFlagged}}, nil, nil, true},
+		{"burst already explained by the label", &Analysis{DormantRelease: burst, AxisResults: overridden}, nil, nil, true},
+		{"burst under Stalled is shown", &Analysis{DormantRelease: burst, AxisResults: stalled}, []string{"639 days", "9.x, 12.x"}, nil, false},
 		{"fresh, clean OSV check", &Analysis{DormantRelease: fresh(false), MaliciousState: &MaliciousState{Status: MaliciousStatusClean}},
-			[]string{"2025-09-08", "1042 days", "No OSV malicious-package record names it yet.", "_npmUser", "clears on 2025-09-15"}, false},
+			[]string{"2025-09-08", "1042 days", "No OSV malicious-package record names it yet.", "_npmUser", "clears on 2025-09-15"}, nil, false},
 		{"fresh, OSV lookup failed", &Analysis{DormantRelease: fresh(false), MaliciousState: &MaliciousState{Status: MaliciousStatusLookupFailed}},
-			[]string{"did not complete"}, false},
-		{"fresh, removed", &Analysis{DormantRelease: fresh(true)}, []string{"npm has since removed this version."}, false},
+			[]string{"did not complete"}, nil, false},
+		{"fresh, removed, no OSV check", &Analysis{DormantRelease: fresh(true)}, []string{"npm has since removed this version."}, []string{"OSV", "_npmUser"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -177,6 +183,11 @@ func TestDormantReleaseNotice(t *testing.T) {
 			for _, want := range tt.contains {
 				if !strings.Contains(got, want) {
 					t.Errorf("notice %q missing %q", got, want)
+				}
+			}
+			for _, unwanted := range tt.absent {
+				if strings.Contains(got, unwanted) {
+					t.Errorf("notice %q unexpectedly contains %q", got, unwanted)
 				}
 			}
 		})

@@ -245,7 +245,7 @@ func printFresh(hist map[string]*domain.ReleaseHistory, entries []entry, now tim
 	var releases, alerts int
 	for _, h := range hist {
 		for v, at := range h.PublishedAt {
-			if at.Before(now.Add(-year)) || !at.Before(now) || isPrerelease(v) {
+			if at.Before(now.Add(-year)) || !at.Before(now) || domain.IsPrerelease(v) {
 				continue
 			}
 			releases++
@@ -265,12 +265,6 @@ func printFresh(hist map[string]*domain.ReleaseHistory, entries []entry, now tim
 		}
 		fmt.Printf("  fresh rule with a %d-day period: %d lockfile entries flagged at %s\n", days, n, now.Format(time.DateOnly))
 	}
-}
-
-// isPrerelease mirrors the domain rule: a "-" before any "+" build metadata.
-func isPrerelease(v string) bool {
-	core, _, _ := strings.Cut(v, "+")
-	return strings.Contains(core, "-")
 }
 
 // afterSilence reports whether version was published at least a year after
