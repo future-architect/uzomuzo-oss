@@ -141,6 +141,14 @@ across-lines incidents cannot show that 7 days will be enough next time. The
 data does not fix the period; 7 days is a policy that covered 16 of the 20
 one-line incidents and all 7 across lines seen so far.
 
+**Update 2026-10-13: the 27 incidents above are not the 13 waves and 13 single
+incidents of the Context.** The two counts come from different selections of
+the same OpenSSF data: the set above holds 16 incidents outside the bulk
+waves, where the Context has 13 single incidents. Which filter separates the
+two sets was recorded outside this repository and is not published with it;
+the figures above stand for the selection stated above them (incidents whose
+first malicious version returned from a year of silence).
+
 ADR-0026 kept a burst across lines flagged for a year. That year was its
 silence threshold reused as a cap, "a policy choice, not a measurement". In
 the seven incidents observed, the record arrived within 3 days, so the extra
