@@ -100,7 +100,9 @@ func ParseFailPolicy(raw string) (FailPolicy, error) {
 		}
 		triggers[ms] = struct{}{}
 	}
-	if len(triggers) > 0 {
+	// Any non-empty selection also fails on a malicious version, including one
+	// that names only dormant-release (ADR-0027).
+	if len(triggers) > 0 || dormant {
 		malicious = true
 	}
 	return FailPolicy{triggers: triggers, malicious: malicious, dormant: dormant}, nil

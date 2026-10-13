@@ -17,6 +17,11 @@ func TestDormantReleaseFailPolicy(t *testing.T) {
 		},
 	}}
 	unmarked := audit.AuditEntry{Analysis: &analysis.Analysis{}}
+	// A malicious version without the marker, like chalk 5.6.1: any non-empty
+	// selection fails on it (ADR-0027), dormant-release alone included.
+	malicious := audit.AuditEntry{Analysis: &analysis.Analysis{
+		MaliciousState: &analysis.MaliciousState{Status: analysis.MaliciousStatusFlagged, AdvisoryID: "MAL-1"},
+	}}
 	tests := []struct {
 		raw     string
 		entries []audit.AuditEntry
@@ -28,6 +33,8 @@ func TestDormantReleaseFailPolicy(t *testing.T) {
 		{"review-needed", []audit.AuditEntry{marked}, false},
 		{"malicious", []audit.AuditEntry{marked}, false},
 		{"stalled", []audit.AuditEntry{marked}, true},
+		{"dormant-release", []audit.AuditEntry{malicious}, true},
+		{"review-needed", []audit.AuditEntry{malicious}, true},
 	}
 	for _, tt := range tests {
 		p, err := ParseFailPolicy(tt.raw)

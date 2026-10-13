@@ -93,7 +93,9 @@ the marker clears.
 
 ### `--fail-on dormant-release` is opt-in
 
-Unlike `malicious`, no other `--fail-on` value implies it. A burst across
+Unlike `malicious`, no other `--fail-on` value implies it. The reverse holds
+as for every other value: `--fail-on dormant-release` alone also fails on a
+version named in a malicious-package advisory (ADR-0027). A burst across
 lines on an Active or Legacy-Safe package also fails `--fail-on review-needed`
 during its 7 days, through ADR-0026's label change; a single-line return
 fails only `dormant-release`. A malicious advisory
