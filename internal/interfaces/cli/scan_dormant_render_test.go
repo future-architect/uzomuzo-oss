@@ -36,16 +36,31 @@ func TestDormantReleaseScanOutputs(t *testing.T) {
 		Packages []struct {
 			Lifecycle      string `json:"lifecycle"`
 			DormantRelease *struct {
-				Kind       string `json:"kind"`
-				SilentDays int    `json:"silent_days"`
+				Kind          string    `json:"kind"`
+				PublishedAt   time.Time `json:"published_at"`
+				SilentDays    int       `json:"silent_days"`
+				BurstVersions []string  `json:"burst_versions"`
+				Lines         []string  `json:"lines"`
+				Removed       bool      `json:"removed"`
+				Until         time.Time `json:"until"`
 			} `json:"dormant_release"`
 		} `json:"packages"`
 	}
 	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
-	if got := out.Packages[0]; got.Lifecycle != "Stalled" || got.DormantRelease == nil || got.DormantRelease.Kind != "fresh" || got.DormantRelease.SilentDays != 400 {
+	if len(out.Packages) != 1 {
+		t.Fatalf("JSON: want 1 package, got %d: %s", len(out.Packages), buf.String())
+	}
+	got := out.Packages[0]
+	if got.Lifecycle != "Stalled" || got.DormantRelease == nil {
 		t.Fatalf("JSON: %s", buf.String())
+	}
+	d := got.DormantRelease
+	if d.Kind != "fresh" || !d.PublishedAt.Equal(published) || d.SilentDays != 400 ||
+		!slices.Equal(d.BurstVersions, []string{"2.0.1"}) || !slices.Equal(d.Lines, []string{"2"}) ||
+		d.Removed || !d.Until.Equal(published.Add(7*24*time.Hour)) {
+		t.Fatalf("JSON dormant_release = %+v", *d)
 	}
 
 	buf.Reset()
@@ -55,6 +70,9 @@ func TestDormantReleaseScanOutputs(t *testing.T) {
 	records, err := csv.NewReader(&buf).ReadAll()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("CSV: want header + 1 row, got %d: %v", len(records), records)
 	}
 	col := slices.Index(records[0], "dormant_release")
 	if col < 0 || records[1][col] != "fresh" {

@@ -22,8 +22,8 @@ type LifecycleAssessmentRules struct {
 	VulnerabilityScorePoorMax  float64
 	ResidualAdvisoryThreshold  int
 	HighSeverityCVSSThreshold  float64
-	DormantSilenceDays         int
-	DormantFlagDays            int
+	DormantSilence             time.Duration
+	DormantFlag                time.Duration
 }
 
 // LifecycleAssessorService implements lifecycle/activity assessment logic.
@@ -51,9 +51,8 @@ func NewLifecycleAssessorServiceWithConfig(c cfg.LifecycleAssessmentConfig) *Lif
 		VulnerabilityScorePoorMax:  c.VulnerabilityScorePoorMax,
 		ResidualAdvisoryThreshold:  c.ResidualAdvisoryThreshold,
 		HighSeverityCVSSThreshold:  c.HighSeverityCVSSThreshold,
-		DormantSilenceDays:         c.DormantSilenceDays,
-		DormantFlagDays:            c.DormantFlagDays,
 	}
+	rules.DormantSilence, rules.DormantFlag = c.DormantWindows()
 	return &LifecycleAssessorService{rules: rules}
 }
 
@@ -80,9 +79,7 @@ func (s *LifecycleAssessorService) applyDormantBurst(in AssessmentInput, res *As
 	default:
 		return res
 	}
-	silence := time.Duration(s.rules.DormantSilenceDays) * 24 * time.Hour
-	flag := time.Duration(s.rules.DormantFlagDays) * 24 * time.Hour
-	b := in.Analysis.DormantBurst(in.Now, silence, flag)
+	b := in.Analysis.DormantBurst(in.Now, s.rules.DormantSilence, s.rules.DormantFlag)
 	if b == nil {
 		return res
 	}

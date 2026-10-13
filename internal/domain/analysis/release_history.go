@@ -95,7 +95,7 @@ func DetectDormantBurst(h *ReleaseHistory, version string, now time.Time, minSil
 // version is in the package's first release burst, or the condition is not met.
 // See ADR-0028.
 func DetectFreshDormantRelease(h *ReleaseHistory, version string, now time.Time, minSilence, freshFor time.Duration) *DormantBurst {
-	if IsPrerelease(version) {
+	if freshFor <= 0 || IsPrerelease(version) {
 		return nil
 	}
 	b := detectDormantReturn(h, version, now, minSilence)

@@ -196,10 +196,12 @@ func NormalizeLifecycleConfig(c *LifecycleAssessmentConfig) {
 	if c.CommitActivityWindowDays == 0 {
 		c.CommitActivityWindowDays = def.CommitActivityWindowDays
 	}
-	if c.DormantSilenceDays == 0 {
+	// The dormant windows must be positive: a non-positive flag period would
+	// disable the burst rule's age limit while marking nothing.
+	if c.DormantSilenceDays <= 0 {
 		c.DormantSilenceDays = def.DormantSilenceDays
 	}
-	if c.DormantFlagDays == 0 {
+	if c.DormantFlagDays <= 0 {
 		c.DormantFlagDays = def.DormantFlagDays
 	}
 }

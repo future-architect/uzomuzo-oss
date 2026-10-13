@@ -26,8 +26,7 @@ type DormantRelease struct {
 	// over a fresh release when both match.
 	Kind DormantReleaseKind
 	// Burst describes the release and the burst it belongs to. Never nil on a
-	// value from EvaluateDormantRelease; a value without it is treated as no
-	// marker by every output and by the --fail-on policy.
+	// value from EvaluateDormantRelease; see HasDormantRelease.
 	Burst *DormantBurst
 	// Until is when the marker clears: the publish time plus the period the
 	// matching rule keeps a release flagged.
@@ -52,12 +51,19 @@ func (a *Analysis) EvaluateDormantRelease(now time.Time, silence, flag time.Dura
 	return nil
 }
 
+// HasDormantRelease reports whether the analysed version carries a usable
+// dormant-release marker: one with its burst. Every output and the --fail-on
+// policy use it, so a marker without a burst counts as none everywhere.
+func (a *Analysis) HasDormantRelease() bool {
+	return a != nil && a.DormantRelease != nil && a.DormantRelease.Burst != nil
+}
+
 // DormantReleaseNotice returns the text to show for the dormant-release marker,
 // or "" when there is nothing to add: no marker, a malicious advisory already
 // names the version, or the lifecycle result already explains the burst
 // because ADR-0026 turned its label into Review Needed.
 func (a *Analysis) DormantReleaseNotice() string {
-	if a == nil || a.DormantRelease == nil || a.DormantRelease.Burst == nil || a.Malicious() {
+	if !a.HasDormantRelease() || a.Malicious() {
 		return ""
 	}
 	if lr := a.GetLifecycleResult(); lr != nil {

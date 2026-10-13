@@ -77,6 +77,12 @@ func TestDetectFreshDormantRelease(t *testing.T) {
 			}
 		})
 	}
+	// A non-positive period matches nothing, even at the publish time.
+	for _, freshFor := range []time.Duration{0, -time.Hour} {
+		if got := DetectFreshDormantRelease(quiet, "6.2.2", mustTime(t, "2025-09-08T13:16:00Z"), year, freshFor); got != nil {
+			t.Errorf("freshFor %v: got %+v, want nil", freshFor, got)
+		}
+	}
 }
 
 // TestEvaluateDormantRelease pins which rule wins, the clearing time, and that
@@ -133,9 +139,13 @@ func TestEvaluateDormantRelease(t *testing.T) {
 	if got := (&Analysis{}).EvaluateDormantRelease(time.Now(), silence, flag); got != nil {
 		t.Errorf("no package: got %+v, want nil", got)
 	}
-	fresh := &Analysis{Package: &Package{Version: "6.2.2"}, ReleaseHistory: quiet}
-	if got := fresh.EvaluateDormantRelease(mustTime(t, "2025-09-09T00:00:00Z"), silence, 0); got != nil {
-		t.Errorf("zero flag period: got %+v, want nil", got)
+	// A non-positive period marks nothing: DetectDormantBurst would read it as
+	// no age limit and keep the burst marked for ever.
+	burstAnalysis := &Analysis{Package: &Package{Version: "12.0.1"}, ReleaseHistory: nodeIPC}
+	for _, f := range []time.Duration{0, -time.Hour} {
+		if got := burstAnalysis.EvaluateDormantRelease(mustTime(t, "2026-05-15T00:00:00Z"), silence, f); got != nil {
+			t.Errorf("flag period %v: got %+v, want nil", f, got)
+		}
 	}
 }
 

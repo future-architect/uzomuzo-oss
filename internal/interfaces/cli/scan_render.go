@@ -356,7 +356,7 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		maintenance, _ := entryMaintenanceEOL(&displayEntries[i], "—")
 		if a := displayEntries[i].Analysis; a != nil && a.Malicious() {
 			maintenance += " ☠ " + a.MaliciousState.AdvisoryID
-		} else if a != nil && a.DormantRelease != nil && a.DormantRelease.Burst != nil {
+		} else if a.HasDormantRelease() {
 			maintenance += fmt.Sprintf(" ⚠ %dd silence", a.DormantRelease.Burst.SilentDays)
 		}
 		cols = cols[:0]
@@ -567,7 +567,8 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	} else if a.MaliciousState != nil && a.MaliciousState.Status == domain.MaliciousStatusLookupFailed {
 		je.MaliciousCheck = "unknown"
 	}
-	if d := a.DormantRelease; d != nil && d.Burst != nil {
+	if a.HasDormantRelease() {
+		d := a.DormantRelease
 		je.DormantRelease = &dormantJSON{Kind: d.Kind, PublishedAt: d.Burst.PublishedAt, SilentDays: d.Burst.SilentDays,
 			BurstVersions: d.Burst.Versions, Lines: d.Burst.Lines, Removed: d.Burst.Removed, Until: d.Until}
 	}
@@ -651,7 +652,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 			if a.Malicious() {
 				maliciousAdvisory = a.MaliciousState.AdvisoryID
 			}
-			if a.DormantRelease != nil && a.DormantRelease.Burst != nil {
+			if a.HasDormantRelease() {
 				dormantRelease = string(a.DormantRelease.Kind)
 			}
 			successor = a.EOL.Successor
