@@ -2,6 +2,7 @@
 package config
 
 import (
+	"math"
 	"time"
 )
 
@@ -149,8 +150,10 @@ type LifecycleAssessmentConfig struct {
 }
 
 // DormantWindows returns DormantSilenceDays and DormantFlagDays as durations.
+// A day count too large for time.Duration (over about 292 years) becomes the
+// largest duration instead of wrapping to a negative one.
 func (c LifecycleAssessmentConfig) DormantWindows() (silence, flag time.Duration) {
-	return time.Duration(c.DormantSilenceDays) * 24 * time.Hour, time.Duration(c.DormantFlagDays) * 24 * time.Hour
+	return daysToDuration(c.DormantSilenceDays), daysToDuration(c.DormantFlagDays)
 }
 
 // NormalizeLifecycleConfig fills zero fields of c with defaults from DefaultValues.Lifecycle,
@@ -205,4 +208,14 @@ func NormalizeLifecycleConfig(c *LifecycleAssessmentConfig) {
 	if c.DormantFlagDays <= 0 {
 		c.DormantFlagDays = def.DormantFlagDays
 	}
+}
+
+// daysToDuration converts days to a duration, saturating at the largest
+// time.Duration so that a huge positive count never overflows to a negative one.
+func daysToDuration(days int) time.Duration {
+	const day = 24 * time.Hour
+	if int64(days) > int64(math.MaxInt64/day) {
+		return time.Duration(math.MaxInt64)
+	}
+	return time.Duration(days) * day
 }
