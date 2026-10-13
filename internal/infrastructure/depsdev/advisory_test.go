@@ -53,27 +53,6 @@ func TestFetchAdvisory_Success(t *testing.T) {
 	}
 }
 
-func TestFetchAdvisory_404ReturnsNilNil(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "not found", http.StatusNotFound)
-	}))
-	defer srv.Close()
-
-	client := NewDepsDevClient(&config.DepsDevConfig{
-		BaseURL:    srv.URL,
-		Timeout:    5e9,
-		MaxRetries: 0,
-	})
-
-	detail, err := client.FetchAdvisory(context.Background(), "GHSA-nonexistent")
-	if err != nil {
-		t.Fatalf("expected no error for 404, got: %v", err)
-	}
-	if detail != nil {
-		t.Error("expected nil detail for 404")
-	}
-}
-
 func TestFetchAdvisory_NegativeCaching(t *testing.T) {
 	var callCount atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

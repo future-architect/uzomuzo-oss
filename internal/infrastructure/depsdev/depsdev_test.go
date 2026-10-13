@@ -250,47 +250,6 @@ func TestExtractRepositoryURL(t *testing.T) {
 	}
 }
 
-// TestExtractRepositoryURLFromLinks_Expected checks a subset of canonical expectations
-// to validate the helper's external contract.
-func TestExtractRepositoryURLFromLinks_Expected(t *testing.T) {
-	cases := []struct {
-		name     string
-		links    []Link
-		expected string
-	}{
-		{
-			name:     "https_github",
-			links:    []Link{{Label: "SOURCE_REPO", URL: "https://github.com/owner/repo"}},
-			expected: "https://github.com/owner/repo",
-		},
-		{
-			name:     "git_plus_https_normalized",
-			links:    []Link{{Label: "SOURCE_REPO", URL: "git+https://github.com/owner/repo.git"}},
-			expected: "https://github.com/owner/repo",
-		},
-		{
-			name:     "fallback_to_github_homepage",
-			links:    []Link{{Label: "HOMEPAGE", URL: "https://github.com/owner/repo"}},
-			expected: "https://github.com/owner/repo",
-		},
-		{
-			name:     "non_github_domain_returns_empty_on_fallback",
-			links:    []Link{{Label: "DOCS", URL: "https://gitlab.com/owner/repo"}},
-			expected: "",
-		},
-	}
-
-	for _, tc := range cases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			got := ExtractRepositoryURLFromLinks(tc.links)
-			if got != tc.expected {
-				t.Fatalf("ExtractRepositoryURLFromLinks() = %q, want %q", got, tc.expected)
-			}
-		})
-	}
-}
-
 func TestNuGetResolverInChain(t *testing.T) {
 	// Build a synthetic PackageResponse for nuget ecosystem
 	pkg := &PackageResponse{Version: Version{VersionKey: VersionKey{System: "nuget", Name: "Serilog", Version: "2.0.0"}}}

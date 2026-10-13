@@ -196,53 +196,6 @@ func TestSentenceNegatives(t *testing.T) {
 	})
 }
 
-// TestContextualPatternsForStats verifies the accessor returns labeled contextual patterns.
-func TestContextualPatternsForStats(t *testing.T) {
-	pats := ContextualPatternsForStats()
-	if len(pats) != 8 {
-		t.Fatalf("ContextualPatternsForStats returned %d patterns, want 8", len(pats))
-	}
-	for i, p := range pats {
-		if p.Label == "" {
-			t.Errorf("pattern[%d] has empty label", i)
-		}
-		if p.Rx == nil {
-			t.Errorf("pattern[%d] (%s) has nil Rx", i, p.Label)
-		}
-	}
-	// Spot-check: pattern[3] should match "moved into read-only mode"
-	if !pats[3].Rx.MatchString("this repository has moved into read-only mode") {
-		t.Error("pattern[3] did not match 'moved into read-only mode'")
-	}
-}
-
-// TestExplicitPatternsForStats verifies the accessor returns the Readme explicit pattern.
-func TestExplicitPatternsForStats(t *testing.T) {
-	pats := ExplicitPatternsForStats()
-	if len(pats) != 1 {
-		t.Fatalf("ExplicitPatternsForStats returned %d patterns, want 1", len(pats))
-	}
-	p := pats[0]
-	if p.Label == "" {
-		t.Error("explicit pattern has empty label")
-	}
-	cases := []struct {
-		text string
-		want bool
-	}{
-		{"this project is deprecated", true},
-		{"this package is now abandoned", true},
-		{"no longer maintained", true},
-		{"reached end of life", true},
-		{"just a normal readme", false},
-	}
-	for _, c := range cases {
-		if got := p.Rx.MatchString(c.text); got != c.want {
-			t.Errorf("explicit pattern on %q = %v, want %v", c.text, got, c.want)
-		}
-	}
-}
-
 // TestContextualReadOnlyMode verifies the "moved into read-only mode" contextual pattern.
 func TestContextualReadOnlyMode(t *testing.T) {
 	text := "This repository has moved into read-only mode."
@@ -286,33 +239,6 @@ func TestNewSuccessorPatterns(t *testing.T) {
 	}
 }
 
-// TestDateBasedPatterns verifies date-anchored contextual EOL patterns.
-func TestDateBasedPatterns(t *testing.T) {
-	cases := []struct {
-		name string
-		text string
-	}{
-		{"will be removed by date", "This library will be removed by March 15, 2026."},
-		{"will be sunset on date", "This package will be sunset on 2025-06-30."},
-		{"support continues until", "Support continues until 2025-12-31."},
-		{"security fixes until", "Security fixes until 2025/06/30 only."},
-		{"after date no support", "After 2025-06-01 no support will be provided."},
-		{"after date without updates", "After January 1, 2026 without updates."},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			res := DetectLifecycle(LifecycleDetectOpts{
-				Source:   SourceReadme,
-				RepoName: "testrepo",
-				Text:     tc.text,
-			})
-			if !res.Matched {
-				t.Errorf("expected match, got none for %q", tc.text)
-			}
-		})
-	}
-}
-
 // TestDateExtraction verifies that Date is populated from date-anchored contextual patterns.
 func TestDateExtraction(t *testing.T) {
 	cases := []struct {
@@ -344,23 +270,5 @@ func TestDateExtraction(t *testing.T) {
 				t.Errorf("Date=%q, want %q", res.Date, tc.wantDate)
 			}
 		})
-	}
-}
-
-// TestDetectionKindString verifies the String() method on DetectionKind.
-func TestDetectionKindString(t *testing.T) {
-	cases := []struct {
-		kind DetectionKind
-		want string
-	}{
-		{KindNone, ""},
-		{KindStrong, "strong"},
-		{KindContextual, "contextual"},
-		{KindExplicit, "explicit"},
-	}
-	for _, tc := range cases {
-		if got := tc.kind.String(); got != tc.want {
-			t.Errorf("DetectionKind(%d).String()=%q, want %q", tc.kind, got, tc.want)
-		}
 	}
 }

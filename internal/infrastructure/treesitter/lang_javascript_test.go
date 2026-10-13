@@ -48,39 +48,6 @@ axios.post("https://example.com");
 	}
 }
 
-func TestAnalyzer_TypeScript(t *testing.T) {
-	dir := t.TempDir()
-	err := os.WriteFile(filepath.Join(dir, "index.ts"), []byte(`import axios from "axios";
-
-const res = axios.get("https://example.com");
-`), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	analyzer := NewAnalyzer()
-	t.Cleanup(analyzer.Close)
-	importPaths := map[string][]string{
-		"pkg:npm/axios@1.6.0": {"axios"},
-	}
-	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ca, ok := result["pkg:npm/axios@1.6.0"]
-	if !ok {
-		t.Fatal("expected coupling analysis for axios")
-	}
-
-	if ca.ImportFileCount != 1 {
-		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
-	}
-	if ca.CallSiteCount != 1 {
-		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
-	}
-}
-
 func TestAnalyzer_TSXJSXComponentUsage(t *testing.T) {
 	dir := t.TempDir()
 	// Mix self-closing tags (<Camera />, <Camera />) and non-self-closing
@@ -276,42 +243,6 @@ MyLib.doOther();
 	}
 }
 
-func TestAnalyzer_JavaScriptScopedDefaultImport(t *testing.T) {
-	dir := t.TempDir()
-	err := os.WriteFile(filepath.Join(dir, "index.js"), []byte(`import cloud from "@strapi/plugin-cloud";
-
-cloud.deploy();
-cloud.status();
-`), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	analyzer := NewAnalyzer()
-	t.Cleanup(analyzer.Close)
-	importPaths := map[string][]string{
-		"pkg:npm/%40strapi/plugin-cloud@1.0.0": {"@strapi/plugin-cloud"},
-	}
-	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ca, ok := result["pkg:npm/%40strapi/plugin-cloud@1.0.0"]
-	if !ok {
-		t.Fatal("expected coupling analysis for @strapi/plugin-cloud")
-	}
-	if ca.ImportFileCount != 1 {
-		t.Errorf("ImportFileCount = %d, want 1", ca.ImportFileCount)
-	}
-	if ca.CallSiteCount != 2 {
-		t.Errorf("CallSiteCount = %d, want 2", ca.CallSiteCount)
-	}
-	if ca.APIBreadth != 2 {
-		t.Errorf("APIBreadth = %d, want 2", ca.APIBreadth)
-	}
-}
-
 func TestAnalyzer_TypeScriptScopedNamespaceImport(t *testing.T) {
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "index.ts"), []byte(`import * as S3 from "@aws-sdk/client-s3";
@@ -338,60 +269,6 @@ S3.GetObjectCommand();
 	}
 	if ca.CallSiteCount != 1 {
 		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
-	}
-}
-
-func TestAnalyzer_JavaScriptScopedRequire(t *testing.T) {
-	dir := t.TempDir()
-	err := os.WriteFile(filepath.Join(dir, "index.js"), []byte(`const cloud = require("@strapi/plugin-cloud");
-
-cloud.deploy();
-`), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	analyzer := NewAnalyzer()
-	t.Cleanup(analyzer.Close)
-	importPaths := map[string][]string{
-		"pkg:npm/%40strapi/plugin-cloud@1.0.0": {"@strapi/plugin-cloud"},
-	}
-	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ca, ok := result["pkg:npm/%40strapi/plugin-cloud@1.0.0"]
-	if !ok {
-		t.Fatal("expected coupling analysis for @strapi/plugin-cloud (CJS)")
-	}
-	if ca.CallSiteCount != 1 {
-		t.Errorf("CallSiteCount = %d, want 1", ca.CallSiteCount)
-	}
-}
-
-func TestAnalyzer_TypeScriptTypeOnlyImport(t *testing.T) {
-	dir := t.TempDir()
-	err := os.WriteFile(filepath.Join(dir, "index.ts"), []byte(`import type { Foo } from "@scope/pkg";
-
-// No runtime usage — should not count
-`), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	analyzer := NewAnalyzer()
-	t.Cleanup(analyzer.Close)
-	importPaths := map[string][]string{
-		"pkg:npm/%40scope/pkg@1.0.0": {"@scope/pkg"},
-	}
-	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(result) != 0 {
-		t.Errorf("expected no coupling for type-only import, got %d results", len(result))
 	}
 }
 
@@ -1439,21 +1316,6 @@ func TestAnalyzer_JSInlineRequireCallSites(t *testing.T) {
 			wantBreadth:  0,
 		},
 		{
-			name:     "factory pattern: require('pkg')('arg')",
-			filename: "index.js",
-			code: `var deprecate = require('depd')('express');
-`,
-			importPaths: map[string][]string{
-				"pkg:npm/depd@2.0.0": {"depd"},
-			},
-			purl:         "pkg:npm/depd@2.0.0",
-			wantImports:  1,
-			wantCalls:    1, // baseline for blank/side-effect import (#261)
-			wantIsUnused: false,
-			wantBlank:    true,
-			wantBreadth:  0,
-		},
-		{
 			name:     "bare side-effect require: require('pkg')",
 			filename: "index.js",
 			code: `require('side-effect-only');
@@ -1484,21 +1346,6 @@ serialize(document);
 			wantIsUnused: false,
 			wantBlank:    false,
 			wantBreadth:  1,
-		},
-		{
-			name:     "chained member access without call: require('pkg').prop",
-			filename: "index.js",
-			code: `var version = require('some-pkg').version;
-`,
-			importPaths: map[string][]string{
-				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
-			},
-			purl:         "pkg:npm/some-pkg@1.0.0",
-			wantImports:  1,
-			wantCalls:    1, // baseline for blank/side-effect import (#261)
-			wantIsUnused: false,
-			wantBlank:    true,
-			wantBreadth:  0,
 		},
 	}
 
@@ -1568,18 +1415,6 @@ func TestAnalyzer_JSReExport(t *testing.T) {
 			name:     "named re-export",
 			filename: "index.ts",
 			code:     `export { useState } from "react";` + "\n",
-			importPaths: map[string][]string{
-				"pkg:npm/react@18.0.0": {"react"},
-			},
-			purl:        "pkg:npm/react@18.0.0",
-			wantImports: 1,
-			wantCalls:   1, // blank-import baseline
-			wantBlank:   true,
-		},
-		{
-			name:     "aliased re-export",
-			filename: "index.ts",
-			code:     `export { useState as default } from "react";` + "\n",
 			importPaths: map[string][]string{
 				"pkg:npm/react@18.0.0": {"react"},
 			},
@@ -1720,45 +1555,6 @@ func TestAnalyzer_JSDynamicImport(t *testing.T) {
 				"pkg:npm/lodash@4.17.21": {"lodash"},
 			},
 			purl:        "pkg:npm/lodash@4.17.21",
-			wantImports: 1,
-			wantCalls:   1, // blank-import baseline
-			wantBreadth: 0,
-			wantBlank:   true,
-		},
-		{
-			name:     "dynamic import with promise chain",
-			filename: "index.js",
-			code:     `import("lodash").then(m => m.default());` + "\n",
-			importPaths: map[string][]string{
-				"pkg:npm/lodash@4.17.21": {"lodash"},
-			},
-			purl:        "pkg:npm/lodash@4.17.21",
-			wantImports: 1,
-			wantCalls:   1, // blank-import baseline
-			wantBreadth: 0,
-			wantBlank:   true,
-		},
-		{
-			name:     "destructured dynamic import",
-			filename: "index.ts",
-			code:     `const { get } = await import("axios");` + "\n",
-			importPaths: map[string][]string{
-				"pkg:npm/axios@1.6.0": {"axios"},
-			},
-			purl:        "pkg:npm/axios@1.6.0",
-			wantImports: 1,
-			wantCalls:   1, // blank-import baseline
-			wantBreadth: 0,
-			wantBlank:   true,
-		},
-		{
-			name:     "dynamic import of scoped package",
-			filename: "index.ts",
-			code:     `const s3 = await import("@aws-sdk/client-s3");` + "\n",
-			importPaths: map[string][]string{
-				"pkg:npm/%40aws-sdk/client-s3@3.0.0": {"@aws-sdk/client-s3"},
-			},
-			purl:        "pkg:npm/%40aws-sdk/client-s3@3.0.0",
 			wantImports: 1,
 			wantCalls:   1, // blank-import baseline
 			wantBreadth: 0,

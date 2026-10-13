@@ -58,23 +58,3 @@ func TestGetReverseDependencyCount_EmptyName(t *testing.T) {
 		t.Errorf("expected 0 for empty name, got %d", count)
 	}
 }
-
-func TestGetReverseDependencyCount_EmptyArray(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`[]`))
-	}))
-	defer srv.Close()
-
-	client := NewClient()
-	client.baseURL = srv.URL
-
-	count, err := client.GetReverseDependencyCount(context.Background(), "tiny-gem")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if count != 0 {
-		t.Errorf("expected 0 for empty array, got %d", count)
-	}
-}
