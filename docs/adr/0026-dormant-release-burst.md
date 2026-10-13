@@ -1,7 +1,7 @@
 # 0026. A release burst across lines after a long silence needs a human
 
 Date: 2026-10-08
-Status: Accepted (amended by [ADR-0028](0028-dormant-release-marker.md): the burst is also carried as a marker next to the label, the silence moved to `DormantSilenceDays`, and a burst stays Review Needed for `DormantFlagDays` (7 days) instead of 365)
+Status: Accepted — flag period shortened to 7 days, see [ADR-0028](0028-dormant-release-marker.md)
 
 ## Context
 
@@ -51,8 +51,7 @@ When the label is **Active or Legacy-Safe** and the analysed version was publish
    release after the silence, counting only releases published by the moment
    of evaluation — that touches at least `DormantBurstMinLines` (2)
    release lines (the major version, or `0.minor` below 1.0), and
-3. no more than `RecentStableWindowDays` ago (since ADR-0028: no more than
-   `DormantFlagDays`, 7 days, ago),
+3. no more than `RecentStableWindowDays` ago,
 
 the label becomes **Review Needed**, with the silence, the lines and the burst in
 the reason and signals. The signals behind the replaced label are kept after
@@ -167,9 +166,8 @@ tooling-heavy; other populations will differ.
 
 ## Consequences
 
-- Under this ADR as first accepted, `pkg:npm/node-ipc@12.0.1` and its
-  sibling versions were Review Needed until 2027-05-14. Since ADR-0028 they
-  are Review Needed for 7 days, until 2026-05-21. The reason reads "Possible hijacked release. This version came out
+- `pkg:npm/node-ipc@12.0.1` and its sibling versions are Review Needed until
+  2027-05-14, with the reason "Possible hijacked release. This version came out
   after 639 days with no release, as part of a set published within a day on
   the 9.x, 12.x lines. Takeovers of npm packages that had gone quiet looked like
   this (node-ipc 2026, rc 2021), but so does a maintainer who returns and ships
@@ -224,3 +222,11 @@ tooling-heavy; other populations will differ.
   publisher changes (`_npmUser`), new dependencies and new install scripts in the
   burst, which are lost when the registry removes the version and so could not be
   checked against the incidents above.
+- **Update 2026-10-13: ADR-0028 amends the flag period and the thresholds.** A
+  burst now turns Active or Legacy-Safe into Review Needed for `DormantFlagDays`
+  (7 days) after publication, not `RecentStableWindowDays` (365), so
+  `pkg:npm/node-ipc@12.0.1` was Review Needed until 2026-05-21 rather than
+  2027-05-14. The silence threshold moved to its own setting,
+  `DormantSilenceDays` (365). The burst is also carried as a marker next to the
+  label, which ADR-0028 describes. The bullets above record this decision as it
+  was first accepted.

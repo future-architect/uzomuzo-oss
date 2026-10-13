@@ -402,7 +402,18 @@ Exit with code 1 when any dependency matches the specified lifecycle labels:
 ./uzomuzo scan --sbom bom.json --fail-on eol-confirmed,eol-effective,stalled
 ```
 
-Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `legacy-safe`, `review-needed`
+Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `legacy-safe`, `review-needed`, `malicious`, `dormant-release`
+
+`malicious` fails on a version named in an OSV malicious-package advisory. Any
+other non-empty `--fail-on` selection also fails on such a version (see
+[ADR-0027](adr/0027-osv-malicious-advisories.md)).
+
+`dormant-release` fails on an npm version that came out in the last 7 days after
+a year with no releases, whatever its lifecycle label, on one release line or
+several. No other value implies it: it is a reason to look before adopting, not
+a finding, and ordinary releases carry it too (see
+[ADR-0028](adr/0028-dormant-release-marker.md)). `review-needed` stops only on
+the narrower case below, and only while the label is Review Needed.
 
 `review-needed` covers the cases uzomuzo cannot decide on its own — including a
 package whose every published release is yanked (see

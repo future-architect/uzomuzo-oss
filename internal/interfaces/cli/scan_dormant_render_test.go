@@ -69,6 +69,20 @@ func TestDormantReleaseScanOutputs(t *testing.T) {
 		t.Fatalf("table: %s", buf.String())
 	}
 
+	// When an advisory also names the version, the table cell shows the
+	// advisory, not the marker.
+	both := marked
+	flagged := *marked.Analysis
+	flagged.MaliciousState = &analysis.MaliciousState{Status: analysis.MaliciousStatusFlagged, AdvisoryID: "MAL-1", Scope: analysis.MaliciousScopeVersion}
+	both.Analysis = &flagged
+	buf.Reset()
+	if err := renderScanTable(&buf, []audit.AuditEntry{both}, []audit.AuditEntry{both}, false); err != nil {
+		t.Fatal(err)
+	}
+	if table := buf.String(); !strings.Contains(table, "Stalled ☠ MAL-1") || strings.Contains(table, "silence") {
+		t.Fatalf("table with both: %s", table)
+	}
+
 	buf.Reset()
 	if err := renderBoxEntry(&buf, &marked); err != nil {
 		t.Fatal(err)
