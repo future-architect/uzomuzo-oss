@@ -153,8 +153,9 @@ func (c LifecycleAssessmentConfig) DormantWindows() (silence, flag time.Duration
 	return time.Duration(c.DormantSilenceDays) * 24 * time.Hour, time.Duration(c.DormantFlagDays) * 24 * time.Hour
 }
 
-// NormalizeLifecycleConfig fills zero fields of c with defaults from DefaultValues.Lifecycle.
-// It is safe to call multiple times; fields already set to non-zero values are left unchanged.
+// NormalizeLifecycleConfig fills zero fields of c with defaults from DefaultValues.Lifecycle,
+// and also replaces non-positive DormantSilenceDays and DormantFlagDays. It is safe to call
+// multiple times; other fields already set to non-zero values are left unchanged.
 func NormalizeLifecycleConfig(c *LifecycleAssessmentConfig) {
 	def := DefaultValues.Lifecycle
 	if c.Type == "" {

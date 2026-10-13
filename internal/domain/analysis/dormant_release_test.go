@@ -139,6 +139,12 @@ func TestEvaluateDormantRelease(t *testing.T) {
 	if got := (&Analysis{}).EvaluateDormantRelease(time.Now(), silence, flag); got != nil {
 		t.Errorf("no package: got %+v, want nil", got)
 	}
+	// Only an npm history is read: the marker's text and thresholds are npm's.
+	other := *nodeIPC
+	other.Registry = "pypi"
+	if got := (&Analysis{Package: &Package{Version: "12.0.1"}, ReleaseHistory: &other}).EvaluateDormantRelease(mustTime(t, "2026-05-15T00:00:00Z"), silence, flag); got != nil {
+		t.Errorf("non-npm history: got %+v, want nil", got)
+	}
 	// A non-positive period marks nothing: DetectDormantBurst would read it as
 	// no age limit and keep the burst marked for ever.
 	burstAnalysis := &Analysis{Package: &Package{Version: "12.0.1"}, ReleaseHistory: nodeIPC}

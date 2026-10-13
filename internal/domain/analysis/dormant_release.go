@@ -37,9 +37,9 @@ type DormantRelease struct {
 // analysed version at now: a return after at least silence without a release
 // is marked for flag after publication. flag must be positive; flag <= 0
 // marks nothing. Returns nil when the analysis, its package or its release
-// history is missing, or no rule matches.
+// history is missing, the history is not from npm, or no rule matches.
 func (a *Analysis) EvaluateDormantRelease(now time.Time, silence, flag time.Duration) *DormantRelease {
-	if a == nil || a.Package == nil || flag <= 0 {
+	if a == nil || a.Package == nil || flag <= 0 || a.ReleaseHistory == nil || a.ReleaseHistory.Registry != RegistryNpm {
 		return nil
 	}
 	if b := DetectDormantBurst(a.ReleaseHistory, a.Package.Version, now, silence, flag); b != nil {

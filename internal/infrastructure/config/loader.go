@@ -169,7 +169,7 @@ func (s *ConfigService) loadFromEnvironment(config *domainConfig.Config) {
 	loadInt("LIFECYCLE_ASSESS_RESIDUAL_ADVISORY_THRESHOLD", func(v int) { config.Lifecycle.ResidualAdvisoryThreshold = v })
 	loadInt("LIFECYCLE_ASSESS_COMMIT_ACTIVITY_WINDOW_DAYS", func(v int) { config.Lifecycle.CommitActivityWindowDays = v })
 
-	// Normalize zero-values to defaults
+	// Fill zero values, and non-positive dormant windows, with defaults
 	domainConfig.NormalizeLifecycleConfig(&config.Lifecycle)
 
 }
