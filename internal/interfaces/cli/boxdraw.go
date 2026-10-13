@@ -344,6 +344,13 @@ func renderBoxEntryError(ctx *boxContext) error {
 		}
 		return nil
 	}
+	// The marker comes from the registry, so it can be present when deps.dev
+	// failed.
+	if notice := ctx.analysis.DormantReleaseNotice(); notice != "" {
+		if err := writeLine(ctx, "%s %s", dormantReleasePrefix, notice); err != nil {
+			return wrap(err)
+		}
+	}
 	icon := verdictIcon(ctx.entry.Verdict)
 	label := verdictLabel(ctx.entry.Verdict)
 	if ctx.entry.ErrorMsg != "" {

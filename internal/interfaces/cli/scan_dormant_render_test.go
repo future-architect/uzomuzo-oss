@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -111,6 +112,26 @@ func TestDormantReleaseScanOutputs(t *testing.T) {
 	for _, want := range []string{"Release after silence", "400 days", "No OSV malicious-package", "2026-10-08"} {
 		if !strings.Contains(flat, want) {
 			t.Errorf("box missing %q:\n%s", want, box)
+		}
+	}
+
+	// A deps.dev failure still carries the marker, since the release history
+	// comes from the registry: the error box shows it next to the error.
+	failed := marked
+	errored := *marked.Analysis
+	errored.Error = errors.New("deps.dev lookup failed")
+	errored.AxisResults = nil
+	failed.Analysis = &errored
+	failed.ErrorMsg = "deps.dev lookup failed"
+	buf.Reset()
+	if err := renderBoxEntry(&buf, &failed); err != nil {
+		t.Fatal(err)
+	}
+	errBox := buf.String()
+	flat = strings.Join(strings.Fields(strings.ReplaceAll(errBox, "│", " ")), " ")
+	for _, want := range []string{"Release after silence", "400 days", "error: deps.dev lookup failed"} {
+		if !strings.Contains(flat, want) {
+			t.Errorf("error box missing %q:\n%s", want, errBox)
 		}
 	}
 }
