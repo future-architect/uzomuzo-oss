@@ -1,7 +1,7 @@
 # 0028. A return from silence is a marker next to the label, and a fresh one counts on any line
 
 Date: 2026-10-09
-Status: Proposed
+Status: Accepted
 
 ## Context
 
