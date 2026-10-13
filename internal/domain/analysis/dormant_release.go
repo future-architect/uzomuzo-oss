@@ -42,10 +42,17 @@ func (a *Analysis) EvaluateDormantRelease(now time.Time, silence, flag time.Dura
 	if a == nil || a.Package == nil || flag <= 0 {
 		return nil
 	}
-	if b := DetectDormantBurst(a.ReleaseHistory, a.Package.Version, now, silence, flag); b != nil {
+	// One pass over the history serves both rules: they share the silence and
+	// the age limit, and differ only in the lines touched and prereleases, as
+	// DetectDormantBurst and DetectFreshDormantRelease do.
+	b := detectDormantReturn(a.ReleaseHistory, a.Package.Version, now, silence)
+	if b == nil || now.Sub(b.PublishedAt) > flag {
+		return nil
+	}
+	if len(b.Lines) >= DormantBurstMinLines {
 		return &DormantRelease{Kind: DormantReleaseBurstAcrossLines, Burst: b, Until: b.PublishedAt.Add(flag)}
 	}
-	if b := DetectFreshDormantRelease(a.ReleaseHistory, a.Package.Version, now, silence, flag); b != nil {
+	if !IsPrerelease(a.Package.Version) {
 		return &DormantRelease{Kind: DormantReleaseFresh, Burst: b, Until: b.PublishedAt.Add(flag)}
 	}
 	return nil

@@ -100,6 +100,16 @@ func TestEvaluateDormantRelease(t *testing.T) {
 		"6.2.1": "2022-11-01T00:00:00Z",
 		"6.2.2": "2025-09-08T13:16:00Z",
 	})
+	quietPre := history(t, map[string]string{
+		"6.2.1":        "2022-11-01T00:00:00Z",
+		"6.3.0-beta.1": "2025-09-08T13:16:00Z",
+	})
+	burstPre := history(t, map[string]string{
+		"12.0.0":      "2024-08-12T16:28:35Z",
+		"12.0.1":      "2026-05-14T14:25:30Z",
+		"9.2.3":       "2026-05-14T14:26:01Z",
+		"13.0.0-rc.1": "2026-05-14T14:27:00Z",
+	})
 	tests := []struct {
 		name      string
 		h         *ReleaseHistory
@@ -112,6 +122,8 @@ func TestEvaluateDormantRelease(t *testing.T) {
 		{"burst clears after the same 7 days", nodeIPC, "12.0.1", "2026-05-21T14:25:31Z", "", ""},
 		{"single line is fresh", quiet, "6.2.2", "2025-09-09T00:00:00Z", DormantReleaseFresh, "2025-09-15T13:16:00Z"},
 		{"single line after the fresh period", quiet, "6.2.2", "2025-10-01T00:00:00Z", "", ""},
+		{"single-line prerelease is not fresh", quietPre, "6.3.0-beta.1", "2025-09-09T00:00:00Z", "", ""},
+		{"prerelease in a burst across lines is marked", burstPre, "13.0.0-rc.1", "2026-05-15T00:00:00Z", DormantReleaseBurstAcrossLines, "2026-05-21T14:27:00Z"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
