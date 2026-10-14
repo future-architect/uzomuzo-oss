@@ -61,6 +61,7 @@ uzomuzo scan "pkg:npm/example@1.2.3" --format json \
 |-------|-----------------------------|
 | `malicious` present | An OSV advisory names this version (or, with `scope: "package"`, the whole package) as malicious. Stop the evaluation -- see the first row of the Recommendation logic. |
 | `malicious_check: "unknown"` | The malicious lookup failed. Say so in the verdict; do not treat it as clean. |
+| both absent | Clean for npm, PyPI, crates.io, Go, and Maven. For any other ecosystem the check did not run: write "not checked". |
 | `dormant_release` present | (npm) This version came out after a year with no releases. Not a finding, but a reason to confirm who published it before trusting it. The marker is shown only for 7 days after publication (`until`), so its absence on an older version proves nothing; for a version pinned recently, compare its publish date with the previous release yourself. |
 | `reason` | Why scan chose the lifecycle label. Needed to interpret `Review Needed` (see Security Urgency below). |
 
@@ -92,7 +93,7 @@ Display ALL of these from the diet JSON. Do NOT re-compute any of them.
 
 ### How to read the health fields
 
-- **Vulnerability fields describe the latest release, including its dependencies.** Diet takes them from the release uzomuzo picks as the newest (the stable release; failing that, the highest or pre-release version), not from the pinned version, and it counts advisories in that release's own dependencies too. Split them with scan's `direct_advisory_count` and `transitive_advisory_count`:
+- **Vulnerability fields describe the latest release, including its dependencies.** Diet takes them from the release uzomuzo picks as the newest (the stable release; failing that, the highest version, then a pre-release, then the requested version), not from the pinned version, and it counts advisories in that release's own dependencies too. Split them with scan's `direct_advisory_count` and `transitive_advisory_count`:
   - Direct advisories on the latest release mean "even upgrading does not fix these" -- a strong reason to remove or replace.
   - Transitive-only advisories (`direct_advisory_count` 0) are in a package this one depends on. They argue for a dependency bump upstream, not for removing this package. `max_cvss_score` may come from them.
   - For the version you actually ship, query OSV for that exact version (`osv-scanner`, `govulncheck`, `npm audit`, `pip-audit`). If the pinned version is vulnerable but the latest release is clean, the fix is an upgrade, not a removal.
@@ -234,7 +235,7 @@ Rate each axis High/Med/Low using the data gathered in Phases 1-3. Each axis is 
 | **Production Scope** | Phase 2 classification | 0 production files (all test/CI/example) | < 50% production files | >= 50% production files |
 | **Coupling Depth** | `coupling_effort`, `import_file_count`, `call_site_count` | `coupling_effort` < 0.25 (trivial/easy) | 0.25 - 0.6 (moderate) | >= 0.6 (hard, deeply wired) |
 | **Replaceability** | Phase 3b symbol map | > 80% symbols have stdlib/existing-dep replacement | 50-80% replaceable | < 50%, or crypto/protocol involved |
-| **Security Urgency** | `has_vulnerabilities`, `max_cvss_score`, `lifecycle`, scan `direct_advisory_count` / `reason` / `dormant_release` | Direct advisories on the latest release with CVSS >= 7.0 (no upstream fix), or lifecycle EOL-Confirmed/EOL-Effective, or scan `reason` starting `All releases yanked on`, or `dormant_release.kind = "burst_across_lines"` (whatever the label) | Direct advisories with CVSS 4.0-6.9, or lifecycle Stalled/EOL-Scheduled/Archived, or `Review Needed` for lack of data, or `dormant_release.kind = "fresh"` | No direct advisories on the latest release, or only ones with CVSS below 4.0 (transitive-only counts here), lifecycle Active/Legacy-Safe. A direct advisory with no CVSS score counts as Medium until its severity is looked up |
+| **Security Urgency** | `has_vulnerabilities`, `max_cvss_score`, `lifecycle`, scan `direct_advisory_count` / `reason` / `dormant_release` | Direct advisories on the latest release with CVSS >= 7.0 (no upstream fix), or lifecycle EOL-Confirmed/EOL-Effective, or `dormant_release.kind = "burst_across_lines"` (whatever the label) | Direct advisories with CVSS 4.0-6.9, or lifecycle Stalled/EOL-Scheduled/Archived, or `Review Needed` for lack of data, or `dormant_release.kind = "fresh"` | No direct advisories on the latest release, or only ones with CVSS below 4.0 (transitive-only counts here), lifecycle Active/Legacy-Safe. A direct advisory with no CVSS score counts as Medium until its severity is looked up |
 | **Cascade Potential** | `exclusive_transitive`, project knowledge | Removing unblocks 3+ further removals | Unblocks 1-2 | Standalone, no cascade |
 
 ### Scoring overrides
@@ -242,6 +243,9 @@ Rate each axis High/Med/Low using the data gathered in Phases 1-3. Each axis is 
 - **Coupling Depth override**: When Phase 2 shows ALL import files are non-production (test/CI/example), override Coupling Depth to **High** regardless of `coupling_effort`. Test/CI refactoring is low-risk regardless of call count.
 - **Transitive Cleanup caveat**: When `stays_as_indirect: true`, `exclusive_transitive` may overestimate actual cleanup -- some "exclusive" transitives may remain reachable via the indirect path. Note this uncertainty in the rationale.
 - **Unmeasured coupling**: When Phase 1 found that coupling was not measured, write "unmeasured" for Coupling Depth and Production Scope instead of a rating. Do not let a "trivial" label from an unmeasured run count as High.
+- **Rate the lifecycle part from scan when diet says `Archived`**: diet overwrites the lifecycle label with `Archived` whenever the repository is archived, even when the registry has declared end of life. Example: an npm-deprecated package with an archived repository is `EOL-Confirmed` in scan but `Archived` in diet. Use scan's `lifecycle` for the rating (EOL-Confirmed / EOL-Effective -> High, Stalled -> Medium).
+- **Highest matching column wins**: if the inputs match both High and Medium (e.g., Stalled with a direct CVSS 8.1 advisory), rate High.
+- **All releases yanked is not a security signal**: it is handled by its own Recommendation row; rate Security Urgency from the other inputs.
 - **Security Urgency is about removal, not upgrade**: If the pinned version has advisories but the latest release is clean, the remedy is an upgrade. Rate Security Urgency from the latest release's **direct** advisories, and mention the upgrade in the rationale. When both direct and transitive advisories exist, `max_cvss_score` may belong to a transitive one; look up the direct advisories' scores on OSV before rating.
 
 ### Scoring output
@@ -298,7 +302,7 @@ Synthesize all phases into a structured recommendation. Use the exact field name
 **6-Axis Summary**:
   {axis}: {H/M/L}  (x6, from Phase 4)
 
-**Recommendation**: REMOVE / DEFER / KEEP / UPGRADE / REPLACE VERSION NOW
+**Recommendation**: REMOVE / DEFER / KEEP / UPGRADE / REPLACE / REPLACE VERSION NOW
 **Effort**: Trivial (<1h) / Small (1-4h) / Medium (1-3d) / Large (1w+)
 **Priority**: S (do now) / A (this sprint) / B (when convenient) / C (keep for now)
 **Rationale**: {1-2 sentences -- why this recommendation, citing the key axis scores}
@@ -313,14 +317,15 @@ Rules are evaluated **top-to-bottom; first match wins.** If multiple rows could 
 | scan `malicious` present | REPLACE VERSION NOW, Priority S. This is incident response, not a removal decision: move to a version the advisory does not name (or, for `scope: "package"`, remove the package), and run `/diet-assess-risk` to judge what the malicious code could have reached. Skip the rest of this table |
 | `is_unused: true`, and a search of configuration and build files finds no reference (see Data quality check) | REMOVE, Trivial, Priority S |
 | Pinned version has advisories, the pinned version is older than the latest release, an OSV check of the latest release (with the dependency versions it resolves to in your project) no longer shows them, and lifecycle is Active or Legacy-Safe | UPGRADE, Priority A. Stop here; name in the rationale any axis that would still argue for removal later |
+| scan `reason` starts with `All releases yanked on` | REPLACE, Priority A -- no version resolves any more, so a fresh install or lockfile update can break. This is build continuity, not security: do not use it to justify a breaking change |
+| Coupling Depth or Production Scope is "unmeasured" | DEFER -- re-run diet with the correct `--source`, or read the import sites by hand, then evaluate again. Exception: if Security Urgency is High, REMOVE as for the High-urgency row below and note the missing coupling data |
 | API leakage = Yes AND Security Urgency = High | REMOVE with BREAKING CHANGE warning -- security overrides API stability. Rationale must document the breaking change and recommend a major version bump or deprecation timeline. Escalate to `/diet-assess-risk` |
 | API leakage = Yes | DEFER (needs major version bump or deprecation period) |
 | Replaceability = Low (crypto/protocol) | KEEP -- find an alternative maintained library rather than self-implementing. If Security Urgency is also High, escalate to `/diet-assess-risk` for full risk analysis. Never recommend self-implementing crypto/protocol |
-| Coupling Depth or Production Scope is "unmeasured" | DEFER -- re-run diet with the correct `--source`, or read the import sites by hand, then evaluate again. Exception: if Security Urgency is High, REMOVE as for the High-urgency row below and note the missing coupling data |
 | All 6 axes High or Med | REMOVE |
 | 1-2 axes Low, rest High/Med | REMOVE -- note the Low axes as caveats in rationale |
 | Security Urgency = High, others mixed | REMOVE (prioritize security). Suggest `/diet-assess-risk` for full analysis |
-| `stays_as_indirect: true`, coupling low | REMOVE (still valuable: delegates version management, unblocks future cleanup) |
+| `stays_as_indirect: true` AND Coupling Depth = High | REMOVE (still valuable: delegates version management, unblocks future cleanup) |
 | >= 3 axes Low | KEEP |
 
 ### Effort derivation

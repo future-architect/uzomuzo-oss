@@ -13,7 +13,9 @@ Analyze and plan the removal of dependency `$ARGUMENTS`, then take action.
 - **Default (Issue mode)**: Run Phase 1 analysis, then file a GitHub Issue with the findings and proposed migration plan. Appropriate for external OSS contributions and large projects where you don't own the build environment.
 - **`--pr` (PR mode)**: Run the full removal lifecycle locally: analysis → replacement → verification → commit. Use this only when you own the project and can run build/test locally.
 
-Parse `$ARGUMENTS` for flags:
+Parse `$ARGUMENTS` for flags, and set `TARGET` to the dependency itself: drop the flags and their values, and turn a PURL into the name the package manager uses (`pkg:golang/github.com/pkg/errors@v0.9.1` -> `github.com/pkg/errors`, `pkg:npm/%40scope/name@1.0.0` -> `@scope/name`). Every command below uses `$TARGET`, never the raw `$ARGUMENTS`.
+
+Flags:
 - If `--pr` is present → PR mode (direct implementation)
 - If `--repo owner/repo` is present → target that repository for the issue
 - Otherwise → Issue mode (default)
@@ -59,7 +61,7 @@ uzomuzo scan "pkg:npm/example@1.2.3" --format json \
 
 - **`malicious` present**: Stop this flow. Moving off the malicious version comes before any removal plan, and it must not wait for an issue to be triaged. Report the advisory to the user and propose the fix: pin to a version the advisory does not name (or remove the package when `scope` is `"package"`), and run `/diet-assess-risk` to list the secrets to rotate (skip that if it already produced the incident verdict). Make the change only in PR mode and only after the user approves it; rotating credentials is the user's action, not yours. For an external project, do not open a public issue that describes an exploitable situation in detail; draft a private report for the maintainers' security contact (`SECURITY.md`) and send nothing until the user approves it.
 - **`dormant_release` present** (npm, shown for 7 days after publication): The version came out after a year of silence. Prefer staying on, or pinning back to, the release before the silence while you plan the removal.
-- Otherwise continue.
+- Otherwise continue. (For ecosystems other than npm, PyPI, crates.io, Go, and Maven, uzomuzo does not run the malicious check; note "not checked" in any issue or PR text.)
 
 ### 1. Will it actually disappear?
 
@@ -75,11 +77,11 @@ In detailed output (`--format detailed`), the line `⚠ Remains indirect:  yes  
 If diet output is not available, you can verify manually:
 ```bash
 # Go
-go mod why -m $ARGUMENTS
+go mod why -m $TARGET
 # npm
-npm ls $ARGUMENTS
+npm ls $TARGET
 # pip
-pip show $ARGUMENTS | grep "Required-by"
+pip show $TARGET | grep "Required-by"
 ```
 
 ### 2. What's the replacement?
@@ -106,7 +108,7 @@ Check these before starting:
   ```bash
   # Go: signatures name the dep by its import alias (e.g. `dep.Type`), not by module path.
   # 1. Find the alias used in each importing file:
-  grep -rn --include="*.go" "\"$ARGUMENTS" .
+  grep -rn --include="*.go" "\"$TARGET" .
   # 2. List each package's exported API and look for that alias:
   for p in $(go list ./...); do go doc -all "$p" 2>/dev/null | grep -q '\b<alias>\.' && echo "$p"; done
   ```
@@ -164,7 +166,7 @@ gh search issues "replace deprecated kv" --repo vercel/next.js --limit 10
 
 **Post-filter**: GitHub fuzzy search can return false positives. Verify that each hit is actually about the same dependency removal — not just a mention in passing.
 
-If a matching issue/discussion already exists, **do not file a duplicate**. Instead, add a comment with any new analysis (e.g., impact data from diet) and stop.
+If a matching issue/discussion already exists, **do not file a duplicate**. Instead, draft a comment with any new analysis (e.g., impact data from diet), post it only after the user approves it (see "Confirm before posting"), and stop.
 
 ### Step 1: File the issue or discussion
 
@@ -243,14 +245,14 @@ Before filing, check the target repository's issue templates:
 
 ### Confirm before posting
 
-Filing an issue or discussion publishes text under the user's name in someone else's repository, and it cannot be fully taken back. Before running `gh issue create` or the `createDiscussion` mutation, show the user the target repository, the channel (issue or discussion), the title, and the full body, and wait for their approval. Post only after they approve; apply any edits they ask for first.
+Filing an issue or discussion publishes text under the user's name in someone else's repository, and it cannot be fully taken back. Before any command that writes to a repository you do not own -- `gh issue create`, `gh issue comment`, `gh pr comment`, the `createDiscussion` mutation, or any other GraphQL mutation -- show the user the target repository, the channel (issue or discussion), the title, and the full body, and wait for their approval. Post only after they approve; apply any edits they ask for first.
 
 ### After filing
 
 Do not proceed to implementation. The issue/discussion is the deliverable.
 
 **Follow-up guidance:**
-- If no maintainer response after **2 weeks**, add a polite ping comment.
+- If no maintainer response after **2 weeks**, draft a polite ping comment and post it only after the user approves it.
 - If the maintainer responds with **"PR welcome"**, you may re-run with `--pr` to implement (but check if you can reproduce CI locally first).
 - If the same dependency is EOL across **multiple projects** (e.g., mitchellh/* packages), cross-reference the issues in each body so maintainers see the ecosystem-wide pattern.
 - If the dependency would benefit from **structural reform** rather than individual removal (e.g., a framework that pulls in many EOL deps), mention this in the Notes section — the insight is valuable even if you can't implement it yourself.
@@ -269,7 +271,7 @@ The following phases apply only in PR mode. Use this when you own the project.
 
 ```bash
 # Find all files importing the dependency (production code only)
-grep -rn "$ARGUMENTS" --include="*.go" -l | grep -v _test.go
+grep -rn "$TARGET" --include="*.go" -l | grep -v _test.go
 
 # For each file, check if a corresponding test file exists
 # e.g., reporter/email.go → reporter/email_test.go
@@ -301,12 +303,14 @@ For high-impact removals (framework replacement, parser rewrite), unit tests are
 
 ```bash
 # Build the "before" binary from a separate checkout of the base commit,
-# so your working tree (and the shared stash stack) are never touched
+# so your working tree (and the shared stash stack) are never touched.
+# BASE must be the commit before the removal, not HEAD after you commit it.
 set -euo pipefail
+BASE=${BASE:-$(git merge-base origin/main HEAD)}
 OUT=$(mktemp -d)
-git worktree add "$OUT/src" HEAD
+git worktree add --detach "$OUT/src" "$BASE"
+trap 'git worktree remove --force "$OUT/src"' EXIT   # cleans up even if a build fails
 (cd "$OUT/src" && go build -o "$OUT/before/" ./cmd/...)   # trailing slash: one binary per command
-git worktree remove "$OUT/src"
 go build -o "$OUT/after/" ./cmd/...
 
 # Run the same command from both builds against real-world inputs and diff the output
@@ -324,7 +328,7 @@ The vuls fanal framework removal used this approach: 17 real OSS lockfiles, 7,19
 Based on the strategy from Phase 1:
 
 **For stdlib replacement:**
-1. Find all import sites: `grep -rn "$ARGUMENTS" --include="*.go" | grep -v _test.go`
+1. Find all import sites: `grep -rn "$TARGET" --include="*.go" | grep -v _test.go`
 2. For each site, replace the API call with the stdlib equivalent
 3. Update imports
 4. If the replacement API has different error handling or return types, adapt the call site
@@ -367,7 +371,7 @@ Lessons learned from real dependency removals:
 For Go:
 ```bash
 # Remove the direct dependency
-go mod edit -droprequire $ARGUMENTS
+go mod edit -droprequire $TARGET
 go mod tidy
 ```
 

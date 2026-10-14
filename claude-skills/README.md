@@ -10,7 +10,7 @@ Detects EOL packages with uzomuzo, then uses the LLM to trace data flow through 
 
 **What it does:**
 1. Reads the diet entry, then runs `uzomuzo scan` on the pinned version for the signals diet JSON does not carry (OSV malicious-package advisories, the npm dormant-release marker, the reason behind `Review Needed`)
-2. Checks the pinned version's own advisories (diet's vulnerability fields describe the latest stable release)
+2. Checks the pinned version's own advisories (diet's vulnerability fields describe the release uzomuzo picks as latest -- stable, else highest, else pre-release, else the requested version -- and include that release's dependencies)
 3. Classifies the threat profile; a malicious version short-circuits to incident handling (which secrets to rotate)
 4. For each unhealthy package, reads the source code to trace what data flows through it, including runtime-loaded dependencies with no import
 5. Constructs attack scenarios (unpatched vulnerabilities + supply chain takeover, including install-time execution)
@@ -41,7 +41,7 @@ Evaluates a single dependency for removal using a 5-phase data-driven framework 
 | Production Scope | Usage classification from Phase 2 |
 | Coupling Depth | `coupling_effort`, `call_site_count`, `api_breadth` |
 | Replaceability | Symbol migration map from Phase 3 |
-| Security Urgency | `has_vulnerabilities`, `max_cvss_score` (latest stable release), `lifecycle`, scan's `reason` |
+| Security Urgency | `has_vulnerabilities`, `max_cvss_score` (latest release, including its dependencies), scan's `direct_advisory_count`, `lifecycle`, scan's `reason` |
 | Cascade Potential | `exclusive_transitive` + project knowledge |
 
 ```bash
