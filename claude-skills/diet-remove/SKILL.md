@@ -24,7 +24,7 @@ Parse `$ARGUMENTS` for flags:
 
 ### Ecosystem detection
 
-Detect the ecosystem from the PURL scheme or module path (`pkg:golang/` → Go, `pkg:npm/` → npm, `pkg:pypi/` → Python, `pkg:maven/` → Maven, `pkg:githubactions/` → GitHub Actions).
+Detect the ecosystem from the PURL scheme or module path (`pkg:golang/` → Go, `pkg:npm/` → npm, `pkg:pypi/` → Python, `pkg:maven/` → Maven, `pkg:cargo/` → Rust, `pkg:githubactions/` → GitHub Actions). Diet measures source coupling for Go, Python, JavaScript/TypeScript, and Java only; for other ecosystems, find the import sites yourself before trusting a "trivial" or "unused" label.
 
 If the ecosystem is **not Go**, display this notice to the user before proceeding:
 
@@ -47,14 +47,29 @@ The rest of the flow (duplicate check, issue template, etc.) proceeds identicall
 
 Before writing any code, run through these checks:
 
+### 0. Is this an incident rather than a cleanup?
+
+Run `uzomuzo scan` on the exact version in the SBOM. Diet JSON does not carry these signals:
+
+```bash
+uzomuzo scan "pkg:npm/example@1.2.3" --format json \
+  | jq '.packages[0] | {lifecycle, reason, malicious, malicious_check, dormant_release}'
+```
+
+- **`malicious` present**: Stop this flow. Moving off the malicious version comes before any removal plan, and it must not wait for an issue to be triaged. In your own project, pin to a version the advisory does not name (or remove the package when `scope` is `"package"`) and run `/diet-assess-risk` to list the secrets to rotate. In an external project, do not open a public issue that describes an exploitable situation in detail; point the maintainers to the advisory through their security policy (`SECURITY.md`) instead.
+- **`dormant_release` present** (npm): The version came out after a year of silence. Prefer staying on, or pinning back to, the release before the silence while you plan the removal.
+- Otherwise continue.
+
 ### 1. Will it actually disappear?
 
-Check the **STAYS** column in the `uzomuzo diet` output (or `stays_as_indirect` in JSON):
+Check the **REMAINS** column in the `uzomuzo diet` table output (or `stays_as_indirect` in JSON):
 
-- **STAYS = `-`** → Removing this dep fully removes it from the dependency tree. Go ahead.
-- **STAYS = `yes`** → Another direct dep depends on this transitively. It will remain as an indirect dependency after removal. Still worth doing (version management delegation, future removal readiness), but set expectations: it won't leave go.sum / lockfile.
+- **REMAINS = `-`** → Removing this dep fully removes it from the dependency tree. Go ahead.
+- **REMAINS = `yes`** → Another direct dep depends on this transitively. It will remain as an indirect dependency after removal. Still worth doing (version management delegation, future removal readiness), but set expectations: it won't leave go.sum / lockfile.
 
-In detailed output, the `IndirectVia` field shows exactly which direct deps pull it in transitively. These are the upstream targets for Phase 5 (Upstream Diet).
+The **REMOVES** column (`exclusive_transitive` in JSON) is how many transitive deps leave together with it.
+
+In detailed output (`--format detailed`), the line `⚠ Remains indirect:  yes  (via: ...)` (`indirect_via` in JSON) shows exactly which direct deps pull it in transitively. These are the upstream targets for Phase 5 (Upstream Diet).
 
 If diet output is not available, you can verify manually:
 ```bash
@@ -221,6 +236,10 @@ Before filing, check the target repository's issue templates:
    ```
 3. If blank issues are enabled or a "feature request" template exists, use `gh issue create`
 
+### Confirm before posting
+
+Filing an issue or discussion publishes text under the user's name in someone else's repository, and it cannot be fully taken back. Before running `gh issue create` or the `createDiscussion` mutation, show the user the target repository, the channel (issue or discussion), the title, and the full body, and wait for their approval. Post only after they approve; apply any edits they ask for first.
+
 ### After filing
 
 Do not proceed to implementation. The issue/discussion is the deliverable.
@@ -276,8 +295,11 @@ Real example: `c-robinson/iplib` handled IPv4 `/31` and `/32` CIDR prefixes diff
 For high-impact removals (framework replacement, parser rewrite), unit tests aren't enough. Build a comparison harness:
 
 ```bash
-# Build before and after binaries
-git stash && go build -o /tmp/before ./cmd/... && git stash pop
+# Build the "before" binary from a separate checkout of the base commit,
+# so your working tree (and the shared stash stack) are never touched
+git worktree add /tmp/diet-before HEAD
+(cd /tmp/diet-before && go build -o /tmp/before ./cmd/...)
+git worktree remove /tmp/diet-before
 go build -o /tmp/after ./cmd/...
 
 # Run both against real-world inputs and diff the output
@@ -399,9 +421,9 @@ Binary: {size before} → {size after} ({reduction}%)
 
 ## Phase 5: Upstream Diet — when the dep stays as indirect
 
-If `uzomuzo diet` showed **STAYS = `yes`** for this dependency (or you see it still in go.sum / lockfile after removal), it remains as an indirect dependency.
+If `uzomuzo diet` showed **REMAINS = `yes`** for this dependency (or you see it still in go.sum / lockfile after removal), it remains as an indirect dependency.
 
-The diet detailed output's `IndirectVia` field already tells you exactly which direct deps pull it in. Use this to plan upstream removals.
+The diet detailed output's `Remains indirect: yes (via: ...)` line (`indirect_via` in JSON) already tells you exactly which direct deps pull it in. Use this to plan upstream removals.
 
 ### Is the upstream under your control?
 
@@ -457,7 +479,7 @@ The breakthrough came from **removing the framework itself** — replacing the f
 | go.sum keeps getting longer despite removals | Check for a framework pulling everything back in |
 | Binary size doesn't change after 3+ removals | Look for a shared layer that imports the deps transitively |
 | Multiple deps serve the same framework | Remove the framework, not the individual deps |
-| `diet` shows many deps with 0 ONLY-VIA-THIS | They're all shared through a common layer — peel the layer |
+| `diet` shows many deps with REMOVES = 0 | They're all shared through a common layer — peel the layer |
 
 Structural reform approaches:
 - **Framework peel**: Call specific functions directly instead of going through a plugin/registration layer
@@ -501,6 +523,9 @@ All generated content (commit messages, issues, PRs, discussions) MUST include p
 | `pkg:golang` | `https://pkg.go.dev/<namespace/name>` |
 | `pkg:pypi` | `https://pypi.org/project/<name>` |
 | `pkg:maven` | `https://central.sonatype.com/artifact/<namespace>/<name>` |
+| `pkg:cargo` | `https://crates.io/crates/<name>` |
+| `pkg:nuget` | `https://www.nuget.org/packages/<name>` |
+| `pkg:githubactions` | `https://github.com/<namespace>/<name>` |
 
 ### Example commit message with sources
 
@@ -532,3 +557,5 @@ When filing an issue (default mode) or PR, include:
 - **Measure before AND after.** go.sum line count, binary size, build time. Put the numbers in the commit message.
 - **If it's harder than expected, stop and reassess.** The removal may not be worth the effort — that's a valid conclusion.
 - **Always include primary source links.** Never claim "deprecated" or "archived" without evidence URLs.
+- **Never post to another repository without the user's approval.** Show the draft first (see "Confirm before posting").
+- **Diet's vulnerability counts describe the latest stable release**, not the version you ship. When an issue or commit message cites vulnerabilities, name the version they apply to.

@@ -40,10 +40,26 @@ Run `uzomuzo scan <purl>` to get health signals. Mark coupling fields (`import_f
 
 Sort diet entries by `health_risk * (1 - coupling_effort)` descending (both fields are 0.0-1.0 normalized). This prioritizes dependencies that are both unhealthy and actionable — high health risk combined with lower coupling effort gives the best risk-reduction ROI. Run Phase 0-3 for each of the top N entries (N is user-specified, default 5), then produce the summary table.
 
+If coupling was not measured -- every entry without a `scope` has `import_file_count = 0` and `is_unused = false`. That happens when source analysis is skipped, fails, or matches no import because `--source` points at the wrong directory; the top-level `source_root` cannot tell you, because the CLI fills it with `.` by default. Then every `coupling_effort` is 0 and this sort degenerates to `health_risk` alone. Say so above the summary table, and treat each entry as Mode B for coupling.
+
+Each entry's assessment is independent. If your environment can run subagents, assess the N entries in parallel, one subagent per dependency, each returning only its verdict block; then build the summary table from the returned blocks. Separate contexts also stop one dependency's data flows from leaking into another's scenarios.
+
+### Signals that are not in diet JSON (all modes)
+
+Diet JSON does not carry the OSV malicious-package check or the npm dormant-release marker, and its vulnerability fields describe the package's latest stable release rather than the version you ship. Before the early exits, fetch these for the exact version in the SBOM:
+
+```bash
+uzomuzo scan "pkg:npm/example@1.2.3" --format json \
+  | jq '.packages[0] | {lifecycle, reason, malicious, malicious_check, dormant_release}'
+```
+
+Then check the pinned version's advisories with an OSV-backed tool (`osv-scanner`, `govulncheck`, `npm audit`, `pip-audit`). Record both: "advisories on the pinned version" and "advisories still present on the latest stable release" (diet's `vulnerability_count`). The second number means upgrading does not help.
+
 ### Early exits
 
-- If `is_unused` is `true`: **Stop.** Report "Unused dependency -- no data flow risk. Remove it." No further analysis needed.
-- If `lifecycle` is `Active` and `has_vulnerabilities` is `false`: **Stop.** Report "Maintained, no known vulnerabilities. No immediate risk." This skill is for unhealthy dependencies.
+- If scan returns a `malicious` object: **Stop the normal flow.** Report "Malicious version (advisory {advisory_id}) -- Remove urgently." Data-flow analysis is the wrong question here: malicious packages usually act when installed or imported, not through the call sites diet counts. Instead list where this version was installed (developer machines, CI runners, build images, production) and which secrets those environments hold, because those are what to rotate. With `scope: "package"`, every version is affected; with `scope: "version"`, moving to an unaffected version is enough. Link the advisory.
+- If `is_unused` is `true` (and not malicious): Report "Unused in source -- no call-site data flow. Remove it." Still note in one line that an installed but unused package keeps its install-time exposure (see Scenario B), which is a reason to remove it rather than to ignore it.
+- If `lifecycle` is `Active`, `has_vulnerabilities` is `false`, the pinned version has no advisories, scan shows no `malicious` and no `dormant_release`, and `malicious_check` is not `"unknown"`: **Stop.** Report "Maintained, no known vulnerabilities. No immediate risk." This skill is for unhealthy dependencies.
 
 ## Phase 1: Threat surface inventory
 
@@ -57,29 +73,39 @@ Extract the full diet entry. These fields will appear verbatim in the verdict's 
 |-------|----------|-----|
 | Identity | `purl`, `name`, `version`, `ecosystem` | Package identification |
 | Ranking | `rank`, `priority_score`, `overall_score` | Diet's automated ranking (`rank` is position among all deps) |
-| Health | `health_risk`, `lifecycle`, `has_vulnerabilities`, `vulnerability_count`, `max_cvss_score` | Maintenance and vulnerability status |
+| Health | `health_risk`, `lifecycle`, `has_vulnerabilities`, `vulnerability_count`, `max_cvss_score` | Maintenance status; vulnerability fields are for the latest stable release |
 | Graph | `graph_impact`, `exclusive_transitive`, `total_transitive` | Blast radius |
 | Coupling | `coupling_effort`, `difficulty`, `import_file_count`, `call_site_count`, `api_breadth` | Integration depth |
 | Coupling detail | `symbols`, `import_files` | Specific APIs used and files importing them (Phase 2 starting points) |
 | Persistence | `stays_as_indirect`, `indirect_via` | Whether risk is eliminable |
 | Import style | `has_blank_import`, `has_dot_import`, `has_wildcard_import` | Coupling accuracy caveats |
-| Scope | `scope` | `"tool"` deps have different risk profile (build-time only); absent for normal deps |
+| Scope | `scope` | `"tool"` = build-time only (Go `tool` directive); `"runtime"` = loaded by reflection, ServiceLoader, or classpath resources rather than imported (JDBC drivers, logging backends); absent for normal deps |
+| From scan | `malicious`, `malicious_check`, `dormant_release`, `reason` | Fetched in Phase 0; not part of diet JSON |
 
-Note: Fields with `omitempty` in the JSON schema (`has_vulnerabilities`, `vulnerability_count`, `max_cvss_score`, `overall_score`, `scope`, `indirect_via`, `import_files`) may be absent from the JSON. Treat absent booleans as `false` and absent numbers as `0`.
+Note: Only `scope`, `indirect_via`, and `import_files` may be absent from a diet entry. Numeric and boolean fields are always present, so `0` and `false` are real values -- except when coupling was not measured (see Mode C), where the zeros mean "unknown".
 
 ### Step 2: Classify threat profile
 
 Assign a threat profile based on diet data:
 
+Rows are evaluated top to bottom; the first match wins. "Vulnerable" below means advisories on the pinned version or on the latest stable release.
+
 | Profile | Criteria | Phase 2 strategy |
 |---------|----------|-----------------|
-| **CRITICAL-EXPOSURE** | `has_vulnerabilities=true` AND `lifecycle` in {EOL-Confirmed, EOL-Effective, EOL-Scheduled, Archived, Stalled} AND `import_file_count > 0` | Full Phase 2 on all security-critical files |
-| **LATENT-RISK** | `lifecycle` in {EOL-Confirmed, EOL-Effective, EOL-Scheduled, Archived, Stalled} AND `import_file_count > 0` AND `has_vulnerabilities=false` | Phase 2 on security-critical files only |
-| **SUPPLY-CHAIN-ONLY** | `import_file_count = 0` OR `is_unused = true` | Skip Phase 2 -- risk is graph/supply-chain, not data flow |
-| **MONITORING** | `lifecycle` is Active, Legacy-Safe, or Review Needed, but `has_vulnerabilities=true` | Phase 2 optional -- assess known CVE impact |
-| **LOW-RISK** | Any combination not matching above (e.g., `Legacy-Safe` or `Review Needed` with no vulns) | Produce minimal assessment noting the dependency is healthy or benign |
+| **COMPROMISED** | scan returned `malicious` | Handled by the early exit in Phase 0 |
+| **SUSPECT-RELEASE** | `dormant_release` present, OR `lifecycle = Review Needed` and scan's `reason` starts with `Possible hijacked release` or `All releases yanked on` | Phase 2 on security-critical files; Scenario B is the primary scenario. For npm, check who published the version (`npm view <package>@<version> _npmUser`) against earlier releases and diff the package contents against the release before the silence |
+| **CRITICAL-EXPOSURE** | Vulnerable AND `lifecycle` in {EOL-Confirmed, EOL-Effective, EOL-Scheduled, Archived, Stalled} AND (`import_file_count > 0` OR `scope = "runtime"`) | Full Phase 2 on all security-critical files |
+| **LATENT-RISK** | `lifecycle` in {EOL-Confirmed, EOL-Effective, EOL-Scheduled, Archived, Stalled} AND (`import_file_count > 0` OR `scope = "runtime"`) AND not vulnerable | Phase 2 on security-critical files only |
+| **SUPPLY-CHAIN-ONLY** | `is_unused = true`, OR `scope = "tool"` | Skip Phase 2 call-site reading -- but still assess install-time and build-time execution in Scenario B |
+| **MONITORING** | `lifecycle` is Active, Legacy-Safe, or Review Needed (lack of data), but vulnerable | Phase 2 optional -- assess known CVE impact |
+| **LOW-RISK** | Any combination not matching above | Produce minimal assessment noting the dependency is healthy or benign |
 
-Lifecycle values produced by diet: `Active`, `Stalled`, `Legacy-Safe`, `EOL-Confirmed`, `EOL-Effective`, `EOL-Scheduled`, `Archived`, `Review Needed`.
+When coupling was not measured (see Mode C), `is_unused` is `false` and `import_file_count` is 0 for every entry. Do not read those zeros as "no data flow"; treat the dependency as Mode B (coupling unavailable, assume > 0).
+
+Lifecycle values produced by diet: `Active`, `Stalled`, `Legacy-Safe`, `EOL-Confirmed`, `EOL-Effective`, `EOL-Scheduled`, `Archived`, `Review Needed`. Two of them need care:
+
+- `Archived` is diet's own label for "the source repository is archived"; it overrides the lifecycle label. `uzomuzo scan` reports the same package as `Stalled` unless the registry also signals end of life ([ADR-0020](https://github.com/future-architect/uzomuzo-oss/blob/main/docs/adr/0020-archived-registry-liveness.md)). It means no fixes will come, not that the code is already known bad.
+- `Review Needed` covers three different situations, told apart by scan's `reason`: too little data to classify; every release yanked ([ADR-0022](https://github.com/future-architect/uzomuzo-oss/blob/main/docs/adr/0022-all-releases-yanked-is-not-eol.md)); or, on npm, a release burst across release lines after a long silence -- how past takeovers of quiet npm packages have looked ([ADR-0026](https://github.com/future-architect/uzomuzo-oss/blob/main/docs/adr/0026-dormant-release-burst.md)).
 
 ### Step 3: Scope Phase 2 targets
 
@@ -126,12 +152,14 @@ If any of these flags are set, note them -- they affect Phase 2 accuracy:
 
 If `scope` is `"tool"`: This is a build-time/tooling dependency (e.g., Go `tool` directive). It does not execute at runtime. Supply chain risk applies (compromised tool could inject malicious code at build time), but runtime data flow risk is absent.
 
+If `scope` is `"runtime"`: The dependency is loaded without a static import -- a JDBC driver named in a connection URL, a logging backend found on the classpath, a Spring auto-configuration. `import_files` will be empty, but the code runs in production and often sees sensitive data (a JDBC driver sees every query and the database password). For Phase 2, find where it is wired: configuration files (`application.yml`, `*.properties`, `META-INF/services/*`, `spring.factories`), connection strings, and `Class.forName` calls.
+
 ## Phase 2: Targeted code inspection
 
 **Skip this phase entirely if:**
 - Threat profile is SUPPLY-CHAIN-ONLY
 - No source code is available (Mode B input)
-- `import_file_count` is 0
+- `import_file_count` is 0 and `scope` is not `"runtime"` (for `"runtime"`, read the wiring found in Phase 1 Step 4 instead of `import_files`)
 
 For each skip case, add a "Limitations" note to the verdict explaining what could not be assessed and why.
 
@@ -179,10 +207,12 @@ Build scenarios from the actual data flows observed in Step 2, not from generic 
 - If known CVEs exist: What specific data flows are exposed by them?
 - If no known CVEs: Given the data flows observed, what category of vulnerability (RCE, data leak, auth bypass, DoS) would have the highest impact if discovered?
 
-**Scenario B -- Supply chain compromise**:
+**Scenario B -- Supply chain compromise** (a malicious version is published, typically through a stolen maintainer account):
+- **Install-time and build-time execution**: Does the package get to run code before any of your call sites do? npm `preinstall`/`install`/`postinstall` scripts, Python source distributions that run `setup.py`, Maven/Gradle plugins, Go `tool` directives and `go generate`. Some recent npm compromises, such as the self-spreading Shai-Hulud worm in 2025, did all their work in an install script, stealing npm tokens, GitHub tokens, and cloud keys from developer machines and CI runners. This applies even when `import_file_count = 0`. Name the environments that install this package and what secrets they hold.
 - If this package **exfiltrated data via IN flows**: What could an attacker steal? (Based on actual Data IN from Step 2)
 - If this package **altered OUT flows**: What would break? What would be silent?
 - Is the attack **detectable?** A crash is detectable. Subtly wrong auth decisions or silently leaked credentials are not.
+- **Takeover likelihood**: An unmaintained package with a single maintainer is easier to take over than an active one, and a takeover after a long silence is what scan's dormant-release marker watches for. Use `lifecycle`, `overall_score`, and `dormant_release` here; do not invent a probability.
 
 ### Step 4: Identify mitigating factors
 
@@ -192,7 +222,10 @@ For each applicable factor, cite the evidence from the code:
 
 - Upstream encryption before data reaches this package
 - Downstream validation after data leaves this package
-- Package pinned by lockfile integrity (go.sum, package-lock.json, pip --require-hashes)
+- Package pinned by lockfile integrity (go.sum, package-lock.json, pip --require-hashes). This stops a swapped artifact for the same version; it does not stop a new malicious version from arriving through a routine lockfile update
+- Install scripts disabled where it is installed (`npm ci --ignore-scripts`, pnpm's default of not running dependency build scripts unless allowed, `pip install --only-binary :all:`). Removes the install-time part of Scenario B
+- Dependency updates held back by a minimum release age or manual review (e.g., Renovate `minimumReleaseAge`, pnpm `minimumReleaseAge`). Most malicious versions are detected and removed within days
+- Build provenance (npm provenance, PyPI attestations) on the pinned version. It shows which repository and workflow built the artifact; it does not prove the code is benign, and it does not help once a maintainer account is taken over
 - Package is small and auditable (check `api_breadth` -- under 10 is auditable)
 - Usage is behind a build tag / feature flag that limits exposure
 - Test-only usage (files in `*_test.go`, `test/`, `__tests__/`, `tests/`)
@@ -212,7 +245,10 @@ For each applicable factor, cite the evidence from the code:
 | PURL | `{purl}` ({name} {version}, {ecosystem}) |
 | Rank | #{rank} of {summary.total_direct} direct deps |
 | Lifecycle | {lifecycle} ([registry link]) |
-| Known CVEs | {vulnerability_count} {(max CVSS: {max_cvss_score}) if present, else "(CVSS unavailable)"} |
+| Known CVEs (latest stable) | {vulnerability_count} {(max CVSS: {max_cvss_score}) if present, else "(CVSS unavailable)"} |
+| Known CVEs (pinned version) | {count and IDs from OSV, or "not checked"} |
+| Malicious check | {clean / flagged: {advisory_id} ({scope}) / unknown -- lookup failed} |
+| Dormant release | {none / {silent_days} days of silence, published {published_at}} *(npm only; omit row otherwise)* |
 | Priority / Overall | {priority_score} / {overall_score} |
 | Difficulty | {difficulty} (coupling_effort: {coupling_effort}) |
 | Coupling | {import_file_count} files, {call_site_count} calls, {api_breadth} APIs |
@@ -224,7 +260,7 @@ For each applicable factor, cite the evidence from the code:
 
 #### New Findings (from this assessment)
 
-**Threat profile**: {CRITICAL-EXPOSURE | LATENT-RISK | SUPPLY-CHAIN-ONLY | MONITORING | LOW-RISK}
+**Threat profile**: {SUSPECT-RELEASE | CRITICAL-EXPOSURE | LATENT-RISK | SUPPLY-CHAIN-ONLY | MONITORING | LOW-RISK}
 
 **Files inspected**: {N} of {import_file_count} files read ({M} Priority 1, {K} Priority 2)
 
@@ -252,7 +288,7 @@ For each applicable factor, cite the evidence from the code:
 
 | Posture | Meaning |
 |---------|---------|
-| **Remove urgently** | Active exploitation risk or critical data exposure. Run `/diet-remove` now. |
+| **Remove urgently** | Malicious version, active exploitation risk, or critical data exposure. Run `/diet-remove` now (for a malicious version: move off it first, then rotate the secrets listed in the verdict). |
 | **Plan removal** | Significant risk that grows over time. Run `/diet-evaluate-removal` to plan. |
 | **Monitor** | Low current risk but degrading health. Re-assess quarterly. |
 | **Accept with documentation** | Risk is understood and mitigated. Document the decision and rationale. |
@@ -274,6 +310,8 @@ The verdict MUST include verifiable primary source links. Never claim "EOL", "Ar
 |-------|--------------|
 | Lifecycle status | Package registry page (see PURL-to-URL table below) |
 | Known CVEs | NVD (`nvd.nist.gov/vuln/detail/<CVE>`), GitHub Advisory (`github.com/advisories/<GHSA>`), or OSV (`osv.dev/vulnerability/<ID>`) |
+| Malicious version | The advisory scan names (`malicious.reference`), or `osv.dev/vulnerability/<MAL-ID>` |
+| Dormant release | The npm version page (`https://www.npmjs.com/package/<name>/v/<version>`) and the previous release's date |
 | Scorecard | `https://scorecard.dev/viewer/?uri=github.com/<org>/<repo>` |
 | Repository archived | GitHub repo URL (shows archived banner) |
 | Last commit date | `https://github.com/<org>/<repo>/commits/<branch>` |
@@ -286,6 +324,9 @@ The verdict MUST include verifiable primary source links. Never claim "EOL", "Ar
 | `pkg:golang` | `https://pkg.go.dev/<namespace/name>` |
 | `pkg:pypi` | `https://pypi.org/project/<name>` |
 | `pkg:maven` | `https://central.sonatype.com/artifact/<namespace>/<name>` |
+| `pkg:cargo` | `https://crates.io/crates/<name>` |
+| `pkg:nuget` | `https://www.nuget.org/packages/<name>` |
+| `pkg:githubactions` | `https://github.com/<namespace>/<name>` |
 
 ## Language-specific reference
 
@@ -303,6 +344,8 @@ The core analysis (Phases 0-3) is language-neutral. Use this table for language-
 ## Important rules
 
 - **Start from diet's output.** Do not re-discover what diet already computed. The `symbols[]` and `import_files[]` fields are your starting points for Phase 2.
+- **Fill diet's gaps from scan.** Malicious-version and dormant-release signals, and the advisories on the pinned version, are not in diet JSON. A verdict that skipped them must say so.
+- **Install time counts.** "Zero imports" removes call-site data flows, not the package's chance to run code on every machine that installs it.
 - **Read in priority order, stop when you have enough.** Phase 1 Step 3 gives you the reading order. Stop when you can construct credible attack scenarios — not when you hit an arbitrary file count.
 - **Be precise.** Quote specific file paths and line numbers. "The auth module uses this" is too vague.
 - **Do not speculate.** If you cannot determine something from the code, say "undetermined from static analysis."

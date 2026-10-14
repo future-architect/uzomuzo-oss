@@ -9,12 +9,13 @@ Reusable [Claude Code](https://claude.ai/code) skills for dependency analysis. T
 Detects EOL packages with uzomuzo, then uses the LLM to trace data flow through source code and assess security impact.
 
 **What it does:**
-1. Runs `uzomuzo scan` to detect EOL/Archived dependencies
-2. Optionally runs `govulncheck` for reachability analysis
-3. For each EOL package, reads the source code to trace what data flows through it
-4. Constructs attack scenarios (unpatched vulnerabilities + supply chain takeover)
-5. Identifies mitigating factors (encryption, validation, hash pinning)
-6. Outputs a risk assessment table with recommended actions
+1. Reads the diet entry, then runs `uzomuzo scan` on the pinned version for the signals diet JSON does not carry (OSV malicious-package advisories, the npm dormant-release marker, the reason behind `Review Needed`)
+2. Checks the pinned version's own advisories (diet's vulnerability fields describe the latest stable release)
+3. Classifies the threat profile; a malicious version short-circuits to incident handling (which secrets to rotate)
+4. For each unhealthy package, reads the source code to trace what data flows through it, including runtime-loaded dependencies with no import
+5. Constructs attack scenarios (unpatched vulnerabilities + supply chain takeover, including install-time execution)
+6. Identifies mitigating factors (encryption, validation, hash pinning, disabled install scripts, release-age delays)
+7. Outputs a risk assessment table with recommended actions
 
 ```bash
 # In Claude Code
@@ -27,11 +28,11 @@ Detects EOL packages with uzomuzo, then uses the LLM to trace data flow through 
 Evaluates a single dependency for removal using a 5-phase data-driven framework that leverages diet's full JSON output.
 
 **The 5 phases:**
-1. **Ingest Diet Data** -- Extract all fields from diet JSON (existing file or fresh run)
+1. **Ingest Diet Data** -- Extract all fields from diet JSON, check that coupling was actually measured, and fetch malicious/dormant-release signals from `uzomuzo scan`
 2. **Usage Classification** -- Classify `import_files` into production/test/CI/example/generated
-3. **Feasibility Analysis** -- API leakage gate check + symbol-by-symbol migration map
+3. **Feasibility Analysis** -- API leakage gate check + symbol-by-symbol migration map + verification cost (are the calling files tested?)
 4. **6-Axis Scoring** -- Data-anchored ratings (no guesswork)
-5. **Verdict** -- Structured REMOVE/DEFER/KEEP recommendation
+5. **Verdict** -- Structured REMOVE/DEFER/KEEP/UPGRADE recommendation, with an effort estimate that accounts for the tests that must be written first
 
 **The 6 axes** (each anchored to concrete diet data):
 | Axis | Data source |
@@ -40,7 +41,7 @@ Evaluates a single dependency for removal using a 5-phase data-driven framework 
 | Production Scope | Usage classification from Phase 2 |
 | Coupling Depth | `coupling_effort`, `call_site_count`, `api_breadth` |
 | Replaceability | Symbol migration map from Phase 3 |
-| Security Urgency | `has_vulnerabilities`, `max_cvss_score`, `lifecycle` |
+| Security Urgency | `has_vulnerabilities`, `max_cvss_score` (latest stable release), `lifecycle`, scan's `reason` |
 | Cascade Potential | `exclusive_transitive` + project knowledge |
 
 ```bash
@@ -53,7 +54,7 @@ Evaluates a single dependency for removal using a 5-phase data-driven framework 
 Analyzes a dependency for removal, then either files an issue (default) or implements the change directly.
 
 **Two modes:**
-- **Issue mode (default)**: Runs pre-flight analysis, then files a GitHub Issue with findings and migration plan. Best for external OSS contributions.
+- **Issue mode (default)**: Runs pre-flight analysis, then drafts a GitHub Issue with findings and migration plan, and posts it after you approve the draft. Best for external OSS contributions.
 - **PR mode (`--pr`)**: Full removal lifecycle — analysis → replacement → verification → commit. Use when you own the project.
 
 ```bash
