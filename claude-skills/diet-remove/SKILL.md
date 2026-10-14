@@ -57,7 +57,7 @@ uzomuzo scan "pkg:npm/example@1.2.3" --format json \
                        direct_advisory_count, transitive_advisory_count, max_cvss3_score}'
 ```
 
-- **`malicious` present**: Stop this flow. Moving off the malicious version comes before any removal plan, and it must not wait for an issue to be triaged. In your own project, pin to a version the advisory does not name (or remove the package when `scope` is `"package"`) and run `/diet-assess-risk` to list the secrets to rotate. If `/diet-assess-risk` already produced that incident verdict, do not run it again: go straight to pinning or removal and the rotation it listed. In an external project, do not open a public issue that describes an exploitable situation in detail; point the maintainers to the advisory through their security policy (`SECURITY.md`) instead.
+- **`malicious` present**: Stop this flow. Moving off the malicious version comes before any removal plan, and it must not wait for an issue to be triaged. Report the advisory to the user and propose the fix: pin to a version the advisory does not name (or remove the package when `scope` is `"package"`), and run `/diet-assess-risk` to list the secrets to rotate (skip that if it already produced the incident verdict). Make the change only in PR mode and only after the user approves it; rotating credentials is the user's action, not yours. For an external project, do not open a public issue that describes an exploitable situation in detail; draft a private report for the maintainers' security contact (`SECURITY.md`) and send nothing until the user approves it.
 - **`dormant_release` present** (npm, shown for 7 days after publication): The version came out after a year of silence. Prefer staying on, or pinning back to, the release before the silence while you plan the removal.
 - Otherwise continue.
 
@@ -104,9 +104,13 @@ Check these before starting:
 - **API leakage**: Does this dependency's types appear in exported identifiers?
   If yes, removal is a breaking change — needs major version bump or deprecation period.
   ```bash
-  # Go: search for exported identifiers using the dep's types
-  grep -rn "func.*$ARGUMENTS\|type.*$ARGUMENTS" --include="*.go" | grep -v _test.go | grep "^[A-Z]"
+  # Go: signatures name the dep by its import alias (e.g. `dep.Type`), not by module path.
+  # 1. Find the alias used in each importing file:
+  grep -rn --include="*.go" "\"$ARGUMENTS" .
+  # 2. List each package's exported API and look for that alias:
+  for p in $(go list ./...); do go doc -all "$p" 2>/dev/null | grep -q '\b<alias>\.' && echo "$p"; done
   ```
+  No output from a grep is not proof of compatibility; read the exported declarations of each package that imports the dependency.
 
 - **Build tags**: Is the import behind a build tag? (e.g., `//go:build jsoniter`)
   If yes, the dep may not affect default builds — consider just deleting the tagged file.
@@ -298,15 +302,17 @@ For high-impact removals (framework replacement, parser rewrite), unit tests are
 ```bash
 # Build the "before" binary from a separate checkout of the base commit,
 # so your working tree (and the shared stash stack) are never touched
-git worktree add /tmp/diet-before HEAD
-(cd /tmp/diet-before && go build -o /tmp/before ./cmd/...)
-git worktree remove /tmp/diet-before
-go build -o /tmp/after ./cmd/...
+set -euo pipefail
+OUT=$(mktemp -d)
+git worktree add "$OUT/src" HEAD
+(cd "$OUT/src" && go build -o "$OUT/before/" ./cmd/...)   # trailing slash: one binary per command
+git worktree remove "$OUT/src"
+go build -o "$OUT/after/" ./cmd/...
 
-# Run both against real-world inputs and diff the output
-/tmp/before < input.json > /tmp/out-before.json
-/tmp/after  < input.json > /tmp/out-after.json
-diff /tmp/out-before.json /tmp/out-after.json
+# Run the same command from both builds against real-world inputs and diff the output
+"$OUT/before/<tool>" < input.json > "$OUT/out-before.json"
+"$OUT/after/<tool>"  < input.json > "$OUT/out-after.json"
+diff "$OUT/out-before.json" "$OUT/out-after.json"
 ```
 
 The vuls fanal framework removal used this approach: 17 real OSS lockfiles, 7,198 libraries compared — found 1 legitimate difference (a pnpm bug fix).
@@ -394,7 +400,7 @@ For non-Go projects, run the equivalent build + lint + test pipeline.
   ```bash
   wc -l go.sum  # compare with before
   ```
-  If go.sum didn't shrink, the dependency remains as indirect.
+  Line count is a metric, not proof: go.sum can keep hashes for modules no longer built in. To know whether the dependency is still required, run `go mod why -m <module>` (or check `go list -m all`).
 
 - **Check binary size** (for compiled languages):
   ```bash
@@ -422,7 +428,7 @@ Binary: {size before} → {size after} ({reduction}%)
 
 ## Phase 5: Upstream Diet — when the dep stays as indirect
 
-If `uzomuzo diet` showed **REMAINS = `yes`** for this dependency (or you see it still in go.sum / lockfile after removal), it remains as an indirect dependency.
+If `uzomuzo diet` showed **REMAINS = `yes`** for this dependency (or `go mod why -m` / `npm ls` still shows a path to it after removal), it remains as an indirect dependency.
 
 The diet detailed output's `Remains indirect: yes (via: ...)` line (`indirect_via` in JSON) already tells you exactly which direct deps pull it in. Use this to plan upstream removals.
 

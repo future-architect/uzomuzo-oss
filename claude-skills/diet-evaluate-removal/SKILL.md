@@ -39,10 +39,11 @@ uzomuzo diet --sbom bom.json --source . --format json | jq '.dependencies[] | se
 Detect it across the whole JSON, not from the one entry:
 
 ```bash
-jq '[.dependencies[] | select(.scope == null)] | (all(.import_file_count == 0 and (.is_unused | not)))' diet.json
+jq '[.dependencies[] | select(.scope == null)]
+    | if length == 0 then "undetermined" else all(.import_file_count == 0 and (.is_unused | not)) end' diet.json
 ```
 
-`true` means coupling was not measured. (`source_root` does not tell you: the CLI fills it with `.` by default.) Re-run diet with `--source` pointing at the project root the SBOM was generated from. If that is impossible, write "unmeasured" for Coupling Depth and Production Scope and say so in the verdict.
+`true` means coupling was not measured. `"undetermined"` means every dependency has a `scope`, so this check cannot tell; look at the diet log for `no imports matched any dependency`. (`source_root` does not tell you: the CLI fills it with `.` by default.) Re-run diet with `--source` pointing at the project root the SBOM was generated from. If that is impossible, write "unmeasured" for Coupling Depth and Production Scope and say so in the verdict.
 
 Example of the trap: `{"difficulty": "trivial", "coupling_effort": 0, "is_unused": false, "import_file_count": 0}` looks like a free removal, but if every other entry looks the same, nobody has looked at the code yet.
 
@@ -104,6 +105,7 @@ Display ALL of these from the diet JSON. Do NOT re-compute any of them.
 
 Before proceeding, flag any of these patterns -- they indicate diet's coupling data may be unreliable:
 
+- `is_unused: true` -- `is_unused` only means diet found no import. Dependencies loaded through configuration, plugins, reflection, ServiceLoader, or build commands still show as unused unless diet knows them (it recognizes Go `tool` directives and a fixed list of Java runtime libraries such as JDBC drivers and logging backends). Before treating an unused dependency as removable, search configuration and build files for its name (`*.yml`, `*.properties`, `META-INF/services/*`, `spring.factories`, `package.json` scripts and config files, `Makefile`, CI workflows).
 - `scope: "tool"` + `import_file_count: 0` -- Expected for build-time-only tool deps. Not an IBNC pattern. These have zero runtime imports by design.
 - `scope: "runtime"` + `import_file_count: 0` -- Expected for runtime-mechanism deps (JDBC drivers, logging backends, Spring auto-config). Loaded via reflection/ServiceLoader/classpath, not static imports.
 - `has_blank_import: true` + `call_site_count: 0` -- The blank import IS the usage (Go DB drivers, JS polyfills). Coupling is underestimated.
@@ -150,6 +152,8 @@ Usage Classification for {name}:
 | easy/trivial | -- | unchanged |
 
 If ALL import files are non-production, note: **"Zero production code impact."**
+
+For `scope: "runtime"` dependencies, `import_files` is empty but the dependency runs in production. Classify the files that wire it instead (configuration, connection strings, `META-INF/services/*`, `Class.forName` calls) as Production, and never treat an empty list as "zero production files" for Production Scope or Effort.
 
 ---
 
@@ -230,7 +234,7 @@ Rate each axis High/Med/Low using the data gathered in Phases 1-3. Each axis is 
 | **Production Scope** | Phase 2 classification | 0 production files (all test/CI/example) | < 50% production files | >= 50% production files |
 | **Coupling Depth** | `coupling_effort`, `import_file_count`, `call_site_count` | `coupling_effort` < 0.25 (trivial/easy) | 0.25 - 0.6 (moderate) | >= 0.6 (hard, deeply wired) |
 | **Replaceability** | Phase 3b symbol map | > 80% symbols have stdlib/existing-dep replacement | 50-80% replaceable | < 50%, or crypto/protocol involved |
-| **Security Urgency** | `has_vulnerabilities`, `max_cvss_score`, `lifecycle`, scan `direct_advisory_count` / `reason` / `dormant_release` | Direct advisories on the latest release with CVSS >= 7.0 (no upstream fix), or lifecycle EOL-Confirmed/EOL-Effective, or scan `reason` starting `All releases yanked on`, or `dormant_release.kind = "burst_across_lines"` (whatever the label) | Direct advisories with CVSS 4.0-6.9, or lifecycle Stalled/EOL-Scheduled/Archived, or `Review Needed` for lack of data, or `dormant_release.kind = "fresh"` | No direct advisories on the latest release (transitive-only counts here), lifecycle Active/Legacy-Safe |
+| **Security Urgency** | `has_vulnerabilities`, `max_cvss_score`, `lifecycle`, scan `direct_advisory_count` / `reason` / `dormant_release` | Direct advisories on the latest release with CVSS >= 7.0 (no upstream fix), or lifecycle EOL-Confirmed/EOL-Effective, or scan `reason` starting `All releases yanked on`, or `dormant_release.kind = "burst_across_lines"` (whatever the label) | Direct advisories with CVSS 4.0-6.9, or lifecycle Stalled/EOL-Scheduled/Archived, or `Review Needed` for lack of data, or `dormant_release.kind = "fresh"` | No direct advisories on the latest release, or only ones with CVSS below 4.0 (transitive-only counts here), lifecycle Active/Legacy-Safe. A direct advisory with no CVSS score counts as Medium until its severity is looked up |
 | **Cascade Potential** | `exclusive_transitive`, project knowledge | Removing unblocks 3+ further removals | Unblocks 1-2 | Standalone, no cascade |
 
 ### Scoring overrides
@@ -307,11 +311,12 @@ Rules are evaluated **top-to-bottom; first match wins.** If multiple rows could 
 | Condition | Recommendation |
 |-----------|---------------|
 | scan `malicious` present | REPLACE VERSION NOW, Priority S. This is incident response, not a removal decision: move to a version the advisory does not name (or, for `scope: "package"`, remove the package), and run `/diet-assess-risk` to judge what the malicious code could have reached. Skip the rest of this table |
-| `is_unused: true` | REMOVE, Trivial, Priority S |
-| Pinned version has advisories, latest release has no direct ones, and lifecycle is Active or Legacy-Safe | UPGRADE, Priority A. Stop here; name in the rationale any axis that would still argue for removal later |
+| `is_unused: true`, and a search of configuration and build files finds no reference (see Data quality check) | REMOVE, Trivial, Priority S |
+| Pinned version has advisories, the pinned version is older than the latest release, an OSV check of the latest release (with the dependency versions it resolves to in your project) no longer shows them, and lifecycle is Active or Legacy-Safe | UPGRADE, Priority A. Stop here; name in the rationale any axis that would still argue for removal later |
 | API leakage = Yes AND Security Urgency = High | REMOVE with BREAKING CHANGE warning -- security overrides API stability. Rationale must document the breaking change and recommend a major version bump or deprecation timeline. Escalate to `/diet-assess-risk` |
 | API leakage = Yes | DEFER (needs major version bump or deprecation period) |
 | Replaceability = Low (crypto/protocol) | KEEP -- find an alternative maintained library rather than self-implementing. If Security Urgency is also High, escalate to `/diet-assess-risk` for full risk analysis. Never recommend self-implementing crypto/protocol |
+| Coupling Depth or Production Scope is "unmeasured" | DEFER -- re-run diet with the correct `--source`, or read the import sites by hand, then evaluate again. Exception: if Security Urgency is High, REMOVE as for the High-urgency row below and note the missing coupling data |
 | All 6 axes High or Med | REMOVE |
 | 1-2 axes Low, rest High/Med | REMOVE -- note the Low axes as caveats in rationale |
 | Security Urgency = High, others mixed | REMOVE (prioritize security). Suggest `/diet-assess-risk` for full analysis |

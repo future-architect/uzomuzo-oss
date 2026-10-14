@@ -59,7 +59,7 @@ Then check the pinned version's advisories with an OSV-backed tool (`osv-scanner
 ### Early exits
 
 - If scan returns a `malicious` object: **Stop the normal flow.** Report "Malicious version (advisory {advisory_id}) -- Remove urgently." Data-flow analysis is the wrong question here: malicious packages usually act when installed or imported, not through the call sites diet counts. Instead list where this version was installed (developer machines, CI runners, build images, production) and which secrets those environments hold, because those are what to rotate. With `scope: "package"`, every version is affected; with `scope: "version"`, moving to an unaffected version is enough. Link the advisory.
-- If `is_unused` is `true` (and not malicious): Report "Unused in source -- no call-site data flow. Remove it." Add one line on install-time exposure (the first bullet of Scenario B) -- an installed but unused package can still run code on every machine that installs it, which is a reason to remove it rather than to ignore it. Then stop.
+- If `is_unused` is `true` (and not malicious): `is_unused` only means diet found no import. Dependencies loaded through configuration, plugins, reflection, ServiceLoader, or build commands still show as unused unless diet knows them (it recognizes Go `tool` directives and a fixed list of Java runtime libraries such as JDBC drivers and logging backends). Before treating an unused dependency as removable, search configuration and build files for its name (`*.yml`, `*.properties`, `META-INF/services/*`, `spring.factories`, `package.json` scripts and config files, `Makefile`, CI workflows). If that search finds nothing, report "Unused in source -- no call-site data flow. Remove it." Add one line on install-time exposure (the first bullet of Scenario B) -- an installed but unused package can still run code on every machine that installs it, which is a reason to remove it rather than to ignore it. Then stop.
 - If `lifecycle` is `Active`, `has_vulnerabilities` is `false`, the pinned version has no advisories, scan shows no `malicious` and no `dormant_release`, `malicious_check` is not `"unknown"`, and the pinned version did not come out after a long silence: **Stop.** (The `dormant_release` marker is shown only for 7 days after publication, so for an older pin compare its publish date with the previous release's yourself.) Report "Maintained, no known vulnerabilities. No immediate risk." This skill is for unhealthy dependencies.
 
 ## Phase 1: Threat surface inventory
@@ -100,6 +100,7 @@ Rows are evaluated top to bottom; the first match wins. "Vulnerable" below means
 | **LATENT-RISK** | `lifecycle` in {EOL-Confirmed, EOL-Effective, EOL-Scheduled, Archived, Stalled} AND (`import_file_count > 0` OR `scope = "runtime"`) AND not vulnerable | Phase 2 on security-critical files only |
 | **SUPPLY-CHAIN-ONLY** | `is_unused = true`, OR `scope = "tool"` | Skip Phase 2 call-site reading -- but still assess install-time and build-time execution in Scenario B |
 | **MONITORING** | `lifecycle` is Active, Legacy-Safe, or Review Needed (lack of data), but vulnerable | Phase 2 optional -- assess known CVE impact |
+| **INCOMPLETE** | `malicious_check = "unknown"`, or the pinned version's advisories could not be checked, and nothing above matched | Do not call the package healthy. Report what could not be checked and re-run the failed lookup before deciding |
 | **LOW-RISK** | Any combination not matching above | Produce minimal assessment noting the dependency is healthy or benign |
 
 When coupling was not measured (see Mode C), `is_unused` is `false` and `import_file_count` is 0 for every entry. Do not read those zeros as "no data flow"; treat the dependency as Mode B (coupling unavailable, assume > 0).
@@ -227,7 +228,7 @@ For each applicable factor, cite the evidence from the code:
 - Package pinned by lockfile integrity (go.sum, package-lock.json, pip --require-hashes). This stops a swapped artifact for the same version; it does not stop a new malicious version from arriving through a routine lockfile update
 - Install scripts disabled where it is installed (`npm ci --ignore-scripts`, pnpm's default of not running dependency build scripts unless allowed, `pip install --only-binary :all:`). Removes the install-time part of Scenario B
 - Dependency updates held back by a minimum release age or manual review (e.g., Renovate `minimumReleaseAge`, pnpm `minimumReleaseAge`). Most malicious versions are named in an advisory within days of publication, though not all are removed from the registry
-- Build provenance (npm provenance, PyPI attestations) on the pinned version. It shows which repository and workflow built the artifact; it does not prove the code is benign, and it does not help when the attacker can run the release workflow itself (e.g., with a stolen GitHub token). A version that lacks provenance when earlier ones had it is a warning sign
+- Provenance on the pinned version. npm provenance records which repository and workflow built the package; PyPI's default publish attestations record which trusted publisher uploaded it, which is not the same as where it was built. Read the attestation actually present. Either kind it does not prove the code is benign, and it does not help when the attacker can run the release workflow itself (e.g., with a stolen GitHub token). A version that lacks provenance when earlier ones had it is a warning sign
 - Package is small and auditable (check `api_breadth` -- under 10 is auditable)
 - Usage is behind a build tag / feature flag that limits exposure
 - Test-only usage (files in `*_test.go`, `test/`, `__tests__/`, `tests/`)
@@ -262,7 +263,7 @@ For each applicable factor, cite the evidence from the code:
 
 #### New Findings (from this assessment)
 
-**Threat profile**: {SUSPECT-RELEASE | WITHDRAWN | CRITICAL-EXPOSURE | LATENT-RISK | SUPPLY-CHAIN-ONLY | MONITORING | LOW-RISK}
+**Threat profile**: {SUSPECT-RELEASE | WITHDRAWN | INCOMPLETE | CRITICAL-EXPOSURE | LATENT-RISK | SUPPLY-CHAIN-ONLY | MONITORING | LOW-RISK}
 
 **Files inspected**: {N} of {import_file_count} files read ({M} Priority 1, {K} Priority 2)
 
@@ -339,7 +340,7 @@ The core analysis (Phases 0-3) is language-neutral. Use this table for language-
 | Build constraints | `//go:build` tags | N/A | N/A | Maven profiles |
 | Side-effect imports | `import _ "pkg"` | `try/except ImportError` | `import 'pkg'` (no binding), `require('pkg')` | Static initializer blocks |
 | Wildcard imports | `import . "pkg"` | `from x import *` | N/A (namespace `import * as ns` -- symbols tracked via `ns.` prefix) | `import static x.*` |
-| Lockfile integrity | `go.sum` hash verification | `pip --require-hashes` | `package-lock.json` integrity field | `maven-enforcer-plugin` |
+| Lockfile integrity | `go.sum` hash verification | `pip --require-hashes` | `package-lock.json` integrity field | No standard lockfile: pinned versions plus checksum verification you configure explicitly (`maven-enforcer-plugin` alone does not verify artifact hashes) |
 | Vulnerability scanner | `govulncheck` | `pip-audit`, `safety` | `npm audit` | `dependency-check`, OWASP |
 | Test file patterns | `*_test.go` | `test_*.py`, `tests/` | `*.test.js`, `__tests__/` | `*Test.java`, `src/test/` |
 
