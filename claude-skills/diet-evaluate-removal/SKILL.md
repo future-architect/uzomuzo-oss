@@ -34,7 +34,7 @@ uzomuzo diet --sbom bom.json --source . --format json | jq '.dependencies[] | se
 
 ### Check that coupling was actually measured
 
-`difficulty` and `coupling_effort` are only meaningful when diet matched imports in the source tree. When source analysis is skipped, fails, or finds no import of any dependency (typically because `--source` points at the wrong directory; diet logs `no imports matched any dependency`), diet gives **every** entry `import_file_count = call_site_count = 0`, `coupling_effort = 0`, `difficulty = "trivial"`, and `is_unused = false`. Here "trivial" means "not measured", not "easy to remove".
+`difficulty` and `coupling_effort` are only meaningful when diet matched imports in the source tree. When source analysis is skipped, fails, or finds no import of any dependency (typically because `--source` points at the wrong directory; diet logs `no imports matched any dependency`), diet gives every entry without a `scope` `import_file_count = call_site_count = 0`, `coupling_effort = 0`, `difficulty = "trivial"`, and `is_unused = false` (`tool` and `runtime` entries get a placeholder `api_breadth = 1` and show `easy`). Here "trivial" means "not measured", not "easy to remove".
 
 Detect it across the whole JSON, not from the one entry:
 
@@ -52,14 +52,15 @@ Diet JSON does not carry the OSV malicious-package check or the npm dormant-rele
 
 ```bash
 uzomuzo scan "pkg:npm/example@1.2.3" --format json \
-  | jq '.packages[0] | {lifecycle, reason, malicious, malicious_check, dormant_release}'
+  | jq '.packages[0] | {lifecycle, reason, stable_version, malicious, malicious_check, dormant_release,
+                       direct_advisory_count, transitive_advisory_count, max_cvss3_score}'
 ```
 
 | Field | Meaning for this evaluation |
 |-------|-----------------------------|
 | `malicious` present | An OSV advisory names this version (or, with `scope: "package"`, the whole package) as malicious. Stop the evaluation -- see the first row of the Recommendation logic. |
 | `malicious_check: "unknown"` | The malicious lookup failed. Say so in the verdict; do not treat it as clean. |
-| `dormant_release` present | (npm) This version came out after a year with no releases. Not a finding, but a reason to confirm who published it before trusting it. |
+| `dormant_release` present | (npm) This version came out after a year with no releases. Not a finding, but a reason to confirm who published it before trusting it. The marker is shown only for 7 days after publication (`until`), so its absence on an older version proves nothing; for a version pinned recently, compare its publish date with the previous release yourself. |
 | `reason` | Why scan chose the lifecycle label. Needed to interpret `Review Needed` (see Security Urgency below). |
 
 ### Required fields to extract
@@ -82,17 +83,20 @@ Display ALL of these from the diet JSON. Do NOT re-compute any of them.
 | `symbols` | Exact API surface used (function/type names) |
 | `import_files` | Exact file paths that import this dep |
 | `has_blank_import` / `has_dot_import` / `has_wildcard_import` | Special import patterns |
-| `is_unused` | Whether diet detected zero imports |
+| `is_unused` | Whether diet found zero imports (always `false` for `tool` / `runtime` scope, and for every entry when coupling was not measured) |
 | `lifecycle` | Active / Stalled / Legacy-Safe / EOL-Confirmed / EOL-Effective / EOL-Scheduled / Archived / Review Needed |
-| `has_vulnerabilities` / `vulnerability_count` / `max_cvss_score` | Advisories on the package's **current stable release**, not on the version in your SBOM (see below) |
+| `has_vulnerabilities` / `vulnerability_count` / `max_cvss_score` | Advisories on the package's **latest release, including advisories in its dependencies** -- not on the version in your SBOM (see below) |
 | `overall_score` | OpenSSF Scorecard overall score (0-10) |
 | `graph_impact` / `coupling_effort` / `health_risk` | Score components (each 0.0-1.0) |
 
 ### How to read the health fields
 
-- **Vulnerability fields describe the latest stable release.** Diet takes them from the release uzomuzo picks as stable, not from the pinned version. So `has_vulnerabilities: true` means "even upgrading to the newest stable release does not fix these" -- a strong reason to remove or replace. To learn what affects the version you actually ship, query OSV for that exact version (`osv-scanner`, `govulncheck`, `npm audit`, `pip-audit`). If the pinned version is vulnerable but the latest stable is clean, the fix is an upgrade, not a removal.
-- **`Archived` is diet's own label.** Diet writes `Archived` whenever the source repository is archived, overriding the lifecycle label. `uzomuzo scan` reports the same package as `Stalled` unless the registry also gives an explicit end-of-life signal ([ADR-0020](https://github.com/future-architect/uzomuzo-oss/blob/main/docs/adr/0020-archived-registry-liveness.md)). Archived means "no more fixes will come", not "already broken".
-- **`Review Needed` now has specific causes**, visible in scan's `reason`: too little data to classify; every published release is yanked ([ADR-0022](https://github.com/future-architect/uzomuzo-oss/blob/main/docs/adr/0022-all-releases-yanked-is-not-eol.md)); or (npm) a release burst across release lines after a long silence ([ADR-0026](https://github.com/future-architect/uzomuzo-oss/blob/main/docs/adr/0026-dormant-release-burst.md)). The last two are not "unknown" -- treat them as urgent (see Phase 4).
+- **Vulnerability fields describe the latest release, including its dependencies.** Diet takes them from the release uzomuzo picks as the newest (the stable release; failing that, the highest or pre-release version), not from the pinned version, and it counts advisories in that release's own dependencies too. Split them with scan's `direct_advisory_count` and `transitive_advisory_count`:
+  - Direct advisories on the latest release mean "even upgrading does not fix these" -- a strong reason to remove or replace.
+  - Transitive-only advisories (`direct_advisory_count` 0) are in a package this one depends on. They argue for a dependency bump upstream, not for removing this package. `max_cvss_score` may come from them.
+  - For the version you actually ship, query OSV for that exact version (`osv-scanner`, `govulncheck`, `npm audit`, `pip-audit`). If the pinned version is vulnerable but the latest release is clean, the fix is an upgrade, not a removal.
+- **`Archived` is diet's own label.** Diet writes `Archived` whenever the source repository is archived, overriding the lifecycle label. Check scan's `stable_version` and its release date before concluding fixes stopped: packages that moved into a monorepo keep publishing from the new repository while the old one is archived. `uzomuzo scan` reports the same package as `Stalled` unless the registry also gives an explicit end-of-life signal ([ADR-0020](https://github.com/future-architect/uzomuzo-oss/blob/main/docs/adr/0020-archived-registry-liveness.md)). Archived alone does not mean "already broken".
+- **`Review Needed` now has specific causes**, visible in scan's `reason`: too little data to classify (`Insufficient data for assessment`, `Commit data missing`); every published release is yanked ([ADR-0022](https://github.com/future-architect/uzomuzo-oss/blob/main/docs/adr/0022-all-releases-yanked-is-not-eol.md)); or (npm) a release burst across release lines after a long silence ([ADR-0026](https://github.com/future-architect/uzomuzo-oss/blob/main/docs/adr/0026-dormant-release-burst.md)). The last two are not "unknown" -- see Security Urgency in Phase 4.
 - **`health_risk` is 1.0 for a malicious version**, but 1.0 can also come from EOL plus a high CVSS score. Use scan's `malicious` field, not `health_risk`, to tell them apart.
 - **`coupling_effort` formula** (for explaining a difficulty label): `0.4 * L(import_file_count, 5) + 0.4 * L(call_site_count, 20) + 0.2 * L(api_breadth, 10)`, where `L(x, m)` is a logistic curve that reaches 0.5 at `x = m`. Labels: exactly `0` is trivial, `< 0.25` easy, `< 0.6` moderate, otherwise hard. Effort is exactly 0 only when the dependency is unused, is used through a blank import alone, or coupling was not measured -- so "trivial" never means "a few call sites".
 
@@ -226,7 +230,7 @@ Rate each axis High/Med/Low using the data gathered in Phases 1-3. Each axis is 
 | **Production Scope** | Phase 2 classification | 0 production files (all test/CI/example) | < 50% production files | >= 50% production files |
 | **Coupling Depth** | `coupling_effort`, `import_file_count`, `call_site_count` | `coupling_effort` < 0.25 (trivial/easy) | 0.25 - 0.6 (moderate) | >= 0.6 (hard, deeply wired) |
 | **Replaceability** | Phase 3b symbol map | > 80% symbols have stdlib/existing-dep replacement | 50-80% replaceable | < 50%, or crypto/protocol involved |
-| **Security Urgency** | `has_vulnerabilities`, `max_cvss_score`, `lifecycle`, scan `reason` / `dormant_release` | CVSS >= 7.0 on the latest stable release (no upstream fix), or lifecycle EOL-Confirmed/EOL-Effective/Archived, or `Review Needed` with a scan `reason` starting `All releases yanked on` or `Possible hijacked release` | CVSS 4.0-6.9 on the latest stable release, or lifecycle Stalled/EOL-Scheduled, or `Review Needed` for lack of data, or `dormant_release` present | No vulns on the latest stable release, lifecycle Active/Legacy-Safe |
+| **Security Urgency** | `has_vulnerabilities`, `max_cvss_score`, `lifecycle`, scan `direct_advisory_count` / `reason` / `dormant_release` | Direct advisories on the latest release with CVSS >= 7.0 (no upstream fix), or lifecycle EOL-Confirmed/EOL-Effective, or scan `reason` starting `All releases yanked on`, or `dormant_release.kind = "burst_across_lines"` (whatever the label) | Direct advisories with CVSS 4.0-6.9, or lifecycle Stalled/EOL-Scheduled/Archived, or `Review Needed` for lack of data, or `dormant_release.kind = "fresh"` | No direct advisories on the latest release (transitive-only counts here), lifecycle Active/Legacy-Safe |
 | **Cascade Potential** | `exclusive_transitive`, project knowledge | Removing unblocks 3+ further removals | Unblocks 1-2 | Standalone, no cascade |
 
 ### Scoring overrides
@@ -234,7 +238,7 @@ Rate each axis High/Med/Low using the data gathered in Phases 1-3. Each axis is 
 - **Coupling Depth override**: When Phase 2 shows ALL import files are non-production (test/CI/example), override Coupling Depth to **High** regardless of `coupling_effort`. Test/CI refactoring is low-risk regardless of call count.
 - **Transitive Cleanup caveat**: When `stays_as_indirect: true`, `exclusive_transitive` may overestimate actual cleanup -- some "exclusive" transitives may remain reachable via the indirect path. Note this uncertainty in the rationale.
 - **Unmeasured coupling**: When Phase 1 found that coupling was not measured, write "unmeasured" for Coupling Depth and Production Scope instead of a rating. Do not let a "trivial" label from an unmeasured run count as High.
-- **Security Urgency is about removal, not upgrade**: If the pinned version has advisories but the latest stable release is clean, the remedy is an upgrade. Rate Security Urgency from the latest stable release, and mention the upgrade in the rationale.
+- **Security Urgency is about removal, not upgrade**: If the pinned version has advisories but the latest release is clean, the remedy is an upgrade. Rate Security Urgency from the latest release's **direct** advisories, and mention the upgrade in the rationale. When both direct and transitive advisories exist, `max_cvss_score` may belong to a transitive one; look up the direct advisories' scores on OSV before rating.
 
 ### Scoring output
 
@@ -279,7 +283,7 @@ Synthesize all phases into a structured recommendation. Use the exact field name
 
 **Health**:
   lifecycle: {lifecycle} {-- scan reason: {reason} if Review Needed}
-  vulnerabilities on latest stable: {vulnerability_count} (max CVSS {max_cvss_score})
+  vulnerabilities on latest release: {vulnerability_count} ({direct_advisory_count} direct, {transitive_advisory_count} via its dependencies; max CVSS {max_cvss_score})
   vulnerabilities on pinned version: {from OSV, or "not checked"}
   malicious check: {clean / flagged: {advisory_id} / unknown}
   dormant release: {none / {silent_days} days of silence before this version}
@@ -304,15 +308,15 @@ Rules are evaluated **top-to-bottom; first match wins.** If multiple rows could 
 |-----------|---------------|
 | scan `malicious` present | REPLACE VERSION NOW, Priority S. This is incident response, not a removal decision: move to a version the advisory does not name (or, for `scope: "package"`, remove the package), and run `/diet-assess-risk` to judge what the malicious code could have reached. Skip the rest of this table |
 | `is_unused: true` | REMOVE, Trivial, Priority S |
-| Pinned version has advisories, latest stable has none, and lifecycle is Active or Legacy-Safe | UPGRADE. The vulnerability is not a reason to remove; finish the table only if another axis argues for removal |
+| Pinned version has advisories, latest release has no direct ones, and lifecycle is Active or Legacy-Safe | UPGRADE, Priority A. Stop here; name in the rationale any axis that would still argue for removal later |
 | API leakage = Yes AND Security Urgency = High | REMOVE with BREAKING CHANGE warning -- security overrides API stability. Rationale must document the breaking change and recommend a major version bump or deprecation timeline. Escalate to `/diet-assess-risk` |
 | API leakage = Yes | DEFER (needs major version bump or deprecation period) |
 | Replaceability = Low (crypto/protocol) | KEEP -- find an alternative maintained library rather than self-implementing. If Security Urgency is also High, escalate to `/diet-assess-risk` for full risk analysis. Never recommend self-implementing crypto/protocol |
 | All 6 axes High or Med | REMOVE |
 | 1-2 axes Low, rest High/Med | REMOVE -- note the Low axes as caveats in rationale |
 | Security Urgency = High, others mixed | REMOVE (prioritize security). Suggest `/diet-assess-risk` for full analysis |
-| >= 3 axes Low | KEEP |
 | `stays_as_indirect: true`, coupling low | REMOVE (still valuable: delegates version management, unblocks future cleanup) |
+| >= 3 axes Low | KEEP |
 
 ### Effort derivation
 
@@ -336,7 +340,7 @@ After picking a row, **raise Effort one level** when more than half of the produ
 ## Important rules
 
 - **Start from diet's output.** Never re-compute fields that diet already provides. But check that coupling was measured (Phase 1) before trusting `difficulty`, and fetch the malicious and dormant-release signals from `uzomuzo scan`, because diet JSON does not carry them.
-- **Know which version a number describes.** Diet's vulnerability fields describe the latest stable release; the version you ship may be better or worse.
+- **Know which version a number describes.** Diet's vulnerability fields describe the latest release and include its dependencies' advisories; the version you ship may be better or worse.
 - **Classify before scoring.** Usage classification (Phase 2) changes everything -- always do it before the 6-axis scoring.
 - **API leakage is a gate, not a spectrum.** If exported types depend on this package, flag it immediately.
 - **Be concrete about replacements.** Don't say "use stdlib" -- name the specific function, note the version requirement, show the migration pattern.

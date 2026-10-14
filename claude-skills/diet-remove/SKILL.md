@@ -18,7 +18,7 @@ Parse `$ARGUMENTS` for flags:
 - If `--repo owner/repo` is present → target that repository for the issue
 - Otherwise → Issue mode (default)
 
-**When to use**: After `/diet-evaluate-removal` confirms the dependency is worth removing, or when `uzomuzo diet` ranks it as trivial/easy.
+**When to use**: After `/diet-evaluate-removal` confirms the dependency is worth removing, or when `uzomuzo diet` reports it unused or easy (a "trivial" label is only meaningful if coupling was measured -- when every dependency shows trivial and none is unused, re-run diet with the right `--source`).
 
 **Safety principle**: Every removal must pass build + vet + test before committing. If any step fails, stop and diagnose — don't force it.
 
@@ -53,11 +53,12 @@ Run `uzomuzo scan` on the exact version in the SBOM. Diet JSON does not carry th
 
 ```bash
 uzomuzo scan "pkg:npm/example@1.2.3" --format json \
-  | jq '.packages[0] | {lifecycle, reason, malicious, malicious_check, dormant_release}'
+  | jq '.packages[0] | {lifecycle, reason, stable_version, malicious, malicious_check, dormant_release,
+                       direct_advisory_count, transitive_advisory_count, max_cvss3_score}'
 ```
 
-- **`malicious` present**: Stop this flow. Moving off the malicious version comes before any removal plan, and it must not wait for an issue to be triaged. In your own project, pin to a version the advisory does not name (or remove the package when `scope` is `"package"`) and run `/diet-assess-risk` to list the secrets to rotate. In an external project, do not open a public issue that describes an exploitable situation in detail; point the maintainers to the advisory through their security policy (`SECURITY.md`) instead.
-- **`dormant_release` present** (npm): The version came out after a year of silence. Prefer staying on, or pinning back to, the release before the silence while you plan the removal.
+- **`malicious` present**: Stop this flow. Moving off the malicious version comes before any removal plan, and it must not wait for an issue to be triaged. In your own project, pin to a version the advisory does not name (or remove the package when `scope` is `"package"`) and run `/diet-assess-risk` to list the secrets to rotate. If `/diet-assess-risk` already produced that incident verdict, do not run it again: go straight to pinning or removal and the rotation it listed. In an external project, do not open a public issue that describes an exploitable situation in detail; point the maintainers to the advisory through their security policy (`SECURITY.md`) instead.
+- **`dormant_release` present** (npm, shown for 7 days after publication): The version came out after a year of silence. Prefer staying on, or pinning back to, the release before the silence while you plan the removal.
 - Otherwise continue.
 
 ### 1. Will it actually disappear?
@@ -173,7 +174,7 @@ After completing Phase 1, **stop and file an issue** instead of implementing. Th
 Use `gh issue create` with the following structure:
 
 ```
-Title: dep: replace EOL {dependency} with {replacement}
+Title: dep: replace {lifecycle status, e.g. deprecated / archived / unmaintained} {dependency} with {replacement}
 
 Body:
 ## Problem
@@ -558,4 +559,4 @@ When filing an issue (default mode) or PR, include:
 - **If it's harder than expected, stop and reassess.** The removal may not be worth the effort — that's a valid conclusion.
 - **Always include primary source links.** Never claim "deprecated" or "archived" without evidence URLs.
 - **Never post to another repository without the user's approval.** Show the draft first (see "Confirm before posting").
-- **Diet's vulnerability counts describe the latest stable release**, not the version you ship. When an issue or commit message cites vulnerabilities, name the version they apply to.
+- **Diet's vulnerability counts describe the latest release and include its dependencies' advisories**, not the version you ship. When an issue or commit message cites vulnerabilities, name the version they apply to and whether they are in the package itself.
