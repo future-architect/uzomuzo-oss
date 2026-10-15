@@ -44,7 +44,7 @@ func TestArchivedDisabledScanOutputs(t *testing.T) {
 	if r := rows[archived.PURL]; !strings.Contains(r, "Stalled · archived") || strings.Contains(r, "disabled") {
 		t.Errorf("archived row: %q", r)
 	}
-	if r := rows[quiet.PURL]; strings.Contains(r, "·") {
+	if r := rows[quiet.PURL]; !strings.Contains(r, "Stalled") || strings.Contains(r, "·") {
 		t.Errorf("quiet row has a marker: %q", r)
 	}
 	if r := rows[disabled.PURL]; !strings.Contains(r, "Stalled · disabled") || strings.Contains(r, "archived") {

@@ -7,8 +7,9 @@ Status: Proposed
 
 [ADR-0020](0020-archived-registry-liveness.md) keeps an archived or disabled
 repository out of EOL unless a primary source says so; such a repository is
-usually labelled Stalled. The verdict, however, turns every archived repository
-into `replace` (`internal/domain/audit/verdict.go`). Before this change the
+usually labelled Stalled. The verdict, however, turns an archived repository
+into `replace` whenever its analysis succeeded (`internal/domain/audit/verdict.go`;
+an analysis error makes it `review` first). Before this change the
 table therefore showed two rows that differ only in their status, with nothing
 saying why (v0.7.0, 2026-10-15):
 
