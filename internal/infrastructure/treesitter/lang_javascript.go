@@ -247,8 +247,15 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 	if parent.Kind() == "arguments" {
 		callExpr := parent.Parent()
 		if callExpr != nil && callExpr.Kind() == "call_expression" {
+			// `const x = require('pkg').member` binds x just like
+			// `const { member: x } = require('pkg')`, so look for the binding
+			// above the whole member chain. Without this, the require falls
+			// through to isInlineRequireUsage and every call through x is
+			// lost (#543).
+			bound := requireMemberChainTop(callExpr)
+
 			// Check for variable declarator: const x = require('pkg')
-			declarator := findAncestorVariableDeclarator(callExpr)
+			declarator := findAncestorVariableDeclarator(bound)
 			if declarator != nil {
 				nameNode := declarator.ChildByFieldName("name")
 				if nameNode == nil {
@@ -266,13 +273,31 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 			// Check for property assignment: obj.prop = require('pkg')
 			// The qualified member expression becomes the binding alias (for example, `file.glob`)
 			// to avoid collisions and so that call sites like obj.prop.method() or obj.prop() can be tracked.
-			if binding := extractPropertyAssignBinding(callExpr, src); binding != "" {
+			if binding := extractPropertyAssignBinding(bound, src); binding != "" {
 				return []string{binding}
 			}
 		}
 	}
 
 	return nil
+}
+
+// requireMemberChainTop returns the outermost member_expression whose object
+// chain starts at the require() call (`require('pkg').a.b` returns the
+// `.b` node), or the call itself when no member access follows it.
+func requireMemberChainTop(callExpr *sitter.Node) *sitter.Node {
+	top := callExpr
+	for {
+		parent := top.Parent()
+		if parent == nil || parent.Kind() != "member_expression" {
+			return top
+		}
+		obj := parent.ChildByFieldName("object")
+		if obj == nil || obj.Id() != top.Id() {
+			return top
+		}
+		top = parent
+	}
 }
 
 // isInlineRequireUsage checks whether a CJS require() call is used inline without

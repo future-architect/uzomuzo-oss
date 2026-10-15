@@ -1332,6 +1332,90 @@ const name = basename("/foo/bar.txt");
 			wantSymbols: []string{"basename", "join", "resolve"},
 		},
 		{
+			name:     "member of require bound to a variable: const x = require('pkg').default (#543)",
+			filename: "index.js",
+			code: `const ipc = require("node-ipc").default;
+
+ipc.config.id = "broker";
+ipc.serve(() => {});
+ipc.server.start();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/node-ipc@10.1.0": {"node-ipc"},
+			},
+			purl:        "pkg:npm/node-ipc@10.1.0",
+			wantImports: 1,
+			wantCalls:   3,
+			wantBreadth: 3,
+			wantSymbols: []string{"config", "serve", "server"},
+		},
+		{
+			name:     "named member of require bound to a variable: const post = require('pkg').post (#543)",
+			filename: "index.js",
+			code: `const post = require("request").post;
+
+post({ url: "https://a.example" });
+post({ url: "https://b.example" });
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/request@2.88.2": {"request"},
+			},
+			purl:        "pkg:npm/request@2.88.2",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 1,
+			wantSymbols: []string{"post"},
+		},
+		{
+			name:     "nested member chain of require bound to a variable",
+			filename: "index.js",
+			code: `const sub = require("deep-pkg").api.v2;
+
+sub.run();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/deep-pkg@1.0.0": {"deep-pkg"},
+			},
+			purl:        "pkg:npm/deep-pkg@1.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"run"},
+		},
+		{
+			name:     "member of require in a compound fallback: var X = root.X || require('pkg').X",
+			filename: "index.js",
+			code: `var Hammer = window.Hammer || require("hammerjs").default;
+
+Hammer.on("tap");
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/hammerjs@2.0.8": {"hammerjs"},
+			},
+			purl:        "pkg:npm/hammerjs@2.0.8",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"on"},
+		},
+		{
+			name:     "member of require assigned to an object property",
+			filename: "index.js",
+			code: `const deps = {};
+deps.ipc = require("node-ipc").default;
+
+deps.ipc.serve(() => {});
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/node-ipc@10.1.0": {"node-ipc"},
+			},
+			purl:        "pkg:npm/node-ipc@10.1.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"serve"},
+		},
+		{
 			name:     "simple CJS require still works alongside destructured",
 			filename: "index.js",
 			code: `const axios = require("axios");
@@ -1486,9 +1570,24 @@ serialize(document);
 			wantBreadth:  1,
 		},
 		{
-			name:     "chained member access without call: require('pkg').prop",
+			name:     "member of require bound to a variable that is never used: same as an unused destructuring (#543)",
 			filename: "index.js",
 			code: `var version = require('some-pkg').version;
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    0, // `version` is a binding, like `const { version } = require('some-pkg')`
+			wantIsUnused: false,
+			wantBlank:    false,
+			wantBreadth:  0,
+		},
+		{
+			name:     "chained member access without a binding: f(require('pkg').prop)",
+			filename: "index.js",
+			code: `console.log(require('some-pkg').version);
 `,
 			importPaths: map[string][]string{
 				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
