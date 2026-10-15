@@ -94,3 +94,20 @@ func TestArchivedDisabledFailPolicy(t *testing.T) {
 		}
 	}
 }
+
+// TestNeedsRepositoryState pins which selections need repository state read
+// with a GitHub token.
+func TestNeedsRepositoryState(t *testing.T) {
+	for raw, want := range map[string]bool{
+		"archived": true, "disabled": true, "stalled,archived": true,
+		"": false, "stalled": false, "malicious": false, "dormant-release": false,
+	} {
+		p, err := ParseFailPolicy(raw)
+		if err != nil {
+			t.Fatalf("ParseFailPolicy(%q): %v", raw, err)
+		}
+		if got := p.NeedsRepositoryState(); got != want {
+			t.Errorf("%q: NeedsRepositoryState = %v, want %v", raw, got, want)
+		}
+	}
+}

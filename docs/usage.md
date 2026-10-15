@@ -424,7 +424,9 @@ disabled it, whatever the lifecycle label or verdict, including entries whose
 analysis failed. An archived repository is usually labelled Stalled (see
 [ADR-0020](adr/0020-archived-registry-liveness.md)), so `stalled` also catches
 it but fails on quiet, unarchived repositories too. No other value implies
-either one, and neither implies the other (see
+either one, and neither implies the other. Both need `GITHUB_TOKEN`: without it
+the disabled state is never read and the archived state only through Scorecard,
+so the scan refuses these values instead of passing entries it did not check (see
 [ADR-0029](adr/0029-archived-disabled-are-facts.md)). The table shows
 `· archived` / `· disabled` after the lifecycle label; JSON has `archived` and
 `disabled` booleans, and CSV has `archived` and `disabled` columns.

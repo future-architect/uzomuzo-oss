@@ -133,6 +133,14 @@ func (p FailPolicy) IsEmpty() bool {
 	return len(p.triggers) == 0 && !p.malicious && !p.dormant && !p.archived && !p.disabled
 }
 
+// NeedsRepositoryState reports whether the policy selects archived or disabled,
+// which can only be decided from repository state read with a GitHub token.
+// Without one, IsDisabled is never set and IsArchived only through Scorecard,
+// so such a policy would pass entries it never checked.
+func (p FailPolicy) NeedsRepositoryState() bool {
+	return p.archived || p.disabled
+}
+
 // IsTriggered returns true if the given label is in the fail set.
 func (p FailPolicy) IsTriggered(label analysis.MaintenanceStatus) bool {
 	if p.triggers == nil {

@@ -65,6 +65,9 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 	if err != nil {
 		return fmt.Errorf("parse fail policy: %w", err)
 	}
+	if policy.NeedsRepositoryState() && cfg.GitHub.Token == "" {
+		return fmt.Errorf("--fail-on archived and disabled require GITHUB_TOKEN to read the repository state")
+	}
 
 	analysisService := createAnalysisService(cfg)
 	scanService, err := scanapp.NewService(analysisService)

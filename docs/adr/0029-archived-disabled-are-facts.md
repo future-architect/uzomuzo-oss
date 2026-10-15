@@ -45,6 +45,10 @@ The label does not change.
   other value, and neither implies the other. Like every non-empty selection,
   each also fails on a malicious version (ADR-0027). They are evaluated over all
   entries, independent of `--show-only`.
+- **Token.** Both values require `GITHUB_TOKEN`, checked before the scan
+  starts, as `--include-actions` does. Without a token the GitHub client sets
+  `IsDisabled` to false for every entry and `IsArchived` is known only when a
+  Scorecard result says so, so the gate would pass entries it never checked.
 - **Table.** The LIFECYCLE cell gets ` · archived` and/or ` · disabled`, after
   any malicious (`☠`) or dormant-release (`⚠`) marker. They are appended rather
   than competing for the cell, because an archived repository that suddenly
