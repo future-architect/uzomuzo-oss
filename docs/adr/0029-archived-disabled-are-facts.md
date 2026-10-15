@@ -49,6 +49,13 @@ The label does not change.
   starts, as `--include-actions` does. Without a token the GitHub client sets
   `IsDisabled` to false for every entry and `IsArchived` is known only when a
   Scorecard result says so, so the gate would pass entries it never checked.
+- **Failed lookups.** With a token, a repository-state lookup can still fail
+  (authentication, rate limit). Such an entry has no state, so neither value
+  matches it; it carries the error and gets the `review` verdict, as a failed
+  lookup does for every other `--fail-on` value (a failed deps.dev lookup does
+  not match `eol-confirmed` either). Failing CI on unverified entries is a
+  question for all values at once, tracked as `--fail-on-verdict review` in #541,
+  not a special case of these two.
 - **Table.** The LIFECYCLE cell gets ` · archived` and/or ` · disabled`, after
   any malicious (`☠`) or dormant-release (`⚠`) marker. They are appended rather
   than competing for the cell, because an archived repository that suddenly
