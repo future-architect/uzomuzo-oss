@@ -523,57 +523,66 @@ func convertRepoURLToProjectKey(repoURL string) string {
 	// - git+ssh://git@github.com/owner/repo
 	// - ssh://git@github.com/owner/repo
 	// - git@github.com:owner/repo
-	s := strings.ToLower(strings.TrimSpace(repoURL))
-
-	// Remove fragment and query early
-	if i := strings.Index(s, "#"); i >= 0 {
-		s = s[:i]
-	}
-	if i := strings.Index(s, "?"); i >= 0 {
-		s = s[:i]
+	s := strings.TrimSpace(repoURL)
+	if s == "" {
+		return ""
 	}
 
-	// Remove common scheme prefixes
-	for _, prefix := range []string{
-		"https://", "http://", "git+ssh://", "ssh://",
-	} {
-		if strings.HasPrefix(s, prefix) {
-			s = strings.TrimPrefix(s, prefix)
+	for {
+		lower := strings.ToLower(s)
+		idx := strings.Index(lower, "://")
+		if idx == -1 {
 			break
 		}
-	}
-
-	// Drop leading user@ if present (e.g., git@github.com/...)
-	s = strings.TrimPrefix(s, "git@")
-
-	// If the string contains github.com anywhere, extract from there
-	idx := strings.Index(s, "github.com")
-	if idx == -1 {
-		return ""
-	}
-	key := s[idx:]
-
-	// Normalize separator after host: allow github.com:owner/repo or github.com/owner/repo
-	if strings.HasPrefix(key, "github.com:") {
-		key = strings.Replace(key, "github.com:", "github.com/", 1)
-	}
-
-	// Trim any trailing slashes
-	key = strings.TrimRight(key, "/")
-
-	// Ensure we only keep host/owner/repo even if deeper paths appear
-	if strings.HasPrefix(key, "github.com/") {
-		rest := strings.TrimPrefix(key, "github.com/")
-		parts := strings.Split(rest, "/")
-		if len(parts) >= 2 {
-			owner := parts[0]
-			repo := strings.TrimSuffix(parts[1], ".git")
-			return "github.com/" + owner + "/" + repo
+		rest := s[idx+len("://"):]
+		restLower := strings.ToLower(rest)
+		if strings.HasPrefix(restLower, "git+ssh://") ||
+			strings.HasPrefix(restLower, "ssh://") ||
+			strings.HasPrefix(restLower, "git@github.com:") ||
+			strings.HasPrefix(restLower, "git@github.com/") {
+			s = rest
+			continue
 		}
-		// Not enough path segments to form owner/repo
+		break
+	}
+
+	lower := strings.ToLower(s)
+	if strings.HasPrefix(lower, "git@github.com:") {
+		path := s[len("git@github.com:"):]
+		return githubProjectKeyFromPath(path)
+	}
+	if strings.HasPrefix(lower, "git@github.com/") {
+		s = s[len("git@"):]
+		lower = strings.ToLower(s)
+	}
+	if strings.HasPrefix(lower, "github.com/") || strings.HasPrefix(lower, "github.com:") {
+		s = "https://" + s
+	}
+
+	parsed, err := neturl.Parse(s)
+	if err != nil || !strings.EqualFold(parsed.Hostname(), "github.com") {
 		return ""
 	}
-	return ""
+	return githubProjectKeyFromPath(parsed.Path)
+}
+
+func githubProjectKeyFromPath(path string) string {
+	if i := strings.Index(path, "#"); i >= 0 {
+		path = path[:i]
+	}
+	if i := strings.Index(path, "?"); i >= 0 {
+		path = path[:i]
+	}
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	owner := strings.ToLower(parts[0])
+	repo := strings.ToLower(strings.TrimSuffix(parts[1], ".git"))
+	if owner == "" || repo == "" {
+		return ""
+	}
+	return "github.com/" + owner + "/" + repo
 }
 
 // normalizeRepoURLForProject converts any repo URL into canonical form for project lookups:
