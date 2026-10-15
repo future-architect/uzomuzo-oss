@@ -70,6 +70,9 @@ func TestFetchAndValidateGitHubAnalysis_IdentitySplit(t *testing.T) {
 					tt.analyzePURL: {
 						PURL:    tt.analyzePURL,
 						Package: &depsdev.Package{},
+						// The package must link back to the input repository, or
+						// the round-trip check discards it (see #539).
+						RepoURL: githubURL,
 					},
 				},
 			}
@@ -103,5 +106,44 @@ func TestFetchAndValidateGitHubAnalysis_IdentitySplit(t *testing.T) {
 				t.Errorf("CanonicalKey = %q, want %q", got.CanonicalKey, basePURL)
 			}
 		})
+	}
+}
+
+// TestFetchAndValidateGitHubAnalysis_NoRepoLinkFallsBackToGitHubOnly pins #539:
+// github.com/grafana/grafana resolved to pkg:npm/grafana, an unrelated package with
+// no repository link, and the repository was labeled from that package's 2018
+// release. A package that does not link back to the input repository must be
+// discarded in favor of the GitHub-only analysis.
+func TestFetchAndValidateGitHubAnalysis_NoRepoLinkFallsBackToGitHubOnly(t *testing.T) {
+	t.Parallel()
+
+	const (
+		githubURL     = "https://github.com/grafana/grafana"
+		basePURL      = "pkg:npm/grafana"
+		versionedPURL = "pkg:npm/grafana@1.0.1"
+	)
+
+	dd := &identityDepsDevClient{
+		details: map[string]*depsdev.BatchResult{
+			versionedPURL: {
+				PURL:    versionedPURL,
+				Package: &depsdev.Package{},
+			},
+		},
+	}
+	s := NewIntegrationService(github.NewClient(&config.Config{}), dd)
+
+	got, err := s.fetchAndValidateGitHubAnalysis(context.Background(), versionedPURL, basePURL, githubURL)
+	if err != nil {
+		t.Fatalf("fetchAndValidateGitHubAnalysis failed: %v", err)
+	}
+	if got.Package != nil {
+		t.Errorf("Package = %+v, want nil (unrelated package must be discarded)", got.Package)
+	}
+	if got.OriginalPURL != githubURL {
+		t.Errorf("OriginalPURL = %q, want %q", got.OriginalPURL, githubURL)
+	}
+	if got.RepoURL != githubURL {
+		t.Errorf("RepoURL = %q, want %q", got.RepoURL, githubURL)
 	}
 }

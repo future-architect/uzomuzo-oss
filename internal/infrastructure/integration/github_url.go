@@ -131,7 +131,8 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 	// Round-trip validation: verify the resolved package actually belongs to the input repository.
 	// deps.dev may return an unrelated package that happens to share the repo name
 	// (e.g., "checkout" → pkg:npm/checkout from github.com/bmeck/node-checkout,
-	//  not the intended github.com/actions/checkout).
+	//  not the intended github.com/actions/checkout), or one with no repository link
+	// at all (e.g., "grafana" → pkg:npm/grafana; see #539).
 	if !s.validateRepoURLMatch(analysis.RepoURL, githubURL) {
 		slog.Warn("deps_dev_repo_mismatch_detected",
 			"github_url", githubURL,
@@ -147,11 +148,15 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 
 // validateRepoURLMatch checks whether the resolved repository URL matches the input GitHub URL.
 // Both URLs are normalized to owner/repo form (case-insensitive) before comparison.
-// Returns true if they match, or if the resolved URL is empty (no data to validate against).
+// An empty resolved URL is a mismatch: a package with no repository link carries no
+// evidence that it belongs to the input repository, and a same-named package
+// (e.g., github.com/grafana/grafana → pkg:npm/grafana, which has no repository link)
+// would otherwise label the repository from an unrelated release history.
+//
+// See: https://github.com/future-architect/uzomuzo-oss/issues/539
 func (s *IntegrationService) validateRepoURLMatch(resolvedRepoURL, inputGitHubURL string) bool {
-	// If deps.dev returned no repo URL, we cannot validate — allow the result.
 	if resolvedRepoURL == "" {
-		return true
+		return false
 	}
 
 	inputOwner, inputRepo, err := common.ExtractGitHubOwnerRepo(inputGitHubURL)

@@ -17,6 +17,9 @@ import (
 type entryPathDepsDevClient struct {
 	stubDepsDevClient
 	stableVersion string
+	// repoURL is served as each package's repository link, so the round-trip
+	// check accepts the package (see #539).
+	repoURL string
 
 	releasesFor []string
 	detailsFor  []string
@@ -37,7 +40,7 @@ func (c *entryPathDepsDevClient) GetDetailsForPURLs(_ context.Context, purls []s
 	c.detailsFor = append(c.detailsFor, purls...)
 	out := make(map[string]*depsdev.BatchResult, len(purls))
 	for _, p := range purls {
-		out[p] = &depsdev.BatchResult{PURL: p, Package: &depsdev.Package{}}
+		out[p] = &depsdev.BatchResult{PURL: p, Package: &depsdev.Package{}, RepoURL: c.repoURL}
 	}
 	return out, nil
 }
@@ -83,7 +86,7 @@ func TestAnalyzeFromGitHubURL_EntryPathIdentity(t *testing.T) {
 	cfg.GitHub.BaseURL = srv.URL
 	cfg.GitHub.Timeout = 10 * time.Second
 
-	dd := &entryPathDepsDevClient{stableVersion: stableVersion}
+	dd := &entryPathDepsDevClient{stableVersion: stableVersion, repoURL: githubURL}
 	s := NewIntegrationService(github.NewClient(cfg), dd)
 
 	got, err := s.AnalyzeFromGitHubURL(context.Background(), githubURL)
