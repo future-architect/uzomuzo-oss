@@ -198,6 +198,10 @@ func (a *Analyzer) handleJSImport(
 	// `import cloud from '@strapi/plugin-cloud'`). Falls back to aliasFromPkg
 	// for patterns we cannot resolve from the AST.
 	aliases := extractJSBindings(node, src)
+	// For a require followed by member access, extractJSBindings only looks
+	// for a binding above the member chain, so a non-empty result here means
+	// the member read was bound to a name.
+	boundMember := len(aliases) > 0 && startsRequireMemberChain(node)
 	if len(aliases) == 0 {
 		// No variable binding — check for inline require patterns:
 		//   require('x')()          — immediate invocation
@@ -221,7 +225,7 @@ func (a *Analyzer) handleJSImport(
 	// bound name is only passed around or exported afterwards, which the
 	// call-site queries cannot see. Keep the side-effect baseline as evidence
 	// instead of reporting zero calls.
-	if isBoundRequireMember(node, src) {
+	if boundMember {
 		key := blankImportAlias + importPath
 		aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
 	}
@@ -232,6 +236,7 @@ func (a *Analyzer) handleJSImport(
 // ESM: import_statement → import_clause → identifier / namespace_import
 // CJS (variable): string → arguments → call_expression → variable_declarator → name
 // CJS (property): string → arguments → call_expression → assignment_expression → member_expression → property
+// CJS (member): string → arguments → call_expression → member_expression... → variable_declarator / assignment_expression
 //
 // Combined imports (e.g., `import def, * as ns from "pkg"`) produce multiple bindings.
 func extractJSBindings(node *sitter.Node, src []byte) []string {
@@ -319,9 +324,23 @@ func extractRequireMemberBinding(top *sitter.Node, src []byte) []string {
 			}
 			return []string{left.Utf8Text(src)}
 		case "parenthesized_expression":
+			// (require('pkg').y) has the same value as the inner expression.
 		case "binary_expression":
 			op := parent.ChildByFieldName("operator")
-			if op == nil || (op.Kind() != "||" && op.Kind() != "??" && op.Kind() != "&&") {
+			if op == nil {
+				return nil
+			}
+			switch op.Kind() {
+			case "||", "??":
+				// Either operand can be the result.
+			case "&&":
+				// `a && require('pkg').y` yields the member, but
+				// `require('pkg').y && other` yields other when the member is truthy.
+				right := parent.ChildByFieldName("right")
+				if right == nil || right.Id() != child.Id() {
+					return nil
+				}
+			default:
 				return nil
 			}
 		case "ternary_expression":
@@ -337,9 +356,9 @@ func extractRequireMemberBinding(top *sitter.Node, src []byte) []string {
 	return nil
 }
 
-// isBoundRequireMember reports whether node (the string inside require())
-// starts a `require('pkg').member` chain whose value is bound to a name.
-func isBoundRequireMember(node *sitter.Node, src []byte) bool {
+// startsRequireMemberChain reports whether node (the string inside
+// require()) is followed by member access, as in `require('pkg').member`.
+func startsRequireMemberChain(node *sitter.Node) bool {
 	args := node.Parent()
 	if args == nil || args.Kind() != "arguments" {
 		return false
@@ -348,8 +367,7 @@ func isBoundRequireMember(node *sitter.Node, src []byte) bool {
 	if callExpr == nil || callExpr.Kind() != "call_expression" {
 		return false
 	}
-	top := requireMemberChainTop(callExpr)
-	return top != callExpr && len(extractRequireMemberBinding(top, src)) > 0
+	return requireMemberChainTop(callExpr) != callExpr
 }
 
 // requireMemberChainTop returns the outermost member_expression whose object
@@ -376,6 +394,8 @@ func requireMemberChainTop(callExpr *sitter.Node) *sitter.Node {
 // Inline patterns detected:
 //   - require('x')()        — immediate invocation (parent call_expression is the function of an outer call)
 //   - require('x').method() — chained property access (parent call_expression is the object of a member_expression)
+//     A member read bound to a name (`const v = require('x').prop`) is handled
+//     by extractRequireMemberBinding and does not reach this function.
 //   - require('x')('arg')   — factory pattern (same AST shape as immediate invocation)
 //   - require('x');          — bare side-effect require (parent call_expression is inside expression_statement)
 //   - require('x').prop      — member access without call (parent call_expression is object of member_expression)

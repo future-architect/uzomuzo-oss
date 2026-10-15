@@ -31,7 +31,6 @@ Known causes of a used dependency being reported as unused or trivial:
 | Maven coordinates whose Java package is not under the groupId and not in diet's override list (Lombok, Hibernate, OkHttp, Reactor, ...) | Java | [#547](https://github.com/future-architect/uzomuzo-oss/issues/547) |
 | The wheel fallback that finds a distribution's import name skips wheels over 5 MiB (scikit-learn, opencv-python) and can miss namespace packages (`google.*`, `azure.*`) | Python | [#548](https://github.com/future-architect/uzomuzo-oss/issues/548) |
 | `.cjs` / `.mts` / `.cts` / `.vue` / `.svelte` files, `import x = require()`, template-literal `require`; `@types/*` and type-only packages | JS/TS | [#549](https://github.com/future-architect/uzomuzo-oss/issues/549) |
-| `const x = require('pkg').member` | JS/TS | [#543](https://github.com/future-architect/uzomuzo-oss/issues/543) |
 | Dynamic `import()` and inline `require('pkg').f()` are rated `trivial` when no other use is counted, however many files use them; dot-imported calls are not counted | JS/TS, Go | [#550](https://github.com/future-architect/uzomuzo-oss/issues/550) |
 | Package name differs from the import path (`aws/signer/v4`, `k8s.io/api/core/v1`, `json-iterator/go`) | Go | [#551](https://github.com/future-architect/uzomuzo-oss/issues/551) |
 | Uses the per-language queries do not cover, which differ by language: methods on returned objects (all), values passed as arguments (JS/TS, Python), bare imported names used as a base class or in `except` (Python) | all | [#552](https://github.com/future-architect/uzomuzo-oss/issues/552) |
@@ -428,6 +427,7 @@ All languages use tree-sitter for AST-based analysis. Files larger than 1 MiB ar
 | Call sites | Member expressions (`obj.method`), bare calls, constructors (`new Foo`), computed properties, JSX elements (`<Component />`), constant-only patterns |
 | Framework detection | **Angular**: decorator array identifiers (`@NgModule`, `@Component` imports/declarations). **Vue**: `defineComponent({ components: {} })` shorthand properties. |
 | CJS destructuring | `const { X } = require('pkg')` — each destructured name tracked as alias |
+| CJS member read | `const x = require('pkg').member` (also through `||`, `??`, the right side of `&&`, ternary branches, and `obj.p = ...`) — x tracked as alias, and the import also counts as used even if x is never called |
 | Limitations | Dynamic import bindings not tracked through `await`/`.then()`. JSX patterns only for `.js`/`.jsx`/`.tsx` (not `.ts`). Bare identifier matching may false-positive on shadowed locals. `.cjs`/`.mts`/`.cts`, `.vue`, `.svelte` files are not read ([#549](https://github.com/future-architect/uzomuzo-oss/issues/549)). |
 
 ### Java

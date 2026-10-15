@@ -1399,6 +1399,38 @@ Hammer.on("tap");
 			wantSymbols: []string{"on"},
 		},
 		{
+			name:     "member of require on the right of && and in a ternary branch is bound",
+			filename: "index.js",
+			code: `const a = ready && require("ready-pkg").api;
+a.run();
+const b = useNew ? require("ready-pkg").next : legacy;
+b.start();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/ready-pkg@1.0.0": {"ready-pkg"},
+			},
+			purl:        "pkg:npm/ready-pkg@1.0.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
+			wantSymbols: []string{"run", "start"},
+		},
+		{
+			name:     "member of require in a ?? fallback is bound",
+			filename: "index.js",
+			code: `const c = globalThis.cfg ?? require("cfg-pkg").defaults;
+c.load();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/cfg-pkg@1.0.0": {"cfg-pkg"},
+			},
+			purl:        "pkg:npm/cfg-pkg@1.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"load"},
+		},
+		{
 			name:     "member of require assigned to an object property",
 			filename: "index.js",
 			code: `const deps = {};
@@ -1600,6 +1632,24 @@ x();
 			purl:         "pkg:npm/some-pkg@1.0.0",
 			wantImports:  1,
 			wantCalls:    1, // baseline only; x() calls local/other, not the package
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "member of require on the left of && is not an alias",
+			filename: "index.js",
+			code: `const local = () => 1;
+const x = require('some-pkg').flag && local;
+x();
+x();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    1, // baseline only; x is local when the flag is truthy
 			wantIsUnused: false,
 			wantBlank:    true,
 			wantBreadth:  0,
