@@ -31,7 +31,7 @@ func FuzzAnalyzeJavaScriptRequire(f *testing.F) {
 		`require(`,
 		`const { a } = require("pkg").b; a();`,
 		`const x = require("pkg")["y"]; x();`,
-		`const x = require(`+"`pkg`"+`).y;`,
+		`const x = require(` + "`pkg`" + `).y;`,
 		"",
 	}
 	for _, s := range seeds {
