@@ -83,7 +83,7 @@ func RunDiet(
 	return nil
 }
 
-// dietExperimentalNotice is printed on stderr after every run. It goes to
+// dietExperimentalNotice is printed on stderr after the plan is rendered successfully. It goes to
 // stderr, not stdout, so JSON and table output piped to other tools stay
 // unchanged.
 const dietExperimentalNotice = `diet is experimental: "unused" and "trivial" can be wrong (skipped directories, unrecognized import styles).
