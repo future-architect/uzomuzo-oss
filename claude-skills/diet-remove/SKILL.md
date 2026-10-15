@@ -90,7 +90,7 @@ Determine the replacement strategy. In order of preference:
 
 | Strategy | When to use | Example |
 |----------|-------------|---------|
-| **Delete** | Unused (0 imports) | Remove from go.mod/package.json, run tidy |
+| **Delete** | Unused (0 imports), and the step 4 checks below found no configuration, plugin, or type-only use | Remove from go.mod/package.json, run tidy |
 | **Standard library** | stdlib equivalent exists | `go-homedir` → `os.UserHomeDir()` |
 | **Consolidate** | Another dep already does this | Two JSON libs → keep one |
 | **Self-implement** | Small, non-crypto, well-defined API | `lfshook` → 20-line `logrus.Hook` impl |
@@ -124,7 +124,7 @@ Check these before starting:
 
 ### 4. IBNC safety check (imports-but-no-calls patterns)
 
-If the dependency shows 0 call sites but >0 import files, it may still be required. Verify it is not:
+If the dependency shows 0 call sites -- with import files, or with none at all (`is_unused`) -- it may still be required. Verify it is not:
 
 - [ ] Side-effect import (`import _ "pkg"`, `import 'pkg'`, `require('pkg')` without assignment)
 - [ ] Database / driver registration (blank import or conditional `require()`)
@@ -245,7 +245,7 @@ Before filing, check the target repository's issue templates:
 
 ### Confirm before posting
 
-Filing an issue or discussion publishes text under the user's name in someone else's repository, and it cannot be fully taken back. Before any command that writes to a repository you do not own -- `gh issue create`, `gh issue comment`, `gh pr comment`, the `createDiscussion` mutation, or any other GraphQL mutation -- show the user the target repository, the channel (issue or discussion), the title, and the full body, and wait for their approval. Post only after they approve; apply any edits they ask for first.
+Filing an issue, discussion, or comment publishes text under the user's name, and it cannot be fully taken back. Before any command that publishes to GitHub, in any repository including the user's own -- `gh issue create`, `gh issue comment`, `gh pr comment`, the `createDiscussion` mutation, or any other GraphQL mutation -- show the user the target repository, the channel (issue or discussion), the title, and the full body, and wait for their approval. Post only after they approve; apply any edits they ask for first.
 
 ### After filing
 
@@ -266,6 +266,8 @@ If `--pr` was specified, skip this section and continue to Phase 1.5 below.
 The following phases apply only in PR mode. Use this when you own the project.
 
 ## Phase 1.5: Test coverage check — before you touch anything
+
+Record the starting point first: `BASE=$(git rev-parse HEAD)`. The A/B comparison below needs this exact commit.
 
 **Before writing any replacement code, check if the code that uses this dependency has tests.**
 
@@ -304,9 +306,11 @@ For high-impact removals (framework replacement, parser rewrite), unit tests are
 ```bash
 # Build the "before" binary from a separate checkout of the base commit,
 # so your working tree (and the shared stash stack) are never touched.
-# BASE must be the commit before the removal, not HEAD after you commit it.
+# BASE is the commit you recorded before starting the removal
+# (BASE=$(git rev-parse HEAD) at the start of Phase 1.5). A guess such as
+# the merge base can pick an older commit and mix in unrelated changes.
 set -euo pipefail
-BASE=${BASE:-$(git merge-base origin/main HEAD)}
+: "${BASE:?set BASE to the commit recorded before the removal started}"
 OUT=$(mktemp -d)
 git worktree add --detach "$OUT/src" "$BASE"
 trap 'git worktree remove --force "$OUT/src"' EXIT   # cleans up even if a build fails
@@ -408,8 +412,8 @@ For non-Go projects, run the equivalent build + lint + test pipeline.
 
 - **Check binary size** (for compiled languages):
   ```bash
-  go build -o /tmp/binary-after ./cmd/...
-  ls -la /tmp/binary-after
+  go build -o /tmp/binary-after/ ./cmd/...   # trailing slash: one binary per command
+  ls -la /tmp/binary-after/
   ```
 
 - **For framework peels: A/B comparison**
@@ -568,5 +572,5 @@ When filing an issue (default mode) or PR, include:
 - **Measure before AND after.** go.sum line count, binary size, build time. Put the numbers in the commit message.
 - **If it's harder than expected, stop and reassess.** The removal may not be worth the effort — that's a valid conclusion.
 - **Always include primary source links.** Never claim "deprecated" or "archived" without evidence URLs.
-- **Never post to another repository without the user's approval.** Show the draft first (see "Confirm before posting").
+- **Never post to GitHub without the user's approval, in any repository.** Show the draft first (see "Confirm before posting").
 - **Diet's vulnerability counts describe the latest release and include its dependencies' advisories**, not the version you ship. When an issue or commit message cites vulnerabilities, name the version they apply to and whether they are in the package itself.

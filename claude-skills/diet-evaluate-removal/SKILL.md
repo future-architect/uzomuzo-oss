@@ -106,7 +106,7 @@ Display ALL of these from the diet JSON. Do NOT re-compute any of them.
 
 Before proceeding, flag any of these patterns -- they indicate diet's coupling data may be unreliable:
 
-- `is_unused: true` -- `is_unused` only means diet found no import. Dependencies loaded through configuration, plugins, reflection, ServiceLoader, or build commands still show as unused unless diet knows them (it recognizes Go `tool` directives and a fixed list of Java runtime libraries such as JDBC drivers and logging backends). Before treating an unused dependency as removable, search configuration and build files for its name (`*.yml`, `*.properties`, `META-INF/services/*`, `spring.factories`, `package.json` scripts and config files, `Makefile`, CI workflows).
+- `is_unused: true` -- `is_unused` only means diet found no import. Dependencies loaded through configuration, plugins, reflection, ServiceLoader, or build commands still show as unused unless diet knows them (it recognizes Go `tool` directives and a fixed list of Java runtime libraries such as JDBC drivers and logging backends). Before treating an unused dependency as removable, search for its name in the source -- including `import type` / `export type ... from` lines, which diet ignores, and places diet does not read (`build/`, `dist/`, `target/` directories, files over 1 MB, file types it does not parse) -- and in configuration and build files (`*.yml`, `*.properties`, `META-INF/services/*`, `spring.factories`, `package.json` scripts and config files, `Makefile`, CI workflows).
 - `scope: "tool"` + `import_file_count: 0` -- Expected for build-time-only tool deps. Not an IBNC pattern. These have zero runtime imports by design.
 - `scope: "runtime"` + `import_file_count: 0` -- Expected for runtime-mechanism deps (JDBC drivers, logging backends, Spring auto-config). Loaded via reflection/ServiceLoader/classpath, not static imports.
 - `has_blank_import: true` + `call_site_count: 0` -- The blank import IS the usage (Go DB drivers, JS polyfills). Coupling is underestimated.
@@ -204,7 +204,7 @@ Summary: {N}/{total} stdlib, {N} existing-dep, {N} self-impl, {N} no-replacement
 - **no-replacement**: The symbol has no viable alternative. This blocks removal unless the feature can be dropped.
 
 **Special cases**:
-- If `is_unused: true` -- skip this step. The dep can simply be deleted.
+- If `is_unused: true` and the Data quality search found no use -- skip this step. If the search found use, build the map from the places it found, and treat those files as Production in Phase 2.
 - If `has_blank_import: true` and `call_site_count <= 1` -- the import itself is the usage (driver registration, polyfill). Check what `init()` does; the replacement is typically a different driver package, not a code change. Score Replaceability as High if a drop-in alternative driver/polyfill exists, Low if not.
 - If `symbols` is empty but `import_file_count > 0` (without blank/dot/wildcard flags) -- diet's coupling analysis may be incomplete. Manually inspect the import files to determine actual API usage before scoring Replaceability. Note the gap in the rationale.
 
@@ -315,10 +315,10 @@ Rules are evaluated **top-to-bottom; first match wins.** If multiple rows could 
 | Condition | Recommendation |
 |-----------|---------------|
 | scan `malicious` present | REPLACE VERSION NOW, Priority S. This is incident response, not a removal decision: move to a version the advisory does not name (or, for `scope: "package"`, remove the package), and run `/diet-assess-risk` to judge what the malicious code could have reached. Skip the rest of this table |
-| `is_unused: true`, and a search of configuration and build files finds no reference (see Data quality check) | REMOVE, Trivial, Priority S |
+| `is_unused: true`, and the search in the Data quality check finds no use | REMOVE, Trivial, Priority S |
 | Pinned version has advisories, the pinned version is older than the latest release, an OSV check of the latest release (with the dependency versions it resolves to in your project) no longer shows them, and lifecycle is Active or Legacy-Safe | UPGRADE, Priority A. Stop here; name in the rationale any axis that would still argue for removal later |
 | scan `reason` starts with `All releases yanked on` | REPLACE, Priority A -- no version resolves any more, so a fresh install or lockfile update can break. This is build continuity, not security: do not use it to justify a breaking change |
-| Coupling Depth or Production Scope is "unmeasured" | DEFER -- re-run diet with the correct `--source`, or read the import sites by hand, then evaluate again. Exception: if Security Urgency is High, REMOVE as for the High-urgency row below and note the missing coupling data |
+| Coupling Depth or Production Scope is "unmeasured" | DEFER -- re-run diet with the correct `--source`, or read the import sites by hand, then evaluate again. Exception: if Security Urgency is High, do not stop here; continue to the rows below, which still apply (API leakage, crypto/protocol replacement). Rate Replaceability by reading the import sites, not from the empty `symbols` list, and note the missing coupling data in the rationale |
 | API leakage = Yes AND Security Urgency = High | REMOVE with BREAKING CHANGE warning -- security overrides API stability. Rationale must document the breaking change and recommend a major version bump or deprecation timeline. Escalate to `/diet-assess-risk` |
 | API leakage = Yes | DEFER (needs major version bump or deprecation period) |
 | Replaceability = Low (crypto/protocol) | KEEP -- find an alternative maintained library rather than self-implementing. If Security Urgency is also High, escalate to `/diet-assess-risk` for full risk analysis. Never recommend self-implementing crypto/protocol |
