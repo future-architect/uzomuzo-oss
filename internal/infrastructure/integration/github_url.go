@@ -139,7 +139,12 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 			"resolved_purl", analyzePURL,
 			"resolved_repo_url", analysis.RepoURL,
 		)
-		return s.buildGitHubOnlyAnalysis(ctx, githubURL)
+		fallback, err := s.buildGitHubOnlyAnalysis(ctx, githubURL)
+		if err != nil {
+			return nil, err
+		}
+		fallback.UnmatchedPackage = &domain.UnmatchedPackage{PURL: analyzePURL, RepoURL: analysis.RepoURL}
+		return fallback, nil
 	}
 
 	analysis.OriginalPURL = requestedPURL

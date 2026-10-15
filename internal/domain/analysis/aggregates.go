@@ -91,6 +91,12 @@ type Analysis struct {
 	// Release information
 	ReleaseInfo *ReleaseInfo
 
+	// UnmatchedPackage is the registry package a GitHub URL input was mapped to by
+	// name and then discarded because its repository link does not point back to
+	// that repository. Nil unless that happened. It is kept so the report can
+	// name the package the user may still want to check by hand (see #539).
+	UnmatchedPackage *UnmatchedPackage
+
 	// AxisResults stores per-axis assessment outputs (extensible: lifecycle, build_health, etc.)
 	AxisResults map[AssessmentAxis]*AssessmentResult
 	// Zero value of EOL means not evaluated or no evidence of EOL.
@@ -530,3 +536,11 @@ func (a *Analysis) daysSinceLatestPublishAt(now time.Time) int {
 
 // daysBetween counts whole days from t to now.
 func daysBetween(t, now time.Time) int { return int(now.Sub(t).Hours() / 24) }
+
+// UnmatchedPackage records a same-named registry package that was not used for
+// a GitHub URL input. RepoURL is the package's own repository link, empty when
+// the package has none.
+type UnmatchedPackage struct {
+	PURL    string
+	RepoURL string
+}

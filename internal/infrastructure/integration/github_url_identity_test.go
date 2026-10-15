@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
@@ -145,5 +146,9 @@ func TestFetchAndValidateGitHubAnalysis_NoRepoLinkFallsBackToGitHubOnly(t *testi
 	}
 	if got.RepoURL != githubURL {
 		t.Errorf("RepoURL = %q, want %q", got.RepoURL, githubURL)
+	}
+	want := domain.UnmatchedPackage{PURL: versionedPURL}
+	if got.UnmatchedPackage == nil || *got.UnmatchedPackage != want {
+		t.Errorf("UnmatchedPackage = %+v, want %+v", got.UnmatchedPackage, want)
 	}
 }

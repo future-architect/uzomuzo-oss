@@ -31,6 +31,11 @@ func writeBoxIdentity(ctx *boxContext) error {
 			return err
 		}
 	}
+	if a != nil && a.UnmatchedPackage != nil {
+		if err := writeLine(ctx, "Unmatched package: %s", unmatchedPackageText(a.UnmatchedPackage)); err != nil {
+			return err
+		}
+	}
 	if a != nil && a.Repository != nil && a.Repository.Description != "" {
 		if desc := truncateDescription(a.Repository.Description); desc != "" {
 			// Description is free text without a label prefix; use a fixed
@@ -51,6 +56,15 @@ func writeBoxIdentity(ctx *boxContext) error {
 		}
 	}
 	return nil
+}
+
+// unmatchedPackageText explains why a same-named package was not used, so the
+// user can still look it up (e.g., its advisories) when it is in fact theirs.
+func unmatchedPackageText(u *analysispkg.UnmatchedPackage) string {
+	if u.RepoURL == "" {
+		return u.PURL + " (not used: it has no repository link)"
+	}
+	return fmt.Sprintf("%s (not used: it links to %s)", u.PURL, u.RepoURL)
 }
 
 // writeBoxSignals writes the Signals section — data points that directly

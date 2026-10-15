@@ -1275,3 +1275,38 @@ func TestPackageEcoName(t *testing.T) {
 		})
 	}
 }
+
+func TestWriteBoxIdentity_UnmatchedPackage(t *testing.T) {
+	tests := []struct {
+		name    string
+		repoURL string
+		want    string
+	}{
+		{
+			name: "no repository link",
+			want: "Unmatched package: pkg:pypi/pycrypto@2.6.1 (not used: it has no repository link)",
+		},
+		{
+			name:    "links to another repository",
+			repoURL: "https://github.com/bmeck/node-checkout",
+			want:    "Unmatched package: pkg:pypi/pycrypto@2.6.1 (not used: it links to https://github.com/bmeck/node-checkout)",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			entry := &domainaudit.AuditEntry{
+				PURL: "https://github.com/dlitz/pycrypto",
+				Analysis: &analysis.Analysis{
+					UnmatchedPackage: &analysis.UnmatchedPackage{PURL: "pkg:pypi/pycrypto@2.6.1", RepoURL: tt.repoURL},
+				},
+			}
+			if err := writeBoxIdentity(newBoxContext(&buf, entry, 200)); err != nil {
+				t.Fatalf("writeBoxIdentity() error = %v", err)
+			}
+			if !strings.Contains(buf.String(), tt.want) {
+				t.Errorf("output = %q, want it to contain %q", buf.String(), tt.want)
+			}
+		})
+	}
+}
