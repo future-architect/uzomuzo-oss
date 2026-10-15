@@ -217,6 +217,14 @@ func (a *Analyzer) handleJSImport(
 	for _, alias := range aliases {
 		aliasMap[alias] = appendUniquePURLs(aliasMap[alias], purls)
 	}
+	// The member read itself (`require('pkg').version`) is a use even when the
+	// bound name is only passed around or exported afterwards, which the
+	// call-site queries cannot see. Keep the side-effect baseline as evidence
+	// instead of reporting zero calls.
+	if isBoundRequireMember(node, src) {
+		key := blankImportAlias + importPath
+		aliasMap[key] = appendUniquePURLs(aliasMap[key], purls)
+	}
 }
 
 // extractJSBindings walks the AST from an import source node to find all JS binding names.
@@ -248,14 +256,15 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 		callExpr := parent.Parent()
 		if callExpr != nil && callExpr.Kind() == "call_expression" {
 			// `const x = require('pkg').member` binds x just like
-			// `const { member: x } = require('pkg')`, so look for the binding
-			// above the whole member chain. Without this, the require falls
-			// through to isInlineRequireUsage and every call through x is
-			// lost (#543).
-			bound := requireMemberChainTop(callExpr)
+			// `const { member: x } = require('pkg')`. Without this, the
+			// require falls through to isInlineRequireUsage and every call
+			// through x is lost (#543).
+			if top := requireMemberChainTop(callExpr); top != callExpr {
+				return extractRequireMemberBinding(top, src)
+			}
 
 			// Check for variable declarator: const x = require('pkg')
-			declarator := findAncestorVariableDeclarator(bound)
+			declarator := findAncestorVariableDeclarator(callExpr)
 			if declarator != nil {
 				nameNode := declarator.ChildByFieldName("name")
 				if nameNode == nil {
@@ -273,13 +282,74 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 			// Check for property assignment: obj.prop = require('pkg')
 			// The qualified member expression becomes the binding alias (for example, `file.glob`)
 			// to avoid collisions and so that call sites like obj.prop.method() or obj.prop() can be tracked.
-			if binding := extractPropertyAssignBinding(bound, src); binding != "" {
+			if binding := extractPropertyAssignBinding(callExpr, src); binding != "" {
 				return []string{binding}
 			}
 		}
 	}
 
 	return nil
+}
+
+// extractRequireMemberBinding finds the variable or object property that
+// receives the value of `require('pkg').member`. Unlike the plain-require
+// walk, it only climbs through nodes that pass the value on unchanged, so
+// `const x = require('pkg').flag ? a : b` and `require('pkg').y = v` do not
+// make x or the left-hand side an alias of the package.
+func extractRequireMemberBinding(top *sitter.Node, src []byte) []string {
+	child := top
+	for depth := 0; depth < maxAncestorWalkDepth; depth++ {
+		parent := child.Parent()
+		if parent == nil {
+			return nil
+		}
+		switch parent.Kind() {
+		case "variable_declarator":
+			value := parent.ChildByFieldName("value")
+			name := parent.ChildByFieldName("name")
+			if value == nil || value.Id() != child.Id() || name == nil || name.Kind() != "identifier" {
+				return nil
+			}
+			return []string{name.Utf8Text(src)}
+		case "assignment_expression":
+			right := parent.ChildByFieldName("right")
+			left := parent.ChildByFieldName("left")
+			if right == nil || right.Id() != child.Id() || left == nil || left.Kind() != "member_expression" {
+				return nil
+			}
+			return []string{left.Utf8Text(src)}
+		case "parenthesized_expression":
+		case "binary_expression":
+			op := parent.ChildByFieldName("operator")
+			if op == nil || (op.Kind() != "||" && op.Kind() != "??" && op.Kind() != "&&") {
+				return nil
+			}
+		case "ternary_expression":
+			cond := parent.ChildByFieldName("condition")
+			if cond != nil && cond.Id() == child.Id() {
+				return nil
+			}
+		default:
+			return nil
+		}
+		child = parent
+	}
+	return nil
+}
+
+// isBoundRequireMember reports whether node (the string inside require())
+// starts a `require('pkg').member` chain whose value is bound to a name.
+func isBoundRequireMember(node *sitter.Node, src []byte) bool {
+	args := node.Parent()
+	if args == nil || args.Kind() != "arguments" {
+		return false
+	}
+	callExpr := args.Parent()
+	if callExpr == nil || callExpr.Kind() != "call_expression" {
+		return false
+	}
+	top := requireMemberChainTop(callExpr)
+	return top != callExpr && len(extractRequireMemberBinding(top, src)) > 0
 }
 
 // requireMemberChainTop returns the outermost member_expression whose object

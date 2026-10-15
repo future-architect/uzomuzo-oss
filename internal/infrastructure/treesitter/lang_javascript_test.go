@@ -1570,18 +1570,88 @@ serialize(document);
 			wantBreadth:  1,
 		},
 		{
-			name:     "member of require bound to a variable that is never used: same as an unused destructuring (#543)",
+			name:     "member of require bound to a variable that is never called keeps the usage baseline (#543)",
 			filename: "index.js",
 			code: `var version = require('some-pkg').version;
+console.log(version);
 `,
 			importPaths: map[string][]string{
 				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
 			},
 			purl:         "pkg:npm/some-pkg@1.0.0",
 			wantImports:  1,
-			wantCalls:    0, // `version` is a binding, like `const { version } = require('some-pkg')`
+			wantCalls:    1, // the member read is a use the call-site queries cannot see
 			wantIsUnused: false,
-			wantBlank:    false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "member of require used only in a ternary condition is not an alias",
+			filename: "index.js",
+			code: `const local = () => 1;
+const other = () => 2;
+const x = require('some-pkg').enabled ? local : other;
+x();
+x();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    1, // baseline only; x() calls local/other, not the package
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "member of require transformed by an operator is not an alias",
+			filename: "index.js",
+			code: `const s = require('some-pkg').version + ' suffix';
+s.trim();
+s.trim();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    1,
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "assignment to a member of require is not a binding",
+			filename: "index.js",
+			code: `const local = () => 1;
+const x = require('some-pkg').hook = local;
+x();
+x();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    1,
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "member of require re-exported through module.exports keeps the usage baseline",
+			filename: "index.js",
+			code: `module.exports = require('some-pkg').helpers;
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    1,
+			wantIsUnused: false,
+			wantBlank:    true,
 			wantBreadth:  0,
 		},
 		{
