@@ -1,7 +1,7 @@
 # 0029. Archived and disabled are facts next to the label, with their own --fail-on values
 
 Date: 2026-10-15
-Status: Proposed
+Status: Accepted
 
 ## Context
 
