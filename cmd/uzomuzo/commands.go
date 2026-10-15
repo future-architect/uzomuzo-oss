@@ -107,7 +107,7 @@ Examples:
 			scanCommand(cfg),
 			{
 				Name:            "diet",
-				Usage:           "Analyze dependency removability (delegates to uzomuzo-diet)",
+				Usage:           "[experimental] Analyze dependency removability (delegates to uzomuzo-diet)",
 				SkipFlagParsing: true,
 				Action: func(ctx context.Context, cmd *urfcli.Command) error {
 					return delegateToDiet(ctx, cmd)

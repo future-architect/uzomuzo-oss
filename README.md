@@ -140,6 +140,8 @@ uzomuzo scan --file input_purls.txt --sample 500
 
 Most projects have dependencies they don't really need, but knowing **which ones to remove** and **how hard it will be** is the real problem. `uzomuzo diet` answers both:
 
+> **Experimental.** Diet can report a dependency that is in use as `unused` or `trivial`. Check before removing; see [Accuracy](docs/diet.md#accuracy).
+
 ```bash
 # Pipe from trivy (no intermediate file)
 trivy fs . --format cyclonedx | uzomuzo diet --sbom - --source .
