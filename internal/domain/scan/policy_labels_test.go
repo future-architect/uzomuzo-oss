@@ -29,7 +29,7 @@ func Test_ValidFailLabels_ContentAndOrder(t *testing.T) {
 	t.Parallel()
 
 	got := ValidFailLabels()
-	factLabels := []string{"malicious", "dormant-release"}
+	factLabels := []string{"malicious", "dormant-release", "archived", "disabled"}
 	if len(got) != len(wantFailLabels)+len(factLabels) {
 		t.Fatalf("label count: got %d %v, want %d", len(got), got, len(wantFailLabels)+len(factLabels))
 	}

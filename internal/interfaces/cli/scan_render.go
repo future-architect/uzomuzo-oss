@@ -359,6 +359,7 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		} else if a.HasDormantRelease() {
 			maintenance += fmt.Sprintf(" ⚠ %dd silence", a.DormantRelease.Burst.SilentDays)
 		}
+		maintenance = appendRepoStateMarkers(maintenance, displayEntries[i].Analysis)
 		cols = cols[:0]
 		cols = append(cols, tableVerdictDisplay(displayEntries[i].Verdict))
 		if showSource {
@@ -386,11 +387,24 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 	return nil
 }
 
+// appendRepoStateMarkers appends the archived and disabled repository facts to
+// a LIFECYCLE cell, after any malicious or dormant-release marker (ADR-0029).
+// Plain words, not an emoji: a double-width glyph breaks tabwriter alignment.
+func appendRepoStateMarkers(cell string, a *domain.Analysis) string {
+	if a.IsArchived() {
+		cell += " · archived"
+	}
+	if a.IsDisabled() {
+		cell += " · disabled"
+	}
+	return cell
+}
+
 // maxCSVColumns is the widest a CSV row gets: verdict and purl, the two
-// conditional relation columns, then the sixteen fixed columns. Rows without
+// conditional relation columns, then the eighteen fixed columns. Rows without
 // relation info are shorter — this is the buffer's capacity, not its length.
 // Keep in step with the header built in renderScanCSV.
-const maxCSVColumns = 20
+const maxCSVColumns = 22
 
 // initialRowBufBytes is the starting capacity of the reused table row buffer.
 // A row is a verdict cell, a PURL and four short fields, so most rows fit
@@ -462,6 +476,7 @@ type enrichedJSONEntry struct {
 
 	RepoURL        string  `json:"repo_url,omitempty"`
 	Archived       bool    `json:"archived"`
+	Disabled       bool    `json:"disabled"`
 	OverallScore   float64 `json:"overall_score"`
 	DependentCount int     `json:"dependent_count,omitempty"`
 	StableVersion  string  `json:"stable_version,omitempty"`
@@ -562,6 +577,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	je.DependentCount = a.DependentCount
 	je.Successor = a.EOL.Successor
 	je.Archived = a.IsArchived()
+	je.Disabled = a.IsDisabled()
 	if a.Malicious() {
 		je.Malicious = &maliciousJSON{AdvisoryID: a.MaliciousState.AdvisoryID, Summary: a.MaliciousState.Summary, Reference: a.MaliciousState.Reference, Scope: a.MaliciousState.Scope}
 	} else if a.MaliciousState != nil && a.MaliciousState.Status == domain.MaliciousStatusLookupFailed {
@@ -625,7 +641,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	}
 	header = append(header, "lifecycle", "build_integrity", "build_integrity_score", "successor", "advisory_count", "max_advisory_severity", "max_cvss3_score",
 		"direct_advisory_count", "transitive_advisory_count", "max_transitive_advisory_severity", "max_transitive_cvss3_score",
-		"repo_url", "source", "via", "malicious_advisory", "dormant_release")
+		"repo_url", "source", "via", "malicious_advisory", "dormant_release", "archived", "disabled")
 	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
@@ -693,7 +709,8 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		}
 		row = append(row, maintenance, buildIntegrity, buildIntegrityScore, successor, advisoryCount, maxSeverity, maxCVSS3Score,
 			directAdvisoryCount, transitiveAdvisoryCount, maxTransitiveSeverity, maxTransitiveCVSS3Score,
-			repoURL, string(e.Source), e.Via, maliciousAdvisory, dormantRelease)
+			repoURL, string(e.Source), e.Via, maliciousAdvisory, dormantRelease,
+			strconv.FormatBool(e.Analysis.IsArchived()), strconv.FormatBool(e.Analysis.IsDisabled()))
 		if err := cw.Write(row); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}

@@ -271,7 +271,7 @@ func (a *Analysis) GetBotRatio() float64 {
 
 // IsArchived returns whether the repository is archived
 func (a *Analysis) IsArchived() bool {
-	if a.RepoState == nil {
+	if a == nil || a.RepoState == nil {
 		return false
 	}
 	return a.RepoState.IsArchived
@@ -300,7 +300,7 @@ func (a *Analysis) DormantBurst(now time.Time, minSilence, maxAge time.Duration)
 
 // IsDisabled returns whether the repository is disabled
 func (a *Analysis) IsDisabled() bool {
-	if a.RepoState == nil {
+	if a == nil || a.RepoState == nil {
 		return false
 	}
 	return a.RepoState.IsDisabled

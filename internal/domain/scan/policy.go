@@ -41,24 +41,30 @@ var labelMap = func() map[string]analysis.MaintenanceStatus {
 	return m
 }()
 
-// failMalicious and failDormantRelease are --fail-on values that name a fact
-// carried next to the lifecycle label instead of a label.
+// failMalicious, failDormantRelease, failArchived and failDisabled are --fail-on
+// values that name a fact carried next to the lifecycle label instead of a label.
 const (
 	failMalicious      = "malicious"
 	failDormantRelease = "dormant-release"
+	failArchived       = "archived"
+	failDisabled       = "disabled"
 )
+
+// failFacts lists the fact values in display order, after the labels.
+var failFacts = []string{failMalicious, failDormantRelease, failArchived, failDisabled}
 
 // ValidFailLabels returns the valid --fail-on label strings in display order.
 func ValidFailLabels() []string {
-	out := make([]string, 0, len(failLabels)+2)
+	out := make([]string, 0, len(failLabels)+len(failFacts))
 	for _, fl := range failLabels {
 		out = append(out, fl.label)
 	}
-	out = append(out, failMalicious, failDormantRelease)
+	out = append(out, failFacts...)
 	return out
 }
 
-// FailPolicy determines which lifecycle labels, malicious advisories or dormant-release markers trigger a non-zero exit.
+// FailPolicy determines which lifecycle labels or facts (malicious advisories,
+// dormant-release markers, archived or disabled repositories) trigger a non-zero exit.
 // Zero value (empty triggers) means nothing triggers failure.
 type FailPolicy struct {
 	triggers  map[analysis.MaintenanceStatus]struct{}
@@ -66,6 +72,10 @@ type FailPolicy struct {
 	// dormant is set only by an explicit "dormant-release"; no other trigger
 	// implies it. See ADR-0028.
 	dormant bool
+	// archived and disabled are set only by their own explicit value and match
+	// the repository state whatever the label or verdict. See ADR-0029.
+	archived bool
+	disabled bool
 }
 
 // ParseFailPolicy parses a comma-separated --fail-on string into a FailPolicy.
@@ -80,6 +90,8 @@ func ParseFailPolicy(raw string) (FailPolicy, error) {
 	triggers := make(map[analysis.MaintenanceStatus]struct{}, len(parts))
 	malicious := false
 	dormant := false
+	archived := false
+	disabled := false
 	for _, part := range parts {
 		label := strings.TrimSpace(strings.ToLower(part))
 		if label == "" {
@@ -93,6 +105,14 @@ func ParseFailPolicy(raw string) (FailPolicy, error) {
 			dormant = true
 			continue
 		}
+		if label == failArchived {
+			archived = true
+			continue
+		}
+		if label == failDisabled {
+			disabled = true
+			continue
+		}
 		ms, ok := labelMap[label]
 		if !ok {
 			return FailPolicy{}, fmt.Errorf("invalid --fail-on label %q; valid labels: %s",
@@ -101,16 +121,16 @@ func ParseFailPolicy(raw string) (FailPolicy, error) {
 		triggers[ms] = struct{}{}
 	}
 	// Any non-empty selection also fails on a malicious version, including one
-	// that names only dormant-release (ADR-0027).
-	if len(triggers) > 0 || dormant {
+	// that names only a fact such as dormant-release or archived (ADR-0027).
+	if len(triggers) > 0 || dormant || archived || disabled {
 		malicious = true
 	}
-	return FailPolicy{triggers: triggers, malicious: malicious, dormant: dormant}, nil
+	return FailPolicy{triggers: triggers, malicious: malicious, dormant: dormant, archived: archived, disabled: disabled}, nil
 }
 
 // IsEmpty returns true when no triggers are configured.
 func (p FailPolicy) IsEmpty() bool {
-	return len(p.triggers) == 0 && !p.malicious && !p.dormant
+	return len(p.triggers) == 0 && !p.malicious && !p.dormant && !p.archived && !p.disabled
 }
 
 // IsTriggered returns true if the given label is in the fail set.
@@ -137,6 +157,12 @@ func (p FailPolicy) Evaluate(entries []domainaudit.AuditEntry) bool {
 			return true
 		}
 		if p.dormant && e.Analysis.HasDormantRelease() {
+			return true
+		}
+		if p.archived && e.Analysis.IsArchived() {
+			return true
+		}
+		if p.disabled && e.Analysis.IsDisabled() {
 			return true
 		}
 		lr := e.Analysis.GetLifecycleResult()

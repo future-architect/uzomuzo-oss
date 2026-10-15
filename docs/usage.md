@@ -198,9 +198,13 @@ When scanning GitHub URLs, `--include-actions` automatically fetches the target 
 # Scan a repo AND its GitHub Actions dependencies
 ./uzomuzo scan https://github.com/owner/repo --include-actions
 
-# Combined with fail policy
-./uzomuzo scan https://github.com/owner/repo --include-actions --fail-on stalled
+# Fail when a referenced Action's repository is archived
+./uzomuzo scan https://github.com/owner/repo --include-actions --fail-on archived
 ```
+
+An Action has no registry, so no end-of-life is ever declared for it and
+`--fail-on eol-confirmed` does not fire. `--fail-on archived` fails on archived
+Actions only; `--fail-on stalled` also fails on Actions that have merely gone quiet.
 
 Output includes a `SOURCE` column to distinguish direct results from discovered Actions. JSON and CSV formats include a `source` field (`"actions"` for discovered entries).
 
@@ -402,7 +406,7 @@ Exit with code 1 when any dependency matches the specified lifecycle labels:
 ./uzomuzo scan --sbom bom.json --fail-on eol-confirmed,eol-effective,stalled
 ```
 
-Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `legacy-safe`, `review-needed`, `malicious`, `dormant-release`
+Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `legacy-safe`, `review-needed`, `malicious`, `dormant-release`, `archived`, `disabled`
 
 `malicious` fails on a version named in an OSV malicious-package advisory. Any
 other non-empty `--fail-on` selection also fails on such a version (see
@@ -414,6 +418,16 @@ any version in a burst across release lines. No other value implies it: it is a 
 a finding, and ordinary releases carry it too (see
 [ADR-0028](adr/0028-dormant-release-marker.md)). `review-needed` stops only on
 the narrower case below, and only while the label is Review Needed.
+
+`archived` fails when the repository is archived, and `disabled` when GitHub has
+disabled it, whatever the lifecycle label or verdict, including entries whose
+analysis failed. An archived repository is usually labelled Stalled (see
+[ADR-0020](adr/0020-archived-registry-liveness.md)), so `stalled` also catches
+it but fails on quiet, unarchived repositories too. No other value implies
+either one, and neither implies the other (see
+[ADR-0029](adr/0029-archived-disabled-are-facts.md)). The table shows
+`· archived` / `· disabled` after the lifecycle label; JSON has `archived` and
+`disabled` booleans, and CSV has `archived` and `disabled` columns.
 
 `review-needed` covers the cases uzomuzo cannot decide on its own — including a
 package whose every published release is yanked (see
@@ -485,7 +499,7 @@ STATUS     PURL                    LIFECYCLE      BUILD
 |---------|-----------------|--------|
 | `ok` | Active, Legacy-Safe | No action needed |
 | `caution` | Stalled, EOL-Scheduled | Monitor; plan migration |
-| `replace` | EOL-Confirmed, EOL-Effective, Archived | Migrate immediately |
+| `replace` | EOL-Confirmed, EOL-Effective; also any label when a malicious-package advisory names the version, or when the repository is archived and the analysis succeeded (the table shows `· archived`) | Migrate immediately |
 | `review` | Insufficient data, analysis error | Manual investigation |
 
 ### Built-in Flags
