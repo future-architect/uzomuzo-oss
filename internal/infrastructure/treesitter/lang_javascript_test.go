@@ -1416,6 +1416,21 @@ b.start();
 			wantSymbols: []string{"run", "start"},
 		},
 		{
+			name:     "parenthesized member of require is bound",
+			filename: "index.js",
+			code: `const p = (require("paren-pkg").api);
+p.call();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/paren-pkg@1.0.0": {"paren-pkg"},
+			},
+			purl:        "pkg:npm/paren-pkg@1.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"call"},
+		},
+		{
 			name:     "member of require in a ?? fallback is bound",
 			filename: "index.js",
 			code: `const c = globalThis.cfg ?? require("cfg-pkg").defaults;

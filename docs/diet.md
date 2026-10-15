@@ -427,8 +427,8 @@ All languages use tree-sitter for AST-based analysis. Files larger than 1 MiB ar
 | Call sites | Member expressions (`obj.method`), bare calls, constructors (`new Foo`), computed properties, JSX elements (`<Component />`), constant-only patterns |
 | Framework detection | **Angular**: decorator array identifiers (`@NgModule`, `@Component` imports/declarations). **Vue**: `defineComponent({ components: {} })` shorthand properties. |
 | CJS destructuring | `const { X } = require('pkg')` — each destructured name tracked as alias |
-| CJS member read | `const x = require('pkg').member` (also through `||`, `??`, the right side of `&&`, ternary branches, and `obj.p = ...`) — x tracked as alias, and the import also counts as used even if x is never called |
-| Limitations | Dynamic import bindings not tracked through `await`/`.then()`. JSX patterns only for `.js`/`.jsx`/`.tsx` (not `.ts`). Bare identifier matching may false-positive on shadowed locals. `.cjs`/`.mts`/`.cts`, `.vue`, `.svelte` files are not read ([#549](https://github.com/future-architect/uzomuzo-oss/issues/549)). |
+| CJS member read | `const x = require('pkg').member` (also through `||`, `??`, the right side of `&&`, ternary branches, and `obj.p = ...`) — the receiving variable or object property is tracked as the alias, and the import also counts as used even if it is never called |
+| Limitations | Dynamic import bindings not tracked through `await`/`.then()`. JSX patterns only for `.js`/`.jsx`/`.tsx` (not `.ts`). Bare identifier matching may false-positive on shadowed locals. `require('pkg')['y']`, `await require('pkg').y`, TypeScript `.y!` / `as T`, and `x = require('pkg').y` (plain variable) record the import as used but track no calls. `.cjs`/`.mts`/`.cts`, `.vue`, `.svelte` files are not read ([#549](https://github.com/future-architect/uzomuzo-oss/issues/549)). |
 
 ### Java
 

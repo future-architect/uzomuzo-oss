@@ -198,9 +198,9 @@ func (a *Analyzer) handleJSImport(
 	// `import cloud from '@strapi/plugin-cloud'`). Falls back to aliasFromPkg
 	// for patterns we cannot resolve from the AST.
 	aliases := extractJSBindings(node, src)
-	// For a require followed by member access, extractJSBindings only looks
-	// for a binding above the member chain, so a non-empty result here means
-	// the member read was bound to a name.
+	// When require() is followed by member access, extractJSBindings returns
+	// only a name found above the member chain, so aliases plus a member chain
+	// means the member read was bound to a name.
 	boundMember := len(aliases) > 0 && startsRequireMemberChain(node)
 	if len(aliases) == 0 {
 		// No variable binding — check for inline require patterns:
@@ -344,6 +344,7 @@ func extractRequireMemberBinding(top *sitter.Node, src []byte) []string {
 				return nil
 			}
 		case "ternary_expression":
+			// Either branch can be the result; the condition is only tested.
 			cond := parent.ChildByFieldName("condition")
 			if cond != nil && cond.Id() == child.Id() {
 				return nil
@@ -394,11 +395,11 @@ func requireMemberChainTop(callExpr *sitter.Node) *sitter.Node {
 // Inline patterns detected:
 //   - require('x')()        — immediate invocation (parent call_expression is the function of an outer call)
 //   - require('x').method() — chained property access (parent call_expression is the object of a member_expression)
-//     A member read bound to a name (`const v = require('x').prop`) is handled
-//     by extractRequireMemberBinding and does not reach this function.
 //   - require('x')('arg')   — factory pattern (same AST shape as immediate invocation)
 //   - require('x');          — bare side-effect require (parent call_expression is inside expression_statement)
 //   - require('x').prop      — member access without call (parent call_expression is object of member_expression)
+//     when the value is not bound to a name; `const v = require('x').prop` is
+//     handled by extractRequireMemberBinding and does not reach this function.
 //
 // AST walk: string → arguments → call_expression(require) → check parent type.
 func isInlineRequireUsage(node *sitter.Node) bool {
