@@ -17,7 +17,7 @@ uzomuzo does two things SCA tools can't:
 
 Standard SCA tools (Trivy, Syft, Snyk) excel at flagging known CVEs. But they cannot answer: **is this package still maintained?**
 
-A package with zero CVEs today may have been abandoned for years — no one is watching for new vulnerabilities, no one will patch them, and no one will respond to security reports. These are precisely the targets of supply chain attacks (xz-utils 2024, event-stream 2018).
+A package with zero CVEs today may have stopped being maintained. When a vulnerability is found, no fix may come — and the CVE record may not even list the version you run. (Apache Tomcat 8.5: [CVE-2025-24813](https://www.cve.org/CVERecord?id=CVE-2025-24813) was published on 2025-03-10 without 8.5 in its affected versions; 8.5 was added about five months later, on 2025-08-08.)
 
 ### What SCA misses — EOL-Effective
 
