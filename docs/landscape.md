@@ -10,7 +10,7 @@ Modern software depends on deep trees of transitive open-source dependencies. Se
 - **Repository health scorers** (OpenSSF Scorecard) evaluate the security posture of a single repository across 17 automated checks — but they cannot scale to analyze an entire dependency tree in one pass.
 - **EOL databases** (endoflife.date) track end-of-life dates for major frameworks and runtimes — but they cover only around 400 projects, leaving the vast majority of OSS (the "Long Tail") completely unmonitored.
 
-This creates a **CVE Blind Spot**: packages with zero known vulnerabilities are assumed safe, even when they have been abandoned for years. These stagnant dependencies are precisely the targets of supply chain attacks — as demonstrated by xz-utils (2024) and event-stream (2018).
+This creates a **CVE Blind Spot**: packages with zero known vulnerabilities are assumed safe, even when they have been abandoned for years. Once maintenance ends, a newly found vulnerability may never be fixed, and the CVE record may not even list the version you run (see the Tomcat 8.5 example below).
 
 uzomuzo addresses this gap by aggregating signals from multiple authoritative sources and producing a definitive lifecycle classification for every dependency.
 
@@ -48,24 +48,24 @@ Scorecard evaluates 17 security checks for one repository at a time. Running it 
 
 endoflife.date tracks ~400 major frameworks (Node.js, Django, Rails). But a typical production application has 500-2,000 transitive dependencies, most of which are small utility packages that will never appear in endoflife.date. uzomuzo's heuristic assessment covers this entire Long Tail, and its `AnalysisEnricher` hook allows injecting custom or community-maintained EOL catalogs for the packages in between.
 
-## How uzomuzo Would Have Helped
+## What uzomuzo Can and Cannot See
 
-### xz-utils (CVE-2024-3094)
+### What it sees: a version whose maintenance has ended (Apache Tomcat 8.5)
 
-The xz-utils backdoor was inserted by a social engineering attack on a burned-out single maintainer. Before the backdoor was discovered:
+Tomcat 8.5 reached end of life on 2024-03-31. About eleven months later, CVE-2025-24813 (CVSS 9.8 by NVD) was published on 2025-03-10. The record listed only 9.0, 10.1 and 11 as affected, and no fix was released for 8.5. On 2025-04-01 it was added to CISA's Known Exploited Vulnerabilities catalog. 8.5.0–8.5.100 were added to the affected versions on 2025-08-08, about five months after publication; older versions and 10.0 are still `unknown`.
 
-- **Trivy/Syft**: 0 known CVEs. Status: safe.
-- **Scorecard**: Maintained score declining as the original maintainer reduced activity.
-- **uzomuzo**: Would have flagged the combination of **declining human commit diversity** (single maintainer pattern) and **low Maintained score** as a risk signal for downstream consumers. After the compromised version was published with the backdoor, the advisory would have triggered EOL-Effective classification.
+For those five months, the affected-versions field of the CVE record alone did not tell an 8.5 user that they were affected. The end-of-life status was known from the start. This is the gap uzomuzo is built for: telling you that a dependency is no longer maintained, independently of what the CVE data says.
 
-### event-stream (2018)
+Sources: [Tomcat 8.5 EOL](https://tomcat.apache.org/tomcat-85-eol.html), [CVE record](https://www.cve.org/CVERecord?id=CVE-2025-24813), [NVD change history](https://nvd.nist.gov/vuln/detail/CVE-2025-24813#VulnChangeHistorySection), [announcement on 2025-03-10](https://www.openwall.com/lists/oss-security/2025/03/10/5)
 
-The event-stream package was handed to a new maintainer who injected cryptocurrency-stealing malware:
+### What it does not judge: who publishes a release
 
-- **npm registry**: No deprecation flag. Status: normal.
-- **uzomuzo**: The package had **recent commits but no recent stable publish** for a period — the new maintainer was working in a feature branch before injecting the malicious flatmap-stream dependency. The human commit pattern change (new author, different commit cadence) would have appeared in the commit analysis.
+uzomuzo classifies maintenance status. It does not decide whether a release was published by a legitimate maintainer.
 
-These are not guarantees of detection — but they represent signals that existing tools completely miss.
+- **xz-utils (CVE-2024-3094)**: the backdoor was in the 5.6.0 and 5.6.1 release tarballs, created and signed by someone who was making the project's releases at the time ([tukaani.org](https://tukaani.org/xz-backdoor/), [oss-security](https://www.openwall.com/lists/oss-security/2024/03/29/4)). The project was actively maintained, so its maintenance status was not a warning sign.
+- **event-stream (2018)**: the package was handed to a new maintainer, who then added malicious code. A change of hands is not a maintenance-status signal.
+
+For these cases, use signals about publishing and ownership (malicious-package advisories, changes in who can publish), which uzomuzo does not provide.
 
 ## Complementary Usage
 
