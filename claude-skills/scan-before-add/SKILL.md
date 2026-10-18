@@ -16,13 +16,13 @@ When an AI agent (or a person) adds a library, the change usually shows *which* 
 
 - `uzomuzo` on `PATH` (see [Installation](https://github.com/future-architect/uzomuzo-oss#installation)). Check with `uzomuzo --version`.
 - Network access: uzomuzo queries deps.dev, OSV, and GitHub.
-- `GITHUB_TOKEN` is optional. Without it, archive detection relies on the Scorecard "Maintained" check only (no direct GitHub API check), and the last human commit date, the human/bot commit ratio, and fork detection are not available ([details](https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#analysis-precision-and-github_token)). **The verdict for the same package can differ** -- a repository archived on GitHub has come back as `caution` without a token and `replace` with one. Record whether the token was set; never print its value.
+- `GITHUB_TOKEN` is optional. Without it, archive detection relies on the Scorecard "Maintained" check only (no direct GitHub API check), and the last human commit date, the human/bot commit ratio, and fork detection are not available ([details](https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#analysis-precision-and-github_token)). **The verdict for the same package can differ** -- a repository archived on GitHub has come back as `caution` without a token and `replace` with one. Record whether the token was set ("unknown" if you cannot check; do not infer it from rate-limit numbers); never print its value.
 
 ## Step 1: Establish the purpose and the candidates
 
 1. **Purpose** -- one sentence on what the dependency is for, in the person's words.
 2. **Requirements** -- conditions the person already stated (license, ecosystem, "must be maintained", and so on). Write "none stated" if there are none.
-3. **Authority** -- did the person name the package, ask you to choose, and/or tell you not to ask questions? Write it down; later steps depend on it.
+3. **Authority** -- write down three things separately; later steps depend on them: (a) did the person name the package or ask you to choose one, (b) did the person ask you to **add** it to the manifest, or only to recommend, and (c) did the person tell you not to ask questions.
 4. **Candidates**:
    - If the person named a package, that package is the candidate. You may add alternatives you think are worth comparing.
    - If you are choosing, pick the candidates that meet the purpose and scan **all of them before you pick one**, not only the one you end up adding. Consider whether the standard library already covers the purpose. If you scan only one candidate, write down why.
@@ -48,7 +48,7 @@ uzomuzo scan <purl> [<purl> ...] --format json
 
 For each entry in `packages`:
 
-- **Copy these fields exactly as printed**: `purl`, `verdict`, `lifecycle`, `reason`, `archived`, `repo_url`, `stable_version`, `version_license`. Do not translate or soften them.
+- **Copy these fields exactly as printed**: `purl`, `verdict`, `lifecycle`, `reason`, `archived`, `repo_url`, `stable_version`, `version_license`. Do not translate or soften them. Write "not printed" for a field that is absent.
 - **`review` means uzomuzo could not decide.** It is not `ok`. A misspelled or nonexistent package name also comes back as `review` / `Review Needed` with exit code 0 -- check that the package exists in its registry (the Registry link in `--format detailed`) before reading anything else. If it does not exist, fix the PURL and rerun.
 - **`stable_version` is the latest stable release, which may not be the version you pin.** The advisory fields (`advisory_count`, `max_advisory_severity`, and so on) describe the release uzomuzo picks as latest -- stable, else the highest version, else a pre-release, else the requested version -- not necessarily yours. Unless you check the pinned version separately, write "advisories not checked for the pinned version".
 - **`version_license` is looked up for the requested version**, falling back to the project license when the version's license cannot be resolved. Copy it as printed.
@@ -57,8 +57,9 @@ For each entry in `packages`:
 ## Step 4: Choose, or stop and ask
 
 - **Fit and maintenance are separate.** Do not treat `ok` as the winner by default: a candidate must first fit the purpose. Numbers you read (dependents, scores) are facts; what you infer from them is your reading -- keep the two apart.
-- **You were asked to choose, and not to ask questions**: choose, add it, and record "Decided by: AI agent (delegated by the person; not reviewed by a person yet)".
-- **You were asked to choose, but may ask**: show the record with your recommendation and stop before adding. Leave "Decided by" as "not decided yet" until the person answers.
+- **You were asked only to recommend** (no permission to change the manifest): recommend and write the record. Do not add anything.
+- **You were asked to choose and add, and not to ask questions**: choose, scan the pinned version, add it, and record "Decided by: AI agent (delegated by the person; not reviewed by a person yet)".
+- **You were asked to choose and add, but may ask**: show the record with your recommendation and stop before adding. Leave "Decided by" as "not decided yet" until the person answers.
 - **The person named a package and it came back `replace` or `caution`**: the verdict does not block the addition. If you may ask, show the verdict, the reason, and an alternative (another candidate or the standard library) and wait. If you were told not to ask, add it, put the verdict and the reason at the top of your reply, and record "Decided by: the person named it; the agent added it after a `<verdict>` verdict (not reviewed by a person yet)".
 - If the project already has its own rules for adding dependencies, follow them.
 
@@ -72,11 +73,11 @@ For each entry in `packages`:
 - Authority given to the agent: (named the package / asked to choose / told not to ask)
 - Checked on: <date time, timezone>
 - uzomuzo version:
-- GITHUB_TOKEN set: yes | no
+- GITHUB_TOKEN set: yes | no | unknown (could not check)
 
-| Candidate (PURL) | Proposed by | verdict | lifecycle | reason | archived | repository |
-|---|---|---|---|---|---|---|
-|  |  |  |  |  |  |  |
+| Candidate (PURL) | Proposed by | verdict | lifecycle | reason | archived | repository | stable_version | version_license |
+|---|---|---|---|---|---|---|---|---|
+|  |  |  |  |  |  |  |  |  |
 
 - Not obtained:
 - Not checked for the pinned version:

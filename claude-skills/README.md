@@ -124,15 +124,14 @@ All runs on 2026-10-19 used headless Claude Code with model Sonnet, `GITHUB_TOKE
 
 | Prompt | Runs | Skill invoked | What the agent did |
 |---|---|---|---|
-| "Pick a YAML library and add it to go.mod. Do not ask me questions" | 2 | 2 | Scanned 2-3 candidates, added one, recorded "Decided by: AI agent (delegated by the person; not reviewed by a person yet)" |
+| "Pick a YAML library and add it to go.mod. Do not ask me questions" | 2 | 2 | Scanned 4 candidates, added one, and recorded that the agent decided under delegation and no person had reviewed it |
 | "Which YAML library should I use? Add it to go.mod once we agree" | 2 | 2 | Scanned candidates, did not touch go.mod, left "Decided by: not decided yet" |
 
-In an earlier round with the user's own settings and many other skills loaded, the skill was invoked in 2 of 4 runs. Invocation depends on the environment, the model, and the prompt; these runs do not show that it is always invoked.
+Invocation is not the same as following every step. In one of the "add it" runs the agent ran `go get` before scanning the pinned version (it scanned it afterwards). No run used `--format detailed`, and in these runs the agent could not confirm whether `GITHUB_TOKEN` was set. With the previous `description`, the same prompts invoked the skill in 3 of 4 runs. With the user's own settings and many other skills loaded, it was invoked in 2 of 4 runs. Invocation depends on the environment, the model, and the prompt; these runs do not show that it is always invoked.
 
-**Other runs**, with an earlier wording of this skill (same steps for scanning and recording):
-- Go and npm candidates passed by hand: verdicts copied as printed; a nonexistent npm name came back as `review` and the skill asked for a corrected PURL.
-- A named package that came back `replace` (`github.com/mitchellh/go-homedir`): the agent added it, put the verdict first in its reply, and suggested `os.UserHomeDir()`.
-- PyPI: the agent scanned candidates without a version while exploring and pinned the version it then scanned again.
+**Other runs**:
+- First wording of the skill, candidates passed by hand: Go, npm, and RubyGems verdicts copied as printed; a nonexistent npm name came back as `review` and the skill asked for a corrected PURL.
+- Current wording, with the user's own settings loaded: a named package that came back `replace` (`github.com/mitchellh/go-homedir`) was added with the verdict first in the reply and `os.UserHomeDir()` suggested; PyPI candidates were scanned without a version while exploring, then the pinned version was scanned.
 
 Separately, `uzomuzo scan` itself returned a verdict, without an error, for one PURL in each of its eight ecosystems. The skill has not been run on Maven, Cargo, NuGet, or Packagist candidates, with models other than Sonnet, or with agents other than Claude Code. None of this measures whether the verdicts are correct or whether the record improves a selection.
 
