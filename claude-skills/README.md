@@ -118,15 +118,15 @@ Then open your project in Claude Code and use the `/diet-*` and `/select-record`
 
 ### What has been checked (`/select-record`)
 
-Run through Claude Code on 2026-10-19 with `GITHUB_TOKEN` set, from a scratch project that had only the copied skill directory:
+Run through Claude Code on 2026-10-19 with `GITHUB_TOKEN` set, from a scratch project that had only the copied skill directory. In both runs the record was shown in the chat; saving it to a PR or file was not tested.
 
 | Ecosystem | Candidates | Result |
 |---|---|---|
-| Go | `gopkg.in/yaml.v3@v3.0.1`, `github.com/goccy/go-yaml@v1.11.3`, `sigs.k8s.io/yaml@v1.4.0` | Record written with `replace` / `ok` / `caution` as printed; "Decided by" left as "not decided yet" |
-| npm | `request@2.88.2`, `axios@1.6.8`, a nonexistent package name | `replace` / `ok` copied as printed; the nonexistent name came back as `review` and the skill asked for a corrected PURL |
+| Go | `gopkg.in/yaml.v3@v3.0.1`, `github.com/goccy/go-yaml@v1.11.3`, `sigs.k8s.io/yaml@v1.4.0` | Record shown with `replace` / `ok` / `caution` as printed; "Decided by" left as "not decided yet" |
+| npm | `request@2.88.2`, `axios@1.6.8`, a nonexistent package name | `replace` / `ok` copied as printed; the nonexistent name came back as `review` and the skill asked for a corrected PURL (the rerun after a correction was not tested) |
 | RubyGems | `nokogiri@1.15.0` | `ok` copied as printed |
 
-`uzomuzo scan` itself returned a verdict for one PURL in each of its eight ecosystems on the same day. The skill has not been run through Claude Code on PyPI, Maven, Cargo, NuGet, or Packagist candidates. None of this measures whether the verdicts are correct or whether the record improves a selection.
+Separately, `uzomuzo scan` (built from `main` at f9f9d21) returned a verdict, without an error, for one PURL in each of its eight ecosystems on the same day: `pkg:npm/express@4.18.2`, `pkg:pypi/requests@2.31.0`, `pkg:golang/github.com/Masterminds/semver/v3@v3.2.1`, `pkg:cargo/serde@1.0.136`, `pkg:maven/org.apache.commons/commons-lang3@3.12.0`, `pkg:nuget/Newtonsoft.Json@13.0.3`, `pkg:gem/nokogiri@1.15.0`, `pkg:composer/monolog/monolog@3.5.0`. The skill has not been run through Claude Code on PyPI, Maven, Cargo, NuGet, or Packagist candidates. None of this measures whether the verdicts are correct or whether the record improves a selection.
 
 ## How it fits together
 

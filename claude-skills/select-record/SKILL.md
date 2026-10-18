@@ -16,9 +16,9 @@ When an AI agent (or a person) proposes a library, the change usually shows *whi
 
 ## Prerequisites
 
-- `uzomuzo` on `PATH` (see the [Quick Start](../../README.md)). Check with `uzomuzo --version`.
+- `uzomuzo` on `PATH` (see [Installation](https://github.com/future-architect/uzomuzo-oss#installation)). Check with `uzomuzo --version`.
 - Network access: uzomuzo queries deps.dev, OSV, and GitHub.
-- `GITHUB_TOKEN` is optional. Without it, uzomuzo cannot fetch the archived flag, the last human commit, or fork detection, and **the verdict for the same package can differ** (a repository that is archived on GitHub can come back as `caution` instead of `replace`). Record whether the token was set; never print its value.
+- `GITHUB_TOKEN` is optional. Without it, archive detection relies on the Scorecard "Maintained" check only (no direct GitHub API check), and the last human commit date, the human/bot commit ratio, and fork detection are not available ([details](https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#analysis-precision-and-github_token)). **The verdict for the same package can differ** -- a repository archived on GitHub has come back as `caution` without a token and `replace` with one. Record whether the token was set; never print its value.
 
 ## Step 1: Confirm the inputs
 
@@ -52,14 +52,15 @@ For each entry in `packages`:
 
 - **Copy these fields exactly as printed**: `purl`, `verdict`, `lifecycle`, `reason`, `archived`, `repo_url`, `stable_version`, `version_license`. Do not translate or soften them.
 - **`review` means uzomuzo could not decide.** It is not `ok`. A misspelled or nonexistent package name also comes back as `review` / `Review Needed` with exit code 0 -- check that the package exists in its registry (the Registry link in `--format detailed`) before reading anything else. If it does not exist, fix the PURL and rerun.
-- **`stable_version` is the latest stable release, which may not be the version you requested.** Vulnerability and license information in the output may describe that release, not yours. If you need advisories for the requested version, say so as "not checked for the requested version" unless you check it separately.
-- **List what was not obtained**: no token, a failed request, a field that is empty. An empty field is "not obtained", never "none found".
+- **`stable_version` is the latest stable release, which may not be the version you requested.** The advisory fields (`advisory_count`, `max_advisory_severity`, and so on) describe the release uzomuzo picks as latest -- stable, else the highest version, else a pre-release, else the requested version -- not necessarily yours. Unless you check the requested version separately, write "advisories not checked for the requested version".
+- **`version_license` is looked up for the requested version**, falling back to the project license when the version's license cannot be resolved. Say which one it is if the output tells you; otherwise copy it as printed.
+- **Missing field vs. failed lookup**: many JSON fields are omitted when their value is zero or empty (for example, `advisory_count` is omitted when it is 0). An omitted field is "not printed", not a failure. Record "not obtained" only when there is explicit evidence: an `error` field, a warning on stderr, a failed command, or no token for token-only signals.
 
 ## Step 4: Write the record
 
 Fill in the template below. **Do not fill in "Decided by" or "Reason for the decision" yourself** -- ask the person, and leave them as "not decided yet" if there is no answer.
 
-Put the record where it will be found later: the PR description that adds the dependency, or a file the person names.
+Show the record in the chat first. Put it somewhere permanent (the PR description that adds the dependency, or a file) only where the person tells you to. Before creating or editing a PR, issue, or any other shared place, show the full text and the target, and wait for explicit approval.
 
 ```markdown
 ## Dependency selection record
