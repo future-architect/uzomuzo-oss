@@ -42,7 +42,7 @@ uzomuzo scan <purl> [<purl> ...] --format json
 - Scanning PURLs without a version is fine while exploring candidates. **Before adding a dependency, decide the version you will pin and scan that exact PURL** so the record matches what lands in the manifest.
 - Run the final candidates in one call so they share the same timestamp. Note the date and time, the uzomuzo version, and whether `GITHUB_TOKEN` was set.
 - If the command fails (network error, rate limit), record "verdict could not be obtained" for the affected candidates. Do not substitute a verdict of your own.
-- For the evidence behind a verdict (release dates, Scorecard values, the Registry link), also run `uzomuzo scan <purl> --format detailed` for that candidate.
+- `--format detailed` adds release dates, the last human commit date, Scorecard values, and the Registry link. Step 4 says when it is required; you may also run it for other checks (for example, the Registry link of a `review` package).
 
 ## Step 3: Read the result, candidate by candidate
 
@@ -52,10 +52,13 @@ For each entry in `packages`:
 - **`review` means uzomuzo could not decide.** It is not `ok`. A misspelled or nonexistent package name also comes back as `review` / `Review Needed` with exit code 0 -- check that the package exists in its registry (the Registry link in `--format detailed`) before reading anything else. If it does not exist, fix the PURL and rerun.
 - **`stable_version` is the latest stable release, which may not be the version you pin.** The advisory fields (`advisory_count`, `max_advisory_severity`, and so on) describe the release uzomuzo picks as latest -- stable, else the highest version, else a pre-release, else the requested version -- not necessarily yours. Unless you check the pinned version separately, write "advisories not checked for the pinned version".
 - **`version_license` is looked up for the requested version**, falling back to the project license when the version's license cannot be resolved. Copy it as printed.
+- **Detailed output is evidence, not a second verdict.** Scorecard scores, stars, and the other numbers in `--format detailed` may be copied, but do not rank candidates by them and do not let them override `verdict` or `lifecycle`. uzomuzo can return `Active` because of a recent release while also printing `Maintained Score: 0/10`; these are different indicators. Copy both as printed and write "The relationship between these indicators was not investigated." A JSON `overall_score` of `0` together with `(unavailable)` in the detailed report means the score was not measured; copy "(unavailable)".
 - **Missing field vs. failed lookup**: many JSON fields are omitted when their value is zero or empty (for example, `advisory_count` is omitted when it is 0). An omitted field is "not printed", not a failure. Record "not obtained" only when there is explicit evidence: an `error` field, a warning on stderr, a failed command, or no token for token-only signals.
 
 ## Step 4: Choose, or stop and ask
 
+- **Before you choose: if two or more candidates came back `ok` or `caution`, run `uzomuzo scan <purl> <purl> ... --format detailed` once, with all of those candidates in the same call.** The JSON output has no release date and no commit date; the detailed report has both. For each of these candidates copy two lines into the second table of the record: `Releases` -> `Stable` (version and date) and `Signals` -> `Last Human Commit`. Copy the value as printed, including `(unavailable)`; when `GITHUB_TOKEN` is not set, write `(unavailable; no token)`. Write "not printed" only when the line itself is absent, and "not obtained" with the error when the command fails. If you leave an `ok` or `caution` candidate out of this comparison because it does not fit the purpose, write the specific reason in the record; preference alone is not a reason.
+- You may use these dates when you choose, but only in "Reason for the decision" and only labelled as your reading. Do not choose a candidate only because its date is newer, and do not rank candidates by Scorecard values, stars, or any other number in the detailed report.
 - **Fit and maintenance are separate.** Do not treat `ok` as the winner by default: a candidate must first fit the purpose. Numbers you read (dependents, scores) are facts; what you infer from them is your reading -- keep the two apart.
 - **You were asked only to recommend** (no permission to change the manifest): recommend and write the record. Do not add anything.
 - **You were asked to choose and add, and not to ask questions**: choose, scan the pinned version, add it, and record "Decided by: AI agent (delegated by the person; not reviewed by a person yet)".
@@ -79,6 +82,15 @@ For each entry in `packages`:
 |---|---|---|---|---|---|---|---|---|
 |  |  |  |  |  |  |  |  |  |
 
+Candidates compared with `--format detailed` (required when two or more candidates were `ok` or `caution`):
+
+| Candidate (PURL) | Stable release (version, date) | Last human commit |
+|---|---|---|
+|  |  |  |
+
+(If not run, write instead: "detailed not run: fewer than two candidates were ok or caution".)
+
+- Indicator notes:
 - Not obtained:
 - Not checked for the pinned version:
 

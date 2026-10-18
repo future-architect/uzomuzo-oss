@@ -129,6 +129,16 @@ All runs on 2026-10-19 used headless Claude Code with model Sonnet, `GITHUB_TOKE
 
 Invocation is not the same as following every step. In one of the "add it" runs the agent ran `go get` before scanning the pinned version (it scanned it afterwards). No run used `--format detailed`, and in these runs the agent could not confirm whether `GITHUB_TOKEN` was set. With the previous `description`, the same prompts invoked the skill in 3 of 4 runs. With the user's own settings and many other skills loaded, it was invoked in 2 of 4 runs. Invocation depends on the environment, the model, and the prompt; these runs do not show that it is always invoked.
 
+**Required detailed comparison (current wording).** The runs above used the earlier wording, in which `--format detailed` was optional and no run used it. The current wording requires one detailed call for all `ok` or `caution` candidates before choosing. With the same setup, three more runs (two "add it, do not ask", one "which should I use"):
+
+| Run | Skill invoked | `--format detailed` before choosing | Second table | Other |
+|---|---|---|---|---|
+| "add it" 1 | yes | once, 3 candidates (2 `ok`, 1 `caution`) | stable release with date and last human commit for all 3 | Reason used the newer commit date and the API, labelled as the agent's reading; token reported as not confirmed |
+| "add it" 2 | yes | once, the same 3 candidates | same | wrote that the relationship between `Maintained Score: 0/10` and `Active` was not investigated; copied `(unavailable)` |
+| "which should I use" | yes | once, 2 `ok` candidates | same | did not touch go.mod; "Decided by: not decided yet" |
+
+The case with fewer than two `ok`/`caution` candidates and the case without `GITHUB_TOKEN` have not been run with this wording.
+
 **Other runs**:
 - First wording of the skill, candidates passed by hand: Go, npm, and RubyGems verdicts copied as printed; a nonexistent npm name came back as `review` and the skill asked for a corrected PURL.
 - The wording before the recommend/add split, with the user's own settings loaded: a named package that came back `replace` (`github.com/mitchellh/go-homedir`) was added with the verdict first in the reply and `os.UserHomeDir()` suggested; PyPI candidates were scanned without a version while exploring, then the pinned version was scanned.
