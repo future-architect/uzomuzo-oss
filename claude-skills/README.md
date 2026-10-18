@@ -65,23 +65,23 @@ Analyzes a dependency for removal, then either files an issue (default) or imple
 /diet-remove github.com/pkg/errors --pr
 ```
 
-### `/select-record` — Record What Was Checked Before Adding a Dependency
+### `/scan-before-add` — Scan the Candidates Before a Dependency Is Added
 
-Before a new dependency is added -- by you or by an AI agent -- runs `uzomuzo scan` on each candidate and writes a selection record: the verdict and evidence uzomuzo printed, what could not be fetched, and who decided. It does not choose, approve, or install anything.
+Use when a library is being selected, compared, or recommended, and before a new dependency is added -- whether a person named the package or an AI agent is choosing it. The skill runs `uzomuzo scan` on the candidates and writes a selection record: the verdict and evidence uzomuzo printed, what could not be fetched, who proposed each candidate, who chose, and whether a person has reviewed the choice. Its `description` is written so that Claude Code can invoke it on its own when it is about to add a dependency.
 
-**What the record contains:**
-- Purpose, requirements stated beforehand, and who proposed each candidate
-- uzomuzo's `verdict`, `lifecycle`, `reason`, `archived`, and repository, copied as printed
-- What was not obtained (for example, no `GITHUB_TOKEN`) and what was not checked for the requested version
-- Two fixed statements: `ok` is a maintenance verdict, not a safety verdict; the verdicts have not been compared with human judgement
-- "Decided by" and the reason, filled in by a person, not by the skill
+**How it behaves:**
+- uzomuzo's words (`ok` / `caution` / `replace` / `review`, lifecycle labels) are copied as printed and never turned into an approval
+- When the agent is choosing, it scans the candidates it is considering before it picks one
+- When it may ask, it shows the record and stops before adding; when told not to ask, it adds the dependency and records "Decided by: AI agent (delegated by the person; not reviewed by a person yet)"
+- A `replace` verdict on a package the person named does not block the addition; the verdict goes at the top of the reply and into the record
+- Every record carries two fixed statements: `ok` is a maintenance verdict, not a safety verdict; the verdicts have not been compared with human judgement
 
 ```bash
-# In Claude Code
-/select-record parse a YAML config file -- pkg:golang/gopkg.in/yaml.v3@v3.0.1 pkg:golang/github.com/goccy/go-yaml@v1.11.3
+# In Claude Code (or let Claude Code invoke it when it adds a dependency)
+/scan-before-add parse a YAML config file -- pkg:golang/gopkg.in/yaml.v3@v3.0.1 pkg:golang/github.com/goccy/go-yaml@v1.11.3
 ```
 
-The skill accepts PURLs for every ecosystem `uzomuzo scan` supports. See "What has been checked" below for the ecosystems the skill itself has been run on.
+The skill accepts PURLs for every ecosystem `uzomuzo scan` supports. See "What has been checked" below for what has actually been run.
 
 ## Setup
 
@@ -93,14 +93,14 @@ Copy the skill directories into your project's `.claude/skills/` directory:
 # Copy all diet skills
 cp -r claude-skills/diet-* /path/to/your/project/.claude/skills/
 
-# Copy the selection-record skill
-cp -r claude-skills/select-record /path/to/your/project/.claude/skills/
+# Copy the scan-before-add skill
+cp -r claude-skills/scan-before-add /path/to/your/project/.claude/skills/
 
 # Or copy individual skills
 cp -r claude-skills/diet-assess-risk /path/to/your/project/.claude/skills/
 ```
 
-Then open your project in Claude Code and use the `/diet-*` and `/select-record` slash commands.
+Then open your project in Claude Code and use the `/diet-*` and `/scan-before-add` slash commands.
 
 ### Directory structure
 
@@ -112,21 +112,29 @@ Then open your project in Claude Code and use the `/diet-*` and `/select-record`
 │   └── SKILL.md          # /diet-evaluate-removal
 ├── diet-remove/
 │   └── SKILL.md          # /diet-remove
-└── select-record/
-    └── SKILL.md          # /select-record
+└── scan-before-add/
+    └── SKILL.md          # /scan-before-add
 ```
 
-### What has been checked (`/select-record`)
+### What has been checked (`/scan-before-add`)
 
-Run through Claude Code on 2026-10-19 with `GITHUB_TOKEN` set, from a scratch project that had only the copied skill directory. In both runs the record was shown in the chat; saving it to a PR or file was not tested.
+All runs on 2026-10-19 used headless Claude Code with model Sonnet, `GITHUB_TOKEN` set, `uzomuzo` built from `main` at f9f9d21, and a scratch project containing only this skill. Records were shown in the chat; saving them to a commit, PR, or file was not tested.
 
-| Ecosystem | Candidates | Result |
-|---|---|---|
-| Go | `gopkg.in/yaml.v3@v3.0.1`, `github.com/goccy/go-yaml@v1.11.3`, `sigs.k8s.io/yaml@v1.4.0` | Record shown with `replace` / `ok` / `caution` as printed; "Decided by" left as "not decided yet" |
-| npm | `request@2.88.2`, `axios@1.6.8`, a nonexistent package name | `replace` / `ok` copied as printed; the nonexistent name came back as `review` and the skill asked for a corrected PURL (the rerun after a correction was not tested) |
-| RubyGems | `nokogiri@1.15.0` | `ok` copied as printed |
+**Invoked without being named.** Prompts asked to pick a YAML library for a Go CLI without mentioning the skill, run with `--setting-sources project` so that no user-level settings or skills were loaded:
 
-Separately, `uzomuzo scan` (built from `main` at f9f9d21) returned a verdict, without an error, for one PURL in each of its eight ecosystems on the same day: `pkg:npm/express@4.18.2`, `pkg:pypi/requests@2.31.0`, `pkg:golang/github.com/Masterminds/semver/v3@v3.2.1`, `pkg:cargo/serde@1.0.136`, `pkg:maven/org.apache.commons/commons-lang3@3.12.0`, `pkg:nuget/Newtonsoft.Json@13.0.3`, `pkg:gem/nokogiri@1.15.0`, `pkg:composer/monolog/monolog@3.5.0`. The skill has not been run through Claude Code on PyPI, Maven, Cargo, NuGet, or Packagist candidates. None of this measures whether the verdicts are correct or whether the record improves a selection.
+| Prompt | Runs | Skill invoked | What the agent did |
+|---|---|---|---|
+| "Pick a YAML library and add it to go.mod. Do not ask me questions" | 2 | 2 | Scanned 2-3 candidates, added one, recorded "Decided by: AI agent (delegated by the person; not reviewed by a person yet)" |
+| "Which YAML library should I use? Add it to go.mod once we agree" | 2 | 2 | Scanned candidates, did not touch go.mod, left "Decided by: not decided yet" |
+
+In an earlier round with the user's own settings and many other skills loaded, the skill was invoked in 2 of 4 runs. Invocation depends on the environment, the model, and the prompt; these runs do not show that it is always invoked.
+
+**Other runs**, with an earlier wording of this skill (same steps for scanning and recording):
+- Go and npm candidates passed by hand: verdicts copied as printed; a nonexistent npm name came back as `review` and the skill asked for a corrected PURL.
+- A named package that came back `replace` (`github.com/mitchellh/go-homedir`): the agent added it, put the verdict first in its reply, and suggested `os.UserHomeDir()`.
+- PyPI: the agent scanned candidates without a version while exploring and pinned the version it then scanned again.
+
+Separately, `uzomuzo scan` itself returned a verdict, without an error, for one PURL in each of its eight ecosystems. The skill has not been run on Maven, Cargo, NuGet, or Packagist candidates, with models other than Sonnet, or with agents other than Claude Code. None of this measures whether the verdicts are correct or whether the record improves a selection.
 
 ## How it fits together
 
