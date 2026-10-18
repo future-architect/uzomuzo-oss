@@ -45,7 +45,7 @@ func scanFlags() []urfcli.Flag {
 		&urfcli.BoolFlag{Name: "include-actions", Usage: "Also scan GitHub Actions referenced in target repositories' workflows"},
 
 		// Transitive dependency display
-		&urfcli.BoolFlag{Name: "show-transitive", Usage: "Include transitive dependencies in output (SBOM/go.mod: transitive deps; --include-actions: composite action deps)"},
+		&urfcli.BoolFlag{Name: "show-transitive", Usage: "Include transitive dependencies in output (SBOM: transitive deps; --include-actions: composite action deps). go.mod input: // indirect requirements are not read"},
 
 		// Output filtering
 		&urfcli.StringFlag{Name: "show-only", Usage: "Show only entries with specified verdicts (comma-separated: ok,caution,replace,review). Replace means the dependency should be replaced (EOL, archived, etc.)."},

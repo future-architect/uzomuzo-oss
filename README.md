@@ -635,7 +635,7 @@ STATUS      PURL                                                        RELATION
 ```
 <!-- end:output:gomod-table -->
 
-go.mod input adds a `RELATION` column showing `direct` or `indirect` dependency relationship.
+go.mod input adds a `RELATION` column. Only direct requirements are read: `// indirect` requirements are skipped, and `--show-transitive` does not add them (see [#563](https://github.com/future-architect/uzomuzo-oss/issues/563)).
 
 </details>
 
