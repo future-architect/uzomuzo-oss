@@ -81,9 +81,11 @@ func main() { bar.Do() }
 
 // TestAnalyzer_BuildOutputDirs verifies that build, dist and target are
 // skipped only when their direct parent holds the manifest of a tool that
-// writes there, and read when they are ordinary package directories (#546). A control file at the
-// root always imports the dependency, so ImportFileCount is 2 when the
-// directory is read and 1 when it is skipped.
+// writes there, and read when they are ordinary package directories (#546).
+// The table lists every manifest/directory pair that is skipped. In the table
+// cases a control file at the root always imports the dependency, so
+// ImportFileCount is 2 when the directory is read and 1 when it is skipped.
+// The two cases after the table have no control file, so 1 means read.
 func TestAnalyzer_BuildOutputDirs(t *testing.T) {
 	const src = `package b
 import "github.com/foo/bar"
@@ -98,10 +100,21 @@ func B() { bar.Do() }
 		{"Go package named build", "", "internal/build", true},
 		{"build next to go.mod", "go.mod", "build", true},
 		{"build with package.json in the grandparent", "package.json", "src/build", true},
-		{"dist next to package.json", "package.json", "dist", false},
-		{"target next to pom.xml", "pom.xml", "target", false},
+		{"build next to package.json", "package.json", "build", false},
 		{"build next to build.gradle", "build.gradle", "build", false},
+		{"build next to build.gradle.kts", "build.gradle.kts", "build", false},
+		{"build next to settings.gradle", "settings.gradle", "build", false},
+		{"build next to settings.gradle.kts", "settings.gradle.kts", "build", false},
+		{"build next to build.xml", "build.xml", "build", false},
 		{"build next to pyproject.toml", "pyproject.toml", "build", false},
+		{"build next to setup.py", "setup.py", "build", false},
+		{"build next to setup.cfg", "setup.cfg", "build", false},
+		{"dist next to package.json", "package.json", "dist", false},
+		{"dist next to build.xml", "build.xml", "dist", false},
+		{"dist next to pyproject.toml", "pyproject.toml", "dist", false},
+		{"dist next to setup.py", "setup.py", "dist", false},
+		{"dist next to setup.cfg", "setup.cfg", "dist", false},
+		{"target next to pom.xml", "pom.xml", "target", false},
 		{"target next to Cargo.toml", "Cargo.toml", "target", false},
 		{"target next to build.sbt", "build.sbt", "target", false},
 		{"build next to Cargo.toml", "Cargo.toml", "build", true},
