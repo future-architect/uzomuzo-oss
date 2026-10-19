@@ -27,7 +27,7 @@ Known causes of a used dependency being reported as unused or trivial:
 
 | Cause | Languages | Issue |
 |---|---|---|
-| A `build`, `dist`, or `target` directory next to a build manifest (`package.json`, `pom.xml`, `build.gradle`, `pyproject.toml`, `setup.py`, ...) is treated as build output and not read, so source kept there (for example a root `build/gulpfile.js`) is missed. Of a file over 1 MiB, only the first 64 KiB is parsed, for imports only; its calls are not counted | all | [#546](https://github.com/future-architect/uzomuzo-oss/issues/546) |
+| A `build`, `dist`, or `target` directory next to the manifest of a tool that writes there (for example `dist` next to `package.json`, `target` next to `pom.xml`) is treated as build output and not read, so source kept there is missed: for example a root `build/gulpfile.js`, or a Go package at `build/` in a module whose root also holds a `package.json` for JS tooling. Of a file over 1 MiB, only the first 64 KiB is parsed, for imports only; its calls are not counted | all | [#546](https://github.com/future-architect/uzomuzo-oss/issues/546) |
 | Maven coordinates whose Java package is not under the groupId and not in diet's override list (Lombok, Hibernate, OkHttp, Reactor, ...) | Java | [#547](https://github.com/future-architect/uzomuzo-oss/issues/547) |
 | The wheel fallback that finds a distribution's import name skips wheels over 5 MiB (scikit-learn, opencv-python) and can miss namespace packages (`google.*`, `azure.*`) | Python | [#548](https://github.com/future-architect/uzomuzo-oss/issues/548) |
 | `.cjs` / `.mts` / `.cts` / `.vue` / `.svelte` files, `import x = require()`, template-literal `require`; `@types/*` and type-only packages | JS/TS | [#549](https://github.com/future-architect/uzomuzo-oss/issues/549) |
@@ -391,7 +391,7 @@ The quality of diet analysis depends heavily on what the SBOM tool includes. Dif
 
 ## Supported Languages
 
-All languages use tree-sitter for AST-based analysis. Files larger than 1 MiB are skipped. Directories named `testdata`, `__pycache__`, `build`, `dist`, `target`, `vendor`, `node_modules`, and `.git` are skipped at any depth, including when they are real source packages ([#546](https://github.com/future-architect/uzomuzo-oss/issues/546)). See [Accuracy](#accuracy) for known gaps.
+All languages use tree-sitter for AST-based analysis. Of a file larger than 1 MiB, only the first 64 KiB is parsed, for imports only; its calls are not counted. Directories named `testdata`, `__pycache__`, `vendor`, `node_modules`, and `.git` are skipped at any depth. Directories named `build`, `dist`, and `target` are skipped only when their parent directory contains the manifest of a tool that writes there: `build` next to `package.json`, `build.gradle(.kts)`, `settings.gradle(.kts)`, `build.xml`, `pyproject.toml`, `setup.py`, or `setup.cfg`; `dist` next to `package.json`, `build.xml`, `pyproject.toml`, `setup.py`, or `setup.cfg`; `target` next to `pom.xml`, `Cargo.toml`, or `build.sbt`. A `--source` directory that is itself named `build`, `dist`, or `target` is always read ([#546](https://github.com/future-architect/uzomuzo-oss/issues/546)). See [Accuracy](#accuracy) for known gaps.
 
 ### Go
 

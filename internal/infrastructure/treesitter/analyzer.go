@@ -38,31 +38,33 @@ var skipDirs = map[string]bool{
 	"__pycache__":  true,
 }
 
-// buildOutputDirs are directory names that build tools use for their output.
-// They are skipped only when they sit next to a build manifest (see
+// buildOutputManifests maps each directory name that build tools use for
+// their output to the manifests of the tools that write there. Such a
+// directory is skipped only when its parent holds one of those manifests (see
 // isBuildOutputDir), because the same names are also real package names:
-// Go internal/build, Java com/example/build, Python src/build (#546).
-var buildOutputDirs = map[string]bool{
-	"build":  true,
-	"dist":   true,
-	"target": true,
-}
-
-// buildManifests are files whose presence marks a directory as a project root
-// whose build/, dist/ or target/ child holds build output. go.mod is not listed:
-// the Go toolchain does not write output into the module tree, so a build/
-// directory next to go.mod holds hand-written code or scripts.
-var buildManifests = []string{
-	"package.json",
-	"pom.xml",
-	"build.gradle",
-	"build.gradle.kts",
-	"settings.gradle",
-	"settings.gradle.kts",
-	"build.xml",
-	"pyproject.toml",
-	"setup.py",
-	"setup.cfg",
+// Go internal/build, Java com/example/build, Python src/build (#546). A
+// manifest only marks the directories its own tool writes: Cargo and sbt
+// write target/, so a build/ next to Cargo.toml is still read. go.mod is not
+// listed: Go build output (binaries, goreleaser dist/) contains no .go source,
+// so reading it adds no imports, while a build/ directory next to go.mod
+// usually holds hand-written code or scripts.
+var buildOutputManifests = map[string][]string{
+	"build": {
+		"package.json",
+		"build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts",
+		"build.xml",
+		"pyproject.toml", "setup.py", "setup.cfg",
+	},
+	"dist": {
+		"package.json",
+		"build.xml",
+		"pyproject.toml", "setup.py", "setup.cfg",
+	},
+	"target": {
+		"pom.xml",
+		"Cargo.toml",
+		"build.sbt",
+	},
 }
 
 // largeFileBytes is the size above which a file is not fully parsed.
@@ -74,18 +76,6 @@ const (
 	largeFileBytes       = 1 << 20
 	largeFilePrefixBytes = 64 << 10
 )
-
-// isBuildOutputDir reports whether dir (named build, dist or target) is a
-// build output directory: its parent contains a build manifest.
-func isBuildOutputDir(dir string) bool {
-	parent := filepath.Dir(dir)
-	for _, m := range buildManifests {
-		if _, err := os.Stat(filepath.Join(parent, m)); err == nil {
-			return true
-		}
-	}
-	return false
-}
 
 // langID identifies a programming language for parsing.
 type langID int
@@ -269,7 +259,7 @@ func (a *Analyzer) AnalyzeCoupling(
 			if skipDirs[d.Name()] {
 				return filepath.SkipDir
 			}
-			if path != sourceRoot && buildOutputDirs[d.Name()] && isBuildOutputDir(path) {
+			if path != sourceRoot && isBuildOutputDir(path) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -427,7 +417,7 @@ func (a *Analyzer) analyzeFile(
 
 	var src []byte
 	if importsOnly {
-		slog.Debug("large file: parsing the head for imports only", "path", path, "size", info.Size())
+		slog.Debug("large_file_imports_only", "path", path, "size", info.Size(), "prefix_bytes", largeFilePrefixBytes)
 		src, err = readPrefix(path, largeFilePrefixBytes)
 	} else {
 		src, err = os.ReadFile(path)
@@ -753,12 +743,29 @@ type accumulator struct {
 	hasWildcardImport bool // true if any file uses wildcard import for this PURL
 }
 
+// isBuildOutputDir reports whether dir is a build output directory: its name
+// is in buildOutputManifests and its parent contains a manifest file of a tool
+// that writes there.
+func isBuildOutputDir(dir string) bool {
+	parent := filepath.Dir(dir)
+	for _, m := range buildOutputManifests[filepath.Base(dir)] {
+		if fi, err := os.Stat(filepath.Join(parent, m)); err == nil && fi.Mode().IsRegular() {
+			return true
+		}
+	}
+	return false
+}
+
 // readPrefix reads at most n bytes from the start of the file at path.
 func readPrefix(path string, n int64) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read file prefix: %w", err)
 	}
-	defer f.Close()
-	return io.ReadAll(io.LimitReader(f, n))
+	defer func() { _ = f.Close() }() // read-only handle; a close error loses no data
+	b, err := io.ReadAll(io.LimitReader(f, n))
+	if err != nil {
+		return nil, fmt.Errorf("read file prefix: %w", err)
+	}
+	return b, nil
 }

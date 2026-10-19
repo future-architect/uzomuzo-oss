@@ -7,7 +7,10 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
 )
 
 // TestAnalyzer_CloseIdempotent verifies that Analyzer.Close can be called
@@ -77,26 +80,47 @@ func main() { bar.Do() }
 }
 
 // TestAnalyzer_BuildOutputDirs verifies that build, dist and target are
-// skipped only next to a build manifest, and read when they are ordinary
-// package directories (#546).
+// skipped only when their direct parent holds the manifest of a tool that
+// writes there, and read when they are ordinary package directories (#546).
+// The table lists every manifest/directory pair that is skipped. In the table
+// cases a control file at the root always imports the dependency, so
+// ImportFileCount is 2 when the directory is read and 1 when it is skipped.
+// The two cases after the table have no control file, so 1 means read.
 func TestAnalyzer_BuildOutputDirs(t *testing.T) {
-	const purl = "pkg:golang/github.com/foo/bar@v1.0.0"
-	src := []byte(`package b
+	const src = `package b
 import "github.com/foo/bar"
 func B() { bar.Do() }
-`)
+`
 	tests := []struct {
 		name     string
-		manifest string // file created next to the directory; "" for none
+		manifest string // manifest path relative to the root; "" for none
 		dir      string
 		wantRead bool
 	}{
 		{"Go package named build", "", "internal/build", true},
 		{"build next to go.mod", "go.mod", "build", true},
-		{"dist next to package.json", "package.json", "dist", false},
-		{"target next to pom.xml", "pom.xml", "target", false},
+		{"build with package.json in the grandparent", "package.json", "src/build", true},
+		{"build next to package.json", "package.json", "build", false},
 		{"build next to build.gradle", "build.gradle", "build", false},
+		{"build next to build.gradle.kts", "build.gradle.kts", "build", false},
+		{"build next to settings.gradle", "settings.gradle", "build", false},
+		{"build next to settings.gradle.kts", "settings.gradle.kts", "build", false},
+		{"build next to build.xml", "build.xml", "build", false},
 		{"build next to pyproject.toml", "pyproject.toml", "build", false},
+		{"build next to setup.py", "setup.py", "build", false},
+		{"build next to setup.cfg", "setup.cfg", "build", false},
+		{"dist next to package.json", "package.json", "dist", false},
+		{"dist next to build.xml", "build.xml", "dist", false},
+		{"dist next to pyproject.toml", "pyproject.toml", "dist", false},
+		{"dist next to setup.py", "setup.py", "dist", false},
+		{"dist next to setup.cfg", "setup.cfg", "dist", false},
+		{"target next to pom.xml", "pom.xml", "target", false},
+		{"target next to Cargo.toml", "Cargo.toml", "target", false},
+		{"target next to build.sbt", "build.sbt", "target", false},
+		{"build next to Cargo.toml", "Cargo.toml", "build", true},
+		{"dist next to build.sbt", "build.sbt", "dist", true},
+		{"target next to package.json", "package.json", "target", true},
+		{"dist next to build.gradle", "build.gradle", "dist", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -106,55 +130,130 @@ func B() { bar.Do() }
 				t.Fatal(err)
 			}
 			if tt.manifest != "" {
-				if err := os.WriteFile(filepath.Join(filepath.Dir(pkgDir), tt.manifest), []byte("{}"), 0o644); err != nil {
-					t.Fatal(err)
-				}
+				// Only the manifest's existence is checked, so it is left empty.
+				writeCorpusFile(t, filepath.Join(root, filepath.FromSlash(tt.manifest)), "")
 			}
-			if err := os.WriteFile(filepath.Join(pkgDir, "b.go"), src, 0o644); err != nil {
+			writeCorpusFile(t, filepath.Join(pkgDir, "b.go"), src)
+			writeCorpusFile(t, filepath.Join(root, "main.go"), src)
+			want := 1
+			if tt.wantRead {
+				want = 2
+			}
+			if got := analyzeFooBar(t, root).ImportFileCount; got != want {
+				t.Errorf("ImportFileCount = %d, want %d", got, want)
+			}
+		})
+	}
+
+	t.Run("scan root named build next to package.json", func(t *testing.T) {
+		parent := t.TempDir()
+		writeCorpusFile(t, filepath.Join(parent, "package.json"), "")
+		root := filepath.Join(parent, "build")
+		if err := os.Mkdir(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeCorpusFile(t, filepath.Join(root, "b.go"), src)
+		if got := analyzeFooBar(t, root).ImportFileCount; got != 1 {
+			t.Errorf("ImportFileCount = %d, want 1", got)
+		}
+	})
+
+	t.Run("directory named like a manifest is not a manifest", func(t *testing.T) {
+		root := t.TempDir()
+		pkgDir := filepath.Join(root, "build")
+		for _, d := range []string{filepath.Join(root, "package.json"), pkgDir} {
+			if err := os.Mkdir(d, 0o755); err != nil {
 				t.Fatal(err)
 			}
-			analyzer := NewAnalyzer()
-			t.Cleanup(analyzer.Close)
-			result, err := analyzer.AnalyzeCoupling(context.Background(), root, map[string][]string{purl: {"github.com/foo/bar"}})
-			if err != nil {
-				t.Fatal(err)
+		}
+		writeCorpusFile(t, filepath.Join(pkgDir, "b.go"), src)
+		if got := analyzeFooBar(t, root).ImportFileCount; got != 1 {
+			t.Errorf("ImportFileCount = %d, want 1", got)
+		}
+	})
+}
+
+// TestAnalyzer_LargeFileImportsCounted verifies that a file over
+// largeFileBytes still counts as an importer, so a dependency imported only
+// there is not reported unused (#546), while its calls are not counted. A file
+// of exactly largeFileBytes is still parsed in full. The body repeats a call
+// statement so the largeFilePrefixBytes cut lands in the middle of one: the
+// import must still be found when the parsed prefix ends in broken syntax.
+func TestAnalyzer_LargeFileImportsCounted(t *testing.T) {
+	const head = "package gen\nimport \"github.com/foo/bar\"\nfunc F() { bar.Do() }\n"
+	const line = "var _ = bar.Do()\n"
+	if (largeFilePrefixBytes-len(head))%len(line) == 0 {
+		t.Fatal("the prefix cut must land mid-statement; adjust head or line")
+	}
+	tests := []struct {
+		name      string
+		size      int
+		fullParse bool
+	}{
+		{"exactly largeFileBytes is parsed in full", largeFileBytes, true},
+		{"largeFileBytes+1 is parsed for imports only", largeFileBytes + 1, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lines := (tt.size - len(head)) / len(line)
+			content := head + strings.Repeat(line, lines)
+			content += strings.Repeat("\n", tt.size-len(content))
+			dir := t.TempDir()
+			writeCorpusFile(t, filepath.Join(dir, "gen.pb.go"), content)
+			got := analyzeFooBar(t, dir)
+			if got.ImportFileCount != 1 || got.IsUnused {
+				t.Errorf("ImportFileCount = %d, IsUnused = %v; want 1, false", got.ImportFileCount, got.IsUnused)
 			}
-			got := result[purl] != nil && result[purl].ImportFileCount == 1
-			if got != tt.wantRead {
-				t.Errorf("read %s = %v, want %v (result %+v)", tt.dir, got, tt.wantRead, result[purl])
+			wantCalls := 0
+			if tt.fullParse {
+				wantCalls = 1 + lines
+			}
+			if got.CallSiteCount != wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", got.CallSiteCount, wantCalls)
 			}
 		})
 	}
 }
 
-// TestAnalyzer_LargeFileImportsCounted verifies that a file over
-// largeFileBytes still counts as an importer, so a dependency imported only
-// there is not reported unused (#546). Its calls are not counted.
-func TestAnalyzer_LargeFileImportsCounted(t *testing.T) {
-	const purl = "pkg:golang/github.com/foo/bar@v1.0.0"
+// TestAnalyzer_LargeFilePrefixBoundary verifies that exactly
+// largeFilePrefixBytes of a large file are parsed for imports: an import that
+// ends on the last byte of the prefix is found, one right after it is not.
+// Reading one or two bytes less would still find the first import, because
+// tree-sitter recovers a string missing its closing quote; three or more
+// bytes less fails the test.
+func TestAnalyzer_LargeFilePrefixBoundary(t *testing.T) {
+	const (
+		inside  = "pkg:golang/github.com/foo/bar@v1.0.0"
+		outside = "pkg:golang/github.com/foo/baz@v1.0.0"
+	)
+	const pkg = "package gen\n"
+	const importIn = "import \"github.com/foo/bar\"\n"
+	const importOut = "import \"github.com/foo/baz\"\n"
+	pad := largeFilePrefixBytes - len(pkg) - len(importIn)
+	// One comment line of exactly pad bytes ("//" + spaces + "\n").
+	content := pkg + "//" + strings.Repeat(" ", pad-3) + "\n" + importIn + importOut
+	if len(content)-len(importOut) != largeFilePrefixBytes {
+		t.Fatalf("import of bar ends at byte %d, want %d", len(content)-len(importOut), largeFilePrefixBytes)
+	}
+	content += strings.Repeat("\n", largeFileBytes+1-len(content))
 	dir := t.TempDir()
-	head := "package gen\nimport \"github.com/foo/bar\"\nfunc F() { bar.Do() }\n"
-	pad := make([]byte, largeFileBytes)
-	for i := range pad {
-		pad[i] = '\n'
-	}
-	content := append([]byte(head), pad...)
-	content = append(content, []byte("func G() { bar.Do() }\n")...)
-	if err := os.WriteFile(filepath.Join(dir, "gen.pb.go"), content, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCorpusFile(t, filepath.Join(dir, "gen.pb.go"), content)
 	analyzer := NewAnalyzer()
 	t.Cleanup(analyzer.Close)
-	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, map[string][]string{purl: {"github.com/foo/bar"}})
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, map[string][]string{
+		inside:  {"github.com/foo/bar"},
+		outside: {"github.com/foo/baz"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := result[purl]
-	if got == nil || got.ImportFileCount != 1 || got.IsUnused {
-		t.Fatalf("large file import not counted: %+v", got)
+	if got := result[inside]; got == nil || got.ImportFileCount != 1 {
+		t.Errorf("import ending at the prefix boundary: got %+v, want ImportFileCount 1", got)
 	}
-	if got.CallSiteCount != 0 {
-		t.Errorf("CallSiteCount = %d, want 0 for a large file", got.CallSiteCount)
+	// A dependency with no importer has no entry; the entry for bar above
+	// shows that the file was analyzed.
+	if got := result[outside]; got != nil {
+		t.Errorf("import after the prefix boundary: got %+v, want no result", got)
 	}
 }
 
@@ -390,4 +489,22 @@ func TestMergeAccumulators(t *testing.T) {
 			}
 		})
 	}
+}
+
+// analyzeFooBar analyzes root for the single Go dependency github.com/foo/bar
+// and returns its result, failing the test when there is none.
+func analyzeFooBar(t *testing.T, root string) *domaindiet.CouplingAnalysis {
+	t.Helper()
+	const purl = "pkg:golang/github.com/foo/bar@v1.0.0"
+	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
+	result, err := analyzer.AnalyzeCoupling(context.Background(), root, map[string][]string{purl: {"github.com/foo/bar"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := result[purl]
+	if got == nil {
+		t.Fatalf("no result for %s", purl)
+	}
+	return got
 }
