@@ -3,13 +3,14 @@
 package treesitter
 
 import (
-	"bytes"
 	"context"
 	"maps"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
 )
 
 // TestAnalyzer_CloseIdempotent verifies that Analyzer.Close can be called
@@ -79,16 +80,15 @@ func main() { bar.Do() }
 }
 
 // TestAnalyzer_BuildOutputDirs verifies that build, dist and target are
-// skipped only when their direct parent holds a build manifest file, and read
-// when they are ordinary package directories (#546). A control file at the
+// skipped only when their direct parent holds the manifest of a tool that
+// writes there, and read when they are ordinary package directories (#546). A control file at the
 // root always imports the dependency, so ImportFileCount is 2 when the
 // directory is read and 1 when it is skipped.
 func TestAnalyzer_BuildOutputDirs(t *testing.T) {
-	const purl = "pkg:golang/github.com/foo/bar@v1.0.0"
-	src := []byte(`package b
+	const src = `package b
 import "github.com/foo/bar"
 func B() { bar.Do() }
-`)
+`
 	tests := []struct {
 		name     string
 		manifest string // manifest path relative to the root; "" for none
@@ -104,6 +104,10 @@ func B() { bar.Do() }
 		{"build next to pyproject.toml", "pyproject.toml", "build", false},
 		{"target next to Cargo.toml", "Cargo.toml", "target", false},
 		{"target next to build.sbt", "build.sbt", "target", false},
+		{"build next to Cargo.toml", "Cargo.toml", "build", true},
+		{"dist next to build.sbt", "build.sbt", "dist", true},
+		{"target next to package.json", "package.json", "target", true},
+		{"dist next to build.gradle", "build.gradle", "dist", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -114,52 +118,45 @@ func B() { bar.Do() }
 			}
 			if tt.manifest != "" {
 				// Only the manifest's existence is checked, so it is left empty.
-				if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(tt.manifest)), nil, 0o644); err != nil {
-					t.Fatal(err)
-				}
+				writeCorpusFile(t, filepath.Join(root, filepath.FromSlash(tt.manifest)), "")
 			}
-			if err := os.WriteFile(filepath.Join(pkgDir, "b.go"), src, 0o644); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(filepath.Join(root, "main.go"), src, 0o644); err != nil {
-				t.Fatal(err)
-			}
+			writeCorpusFile(t, filepath.Join(pkgDir, "b.go"), src)
+			writeCorpusFile(t, filepath.Join(root, "main.go"), src)
 			want := 1
 			if tt.wantRead {
 				want = 2
 			}
-			assertImportFileCount(t, root, purl, want)
+			if got := analyzeFooBar(t, root).ImportFileCount; got != want {
+				t.Errorf("ImportFileCount = %d, want %d", got, want)
+			}
 		})
 	}
 
 	t.Run("scan root named build next to package.json", func(t *testing.T) {
 		parent := t.TempDir()
-		if err := os.WriteFile(filepath.Join(parent, "package.json"), nil, 0o644); err != nil {
-			t.Fatal(err)
-		}
+		writeCorpusFile(t, filepath.Join(parent, "package.json"), "")
 		root := filepath.Join(parent, "build")
-		if err := os.MkdirAll(root, 0o755); err != nil {
+		if err := os.Mkdir(root, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "b.go"), src, 0o644); err != nil {
-			t.Fatal(err)
+		writeCorpusFile(t, filepath.Join(root, "b.go"), src)
+		if got := analyzeFooBar(t, root).ImportFileCount; got != 1 {
+			t.Errorf("ImportFileCount = %d, want 1", got)
 		}
-		assertImportFileCount(t, root, purl, 1)
 	})
 
 	t.Run("directory named like a manifest is not a manifest", func(t *testing.T) {
 		root := t.TempDir()
-		if err := os.MkdirAll(filepath.Join(root, "package.json"), 0o755); err != nil {
-			t.Fatal(err)
-		}
 		pkgDir := filepath.Join(root, "build")
-		if err := os.MkdirAll(pkgDir, 0o755); err != nil {
-			t.Fatal(err)
+		for _, d := range []string{filepath.Join(root, "package.json"), pkgDir} {
+			if err := os.Mkdir(d, 0o755); err != nil {
+				t.Fatal(err)
+			}
 		}
-		if err := os.WriteFile(filepath.Join(pkgDir, "b.go"), src, 0o644); err != nil {
-			t.Fatal(err)
+		writeCorpusFile(t, filepath.Join(pkgDir, "b.go"), src)
+		if got := analyzeFooBar(t, root).ImportFileCount; got != 1 {
+			t.Errorf("ImportFileCount = %d, want 1", got)
 		}
-		assertImportFileCount(t, root, purl, 1)
 	})
 }
 
@@ -167,9 +164,9 @@ func B() { bar.Do() }
 // largeFileBytes still counts as an importer, so a dependency imported only
 // there is not reported unused (#546), while its calls are not counted. A file
 // of exactly largeFileBytes is still parsed in full. The body repeats a call
-// statement so the largeFilePrefixBytes cut lands in the middle of one.
+// statement so the largeFilePrefixBytes cut lands in the middle of one: the
+// import must still be found when the parsed prefix ends in broken syntax.
 func TestAnalyzer_LargeFileImportsCounted(t *testing.T) {
-	const purl = "pkg:golang/github.com/foo/bar@v1.0.0"
 	const head = "package gen\nimport \"github.com/foo/bar\"\nfunc F() { bar.Do() }\n"
 	const line = "var _ = bar.Do()\n"
 	if (largeFilePrefixBytes-len(head))%len(line) == 0 {
@@ -178,56 +175,30 @@ func TestAnalyzer_LargeFileImportsCounted(t *testing.T) {
 	tests := []struct {
 		name      string
 		size      int
-		wantCalls func(lines int) int
+		fullParse bool
 	}{
-		{"exactly largeFileBytes is parsed in full", largeFileBytes, func(lines int) int { return 1 + lines }},
-		{"largeFileBytes+1 is parsed for imports only", largeFileBytes + 1, func(int) int { return 0 }},
+		{"exactly largeFileBytes is parsed in full", largeFileBytes, true},
+		{"largeFileBytes+1 is parsed for imports only", largeFileBytes + 1, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			lines := (tt.size - len(head)) / len(line)
-			content := []byte(head + strings.Repeat(line, lines))
-			content = append(content, bytes.Repeat([]byte{'\n'}, tt.size-len(content))...)
+			content := head + strings.Repeat(line, lines)
+			content += strings.Repeat("\n", tt.size-len(content))
 			dir := t.TempDir()
-			if err := os.WriteFile(filepath.Join(dir, "gen.pb.go"), content, 0o644); err != nil {
-				t.Fatal(err)
-			}
-			analyzer := NewAnalyzer()
-			t.Cleanup(analyzer.Close)
-			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, map[string][]string{purl: {"github.com/foo/bar"}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			got := result[purl]
-			if got == nil {
-				t.Fatal("large file import not counted: no result")
-			}
+			writeCorpusFile(t, filepath.Join(dir, "gen.pb.go"), content)
+			got := analyzeFooBar(t, dir)
 			if got.ImportFileCount != 1 || got.IsUnused {
 				t.Errorf("ImportFileCount = %d, IsUnused = %v; want 1, false", got.ImportFileCount, got.IsUnused)
 			}
-			if want := tt.wantCalls(lines); got.CallSiteCount != want {
-				t.Errorf("CallSiteCount = %d, want %d", got.CallSiteCount, want)
+			wantCalls := 0
+			if tt.fullParse {
+				wantCalls = 1 + lines
+			}
+			if got.CallSiteCount != wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", got.CallSiteCount, wantCalls)
 			}
 		})
-	}
-}
-
-// assertImportFileCount analyzes root for a single Go dependency and checks
-// how many files import it.
-func assertImportFileCount(t *testing.T, root, purl string, want int) {
-	t.Helper()
-	analyzer := NewAnalyzer()
-	t.Cleanup(analyzer.Close)
-	result, err := analyzer.AnalyzeCoupling(context.Background(), root, map[string][]string{purl: {"github.com/foo/bar"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := result[purl]
-	if got == nil {
-		t.Fatalf("no result for %s, want ImportFileCount %d", purl, want)
-	}
-	if got.ImportFileCount != want {
-		t.Errorf("ImportFileCount = %d, want %d", got.ImportFileCount, want)
 	}
 }
 
@@ -463,4 +434,22 @@ func TestMergeAccumulators(t *testing.T) {
 			}
 		})
 	}
+}
+
+// analyzeFooBar analyzes root for the single Go dependency github.com/foo/bar
+// and returns its result, failing the test when there is none.
+func analyzeFooBar(t *testing.T, root string) *domaindiet.CouplingAnalysis {
+	t.Helper()
+	const purl = "pkg:golang/github.com/foo/bar@v1.0.0"
+	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
+	result, err := analyzer.AnalyzeCoupling(context.Background(), root, map[string][]string{purl: {"github.com/foo/bar"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := result[purl]
+	if got == nil {
+		t.Fatalf("no result for %s", purl)
+	}
+	return got
 }
