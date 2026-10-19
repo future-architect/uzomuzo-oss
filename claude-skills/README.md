@@ -139,6 +139,15 @@ Invocation is not the same as following every step. In one of the "add it" runs 
 
 The case with fewer than two `ok`/`caution` candidates and the case without `GITHUB_TOKEN` have not been run with this wording.
 
+**Prompts that do not mention a library.** Four more runs with the same setup asked for a feature only:
+
+| Prompt | Runs | Dependency added | What the agent did |
+|---|---|---|---|
+| "Read port and log_level from config.yaml and print them at startup. Do not ask; make it work" | 2 | `github.com/goccy/go-yaml` in both | Followed the skill's steps before adding (3 candidates scanned, detailed comparison, record with "Decided by: AI agent"). In both runs the agent did **not** invoke the skill through the Skill tool; it listed `.claude/`, opened `SKILL.md`, and followed it |
+| "Add serve and version subcommands with --help. Do not ask; make it work" | 2 | none (standard library only) | Did not use the skill, which is expected because nothing was added |
+
+The scratch projects had four files, so the agent saw the skill file while looking around. Whether this happens in a larger repository, and why the Skill tool was not used, has not been checked.
+
 **Other runs**:
 - First wording of the skill, candidates passed by hand: Go, npm, and RubyGems verdicts copied as printed; a nonexistent npm name came back as `review` and the skill asked for a corrected PURL.
 - The wording before the recommend/add split, with the user's own settings loaded: a named package that came back `replace` (`github.com/mitchellh/go-homedir`) was added with the verdict first in the reply and `os.UserHomeDir()` suggested; PyPI candidates were scanned without a version while exploring, then the pinned version was scanned.
