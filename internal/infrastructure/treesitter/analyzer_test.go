@@ -3,10 +3,12 @@
 package treesitter
 
 import (
+	"bytes"
 	"context"
 	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -77,8 +79,10 @@ func main() { bar.Do() }
 }
 
 // TestAnalyzer_BuildOutputDirs verifies that build, dist and target are
-// skipped only next to a build manifest, and read when they are ordinary
-// package directories (#546).
+// skipped only when their direct parent holds a build manifest file, and read
+// when they are ordinary package directories (#546). A control file at the
+// root always imports the dependency, so ImportFileCount is 2 when the
+// directory is read and 1 when it is skipped.
 func TestAnalyzer_BuildOutputDirs(t *testing.T) {
 	const purl = "pkg:golang/github.com/foo/bar@v1.0.0"
 	src := []byte(`package b
@@ -87,16 +91,19 @@ func B() { bar.Do() }
 `)
 	tests := []struct {
 		name     string
-		manifest string // file created next to the directory; "" for none
+		manifest string // manifest path relative to the root; "" for none
 		dir      string
 		wantRead bool
 	}{
 		{"Go package named build", "", "internal/build", true},
 		{"build next to go.mod", "go.mod", "build", true},
+		{"build with package.json in the grandparent", "package.json", "src/build", true},
 		{"dist next to package.json", "package.json", "dist", false},
 		{"target next to pom.xml", "pom.xml", "target", false},
 		{"build next to build.gradle", "build.gradle", "build", false},
 		{"build next to pyproject.toml", "pyproject.toml", "build", false},
+		{"target next to Cargo.toml", "Cargo.toml", "target", false},
+		{"target next to build.sbt", "build.sbt", "target", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -106,55 +113,121 @@ func B() { bar.Do() }
 				t.Fatal(err)
 			}
 			if tt.manifest != "" {
-				if err := os.WriteFile(filepath.Join(filepath.Dir(pkgDir), tt.manifest), []byte("{}"), 0o644); err != nil {
+				// Only the manifest's existence is checked, so it is left empty.
+				if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(tt.manifest)), nil, 0o644); err != nil {
 					t.Fatal(err)
 				}
 			}
 			if err := os.WriteFile(filepath.Join(pkgDir, "b.go"), src, 0o644); err != nil {
 				t.Fatal(err)
 			}
+			if err := os.WriteFile(filepath.Join(root, "main.go"), src, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			want := 1
+			if tt.wantRead {
+				want = 2
+			}
+			assertImportFileCount(t, root, purl, want)
+		})
+	}
+
+	t.Run("scan root named build next to package.json", func(t *testing.T) {
+		parent := t.TempDir()
+		if err := os.WriteFile(filepath.Join(parent, "package.json"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		root := filepath.Join(parent, "build")
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "b.go"), src, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		assertImportFileCount(t, root, purl, 1)
+	})
+
+	t.Run("directory named like a manifest is not a manifest", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "package.json"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		pkgDir := filepath.Join(root, "build")
+		if err := os.MkdirAll(pkgDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(pkgDir, "b.go"), src, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		assertImportFileCount(t, root, purl, 1)
+	})
+}
+
+// TestAnalyzer_LargeFileImportsCounted verifies that a file over
+// largeFileBytes still counts as an importer, so a dependency imported only
+// there is not reported unused (#546), while its calls are not counted. A file
+// of exactly largeFileBytes is still parsed in full. The body repeats a call
+// statement so the largeFilePrefixBytes cut lands in the middle of one.
+func TestAnalyzer_LargeFileImportsCounted(t *testing.T) {
+	const purl = "pkg:golang/github.com/foo/bar@v1.0.0"
+	const head = "package gen\nimport \"github.com/foo/bar\"\nfunc F() { bar.Do() }\n"
+	const line = "var _ = bar.Do()\n"
+	if (largeFilePrefixBytes-len(head))%len(line) == 0 {
+		t.Fatal("the prefix cut must land mid-statement; adjust head or line")
+	}
+	tests := []struct {
+		name      string
+		size      int
+		wantCalls func(lines int) int
+	}{
+		{"exactly largeFileBytes is parsed in full", largeFileBytes, func(lines int) int { return 1 + lines }},
+		{"largeFileBytes+1 is parsed for imports only", largeFileBytes + 1, func(int) int { return 0 }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lines := (tt.size - len(head)) / len(line)
+			content := []byte(head + strings.Repeat(line, lines))
+			content = append(content, bytes.Repeat([]byte{'\n'}, tt.size-len(content))...)
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "gen.pb.go"), content, 0o644); err != nil {
+				t.Fatal(err)
+			}
 			analyzer := NewAnalyzer()
 			t.Cleanup(analyzer.Close)
-			result, err := analyzer.AnalyzeCoupling(context.Background(), root, map[string][]string{purl: {"github.com/foo/bar"}})
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, map[string][]string{purl: {"github.com/foo/bar"}})
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := result[purl] != nil && result[purl].ImportFileCount == 1
-			if got != tt.wantRead {
-				t.Errorf("read %s = %v, want %v (result %+v)", tt.dir, got, tt.wantRead, result[purl])
+			got := result[purl]
+			if got == nil {
+				t.Fatal("large file import not counted: no result")
+			}
+			if got.ImportFileCount != 1 || got.IsUnused {
+				t.Errorf("ImportFileCount = %d, IsUnused = %v; want 1, false", got.ImportFileCount, got.IsUnused)
+			}
+			if want := tt.wantCalls(lines); got.CallSiteCount != want {
+				t.Errorf("CallSiteCount = %d, want %d", got.CallSiteCount, want)
 			}
 		})
 	}
 }
 
-// TestAnalyzer_LargeFileImportsCounted verifies that a file over
-// largeFileBytes still counts as an importer, so a dependency imported only
-// there is not reported unused (#546). Its calls are not counted.
-func TestAnalyzer_LargeFileImportsCounted(t *testing.T) {
-	const purl = "pkg:golang/github.com/foo/bar@v1.0.0"
-	dir := t.TempDir()
-	head := "package gen\nimport \"github.com/foo/bar\"\nfunc F() { bar.Do() }\n"
-	pad := make([]byte, largeFileBytes)
-	for i := range pad {
-		pad[i] = '\n'
-	}
-	content := append([]byte(head), pad...)
-	content = append(content, []byte("func G() { bar.Do() }\n")...)
-	if err := os.WriteFile(filepath.Join(dir, "gen.pb.go"), content, 0o644); err != nil {
-		t.Fatal(err)
-	}
+// assertImportFileCount analyzes root for a single Go dependency and checks
+// how many files import it.
+func assertImportFileCount(t *testing.T, root, purl string, want int) {
+	t.Helper()
 	analyzer := NewAnalyzer()
 	t.Cleanup(analyzer.Close)
-	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, map[string][]string{purl: {"github.com/foo/bar"}})
+	result, err := analyzer.AnalyzeCoupling(context.Background(), root, map[string][]string{purl: {"github.com/foo/bar"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := result[purl]
-	if got == nil || got.ImportFileCount != 1 || got.IsUnused {
-		t.Fatalf("large file import not counted: %+v", got)
+	if got == nil {
+		t.Fatalf("no result for %s, want ImportFileCount %d", purl, want)
 	}
-	if got.CallSiteCount != 0 {
-		t.Errorf("CallSiteCount = %d, want 0 for a large file", got.CallSiteCount)
+	if got.ImportFileCount != want {
+		t.Errorf("ImportFileCount = %d, want %d", got.ImportFileCount, want)
 	}
 }
 

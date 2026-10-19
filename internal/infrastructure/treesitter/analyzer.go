@@ -50,8 +50,9 @@ var buildOutputDirs = map[string]bool{
 
 // buildManifests are files whose presence marks a directory as a project root
 // whose build/, dist/ or target/ child holds build output. go.mod is not listed:
-// the Go toolchain does not write output into the module tree, so a build/
-// directory next to go.mod holds hand-written code or scripts.
+// Go build output (binaries, goreleaser dist/) contains no .go source, so
+// reading it adds no imports, while a build/ directory next to go.mod usually
+// holds hand-written code or scripts.
 var buildManifests = []string{
 	"package.json",
 	"pom.xml",
@@ -63,6 +64,8 @@ var buildManifests = []string{
 	"pyproject.toml",
 	"setup.py",
 	"setup.cfg",
+	"Cargo.toml",
+	"build.sbt",
 }
 
 // largeFileBytes is the size above which a file is not fully parsed.
@@ -74,18 +77,6 @@ const (
 	largeFileBytes       = 1 << 20
 	largeFilePrefixBytes = 64 << 10
 )
-
-// isBuildOutputDir reports whether dir (named build, dist or target) is a
-// build output directory: its parent contains a build manifest.
-func isBuildOutputDir(dir string) bool {
-	parent := filepath.Dir(dir)
-	for _, m := range buildManifests {
-		if _, err := os.Stat(filepath.Join(parent, m)); err == nil {
-			return true
-		}
-	}
-	return false
-}
 
 // langID identifies a programming language for parsing.
 type langID int
@@ -427,7 +418,7 @@ func (a *Analyzer) analyzeFile(
 
 	var src []byte
 	if importsOnly {
-		slog.Debug("large file: parsing the head for imports only", "path", path, "size", info.Size())
+		slog.Debug("large_file_imports_only", "path", path, "size", info.Size(), "prefix_bytes", largeFilePrefixBytes)
 		src, err = readPrefix(path, largeFilePrefixBytes)
 	} else {
 		src, err = os.ReadFile(path)
@@ -753,12 +744,28 @@ type accumulator struct {
 	hasWildcardImport bool // true if any file uses wildcard import for this PURL
 }
 
+// isBuildOutputDir reports whether dir (named build, dist or target) is a
+// build output directory: its parent contains a build manifest file.
+func isBuildOutputDir(dir string) bool {
+	parent := filepath.Dir(dir)
+	for _, m := range buildManifests {
+		if fi, err := os.Stat(filepath.Join(parent, m)); err == nil && !fi.IsDir() {
+			return true
+		}
+	}
+	return false
+}
+
 // readPrefix reads at most n bytes from the start of the file at path.
 func readPrefix(path string, n int64) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
-	return io.ReadAll(io.LimitReader(f, n))
+	defer func() { _ = f.Close() }() // read-only handle; a close error loses no data
+	b, err := io.ReadAll(io.LimitReader(f, n))
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	return b, nil
 }
