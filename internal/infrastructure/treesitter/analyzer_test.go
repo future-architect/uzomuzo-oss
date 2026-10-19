@@ -215,6 +215,48 @@ func TestAnalyzer_LargeFileImportsCounted(t *testing.T) {
 	}
 }
 
+// TestAnalyzer_LargeFilePrefixBoundary verifies that exactly
+// largeFilePrefixBytes of a large file are parsed for imports: an import that
+// ends on the last byte of the prefix is found, one right after it is not.
+// Reading one or two bytes less would still find the first import, because
+// tree-sitter recovers a string missing its closing quote; three or more
+// bytes less fails the test.
+func TestAnalyzer_LargeFilePrefixBoundary(t *testing.T) {
+	const (
+		inside  = "pkg:golang/github.com/foo/bar@v1.0.0"
+		outside = "pkg:golang/github.com/foo/baz@v1.0.0"
+	)
+	const pkg = "package gen\n"
+	const importIn = "import \"github.com/foo/bar\"\n"
+	const importOut = "import \"github.com/foo/baz\"\n"
+	pad := largeFilePrefixBytes - len(pkg) - len(importIn)
+	// One comment line of exactly pad bytes ("//" + spaces + "\n").
+	content := pkg + "//" + strings.Repeat(" ", pad-3) + "\n" + importIn + importOut
+	if len(content)-len(importOut) != largeFilePrefixBytes {
+		t.Fatalf("import of bar ends at byte %d, want %d", len(content)-len(importOut), largeFilePrefixBytes)
+	}
+	content += strings.Repeat("\n", largeFileBytes+1-len(content))
+	dir := t.TempDir()
+	writeCorpusFile(t, filepath.Join(dir, "gen.pb.go"), content)
+	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, map[string][]string{
+		inside:  {"github.com/foo/bar"},
+		outside: {"github.com/foo/baz"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := result[inside]; got == nil || got.ImportFileCount != 1 {
+		t.Errorf("import ending at the prefix boundary: got %+v, want ImportFileCount 1", got)
+	}
+	// A dependency with no importer has no entry; the entry for bar above
+	// shows that the file was analyzed.
+	if got := result[outside]; got != nil {
+		t.Errorf("import after the prefix boundary: got %+v, want no result", got)
+	}
+}
+
 func TestAnalyzer_NoMatchingImports(t *testing.T) {
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
