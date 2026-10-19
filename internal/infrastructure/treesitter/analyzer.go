@@ -749,7 +749,7 @@ type accumulator struct {
 func isBuildOutputDir(dir string) bool {
 	parent := filepath.Dir(dir)
 	for _, m := range buildOutputManifests[filepath.Base(dir)] {
-		if fi, err := os.Stat(filepath.Join(parent, m)); err == nil && !fi.IsDir() {
+		if fi, err := os.Stat(filepath.Join(parent, m)); err == nil && fi.Mode().IsRegular() {
 			return true
 		}
 	}
