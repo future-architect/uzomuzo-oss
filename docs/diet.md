@@ -27,7 +27,7 @@ Known causes of a used dependency being reported as unused or trivial:
 
 | Cause | Languages | Issue |
 |---|---|---|
-| Directories named `build`, `dist`, or `target` at any depth, and files over 1 MiB, are not read | all | [#546](https://github.com/future-architect/uzomuzo-oss/issues/546) |
+| A `build`, `dist`, or `target` directory next to a build manifest (`package.json`, `pom.xml`, `build.gradle`, `pyproject.toml`, `setup.py`, ...) is treated as build output and not read, so source kept there (for example a root `build/gulpfile.js`) is missed. Of a file over 1 MiB, only the first 64 KiB is parsed, for imports only; its calls are not counted | all | [#546](https://github.com/future-architect/uzomuzo-oss/issues/546) |
 | Maven coordinates whose Java package is not under the groupId and not in diet's override list (Lombok, Hibernate, OkHttp, Reactor, ...) | Java | [#547](https://github.com/future-architect/uzomuzo-oss/issues/547) |
 | The wheel fallback that finds a distribution's import name skips wheels over 5 MiB (scikit-learn, opencv-python) and can miss namespace packages (`google.*`, `azure.*`) | Python | [#548](https://github.com/future-architect/uzomuzo-oss/issues/548) |
 | `.cjs` / `.mts` / `.cts` / `.vue` / `.svelte` files, `import x = require()`, template-literal `require`; `@types/*` and type-only packages | JS/TS | [#549](https://github.com/future-architect/uzomuzo-oss/issues/549) |

@@ -76,6 +76,88 @@ func main() { bar.Do() }
 	}
 }
 
+// TestAnalyzer_BuildOutputDirs verifies that build, dist and target are
+// skipped only next to a build manifest, and read when they are ordinary
+// package directories (#546).
+func TestAnalyzer_BuildOutputDirs(t *testing.T) {
+	const purl = "pkg:golang/github.com/foo/bar@v1.0.0"
+	src := []byte(`package b
+import "github.com/foo/bar"
+func B() { bar.Do() }
+`)
+	tests := []struct {
+		name     string
+		manifest string // file created next to the directory; "" for none
+		dir      string
+		wantRead bool
+	}{
+		{"Go package named build", "", "internal/build", true},
+		{"build next to go.mod", "go.mod", "build", true},
+		{"dist next to package.json", "package.json", "dist", false},
+		{"target next to pom.xml", "pom.xml", "target", false},
+		{"build next to build.gradle", "build.gradle", "build", false},
+		{"build next to pyproject.toml", "pyproject.toml", "build", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			pkgDir := filepath.Join(root, filepath.FromSlash(tt.dir))
+			if err := os.MkdirAll(pkgDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if tt.manifest != "" {
+				if err := os.WriteFile(filepath.Join(filepath.Dir(pkgDir), tt.manifest), []byte("{}"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(pkgDir, "b.go"), src, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
+			result, err := analyzer.AnalyzeCoupling(context.Background(), root, map[string][]string{purl: {"github.com/foo/bar"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := result[purl] != nil && result[purl].ImportFileCount == 1
+			if got != tt.wantRead {
+				t.Errorf("read %s = %v, want %v (result %+v)", tt.dir, got, tt.wantRead, result[purl])
+			}
+		})
+	}
+}
+
+// TestAnalyzer_LargeFileImportsCounted verifies that a file over
+// largeFileBytes still counts as an importer, so a dependency imported only
+// there is not reported unused (#546). Its calls are not counted.
+func TestAnalyzer_LargeFileImportsCounted(t *testing.T) {
+	const purl = "pkg:golang/github.com/foo/bar@v1.0.0"
+	dir := t.TempDir()
+	head := "package gen\nimport \"github.com/foo/bar\"\nfunc F() { bar.Do() }\n"
+	pad := make([]byte, largeFileBytes)
+	for i := range pad {
+		pad[i] = '\n'
+	}
+	content := append([]byte(head), pad...)
+	content = append(content, []byte("func G() { bar.Do() }\n")...)
+	if err := os.WriteFile(filepath.Join(dir, "gen.pb.go"), content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, map[string][]string{purl: {"github.com/foo/bar"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := result[purl]
+	if got == nil || got.ImportFileCount != 1 || got.IsUnused {
+		t.Fatalf("large file import not counted: %+v", got)
+	}
+	if got.CallSiteCount != 0 {
+		t.Errorf("CallSiteCount = %d, want 0 for a large file", got.CallSiteCount)
+	}
+}
+
 func TestAnalyzer_NoMatchingImports(t *testing.T) {
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(`package main
