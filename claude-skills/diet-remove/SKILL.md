@@ -93,11 +93,12 @@ Determine the replacement strategy. In order of preference:
 | **Delete** | Unused (0 imports), and the step 4 checks below found no configuration, plugin, or type-only use | Remove from go.mod/package.json, run tidy |
 | **Standard library** | stdlib equivalent exists | `go-homedir` → `os.UserHomeDir()` |
 | **Consolidate** | Another dep already does this | Two JSON libs → keep one |
-| **Self-implement** | Small, non-crypto, well-defined API | `lfshook` → 20-line `logrus.Hook` impl |
+| **Self-implement** | Small, well-defined API; inputs bounded; old and new output can be compared on the same inputs; not credential handling (see NEVER below) | `lfshook` → 20-line `logrus.Hook` impl |
+| **Switch or fork** | The original is archived or end-of-life and there is no stdlib equivalent | Move to a maintained successor; if there is none, fork it and own the fork. Self-implement only under the Self-implement conditions, and compare the caller's results before and after (e.g. an authorization decision that uses the copied data), not only the new function |
 | **Submodule isolate** | Used only in one subcommand/tool | `gosnmp` → `contrib/snmp2cpe/go.mod` |
 | **Framework peel** | Dep comes via a framework you don't fully need | Trivy fanal → direct parser calls |
 
-**NEVER self-implement**: crypto, TLS, protocol negotiation, auth token handling, or anything where subtle bugs create security vulnerabilities.
+**NEVER self-implement**: crypto, TLS, protocol negotiation, anything that sets, sends, or checks credentials (bearer tokens, SASL PLAIN/LOGIN, cookies, signatures), or anything where subtle bugs create security vulnerabilities -- even when the replacement is only a few lines. Length is not the criterion: tests encode the policy you chose and cannot tell you the policy is wrong. If the library providing it is actively maintained, keep it. Two earlier examples in this file broke this rule; see the note under Common patterns.
 
 ### 3. Are there hidden complications?
 
@@ -341,6 +342,7 @@ Based on the strategy from Phase 1:
 1. Write the replacement in the same package that uses it (don't create a shared utility for a single use site)
 2. Keep it minimal — match only the API surface actually used, not the full library
 3. Write tests that cover the same behavior as the original
+4. Compare the old and new output on the same inputs (differential test), not only unit tests of the new code
 
 **For submodule isolation:**
 1. Create `contrib/<tool>/go.mod` with its own module path
@@ -501,19 +503,21 @@ Structural reform approaches:
 - **Reporter/plugin extraction**: Move optional integrations to submodules with their own `go.mod`
 - **Binary split**: Separate CLI subcommands into separate binaries (git-style delegation — like `uzomuzo-diet` itself)
 
-## Common patterns (from real removals)
+## Common patterns (from removal PRs against Vuls)
 
 | Dependency | Replacement | Effort | Surprise |
 |-----------|-------------|--------|----------|
 | `mitchellh/go-homedir` | `os.UserHomeDir()` | 15 min | None — simplest possible removal |
 | `rifflock/lfshook` | 20-line `logrus.Hook` impl | 30 min | Test was 131 lines (file I/O) |
 | `samber/lo` (UniqBy) | Per-package `uniqBy` helper | 30 min | Better to duplicate than abstract |
-| `golang.org/x/oauth2` | 10-line `bearerTransport` | 30 min | Just a `RoundTripper` wrapper |
 | `golang.org/x/xerrors` | `fmt.Errorf` + `errors` | 2 hr | 10 edge cases in 788 call sites, found existing bug |
 | `gosnmp/gosnmp` | Submodule `contrib/snmp2cpe/` | 1 hr | `version.go` imported root module |
-| `emersion/go-smtp` | `net/smtp` + LOGIN auth | 1.5 hr | TLS connection setup differs |
 | `c-robinson/iplib` | `net/netip` CIDR enumeration | 1 hr | IPv4 network/broadcast edge cases |
 | Trivy fanal framework | Direct parser calls | 2 days | -68% binary size, found pnpm bug |
+
+These rows come from removal PRs opened against [future-architect/vuls](https://github.com/future-architect/vuls) in 2026-03. Only the fanal row ([#2476](https://github.com/future-architect/vuls/pull/2476)) is merged; the others are open, so effort and surprises describe writing the change, not running it in production.
+
+Two rows were removed in 2026-10: `golang.org/x/oauth2` → a 10-line `bearerTransport` ([#2462](https://github.com/future-architect/vuls/pull/2462)) and `emersion/go-smtp` → `net/smtp` with self-written PLAIN/LOGIN auth ([#2467](https://github.com/future-architect/vuls/pull/2467)). Both libraries are actively maintained, and both changes re-implemented credential handling, which the NEVER rule above forbids. `oauth2` also stays in `go.mod` as an indirect dependency, so removing the direct use gained nothing. The SMTP change replaced stdlib `smtp.PlainAuth`, which refuses to send credentials over an unencrypted connection except to localhost, with a copy that sends them whenever the server advertises the mechanism -- and the server advertising PLAIN says nothing about whether the connection is encrypted. Both had passing tests. Do not repeat the pattern.
 
 **Language coverage**: PR mode commands and common patterns are currently Go-centric, built from real removal experience. Issue mode and IBNC checks are language-agnostic. PRs adding equivalent PR-mode guidance for npm, pip, Maven, or other ecosystems (backed by actual removal data) are welcome.
 
