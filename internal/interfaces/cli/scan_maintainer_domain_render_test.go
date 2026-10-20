@@ -112,3 +112,32 @@ func TestEmptyScanJSONGolden(t *testing.T) {
 		t.Errorf("JSON changed:\n%s", buf.String())
 	}
 }
+
+// TestScanJSONRDAPBootstrap checks that rdap_bootstrap appears only when the
+// maintainer domain check ran.
+func TestScanJSONRDAPBootstrap(t *testing.T) {
+	var buf bytes.Buffer
+	info := &analysis.RDAPBootstrapInfo{Source: analysis.RDAPBootstrapCache, Publication: "2026-09-30T23:00:03Z"}
+	if err := renderScanOutput(&buf, nil, nil, FormatJSON, false, info); err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		RDAPBootstrap *struct {
+			Source      string `json:"source"`
+			Publication string `json:"publication"`
+		} `json:"rdap_bootstrap"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.RDAPBootstrap == nil || out.RDAPBootstrap.Source != "cache" || out.RDAPBootstrap.Publication != "2026-09-30T23:00:03Z" {
+		t.Errorf("output=%s", buf.String())
+	}
+	buf.Reset()
+	if err := renderScanOutput(&buf, nil, nil, FormatJSON, false, nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "rdap_bootstrap") {
+		t.Errorf("check off but rdap_bootstrap present: %s", buf.String())
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common"
@@ -69,9 +70,29 @@ type maintainerDomainChecker interface {
 	Check(context.Context, domain.MaintainerAddress, time.Time) domain.MaintainerDomainFinding
 }
 
-// WithMaintainerDomain enables the optional npm maintainer domain check.
+// rdapBootstrapRefresher is implemented by a checker that can refresh its RDAP
+// service list before the first check.
+type rdapBootstrapRefresher interface {
+	RefreshBootstrap(context.Context) domain.RDAPBootstrapInfo
+}
+
+// WithMaintainerDomain enables the optional npm maintainer domain check. The
+// RDAP service list is refreshed from IANA once per service and cached under
+// the user cache directory. See ADR-0030.
 func WithMaintainerDomain() Option {
-	return func(s *AnalysisService) { s.maintainerDomainChecker = rdap.NewClient() }
+	return func(s *AnalysisService) {
+		client := rdap.NewClient()
+		client.SetBootstrapCache(rdap.DefaultBootstrapCachePath())
+		s.maintainerDomainChecker = client
+	}
+}
+
+// RDAPBootstrap reports the RDAP service list the maintainer domain check
+// used. It is nil when the check is off or found no npm package to check.
+func (s *AnalysisService) RDAPBootstrap() *domain.RDAPBootstrapInfo {
+	s.rdapBootstrapMu.Lock()
+	defer s.rdapBootstrapMu.Unlock()
+	return s.rdapBootstrap
 }
 
 // WithEnricher appends an enricher to the pipeline between Phase 1 and Phase 3.
@@ -90,6 +111,8 @@ type AnalysisService struct {
 	cfg                     *config.Config
 	enrichers               []AnalysisEnricher
 	maintainerDomainChecker maintainerDomainChecker
+	rdapBootstrapMu         sync.Mutex
+	rdapBootstrap           *domain.RDAPBootstrapInfo
 	// packagistClient is stored here (unlike other infra clients) because
 	// ProcessBatch* methods pass it to eolevaluator.NewEvaluator to share
 	// the same instance (and its 5-min TTL cache) across calls.
@@ -434,6 +457,7 @@ func (s *AnalysisService) checkMaintainerDomains(ctx context.Context, analyses m
 		if a == nil || a.ReleaseHistory == nil || a.ReleaseHistory.Registry != domain.RegistryNpm {
 			continue
 		}
+		s.refreshRDAPBootstrap(ctx)
 		result := &domain.MaintainerDomainResult{}
 		for _, address := range a.ReleaseHistory.Maintainers {
 			result.Findings = append(result.Findings, s.maintainerDomainChecker.Check(ctx, address, now))
@@ -445,4 +469,20 @@ func (s *AnalysisService) checkMaintainerDomains(ctx context.Context, analyses m
 		}
 		a.MaintainerDomain = result
 	}
+}
+
+// refreshRDAPBootstrap refreshes the checker's RDAP service list once, before
+// the first package is checked, so a scan without npm packages fetches nothing.
+func (s *AnalysisService) refreshRDAPBootstrap(ctx context.Context) {
+	refresher, ok := s.maintainerDomainChecker.(rdapBootstrapRefresher)
+	if !ok {
+		return
+	}
+	s.rdapBootstrapMu.Lock()
+	defer s.rdapBootstrapMu.Unlock()
+	if s.rdapBootstrap != nil {
+		return
+	}
+	info := refresher.RefreshBootstrap(ctx)
+	s.rdapBootstrap = &info
 }

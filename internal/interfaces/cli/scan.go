@@ -12,6 +12,7 @@ import (
 
 	"github.com/future-architect/uzomuzo-oss/internal/application"
 	scanapp "github.com/future-architect/uzomuzo-oss/internal/application/scan"
+	analysispkg "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	domainscan "github.com/future-architect/uzomuzo-oss/internal/domain/scan"
@@ -315,7 +316,11 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 	displayEntries := filterEntriesByVerdict(result.Entries, showOnly)
 	filterActive := showOnly != nil
 
-	if err := renderScanOutput(os.Stdout, result.Entries, displayEntries, format, filterActive); err != nil {
+	var bootstrap *analysispkg.RDAPBootstrapInfo
+	if as := svc.AnalysisService(); as != nil {
+		bootstrap = as.RDAPBootstrap()
+	}
+	if err := renderScanOutput(os.Stdout, result.Entries, displayEntries, format, filterActive, bootstrap); err != nil {
 		return fmt.Errorf("failed to render output: %w", err)
 	}
 

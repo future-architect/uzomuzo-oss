@@ -156,14 +156,16 @@ func ResolveFormat(explicit string, inputCount int) (string, error) {
 // renderScanOutput dispatches to the correct renderer by format.
 // allEntries is used for summary counts; displayEntries is the (possibly filtered) set to render.
 // filterActive indicates whether --show-only was explicitly provided (even if all entries match).
-func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, format string, filterActive bool) error {
+// bootstrap is the RDAP service list used by --maintainer-domain, nil when the check did not run;
+// only JSON reports it.
+func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, format string, filterActive bool, bootstrap *domain.RDAPBootstrapInfo) error {
 	switch format {
 	case FormatDetailed:
 		return renderScanDetailed(w, allEntries, displayEntries, filterActive)
 	case FormatTable:
 		return renderScanTable(w, allEntries, displayEntries, filterActive)
 	case FormatJSON:
-		return renderScanJSON(w, allEntries, displayEntries, filterActive)
+		return writeScanJSON(w, allEntries, displayEntries, filterActive, bootstrap)
 	case FormatCSV:
 		return renderScanCSV(w, displayEntries)
 	default:
@@ -548,18 +550,33 @@ type maintainerDomainFindingJSON struct {
 }
 
 type enrichedJSONOutput struct {
-	Summary  jsonSummary         `json:"summary"`
-	Entries  []enrichedJSONEntry `json:"packages"`
-	Filtered bool                `json:"filtered,omitempty"`
-	Shown    int                 `json:"shown"`
+	Summary       jsonSummary         `json:"summary"`
+	Entries       []enrichedJSONEntry `json:"packages"`
+	Filtered      bool                `json:"filtered,omitempty"`
+	Shown         int                 `json:"shown"`
+	RDAPBootstrap *rdapBootstrapJSON  `json:"rdap_bootstrap,omitempty"`
+}
+
+// rdapBootstrapJSON reports the IANA RDAP service list --maintainer-domain used.
+type rdapBootstrapJSON struct {
+	Source      domain.RDAPBootstrapSource `json:"source"`
+	Publication string                     `json:"publication"`
 }
 
 // renderScanJSON renders the JSON output format.
 // filterActive indicates whether --show-only was explicitly provided.
 func renderScanJSON(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool) error {
+	return writeScanJSON(w, allEntries, displayEntries, filterActive, nil)
+}
+
+// writeScanJSON renders JSON and, when bootstrap is non-nil, the rdap_bootstrap field.
+func writeScanJSON(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool, bootstrap *domain.RDAPBootstrapInfo) error {
 	out := enrichedJSONOutput{
 		Summary: computeSummary(allEntries),
 		Entries: make([]enrichedJSONEntry, 0, len(displayEntries)),
+	}
+	if bootstrap != nil {
+		out.RDAPBootstrap = &rdapBootstrapJSON{Source: bootstrap.Source, Publication: bootstrap.Publication}
 	}
 	if filterActive {
 		out.Filtered = true

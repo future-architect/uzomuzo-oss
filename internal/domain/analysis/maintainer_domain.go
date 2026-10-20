@@ -68,6 +68,25 @@ func HasDeletionStatus(statuses []string) bool {
 // NormalizeEmail matches maintainer addresses despite surrounding space or case.
 func NormalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
 
+// RDAPBootstrapSource names where the RDAP service list used by a run came from.
+type RDAPBootstrapSource string
+
+const (
+	// RDAPBootstrapLive means the list was fetched from IANA during the run.
+	RDAPBootstrapLive RDAPBootstrapSource = "live"
+	// RDAPBootstrapCache means a cached copy of the IANA list was used.
+	RDAPBootstrapCache RDAPBootstrapSource = "cache"
+	// RDAPBootstrapEmbedded means the copy built into the binary was used.
+	RDAPBootstrapEmbedded RDAPBootstrapSource = "embedded"
+)
+
+// RDAPBootstrapInfo identifies the IANA RDAP service list a run used. See ADR-0030.
+type RDAPBootstrapInfo struct {
+	Source RDAPBootstrapSource
+	// Publication is the list's "publication" timestamp as IANA wrote it.
+	Publication string
+}
+
 // DomainLookupStatus describes the outcome of an RDAP lookup.
 type DomainLookupStatus int
 

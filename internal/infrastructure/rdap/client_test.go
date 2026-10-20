@@ -269,6 +269,10 @@ func TestRegistrarSanitized(t *testing.T) {
 // only https services.
 func TestEmbeddedBootstrap(t *testing.T) {
 	t.Parallel()
+	embedded := embeddedBootstrap()
+	if len(embedded.bases) == 0 || embedded.publication == "" {
+		t.Fatalf("embedded registry: %d services, publication %q", len(embedded.bases), embedded.publication)
+	}
 	base := NewClient().base
 	for _, tld := range []string{"com", "net", "org"} {
 		if !strings.HasPrefix(base[tld], "https://") {

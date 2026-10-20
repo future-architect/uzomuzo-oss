@@ -3,7 +3,6 @@ package rdap
 import (
 	"context"
 	"crypto/sha256"
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,13 +21,6 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"golang.org/x/net/publicsuffix"
 )
-
-//go:embed bootstrap.json
-var bootstrapFS embed.FS
-
-type bootstrap struct {
-	Services [][][]string `json:"services"`
-}
 
 type diskEntry struct {
 	analysis.DomainRecord
@@ -49,40 +41,6 @@ const (
 	maxRedirects       = 5
 )
 
-// bootstrapBases maps each TLD in the embedded IANA bootstrap to the first
-// https RDAP base URL listed for it. Plain-http services are left out so a
-// network attacker cannot forge a registration date.
-var bootstrapBases = sync.OnceValue(func() map[string]string {
-	data, err := bootstrapFS.ReadFile("bootstrap.json")
-	if err != nil {
-		panic(fmt.Sprintf("rdap: read embedded bootstrap: %v", err))
-	}
-	var b bootstrap
-	if err := json.Unmarshal(data, &b); err != nil {
-		panic(fmt.Sprintf("rdap: decode embedded bootstrap: %v", err))
-	}
-	base := make(map[string]string)
-	for _, service := range b.Services {
-		if len(service) < 2 {
-			continue
-		}
-		var https string
-		for _, u := range service[1] {
-			if strings.HasPrefix(strings.ToLower(u), "https://") {
-				https = u
-				break
-			}
-		}
-		if https == "" {
-			continue
-		}
-		for _, tld := range service[0] {
-			base[strings.ToLower(tld)] = https
-		}
-	}
-	return base
-})
-
 // Client looks up registration data through RDAP and caches the results.
 type Client struct {
 	mu              sync.Mutex
@@ -93,6 +51,9 @@ type Client struct {
 	cacheDir        string
 	retryDelay      time.Duration
 	requestInterval time.Duration
+	bootstrapURL    string
+	bootstrapCache  string
+	now             func() time.Time
 }
 
 // NewClient returns an RDAP client configured from the embedded DNS bootstrap.
@@ -101,11 +62,13 @@ type Client struct {
 func NewClient() *Client {
 	return &Client{
 		http:            &http.Client{Timeout: rdapRequestTimeout, CheckRedirect: checkRedirect},
-		base:            maps.Clone(bootstrapBases()),
+		base:            maps.Clone(embeddedBootstrap().bases),
 		cache:           make(map[string]analysis.DomainRecord),
 		last:            make(map[string]time.Time),
 		retryDelay:      rdapRetryDelay,
 		requestInterval: time.Second,
+		bootstrapURL:    ianaBootstrapURL,
+		now:             time.Now,
 	}
 }
 

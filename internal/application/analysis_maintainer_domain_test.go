@@ -102,3 +102,45 @@ func TestCheckMaintainerDomainsSkips(t *testing.T) {
 		t.Errorf("cancelled mid-package: calls=%d result=%+v", fake.calls, partial["npm"].MaintainerDomain)
 	}
 }
+
+type refreshingChecker struct {
+	fakeMaintainerDomainChecker
+	refreshes int
+}
+
+// RefreshBootstrap counts refreshes for application tests.
+func (r *refreshingChecker) RefreshBootstrap(context.Context) domain.RDAPBootstrapInfo {
+	r.refreshes++
+	return domain.RDAPBootstrapInfo{Source: domain.RDAPBootstrapLive, Publication: "2026-10-20T00:00:00Z"}
+}
+
+// TestRDAPBootstrapRefreshedOnceWhenNeeded checks that the service list is
+// refreshed once, and only when an npm package is checked.
+func TestRDAPBootstrapRefreshedOnceWhenNeeded(t *testing.T) {
+	now := time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC)
+	address := domain.MaintainerAddress{Account: "atiertant", Email: "a.tiertant@atlantis-software.net", FirstSeen: time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)}
+	checker := &refreshingChecker{}
+	s := &AnalysisService{maintainerDomainChecker: checker}
+
+	s.checkMaintainerDomains(context.Background(), map[string]*domain.Analysis{"pypi": {ReleaseHistory: &domain.ReleaseHistory{Registry: "pypi"}}}, now)
+	if checker.refreshes != 0 || s.RDAPBootstrap() != nil {
+		t.Fatalf("no npm package: refreshes=%d info=%+v", checker.refreshes, s.RDAPBootstrap())
+	}
+	npm := func() map[string]*domain.Analysis {
+		return map[string]*domain.Analysis{
+			"a": {ReleaseHistory: &domain.ReleaseHistory{Registry: domain.RegistryNpm, Maintainers: []domain.MaintainerAddress{address}}},
+			"b": {ReleaseHistory: &domain.ReleaseHistory{Registry: domain.RegistryNpm, Maintainers: []domain.MaintainerAddress{address}}},
+		}
+	}
+	s.checkMaintainerDomains(context.Background(), npm(), now)
+	s.checkMaintainerDomains(context.Background(), npm(), now)
+	if checker.refreshes != 1 {
+		t.Errorf("refreshes=%d, want 1 across batches", checker.refreshes)
+	}
+	if got := s.RDAPBootstrap(); got == nil || got.Source != domain.RDAPBootstrapLive || got.Publication != "2026-10-20T00:00:00Z" {
+		t.Errorf("info=%+v", got)
+	}
+	if off := (&AnalysisService{}); off.RDAPBootstrap() != nil {
+		t.Errorf("check off: info=%+v, want nil", off.RDAPBootstrap())
+	}
+}

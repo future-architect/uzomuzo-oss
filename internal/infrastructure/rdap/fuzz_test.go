@@ -40,3 +40,24 @@ func FuzzMailHost(f *testing.F) {
 		_, _ = Registrable(host)
 	})
 }
+
+// FuzzBootstrap checks that registry parsing never panics and only keeps https services.
+func FuzzBootstrap(f *testing.F) {
+	f.Add([]byte(`{"publication":"2026-10-20T00:00:00Z","services":[[["com"],["https://rdap.verisign.com/com/v1/"]]]}`))
+	f.Add([]byte(`{"services":[[["kg"],["http://rdap.cctld.kg/"]]]}`))
+	f.Add([]byte(`{"services":[[]]}`))
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if len(data) > rdapResponseLimit {
+			return
+		}
+		list, err := parseBootstrap(data)
+		if err != nil {
+			return
+		}
+		for tld, base := range list.bases {
+			if !strings.HasPrefix(strings.ToLower(base), "https://") {
+				t.Fatalf("base[%q]=%q is not https", tld, base)
+			}
+		}
+	})
+}
