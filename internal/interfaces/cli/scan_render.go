@@ -165,7 +165,7 @@ func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.Audi
 	case FormatTable:
 		return renderScanTable(w, allEntries, displayEntries, filterActive)
 	case FormatJSON:
-		return writeScanJSON(w, allEntries, displayEntries, filterActive, bootstrap)
+		return renderScanJSON(w, allEntries, displayEntries, filterActive, bootstrap)
 	case FormatCSV:
 		return renderScanCSV(w, displayEntries)
 	default:
@@ -565,12 +565,8 @@ type rdapBootstrapJSON struct {
 
 // renderScanJSON renders the JSON output format.
 // filterActive indicates whether --show-only was explicitly provided.
-func renderScanJSON(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool) error {
-	return writeScanJSON(w, allEntries, displayEntries, filterActive, nil)
-}
-
-// writeScanJSON renders JSON and, when bootstrap is non-nil, the rdap_bootstrap field.
-func writeScanJSON(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool, bootstrap *domain.RDAPBootstrapInfo) error {
+// bootstrap, when non-nil, is written as rdap_bootstrap.
+func renderScanJSON(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool, bootstrap *domain.RDAPBootstrapInfo) error {
 	out := enrichedJSONOutput{
 		Summary: computeSummary(allEntries),
 		Entries: make([]enrichedJSONEntry, 0, len(displayEntries)),

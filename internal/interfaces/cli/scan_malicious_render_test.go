@@ -18,7 +18,7 @@ func TestMaliciousScanOutputs(t *testing.T) {
 	unknown := audit.AuditEntry{PURL: "pkg:npm/other@1.0.0", Verdict: audit.VerdictReview, Analysis: &analysis.Analysis{MaliciousState: &analysis.MaliciousState{Status: analysis.MaliciousStatusLookupFailed}}}
 	entries := []audit.AuditEntry{flagged, unknown}
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	var out struct {

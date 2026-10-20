@@ -88,7 +88,7 @@ func TestRenderScanTable(t *testing.T) {
 func TestRenderScanJSON(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries()
-	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false, nil); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -216,7 +216,7 @@ func TestRenderScanJSON_WithSource(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false, nil); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -329,7 +329,7 @@ func TestRenderScanTable_NoRelationColumnForUnknown(t *testing.T) {
 func TestRenderScanJSON_WithRelation(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeRelationEntries()
-	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false, nil); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -351,7 +351,7 @@ func TestRenderScanJSON_WithRelation(t *testing.T) {
 func TestRenderScanJSON_OmitsRelationWhenUnknown(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries()
-	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false, nil); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 	// Relation with empty string should be omitted via omitempty.
@@ -447,7 +447,7 @@ func TestRenderScanJSON_TransitiveAdvisories(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false, nil); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -714,7 +714,7 @@ func TestRenderScanJSON_WithShowOnly(t *testing.T) {
 	displayEntries := filterEntriesByVerdict(allEntries, filter)
 
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, allEntries, displayEntries, true); err != nil {
+	if err := renderScanJSON(&buf, allEntries, displayEntries, true, nil); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 
@@ -747,7 +747,7 @@ func TestRenderScanJSON_WithShowOnly(t *testing.T) {
 func TestRenderScanJSON_AlwaysSerializesZeroValueFields(t *testing.T) {
 	var buf bytes.Buffer
 	entries := makeTestEntries() // entry[0] (express, OK) has Archived=false, OverallScore=0
-	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false, nil); err != nil {
 		t.Fatalf("renderScanJSON() error = %v", err)
 	}
 

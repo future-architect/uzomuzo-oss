@@ -26,7 +26,7 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 	}}}
 	e := audit.AuditEntry{PURL: "pkg:npm/node-ipc@12.0.0", Verdict: audit.VerdictOK, Analysis: a}
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, []audit.AuditEntry{e}, []audit.AuditEntry{e}, false); err != nil {
+	if err := renderScanJSON(&buf, []audit.AuditEntry{e}, []audit.AuditEntry{e}, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	var out struct {
@@ -85,7 +85,7 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 	}
 	a.MaintainerDomain = &analysis.MaintainerDomainResult{}
 	buf.Reset()
-	if err := renderScanJSON(&buf, []audit.AuditEntry{e}, []audit.AuditEntry{e}, false); err != nil {
+	if err := renderScanJSON(&buf, []audit.AuditEntry{e}, []audit.AuditEntry{e}, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), `"flagged": []`) || !strings.Contains(buf.String(), `"unchecked_findings": []`) {
@@ -93,7 +93,7 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 	}
 	a.MaintainerDomain = nil
 	buf.Reset()
-	if err := renderScanJSON(&buf, []audit.AuditEntry{e}, []audit.AuditEntry{e}, false); err != nil {
+	if err := renderScanJSON(&buf, []audit.AuditEntry{e}, []audit.AuditEntry{e}, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(buf.String(), "maintainer_domain") {
@@ -105,7 +105,7 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 func TestEmptyScanJSONGolden(t *testing.T) {
 	const golden = "{\n  \"summary\": {\n    \"total\": 0,\n    \"ok\": 0,\n    \"caution\": 0,\n    \"replace\": 0,\n    \"review\": 0,\n    \"build_integrity\": {\n      \"hardened\": 0,\n      \"moderate\": 0,\n      \"weak\": 0,\n      \"ungraded\": 0\n    }\n  },\n  \"packages\": [],\n  \"shown\": 0\n}\n"
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, nil, nil, false); err != nil {
+	if err := renderScanJSON(&buf, nil, nil, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	if buf.String() != golden {

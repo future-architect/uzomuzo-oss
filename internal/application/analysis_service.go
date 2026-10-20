@@ -88,7 +88,8 @@ func WithMaintainerDomain() Option {
 }
 
 // RDAPBootstrap reports the RDAP service list the maintainer domain check
-// used. It is nil when the check is off or found no npm package to check.
+// used. It is nil when the check is off, when it found no npm package to
+// check, or when its checker cannot refresh the list.
 func (s *AnalysisService) RDAPBootstrap() *domain.RDAPBootstrapInfo {
 	s.rdapBootstrapMu.Lock()
 	defer s.rdapBootstrapMu.Unlock()

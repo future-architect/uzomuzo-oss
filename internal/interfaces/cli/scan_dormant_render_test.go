@@ -30,7 +30,7 @@ func TestDormantReleaseScanOutputs(t *testing.T) {
 	entries := []audit.AuditEntry{marked}
 
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	var out struct {

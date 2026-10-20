@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"maps"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -25,6 +26,10 @@ const ianaBootstrapURL = "https://data.iana.org/rdap/dns.json"
 
 // bootstrapCacheSchema versions the on-disk bootstrap cache layout.
 const bootstrapCacheSchema = 1
+
+// maxBootstrapLifetime caps how long a cached registry is trusted, whatever
+// max-age or Expires says.
+const maxBootstrapLifetime = 365 * 24 * time.Hour
 
 //go:embed bootstrap.json
 var bootstrapFS embed.FS
@@ -80,19 +85,19 @@ func (c *Client) SetBootstrapCache(path string) { c.bootstrapCache = path }
 // SetBootstrapURL overrides the bootstrap registry URL.
 func (c *Client) SetBootstrapURL(u string) { c.bootstrapURL = u }
 
-// SetClock replaces the clock used for bootstrap cache expiry.
-func (c *Client) SetClock(now func() time.Time) { c.now = now }
+// SetBootstrapClock replaces the clock used for bootstrap cache expiry.
+func (c *Client) SetBootstrapClock(now func() time.Time) { c.now = now }
 
 // RefreshBootstrap replaces the TLD service list with the current IANA
 // registry, following its HTTP cache headers (RFC 9224 section 4). A cached
 // copy is used without a request until it expires, then revalidated with
-// If-None-Match. Any failure keeps the embedded registry. The fetch is not
-// retried. Call it before SetBaseURL and the first lookup: it replaces the
-// whole list. See ADR-0030.
+// If-None-Match when it has an ETag. Any failure resets the list to the
+// embedded registry. The fetch is not retried. Call it before SetBaseURL and
+// the first lookup: it replaces the whole list. See ADR-0030.
 func (c *Client) RefreshBootstrap(ctx context.Context) analysis.RDAPBootstrapInfo {
 	list, source, err := c.loadBootstrap(ctx)
 	if err != nil {
-		slog.Debug("rdap_bootstrap_fallback", "url", c.bootstrapURL, "error", err)
+		slog.Warn("rdap_bootstrap_fallback", "url", c.bootstrapURL, "error", err)
 		list, source = embeddedBootstrap(), analysis.RDAPBootstrapEmbedded
 	}
 	c.mu.Lock()
@@ -103,12 +108,13 @@ func (c *Client) RefreshBootstrap(ctx context.Context) analysis.RDAPBootstrapInf
 
 func (c *Client) loadBootstrap(ctx context.Context) (bootstrapList, analysis.RDAPBootstrapSource, error) {
 	cached, cacheErr := c.readBootstrapCache()
+	var cachedList bootstrapList
+	if cacheErr == nil {
+		// An unusable cached body is not revalidated: a 304 would keep it.
+		cachedList, cacheErr = parseBootstrap(cached.Body)
+	}
 	if cacheErr == nil && c.now().Before(cached.Expires) {
-		list, err := parseBootstrap(cached.Body)
-		if err == nil {
-			return list, analysis.RDAPBootstrapCache, nil
-		}
-		cacheErr = err
+		return cachedList, analysis.RDAPBootstrapCache, nil
 	}
 	if cacheErr != nil && !errors.Is(cacheErr, os.ErrNotExist) {
 		slog.Debug("rdap_bootstrap_cache_unusable", "path", c.bootstrapCache, "error", cacheErr)
@@ -131,16 +137,14 @@ func (c *Client) loadBootstrap(ctx context.Context) (bootstrapList, analysis.RDA
 
 	switch {
 	case resp.StatusCode == http.StatusNotModified && revalidate:
-		list, err := parseBootstrap(cached.Body)
-		if err != nil {
-			return bootstrapList{}, "", fmt.Errorf("cached bootstrap after 304: %w", err)
-		}
 		cached.Expires = c.expiry(resp.Header)
 		if etag := resp.Header.Get("ETag"); etag != "" {
 			cached.ETag = etag
 		}
-		c.writeBootstrapCache(cached)
-		return list, analysis.RDAPBootstrapCache, nil
+		if !noStore(resp.Header) {
+			c.writeBootstrapCache(cached)
+		}
+		return cachedList, analysis.RDAPBootstrapCache, nil
 	case resp.StatusCode == http.StatusOK:
 		body, err := io.ReadAll(io.LimitReader(resp.Body, rdapResponseLimit+1))
 		if err != nil {
@@ -153,40 +157,84 @@ func (c *Client) loadBootstrap(ctx context.Context) (bootstrapList, analysis.RDA
 		if err != nil {
 			return bootstrapList{}, "", fmt.Errorf("fetched bootstrap: %w", err)
 		}
-		c.writeBootstrapCache(bootstrapCacheEntry{ETag: resp.Header.Get("ETag"), Expires: c.expiry(resp.Header), Body: body})
+		if !noStore(resp.Header) {
+			c.writeBootstrapCache(bootstrapCacheEntry{ETag: resp.Header.Get("ETag"), Expires: c.expiry(resp.Header), Body: body})
+		}
 		return list, analysis.RDAPBootstrapLive, nil
 	default:
 		return bootstrapList{}, "", fmt.Errorf("fetch bootstrap: HTTP %d", resp.StatusCode)
 	}
 }
 
-// expiry derives the refresh time from Cache-Control max-age, then Expires.
-// no-store, no-cache, or neither header means the copy is stale at once and
-// the next run revalidates it.
+// expiry derives the refresh time from Cache-Control max-age less Age, then
+// from Expires, both capped at maxBootstrapLifetime. A no-store or no-cache
+// directive anywhere in Cache-Control, or neither header, means the copy is
+// stale at once and the next run revalidates it.
 func (c *Client) expiry(h http.Header) time.Time {
 	now := c.now()
-	for _, directive := range strings.Split(h.Get("Cache-Control"), ",") {
-		name, value, _ := strings.Cut(strings.TrimSpace(directive), "=")
-		switch strings.ToLower(name) {
-		case "no-store", "no-cache":
-			return now
-		case "max-age":
-			if seconds, err := strconv.ParseInt(strings.Trim(value, `"`), 10, 64); err == nil && seconds >= 0 && seconds <= int64(365*24*time.Hour/time.Second) {
-				return now.Add(time.Duration(seconds) * time.Second)
-			}
-		}
+	directives := cacheDirectives(h)
+	if _, ok := directives["no-store"]; ok {
+		return now
+	}
+	if _, ok := directives["no-cache"]; ok {
+		return now
+	}
+	if seconds, ok := headerSeconds(directives["max-age"]); ok {
+		age, _ := headerSeconds(h.Get("Age"))
+		return now.Add(max(min(seconds, maxBootstrapLifetime)-age, 0))
 	}
 	if at, err := http.ParseTime(h.Get("Expires")); err == nil {
+		if limit := now.Add(maxBootstrapLifetime); at.After(limit) {
+			return limit
+		}
 		return at
 	}
 	return now
+}
+
+// noStore reports whether the response must not be written to disk.
+func noStore(h http.Header) bool {
+	_, ok := cacheDirectives(h)["no-store"]
+	return ok
+}
+
+// cacheDirectives collects Cache-Control directives from every header line,
+// lowercased, with their values unquoted.
+func cacheDirectives(h http.Header) map[string]string {
+	out := map[string]string{}
+	for _, directive := range strings.Split(strings.Join(h.Values("Cache-Control"), ","), ",") {
+		name, value, _ := strings.Cut(strings.TrimSpace(directive), "=")
+		if name != "" {
+			out[strings.ToLower(name)] = strings.Trim(value, `"`)
+		}
+	}
+	return out
+}
+
+// headerSeconds parses a non-negative delta-seconds value, saturating at
+// maxBootstrapLifetime so a huge value cannot overflow.
+func headerSeconds(v string) (time.Duration, bool) {
+	seconds, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+	if err != nil || seconds < 0 {
+		return 0, false
+	}
+	if seconds > int64(maxBootstrapLifetime/time.Second) {
+		return maxBootstrapLifetime, true
+	}
+	return time.Duration(seconds) * time.Second, true
 }
 
 func (c *Client) readBootstrapCache() (bootstrapCacheEntry, error) {
 	if c.bootstrapCache == "" {
 		return bootstrapCacheEntry{}, os.ErrNotExist
 	}
-	data, err := os.ReadFile(c.bootstrapCache)
+	f, err := os.Open(c.bootstrapCache)
+	if err != nil {
+		return bootstrapCacheEntry{}, fmt.Errorf("read bootstrap cache: %w", err)
+	}
+	defer func() { _ = f.Close() }() // read-only
+	// The body is at most rdapResponseLimit; the rest is a small envelope.
+	data, err := io.ReadAll(io.LimitReader(f, 2*rdapResponseLimit))
 	if err != nil {
 		return bootstrapCacheEntry{}, fmt.Errorf("read bootstrap cache: %w", err)
 	}
@@ -210,12 +258,14 @@ func (c *Client) writeBootstrapCache(entry bootstrapCacheEntry) {
 	}
 	entry.Schema = bootstrapCacheSchema
 	entry.Expires = entry.Expires.UTC()
-	if err := writeFileAtomic(c.bootstrapCache, entry); err != nil {
+	if err := writeJSONAtomic(c.bootstrapCache, entry); err != nil {
 		slog.Debug("rdap_bootstrap_cache_write_failed", "path", c.bootstrapCache, "error", err)
 	}
 }
 
-func writeFileAtomic(path string, v any) error {
+// writeJSONAtomic writes v as JSON to path through a temporary file in the
+// same directory and a rename.
+func writeJSONAtomic(path string, v any) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
@@ -224,7 +274,7 @@ func writeFileAtomic(path string, v any) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create directory: %w", err)
 	}
-	tmp, err := os.CreateTemp(dir, ".dns-*.json")
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+"-*")
 	if err != nil {
 		return fmt.Errorf("create temporary file: %w", err)
 	}
@@ -244,12 +294,15 @@ func writeFileAtomic(path string, v any) error {
 }
 
 // parseBootstrap keeps, for each TLD, the first https RDAP base URL listed.
-// Plain-http services are left out so a network attacker cannot forge a
-// registration date. A registry without any usable service is rejected.
+// Plain-http services are left out (see ADR-0030). A registry without an
+// RFC 3339 publication time or without any https service is rejected.
 func parseBootstrap(data []byte) (bootstrapList, error) {
 	var b bootstrap
 	if err := json.Unmarshal(data, &b); err != nil {
 		return bootstrapList{}, fmt.Errorf("decode bootstrap: %w", err)
+	}
+	if _, err := time.Parse(time.RFC3339, b.Publication); err != nil {
+		return bootstrapList{}, fmt.Errorf("bootstrap publication %q: %w", b.Publication, err)
 	}
 	bases := make(map[string]string)
 	for _, service := range b.Services {
@@ -258,7 +311,7 @@ func parseBootstrap(data []byte) (bootstrapList, error) {
 		}
 		var https string
 		for _, u := range service[1] {
-			if strings.HasPrefix(strings.ToLower(u), "https://") {
+			if isHTTPSBase(u) {
 				https = u
 				break
 			}
@@ -274,4 +327,10 @@ func parseBootstrap(data []byte) (bootstrapList, error) {
 		return bootstrapList{}, errors.New("bootstrap has no https services")
 	}
 	return bootstrapList{bases: bases, publication: b.Publication}, nil
+}
+
+// isHTTPSBase reports whether u is an https URL with a host and no userinfo.
+func isHTTPSBase(u string) bool {
+	parsed, err := url.Parse(u)
+	return err == nil && strings.EqualFold(parsed.Scheme, "https") && parsed.Host != "" && parsed.User == nil
 }

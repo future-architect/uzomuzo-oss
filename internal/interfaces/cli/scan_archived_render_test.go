@@ -55,7 +55,7 @@ func TestArchivedDisabledScanOutputs(t *testing.T) {
 	}
 
 	buf.Reset()
-	if err := renderScanJSON(&buf, entries, entries, false); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	var out struct {

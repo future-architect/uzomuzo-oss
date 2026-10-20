@@ -67,7 +67,7 @@ func (s *bootstrapServer) client(t *testing.T, cachePath string, now time.Time) 
 	c.SetBootstrapURL(s.URL + "/dns.json")
 	c.SetBootstrapCache(cachePath)
 	c.SetRequestInterval(0)
-	c.SetClock(func() time.Time { return now })
+	c.SetBootstrapClock(func() time.Time { return now })
 	return c
 }
 
@@ -109,9 +109,12 @@ func TestRefreshBootstrapLive(t *testing.T) {
 	if len(files) != 1 || files[0].Name() != "dns.json" {
 		t.Errorf("cache dir holds %v, want only dns.json (no domain records, no temp files)", files)
 	}
-	info2, err := os.Stat(cachePath)
-	if err != nil || info2.Mode().Perm() != 0o600 {
-		t.Errorf("cache file mode=%v err=%v", info2.Mode().Perm(), err)
+	stat, err := os.Stat(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stat.Mode().Perm() != 0o600 {
+		t.Errorf("cache file mode=%v, want 0600", stat.Mode().Perm())
 	}
 }
 
@@ -126,9 +129,20 @@ func TestRefreshBootstrapFallsBackToEmbedded(t *testing.T) {
 		{"server error", http.StatusInternalServerError, nil},
 		{"not found", http.StatusNotFound, nil},
 		{"malformed", http.StatusOK, func(*bootstrapServer) string { return `{` }},
-		{"empty services", http.StatusOK, func(*bootstrapServer) string { return `{"publication":"x","services":[]}` }},
+		{"empty services", http.StatusOK, func(*bootstrapServer) string {
+			return `{"publication":"2026-10-20T00:00:00Z","services":[]}`
+		}},
 		{"plain http only", http.StatusOK, func(*bootstrapServer) string {
-			return `{"publication":"x","services":[[["newtld"],["http://rdap.example/"]]]}`
+			return `{"publication":"2026-10-20T00:00:00Z","services":[[["newtld"],["http://rdap.example/"]]]}`
+		}},
+		{"https without host", http.StatusOK, func(*bootstrapServer) string {
+			return `{"publication":"2026-10-20T00:00:00Z","services":[[["newtld"],["https://"]]]}`
+		}},
+		{"https with userinfo", http.StatusOK, func(*bootstrapServer) string {
+			return `{"publication":"2026-10-20T00:00:00Z","services":[[["newtld"],["https://u:p@rdap.example/"]]]}`
+		}},
+		{"missing publication", http.StatusOK, func(s *bootstrapServer) string {
+			return strings.Replace(s.registry("newtld"), `"publication":"2026-10-20T00:00:00Z",`, "", 1)
 		}},
 		{"oversize", http.StatusOK, func(s *bootstrapServer) string {
 			return s.registry("newtld")[:10] + strings.Repeat(" ", rdapResponseLimit) + s.registry("newtld")[10:]
@@ -215,8 +229,16 @@ func TestBootstrapExpiry(t *testing.T) {
 		{"max-age", http.Header{"Cache-Control": {"public, max-age=86400"}}, now.Add(24 * time.Hour)},
 		{"max-age wins over expires", http.Header{"Cache-Control": {"max-age=60"}, "Expires": {"Wed, 21 Oct 2026 10:00:00 GMT"}}, now.Add(time.Minute)},
 		{"expires", http.Header{"Expires": {"Wed, 21 Oct 2026 10:00:00 GMT"}}, time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC)},
-		{"no-cache", http.Header{"Cache-Control": {"no-cache, max-age=86400"}}, now},
+		{"no-cache first", http.Header{"Cache-Control": {"no-cache, max-age=86400"}}, now},
+		{"no-cache last", http.Header{"Cache-Control": {"max-age=86400, no-cache"}}, now},
+		{"no-store on second line", http.Header{"Cache-Control": {"max-age=86400", "no-store"}}, now},
+		{"max-age on second line", http.Header{"Cache-Control": {"public", "max-age=60"}}, now.Add(time.Minute)},
+		{"age subtracted", http.Header{"Cache-Control": {"max-age=86400"}, "Age": {"3600"}}, now.Add(23 * time.Hour)},
+		{"age beyond max-age", http.Header{"Cache-Control": {"max-age=60"}, "Age": {"120"}}, now},
+		{"huge max-age capped", http.Header{"Cache-Control": {"max-age=999999999999999"}}, now.Add(maxBootstrapLifetime)},
+		{"far expires capped", http.Header{"Expires": {"Thu, 01 Jan 2099 00:00:00 GMT"}}, now.Add(maxBootstrapLifetime)},
 		{"bad max-age", http.Header{"Cache-Control": {"max-age=abc"}}, now},
+		{"negative max-age", http.Header{"Cache-Control": {"max-age=-1"}}, now},
 		{"none", http.Header{}, now},
 	}
 	for _, tt := range tests {
@@ -250,5 +272,124 @@ func TestRefreshBootstrapIgnoresBrokenCache(t *testing.T) {
 	var entry bootstrapCacheEntry
 	if err := json.Unmarshal(data, &entry); err != nil || entry.Schema != bootstrapCacheSchema {
 		t.Errorf("cache not rewritten: %s", data)
+	}
+}
+
+// TestRefreshBootstrapExpiredCacheFetchFails pins that a failed fetch uses the
+// embedded registry, not an expired cached copy, and leaves the cache alone.
+func TestRefreshBootstrapExpiredCacheFetchFails(t *testing.T) {
+	t.Parallel()
+	srv := newBootstrapServer(t)
+	cachePath := filepath.Join(t.TempDir(), "dns.json")
+	start := time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC)
+	if info := srv.client(t, cachePath, start).RefreshBootstrap(context.Background()); info.Source != analysis.RDAPBootstrapLive {
+		t.Fatalf("seed info=%+v", info)
+	}
+	before, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.status.Store(http.StatusServiceUnavailable)
+	c := srv.client(t, cachePath, start.Add(48*time.Hour))
+	if info := c.RefreshBootstrap(context.Background()); info.Source != analysis.RDAPBootstrapEmbedded {
+		t.Errorf("info=%+v, want embedded", info)
+	}
+	if _, ok := c.base["newtld"]; ok {
+		t.Errorf("expired cached registry was used")
+	}
+	after, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("cache file changed after a failed fetch")
+	}
+}
+
+// TestRefreshBootstrapNoStore checks that a no-store response is used but not written.
+func TestRefreshBootstrapNoStore(t *testing.T) {
+	t.Parallel()
+	body := ""
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Cache-Control", "max-age=86400, no-store")
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	body = fmt.Sprintf(`{"publication":"2026-10-20T00:00:00Z","services":[[["newtld"],[%q]]]}`, srv.URL+"/rdap/")
+	cachePath := filepath.Join(t.TempDir(), "dns.json")
+	c := NewClient()
+	c.SetHTTPClient(srv.Client())
+	c.SetBootstrapURL(srv.URL + "/dns.json")
+	c.SetBootstrapCache(cachePath)
+	if info := c.RefreshBootstrap(context.Background()); info.Source != analysis.RDAPBootstrapLive {
+		t.Fatalf("info=%+v, want live", info)
+	}
+	if _, err := os.Stat(cachePath); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("no-store response was written: %v", err)
+	}
+}
+
+// TestRefreshBootstrapExpiredCacheNewList checks that an expired copy is
+// replaced when the registry changed, so a TLD whose RDAP URL moved follows it.
+func TestRefreshBootstrapExpiredCacheNewList(t *testing.T) {
+	t.Parallel()
+	srv := newBootstrapServer(t)
+	cachePath := filepath.Join(t.TempDir(), "dns.json")
+	start := time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC)
+	if info := srv.client(t, cachePath, start).RefreshBootstrap(context.Background()); info.Source != analysis.RDAPBootstrapLive {
+		t.Fatalf("seed info=%+v", info)
+	}
+	moved := strings.Replace(srv.registry("newtld"), "/rdap/", "/rdap/moved/", 1)
+	srv.body.Store(moved)
+	later := start.Add(48 * time.Hour)
+	c := srv.client(t, cachePath, later)
+	if info := c.RefreshBootstrap(context.Background()); info.Source != analysis.RDAPBootstrapLive {
+		t.Fatalf("info=%+v, want live", info)
+	}
+	if got := srv.ifNoneMatch.Load(); got != `"v2"` {
+		t.Errorf("If-None-Match=%q, want the cached ETag", got)
+	}
+	if want := srv.URL + "/rdap/moved/"; c.base["newtld"] != want {
+		t.Errorf("base[newtld]=%q, want %q", c.base["newtld"], want)
+	}
+	entry, err := (&Client{bootstrapCache: cachePath}).readBootstrapCache()
+	if err != nil || !strings.Contains(string(entry.Body), "/rdap/moved/") || !entry.Expires.Equal(later.Add(24*time.Hour)) {
+		t.Errorf("cache not rewritten: expires=%s err=%v", entry.Expires, err)
+	}
+}
+
+// TestRefreshBootstrapExpiredCacheWithoutETag checks that a copy without an
+// ETag is refetched with a plain GET.
+func TestRefreshBootstrapExpiredCacheWithoutETag(t *testing.T) {
+	t.Parallel()
+	srv := newBootstrapServer(t)
+	cachePath := filepath.Join(t.TempDir(), "dns.json")
+	if err := writeJSONAtomic(cachePath, bootstrapCacheEntry{Schema: bootstrapCacheSchema, Body: json.RawMessage(srv.registry("oldtld"))}); err != nil {
+		t.Fatal(err)
+	}
+	c := srv.client(t, cachePath, time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC))
+	if info := c.RefreshBootstrap(context.Background()); info.Source != analysis.RDAPBootstrapLive {
+		t.Fatalf("info=%+v, want live", info)
+	}
+	if got := srv.ifNoneMatch.Load(); got != "" {
+		t.Errorf("If-None-Match=%q, want none", got)
+	}
+}
+
+// TestRefreshBootstrapBrokenCachedBodyNotRevalidated checks that an expired
+// cache entry whose body is unusable is replaced by a plain GET, not kept by a 304.
+func TestRefreshBootstrapBrokenCachedBodyNotRevalidated(t *testing.T) {
+	t.Parallel()
+	srv := newBootstrapServer(t)
+	cachePath := filepath.Join(t.TempDir(), "dns.json")
+	if err := writeJSONAtomic(cachePath, bootstrapCacheEntry{Schema: bootstrapCacheSchema, ETag: `"v2"`, Body: json.RawMessage(`{"services":[]}`)}); err != nil {
+		t.Fatal(err)
+	}
+	c := srv.client(t, cachePath, time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC))
+	if info := c.RefreshBootstrap(context.Background()); info.Source != analysis.RDAPBootstrapLive {
+		t.Fatalf("info=%+v, want live", info)
+	}
+	if got := srv.ifNoneMatch.Load(); got != "" {
+		t.Errorf("If-None-Match=%q, want none for an unusable cached body", got)
 	}
 }
