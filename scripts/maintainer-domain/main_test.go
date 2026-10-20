@@ -198,10 +198,23 @@ func TestCSVCellQuotesFormulaPrefixes(t *testing.T) {
 	t.Parallel()
 	for in, want := range map[string]string{
 		"": "", "node-ipc": "node-ipc", "@scope/name": "'@scope/name", "=HYPERLINK(1)": "'=HYPERLINK(1)",
-		"+1": "'+1", "-x": "'-x", "\tx": "'\tx",
+		"+1": "'+1", "-x": "'-x", "\tx": "'\tx", "\rx": "'\rx", "\nx": "'\nx",
 	} {
 		if got := csvCell(in); got != want {
 			t.Errorf("csvCell(%q)=%q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestPackageCell keeps well-formed scoped names and neutralises the rest.
+func TestPackageCell(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]string{
+		"node-ipc": "node-ipc", "@babel/core": "@babel/core", "@scope/name": "@scope/name",
+		"@SUM(1)": "'@SUM(1)", "=cmd|' /C calc'!A0": "'=cmd|' /C calc'!A0", "+1": "'+1",
+	} {
+		if got := packageCell(in); got != want {
+			t.Errorf("packageCell(%q)=%q, want %q", in, got, want)
 		}
 	}
 }

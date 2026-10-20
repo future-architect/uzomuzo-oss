@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -420,13 +421,13 @@ func writeRows(path string, rows []row) (err error) {
 	}
 	for _, r := range rows {
 		if len(r.findings) == 0 {
-			if err := w.Write([]string{r.scope, r.name, formatTime(r.at), r.missing, "", "", "", "", "", "", "", ""}); err != nil {
+			if err := w.Write([]string{r.scope, packageCell(r.name), formatTime(r.at), r.missing, "", "", "", "", "", "", "", ""}); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 			continue
 		}
 		for _, finding := range r.findings {
-			if err := w.Write([]string{r.scope, r.name, formatTime(r.at), r.missing, csvCell(finding.Account), csvCell(finding.Domain), string(finding.Kind), formatTime(finding.FirstSeen), formatTime(finding.Registered), string(finding.Reason), csvCell(finding.Registrar), fmt.Sprint(finding.DropCatch)}); err != nil {
+			if err := w.Write([]string{r.scope, packageCell(r.name), formatTime(r.at), r.missing, csvCell(finding.Account), csvCell(finding.Domain), string(finding.Kind), formatTime(finding.FirstSeen), formatTime(finding.Registered), string(finding.Reason), csvCell(finding.Registrar), fmt.Sprint(finding.DropCatch)}); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 		}
@@ -440,12 +441,24 @@ func writeRows(path string, rows []row) (err error) {
 
 // csvCell keeps a spreadsheet from reading an external value as a formula by
 // prefixing a single quote to a cell that starts with =, +, -, @, tab, CR or LF.
-// Package names are written as given so rows join back to the caller's input.
 func csvCell(v string) string {
 	if v != "" && strings.ContainsRune("=+-@\t\r\n", rune(v[0])) {
 		return "'" + v
 	}
 	return v
+}
+
+// scopedPackageName matches a well-formed scoped npm name such as @babel/core.
+var scopedPackageName = regexp.MustCompile(`^@[a-z0-9~-][a-z0-9._~-]*/[a-z0-9~-][a-z0-9._~-]*$`)
+
+// packageCell writes a well-formed scoped npm name as given, so rows join back
+// to the caller's input, and passes any other name through csvCell. Package
+// names can come from an untrusted lockfile.
+func packageCell(name string) string {
+	if scopedPackageName.MatchString(name) {
+		return name
+	}
+	return csvCell(name)
 }
 
 // formatTime writes an empty cell for an unknown time instead of year 1.

@@ -261,3 +261,17 @@ func TestGetPublishHistory_LiveProbe(t *testing.T) {
 		t.Error("@solana/web3.js 1.95.6 has no time entry")
 	}
 }
+
+// TestRecordFirstSeenStoresUTC checks that first appearances are kept in UTC
+// and that the earliest instant wins regardless of offset.
+func TestRecordFirstSeenStoresUTC(t *testing.T) {
+	t.Parallel()
+	m := map[string]time.Time{}
+	tokyo := time.FixedZone("JST", 9*60*60)
+	recordFirstSeen(m, time.Date(2020, 11, 11, 9, 0, 0, 0, tokyo), Person{Email: " A@Example.com "})
+	recordFirstSeen(m, time.Date(2020, 11, 11, 1, 0, 0, 0, time.UTC), Person{Email: "a@example.com"})
+	got := m["a@example.com"]
+	if !got.Equal(time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)) || got.Location() != time.UTC {
+		t.Errorf("first seen=%s (%s), want 2020-11-11T00:00:00Z in UTC", got, got.Location())
+	}
+}
