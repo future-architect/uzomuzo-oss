@@ -449,7 +449,7 @@ func csvCell(v string) string {
 }
 
 // scopedPackageName matches a well-formed scoped npm name such as @babel/core.
-var scopedPackageName = regexp.MustCompile(`^@[a-z0-9~-][a-z0-9._~-]*/[a-z0-9~-][a-z0-9._~-]*$`)
+var scopedPackageName = regexp.MustCompile(`^@[a-z0-9_~-][a-z0-9._~-]*/[a-z0-9_~-][a-z0-9._~-]*$`)
 
 // packageCell writes a well-formed scoped npm name as given, so rows join back
 // to the caller's input, and passes any other name through csvCell. Package

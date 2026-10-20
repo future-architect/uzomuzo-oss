@@ -210,7 +210,7 @@ func TestCSVCellQuotesFormulaPrefixes(t *testing.T) {
 func TestPackageCell(t *testing.T) {
 	t.Parallel()
 	for in, want := range map[string]string{
-		"node-ipc": "node-ipc", "@babel/core": "@babel/core", "@scope/name": "@scope/name",
+		"node-ipc": "node-ipc", "@babel/core": "@babel/core", "@scope/name": "@scope/name", "@scope/_name": "@scope/_name", "@_scope/name": "@_scope/name",
 		"@SUM(1)": "'@SUM(1)", "=cmd|' /C calc'!A0": "'=cmd|' /C calc'!A0", "+1": "'+1",
 	} {
 		if got := packageCell(in); got != want {
