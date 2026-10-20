@@ -138,6 +138,9 @@ func TestRefreshBootstrapFallsBackToEmbedded(t *testing.T) {
 		{"https without host", http.StatusOK, func(*bootstrapServer) string {
 			return `{"publication":"2026-10-20T00:00:00Z","services":[[["newtld"],["https://"]]]}`
 		}},
+		{"https with port but no hostname", http.StatusOK, func(*bootstrapServer) string {
+			return `{"publication":"2026-10-20T00:00:00Z","services":[[["newtld"],["https://:443/"]]]}`
+		}},
 		{"https with userinfo", http.StatusOK, func(*bootstrapServer) string {
 			return `{"publication":"2026-10-20T00:00:00Z","services":[[["newtld"],["https://u:p@rdap.example/"]]]}`
 		}},

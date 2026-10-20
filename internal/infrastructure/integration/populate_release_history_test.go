@@ -130,3 +130,53 @@ func TestAnalyzeFromPURLs_PopulatesReleaseHistory(t *testing.T) {
 		t.Errorf("Installable = %v, want only 1.0.0", h.Installable)
 	}
 }
+
+// TestAnalyzeFromPURLs_PopulatesMaintainers drives the production path for the
+// maintainer data used by --maintainer-domain (ADR-0030): current maintainers
+// are mapped with a cleaned account name and the earliest dated appearance of
+// their normalized address, and two versions of one package get separate slices.
+func TestAnalyzeFromPURLs_PopulatesMaintainers(t *testing.T) {
+	t.Parallel()
+	const body = `{
+	  "time": {"1.0.0": "2020-11-11T00:00:00Z", "1.0.1": "2023-01-01T00:00:00Z"},
+	  "maintainers": [{"name": "at\u001b[31miertant", "email": "A.Tiertant@Atlantis-Software.NET "}],
+	  "versions": {
+	    "1.0.0": {"maintainers": [{"name": "atiertant", "email": "a.tiertant@atlantis-software.net"}]},
+	    "1.0.1": {"_npmUser": {"name": "atiertant", "email": "A.TIERTANT@atlantis-software.net"}}
+	  }
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() != "/node-ipc" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	nc := npmjs.NewClient()
+	nc.SetBaseURL(srv.URL)
+	svc := NewIntegrationService(github.NewClient(&config.Config{}), &stubDepsDevClient{}, WithNpmClient(nc))
+
+	purls := []string{"pkg:npm/node-ipc@1.0.0", "pkg:npm/node-ipc@1.0.1"}
+	analyses, err := svc.AnalyzeFromPURLs(context.Background(), purls)
+	if err != nil {
+		t.Fatalf("AnalyzeFromPURLs failed: %v", err)
+	}
+	for _, p := range purls {
+		a := analyses[p]
+		if a == nil || a.ReleaseHistory == nil {
+			t.Fatalf("%s: no release history", p)
+		}
+		m := a.ReleaseHistory.Maintainers
+		if len(m) != 1 {
+			t.Fatalf("%s: maintainers=%+v, want 1", p, m)
+		}
+		if m[0].Account != "at[31miertant" || m[0].Email != "A.Tiertant@Atlantis-Software.NET " || !m[0].FirstSeen.Equal(time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("%s: maintainer=%+v", p, m[0])
+		}
+	}
+	analyses[purls[0]].ReleaseHistory.Maintainers[0].Account = "changed"
+	if analyses[purls[1]].ReleaseHistory.Maintainers[0].Account == "changed" {
+		t.Error("two analyses share one Maintainers slice")
+	}
+}

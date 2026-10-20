@@ -331,8 +331,8 @@ func parseBootstrap(data []byte) (bootstrapList, error) {
 	return bootstrapList{bases: bases, publication: b.Publication}, nil
 }
 
-// isHTTPSBase reports whether u is an https URL with a host and no userinfo.
+// isHTTPSBase reports whether u is an https URL with a hostname and no userinfo.
 func isHTTPSBase(u string) bool {
 	parsed, err := url.Parse(u)
-	return err == nil && strings.EqualFold(parsed.Scheme, "https") && parsed.Host != "" && parsed.User == nil
+	return err == nil && strings.EqualFold(parsed.Scheme, "https") && parsed.Hostname() != "" && parsed.User == nil
 }
