@@ -64,6 +64,29 @@ func TestPublisherEmailEvidenceUsesFindingSourceHiddenTimes(t *testing.T) {
 	}
 }
 
+func TestPublisherEmailEvidenceUnobservedAccountUsesSourceHiddenTimes(t *testing.T) {
+	f := MaintainerDomainFinding{Account: "account-a", Domain: "example.com", Kind: MaintainerDomainUnregistered}
+	for _, tc := range []struct {
+		name   string
+		hidden []time.Time
+		want   bool
+	}{
+		{name: "hidden source publish", hidden: []time.Time{time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)}, want: true},
+		{name: "no hidden source publish", want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := PublisherPackageHistory{HiddenPublishedAt: tc.hidden}
+			e := PublisherEmailEvidenceFor(f, source, []PublisherPackageHistory{source})
+			if e.Status != PublisherEmailNotObserved || e.NewerPublishUnknown != tc.want {
+				t.Fatalf("evidence=%+v, want status=%q newer_publish_unknown=%v", e, PublisherEmailNotObserved, tc.want)
+			}
+			if clause := publisherNoticeClause(e); clause != "" {
+				t.Fatalf("notice clause=%q, want empty", clause)
+			}
+		})
+	}
+}
+
 func TestPublisherEvidenceNeverChangesClassification(t *testing.T) {
 	first := time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)
 	base := time.Date(2026, 5, 14, 14, 25, 30, 0, time.UTC)

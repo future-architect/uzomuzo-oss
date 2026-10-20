@@ -98,6 +98,7 @@ func PublisherEmailEvidenceFor(f MaintainerDomainFinding, source PublisherPackag
 		}
 	}
 	if len(latest) == 0 {
+		e.NewerPublishUnknown = len(source.HiddenPublishedAt) > 0
 		return e
 	}
 	sort.Slice(latest, func(i, j int) bool {
