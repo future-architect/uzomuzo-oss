@@ -27,20 +27,6 @@ func FuzzRDAPResponse(f *testing.F) {
 	})
 }
 
-// FuzzMailHost checks host parsing and public-suffix handling on arbitrary strings.
-func FuzzMailHost(f *testing.F) {
-	f.Add("mail.example.co.uk")
-	f.Add("me.github.io")
-	f.Add("..")
-	f.Fuzz(func(t *testing.T, host string) {
-		if len(host) > 4096 {
-			return
-		}
-		_ = validMailHost(strings.ToLower(host))
-		_, _ = Registrable(host)
-	})
-}
-
 // FuzzBootstrap checks that registry parsing never panics and only keeps https services.
 func FuzzBootstrap(f *testing.F) {
 	f.Add([]byte(`{"publication":"2026-10-20T00:00:00Z","services":[[["com"],["https://rdap.verisign.com/com/v1/"]]]}`))

@@ -470,7 +470,7 @@ func (s *AnalysisService) checkMaintainerDomains(ctx context.Context, analyses m
 		for _, address := range a.ReleaseHistory.Maintainers {
 			finding := s.maintainerDomainChecker.Check(ctx, address, now)
 			if finding.Kind.WarrantsNotice() {
-				finding.PublisherEmailEvidence = domain.PublisherEmailEvidenceFor(finding, a.ReleaseHistory.PublisherHistory, histories)
+				finding.PublisherEmailEvidence = domain.PublisherEmailEvidenceFor(finding, domain.PublisherScopeScanPackuments, a.ReleaseHistory.PublisherHistory, histories)
 			}
 			result.Findings = append(result.Findings, finding)
 			// A package interrupted by cancellation would report the cut-short

@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common/maildomain"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
-	"golang.org/x/net/publicsuffix"
 )
 
 type diskEntry struct {
@@ -36,8 +36,6 @@ const (
 	rdapRetryDelay     = 30 * time.Second
 	rdapResponseLimit  = 1 << 20
 	rdapMaxAttempts    = 2
-	maxDNSHostLength   = 253
-	maxDNSLabelLength  = 63
 	maxRedirects       = 5
 )
 
@@ -103,19 +101,6 @@ func (c *Client) SetRetryDelay(delay time.Duration) { c.retryDelay = delay }
 // SetRequestInterval sets the minimum time between requests to one host.
 func (c *Client) SetRequestInterval(delay time.Duration) { c.requestInterval = delay }
 
-// Registrable resolves a mail host to its effective registered domain. The
-// second result reports whether the domain sits under a private (non-ICANN)
-// public suffix, such as github.io.
-func Registrable(host string) (string, bool) {
-	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
-	suffix, icann := publicsuffix.PublicSuffix(host)
-	domain, err := publicsuffix.EffectiveTLDPlusOne(host)
-	if err != nil || suffix == "" {
-		return "", false
-	}
-	return domain, !icann && suffix != host[strings.LastIndex(host, ".")+1:]
-}
-
 var sharedMail = map[string]struct{}{
 	"gmail.com": {}, "googlemail.com": {}, "outlook.com": {}, "hotmail.com": {}, "live.com": {}, "msn.com": {},
 	"yahoo.com": {}, "yahoo.co.jp": {}, "icloud.com": {}, "me.com": {}, "mac.com": {}, "protonmail.com": {},
@@ -132,16 +117,11 @@ func (c *Client) Check(ctx context.Context, address analysis.MaintainerAddress, 
 		f.Kind, f.Reason = analysis.MaintainerDomainUnchecked, reason
 		return f
 	}
-	email := analysis.NormalizeEmail(address.Email)
-	at := strings.LastIndexByte(email, '@')
-	if at < 1 || at == len(email)-1 {
+	host := maildomain.Host(analysis.NormalizeEmail(address.Email))
+	if host == "" {
 		return unchecked(analysis.MaintainerDomainReasonInvalidAddress)
 	}
-	host := email[at+1:]
-	if !validMailHost(host) {
-		return unchecked(analysis.MaintainerDomainReasonInvalidAddress)
-	}
-	domain, private := Registrable(host)
+	domain, private := maildomain.Registrable(host)
 	f.Domain = domain
 	if domain == "" {
 		return unchecked(analysis.MaintainerDomainReasonInvalidAddress)
@@ -175,23 +155,6 @@ func isSharedMail(host, domain string) bool {
 	_, sharedHost := sharedMail[host]
 	_, sharedDomain := sharedMail[domain]
 	return sharedHost || sharedDomain
-}
-
-func validMailHost(host string) bool {
-	if len(host) > maxDNSHostLength || !strings.Contains(host, ".") {
-		return false
-	}
-	for _, label := range strings.Split(host, ".") {
-		if len(label) == 0 || len(label) > maxDNSLabelLength || label[0] == '-' || label[len(label)-1] == '-' {
-			return false
-		}
-		for _, r := range label {
-			if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 // Lookup returns the RDAP record for a registrable domain. The error is

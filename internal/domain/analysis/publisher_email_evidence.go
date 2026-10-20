@@ -1,7 +1,8 @@
 package analysis
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"time"
 )
 
@@ -21,10 +22,10 @@ type PublisherPackageHistory struct {
 
 // PublisherLatestObserved identifies the latest visible publish without an e-mail local part.
 type PublisherLatestObserved struct {
-	PublishedAt time.Time `json:"published_at"`
-	Package     string    `json:"package"`
-	Version     string    `json:"version"`
-	EmailDomain string    `json:"email_domain,omitempty"`
+	PublishedAt time.Time
+	Package     string
+	Version     string
+	EmailDomain string
 }
 
 // PublisherEmailStatus describes whether the latest visible publisher e-mail is usable.
@@ -56,16 +57,31 @@ const (
 	PublisherRegistrationAfter   PublisherRegistrationRelation = "after"
 )
 
-// PublisherEmailEvidence describes limited publisher e-mail evidence from this scan.
+// PublisherEvidenceScope names the packuments the evidence was drawn from.
+type PublisherEvidenceScope string
+
+const (
+	// PublisherScopeScanPackuments is every npm packument fetched by one scan run.
+	PublisherScopeScanPackuments PublisherEvidenceScope = "scan_packuments"
+	// PublisherScopeIncidentPackument is one packument, limited to publishes
+	// before the incident time.
+	PublisherScopeIncidentPackument PublisherEvidenceScope = "incident_packument_before_incident"
+)
+
+// PublisherEvidenceSource is the packument field the evidence reads.
+const PublisherEvidenceSource = "versions._npmUser"
+
+// PublisherEmailEvidence describes limited publisher e-mail evidence from the
+// packuments named by Scope.
 type PublisherEmailEvidence struct {
-	Status                 PublisherEmailStatus          `json:"status"`
-	Source                 string                        `json:"source"`
-	Scope                  string                        `json:"scope"`
-	AccountHistoryComplete bool                          `json:"account_history_complete"`
-	LatestObserved         *PublisherLatestObserved      `json:"latest_observed,omitempty"`
-	DomainRelation         PublisherDomainRelation       `json:"domain_relation"`
-	RegistrationRelation   PublisherRegistrationRelation `json:"registration_relation"`
-	NewerPublishUnknown    bool                          `json:"newer_publish_unknown"`
+	Status                 PublisherEmailStatus
+	Source                 string
+	Scope                  PublisherEvidenceScope
+	AccountHistoryComplete bool
+	LatestObserved         *PublisherLatestObserved
+	DomainRelation         PublisherDomainRelation
+	RegistrationRelation   PublisherRegistrationRelation
+	NewerPublishUnknown    bool
 }
 
 // AddPublisherPublish retains only greatest-time candidates for an account.
@@ -76,40 +92,44 @@ func (h *PublisherPackageHistory) AddPublisherPublish(account string, p Publishe
 	if h.Latest == nil {
 		h.Latest = make(map[string][]PublisherPublish)
 	}
-	current := h.Latest[account]
-	if len(current) == 0 || p.PublishedAt.After(current[0].PublishedAt) {
-		h.Latest[account] = []PublisherPublish{p}
-	} else if p.PublishedAt.Equal(current[0].PublishedAt) {
-		h.Latest[account] = append(current, p)
+	h.Latest[account] = keepLatest(h.Latest[account], p)
+}
+
+// keepLatest adds p to current, which holds only the publishes sharing the
+// greatest time so far.
+func keepLatest(current []PublisherPublish, p PublisherPublish) []PublisherPublish {
+	switch {
+	case len(current) == 0 || p.PublishedAt.After(current[0].PublishedAt):
+		return []PublisherPublish{p}
+	case p.PublishedAt.Equal(current[0].PublishedAt):
+		return append(current, p)
+	default:
+		return current
 	}
 }
 
-// PublisherEmailEvidenceFor evaluates one finding without changing its classification.
-func PublisherEmailEvidenceFor(f MaintainerDomainFinding, source PublisherPackageHistory, histories []PublisherPackageHistory) *PublisherEmailEvidence {
-	e := &PublisherEmailEvidence{Status: PublisherEmailNotObserved, Source: "versions._npmUser", Scope: "scan_packuments", DomainRelation: PublisherDomainUnknown, RegistrationRelation: PublisherRegistrationUnknown}
+// PublisherEmailEvidenceFor evaluates one finding without changing its
+// classification. scope names the packuments that histories cover.
+func PublisherEmailEvidenceFor(f MaintainerDomainFinding, scope PublisherEvidenceScope, source PublisherPackageHistory, histories []PublisherPackageHistory) *PublisherEmailEvidence {
+	e := &PublisherEmailEvidence{Status: PublisherEmailNotObserved, Source: PublisherEvidenceSource, Scope: scope, DomainRelation: PublisherDomainUnknown, RegistrationRelation: PublisherRegistrationUnknown}
 	var latest []PublisherPublish
 	for _, h := range histories {
 		for _, p := range h.Latest[f.Account] {
-			if len(latest) == 0 || p.PublishedAt.After(latest[0].PublishedAt) {
-				latest = []PublisherPublish{p}
-			} else if p.PublishedAt.Equal(latest[0].PublishedAt) {
-				latest = append(latest, p)
-			}
+			latest = keepLatest(latest, p)
 		}
 	}
 	if len(latest) == 0 {
 		e.NewerPublishUnknown = len(source.HiddenPublishedAt) > 0
 		return e
 	}
-	sort.Slice(latest, func(i, j int) bool {
-		if latest[i].Package == latest[j].Package {
-			return latest[i].Version < latest[j].Version
-		}
-		return latest[i].Package < latest[j].Package
+	slices.SortFunc(latest, func(a, b PublisherPublish) int {
+		return cmp.Or(cmp.Compare(a.Package, b.Package), cmp.Compare(a.Version, b.Version))
 	})
+	// Hosts under one registrable domain (mail.example.co.uk, example.co.uk)
+	// do not conflict.
 	domains := map[string]bool{}
 	for _, p := range latest {
-		domains[p.EmailDomain] = true
+		domains[cmp.Or(p.RegistrableDomain, p.EmailDomain)] = true
 	}
 	if len(domains) > 1 {
 		e.Status = PublisherEmailConflicting

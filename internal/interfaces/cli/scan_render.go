@@ -540,14 +540,43 @@ type maintainerDomainUncheckedJSON struct {
 // maintainerDomainFindingJSON omits registered when RDAP gave no registration
 // date (unregistered, and lapsing without a date).
 type maintainerDomainFindingJSON struct {
-	Account                string                         `json:"account"`
-	Domain                 string                         `json:"domain"`
-	Kind                   domain.MaintainerDomainKind    `json:"kind"`
-	FirstSeen              time.Time                      `json:"first_seen"`
-	Registered             time.Time                      `json:"registered,omitzero"`
-	Registrar              string                         `json:"registrar,omitempty"`
-	DropCatch              bool                           `json:"drop_catch"`
-	PublisherEmailEvidence *domain.PublisherEmailEvidence `json:"publisher_email_evidence,omitempty"`
+	Account                string                      `json:"account"`
+	Domain                 string                      `json:"domain"`
+	Kind                   domain.MaintainerDomainKind `json:"kind"`
+	FirstSeen              time.Time                   `json:"first_seen"`
+	Registered             time.Time                   `json:"registered,omitzero"`
+	Registrar              string                      `json:"registrar,omitempty"`
+	DropCatch              bool                        `json:"drop_catch"`
+	PublisherEmailEvidence *publisherEmailEvidenceJSON `json:"publisher_email_evidence,omitempty"`
+}
+
+type publisherEmailEvidenceJSON struct {
+	Status                 domain.PublisherEmailStatus          `json:"status"`
+	Source                 string                               `json:"source"`
+	Scope                  domain.PublisherEvidenceScope        `json:"scope"`
+	AccountHistoryComplete bool                                 `json:"account_history_complete"`
+	LatestObserved         *publisherLatestObservedJSON         `json:"latest_observed,omitempty"`
+	DomainRelation         domain.PublisherDomainRelation       `json:"domain_relation"`
+	RegistrationRelation   domain.PublisherRegistrationRelation `json:"registration_relation"`
+	NewerPublishUnknown    bool                                 `json:"newer_publish_unknown"`
+}
+
+type publisherLatestObservedJSON struct {
+	PublishedAt time.Time `json:"published_at"`
+	Package     string    `json:"package"`
+	Version     string    `json:"version"`
+	EmailDomain string    `json:"email_domain,omitempty"`
+}
+
+func newPublisherEmailEvidenceJSON(e *domain.PublisherEmailEvidence) *publisherEmailEvidenceJSON {
+	if e == nil {
+		return nil
+	}
+	out := &publisherEmailEvidenceJSON{Status: e.Status, Source: e.Source, Scope: e.Scope, AccountHistoryComplete: e.AccountHistoryComplete, DomainRelation: e.DomainRelation, RegistrationRelation: e.RegistrationRelation, NewerPublishUnknown: e.NewerPublishUnknown}
+	if o := e.LatestObserved; o != nil {
+		out.LatestObserved = &publisherLatestObservedJSON{PublishedAt: o.PublishedAt, Package: o.Package, Version: o.Version, EmailDomain: o.EmailDomain}
+	}
+	return out
 }
 
 type enrichedJSONOutput struct {
@@ -638,7 +667,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 			case f.Kind == domain.MaintainerDomainLookupFailed:
 				m.LookupFailed++
 			case f.Kind.WarrantsNotice():
-				m.Flagged = append(m.Flagged, maintainerDomainFindingJSON{Account: f.Account, Domain: f.Domain, Kind: f.Kind, FirstSeen: f.FirstSeen, Registered: f.Registered, Registrar: f.Registrar, DropCatch: f.DropCatch, PublisherEmailEvidence: f.PublisherEmailEvidence})
+				m.Flagged = append(m.Flagged, maintainerDomainFindingJSON{Account: f.Account, Domain: f.Domain, Kind: f.Kind, FirstSeen: f.FirstSeen, Registered: f.Registered, Registrar: f.Registrar, DropCatch: f.DropCatch, PublisherEmailEvidence: newPublisherEmailEvidenceJSON(f.PublisherEmailEvidence)})
 			}
 		}
 		je.MaintainerDomain = m

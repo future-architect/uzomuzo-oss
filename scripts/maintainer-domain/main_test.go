@@ -54,12 +54,18 @@ func TestIncidentUsesPrecedingManifestAndFirstAppearance(t *testing.T) {
 	client.SetBaseURL("net", srv.URL)
 	c := &command{packumentDir: cacheDir, rdap: client}
 	r := c.incidentRow(context.Background(), "population", "node-ipc", []string{"12.0.1"})
-	if r.missing != "" || len(r.findings) != 1 || r.findings[0].Kind != analysis.MaintainerDomainReregisteredBefore || !r.findings[0].FirstSeen.Equal(time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)) {
-		t.Errorf("row=%+v", r)
+	if r.missing != "" || len(r.findings) != 1 {
+		t.Fatalf("row=%+v", r)
+	}
+	if r.findings[0].Kind != analysis.MaintainerDomainReregisteredBefore || !r.findings[0].FirstSeen.Equal(time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("finding=%+v", r.findings[0])
 	}
 	e := r.findings[0].PublisherEmailEvidence
-	if e == nil || e.Status != analysis.PublisherEmailObserved || e.DomainRelation != analysis.PublisherDomainSame || e.RegistrationRelation != analysis.PublisherRegistrationBefore || e.NewerPublishUnknown || e.LatestObserved == nil || e.LatestObserved.Version != "12.0.0" {
-		t.Fatalf("publisher evidence=%+v latest=%+v", e, e.LatestObserved)
+	if e == nil || e.LatestObserved == nil {
+		t.Fatalf("publisher evidence=%+v, want a latest observed publish", e)
+	}
+	if e.Status != analysis.PublisherEmailObserved || e.Scope != analysis.PublisherScopeIncidentPackument || e.DomainRelation != analysis.PublisherDomainSame || e.RegistrationRelation != analysis.PublisherRegistrationBefore || e.NewerPublishUnknown || e.LatestObserved.Version != "12.0.0" {
+		t.Errorf("publisher evidence=%+v latest=%+v", e, *e.LatestObserved)
 	}
 }
 

@@ -173,12 +173,6 @@ func TestLookup(t *testing.T) {
 	if err != nil || rec.Status != analysis.DomainUnsupported || calls.Load() != 0 {
 		t.Errorf("unsupported=%+v calls=%d", rec, calls.Load())
 	}
-	if domain, private := Registrable("mail.example.co.uk"); domain != "example.co.uk" || private {
-		t.Errorf("registrable=%s private=%v", domain, private)
-	}
-	if domain, private := Registrable("me.github.io"); domain != "me.github.io" || !private {
-		t.Errorf("registrable=%s private=%v", domain, private)
-	}
 }
 
 // TestCheckAddress checks address exclusions and classification.

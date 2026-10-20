@@ -16,7 +16,7 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 	first := time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)
 	registered := time.Date(2026, 5, 7, 11, 49, 33, 0, time.UTC)
 	flagged := analysis.MaintainerDomainFinding{Account: "atiertant", Domain: "atlantis-software.net", Kind: analysis.MaintainerDomainReregisteredBefore, FirstSeen: first, Registered: registered, Registrar: "DropCatch.com 538 LLC", DropCatch: true}
-	flagged.PublisherEmailEvidence = &analysis.PublisherEmailEvidence{Status: "observed", Source: "versions._npmUser", Scope: "scan_packuments", DomainRelation: "same", RegistrationRelation: "before", LatestObserved: &analysis.PublisherLatestObserved{PublishedAt: first, Package: "node-ipc", Version: "9.1.2", EmailDomain: "atlantis-software.net"}}
+	flagged.PublisherEmailEvidence = &analysis.PublisherEmailEvidence{Status: analysis.PublisherEmailObserved, Source: analysis.PublisherEvidenceSource, Scope: analysis.PublisherScopeScanPackuments, DomainRelation: analysis.PublisherDomainSame, RegistrationRelation: analysis.PublisherRegistrationBefore, LatestObserved: &analysis.PublisherLatestObserved{PublishedAt: first, Package: "node-ipc", Version: "9.1.2", EmailDomain: "atlantis-software.net"}}
 	unregistered := analysis.MaintainerDomainFinding{Account: "fourth", Domain: "lapsed.example", Kind: analysis.MaintainerDomainUnregistered, FirstSeen: first}
 	a := &analysis.Analysis{MaintainerDomain: &analysis.MaintainerDomainResult{Findings: []analysis.MaintainerDomainFinding{
 		flagged,
@@ -41,6 +41,21 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 					Registered json.RawMessage `json:"registered"`
 					Registrar  string          `json:"registrar"`
 					DropCatch  *bool           `json:"drop_catch"`
+					Evidence   *struct {
+						Status               string `json:"status"`
+						Source               string `json:"source"`
+						Scope                string `json:"scope"`
+						AccountHistory       *bool  `json:"account_history_complete"`
+						DomainRelation       string `json:"domain_relation"`
+						RegistrationRelation string `json:"registration_relation"`
+						NewerPublishUnknown  *bool  `json:"newer_publish_unknown"`
+						LatestObserved       *struct {
+							PublishedAt time.Time `json:"published_at"`
+							Package     string    `json:"package"`
+							Version     string    `json:"version"`
+							EmailDomain string    `json:"email_domain"`
+						} `json:"latest_observed"`
+					} `json:"publisher_email_evidence"`
 				} `json:"flagged"`
 				Unchecked         int `json:"unchecked"`
 				LookupFailed      int `json:"lookup_failed"`
@@ -66,16 +81,26 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 	if f.Account != "atiertant" || f.Domain != "atlantis-software.net" || f.Kind != "reregistered_before" || !f.FirstSeen.Equal(first) || string(f.Registered) != `"2026-05-07T11:49:33Z"` || f.Registrar != "DropCatch.com 538 LLC" || f.DropCatch == nil || !*f.DropCatch {
 		t.Errorf("flagged[0]=%+v", f)
 	}
+	ev := f.Evidence
+	if ev == nil || ev.LatestObserved == nil || ev.AccountHistory == nil || ev.NewerPublishUnknown == nil {
+		t.Fatalf("flagged[0] evidence missing fields: %s", buf.String())
+	}
+	if ev.Status != "observed" || ev.Source != "versions._npmUser" || ev.Scope != "scan_packuments" || *ev.AccountHistory || ev.DomainRelation != "same" || ev.RegistrationRelation != "before" || *ev.NewerPublishUnknown {
+		t.Errorf("flagged[0] evidence=%+v", *ev)
+	}
+	if lo := ev.LatestObserved; !lo.PublishedAt.Equal(first) || lo.Package != "node-ipc" || lo.Version != "9.1.2" || lo.EmailDomain != "atlantis-software.net" {
+		t.Errorf("flagged[0] latest_observed=%+v", *lo)
+	}
 	u := m.Flagged[1]
-	if u.Account != "fourth" || u.Kind != "unregistered" || u.Registered != nil || u.DropCatch == nil || *u.DropCatch {
-		t.Errorf("flagged[1]=%+v, want no registered key and drop_catch false", u)
+	if u.Account != "fourth" || u.Kind != "unregistered" || u.Registered != nil || u.DropCatch == nil || *u.DropCatch || u.Evidence != nil {
+		t.Errorf("flagged[1]=%+v, want no registered key, drop_catch false and no publisher_email_evidence key", u)
 	}
 	if len(m.UncheckedFindings) != 1 || m.UncheckedFindings[0].Account != "other" || m.UncheckedFindings[0].Domain != "gmail.com" || m.UncheckedFindings[0].Reason != "free_mail" {
 		t.Errorf("unchecked=%s", buf.String())
 	}
 	notice := strings.Join(a.MaintainerDomainNotices(), "\n")
-	if !strings.Contains(notice, " The account's latest publish seen in this scan (2020-11-11) still used this domain.") || !strings.Contains(buf.String(), `"publisher_email_evidence"`) || !strings.Contains(buf.String(), `"account_history_complete": false`) {
-		t.Errorf("evidence missing: notice=%q JSON=%s", notice, buf.String())
+	if !strings.Contains(notice, " The account's latest publish seen in this scan (2020-11-11) still used this domain.") {
+		t.Errorf("evidence sentence missing: notice=%q", notice)
 	}
 	buf.Reset()
 	if err := renderBoxEntry(&buf, &e); err != nil {

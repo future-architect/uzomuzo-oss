@@ -147,7 +147,7 @@ uzomuzo scan --file input_purls.txt --sample 500
 `--maintainer-domain` is off by default and applies only to versioned npm inputs. It adds a notice for manual review without changing the scan verdict, in `--format json` (`maintainer_domain`) and the detailed view; table and CSV output are unchanged. The notice says what may happen (if the maintainer still uses the address, npm password-reset mail may reach whoever holds or next registers the domain) and asks for the account e-mail and 2FA to be confirmed. See [ADR-0030](docs/adr/0030-maintainer-email-domain-marker.md).
 When RDAP provides the registrar of a re-registered domain, the notice names it. The list of RDAP servers is fetched from IANA and cached under the user cache directory, with the copy built into the binary as the fallback.
 
-Flagged npm findings also include publisher e-mail domain evidence from packuments already fetched in the scan; this limited observation does not change the notice or verdict.
+Flagged npm findings also include publisher e-mail domain evidence from packuments already fetched in the scan. When the account's latest visible publish has a usable e-mail, the notice gains one sentence saying whether that publish used the same domain or another one, or that a newer publish exists whose publisher is not visible. The evidence never removes a notice and does not change the verdict.
 
 ### Dependency Diet — *Which dependency should I remove first?*
 

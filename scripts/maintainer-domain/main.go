@@ -380,10 +380,10 @@ func (c *command) incidentRow(ctx context.Context, scope, name string, versions 
 	}
 	firstSeen := h.FirstSeenBefore(r.at)
 	for _, p := range people {
-		finding := c.rdap.Check(ctx, analysis.MaintainerAddress{Account: p.Name, Email: p.Email, FirstSeen: firstSeen[analysis.NormalizeEmail(p.Email)]}, r.at)
+		finding := c.rdap.Check(ctx, analysis.MaintainerAddress{Account: analysis.StripControlRunes(p.Name), Email: p.Email, FirstSeen: firstSeen[analysis.NormalizeEmail(p.Email)]}, r.at)
 		if finding.Kind.WarrantsNotice() {
 			source := h.PublisherHistoryBefore(name, r.at)
-			finding.PublisherEmailEvidence = analysis.PublisherEmailEvidenceFor(finding, source, []analysis.PublisherPackageHistory{source})
+			finding.PublisherEmailEvidence = analysis.PublisherEmailEvidenceFor(finding, analysis.PublisherScopeIncidentPackument, source, []analysis.PublisherPackageHistory{source})
 		}
 		r.findings = append(r.findings, finding)
 	}
@@ -445,7 +445,7 @@ func (c *command) lockfile(ctx context.Context, path string, now time.Time, scop
 			continue
 		}
 		for _, p := range h.Maintainers {
-			r.findings = append(r.findings, c.rdap.Check(ctx, analysis.MaintainerAddress{Account: p.Name, Email: p.Email, FirstSeen: h.FirstSeen[analysis.NormalizeEmail(p.Email)]}, now))
+			r.findings = append(r.findings, c.rdap.Check(ctx, analysis.MaintainerAddress{Account: analysis.StripControlRunes(p.Name), Email: p.Email, FirstSeen: h.FirstSeen[analysis.NormalizeEmail(p.Email)]}, now))
 		}
 		c.rows = append(c.rows, r)
 	}
@@ -532,7 +532,7 @@ func publisherCSVFields(e *analysis.PublisherEmailEvidence) []string {
 	if e == nil {
 		return fields
 	}
-	fields[0], fields[1], fields[2], fields[3] = string(e.Status), e.Source, e.Scope, fmt.Sprint(e.AccountHistoryComplete)
+	fields[0], fields[1], fields[2], fields[3] = string(e.Status), e.Source, string(e.Scope), fmt.Sprint(e.AccountHistoryComplete)
 	if e.LatestObserved != nil {
 		fields[4], fields[5], fields[6], fields[7] = formatTime(e.LatestObserved.PublishedAt), packageCell(e.LatestObserved.Package), csvCell(e.LatestObserved.Version), csvCell(e.LatestObserved.EmailDomain)
 	}

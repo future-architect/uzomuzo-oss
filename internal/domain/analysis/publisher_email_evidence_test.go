@@ -27,7 +27,7 @@ func TestPublisherEmailEvidenceLatestAndHidden(t *testing.T) {
 				h.HiddenPublishedAt = []time.Time{hidden}
 			}
 			f := MaintainerDomainFinding{Account: "atiertant", Domain: "atlantis-software.net", Kind: MaintainerDomainReregisteredBefore, Registered: old}
-			e := PublisherEmailEvidenceFor(f, h, []PublisherPackageHistory{h})
+			e := PublisherEmailEvidenceFor(f, PublisherScopeScanPackuments, h, []PublisherPackageHistory{h})
 			if e.Status != tc.wantStatus || e.DomainRelation != tc.wantRelation || e.RegistrationRelation != PublisherRegistrationAfter || e.NewerPublishUnknown != tc.hidden {
 				t.Fatalf("evidence=%+v", e)
 			}
@@ -49,7 +49,7 @@ func TestPublisherEmailEvidenceUsesFindingSourceHiddenTimes(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			source := PublisherPackageHistory{HiddenPublishedAt: []time.Time{tc.hidden}}
-			e := PublisherEmailEvidenceFor(f, source, []PublisherPackageHistory{source, other})
+			e := PublisherEmailEvidenceFor(f, PublisherScopeScanPackuments, source, []PublisherPackageHistory{source, other})
 			if e.NewerPublishUnknown != tc.want {
 				t.Fatalf("newer_publish_unknown=%v, want %v", e.NewerPublishUnknown, tc.want)
 			}
@@ -76,7 +76,7 @@ func TestPublisherEmailEvidenceUnobservedAccountUsesSourceHiddenTimes(t *testing
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			source := PublisherPackageHistory{HiddenPublishedAt: tc.hidden}
-			e := PublisherEmailEvidenceFor(f, source, []PublisherPackageHistory{source})
+			e := PublisherEmailEvidenceFor(f, PublisherScopeScanPackuments, source, []PublisherPackageHistory{source})
 			if e.Status != PublisherEmailNotObserved || e.NewerPublishUnknown != tc.want {
 				t.Fatalf("evidence=%+v, want status=%q newer_publish_unknown=%v", e, PublisherEmailNotObserved, tc.want)
 			}
@@ -108,7 +108,7 @@ func TestPublisherEvidenceNeverChangesClassification(t *testing.T) {
 					h.Latest = map[string][]PublisherPublish{"atiertant": {{Package: "node-ipc", Version: "12.0.0", PublishedAt: first, EmailDomain: "example.com", RegistrableDomain: "example.com"}}}
 				}
 				baselineFlagged := len((&MaintainerDomainResult{Findings: []MaintainerDomainFinding{f}}).Flagged())
-				f.PublisherEmailEvidence = PublisherEmailEvidenceFor(f, h, []PublisherPackageHistory{h})
+				f.PublisherEmailEvidence = PublisherEmailEvidenceFor(f, PublisherScopeScanPackuments, h, []PublisherPackageHistory{h})
 				if f.Kind != kind || len((&MaintainerDomainResult{Findings: []MaintainerDomainFinding{f}}).Flagged()) != baselineFlagged {
 					t.Fatalf("same=%v before=%v hidden=%v finding=%+v", same, before, hidden, f)
 				}
@@ -154,11 +154,11 @@ func TestPublisherEmailEvidenceConflictingAndUnobserved(t *testing.T) {
 		{Package: "example", Version: "1", PublishedAt: at, EmailDomain: "example.com", RegistrableDomain: "example.com"},
 		{Package: "example", Version: "2", PublishedAt: at, EmailDomain: "other.example", RegistrableDomain: "other.example"},
 	}}}
-	if got := PublisherEmailEvidenceFor(f, h, []PublisherPackageHistory{h}); got.Status != PublisherEmailConflicting || got.DomainRelation != PublisherDomainUnknown {
+	if got := PublisherEmailEvidenceFor(f, PublisherScopeScanPackuments, h, []PublisherPackageHistory{h}); got.Status != PublisherEmailConflicting || got.DomainRelation != PublisherDomainUnknown {
 		t.Fatalf("conflicting=%+v", got)
 	}
 	f.Account = "absent"
-	if got := PublisherEmailEvidenceFor(f, h, []PublisherPackageHistory{h}); got.Status != PublisherEmailNotObserved || got.LatestObserved != nil {
+	if got := PublisherEmailEvidenceFor(f, PublisherScopeScanPackuments, h, []PublisherPackageHistory{h}); got.Status != PublisherEmailNotObserved || got.LatestObserved != nil {
 		t.Fatalf("unobserved=%+v", got)
 	}
 }
@@ -167,8 +167,27 @@ func TestPublisherEmailEvidenceEqualRegistrationAndRegistrableDomain(t *testing.
 	at := time.Date(2026, 5, 7, 11, 49, 33, 0, time.UTC)
 	f := MaintainerDomainFinding{Account: "account-a", Domain: "example.co.uk", Kind: MaintainerDomainReregisteredBefore, Registered: at}
 	h := PublisherPackageHistory{Latest: map[string][]PublisherPublish{"account-a": {{Package: "example", Version: "1", PublishedAt: at, EmailDomain: "mail.example.co.uk", RegistrableDomain: "example.co.uk"}}}}
-	e := PublisherEmailEvidenceFor(f, h, []PublisherPackageHistory{h})
+	e := PublisherEmailEvidenceFor(f, PublisherScopeScanPackuments, h, []PublisherPackageHistory{h})
 	if e.Status != PublisherEmailObserved || e.DomainRelation != PublisherDomainSame || e.RegistrationRelation != PublisherRegistrationEqual {
 		t.Fatalf("evidence=%+v", e)
+	}
+}
+
+// TestPublisherEmailEvidenceSameRegistrableDomainDoesNotConflict checks that
+// tied publishes from two hosts of one registrable domain are not conflicting.
+func TestPublisherEmailEvidenceSameRegistrableDomainDoesNotConflict(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	f := MaintainerDomainFinding{Account: "account-a", Domain: "example.co.uk"}
+	h := PublisherPackageHistory{Latest: map[string][]PublisherPublish{"account-a": {
+		{Package: "example", Version: "1", PublishedAt: at, EmailDomain: "mail.example.co.uk", RegistrableDomain: "example.co.uk"},
+		{Package: "example", Version: "2", PublishedAt: at, EmailDomain: "example.co.uk", RegistrableDomain: "example.co.uk"},
+	}}}
+	e := PublisherEmailEvidenceFor(f, PublisherScopeIncidentPackument, h, []PublisherPackageHistory{h})
+	if e.Status != PublisherEmailObserved || e.DomainRelation != PublisherDomainSame {
+		t.Fatalf("evidence=%+v", e)
+	}
+	if e.Scope != PublisherScopeIncidentPackument || e.Source != PublisherEvidenceSource {
+		t.Errorf("scope=%q source=%q", e.Scope, e.Source)
 	}
 }
