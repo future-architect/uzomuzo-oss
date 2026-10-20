@@ -212,26 +212,32 @@ func (a *Analysis) MaintainerDomainNotices() []string {
 }
 
 func maintainerDomainNotice(f MaintainerDomainFinding) string {
-	who := "the maintainer"
+	// The notice states the RDAP fact first, then the npm record, then the
+	// conditional risk and one action. The address itself is not printed:
+	// the account name and domain are enough to act on, and the address
+	// would otherwise land in terminals and CI logs.
+	who := "a maintainer"
 	if f.Account != "" {
 		who = "maintainer " + f.Account
 	}
+	first := f.FirstSeen.UTC().Format(time.DateOnly)
 	const action = " Ask the maintainer to confirm the account e-mail and 2FA."
 	clause := publisherNoticeClause(f.PublisherEmailEvidence)
 	switch f.Kind {
 	case MaintainerDomainReregisteredBefore:
 		registrar := ""
 		if f.Registrar != "" {
-			registrar = " via " + f.Registrar
+			registrar = " (registrar: " + f.Registrar
 			if f.DropCatch {
-				registrar += " (a drop-catch registrar)"
+				registrar += ", a drop-catch registrar"
 			}
+			registrar += ")"
 		}
-		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever now holds %s (registered %s%s, after the address first appeared %s).%s%s", who, f.Domain, f.Registered.UTC().Format(time.DateOnly), registrar, f.FirstSeen.UTC().Format(time.DateOnly), action, clause)
+		return fmt.Sprintf("RDAP shows %s registered on %s%s. That is after npm records first showed %s with an address at this domain (%s). If the account still uses that address, npm password-reset mail may reach whoever holds the domain now.%s%s", f.Domain, f.Registered.UTC().Format(time.DateOnly), registrar, who, first, action, clause)
 	case MaintainerDomainLapsing:
-		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever registers %s next (the domain is being deleted).%s%s", who, f.Domain, action, clause)
+		return fmt.Sprintf("RDAP shows %s is being deleted. npm records show %s with an address at this domain (first seen %s). If the account still uses that address, npm password-reset mail may reach whoever registers the domain next.%s%s", f.Domain, who, first, action, clause)
 	case MaintainerDomainUnregistered:
-		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever registers %s (RDAP has no registration).%s%s", who, f.Domain, action, clause)
+		return fmt.Sprintf("RDAP has no registration for %s. npm records show %s with an address at this domain (first seen %s). If the account still uses that address, npm password-reset mail may reach whoever registers the domain.%s%s", f.Domain, who, first, action, clause)
 	default:
 		return ""
 	}

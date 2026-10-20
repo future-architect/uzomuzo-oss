@@ -65,9 +65,9 @@ func TestMaintainerDomainNoticeRegistrar(t *testing.T) {
 		name, registrar, want string
 		drop                  bool
 	}{
-		{"unknown", "", "(registered 2026-05-07, after", false},
-		{"ordinary", "NameCheap, Inc.", "(registered 2026-05-07 via NameCheap, Inc., after", false},
-		{"drop catch", "DropCatch.com 538 LLC", "(registered 2026-05-07 via DropCatch.com 538 LLC (a drop-catch registrar), after", true},
+		{"unknown", "", "registered on 2026-05-07. That is after", false},
+		{"ordinary", "NameCheap, Inc.", "registered on 2026-05-07 (registrar: NameCheap, Inc.). That is after", false},
+		{"drop catch", "DropCatch.com 538 LLC", "registered on 2026-05-07 (registrar: DropCatch.com 538 LLC, a drop-catch registrar). That is after", true},
 	} {
 		a := &Analysis{MaintainerDomain: &MaintainerDomainResult{Findings: []MaintainerDomainFinding{{Domain: "example.com", Kind: MaintainerDomainReregisteredBefore, FirstSeen: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Registered: time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC), Registrar: tc.registrar, DropCatch: tc.drop}}}}
 		notices := a.MaintainerDomainNotices()
@@ -89,11 +89,11 @@ func TestMaintainerDomainNotices(t *testing.T) {
 		want string
 	}{
 		{"reregistered before", MaintainerDomainFinding{Account: "atiertant", Domain: "atlantis-software.net", Kind: MaintainerDomainReregisteredBefore, FirstSeen: first, Registered: registered},
-			"if maintainer atiertant still uses this address, npm password-reset mail may reach whoever now holds atlantis-software.net (registered 2026-05-07, after the address first appeared 2020-11-11). Ask the maintainer to confirm the account e-mail and 2FA."},
+			"RDAP shows atlantis-software.net registered on 2026-05-07. That is after npm records first showed maintainer atiertant with an address at this domain (2020-11-11). If the account still uses that address, npm password-reset mail may reach whoever holds the domain now. Ask the maintainer to confirm the account e-mail and 2FA."},
 		{"lapsing", MaintainerDomainFinding{Account: "atiertant", Domain: "example.com", Kind: MaintainerDomainLapsing, FirstSeen: first},
-			"if maintainer atiertant still uses this address, npm password-reset mail may reach whoever registers example.com next (the domain is being deleted). Ask the maintainer to confirm the account e-mail and 2FA."},
+			"RDAP shows example.com is being deleted. npm records show maintainer atiertant with an address at this domain (first seen 2020-11-11). If the account still uses that address, npm password-reset mail may reach whoever registers the domain next. Ask the maintainer to confirm the account e-mail and 2FA."},
 		{"unregistered without account", MaintainerDomainFinding{Domain: "example.com", Kind: MaintainerDomainUnregistered, FirstSeen: first},
-			"if the maintainer still uses this address, npm password-reset mail may reach whoever registers example.com (RDAP has no registration). Ask the maintainer to confirm the account e-mail and 2FA."},
+			"RDAP has no registration for example.com. npm records show a maintainer with an address at this domain (first seen 2020-11-11). If the account still uses that address, npm password-reset mail may reach whoever registers the domain. Ask the maintainer to confirm the account e-mail and 2FA."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
