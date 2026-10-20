@@ -107,10 +107,17 @@ func TestPublisherEvidenceNeverChangesClassification(t *testing.T) {
 				if !same {
 					h.Latest = map[string][]PublisherPublish{"atiertant": {{Package: "node-ipc", Version: "12.0.0", PublishedAt: first, EmailDomain: "example.com", RegistrableDomain: "example.com"}}}
 				}
-				baselineFlagged := len((&MaintainerDomainResult{Findings: []MaintainerDomainFinding{f}}).Flagged())
+				baseline := maintainerDomainNotice(f)
 				f.PublisherEmailEvidence = PublisherEmailEvidenceFor(f, PublisherScopeScanPackuments, h, []PublisherPackageHistory{h})
-				if f.Kind != kind || len((&MaintainerDomainResult{Findings: []MaintainerDomainFinding{f}}).Flagged()) != baselineFlagged {
-					t.Fatalf("same=%v before=%v hidden=%v finding=%+v", same, before, hidden, f)
+				got := maintainerDomainNotice(f)
+				// A kind without a notice gains none; otherwise the evidence
+				// appends one sentence and keeps the notice it extends.
+				if kind.WarrantsNotice() {
+					if !strings.HasPrefix(got, baseline) || len(got) == len(baseline) {
+						t.Errorf("same=%v before=%v hidden=%v: notice %q does not extend %q", same, before, hidden, got, baseline)
+					}
+				} else if got != "" || baseline != "" {
+					t.Errorf("same=%v before=%v hidden=%v: kind %s gave notice %q", same, before, hidden, kind, got)
 				}
 			}
 		}
@@ -189,5 +196,21 @@ func TestPublisherEmailEvidenceSameRegistrableDomainDoesNotConflict(t *testing.T
 	}
 	if e.Scope != PublisherScopeIncidentPackument || e.Source != PublisherEvidenceSource {
 		t.Errorf("scope=%q source=%q", e.Scope, e.Source)
+	}
+}
+
+// TestPublisherEmailEvidenceTieWithMissingEmailConflicts pins that a publish
+// without a domain tied with one that has a domain is not read as observed.
+func TestPublisherEmailEvidenceTieWithMissingEmailConflicts(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2024, 8, 12, 0, 0, 0, 0, time.UTC)
+	f := MaintainerDomainFinding{Account: "atiertant", Domain: "atlantis-software.net"}
+	h := PublisherPackageHistory{Latest: map[string][]PublisherPublish{"atiertant": {
+		{Package: "node-ipc", Version: "2", PublishedAt: at, EmailDomain: "atlantis-software.net", RegistrableDomain: "atlantis-software.net"},
+		{Package: "node-ipc", Version: "3", PublishedAt: at},
+	}}}
+	e := PublisherEmailEvidenceFor(f, PublisherScopeScanPackuments, h, []PublisherPackageHistory{h})
+	if e.Status != PublisherEmailConflicting || e.LatestObserved != nil || e.DomainRelation != PublisherDomainUnknown {
+		t.Errorf("evidence=%+v, want conflicting with no latest observed", e)
 	}
 }

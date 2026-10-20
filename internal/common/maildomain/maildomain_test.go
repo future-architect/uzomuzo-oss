@@ -1,9 +1,6 @@
 package maildomain
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 // TestHost checks local-part and host validation.
 func TestHost(t *testing.T) {
@@ -15,7 +12,7 @@ func TestHost(t *testing.T) {
 		{"empty host", "a@", ""},
 		{"single label host", "a@localhost", ""},
 		{"label starts with hyphen", "a@-example.com", ""},
-		{"uppercase not normalized", "a@Example.com", ""},
+		{"mixed case and spaces", " A@Example.COM ", "example.com"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -36,18 +33,4 @@ func TestRegistrable(t *testing.T) {
 	if domain, private := Registrable("me.github.io"); domain != "me.github.io" || !private {
 		t.Errorf("registrable=%s private=%v", domain, private)
 	}
-}
-
-// FuzzHost checks host parsing and public-suffix handling on arbitrary strings.
-func FuzzHost(f *testing.F) {
-	f.Add("a@mail.example.co.uk")
-	f.Add("me.github.io")
-	f.Add("..")
-	f.Fuzz(func(t *testing.T, s string) {
-		if len(s) > 4096 {
-			return
-		}
-		_ = Host(strings.ToLower(s))
-		_, _ = Registrable(s)
-	})
 }

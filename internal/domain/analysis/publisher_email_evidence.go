@@ -16,7 +16,9 @@ type PublisherPublish struct {
 
 // PublisherPackageHistory keeps latest visible publishes per account in one packument.
 type PublisherPackageHistory struct {
-	Latest            map[string][]PublisherPublish
+	// Latest maps an account name to its publishes sharing the latest time.
+	Latest map[string][]PublisherPublish
+	// HiddenPublishedAt holds the times of versions whose manifest was removed.
 	HiddenPublishedAt []time.Time
 }
 
@@ -32,9 +34,15 @@ type PublisherLatestObserved struct {
 type PublisherEmailStatus string
 
 const (
+	// PublisherEmailNotObserved means the account has no visible publish in scope.
 	PublisherEmailNotObserved PublisherEmailStatus = "not_observed"
-	PublisherEmailObserved    PublisherEmailStatus = "observed"
-	PublisherEmailMissing     PublisherEmailStatus = "email_missing"
+	// PublisherEmailObserved means the latest visible publish has a usable domain.
+	PublisherEmailObserved PublisherEmailStatus = "observed"
+	// PublisherEmailMissing means the latest visible publish has no usable domain.
+	PublisherEmailMissing PublisherEmailStatus = "email_missing"
+	// PublisherEmailConflicting means publishes tied for latest disagree on the
+	// registrable domain. A tie between a publish with a domain and one without
+	// counts, since the one without may have used another domain.
 	PublisherEmailConflicting PublisherEmailStatus = "conflicting"
 )
 
@@ -42,8 +50,11 @@ const (
 type PublisherDomainRelation string
 
 const (
-	PublisherDomainUnknown   PublisherDomainRelation = "unknown"
-	PublisherDomainSame      PublisherDomainRelation = "same"
+	// PublisherDomainUnknown is used when either domain is unknown.
+	PublisherDomainUnknown PublisherDomainRelation = "unknown"
+	// PublisherDomainSame means the registrable domains match.
+	PublisherDomainSame PublisherDomainRelation = "same"
+	// PublisherDomainDifferent means the registrable domains differ.
 	PublisherDomainDifferent PublisherDomainRelation = "different"
 )
 
@@ -51,10 +62,14 @@ const (
 type PublisherRegistrationRelation string
 
 const (
+	// PublisherRegistrationUnknown is used when the finding has no re-registration date.
 	PublisherRegistrationUnknown PublisherRegistrationRelation = "unknown"
-	PublisherRegistrationBefore  PublisherRegistrationRelation = "before"
-	PublisherRegistrationEqual   PublisherRegistrationRelation = "equal"
-	PublisherRegistrationAfter   PublisherRegistrationRelation = "after"
+	// PublisherRegistrationBefore means the publish predates the re-registration.
+	PublisherRegistrationBefore PublisherRegistrationRelation = "before"
+	// PublisherRegistrationEqual means the publish has the re-registration time.
+	PublisherRegistrationEqual PublisherRegistrationRelation = "equal"
+	// PublisherRegistrationAfter means the publish follows the re-registration.
+	PublisherRegistrationAfter PublisherRegistrationRelation = "after"
 )
 
 // PublisherEvidenceScope names the packuments the evidence was drawn from.
@@ -74,9 +89,11 @@ const PublisherEvidenceSource = "versions._npmUser"
 // PublisherEmailEvidence describes limited publisher e-mail evidence from the
 // packuments named by Scope.
 type PublisherEmailEvidence struct {
-	Status                 PublisherEmailStatus
-	Source                 string
-	Scope                  PublisherEvidenceScope
+	Status PublisherEmailStatus
+	Source string
+	Scope  PublisherEvidenceScope
+	// AccountHistoryComplete is always false: neither scope enumerates every
+	// package of the account. It is reported so a reader does not assume so.
 	AccountHistoryComplete bool
 	LatestObserved         *PublisherLatestObserved
 	DomainRelation         PublisherDomainRelation
@@ -109,7 +126,10 @@ func keepLatest(current []PublisherPublish, p PublisherPublish) []PublisherPubli
 }
 
 // PublisherEmailEvidenceFor evaluates one finding without changing its
-// classification. scope names the packuments that histories cover.
+// classification. scope names the packuments that histories cover; histories
+// should include source, the packument that raised the finding. A removed
+// version in source counts even when the account has no visible publish, while
+// one in another packument counts only where the account published visibly.
 func PublisherEmailEvidenceFor(f MaintainerDomainFinding, scope PublisherEvidenceScope, source PublisherPackageHistory, histories []PublisherPackageHistory) *PublisherEmailEvidence {
 	e := &PublisherEmailEvidence{Status: PublisherEmailNotObserved, Source: PublisherEvidenceSource, Scope: scope, DomainRelation: PublisherDomainUnknown, RegistrationRelation: PublisherRegistrationUnknown}
 	var latest []PublisherPublish

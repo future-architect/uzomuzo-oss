@@ -379,10 +379,10 @@ func (c *command) incidentRow(ctx context.Context, scope, name string, versions 
 		return r
 	}
 	firstSeen := h.FirstSeenBefore(r.at)
+	source := h.PublisherHistoryBefore(name, r.at)
 	for _, p := range people {
 		finding := c.rdap.Check(ctx, analysis.MaintainerAddress{Account: analysis.StripControlRunes(p.Name), Email: p.Email, FirstSeen: firstSeen[analysis.NormalizeEmail(p.Email)]}, r.at)
 		if finding.Kind.WarrantsNotice() {
-			source := h.PublisherHistoryBefore(name, r.at)
 			finding.PublisherEmailEvidence = analysis.PublisherEmailEvidenceFor(finding, analysis.PublisherScopeIncidentPackument, source, []analysis.PublisherPackageHistory{source})
 		}
 		r.findings = append(r.findings, finding)
@@ -479,7 +479,7 @@ func writeRows(path string, rows []row) (err error) {
 	}
 	for _, r := range rows {
 		if len(r.findings) == 0 {
-			if err := w.Write(append([]string{r.scope, packageCell(r.name), formatTime(r.at), r.missing, "", "", "", "", "", "", "", ""}, make([]string, 11)...)); err != nil {
+			if err := w.Write(append([]string{r.scope, packageCell(r.name), formatTime(r.at), r.missing, "", "", "", "", "", "", "", ""}, publisherCSVFields(nil)...)); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 			continue
@@ -527,6 +527,9 @@ func formatTime(t time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
+// publisherCSVFields returns the publisher evidence columns, all empty for nil
+// evidence. Only incidents mode collects evidence; lockfile rows leave these
+// columns empty.
 func publisherCSVFields(e *analysis.PublisherEmailEvidence) []string {
 	fields := make([]string, 11)
 	if e == nil {

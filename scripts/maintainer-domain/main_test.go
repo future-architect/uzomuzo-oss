@@ -112,7 +112,7 @@ func TestWriteRowsPrivateAndRectangular(t *testing.T) {
 	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	rows := []row{{scope: "cases", name: "node-ipc", missing: "packument_unavailable"}, {scope: "cases", name: "example", findings: []analysis.MaintainerDomainFinding{{Kind: analysis.MaintainerDomainReregisteredBefore, Registrar: "DropCatch.com 538 LLC", DropCatch: true, PublisherEmailEvidence: &analysis.PublisherEmailEvidence{Status: analysis.PublisherEmailObserved, Source: "versions._npmUser", Scope: "scan_packuments", DomainRelation: analysis.PublisherDomainSame, RegistrationRelation: analysis.PublisherRegistrationBefore, LatestObserved: &analysis.PublisherLatestObserved{Package: "node-ipc", Version: "12.0.0", EmailDomain: "atlantis-software.net"}}}}}}
+	rows := []row{{scope: "cases", name: "node-ipc", missing: "packument_unavailable"}, {scope: "cases", name: "example", findings: []analysis.MaintainerDomainFinding{{Kind: analysis.MaintainerDomainReregisteredBefore, Registrar: "DropCatch.com 538 LLC", DropCatch: true, PublisherEmailEvidence: &analysis.PublisherEmailEvidence{Status: analysis.PublisherEmailObserved, Source: analysis.PublisherEvidenceSource, Scope: analysis.PublisherScopeIncidentPackument, DomainRelation: analysis.PublisherDomainSame, RegistrationRelation: analysis.PublisherRegistrationBefore, LatestObserved: &analysis.PublisherLatestObserved{Package: "node-ipc", Version: "12.0.0", EmailDomain: "atlantis-software.net"}}}}}}
 	if err := writeRows(path, rows); err != nil {
 		t.Fatal(err)
 	}

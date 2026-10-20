@@ -1,6 +1,9 @@
 package npmjs
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +20,12 @@ func TestPublisherHistoryUsesOnlyVisibleDatedNPMUsers(t *testing.T) {
 	latest := h.PublisherHistory.Latest["atiertant"]
 	if len(latest) != 2 || latest[0].PublishedAt.Format(time.DateOnly) != "2024-08-12" {
 		t.Fatalf("latest=%+v", latest)
+	}
+	for _, p := range latest {
+		want := map[string]string{"2": "atlantis-software.net", "3": ""}[p.Version]
+		if p.Package != "node-ipc" || p.EmailDomain != want || p.RegistrableDomain != want {
+			t.Errorf("version %s: %+v, want package node-ipc and domain %q", p.Version, p, want)
+		}
 	}
 	if len(h.PublisherHistory.HiddenPublishedAt) != 1 || h.PublisherHistory.HiddenPublishedAt[0].Format(time.DateOnly) != "2026-05-14" {
 		t.Fatalf("hidden=%+v", h.PublisherHistory.HiddenPublishedAt)
@@ -98,7 +107,7 @@ func TestPublisherHistoryUnknownVersionsHasNoHiddenPublishes(t *testing.T) {
 // reject yields no domain.
 func TestPublisherHistoryKeysAndAddresses(t *testing.T) {
 	t.Parallel()
-	const packument = `{"name":"node-ipc","time":{"1":"2024-01-01T00:00:00Z","2":"2024-01-02T00:00:00Z"},"versions":{"1":{"_npmUser":{"name":"at\u001b[31miertant","email":"a@atlantis-software.net"}},"2":{"_npmUser":{"name":"other","email":"@example.com"}}}}`
+	const packument = `{"name":"node-ipc","time":{"1":"2024-01-01T00:00:00Z","2":"2024-01-02T00:00:00Z","3":"2024-01-03T00:00:00Z"},"versions":{"1":{"_npmUser":{"name":"at\u001b[31miertant","email":"a@atlantis-software.net"}},"2":{"_npmUser":{"name":"other","email":"@example.com"}},"3":{"_npmUser":{"name":"suffix","email":"a@co.uk"}}}}`
 	h, err := ParsePublishHistoryWithVersions(strings.NewReader(packument))
 	if err != nil {
 		t.Fatal(err)
@@ -112,8 +121,29 @@ func TestPublisherHistoryKeysAndAddresses(t *testing.T) {
 		if got := latest[account]; len(got) != 1 || got[0].RegistrableDomain != "atlantis-software.net" {
 			t.Errorf("%s: latest[%q]=%+v", name, account, got)
 		}
-		if got := latest["other"]; len(got) != 1 || got[0].EmailDomain != "" || got[0].RegistrableDomain != "" {
-			t.Errorf("%s: invalid address gave %+v, want no domain", name, got)
+		for _, account := range []string{"other", "suffix"} {
+			if got := latest[account]; len(got) != 1 || got[0].EmailDomain != "" || got[0].RegistrableDomain != "" {
+				t.Errorf("%s: invalid address of %s gave %+v, want no domain", name, account, got)
+			}
 		}
+	}
+}
+
+// TestGetPublishHistoryFillsPublisherPackage checks that publishes from a
+// packument without "name" are attributed to the requested package.
+func TestGetPublishHistoryFillsPublisherPackage(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"time":{"1.0.0":"2024-01-01T00:00:00Z"},"versions":{"1.0.0":{"_npmUser":{"name":"atiertant","email":"a@atlantis-software.net"}}}}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := NewClient()
+	c.SetBaseURL(srv.URL)
+	h, found, err := c.GetPublishHistory(context.Background(), "node-ipc")
+	if err != nil || !found {
+		t.Fatalf("found=%v err=%v", found, err)
+	}
+	if got := h.PublisherHistory.Latest["atiertant"]; len(got) != 1 || got[0].Package != "node-ipc" {
+		t.Errorf("latest=%+v, want package node-ipc", got)
 	}
 }

@@ -576,17 +576,22 @@ func recordFirstSeen(m map[string]time.Time, at time.Time, people ...Person) {
 }
 
 // publisherPublish leaves both domains empty for an address that the RDAP
-// check would reject as invalid.
+// check would reject as invalid: no valid host, or no registrable domain.
 func publisherPublish(packageName, version string, at time.Time, email string) analysis.PublisherPublish {
-	host := maildomain.Host(analysis.NormalizeEmail(email))
-	var registrable string
-	if host != "" {
-		registrable, _ = maildomain.Registrable(host)
+	p := analysis.PublisherPublish{Package: packageName, Version: version, PublishedAt: at}
+	host := maildomain.Host(email)
+	if host == "" {
+		return p
 	}
-	return analysis.PublisherPublish{Package: packageName, Version: version, PublishedAt: at, EmailDomain: host, RegistrableDomain: registrable}
+	if registrable, _ := maildomain.Registrable(host); registrable != "" {
+		p.EmailDomain, p.RegistrableDomain = host, registrable
+	}
+	return p
 }
 
 // PublisherHistoryBefore builds a summary using only publishes before cutoff.
+// It needs a history from ParsePublishHistoryWithVersions; any other history
+// has no per-version publishers, so the summary lists no visible publish.
 func (h *PublishHistory) PublisherHistoryBefore(packageName string, cutoff time.Time) analysis.PublisherPackageHistory {
 	var out analysis.PublisherPackageHistory
 	if h == nil {

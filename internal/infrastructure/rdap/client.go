@@ -117,7 +117,7 @@ func (c *Client) Check(ctx context.Context, address analysis.MaintainerAddress, 
 		f.Kind, f.Reason = analysis.MaintainerDomainUnchecked, reason
 		return f
 	}
-	host := maildomain.Host(analysis.NormalizeEmail(address.Email))
+	host := maildomain.Host(address.Email)
 	if host == "" {
 		return unchecked(analysis.MaintainerDomainReasonInvalidAddress)
 	}

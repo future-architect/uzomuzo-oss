@@ -12,9 +12,10 @@ const (
 	maxDNSLabelLength = 63
 )
 
-// Host returns the host of an already normalized e-mail address, or "" when
-// the address has no local part or the host is not a valid DNS name.
+// Host returns the lowercased host of an e-mail address, or "" when the
+// address has no local part or the host is not a valid DNS name.
 func Host(email string) string {
+	email = strings.ToLower(strings.TrimSpace(email))
 	at := strings.LastIndexByte(email, '@')
 	if at < 1 || at == len(email)-1 {
 		return ""
