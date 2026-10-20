@@ -50,7 +50,7 @@ const (
 type PublisherDomainRelation string
 
 const (
-	// PublisherDomainUnknown is used when either domain is unknown.
+	// PublisherDomainUnknown is used when either domain is unknown or tied publishes conflict.
 	PublisherDomainUnknown PublisherDomainRelation = "unknown"
 	// PublisherDomainSame means the registrable domains match.
 	PublisherDomainSame PublisherDomainRelation = "same"
@@ -62,7 +62,7 @@ const (
 type PublisherRegistrationRelation string
 
 const (
-	// PublisherRegistrationUnknown is used when the finding has no re-registration date.
+	// PublisherRegistrationUnknown is used when the finding has no re-registration date or no visible publish.
 	PublisherRegistrationUnknown PublisherRegistrationRelation = "unknown"
 	// PublisherRegistrationBefore means the publish predates the re-registration.
 	PublisherRegistrationBefore PublisherRegistrationRelation = "before"
@@ -89,16 +89,25 @@ const PublisherEvidenceSource = "versions._npmUser"
 // PublisherEmailEvidence describes limited publisher e-mail evidence from the
 // packuments named by Scope.
 type PublisherEmailEvidence struct {
+	// Status says whether the latest visible publish has a usable domain.
 	Status PublisherEmailStatus
+	// Source is the packument field read, PublisherEvidenceSource.
 	Source string
-	Scope  PublisherEvidenceScope
+	// Scope names the packuments the evidence was drawn from.
+	Scope PublisherEvidenceScope
 	// AccountHistoryComplete is always false: neither scope enumerates every
 	// package of the account. It is reported so a reader does not assume so.
 	AccountHistoryComplete bool
-	LatestObserved         *PublisherLatestObserved
-	DomainRelation         PublisherDomainRelation
-	RegistrationRelation   PublisherRegistrationRelation
-	NewerPublishUnknown    bool
+	// LatestObserved is nil for not_observed and conflicting; for email_missing
+	// it names the publish and its EmailDomain is empty.
+	LatestObserved *PublisherLatestObserved
+	// DomainRelation compares LatestObserved's registrable domain with the finding's.
+	DomainRelation PublisherDomainRelation
+	// RegistrationRelation compares LatestObserved's time with the re-registration.
+	RegistrationRelation PublisherRegistrationRelation
+	// NewerPublishUnknown is true when a removed version may hide a newer
+	// publish; see PublisherEmailEvidenceFor.
+	NewerPublishUnknown bool
 }
 
 // AddPublisherPublish retains only greatest-time candidates for an account.

@@ -108,7 +108,12 @@ func TestPublisherEvidenceNeverChangesClassification(t *testing.T) {
 					h.Latest = map[string][]PublisherPublish{"atiertant": {{Package: "node-ipc", Version: "12.0.0", PublishedAt: first, EmailDomain: "example.com", RegistrableDomain: "example.com"}}}
 				}
 				baseline := maintainerDomainNotice(f)
+				baselineFlagged := len((&MaintainerDomainResult{Findings: []MaintainerDomainFinding{f}}).Flagged())
 				f.PublisherEmailEvidence = PublisherEmailEvidenceFor(f, PublisherScopeScanPackuments, h, []PublisherPackageHistory{h})
+				// Guards against Flagged() ever starting to read the evidence.
+				if n := len((&MaintainerDomainResult{Findings: []MaintainerDomainFinding{f}}).Flagged()); n != baselineFlagged {
+					t.Errorf("same=%v before=%v hidden=%v: Flagged() count %d, want %d", same, before, hidden, n, baselineFlagged)
+				}
 				got := maintainerDomainNotice(f)
 				// A kind without a notice gains none; otherwise the evidence
 				// appends one sentence and keeps the notice it extends.

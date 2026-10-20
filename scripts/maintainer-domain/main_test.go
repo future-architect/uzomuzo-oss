@@ -112,7 +112,7 @@ func TestWriteRowsPrivateAndRectangular(t *testing.T) {
 	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	rows := []row{{scope: "cases", name: "node-ipc", missing: "packument_unavailable"}, {scope: "cases", name: "example", findings: []analysis.MaintainerDomainFinding{{Kind: analysis.MaintainerDomainReregisteredBefore, Registrar: "DropCatch.com 538 LLC", DropCatch: true, PublisherEmailEvidence: &analysis.PublisherEmailEvidence{Status: analysis.PublisherEmailObserved, Source: analysis.PublisherEvidenceSource, Scope: analysis.PublisherScopeIncidentPackument, DomainRelation: analysis.PublisherDomainSame, RegistrationRelation: analysis.PublisherRegistrationBefore, LatestObserved: &analysis.PublisherLatestObserved{Package: "node-ipc", Version: "12.0.0", EmailDomain: "atlantis-software.net"}}}}}}
+	rows := []row{{scope: "cases", name: "node-ipc", missing: "packument_unavailable"}, {scope: "cases", name: "example", findings: []analysis.MaintainerDomainFinding{{Kind: analysis.MaintainerDomainReregisteredBefore, Registrar: "DropCatch.com 538 LLC", DropCatch: true, PublisherEmailEvidence: &analysis.PublisherEmailEvidence{Status: analysis.PublisherEmailObserved, Source: analysis.PublisherEvidenceSource, Scope: analysis.PublisherScopeIncidentPackument, DomainRelation: analysis.PublisherDomainSame, RegistrationRelation: analysis.PublisherRegistrationBefore, LatestObserved: &analysis.PublisherLatestObserved{PublishedAt: time.Date(2024, 8, 12, 16, 28, 35, 0, time.UTC), Package: "node-ipc", Version: "12.0.0", EmailDomain: "atlantis-software.net"}}}}}}
 	if err := writeRows(path, rows); err != nil {
 		t.Fatal(err)
 	}
@@ -128,6 +128,19 @@ func TestWriteRowsPrivateAndRectangular(t *testing.T) {
 	records, err := csv.NewReader(f).ReadAll()
 	if err != nil || len(records) != 3 || len(records[0]) != 23 || len(records[1]) != 23 || len(records[2]) != 23 || records[2][10] != "DropCatch.com 538 LLC" || records[2][11] != "true" || records[2][12] != "observed" || records[2][17] != "node-ipc" || records[2][19] != "atlantis-software.net" {
 		t.Fatalf("records=%v err=%v", records, err)
+	}
+	wantHeader := []string{"publisher_status", "publisher_source", "publisher_scope", "account_history_complete", "publisher_published_at", "publisher_package", "publisher_version", "publisher_email_domain", "publisher_domain_relation", "publisher_registration_relation", "newer_publish_unknown"}
+	wantEvidence := []string{"observed", "versions._npmUser", "incident_packument_before_incident", "false", "2024-08-12T16:28:35Z", "node-ipc", "12.0.0", "atlantis-software.net", "same", "before", "false"}
+	for i := range wantHeader {
+		if got := records[0][12+i]; got != wantHeader[i] {
+			t.Errorf("header[%d]=%q, want %q", 12+i, got, wantHeader[i])
+		}
+		if got := records[2][12+i]; got != wantEvidence[i] {
+			t.Errorf("%s=%q, want %q", wantHeader[i], got, wantEvidence[i])
+		}
+		if got := records[1][12+i]; got != "" {
+			t.Errorf("row without a finding: %s=%q, want empty", wantHeader[i], got)
+		}
 	}
 	// Unknown times (row date, first_seen, registered) are empty cells, not year 1.
 	if records[1][2] != "" || records[2][7] != "" || records[2][8] != "" {
