@@ -107,10 +107,18 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 #### npm registry — Packument (GET https://registry.npmjs.org/<name>)
 
 - Request: the full packument (scoped names as `@scope%2Fname`); the abbreviated install document has no per-version times
-- Fields consumed: `time` (per-version publish times, `created` / `modified` / `unpublished` skipped), the key set of `versions`
-- Purpose: record when every version was published, including unpublished ones whose `time` entry npm keeps (`Analysis.ReleaseHistory`); the lifecycle assessor reads it against the analysed version to detect a release burst across lines after a long silence, and `Analysis.EvaluateDormantRelease` turns it into the dormant-release marker (`Analysis.DormantRelease`). One request per distinct npm package, for versioned PURLs only
+- Fields consumed: `time` (per-version publish times, `created` / `modified` / `unpublished` skipped), the key set of `versions`, top-level `maintainers`, and per version `maintainers` and `_npmUser`
+- Purpose: record when every version was published, including unpublished ones whose `time` entry npm keeps (`Analysis.ReleaseHistory`); the lifecycle assessor reads it against the analysed version to detect a release burst across lines after a long silence, and `Analysis.EvaluateDormantRelease` turns it into the dormant-release marker (`Analysis.DormantRelease`). The current maintainers, each with the earliest publish time of a version naming its address, feed the optional maintainer domain check below (`ReleaseHistory.Maintainers`, ADR-0030). One request per distinct npm package, for versioned PURLs only
 - Code: `npmjs.Client.GetPublishHistory` (`internal/infrastructure/npmjs/client.go`), `IntegrationService.enrichReleaseHistory` (`internal/infrastructure/integration/populate_release_history.go`), `analysis.DetectDormantBurst` and `analysis.DetectFreshDormantRelease` (`internal/domain/analysis/release_history.go`). See [ADR-0026](adr/0026-dormant-release-burst.md) and [ADR-0028](adr/0028-dormant-release-marker.md)
 - Docs: <https://github.com/npm/registry/blob/main/docs/responses/package-metadata.md>
+
+#### RDAP — Domain (GET <RDAP base>/domain/<registrable domain>)
+
+- Sent only with `scan --maintainer-domain`, for each current npm maintainer address whose registrable domain (public suffix list) is not a shared mail provider or a private suffix. The base URL is the first https service listed for the TLD in the IANA DNS bootstrap embedded in the binary (`internal/infrastructure/rdap/bootstrap.json`, a copy of <https://data.iana.org/rdap/dns.json>); TLDs without one are not queried
+- Fields consumed: `events[]` (`eventAction` = `registration`, `eventDate`), `status[]` (`redemption period`, `pending delete`), and the `fn` of the vCard of the entity whose role is `registrar`. HTTP 404 means unregistered
+- Purpose: classify each address against the address's first appearance and the scan time (`Analysis.MaintainerDomain`, `analysis.ClassifyMaintainerDomain`). At least one second between requests to one RDAP server, 10-second timeout, one retry after 30 seconds on a transport error or HTTP 408, 429 or 5xx; redirects are limited to 5 and may not leave https. Results are kept in memory for the run
+- Code: `rdap.Client.Check` and `rdap.Client.Lookup` (`internal/infrastructure/rdap/client.go`), `AnalysisService.checkMaintainerDomains` (`internal/application/analysis_service.go`), `analysis.ClassifyMaintainerDomain` (`internal/domain/analysis/maintainer_domain.go`). See [ADR-0030](adr/0030-maintainer-email-domain-marker.md)
+- Docs: <https://www.rfc-editor.org/rfc/rfc9083>, <https://www.rfc-editor.org/rfc/rfc9224>
 
 #### GitHub — GraphQL (POST https://api.github.com/graphql)
 

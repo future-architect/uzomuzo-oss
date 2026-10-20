@@ -348,3 +348,7 @@ compares the publisher and other release facts with the previous version, but
 snapshot and the current registry. We found no published accuracy for
 Socket's "New author" alert. The measurements, scripts and an independent
 recount were made outside this repository and are not published with it.
+
+Follow-up (2026-10-21): the maintainer e-mail domain observation above is now an
+optional scan check; see
+[ADR-0030](0030-maintainer-email-domain-marker.md).

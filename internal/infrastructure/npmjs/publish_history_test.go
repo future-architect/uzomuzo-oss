@@ -48,7 +48,7 @@ func TestParsePublishHistoryForMeasurementKeepsVersionIdentities(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = f.Close() }()
-	h, err := ParsePublishHistory(f)
+	h, err := ParsePublishHistoryWithVersions(f)
 	if err != nil {
 		t.Fatal(err)
 	}

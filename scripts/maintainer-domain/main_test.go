@@ -118,6 +118,23 @@ func TestWriteRowsPrivateAndRectangular(t *testing.T) {
 	if err != nil || len(records) != 3 || len(records[0]) != 12 || records[2][10] != "DropCatch.com 538 LLC" || records[2][11] != "true" {
 		t.Fatalf("records=%v err=%v", records, err)
 	}
+	// Unknown times (row date, first_seen, registered) are empty cells, not year 1.
+	if records[1][2] != "" || records[2][7] != "" || records[2][8] != "" {
+		t.Errorf("zero times written: %v", records)
+	}
+}
+
+// TestParsePopulationMergesRepeatedPackages checks one entry per package.
+func TestParsePopulationMergesRepeatedPackages(t *testing.T) {
+	t.Parallel()
+	got, err := parsePopulation(strings.NewReader("package,mal_versions\nnode-ipc,12.0.1\nother,1.0.0\nnode-ipc,9.2.2 9.2.3\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []incidentCase{{Package: "node-ipc", Version: "12.0.1 9.2.2 9.2.3"}, {Package: "other", Version: "1.0.0"}}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
 }
 
 // TestIncidentCasesGroupVersions checks that one case package has one row.

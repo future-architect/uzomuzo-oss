@@ -81,7 +81,11 @@ type Analysis struct {
 	// package, including removed ones. Read against Package.Version to detect a
 	// return from a long silence (see DetectDormantBurst and
 	// DetectFreshDormantRelease).
-	ReleaseHistory   *ReleaseHistory
+	ReleaseHistory *ReleaseHistory
+
+	// MaintainerDomain holds the maintainer e-mail domain findings. It is nil
+	// when --maintainer-domain is off, when the package is not npm, or when
+	// ReleaseHistory is nil (for example a versionless PURL). See ADR-0030.
 	MaintainerDomain *MaintainerDomainResult
 
 	// DormantRelease is set when the analysed version is a release that

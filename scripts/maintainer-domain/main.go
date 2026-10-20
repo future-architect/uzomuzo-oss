@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/csv"
@@ -11,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -52,12 +54,21 @@ func parsePopulation(data io.Reader) ([]incidentCase, error) {
 	if !okPackage || !okMal {
 		return nil, errors.New("population CSV needs package and mal_versions columns")
 	}
+	// Repeated package rows are merged into the first one so a package is
+	// measured and counted once.
 	var out []incidentCase
+	index := map[string]int{}
 	for _, record := range records[1:] {
 		if len(record) <= packageCol || len(record) <= malCol {
 			continue
 		}
-		out = append(out, incidentCase{Package: record[packageCol], Version: record[malCol]})
+		name, versions := record[packageCol], record[malCol]
+		if i, ok := index[name]; ok {
+			out[i].Version = strings.TrimSpace(out[i].Version + " " + versions)
+			continue
+		}
+		index[name] = len(out)
+		out = append(out, incidentCase{Package: name, Version: versions})
 	}
 	return out, nil
 }
@@ -186,16 +197,20 @@ func (c *command) history(ctx context.Context, name string) (*npmjs.PublishHisto
 	cachePath := ""
 	if c.packumentDir != "" {
 		cachePath = filepath.Join(c.packumentDir, strings.ReplaceAll(name, "/", "__")+".json.gz")
-		if f, err := os.Open(cachePath); err == nil {
+		f, err := os.Open(cachePath)
+		switch {
+		case err == nil:
 			zr, err := gzip.NewReader(f)
 			if err == nil {
 				data, err = io.ReadAll(io.LimitReader(zr, packumentReadLimit))
-				_ = zr.Close()
+				_ = zr.Close() // read-only; a read error is reported below
 			}
-			_ = f.Close()
+			_ = f.Close() // read-only; a read error is reported below
 			if err != nil {
 				return nil, fmt.Errorf("read cached packument %q: %w", cachePath, err)
 			}
+		case !errors.Is(err, fs.ErrNotExist):
+			return nil, fmt.Errorf("open cached packument %q: %w", cachePath, err)
 		}
 	}
 	if data == nil {
@@ -210,7 +225,7 @@ func (c *command) history(ctx context.Context, name string) (*npmjs.PublishHisto
 		}
 		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("npm HTTP %d", resp.StatusCode)
+			return nil, fmt.Errorf("fetch npm packument for %q: HTTP %d", name, resp.StatusCode)
 		}
 		data, err = io.ReadAll(io.LimitReader(resp.Body, packumentReadLimit))
 		if err != nil {
@@ -237,7 +252,7 @@ func (c *command) history(ctx context.Context, name string) (*npmjs.PublishHisto
 			}
 		}
 	}
-	return npmjs.ParsePublishHistory(strings.NewReader(string(data)))
+	return npmjs.ParsePublishHistoryWithVersions(bytes.NewReader(data))
 }
 
 func (c *command) incidents(ctx context.Context, populationPath, casesPath string) error {
@@ -319,7 +334,7 @@ func (c *command) incidentRow(ctx context.Context, scope, name string, versions 
 	}
 	firstSeen := h.FirstSeenBefore(r.at)
 	for _, p := range people {
-		r.findings = append(r.findings, c.rdap.Check(ctx, analysis.MaintainerAddress{Account: p.Name, Email: p.Email, FirstSeen: firstSeen[npmjs.NormalizeEmail(p.Email)]}, r.at))
+		r.findings = append(r.findings, c.rdap.Check(ctx, analysis.MaintainerAddress{Account: p.Name, Email: p.Email, FirstSeen: firstSeen[analysis.NormalizeEmail(p.Email)]}, r.at))
 	}
 	return r
 }
@@ -383,7 +398,7 @@ func (c *command) lockfile(ctx context.Context, path string, now time.Time, scop
 			continue
 		}
 		for _, p := range h.Maintainers {
-			r.findings = append(r.findings, c.rdap.Check(ctx, analysis.MaintainerAddress{Account: p.Name, Email: p.Email, FirstSeen: h.FirstSeen[npmjs.NormalizeEmail(p.Email)]}, now))
+			r.findings = append(r.findings, c.rdap.Check(ctx, analysis.MaintainerAddress{Account: p.Name, Email: p.Email, FirstSeen: h.FirstSeen[analysis.NormalizeEmail(p.Email)]}, now))
 		}
 		c.rows = append(c.rows, r)
 	}
@@ -398,12 +413,16 @@ func date(t time.Time) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
-func writeRows(path string, rows []row) error {
+func writeRows(path string, rows []row) (err error) {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("open results CSV %q: %w", path, err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close results CSV %q: %w", path, closeErr)
+		}
+	}()
 	if err := f.Chmod(0o600); err != nil {
 		return fmt.Errorf("restrict results CSV %q: %w", path, err)
 	}
@@ -413,13 +432,13 @@ func writeRows(path string, rows []row) error {
 	}
 	for _, r := range rows {
 		if len(r.findings) == 0 {
-			if err := w.Write([]string{r.scope, r.name, r.at.Format(time.RFC3339), r.missing, "", "", "", "", "", "", "", ""}); err != nil {
+			if err := w.Write([]string{r.scope, r.name, formatTime(r.at), r.missing, "", "", "", "", "", "", "", ""}); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 			continue
 		}
 		for _, finding := range r.findings {
-			if err := w.Write([]string{r.scope, r.name, r.at.Format(time.RFC3339), r.missing, finding.Account, finding.Domain, string(finding.Kind), finding.FirstSeen.Format(time.RFC3339), finding.Registered.Format(time.RFC3339), finding.Reason, finding.Registrar, fmt.Sprint(finding.DropCatch)}); err != nil {
+			if err := w.Write([]string{r.scope, r.name, formatTime(r.at), r.missing, finding.Account, finding.Domain, string(finding.Kind), formatTime(finding.FirstSeen), formatTime(finding.Registered), string(finding.Reason), finding.Registrar, fmt.Sprint(finding.DropCatch)}); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 		}
@@ -429,6 +448,14 @@ func writeRows(path string, rows []row) error {
 		return fmt.Errorf("flush results CSV %q: %w", path, err)
 	}
 	return nil
+}
+
+// formatTime writes an empty cell for an unknown time instead of year 1.
+func formatTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(time.RFC3339)
 }
 
 func printSummary(out io.Writer, rows []row) error {
@@ -462,7 +489,7 @@ func printSummary(out io.Writer, rows []row) error {
 				anyCheck = anyCheck || isCheck
 				allCheck = allCheck && isCheck
 				anyBefore = anyBefore || f.Kind == analysis.MaintainerDomainReregisteredBefore
-				if f.Kind == analysis.MaintainerDomainUnregistered || f.Kind == analysis.MaintainerDomainLapsing || f.Kind == analysis.MaintainerDomainReregisteredBefore {
+				if f.Kind.WarrantsNotice() {
 					anyNotice = true
 					anyDropCatch = anyDropCatch || f.DropCatch
 					domains[f.Domain] = true

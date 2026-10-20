@@ -530,19 +530,21 @@ type maintainerDomainJSON struct {
 }
 
 type maintainerDomainUncheckedJSON struct {
-	Account string `json:"account"`
-	Domain  string `json:"domain"`
-	Reason  string `json:"reason"`
+	Account string                        `json:"account"`
+	Domain  string                        `json:"domain"`
+	Reason  domain.MaintainerDomainReason `json:"reason"`
 }
 
+// maintainerDomainFindingJSON omits registered when RDAP gave no registration
+// date (unregistered, and lapsing without a date).
 type maintainerDomainFindingJSON struct {
 	Account    string                      `json:"account"`
 	Domain     string                      `json:"domain"`
 	Kind       domain.MaintainerDomainKind `json:"kind"`
 	FirstSeen  time.Time                   `json:"first_seen"`
-	Registered time.Time                   `json:"registered"`
+	Registered time.Time                   `json:"registered,omitzero"`
 	Registrar  string                      `json:"registrar,omitempty"`
-	DropCatch  bool                        `json:"drop_catch,omitempty"`
+	DropCatch  bool                        `json:"drop_catch"`
 }
 
 type enrichedJSONOutput struct {
@@ -615,13 +617,13 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	if a.MaintainerDomain != nil {
 		m := &maintainerDomainJSON{Flagged: []maintainerDomainFindingJSON{}}
 		for _, f := range a.MaintainerDomain.Findings {
-			switch f.Kind {
-			case domain.MaintainerDomainUnchecked:
+			switch {
+			case f.Kind == domain.MaintainerDomainUnchecked:
 				m.Unchecked++
 				m.UncheckedFindings = append(m.UncheckedFindings, maintainerDomainUncheckedJSON{Account: f.Account, Domain: f.Domain, Reason: f.Reason})
-			case domain.MaintainerDomainLookupFailed:
+			case f.Kind == domain.MaintainerDomainLookupFailed:
 				m.LookupFailed++
-			case domain.MaintainerDomainUnregistered, domain.MaintainerDomainLapsing, domain.MaintainerDomainReregisteredBefore:
+			case f.Kind.WarrantsNotice():
 				m.Flagged = append(m.Flagged, maintainerDomainFindingJSON{Account: f.Account, Domain: f.Domain, Kind: f.Kind, FirstSeen: f.FirstSeen, Registered: f.Registered, Registrar: f.Registrar, DropCatch: f.DropCatch})
 			}
 		}

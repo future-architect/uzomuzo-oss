@@ -5,8 +5,11 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -42,7 +45,42 @@ const (
 	rdapMaxAttempts    = 2
 	maxDNSHostLength   = 253
 	maxDNSLabelLength  = 63
+	maxRedirects       = 5
 )
+
+// bootstrapBases maps each TLD in the embedded IANA bootstrap to the first
+// https RDAP base URL listed for it. Plain-http services are left out so a
+// network attacker cannot forge a registration date.
+var bootstrapBases = sync.OnceValue(func() map[string]string {
+	data, err := bootstrapFS.ReadFile("bootstrap.json")
+	if err != nil {
+		panic(fmt.Sprintf("rdap: read embedded bootstrap: %v", err))
+	}
+	var b bootstrap
+	if err := json.Unmarshal(data, &b); err != nil {
+		panic(fmt.Sprintf("rdap: decode embedded bootstrap: %v", err))
+	}
+	base := make(map[string]string)
+	for _, service := range b.Services {
+		if len(service) < 2 {
+			continue
+		}
+		var https string
+		for _, u := range service[1] {
+			if strings.HasPrefix(strings.ToLower(u), "https://") {
+				https = u
+				break
+			}
+		}
+		if https == "" {
+			continue
+		}
+		for _, tld := range service[0] {
+			base[strings.ToLower(tld)] = https
+		}
+	}
+	return base
+})
 
 // Client looks up registration data through RDAP and caches the results.
 type Client struct {
@@ -57,23 +95,21 @@ type Client struct {
 }
 
 // NewClient returns an RDAP client configured from the embedded DNS bootstrap.
+// It panics if the embedded bootstrap cannot be decoded, which is a build defect.
+// Setters are meant to be called before the first lookup.
 func NewClient() *Client {
-	data, _ := bootstrapFS.ReadFile("bootstrap.json")
-	var b bootstrap
-	_ = json.Unmarshal(data, &b)
-	base := make(map[string]string)
-	for _, service := range b.Services {
-		if len(service) < 2 || len(service[1]) == 0 {
-			continue
-		}
-		for _, tld := range service[0] {
-			base[strings.ToLower(tld)] = service[1][0]
-		}
+	return &Client{
+		http:            &http.Client{Timeout: rdapRequestTimeout, CheckRedirect: checkRedirect},
+		base:            maps.Clone(bootstrapBases()),
+		cache:           make(map[string]analysis.DomainRecord),
+		last:            make(map[string]time.Time),
+		retryDelay:      rdapRetryDelay,
+		requestInterval: time.Second,
 	}
-	return &Client{http: &http.Client{Timeout: rdapRequestTimeout}, base: base, cache: make(map[string]analysis.DomainRecord), last: make(map[string]time.Time), retryDelay: rdapRetryDelay, requestInterval: time.Second}
 }
 
-// SetCacheDir sets the directory used for successful lookup records.
+// SetCacheDir sets the directory used for found and not-found lookup records.
+// Entries do not expire: a later run reuses them as they were fetched.
 func (c *Client) SetCacheDir(dir string) { c.cacheDir = dir }
 
 // SetBaseURL overrides the RDAP endpoint for a TLD.
@@ -83,8 +119,14 @@ func (c *Client) SetBaseURL(tld, base string) {
 	c.base[strings.ToLower(tld)] = base
 }
 
-// SetHTTPClient replaces the HTTP client used for RDAP requests.
-func (c *Client) SetHTTPClient(client *http.Client) { c.http = client }
+// SetHTTPClient replaces the HTTP client used for RDAP requests. The client's
+// redirect policy is set to the RDAP default when it has none.
+func (c *Client) SetHTTPClient(client *http.Client) {
+	if client.CheckRedirect == nil {
+		client.CheckRedirect = checkRedirect
+	}
+	c.http = client
+}
 
 // SetRetryDelay sets the pause between retryable requests.
 func (c *Client) SetRetryDelay(delay time.Duration) { c.retryDelay = delay }
@@ -92,7 +134,9 @@ func (c *Client) SetRetryDelay(delay time.Duration) { c.retryDelay = delay }
 // SetRequestInterval sets the minimum time between requests to one host.
 func (c *Client) SetRequestInterval(delay time.Duration) { c.requestInterval = delay }
 
-// Registrable resolves a mail host to its effective registered domain.
+// Registrable resolves a mail host to its effective registered domain. The
+// second result reports whether the domain sits under a private (non-ICANN)
+// public suffix, such as github.io.
 func Registrable(host string) (string, bool) {
 	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
 	suffix, icann := publicsuffix.PublicSuffix(host)
@@ -115,40 +159,53 @@ var sharedMail = map[string]struct{}{
 // Check classifies the domain in a maintainer address at the given time.
 func (c *Client) Check(ctx context.Context, address analysis.MaintainerAddress, base time.Time) analysis.MaintainerDomainFinding {
 	f := analysis.MaintainerDomainFinding{Account: address.Account, FirstSeen: address.FirstSeen}
-	email := strings.ToLower(strings.TrimSpace(address.Email))
-	at := strings.LastIndexByte(email, '@')
-	if at < 1 || at == len(email)-1 || address.FirstSeen.IsZero() {
-		f.Kind, f.Reason = analysis.MaintainerDomainUnchecked, "not_in_history"
+	unchecked := func(reason analysis.MaintainerDomainReason) analysis.MaintainerDomainFinding {
+		f.Kind, f.Reason = analysis.MaintainerDomainUnchecked, reason
 		return f
+	}
+	email := analysis.NormalizeEmail(address.Email)
+	at := strings.LastIndexByte(email, '@')
+	if at < 1 || at == len(email)-1 {
+		return unchecked(analysis.MaintainerDomainReasonInvalidAddress)
 	}
 	host := email[at+1:]
 	if !validMailHost(host) {
-		f.Kind, f.Reason = analysis.MaintainerDomainUnchecked, "not_in_history"
-		return f
+		return unchecked(analysis.MaintainerDomainReasonInvalidAddress)
 	}
 	domain, private := Registrable(host)
 	f.Domain = domain
 	if domain == "" {
-		f.Kind, f.Reason = analysis.MaintainerDomainUnchecked, "not_in_history"
-		return f
+		return unchecked(analysis.MaintainerDomainReasonInvalidAddress)
 	}
-	if _, shared := sharedMail[host]; shared {
-		f.Kind, f.Reason = analysis.MaintainerDomainUnchecked, "free_mail"
-		return f
+	if address.FirstSeen.IsZero() {
+		return unchecked(analysis.MaintainerDomainReasonNotInHistory)
+	}
+	if isSharedMail(host, domain) {
+		return unchecked(analysis.MaintainerDomainReasonSharedMail)
 	}
 	if private {
-		f.Kind, f.Reason = analysis.MaintainerDomainUnchecked, "private_suffix"
-		return f
+		return unchecked(analysis.MaintainerDomainReasonPrivateSuffix)
 	}
-	rec, _ := c.Lookup(ctx, domain)
+	rec, err := c.Lookup(ctx, domain)
+	if err != nil {
+		slog.Debug("rdap_lookup_failed", "domain", domain, "error", err)
+	}
 	f.Registered = rec.Registered
 	f.Registrar = rec.Registrar
 	f.DropCatch = analysis.IsDropCatchRegistrar(rec.Registrar)
 	f.Kind = analysis.ClassifyMaintainerDomain(address.FirstSeen, base, rec)
 	if rec.Status == analysis.DomainUnsupported {
-		f.Reason = "no_rdap"
+		f.Reason = analysis.MaintainerDomainReasonNoRDAP
 	}
 	return f
+}
+
+// isSharedMail reports whether the mail host or its registrable domain is a
+// shared provider; regional hosts such as mail.yahoo.co.jp count too.
+func isSharedMail(host, domain string) bool {
+	_, sharedHost := sharedMail[host]
+	_, sharedDomain := sharedMail[domain]
+	return sharedHost || sharedDomain
 }
 
 func validMailHost(host string) bool {
@@ -168,12 +225,16 @@ func validMailHost(host string) bool {
 	return true
 }
 
-// Lookup returns the RDAP record for a registrable domain.
+// Lookup returns the RDAP record for a registrable domain. The error is
+// non-nil only when the record's status is DomainLookupFailed, and says why.
 func (c *Client) Lookup(ctx context.Context, domain string) (analysis.DomainRecord, error) {
 	domain = strings.ToLower(strings.TrimSpace(domain))
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if rec, ok := c.cache[domain]; ok {
+		if rec.Status == analysis.DomainLookupFailed {
+			return rec, fmt.Errorf("rdap lookup %q: an earlier attempt in this run failed", domain)
+		}
 		return rec, nil
 	}
 	if c.cacheDir != "" {
@@ -209,42 +270,79 @@ func (c *Client) Lookup(ctx context.Context, domain string) (analysis.DomainReco
 		}
 		c.last[host] = time.Now()
 		rec, err = c.request(ctx, endpoint)
-		if err == nil || rec.Status != analysis.DomainLookupFailed {
-			break
-		}
 		// Only transport failures and rate limiting or server errors are retried.
-		if _, retry := err.(retryableError); !retry {
+		var retry retryableError
+		if err == nil || !errors.As(err, &retry) {
 			break
 		}
 	}
 	if err != nil {
 		rec = analysis.DomainRecord{Status: analysis.DomainLookupFailed}
+		err = fmt.Errorf("rdap lookup %q: %w", domain, err)
+		// A lookup cut short by the caller is not remembered, so a later call
+		// with a live context asks again.
+		if ctx.Err() != nil {
+			return rec, err
+		}
 	}
 	c.cache[domain] = rec
 	if c.cacheDir != "" && rec.Status != analysis.DomainLookupFailed {
-		if e := os.MkdirAll(c.cacheDir, 0o700); e == nil {
-			data, _ := json.Marshal(diskEntry{DomainRecord: rec, RequestURL: endpoint, FetchedAt: time.Now().UTC().Format(time.RFC3339), Schema: diskSchema})
-			_ = os.WriteFile(c.cachePath(domain), data, 0o600)
-		}
+		c.writeDiskEntry(domain, endpoint, rec)
 	}
-	return rec, nil
+	return rec, err
+}
+
+// writeDiskEntry stores a record on a best-effort basis: the lookup result is
+// already in memory, so a failed write only costs a repeat request next run.
+func (c *Client) writeDiskEntry(domain, endpoint string, rec analysis.DomainRecord) {
+	if err := os.MkdirAll(c.cacheDir, 0o700); err != nil {
+		slog.Debug("rdap_cache_write_failed", "domain", domain, "error", err)
+		return
+	}
+	data, err := json.Marshal(diskEntry{DomainRecord: rec, RequestURL: endpoint, FetchedAt: time.Now().UTC().Format(time.RFC3339), Schema: diskSchema})
+	if err != nil {
+		slog.Debug("rdap_cache_write_failed", "domain", domain, "error", err)
+		return
+	}
+	if err := os.WriteFile(c.cachePath(domain), data, 0o600); err != nil {
+		slog.Debug("rdap_cache_write_failed", "domain", domain, "error", err)
+	}
 }
 
 func (c *Client) cachePath(domain string) string {
 	return filepath.Join(c.cacheDir, fmt.Sprintf("%x.json", sha256.Sum256([]byte(domain))))
 }
 
+// retryableError marks a failure worth one more attempt.
 type retryableError struct{ error }
 
+// Unwrap returns the underlying failure.
+func (e retryableError) Unwrap() error { return e.error }
+
+// checkRedirect bounds redirect hops and refuses a downgrade from https.
+func checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) > maxRedirects {
+		return fmt.Errorf("rdap: more than %d redirects", maxRedirects)
+	}
+	if req.URL.User != nil {
+		return errors.New("rdap: userinfo in redirect")
+	}
+	if len(via) > 0 && strings.EqualFold(via[0].URL.Scheme, "https") && !strings.EqualFold(req.URL.Scheme, "https") {
+		return fmt.Errorf("rdap: redirect from https to %q", req.URL.Scheme)
+	}
+	return nil
+}
+
 func (c *Client) request(ctx context.Context, endpoint string) (analysis.DomainRecord, error) {
+	failed := analysis.DomainRecord{Status: analysis.DomainLookupFailed}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return analysis.DomainRecord{Status: analysis.DomainLookupFailed}, err
+		return failed, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Accept", "application/rdap+json")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return analysis.DomainRecord{Status: analysis.DomainLookupFailed}, retryableError{err}
+		return failed, retryableError{err}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	switch resp.StatusCode {
@@ -263,7 +361,7 @@ func (c *Client) request(ctx context.Context, endpoint string) (analysis.DomainR
 			} `json:"entities"`
 		}
 		if err := json.NewDecoder(io.LimitReader(resp.Body, rdapResponseLimit)).Decode(&body); err != nil {
-			return analysis.DomainRecord{Status: analysis.DomainLookupFailed}, nil
+			return failed, fmt.Errorf("decode response: %w", err)
 		}
 		var registration time.Time
 		count := 0
@@ -274,11 +372,14 @@ func (c *Client) request(ctx context.Context, endpoint string) (analysis.DomainR
 			count++
 			registration, err = time.Parse(time.RFC3339, event.Date)
 			if err != nil {
-				return analysis.DomainRecord{Status: analysis.DomainLookupFailed}, nil
+				return failed, fmt.Errorf("parse registration date: %w", err)
 			}
 		}
-		if count > 1 || (count == 0 && !hasDeletionStatus(body.Status)) {
-			return analysis.DomainRecord{Status: analysis.DomainLookupFailed}, nil
+		if count > 1 {
+			return failed, fmt.Errorf("%d registration events", count)
+		}
+		if count == 0 && !analysis.HasDeletionStatus(body.Status) {
+			return failed, errors.New("no registration event")
 		}
 		if count != 1 {
 			registration = time.Time{}
@@ -302,18 +403,19 @@ func (c *Client) request(ctx context.Context, endpoint string) (analysis.DomainR
 				}
 				var key, value string
 				if json.Unmarshal(field[0], &key) == nil && strings.EqualFold(key, "fn") && json.Unmarshal(field[3], &value) == nil {
-					rec.Registrar = strings.Join(strings.Fields(value), " ")
+					// Shown in the terminal notice, so control characters are dropped.
+					rec.Registrar = analysis.SanitizeExternalSummary(value)
 					return rec, nil
 				}
 			}
 		}
 		return rec, nil
 	default:
-		rec := analysis.DomainRecord{Status: analysis.DomainLookupFailed}
-		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError {
-			return rec, retryableError{fmt.Errorf("RDAP HTTP %d", resp.StatusCode)}
+		err := fmt.Errorf("RDAP HTTP %d", resp.StatusCode)
+		if resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError {
+			return failed, retryableError{err}
 		}
-		return rec, nil
+		return failed, err
 	}
 }
 
@@ -324,10 +426,6 @@ func containsFold(values []string, target string) bool {
 		}
 	}
 	return false
-}
-
-func hasDeletionStatus(statuses []string) bool {
-	return containsFold(statuses, "redemption period") || containsFold(statuses, "pending delete")
 }
 
 func wait(ctx context.Context, delay time.Duration) error {

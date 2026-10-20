@@ -2,31 +2,28 @@ package cli
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/audit"
-	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rdap"
 )
 
 // TestMaintainerDomainJSONAndDetailedNotice checks enabled output.
 func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 	first := time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)
 	registered := time.Date(2026, 5, 7, 11, 49, 33, 0, time.UTC)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"}],"entities":[{"roles":["registrar"],"vcardArray":["vcard",[["fn",{},"text","DropCatch.com 538 LLC"]]]}]}`))
-	}))
-	t.Cleanup(srv.Close)
-	client := rdap.NewClient()
-	client.SetBaseURL("net", srv.URL)
-	flagged := client.Check(context.Background(), analysis.MaintainerAddress{Account: "atiertant", Email: "A.Tiertant@Atlantis-Software.NET ", FirstSeen: first}, time.Date(2026, 5, 14, 14, 25, 30, 0, time.UTC))
-	a := &analysis.Analysis{MaintainerDomain: &analysis.MaintainerDomainResult{Findings: []analysis.MaintainerDomainFinding{flagged, {Account: "other", Kind: analysis.MaintainerDomainUnchecked, Reason: "free_mail"}, {Account: "third", Kind: analysis.MaintainerDomainLookupFailed}}}}
+	flagged := analysis.MaintainerDomainFinding{Account: "atiertant", Domain: "atlantis-software.net", Kind: analysis.MaintainerDomainReregisteredBefore, FirstSeen: first, Registered: registered, Registrar: "DropCatch.com 538 LLC", DropCatch: true}
+	unregistered := analysis.MaintainerDomainFinding{Account: "fourth", Domain: "lapsed.example", Kind: analysis.MaintainerDomainUnregistered, FirstSeen: first}
+	a := &analysis.Analysis{MaintainerDomain: &analysis.MaintainerDomainResult{Findings: []analysis.MaintainerDomainFinding{
+		flagged,
+		{Account: "other", Domain: "gmail.com", Kind: analysis.MaintainerDomainUnchecked, Reason: analysis.MaintainerDomainReasonSharedMail},
+		{Account: "third", Kind: analysis.MaintainerDomainLookupFailed},
+		unregistered,
+		{Account: "fifth", Domain: "old.example", Kind: analysis.MaintainerDomainNormal, FirstSeen: first, Registered: time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)},
+	}}}
 	e := audit.AuditEntry{PURL: "pkg:npm/node-ipc@12.0.0", Verdict: audit.VerdictOK, Analysis: a}
 	var buf bytes.Buffer
 	if err := renderScanJSON(&buf, []audit.AuditEntry{e}, []audit.AuditEntry{e}, false); err != nil {
@@ -36,18 +33,19 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 		Packages []struct {
 			MaintainerDomain *struct {
 				Flagged []struct {
-					Account    string    `json:"account"`
-					Domain     string    `json:"domain"`
-					Kind       string    `json:"kind"`
-					FirstSeen  time.Time `json:"first_seen"`
-					Registered time.Time `json:"registered"`
-					Registrar  string    `json:"registrar"`
-					DropCatch  bool      `json:"drop_catch"`
+					Account    string          `json:"account"`
+					Domain     string          `json:"domain"`
+					Kind       string          `json:"kind"`
+					FirstSeen  time.Time       `json:"first_seen"`
+					Registered json.RawMessage `json:"registered"`
+					Registrar  string          `json:"registrar"`
+					DropCatch  *bool           `json:"drop_catch"`
 				} `json:"flagged"`
 				Unchecked         int `json:"unchecked"`
 				LookupFailed      int `json:"lookup_failed"`
 				UncheckedFindings []struct {
 					Account string `json:"account"`
+					Domain  string `json:"domain"`
 					Reason  string `json:"reason"`
 				} `json:"unchecked_findings"`
 			} `json:"maintainer_domain"`
@@ -60,21 +58,30 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 		t.Fatalf("output=%s", buf.String())
 	}
 	m := out.Packages[0].MaintainerDomain
-	if len(m.Flagged) != 1 || m.Flagged[0].Account != "atiertant" || m.Flagged[0].Domain != "atlantis-software.net" || m.Flagged[0].Kind != "reregistered_before" || !m.Flagged[0].FirstSeen.Equal(first) || !m.Flagged[0].Registered.Equal(registered) || m.Flagged[0].Registrar != "DropCatch.com 538 LLC" || !m.Flagged[0].DropCatch || m.Unchecked != 1 || m.LookupFailed != 1 {
-		t.Errorf("output=%s", buf.String())
+	if m.Unchecked != 1 || m.LookupFailed != 1 || len(m.Flagged) != 2 {
+		t.Fatalf("output=%s", buf.String())
 	}
-	if len(m.UncheckedFindings) != 1 || m.UncheckedFindings[0].Reason != "free_mail" {
+	f := m.Flagged[0]
+	if f.Account != "atiertant" || f.Domain != "atlantis-software.net" || f.Kind != "reregistered_before" || !f.FirstSeen.Equal(first) || string(f.Registered) != `"2026-05-07T11:49:33Z"` || f.Registrar != "DropCatch.com 538 LLC" || f.DropCatch == nil || !*f.DropCatch {
+		t.Errorf("flagged[0]=%+v", f)
+	}
+	u := m.Flagged[1]
+	if u.Account != "fourth" || u.Kind != "unregistered" || u.Registered != nil || u.DropCatch == nil || *u.DropCatch {
+		t.Errorf("flagged[1]=%+v, want no registered key and drop_catch false", u)
+	}
+	if len(m.UncheckedFindings) != 1 || m.UncheckedFindings[0].Account != "other" || m.UncheckedFindings[0].Domain != "gmail.com" || m.UncheckedFindings[0].Reason != "free_mail" {
 		t.Errorf("unchecked=%s", buf.String())
-	}
-	if !strings.Contains(a.MaintainerDomainNotice(), "if maintainer atiertant still uses this address, npm password-reset mail may reach whoever now holds atlantis-software.net (registered 2026-05-07") {
-		t.Errorf("notice=%q", a.MaintainerDomainNotice())
 	}
 	buf.Reset()
 	if err := renderBoxEntry(&buf, &e); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(buf.String(), "Maintainer domain:") || !strings.Contains(buf.String(), "atlantis-software.net") {
-		t.Errorf("detailed box=%s", buf.String())
+	box := buf.String()
+	if got := strings.Count(box, maintainerDomainPrefix); got != 2 {
+		t.Errorf("notice lines=%d, want 2 (one per flagged address):\n%s", got, box)
+	}
+	if !strings.Contains(box, "atlantis-software.net") || !strings.Contains(box, "lapsed.example") {
+		t.Errorf("detailed box=%s", box)
 	}
 	a.MaintainerDomain = nil
 	buf.Reset()
@@ -86,8 +93,8 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 	}
 }
 
-// TestScanWithoutMaintainerDomainMatchesJSONGolden checks default output.
-func TestScanWithoutMaintainerDomainMatchesJSONGolden(t *testing.T) {
+// TestEmptyScanJSONGolden pins the JSON document for an empty result.
+func TestEmptyScanJSONGolden(t *testing.T) {
 	const golden = "{\n  \"summary\": {\n    \"total\": 0,\n    \"ok\": 0,\n    \"caution\": 0,\n    \"replace\": 0,\n    \"review\": 0,\n    \"build_integrity\": {\n      \"hardened\": 0,\n      \"moderate\": 0,\n      \"weak\": 0,\n      \"ungraded\": 0\n    }\n  },\n  \"packages\": [],\n  \"shown\": 0\n}\n"
 	var buf bytes.Buffer
 	if err := renderScanJSON(&buf, nil, nil, false); err != nil {

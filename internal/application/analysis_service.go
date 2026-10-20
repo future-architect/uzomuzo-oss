@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -355,22 +357,12 @@ func (s *AnalysisService) enrichAndAssess(ctx context.Context, analyses map[stri
 		domain.NewLifecycleAssessorService(),
 		domain.NewBuildHealthAssessorService(),
 	)
-	// One clock for the lifecycle rules and the dormant-release marker, and the
-	// same default thresholds the assessor reads, so the two agree on whether a
-	// release is still fresh.
+	// One clock for the lifecycle rules, the dormant-release marker and the
+	// maintainer domain check, and the same default thresholds the assessor
+	// reads, so the lifecycle rules and the dormant-release marker agree on
+	// whether a release is still fresh.
 	now := time.Now()
-	if s.maintainerDomainChecker != nil {
-		for _, a := range analyses {
-			if a == nil || a.ReleaseHistory == nil || a.ReleaseHistory.Registry != domain.RegistryNpm {
-				continue
-			}
-			result := &domain.MaintainerDomainResult{}
-			for _, address := range a.ReleaseHistory.Maintainers {
-				result.Findings = append(result.Findings, s.maintainerDomainChecker.Check(ctx, address, now))
-			}
-			a.MaintainerDomain = result
-		}
-	}
+	s.checkMaintainerDomains(ctx, analyses, now)
 	lifecycleConfig := config.GetDefaultLifecycle()
 	config.NormalizeLifecycleConfig(&lifecycleConfig)
 	silence, flag := lifecycleConfig.DormantWindows()
@@ -425,4 +417,27 @@ func eolEvidenceSource(e domain.EOLStatus) string {
 		return e.Evidences[0].Source
 	}
 	return "unknown"
+}
+
+// checkMaintainerDomains fills Analysis.MaintainerDomain for npm analyses with
+// a release history when the check is enabled. Packages are visited in key
+// order so a cancelled run stops at a predictable point. See ADR-0030.
+func (s *AnalysisService) checkMaintainerDomains(ctx context.Context, analyses map[string]*domain.Analysis, now time.Time) {
+	if s.maintainerDomainChecker == nil {
+		return
+	}
+	for _, key := range slices.Sorted(maps.Keys(analyses)) {
+		if ctx.Err() != nil {
+			return
+		}
+		a := analyses[key]
+		if a == nil || a.ReleaseHistory == nil || a.ReleaseHistory.Registry != domain.RegistryNpm {
+			continue
+		}
+		result := &domain.MaintainerDomainResult{}
+		for _, address := range a.ReleaseHistory.Maintainers {
+			result.Findings = append(result.Findings, s.maintainerDomainChecker.Check(ctx, address, now))
+		}
+		a.MaintainerDomain = result
+	}
 }

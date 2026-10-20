@@ -351,10 +351,8 @@ func renderBoxEntryError(ctx *boxContext) error {
 			return wrap(err)
 		}
 	}
-	if notice := ctx.analysis.MaintainerDomainNotice(); notice != "" {
-		if err := writeLine(ctx, "%s %s", maintainerDomainPrefix, notice); err != nil {
-			return wrap(err)
-		}
+	if err := writeMaintainerDomainNotices(ctx); err != nil {
+		return wrap(err)
 	}
 	icon := verdictIcon(ctx.entry.Verdict)
 	label := verdictLabel(ctx.entry.Verdict)

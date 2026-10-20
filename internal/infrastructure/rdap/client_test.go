@@ -3,7 +3,9 @@ package rdap
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -37,10 +39,10 @@ func TestLookupFailedIsNotPersisted(t *testing.T) {
 	client.SetRetryDelay(0)
 	client.SetRequestInterval(0)
 	first, err := client.Lookup(context.Background(), "atlantis-software.net")
-	if err != nil || first.Status != analysis.DomainLookupFailed || calls.Load() != 2 {
+	if err == nil || first.Status != analysis.DomainLookupFailed || calls.Load() != 2 {
 		t.Fatalf("first=%+v err=%v calls=%d", first, err, calls.Load())
 	}
-	if _, err := os.Stat(client.cachePath("atlantis-software.net")); !os.IsNotExist(err) {
+	if _, err := os.Stat(client.cachePath("atlantis-software.net")); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("failed lookup cache entry exists or cannot be checked: %v", err)
 	}
 	status.Store(http.StatusOK)
@@ -110,21 +112,26 @@ func TestLookupDiskCacheEvidenceAndLegacyEntry(t *testing.T) {
 // TestLookup checks RDAP response handling and retries.
 func TestLookup(t *testing.T) {
 	t.Parallel()
+	registered := time.Date(2026, 5, 7, 11, 49, 33, 0, time.UTC)
 	tests := []struct {
-		name   string
-		status int
-		body   string
-		want   analysis.DomainLookupStatus
-		calls  int32
+		name           string
+		status         int
+		body           string
+		want           analysis.DomainLookupStatus
+		wantRegistered time.Time
+		calls          int32
 	}{
-		{"found", 200, `{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"}]}`, analysis.DomainFound, 1},
-		{"two registrations", 200, `{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"},{"eventAction":"registration","eventDate":"2020-01-01T00:00:00Z"}]}`, analysis.DomainLookupFailed, 1},
-		{"invalid date", 200, `{"events":[{"eventAction":"registration","eventDate":"yesterday"}]}`, analysis.DomainLookupFailed, 1},
-		{"undated pending", 200, `{"status":["pending delete"]}`, analysis.DomainFound, 1},
-		{"undated plain", 200, `{"status":["active"]}`, analysis.DomainLookupFailed, 1},
-		{"not found", 404, ``, analysis.DomainNotFound, 1},
-		{"rate limited", 429, ``, analysis.DomainLookupFailed, 2},
-		{"forbidden", 403, ``, analysis.DomainLookupFailed, 1},
+		{"found", 200, `{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"}]}`, analysis.DomainFound, registered, 1},
+		{"two registrations", 200, `{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"},{"eventAction":"registration","eventDate":"2020-01-01T00:00:00Z"}]}`, analysis.DomainLookupFailed, time.Time{}, 1},
+		{"invalid date", 200, `{"events":[{"eventAction":"registration","eventDate":"yesterday"}]}`, analysis.DomainLookupFailed, time.Time{}, 1},
+		{"undated pending", 200, `{"status":["pending delete"]}`, analysis.DomainFound, time.Time{}, 1},
+		{"undated plain", 200, `{"status":["active"]}`, analysis.DomainLookupFailed, time.Time{}, 1},
+		{"malformed body", 200, `{`, analysis.DomainLookupFailed, time.Time{}, 1},
+		{"not found", 404, ``, analysis.DomainNotFound, time.Time{}, 1},
+		{"request timeout", 408, ``, analysis.DomainLookupFailed, time.Time{}, 2},
+		{"rate limited", 429, ``, analysis.DomainLookupFailed, time.Time{}, 2},
+		{"server error", 503, ``, analysis.DomainLookupFailed, time.Time{}, 2},
+		{"forbidden", 403, ``, analysis.DomainLookupFailed, time.Time{}, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -141,13 +148,19 @@ func TestLookup(t *testing.T) {
 			c.SetRetryDelay(0)
 			c.SetRequestInterval(0)
 			rec, err := c.Lookup(context.Background(), "atlantis-software.net")
-			if err != nil || rec.Status != tt.want {
+			if rec.Status != tt.want {
 				t.Fatalf("record=%+v err=%v, want %v", rec, err, tt.want)
 			}
-			if tt.want == analysis.DomainFound && tt.name != "undated pending" && !rec.Registered.Equal(time.Date(2026, 5, 7, 11, 49, 33, 0, time.UTC)) {
-				t.Errorf("registered=%s", rec.Registered)
+			if wantErr := tt.want == analysis.DomainLookupFailed; (err != nil) != wantErr {
+				t.Errorf("err=%v, want error %v", err, wantErr)
 			}
-			_, _ = c.Lookup(context.Background(), "atlantis-software.net")
+			if !rec.Registered.Equal(tt.wantRegistered) {
+				t.Errorf("registered=%s, want %s", rec.Registered, tt.wantRegistered)
+			}
+			// A second lookup is served from memory, failures included.
+			if _, err := c.Lookup(context.Background(), "atlantis-software.net"); (err != nil) != (tt.want == analysis.DomainLookupFailed) {
+				t.Errorf("cached lookup err=%v", err)
+			}
 			if got := calls.Load(); got != tt.calls {
 				t.Errorf("calls=%d, want %d", got, tt.calls)
 			}
@@ -156,8 +169,8 @@ func TestLookup(t *testing.T) {
 	var calls atomic.Int32
 	c := NewClient()
 	c.SetHTTPClient(&http.Client{Transport: roundTripper(func(*http.Request) (*http.Response, error) { calls.Add(1); return nil, nil })})
-	rec, _ := c.Lookup(context.Background(), "example.invalidtld")
-	if rec.Status != analysis.DomainUnsupported || calls.Load() != 0 {
+	rec, err := c.Lookup(context.Background(), "example.invalidtld")
+	if err != nil || rec.Status != analysis.DomainUnsupported || calls.Load() != 0 {
 		t.Errorf("unsupported=%+v calls=%d", rec, calls.Load())
 	}
 	if domain, private := Registrable("mail.example.co.uk"); domain != "example.co.uk" || private {
@@ -186,15 +199,17 @@ func TestCheckAddress(t *testing.T) {
 		name, email string
 		first       time.Time
 		kind        analysis.MaintainerDomainKind
-		reason      string
+		reason      analysis.MaintainerDomainReason
 	}{
 		{"case and whitespace", "A.Tiertant@Atlantis-Software.NET ", first, analysis.MaintainerDomainReregisteredBefore, ""},
-		{"shared mail", "person@gmail.com", first, analysis.MaintainerDomainUnchecked, "free_mail"},
-		{"private suffix", "person@me.github.io", first, analysis.MaintainerDomainUnchecked, "private_suffix"},
-		{"no rdap", "person@example.invalidtld", first, analysis.MaintainerDomainUnchecked, "no_rdap"},
-		{"not in history", "person@atlantis-software.net", time.Time{}, analysis.MaintainerDomainUnchecked, "not_in_history"},
-		{"invalid", "broken-address", first, analysis.MaintainerDomainUnchecked, "not_in_history"},
-		{"control character", "person@example.com\nInjected", first, analysis.MaintainerDomainUnchecked, "not_in_history"},
+		{"shared mail", "person@gmail.com", first, analysis.MaintainerDomainUnchecked, analysis.MaintainerDomainReasonSharedMail},
+		{"shared mail regional host", "person@mail.yahoo.co.jp", first, analysis.MaintainerDomainUnchecked, analysis.MaintainerDomainReasonSharedMail},
+		{"private suffix", "person@me.github.io", first, analysis.MaintainerDomainUnchecked, analysis.MaintainerDomainReasonPrivateSuffix},
+		{"no rdap", "person@example.invalidtld", first, analysis.MaintainerDomainUnchecked, analysis.MaintainerDomainReasonNoRDAP},
+		{"not in history", "person@atlantis-software.net", time.Time{}, analysis.MaintainerDomainUnchecked, analysis.MaintainerDomainReasonNotInHistory},
+		{"invalid", "broken-address", first, analysis.MaintainerDomainUnchecked, analysis.MaintainerDomainReasonInvalidAddress},
+		{"invalid without history", "broken-address", time.Time{}, analysis.MaintainerDomainUnchecked, analysis.MaintainerDomainReasonInvalidAddress},
+		{"control character", "person@example.com\nInjected", first, analysis.MaintainerDomainUnchecked, analysis.MaintainerDomainReasonInvalidAddress},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -228,15 +243,103 @@ func TestRegistrarEvidence(t *testing.T) {
 	}
 }
 
-// TestRegistrarWhitespace keeps untrusted RDAP text on one notice line.
-func TestRegistrarWhitespace(t *testing.T) {
+// TestRegistrarSanitized keeps untrusted RDAP text on one notice line without
+// terminal control sequences.
+func TestRegistrarSanitized(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ name, fn, want string }{
+		{"newline", `Example Registrar\nInjected`, "Example Registrar Injected"},
+		{"escape sequence", `Example \u001b[31mRegistrar\u001b[0m`, "Example [31mRegistrar[0m"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := NewClient()
+			c.SetHTTPClient(&http.Client{Transport: roundTripper(func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"}],"entities":[{"roles":["registrar"],"vcardArray":["vcard",[["fn",{},"text","` + tc.fn + `"]]]}]}`)), Header: make(http.Header)}, nil
+			})})
+			rec, err := c.request(context.Background(), "https://example.com/domain/example.com")
+			if err != nil || rec.Registrar != tc.want {
+				t.Fatalf("record=%+v err=%v, want registrar %q", rec, err, tc.want)
+			}
+		})
+	}
+}
+
+// TestEmbeddedBootstrap checks that the embedded IANA file loads and keeps
+// only https services.
+func TestEmbeddedBootstrap(t *testing.T) {
+	t.Parallel()
+	base := NewClient().base
+	for _, tld := range []string{"com", "net", "org"} {
+		if !strings.HasPrefix(base[tld], "https://") {
+			t.Errorf("base[%q]=%q, want an https URL", tld, base[tld])
+		}
+	}
+	for tld, u := range base {
+		if !strings.HasPrefix(strings.ToLower(u), "https://") {
+			t.Errorf("base[%q]=%q is not https", tld, u)
+		}
+	}
+}
+
+// TestCheckRedirect checks the redirect limit and the https downgrade refusal.
+func TestCheckRedirect(t *testing.T) {
+	t.Parallel()
+	req := func(raw string) *http.Request {
+		r, err := http.NewRequest(http.MethodGet, raw, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	https := req("https://rdap.example/domain/a.com")
+	tests := []struct {
+		name    string
+		next    *http.Request
+		via     []*http.Request
+		wantErr bool
+	}{
+		{"https to https", req("https://registrar.example/domain/a.com"), []*http.Request{https}, false},
+		{"https to http", req("http://registrar.example/domain/a.com"), []*http.Request{https}, true},
+		{"userinfo", req("https://user@registrar.example/domain/a.com"), []*http.Request{https}, true},
+		{"at hop limit", req("https://registrar.example/"), make([]*http.Request, maxRedirects), false},
+		{"over hop limit", req("https://registrar.example/"), make([]*http.Request, maxRedirects+1), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			via := tt.via
+			if len(via) > 0 && via[0] == nil {
+				via = append([]*http.Request{https}, via[1:]...)
+			}
+			if err := checkRedirect(tt.next, via); (err != nil) != tt.wantErr {
+				t.Errorf("err=%v, want error %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestLookupCancelledIsNotCached checks that a lookup cut short by the caller
+// is asked again once the context is live.
+func TestLookupCancelledIsNotCached(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		_, _ = w.Write([]byte(`{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"}]}`))
+	}))
+	t.Cleanup(srv.Close)
 	c := NewClient()
-	c.SetHTTPClient(&http.Client{Transport: roundTripper(func(*http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"}],"entities":[{"roles":["registrar"],"vcardArray":["vcard",[["fn",{},"text","Example Registrar\nInjected"]]]}]}`)), Header: make(http.Header)}, nil
-	})})
-	rec, err := c.request(context.Background(), "https://example.com/domain/example.com")
-	if err != nil || rec.Registrar != "Example Registrar Injected" {
-		t.Fatalf("record=%+v err=%v", rec, err)
+	c.SetBaseURL("net", srv.URL)
+	c.SetRequestInterval(0)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if rec, err := c.Lookup(ctx, "atlantis-software.net"); err == nil || rec.Status != analysis.DomainLookupFailed {
+		t.Fatalf("cancelled record=%+v err=%v", rec, err)
+	}
+	rec, err := c.Lookup(context.Background(), "atlantis-software.net")
+	if err != nil || rec.Status != analysis.DomainFound || calls.Load() != 1 {
+		t.Fatalf("record=%+v err=%v calls=%d, want one fresh request", rec, err, calls.Load())
 	}
 }
 

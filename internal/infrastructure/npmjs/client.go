@@ -14,6 +14,7 @@ import (
 
 	"github.com/future-architect/uzomuzo-oss/internal/common"
 	"github.com/future-architect/uzomuzo-oss/internal/common/links"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
@@ -320,7 +321,8 @@ func (c *Client) GetDeprecation(ctx context.Context, namespace, name, version st
 }
 
 // PublishHistory is the publish time of every version npm has recorded for a
-// package, and the subset it still serves.
+// package, the subset it still serves, and the maintainer identities the
+// packument names (see ADR-0030).
 type PublishHistory struct {
 	// PublishedAt maps version to publish time. npm keeps an unpublished
 	// version's entry in the packument's "time" object, so this can list
@@ -328,11 +330,20 @@ type PublishHistory struct {
 	PublishedAt map[string]time.Time
 	// Installable holds the versions present in the packument's "versions".
 	// It is nil when "versions" is missing or null, meaning unknown.
-	Installable        map[string]struct{}
-	Maintainers        []Person
-	FirstSeen          map[string]time.Time
+	Installable map[string]struct{}
+	// Maintainers is the packument's top-level "maintainers" list. It is nil
+	// when the field is missing or malformed.
+	Maintainers []Person
+	// FirstSeen maps each normalized e-mail (analysis.NormalizeEmail) to the
+	// earliest publish time of a version whose "maintainers" or "_npmUser"
+	// names it. Versions without a publish time are skipped.
+	FirstSeen map[string]time.Time
+	// VersionMaintainers maps version to its "maintainers" list. It is nil
+	// unless the history was built by ParsePublishHistoryWithVersions.
 	VersionMaintainers map[string][]Person
-	VersionPublisher   map[string]Person
+	// VersionPublisher maps version to its "_npmUser". It is nil unless the
+	// history was built by ParsePublishHistoryWithVersions.
+	VersionPublisher map[string]Person
 }
 
 // Person holds a maintainer or publisher identity from an npm packument.
@@ -341,10 +352,10 @@ type Person struct {
 	Email string `json:"email"`
 }
 
-// NormalizeEmail matches packument addresses despite surrounding space or case.
-func NormalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
-
-// FirstSeenBefore returns the first dated appearance strictly before cutoff.
+// FirstSeenBefore returns, for each normalized e-mail, the first publish time
+// strictly before cutoff of a version that names it. It reads
+// VersionMaintainers and VersionPublisher, so it returns an empty map for a
+// history not built by ParsePublishHistoryWithVersions.
 func (h *PublishHistory) FirstSeenBefore(cutoff time.Time) map[string]time.Time {
 	out := make(map[string]time.Time)
 	if h == nil {
@@ -355,15 +366,17 @@ func (h *PublishHistory) FirstSeenBefore(cutoff time.Time) map[string]time.Time 
 		if at.IsZero() || !at.Before(cutoff) {
 			continue
 		}
-		people = append(append([]Person(nil), people...), h.VersionPublisher[version])
-		for _, p := range people {
-			email := NormalizeEmail(p.Email)
-			if email != "" && (out[email].IsZero() || at.Before(out[email])) {
-				out[email] = at
-			}
-		}
+		recordFirstSeen(out, at, people...)
+		recordFirstSeen(out, at, h.VersionPublisher[version])
 	}
 	return out
+}
+
+// ParsePublishHistoryWithVersions decodes a full npm packument and also keeps
+// each version's maintainers and publisher, which the measurement command
+// needs and the scan does not.
+func ParsePublishHistoryWithVersions(r io.Reader) (*PublishHistory, error) {
+	return decodePublishHistory(r, true)
 }
 
 // GetPublishHistory fetches the full packument of the named package ("name" or
@@ -443,8 +456,11 @@ func extractNpmSuccessor(msg string) string {
 	return ""
 }
 
-// parsePublishHistory keeps dates and the first occurrence of each maintainer
-// address without retaining per-version identities in the scan result.
+// parsePublishHistory decodes the "time", "versions" and "maintainers" keys of
+// a packument. Of each version manifest only "maintainers" and "_npmUser" are
+// kept, as raw JSON: a packument with thousands of versions runs to megabytes,
+// and the rest of the manifest is not needed here. Per-version identities are
+// folded into FirstSeen and not retained.
 func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
 	return decodePublishHistory(r, false)
 }
@@ -502,23 +518,25 @@ func decodePublishHistory(r io.Reader, retainVersions bool) (*PublishHistory, er
 		if retainVersions {
 			h.VersionPublisher[v] = publisher
 		}
-		people = append(people, publisher)
 		at := h.PublishedAt[v]
 		if at.IsZero() {
 			continue
 		}
-		for _, p := range people {
-			email := NormalizeEmail(p.Email)
-			if email != "" && (h.FirstSeen[email].IsZero() || at.Before(h.FirstSeen[email])) {
-				h.FirstSeen[email] = at
-			}
-		}
+		recordFirstSeen(h.FirstSeen, at, people...)
+		recordFirstSeen(h.FirstSeen, at, publisher)
 	}
 	return h, nil
 }
 
-// ParsePublishHistory decodes a cached full npm packument for measurements.
-func ParsePublishHistory(r io.Reader) (*PublishHistory, error) { return decodePublishHistory(r, true) }
+// recordFirstSeen keeps the earliest time each person's normalized e-mail appears.
+func recordFirstSeen(m map[string]time.Time, at time.Time, people ...Person) {
+	for _, p := range people {
+		email := analysis.NormalizeEmail(p.Email)
+		if email != "" && (m[email].IsZero() || at.Before(m[email])) {
+			m[email] = at
+		}
+	}
+}
 
 func decodePeople(raw json.RawMessage) []Person {
 	var people []Person
@@ -530,6 +548,8 @@ func decodePeople(raw json.RawMessage) []Person {
 
 func decodePerson(raw json.RawMessage) Person {
 	var p Person
+	// A missing or legacy string-shaped "_npmUser" leaves p empty, which
+	// recordFirstSeen skips; one bad version must not fail the package.
 	_ = json.Unmarshal(raw, &p)
 	return p
 }

@@ -46,7 +46,7 @@ func scanFlags() []urfcli.Flag {
 
 		// Transitive dependency display
 		&urfcli.BoolFlag{Name: "show-transitive", Usage: "Include transitive dependencies in output (SBOM/go.mod: transitive deps; --include-actions: composite action deps)"},
-		&urfcli.BoolFlag{Name: "maintainer-domain", Usage: "Check npm maintainer e-mail domain registration"},
+		&urfcli.BoolFlag{Name: "maintainer-domain", Usage: "Check whether e-mail domains of npm maintainers lapsed or were re-registered (versioned npm inputs; shown in json and detailed output; makes RDAP requests)"},
 
 		// Output filtering
 		&urfcli.StringFlag{Name: "show-only", Usage: "Show only entries with specified verdicts (comma-separated: ok,caution,replace,review). Replace means the dependency should be replaced (EOL, archived, etc.)."},

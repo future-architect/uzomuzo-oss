@@ -26,6 +26,47 @@ const (
 	MaintainerDomainNormal MaintainerDomainKind = "normal"
 )
 
+// MaintainerDomainReason explains why an address is MaintainerDomainUnchecked.
+type MaintainerDomainReason string
+
+const (
+	// MaintainerDomainReasonNotInHistory means no dated version lists the address.
+	MaintainerDomainReasonNotInHistory MaintainerDomainReason = "not_in_history"
+	// MaintainerDomainReasonInvalidAddress means the address has no usable mail domain.
+	MaintainerDomainReasonInvalidAddress MaintainerDomainReason = "invalid_address"
+	// MaintainerDomainReasonSharedMail means the domain belongs to a shared mail provider.
+	MaintainerDomainReasonSharedMail MaintainerDomainReason = "free_mail"
+	// MaintainerDomainReasonPrivateSuffix means the domain sits under a private public suffix.
+	MaintainerDomainReasonPrivateSuffix MaintainerDomainReason = "private_suffix"
+	// MaintainerDomainReasonNoRDAP means no RDAP service is known for the TLD.
+	MaintainerDomainReasonNoRDAP MaintainerDomainReason = "no_rdap"
+)
+
+// WarrantsNotice reports whether a finding of this kind produces a notice.
+// See ADR-0030.
+func (k MaintainerDomainKind) WarrantsNotice() bool {
+	return k == MaintainerDomainUnregistered || k == MaintainerDomainLapsing || k == MaintainerDomainReregisteredBefore
+}
+
+// RDAP domain statuses that mean the registration is being deleted.
+const (
+	RDAPStatusRedemptionPeriod = "redemption period"
+	RDAPStatusPendingDelete    = "pending delete"
+)
+
+// HasDeletionStatus reports whether any RDAP status says the domain is being deleted.
+func HasDeletionStatus(statuses []string) bool {
+	for _, status := range statuses {
+		if strings.EqualFold(status, RDAPStatusRedemptionPeriod) || strings.EqualFold(status, RDAPStatusPendingDelete) {
+			return true
+		}
+	}
+	return false
+}
+
+// NormalizeEmail matches maintainer addresses despite surrounding space or case.
+func NormalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
+
 // DomainLookupStatus describes the outcome of an RDAP lookup.
 type DomainLookupStatus int
 
@@ -61,14 +102,12 @@ func ClassifyMaintainerDomain(firstSeen, base time.Time, rec DomainRecord) Maint
 	case DomainLookupFailed:
 		return MaintainerDomainLookupFailed
 	case DomainFound:
-		// Deletion status is useful even when RDAP omits the registration event.
 	default:
 		return MaintainerDomainLookupFailed
 	}
-	for _, status := range rec.Statuses {
-		if strings.EqualFold(status, "redemption period") || strings.EqualFold(status, "pending delete") {
-			return MaintainerDomainLapsing
-		}
+	// Checked before the registration date; see ADR-0030.
+	if HasDeletionStatus(rec.Statuses) {
+		return MaintainerDomainLapsing
 	}
 	if rec.Registered.IsZero() {
 		return MaintainerDomainLookupFailed
@@ -91,18 +130,20 @@ type MaintainerAddress struct {
 
 // MaintainerDomainFinding records the classification for one address.
 type MaintainerDomainFinding struct {
-	Account    string
-	Domain     string
-	Kind       MaintainerDomainKind
-	FirstSeen  time.Time
+	Account   string
+	Domain    string
+	Kind      MaintainerDomainKind
+	FirstSeen time.Time
+	// Registered is zero when RDAP gave no registration date.
 	Registered time.Time
-	Reason     string
-	Registrar  string
-	DropCatch  bool
+	// Reason is set only for MaintainerDomainUnchecked.
+	Reason    MaintainerDomainReason
+	Registrar string
+	DropCatch bool
 }
 
-// IsDropCatchRegistrar identifies known drop-catch registrar names.
-// Source: https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/lauinger
+// IsDropCatchRegistrar identifies known drop-catch registrar names by prefix.
+// See ADR-0030 for the source of the list.
 func IsDropCatchRegistrar(name string) bool {
 	name = strings.ToLower(strings.TrimSpace(name))
 	for _, prefix := range []string{"dropcatch.com", "snapnames", "namejet", "pheenix"} {
@@ -125,7 +166,7 @@ func (r *MaintainerDomainResult) Flagged() []MaintainerDomainFinding {
 	}
 	var out []MaintainerDomainFinding
 	for _, f := range r.Findings {
-		if f.Kind == MaintainerDomainUnregistered || f.Kind == MaintainerDomainLapsing || f.Kind == MaintainerDomainReregisteredBefore {
+		if f.Kind.WarrantsNotice() {
 			out = append(out, f)
 		}
 	}
@@ -137,14 +178,23 @@ func (a *Analysis) HasMaintainerDomainNotice() bool {
 	return a != nil && len(a.MaintainerDomain.Flagged()) > 0
 }
 
-// MaintainerDomainNotice formats the first notice-bearing finding.
-func (a *Analysis) MaintainerDomainNotice() string {
-	if !a.HasMaintainerDomainNotice() {
-		return ""
+// MaintainerDomainNotices formats one notice per notice-bearing finding, in
+// finding order. The wording is described in ADR-0030.
+func (a *Analysis) MaintainerDomainNotices() []string {
+	if a == nil {
+		return nil
 	}
-	f := a.MaintainerDomain.Flagged()[0]
-	// The notice states the risk, the evidence, and the action. It stays
-	// conditional because packument e-mails can be stale (npm documents this).
+	flagged := a.MaintainerDomain.Flagged()
+	notices := make([]string, 0, len(flagged))
+	for _, f := range flagged {
+		if notice := maintainerDomainNotice(f); notice != "" {
+			notices = append(notices, notice)
+		}
+	}
+	return notices
+}
+
+func maintainerDomainNotice(f MaintainerDomainFinding) string {
 	who := "the maintainer"
 	if f.Account != "" {
 		who = "maintainer " + f.Account
@@ -159,7 +209,7 @@ func (a *Analysis) MaintainerDomainNotice() string {
 				registrar += " (a drop-catch registrar)"
 			}
 		}
-		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever now holds %s (registered %s%s, after the address first appeared %s).%s", who, f.Domain, f.Registered.Format(time.DateOnly), registrar, f.FirstSeen.Format(time.DateOnly), action)
+		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever now holds %s (registered %s%s, after the address first appeared %s).%s", who, f.Domain, f.Registered.UTC().Format(time.DateOnly), registrar, f.FirstSeen.UTC().Format(time.DateOnly), action)
 	case MaintainerDomainLapsing:
 		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever registers %s next (the domain is being deleted).%s", who, f.Domain, action)
 	case MaintainerDomainUnregistered:
