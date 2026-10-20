@@ -335,6 +335,7 @@ type PublishHistory struct {
 	VersionPublisher   map[string]Person
 }
 
+// Person holds a maintainer or publisher identity from an npm packument.
 type Person struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`

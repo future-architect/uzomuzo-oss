@@ -35,8 +35,10 @@ type ReleaseHistory struct {
 	PublishedAt map[string]time.Time
 	// Installable is the set of versions the registry still serves.
 	Installable map[string]struct{}
+	// Maintainers lists the packument's current top-level maintainers.
 	Maintainers []MaintainerAddress
-	FirstSeen   map[string]time.Time
+	// FirstSeen maps each maintainer e-mail to its earliest dated appearance.
+	FirstSeen map[string]time.Time
 }
 
 // DormantBurst describes a release that came out after a long silence, together

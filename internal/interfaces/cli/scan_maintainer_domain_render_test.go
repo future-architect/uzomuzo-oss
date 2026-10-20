@@ -15,6 +15,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rdap"
 )
 
+// TestMaintainerDomainJSONAndDetailedNotice checks enabled output.
 func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 	first := time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)
 	registered := time.Date(2026, 5, 7, 11, 49, 33, 0, time.UTC)
@@ -83,6 +84,7 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 	}
 }
 
+// TestScanWithoutMaintainerDomainMatchesJSONGolden checks default output.
 func TestScanWithoutMaintainerDomainMatchesJSONGolden(t *testing.T) {
 	const golden = "{\n  \"summary\": {\n    \"total\": 0,\n    \"ok\": 0,\n    \"caution\": 0,\n    \"replace\": 0,\n    \"review\": 0,\n    \"build_integrity\": {\n      \"hardened\": 0,\n      \"moderate\": 0,\n      \"weak\": 0,\n      \"ungraded\": 0\n    }\n  },\n  \"packages\": [],\n  \"shown\": 0\n}\n"
 	var buf bytes.Buffer

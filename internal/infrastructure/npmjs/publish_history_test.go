@@ -13,6 +13,7 @@ import (
 	"time"
 )
 
+// TestParsePublishHistoryMaintainers checks first appearance and current maintainers.
 func TestParsePublishHistoryMaintainers(t *testing.T) {
 	t.Parallel()
 	f, err := os.Open(filepath.Join("testdata", "node-ipc-maintainers.json"))
@@ -39,6 +40,7 @@ func TestParsePublishHistoryMaintainers(t *testing.T) {
 	}
 }
 
+// TestParsePublishHistoryForMeasurementKeepsVersionIdentities checks measurement-only identity maps.
 func TestParsePublishHistoryForMeasurementKeepsVersionIdentities(t *testing.T) {
 	t.Parallel()
 	f, err := os.Open(filepath.Join("testdata", "node-ipc-maintainers.json"))
@@ -58,6 +60,7 @@ func TestParsePublishHistoryForMeasurementKeepsVersionIdentities(t *testing.T) {
 	}
 }
 
+// TestParsePublishHistoryLegacyMaintainerShapes checks malformed legacy fields.
 func TestParsePublishHistoryLegacyMaintainerShapes(t *testing.T) {
 	t.Parallel()
 	const raw = `{"time":{"1.0.0":"2020-01-01T00:00:00Z"},"maintainers":"legacy","versions":{"1.0.0":{"maintainers":"legacy","_npmUser":"legacy"}}}`

@@ -39,6 +39,7 @@ func cachedFixture(t *testing.T) string {
 	return cacheDir
 }
 
+// TestIncidentUsesPrecedingManifestAndFirstAppearance checks incident cutoff data.
 func TestIncidentUsesPrecedingManifestAndFirstAppearance(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -55,6 +56,7 @@ func TestIncidentUsesPrecedingManifestAndFirstAppearance(t *testing.T) {
 	}
 }
 
+// TestLockfileCountsUniqueNamesAndNotices checks lockfile deduplication.
 func TestLockfileCountsUniqueNamesAndNotices(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -90,6 +92,7 @@ func TestLockfileCountsUniqueNamesAndNotices(t *testing.T) {
 	}
 }
 
+// TestMarkWaves checks wave thresholds.
 func TestMarkWaves(t *testing.T) {
 	t.Parallel()
 	start := time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC)

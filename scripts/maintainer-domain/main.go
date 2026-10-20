@@ -37,6 +37,13 @@ type command struct {
 	rows         []row
 }
 
+const (
+	packumentRequestTimeout = 25 * time.Second
+	packumentReadLimit      = 64 << 20
+	waveMinDailyPackages    = 5
+	waveMinTotalPackages    = 10
+)
+
 func main() {
 	if err := run(context.Background(), os.Args[1:], os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -48,7 +55,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return errors.New("usage: maintainer-domain incidents|lockfile [flags]")
 	}
-	c := &command{rdap: rdap.NewClient(), http: &http.Client{Timeout: 25 * time.Second}}
+	c := &command{rdap: rdap.NewClient(), http: &http.Client{Timeout: packumentRequestTimeout}}
 	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	packumentDir := fs.String("packument-dir", "", "compressed packument cache")
@@ -65,7 +72,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return fmt.Errorf("unknown mode %q", args[0])
 	}
 	if err := fs.Parse(args[1:]); err != nil {
-		return err
+		return fmt.Errorf("parse command flags: %w", err)
 	}
 	if *outPath == "" {
 		return errors.New("-out is required to keep per-row evidence out of standard output")
@@ -78,7 +85,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 			return errors.New("incidents requires -population and -cases")
 		}
 		if err := c.incidents(ctx, *population, *cases); err != nil {
-			return err
+			return fmt.Errorf("measure incidents: %w", err)
 		}
 	case "lockfile":
 		if *nowRaw == "" || fs.NArg() == 0 {
@@ -90,12 +97,12 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		}
 		for i, path := range fs.Args() {
 			if err := c.lockfile(ctx, path, now, fmt.Sprintf("lockfile_%d", i+1)); err != nil {
-				return err
+				return fmt.Errorf("measure lockfile %q: %w", path, err)
 			}
 		}
 	}
 	if err := writeRows(*outPath, c.rows); err != nil {
-		return err
+		return fmt.Errorf("write results to %q: %w", *outPath, err)
 	}
 	return printSummary(out, c.rows)
 }
@@ -108,40 +115,40 @@ func (c *command) history(ctx context.Context, name string) (*npmjs.PublishHisto
 		if f, err := os.Open(cachePath); err == nil {
 			zr, err := gzip.NewReader(f)
 			if err == nil {
-				data, err = io.ReadAll(io.LimitReader(zr, 64<<20))
+				data, err = io.ReadAll(io.LimitReader(zr, packumentReadLimit))
 				_ = zr.Close()
 			}
 			_ = f.Close()
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("read cached packument %q: %w", cachePath, err)
 			}
 		}
 	}
 	if data == nil {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://registry.npmjs.org/"+url.PathEscape(name), nil)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create npm request for %q: %w", name, err)
 		}
 		req.Header.Set("Accept", "application/json")
 		resp, err := c.http.Do(req)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fetch npm packument for %q: %w", name, err)
 		}
 		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("npm HTTP %d", resp.StatusCode)
 		}
-		data, err = io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+		data, err = io.ReadAll(io.LimitReader(resp.Body, packumentReadLimit))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read npm packument for %q: %w", name, err)
 		}
 		if cachePath != "" {
 			if err := os.MkdirAll(c.packumentDir, 0o700); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("create packument cache directory: %w", err)
 			}
 			f, err := os.OpenFile(cachePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("open packument cache %q: %w", cachePath, err)
 			}
 			zw := gzip.NewWriter(f)
 			_, err = zw.Write(data)
@@ -152,7 +159,7 @@ func (c *command) history(ctx context.Context, name string) (*npmjs.PublishHisto
 				err = closeErr
 			}
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("write packument cache %q: %w", cachePath, err)
 			}
 		}
 	}
@@ -162,12 +169,12 @@ func (c *command) history(ctx context.Context, name string) (*npmjs.PublishHisto
 func (c *command) incidents(ctx context.Context, populationPath, casesPath string) error {
 	f, err := os.Open(populationPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("open population CSV %q: %w", populationPath, err)
 	}
 	defer func() { _ = f.Close() }()
 	records, err := csv.NewReader(f).ReadAll()
 	if err != nil {
-		return err
+		return fmt.Errorf("read population CSV %q: %w", populationPath, err)
 	}
 	if len(records) == 0 {
 		return errors.New("empty population CSV")
@@ -192,14 +199,14 @@ func (c *command) incidents(ctx context.Context, populationPath, casesPath strin
 	}
 	data, err := os.ReadFile(casesPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("read cases JSON %q: %w", casesPath, err)
 	}
 	var cases []struct {
 		Package string `json:"package"`
 		Version string `json:"version"`
 	}
 	if err := json.Unmarshal(data, &cases); err != nil {
-		return err
+		return fmt.Errorf("decode cases JSON %q: %w", casesPath, err)
 	}
 	for _, tc := range cases {
 		if !seen[tc.Package] {
@@ -266,16 +273,16 @@ func markWaves(rows []row) {
 	sort.Slice(keys, func(i, j int) bool { return keys[i].Before(keys[j]) })
 	waveDays := map[time.Time]bool{}
 	for i := 0; i < len(keys); {
-		if days[keys[i]] < 5 {
+		if days[keys[i]] < waveMinDailyPackages {
 			i++
 			continue
 		}
 		j, count := i, 0
-		for j < len(keys) && days[keys[j]] >= 5 && (j == i || keys[j].Equal(keys[j-1].AddDate(0, 0, 1))) {
+		for j < len(keys) && days[keys[j]] >= waveMinDailyPackages && (j == i || keys[j].Equal(keys[j-1].AddDate(0, 0, 1))) {
 			count += days[keys[j]]
 			j++
 		}
-		if count >= 10 {
+		if count >= waveMinTotalPackages {
 			for k := i; k < j; k++ {
 				waveDays[keys[k]] = true
 			}
@@ -296,7 +303,7 @@ func markWaves(rows []row) {
 func (c *command) lockfile(ctx context.Context, path string, now time.Time, scope string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("read lockfile %q: %w", path, err)
 	}
 	var lock struct {
 		Packages map[string]struct {
@@ -306,7 +313,7 @@ func (c *command) lockfile(ctx context.Context, path string, now time.Time, scop
 		} `json:"packages"`
 	}
 	if err := json.Unmarshal(data, &lock); err != nil {
-		return err
+		return fmt.Errorf("decode lockfile %q: %w", path, err)
 	}
 	if lock.Packages == nil {
 		return errors.New("lockfile requires a packages map")
@@ -355,28 +362,31 @@ func date(t time.Time) time.Time {
 func writeRows(path string, rows []row) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
-		return err
+		return fmt.Errorf("open results CSV %q: %w", path, err)
 	}
 	defer func() { _ = f.Close() }()
 	w := csv.NewWriter(f)
 	if err := w.Write([]string{"scope", "package", "date", "missing", "account", "domain", "kind", "first_seen", "registered", "reason"}); err != nil {
-		return err
+		return fmt.Errorf("write results CSV header: %w", err)
 	}
 	for _, r := range rows {
 		if len(r.findings) == 0 {
 			if err := w.Write([]string{r.scope, r.name, r.at.Format(time.RFC3339), r.missing}); err != nil {
-				return err
+				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 			continue
 		}
 		for _, finding := range r.findings {
 			if err := w.Write([]string{r.scope, r.name, r.at.Format(time.RFC3339), r.missing, finding.Account, finding.Domain, string(finding.Kind), finding.FirstSeen.Format(time.RFC3339), finding.Registered.Format(time.RFC3339), finding.Reason}); err != nil {
-				return err
+				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 		}
 	}
 	w.Flush()
-	return w.Error()
+	if err := w.Error(); err != nil {
+		return fmt.Errorf("flush results CSV %q: %w", path, err)
+	}
+	return nil
 }
 
 func printSummary(out io.Writer, rows []row) error {
@@ -434,11 +444,11 @@ func printSummary(out io.Writer, rows []row) error {
 			continue
 		}
 		if _, err := fmt.Fprintf(out, "%s: packages=%d checkable=%d reregistered_before=%d checkable_dates=%d reregistered_before_dates=%d notices=%d distinct_notice_domains=%d every_address_checkable=%d\n", scope, total, checkable, before, len(checkableDays), len(beforeDays), notices, len(domains), every); err != nil {
-			return err
+			return fmt.Errorf("write summary for %q: %w", scope, err)
 		}
 		for _, kind := range []analysis.MaintainerDomainKind{analysis.MaintainerDomainUnchecked, analysis.MaintainerDomainLookupFailed, analysis.MaintainerDomainUnregistered, analysis.MaintainerDomainLapsing, analysis.MaintainerDomainReregisteredAfter, analysis.MaintainerDomainReregisteredBefore, analysis.MaintainerDomainNormal} {
 			if _, err := fmt.Fprintf(out, "  %s=%d\n", kind, kindCounts[kind]); err != nil {
-				return err
+				return fmt.Errorf("write summary count for %q: %w", kind, err)
 			}
 		}
 		keys := make([]string, 0, len(missing))
@@ -448,7 +458,7 @@ func printSummary(out io.Writer, rows []row) error {
 		sort.Strings(keys)
 		for _, key := range keys {
 			if _, err := fmt.Fprintf(out, "  missing_%s=%d\n", key, missing[key]); err != nil {
-				return err
+				return fmt.Errorf("write missing-data count for %q: %w", key, err)
 			}
 		}
 	}

@@ -328,7 +328,7 @@ func writeBoxVerdict(ctx *boxContext) error {
 	}
 	if notice := ctx.analysis.MaintainerDomainNotice(); notice != "" {
 		if err := writeLine(ctx, "%s %s", maintainerDomainPrefix, notice); err != nil {
-			return err
+			return fmt.Errorf("write maintainer domain notice: %w", err)
 		}
 	}
 	icon := verdictIcon(ctx.entry.Verdict)

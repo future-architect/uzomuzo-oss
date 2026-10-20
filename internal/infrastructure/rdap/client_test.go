@@ -13,6 +13,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
+// TestLookupFailedIsNotPersisted checks recovery on a new client.
 func TestLookupFailedIsNotPersisted(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
@@ -51,6 +52,7 @@ func TestLookupFailedIsNotPersisted(t *testing.T) {
 	}
 }
 
+// TestLookupDiskCacheEvidenceAndLegacyEntry checks evidence and old cache entries.
 func TestLookupDiskCacheEvidenceAndLegacyEntry(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
@@ -103,6 +105,7 @@ func TestLookupDiskCacheEvidenceAndLegacyEntry(t *testing.T) {
 	}
 }
 
+// TestLookup checks RDAP response handling and retries.
 func TestLookup(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -161,6 +164,7 @@ func TestLookup(t *testing.T) {
 	}
 }
 
+// TestCheckAddress checks address exclusions and classification.
 func TestCheckAddress(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
@@ -203,4 +207,5 @@ func TestCheckAddress(t *testing.T) {
 
 type roundTripper func(*http.Request) (*http.Response, error)
 
+// RoundTrip invokes the test transport function.
 func (f roundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

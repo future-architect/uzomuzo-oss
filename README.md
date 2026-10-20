@@ -124,6 +124,9 @@ trivy fs . --format cyclonedx | uzomuzo scan --sbom - --show-transitive  # inclu
 uzomuzo scan                     # auto-detect go.mod in cwd
 uzomuzo scan --format json       # JSON output for CI integration
 
+# Optional npm maintainer e-mail domain notice (makes RDAP requests)
+uzomuzo scan --maintainer-domain pkg:npm/express@4.18.2
+
 # CI gate: exit 1 if any EOL dependency found
 uzomuzo scan --sbom bom.json --fail-on eol-confirmed
 
@@ -140,6 +143,8 @@ uzomuzo scan --file .github/workflows/ci.yml
 # File input (one PURL per line)
 uzomuzo scan --file input_purls.txt --sample 500
 ```
+
+`--maintainer-domain` is off by default and applies only to npm packages. It adds a notice for manual review without changing the scan verdict. See [ADR-0030](docs/adr/0030-maintainer-email-domain-marker.md).
 
 ### Dependency Diet — *Which dependency should I remove first?*
 

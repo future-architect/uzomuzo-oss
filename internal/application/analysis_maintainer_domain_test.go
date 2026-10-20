@@ -14,12 +14,14 @@ type fakeMaintainerDomainChecker struct {
 	registered time.Time
 }
 
+// Check returns a fixed domain classification for application tests.
 func (f *fakeMaintainerDomainChecker) Check(_ context.Context, address domain.MaintainerAddress, base time.Time) domain.MaintainerDomainFinding {
 	f.calls++
 	f.address = address
 	return domain.MaintainerDomainFinding{Account: address.Account, Domain: "atlantis-software.net", FirstSeen: address.FirstSeen, Registered: f.registered, Kind: domain.ClassifyMaintainerDomain(address.FirstSeen, base, domain.DomainRecord{Status: domain.DomainFound, Registered: f.registered})}
 }
 
+// TestMaintainerDomainIsScanOnly checks the opt-in scan path.
 func TestMaintainerDomainIsScanOnly(t *testing.T) {
 	first := time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)
 	registered := time.Date(2026, 5, 7, 11, 49, 33, 0, time.UTC)

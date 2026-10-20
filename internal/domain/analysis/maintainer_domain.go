@@ -10,24 +10,37 @@ import (
 type MaintainerDomainKind string
 
 const (
-	MaintainerDomainUnchecked          MaintainerDomainKind = "unchecked"
-	MaintainerDomainLookupFailed       MaintainerDomainKind = "lookup_failed"
-	MaintainerDomainUnregistered       MaintainerDomainKind = "unregistered"
-	MaintainerDomainLapsing            MaintainerDomainKind = "lapsing"
-	MaintainerDomainReregisteredAfter  MaintainerDomainKind = "reregistered_after"
+	// MaintainerDomainUnchecked means the address or domain cannot be evaluated.
+	MaintainerDomainUnchecked MaintainerDomainKind = "unchecked"
+	// MaintainerDomainLookupFailed means RDAP did not provide a usable answer.
+	MaintainerDomainLookupFailed MaintainerDomainKind = "lookup_failed"
+	// MaintainerDomainUnregistered means RDAP returned no domain record.
+	MaintainerDomainUnregistered MaintainerDomainKind = "unregistered"
+	// MaintainerDomainLapsing means RDAP reports a deletion-related status.
+	MaintainerDomainLapsing MaintainerDomainKind = "lapsing"
+	// MaintainerDomainReregisteredAfter means registration is at or after the evaluation time.
+	MaintainerDomainReregisteredAfter MaintainerDomainKind = "reregistered_after"
+	// MaintainerDomainReregisteredBefore means registration follows the address's first appearance.
 	MaintainerDomainReregisteredBefore MaintainerDomainKind = "reregistered_before"
-	MaintainerDomainNormal             MaintainerDomainKind = "normal"
+	// MaintainerDomainNormal means registration predates or matches the address's first appearance.
+	MaintainerDomainNormal MaintainerDomainKind = "normal"
 )
 
+// DomainLookupStatus describes the outcome of an RDAP lookup.
 type DomainLookupStatus int
 
 const (
+	// DomainFound means RDAP returned a domain record.
 	DomainFound DomainLookupStatus = iota
+	// DomainNotFound means RDAP returned a not-found response.
 	DomainNotFound
+	// DomainUnsupported means no RDAP service is known for the TLD.
 	DomainUnsupported
+	// DomainLookupFailed means the lookup did not yield a usable record.
 	DomainLookupFailed
 )
 
+// DomainRecord holds the RDAP fields used for domain classification.
 type DomainRecord struct {
 	Status     DomainLookupStatus
 	Registered time.Time
@@ -67,12 +80,14 @@ func ClassifyMaintainerDomain(firstSeen, base time.Time, rec DomainRecord) Maint
 	return MaintainerDomainNormal
 }
 
+// MaintainerAddress identifies a maintainer address and its first appearance.
 type MaintainerAddress struct {
 	Account   string
 	Email     string
 	FirstSeen time.Time
 }
 
+// MaintainerDomainFinding records the classification for one address.
 type MaintainerDomainFinding struct {
 	Account    string
 	Domain     string
@@ -82,10 +97,12 @@ type MaintainerDomainFinding struct {
 	Reason     string
 }
 
+// MaintainerDomainResult holds findings for a package's maintainers.
 type MaintainerDomainResult struct {
 	Findings []MaintainerDomainFinding
 }
 
+// Flagged returns findings that warrant a maintainer domain notice.
 func (r *MaintainerDomainResult) Flagged() []MaintainerDomainFinding {
 	if r == nil {
 		return nil
@@ -99,10 +116,12 @@ func (r *MaintainerDomainResult) Flagged() []MaintainerDomainFinding {
 	return out
 }
 
+// HasMaintainerDomainNotice reports whether any finding warrants a notice.
 func (a *Analysis) HasMaintainerDomainNotice() bool {
 	return a != nil && len(a.MaintainerDomain.Flagged()) > 0
 }
 
+// MaintainerDomainNotice formats the first notice-bearing finding.
 func (a *Analysis) MaintainerDomainNotice() string {
 	if !a.HasMaintainerDomainNotice() {
 		return ""

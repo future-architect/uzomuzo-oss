@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// TestClassifyMaintainerDomain checks each registration boundary.
 func TestClassifyMaintainerDomain(t *testing.T) {
 	t.Parallel()
 	first := time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)
