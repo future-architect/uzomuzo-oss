@@ -15,7 +15,7 @@ The existing npm release-history request already retrieves the full packument. A
 
 Shared mail providers, private public suffixes, and TLDs absent from the embedded IANA RDAP bootstrap are `unchecked`. A failed lookup is `lookup_failed`; HTTP 404 is `unregistered`. RDAP status `redemption period` or `pending delete` is `lapsing`. Registration at or after the base is `reregistered_after`; registration strictly after first appearance and before the base is `reregistered_before`; an older registration is `normal`.
 
-Only `unregistered`, `lapsing`, and `reregistered_before` produce a notice. The notice appears in JSON and the detailed box. It does not change verdicts, lifecycle labels, exit codes, or `--fail-on`. The flag is off by default; the default output and RDAP traffic remain unchanged. Other ecosystems are unaffected.
+Only `unregistered`, `lapsing`, and `reregistered_before` produce a notice. The findings appear in JSON as structured fields, and the detailed box shows a notice sentence. The sentence is conditional because packument e-mails can be stale: if the maintainer still uses the address, npm password-reset mail may reach the current domain holder; it asks for the account e-mail and 2FA to be confirmed. It does not change verdicts, lifecycle labels, exit codes, or `--fail-on`. The flag is off by default; the default output and RDAP traffic remain unchanged. Other ecosystems are unaffected.
 
 When RDAP provides a registrar, the notice names it. A fixed list of known drop-catch registrar prefixes adds a separate evidence marker; it does not change the seven classifications. A drop-catch registrar shows the domain was caught at deletion, not who holds it now.
 

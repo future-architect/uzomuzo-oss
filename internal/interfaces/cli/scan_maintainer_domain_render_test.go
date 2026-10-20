@@ -66,7 +66,7 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 	if len(m.UncheckedFindings) != 1 || m.UncheckedFindings[0].Reason != "free_mail" {
 		t.Errorf("unchecked=%s", buf.String())
 	}
-	if !strings.Contains(a.MaintainerDomainNotice(), "atlantis-software.net registered 2026-05-07") {
+	if !strings.Contains(a.MaintainerDomainNotice(), "if maintainer atiertant still uses this address, npm password-reset mail may reach whoever now holds atlantis-software.net (registered 2026-05-07") {
 		t.Errorf("notice=%q", a.MaintainerDomainNotice())
 	}
 	buf.Reset()

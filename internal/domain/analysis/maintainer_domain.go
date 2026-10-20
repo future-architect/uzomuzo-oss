@@ -143,20 +143,27 @@ func (a *Analysis) MaintainerDomainNotice() string {
 		return ""
 	}
 	f := a.MaintainerDomain.Flagged()[0]
+	// The notice states the risk, the evidence, and the action. It stays
+	// conditional because packument e-mails can be stale (npm documents this).
+	who := "the maintainer"
+	if f.Account != "" {
+		who = "maintainer " + f.Account
+	}
+	const action = " Ask the maintainer to confirm the account e-mail and 2FA."
 	switch f.Kind {
 	case MaintainerDomainReregisteredBefore:
 		registrar := ""
 		if f.Registrar != "" {
-			registrar = " through " + f.Registrar
+			registrar = " via " + f.Registrar
 			if f.DropCatch {
 				registrar += " (a drop-catch registrar)"
 			}
 		}
-		return fmt.Sprintf("maintainer e-mail domain %s registered %s%s, after the address first appeared %s", f.Domain, f.Registered.Format(time.DateOnly), registrar, f.FirstSeen.Format(time.DateOnly))
+		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever now holds %s (registered %s%s, after the address first appeared %s).%s", who, f.Domain, f.Registered.Format(time.DateOnly), registrar, f.FirstSeen.Format(time.DateOnly), action)
 	case MaintainerDomainLapsing:
-		return fmt.Sprintf("maintainer e-mail domain %s is lapsing", f.Domain)
+		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever registers %s next (the domain is being deleted).%s", who, f.Domain, action)
 	case MaintainerDomainUnregistered:
-		return fmt.Sprintf("maintainer e-mail domain %s is unregistered", f.Domain)
+		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever registers %s (RDAP has no registration).%s", who, f.Domain, action)
 	default:
 		return ""
 	}

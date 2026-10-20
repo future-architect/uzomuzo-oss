@@ -65,9 +65,9 @@ func TestMaintainerDomainNoticeRegistrar(t *testing.T) {
 		name, registrar, want string
 		drop                  bool
 	}{
-		{"unknown", "", "registered 2026-05-07, after", false},
-		{"ordinary", "NameCheap, Inc.", "registered 2026-05-07 through NameCheap, Inc., after", false},
-		{"drop catch", "DropCatch.com 538 LLC", "registered 2026-05-07 through DropCatch.com 538 LLC (a drop-catch registrar), after", true},
+		{"unknown", "", "(registered 2026-05-07, after", false},
+		{"ordinary", "NameCheap, Inc.", "(registered 2026-05-07 via NameCheap, Inc., after", false},
+		{"drop catch", "DropCatch.com 538 LLC", "(registered 2026-05-07 via DropCatch.com 538 LLC (a drop-catch registrar), after", true},
 	} {
 		a := &Analysis{MaintainerDomain: &MaintainerDomainResult{Findings: []MaintainerDomainFinding{{Domain: "example.com", Kind: MaintainerDomainReregisteredBefore, FirstSeen: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Registered: time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC), Registrar: tc.registrar, DropCatch: tc.drop}}}}
 		if got := a.MaintainerDomainNotice(); !strings.Contains(got, tc.want) {
