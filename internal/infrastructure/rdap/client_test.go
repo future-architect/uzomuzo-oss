@@ -319,6 +319,51 @@ func TestCheckRedirect(t *testing.T) {
 	}
 }
 
+// TestSetHTTPClient checks nil handling, the default redirect policy on a
+// copy, and that a caller's own policy and client are kept.
+func TestSetHTTPClient(t *testing.T) {
+	t.Parallel()
+	c := NewClient()
+	before := c.http
+	c.SetHTTPClient(nil)
+	if c.http != before {
+		t.Errorf("nil client replaced the default")
+	}
+	plain := &http.Client{}
+	c.SetHTTPClient(plain)
+	if plain.CheckRedirect != nil || c.http == plain || c.http.CheckRedirect == nil {
+		t.Errorf("caller client changed or copy lacks a redirect policy")
+	}
+	own := func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	c.SetHTTPClient(&http.Client{CheckRedirect: own})
+	if c.http.CheckRedirect(nil, nil) != http.ErrUseLastResponse {
+		t.Errorf("caller redirect policy replaced")
+	}
+}
+
+// TestLookupRefusedRedirectIsNotRetried checks that a downgrade redirect
+// fails at once instead of waiting for the retry.
+func TestLookupRefusedRedirectIsNotRetried(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	c := NewClient()
+	c.SetHTTPClient(&http.Client{Transport: roundTripper(func(r *http.Request) (*http.Response, error) {
+		calls.Add(1)
+		h := make(http.Header)
+		h.Set("Location", "http://registrar.example/domain/example.net")
+		return &http.Response{StatusCode: http.StatusFound, Header: h, Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
+	})})
+	c.SetBaseURL("net", "https://rdap.example")
+	c.SetRetryDelay(time.Hour)
+	c.SetRequestInterval(0)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	rec, err := c.Lookup(ctx, "example.net")
+	if !errors.Is(err, errRedirectRefused) || rec.Status != analysis.DomainLookupFailed || calls.Load() != 1 {
+		t.Fatalf("record=%+v err=%v calls=%d, want one refused request", rec, err, calls.Load())
+	}
+}
+
 // TestLookupCancelledIsNotCached checks that a lookup cut short by the caller
 // is asked again once the context is live.
 func TestLookupCancelledIsNotCached(t *testing.T) {

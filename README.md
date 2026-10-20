@@ -144,8 +144,8 @@ uzomuzo scan --file .github/workflows/ci.yml
 uzomuzo scan --file input_purls.txt --sample 500
 ```
 
-`--maintainer-domain` is off by default and applies only to npm packages. It adds a notice for manual review without changing the scan verdict. The notice says what may happen (if the maintainer still uses the address, npm password-reset mail may reach the current domain holder) and asks for the account e-mail and 2FA to be confirmed. See [ADR-0030](docs/adr/0030-maintainer-email-domain-marker.md).
-When RDAP provides the registrar, the notice names it.
+`--maintainer-domain` is off by default and applies only to versioned npm inputs. It adds a notice for manual review without changing the scan verdict, in `--format json` (`maintainer_domain`) and the detailed view; table and CSV output are unchanged. The notice says what may happen (if the maintainer still uses the address, npm password-reset mail may reach whoever holds or next registers the domain) and asks for the account e-mail and 2FA to be confirmed. See [ADR-0030](docs/adr/0030-maintainer-email-domain-marker.md).
+When RDAP provides the registrar of a re-registered domain, the notice names it.
 
 ### Dependency Diet — *Which dependency should I remove first?*
 

@@ -192,3 +192,16 @@ func TestMarkWaves(t *testing.T) {
 		}
 	}
 }
+
+// TestCSVCellQuotesFormulaPrefixes checks spreadsheet formula neutralising.
+func TestCSVCellQuotesFormulaPrefixes(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]string{
+		"": "", "node-ipc": "node-ipc", "@scope/name": "'@scope/name", "=HYPERLINK(1)": "'=HYPERLINK(1)",
+		"+1": "'+1", "-x": "'-x",
+	} {
+		if got := csvCell(in); got != want {
+			t.Errorf("csvCell(%q)=%q, want %q", in, got, want)
+		}
+	}
+}

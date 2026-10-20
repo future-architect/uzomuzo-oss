@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -119,13 +120,18 @@ func (c *Client) SetBaseURL(tld, base string) {
 	c.base[strings.ToLower(tld)] = base
 }
 
-// SetHTTPClient replaces the HTTP client used for RDAP requests. The client's
-// redirect policy is set to the RDAP default when it has none.
+// SetHTTPClient uses a copy of client for RDAP requests; a nil client is
+// ignored. The copy gets the RDAP redirect policy when client has none, so the
+// caller's client is left as it was.
 func (c *Client) SetHTTPClient(client *http.Client) {
-	if client.CheckRedirect == nil {
-		client.CheckRedirect = checkRedirect
+	if client == nil {
+		return
 	}
-	c.http = client
+	cp := *client
+	if cp.CheckRedirect == nil {
+		cp.CheckRedirect = checkRedirect
+	}
+	c.http = &cp
 }
 
 // SetRetryDelay sets the pause between retryable requests.
@@ -270,7 +276,7 @@ func (c *Client) Lookup(ctx context.Context, domain string) (analysis.DomainReco
 		}
 		c.last[host] = time.Now()
 		rec, err = c.request(ctx, endpoint)
-		// Only transport failures and rate limiting or server errors are retried.
+		// Only transport failures and HTTP 408, 429 and 5xx are retried.
 		var retry retryableError
 		if err == nil || !errors.As(err, &retry) {
 			break
@@ -319,16 +325,20 @@ type retryableError struct{ error }
 // Unwrap returns the underlying failure.
 func (e retryableError) Unwrap() error { return e.error }
 
+// errRedirectRefused marks a redirect that checkRedirect refused; it is not
+// retried.
+var errRedirectRefused = errors.New("rdap: redirect refused")
+
 // checkRedirect bounds redirect hops and refuses a downgrade from https.
 func checkRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) > maxRedirects {
-		return fmt.Errorf("rdap: more than %d redirects", maxRedirects)
+		return fmt.Errorf("%w: more than %d redirects", errRedirectRefused, maxRedirects)
 	}
 	if req.URL.User != nil {
-		return errors.New("rdap: userinfo in redirect")
+		return fmt.Errorf("%w: userinfo in redirect", errRedirectRefused)
 	}
 	if len(via) > 0 && strings.EqualFold(via[0].URL.Scheme, "https") && !strings.EqualFold(req.URL.Scheme, "https") {
-		return fmt.Errorf("rdap: redirect from https to %q", req.URL.Scheme)
+		return fmt.Errorf("%w: from https to %q", errRedirectRefused, req.URL.Scheme)
 	}
 	return nil
 }
@@ -342,6 +352,9 @@ func (c *Client) request(ctx context.Context, endpoint string) (analysis.DomainR
 	req.Header.Set("Accept", "application/rdap+json")
 	resp, err := c.http.Do(req)
 	if err != nil {
+		if errors.Is(err, errRedirectRefused) {
+			return failed, err
+		}
 		return failed, retryableError{err}
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -384,9 +397,10 @@ func (c *Client) request(ctx context.Context, endpoint string) (analysis.DomainR
 		if count != 1 {
 			registration = time.Time{}
 		}
-		rec := analysis.DomainRecord{Status: analysis.DomainFound, Registered: registration, Statuses: body.Status}
+		// Stored in UTC so JSON and the notice show the same date.
+		rec := analysis.DomainRecord{Status: analysis.DomainFound, Registered: registration.UTC(), Statuses: body.Status}
 		for _, entity := range body.Entities {
-			if !containsFold(entity.Roles, "registrar") {
+			if !slices.ContainsFunc(entity.Roles, func(role string) bool { return strings.EqualFold(role, "registrar") }) {
 				continue
 			}
 			var card []json.RawMessage
@@ -417,15 +431,6 @@ func (c *Client) request(ctx context.Context, endpoint string) (analysis.DomainR
 		}
 		return failed, err
 	}
-}
-
-func containsFold(values []string, target string) bool {
-	for _, value := range values {
-		if strings.EqualFold(value, target) {
-			return true
-		}
-	}
-	return false
 }
 
 func wait(ctx context.Context, delay time.Duration) error {

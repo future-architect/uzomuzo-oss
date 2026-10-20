@@ -12,12 +12,16 @@ type fakeMaintainerDomainChecker struct {
 	calls      int
 	address    domain.MaintainerAddress
 	registered time.Time
+	onCheck    func()
 }
 
 // Check returns a fixed domain classification for application tests.
 func (f *fakeMaintainerDomainChecker) Check(_ context.Context, address domain.MaintainerAddress, base time.Time) domain.MaintainerDomainFinding {
 	f.calls++
 	f.address = address
+	if f.onCheck != nil {
+		f.onCheck()
+	}
 	return domain.MaintainerDomainFinding{Account: address.Account, Domain: "atlantis-software.net", FirstSeen: address.FirstSeen, Registered: f.registered, Kind: domain.ClassifyMaintainerDomain(address.FirstSeen, base, domain.DomainRecord{Status: domain.DomainFound, Registered: f.registered})}
 }
 
@@ -85,5 +89,16 @@ func TestCheckMaintainerDomainsSkips(t *testing.T) {
 	s.checkMaintainerDomains(ctx, cancelled, now)
 	if fake.calls != 0 || cancelled["npm"].MaintainerDomain != nil {
 		t.Errorf("cancelled run: calls=%d result=%+v", fake.calls, cancelled["npm"].MaintainerDomain)
+	}
+
+	// Cancelled during the first of two addresses: no partial result is kept.
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+	fake = &fakeMaintainerDomainChecker{onCheck: cancel}
+	s = &AnalysisService{maintainerDomainChecker: fake}
+	partial := map[string]*domain.Analysis{"npm": {ReleaseHistory: &domain.ReleaseHistory{Registry: domain.RegistryNpm, Maintainers: []domain.MaintainerAddress{address, address}}}}
+	s.checkMaintainerDomains(ctx, partial, now)
+	if fake.calls != 1 || partial["npm"].MaintainerDomain != nil {
+		t.Errorf("cancelled mid-package: calls=%d result=%+v", fake.calls, partial["npm"].MaintainerDomain)
 	}
 }

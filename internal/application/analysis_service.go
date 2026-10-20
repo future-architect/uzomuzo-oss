@@ -437,6 +437,11 @@ func (s *AnalysisService) checkMaintainerDomains(ctx context.Context, analyses m
 		result := &domain.MaintainerDomainResult{}
 		for _, address := range a.ReleaseHistory.Maintainers {
 			result.Findings = append(result.Findings, s.maintainerDomainChecker.Check(ctx, address, now))
+			// A package interrupted by cancellation would report the cut-short
+			// lookups as RDAP failures, so it is left without a result.
+			if ctx.Err() != nil {
+				return
+			}
 		}
 		a.MaintainerDomain = result
 	}

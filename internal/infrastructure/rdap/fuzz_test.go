@@ -14,7 +14,6 @@ func FuzzRDAPResponse(f *testing.F) {
 	f.Add([]byte(`{"status":["pending delete"]}`))
 	f.Add([]byte(`{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"}],"entities":[{"roles":["registrar"],"vcardArray":["vcard",[["fn",{},"text","DropCatch.com 538 LLC"]]]}]}`))
 	f.Add([]byte(`{"events":[{"eventAction":"registration"},{"eventAction":"registration"}]}`))
-	c := NewClient()
 	f.Fuzz(func(t *testing.T, body []byte) {
 		if len(body) > rdapResponseLimit {
 			return
@@ -22,9 +21,9 @@ func FuzzRDAPResponse(f *testing.F) {
 		client := &http.Client{Transport: roundTripper(func(*http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(body)), Header: make(http.Header)}, nil
 		})}
-		cc := &Client{http: client, base: c.base}
+		c := &Client{http: client}
 		// Only the absence of a panic or hang is checked; decode errors are expected.
-		_, _ = cc.request(context.Background(), "https://example.com/domain/example.com")
+		_, _ = c.request(context.Background(), "https://example.com/domain/example.com")
 	})
 }
 

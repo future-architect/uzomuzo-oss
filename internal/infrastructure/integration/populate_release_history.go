@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common/links"
@@ -63,7 +64,7 @@ func (s *IntegrationService) enrichReleaseHistory(ctx context.Context, analyses 
 		cp := *h
 		cp.PublishedAt = maps.Clone(h.PublishedAt)
 		cp.Installable = maps.Clone(h.Installable)
-		cp.Maintainers = append([]domain.MaintainerAddress(nil), h.Maintainers...)
+		cp.Maintainers = slices.Clone(h.Maintainers)
 		a.ReleaseHistory = &cp
 	})
 }
@@ -81,7 +82,7 @@ func (s *IntegrationService) fetchNpmReleaseHistory(ctx context.Context, fullNam
 	for _, p := range h.Maintainers {
 		// The account name is shown in the terminal notice, so control
 		// characters from the packument are removed here.
-		maintainers = append(maintainers, domain.MaintainerAddress{Account: domain.SanitizeExternalSummary(p.Name), Email: p.Email, FirstSeen: h.FirstSeen[domain.NormalizeEmail(p.Email)]})
+		maintainers = append(maintainers, domain.MaintainerAddress{Account: domain.StripControlRunes(p.Name), Email: p.Email, FirstSeen: h.FirstSeen[domain.NormalizeEmail(p.Email)]})
 	}
 	return &domain.ReleaseHistory{
 		Registry:    domain.RegistryNpm,

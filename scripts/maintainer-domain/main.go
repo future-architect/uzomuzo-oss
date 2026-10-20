@@ -13,10 +13,12 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -107,12 +109,7 @@ func parseLockfileNames(data []byte) ([]string, error) {
 		}
 		names[name] = true
 	}
-	ordered := make([]string, 0, len(names))
-	for name := range names {
-		ordered = append(ordered, name)
-	}
-	sort.Strings(ordered)
-	return ordered, nil
+	return slices.Sorted(maps.Keys(names)), nil
 }
 
 type command struct {
@@ -285,12 +282,7 @@ func (c *command) incidents(ctx context.Context, populationPath, casesPath strin
 			caseVersions[tc.Package] = append(caseVersions[tc.Package], tc.Version)
 		}
 	}
-	caseNames := make([]string, 0, len(caseVersions))
-	for name := range caseVersions {
-		caseNames = append(caseNames, name)
-	}
-	sort.Strings(caseNames)
-	for _, name := range caseNames {
+	for _, name := range slices.Sorted(maps.Keys(caseVersions)) {
 		c.rows = append(c.rows, c.incidentRow(ctx, "cases", name, caseVersions[name]))
 	}
 	markWaves(c.rows)
@@ -346,11 +338,7 @@ func markWaves(rows []row) {
 			days[date(r.at)]++
 		}
 	}
-	keys := make([]time.Time, 0, len(days))
-	for day := range days {
-		keys = append(keys, day)
-	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i].Before(keys[j]) })
+	keys := slices.SortedFunc(maps.Keys(days), time.Time.Compare)
 	waveDays := map[time.Time]bool{}
 	for i := 0; i < len(keys); {
 		if days[keys[i]] < waveMinDailyPackages {
@@ -432,13 +420,13 @@ func writeRows(path string, rows []row) (err error) {
 	}
 	for _, r := range rows {
 		if len(r.findings) == 0 {
-			if err := w.Write([]string{r.scope, r.name, formatTime(r.at), r.missing, "", "", "", "", "", "", "", ""}); err != nil {
+			if err := w.Write([]string{r.scope, csvCell(r.name), formatTime(r.at), r.missing, "", "", "", "", "", "", "", ""}); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 			continue
 		}
 		for _, finding := range r.findings {
-			if err := w.Write([]string{r.scope, r.name, formatTime(r.at), r.missing, finding.Account, finding.Domain, string(finding.Kind), formatTime(finding.FirstSeen), formatTime(finding.Registered), string(finding.Reason), finding.Registrar, fmt.Sprint(finding.DropCatch)}); err != nil {
+			if err := w.Write([]string{r.scope, csvCell(r.name), formatTime(r.at), r.missing, csvCell(finding.Account), csvCell(finding.Domain), string(finding.Kind), formatTime(finding.FirstSeen), formatTime(finding.Registered), string(finding.Reason), csvCell(finding.Registrar), fmt.Sprint(finding.DropCatch)}); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 		}
@@ -448,6 +436,15 @@ func writeRows(path string, rows []row) (err error) {
 		return fmt.Errorf("flush results CSV %q: %w", path, err)
 	}
 	return nil
+}
+
+// csvCell keeps a spreadsheet from reading an external value as a formula by
+// prefixing a single quote to a cell that starts with =, +, - or @.
+func csvCell(v string) string {
+	if v != "" && strings.ContainsRune("=+-@", rune(v[0])) {
+		return "'" + v
+	}
+	return v
 }
 
 // formatTime writes an empty cell for an unknown time instead of year 1.
@@ -524,12 +521,7 @@ func printSummary(out io.Writer, rows []row) error {
 				return fmt.Errorf("write summary count for %q: %w", kind, err)
 			}
 		}
-		keys := make([]string, 0, len(missing))
-		for key := range missing {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
+		for _, key := range slices.Sorted(maps.Keys(missing)) {
 			if _, err := fmt.Fprintf(out, "  missing_%s=%d\n", key, missing[key]); err != nil {
 				return fmt.Errorf("write missing-data count for %q: %w", key, err)
 			}

@@ -110,7 +110,7 @@ func TestMaintainerDomainNotices(t *testing.T) {
 		t.Errorf("nil analysis: %q", got)
 	}
 	none := &Analysis{MaintainerDomain: &MaintainerDomainResult{Findings: []MaintainerDomainFinding{{Kind: MaintainerDomainNormal}, {Kind: MaintainerDomainReregisteredAfter}}}}
-	if got := none.MaintainerDomainNotices(); len(got) != 0 || none.HasMaintainerDomainNotice() {
+	if got := none.MaintainerDomainNotices(); len(got) != 0 {
 		t.Errorf("no notice kinds: %q", got)
 	}
 }

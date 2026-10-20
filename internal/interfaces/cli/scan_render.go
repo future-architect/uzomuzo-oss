@@ -526,7 +526,7 @@ type maintainerDomainJSON struct {
 	Flagged           []maintainerDomainFindingJSON   `json:"flagged"`
 	Unchecked         int                             `json:"unchecked"`
 	LookupFailed      int                             `json:"lookup_failed"`
-	UncheckedFindings []maintainerDomainUncheckedJSON `json:"unchecked_findings,omitempty"`
+	UncheckedFindings []maintainerDomainUncheckedJSON `json:"unchecked_findings"`
 }
 
 type maintainerDomainUncheckedJSON struct {
@@ -615,7 +615,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 			BurstVersions: d.Burst.Versions, Lines: d.Burst.Lines, Removed: d.Burst.Removed, Until: d.Until}
 	}
 	if a.MaintainerDomain != nil {
-		m := &maintainerDomainJSON{Flagged: []maintainerDomainFindingJSON{}}
+		m := &maintainerDomainJSON{Flagged: []maintainerDomainFindingJSON{}, UncheckedFindings: []maintainerDomainUncheckedJSON{}}
 		for _, f := range a.MaintainerDomain.Findings {
 			switch {
 			case f.Kind == domain.MaintainerDomainUnchecked:

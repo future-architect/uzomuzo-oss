@@ -190,6 +190,16 @@ $ uzomuzo scan --file .github/workflows/ci.yml -f detailed
 
 </details>
 
+### Maintainer E-mail Domains (`--maintainer-domain`)
+
+For versioned npm inputs, `--maintainer-domain` looks up the domain of each current maintainer's e-mail address through RDAP and adds a notice when the domain is lapsing, unregistered, or was registered again after the address first appeared in the package's npm history:
+
+```bash
+./uzomuzo scan --maintainer-domain --format json pkg:npm/express@4.18.2
+```
+
+The result appears as `maintainer_domain` in `--format json` and as a `⚠ Maintainer domain:` line in the detailed view; table and CSV output are unchanged. The flag is off by default, makes RDAP requests (at least one second apart per RDAP server), and does not change verdicts, exit codes, or `--fail-on`. See [ADR-0030](adr/0030-maintainer-email-domain-marker.md).
+
 ### Actions Discovery (`--include-actions`)
 
 When scanning GitHub URLs, `--include-actions` automatically fetches the target repository's workflow files and evaluates referenced Actions:

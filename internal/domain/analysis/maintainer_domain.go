@@ -34,11 +34,12 @@ const (
 	MaintainerDomainReasonNotInHistory MaintainerDomainReason = "not_in_history"
 	// MaintainerDomainReasonInvalidAddress means the address has no usable mail domain.
 	MaintainerDomainReasonInvalidAddress MaintainerDomainReason = "invalid_address"
-	// MaintainerDomainReasonSharedMail means the domain belongs to a shared mail provider.
+	// MaintainerDomainReasonSharedMail means the domain belongs to a shared mail
+	// provider. The wire value "free_mail" is part of the JSON output.
 	MaintainerDomainReasonSharedMail MaintainerDomainReason = "free_mail"
 	// MaintainerDomainReasonPrivateSuffix means the domain sits under a private public suffix.
 	MaintainerDomainReasonPrivateSuffix MaintainerDomainReason = "private_suffix"
-	// MaintainerDomainReasonNoRDAP means no RDAP service is known for the TLD.
+	// MaintainerDomainReasonNoRDAP means no https RDAP service is known for the TLD.
 	MaintainerDomainReasonNoRDAP MaintainerDomainReason = "no_rdap"
 )
 
@@ -75,7 +76,7 @@ const (
 	DomainFound DomainLookupStatus = iota
 	// DomainNotFound means RDAP returned a not-found response.
 	DomainNotFound
-	// DomainUnsupported means no RDAP service is known for the TLD.
+	// DomainUnsupported means no https RDAP service is known for the TLD.
 	DomainUnsupported
 	// DomainLookupFailed means the lookup did not yield a usable record.
 	DomainLookupFailed
@@ -171,11 +172,6 @@ func (r *MaintainerDomainResult) Flagged() []MaintainerDomainFinding {
 		}
 	}
 	return out
-}
-
-// HasMaintainerDomainNotice reports whether any finding warrants a notice.
-func (a *Analysis) HasMaintainerDomainNotice() bool {
-	return a != nil && len(a.MaintainerDomain.Flagged()) > 0
 }
 
 // MaintainerDomainNotices formats one notice per notice-bearing finding, in

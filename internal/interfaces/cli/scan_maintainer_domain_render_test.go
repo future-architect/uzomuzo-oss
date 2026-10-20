@@ -83,6 +83,14 @@ func TestMaintainerDomainJSONAndDetailedNotice(t *testing.T) {
 	if !strings.Contains(box, "atlantis-software.net") || !strings.Contains(box, "lapsed.example") {
 		t.Errorf("detailed box=%s", box)
 	}
+	a.MaintainerDomain = &analysis.MaintainerDomainResult{}
+	buf.Reset()
+	if err := renderScanJSON(&buf, []audit.AuditEntry{e}, []audit.AuditEntry{e}, false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), `"flagged": []`) || !strings.Contains(buf.String(), `"unchecked_findings": []`) {
+		t.Errorf("empty lists missing: %s", buf.String())
+	}
 	a.MaintainerDomain = nil
 	buf.Reset()
 	if err := renderScanJSON(&buf, []audit.AuditEntry{e}, []audit.AuditEntry{e}, false); err != nil {
