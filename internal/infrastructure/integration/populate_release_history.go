@@ -80,8 +80,8 @@ func (s *IntegrationService) fetchNpmReleaseHistory(ctx context.Context, fullNam
 	}
 	maintainers := make([]domain.MaintainerAddress, 0, len(h.Maintainers))
 	for _, p := range h.Maintainers {
-		// The account name is shown in the terminal notice, so control
-		// characters from the packument are removed here.
+		// The account name is shown in the terminal notice; see
+		// StripControlRunes for what it removes.
 		maintainers = append(maintainers, domain.MaintainerAddress{Account: domain.StripControlRunes(p.Name), Email: p.Email, FirstSeen: h.FirstSeen[domain.NormalizeEmail(p.Email)]})
 	}
 	return &domain.ReleaseHistory{

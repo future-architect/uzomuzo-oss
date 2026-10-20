@@ -47,3 +47,28 @@ func TestNormalizeSummary(t *testing.T) {
 		})
 	}
 }
+
+// TestStripControlRunes checks that identifiers lose control and format runes
+// and outer spaces but keep inner spaces and full length.
+func TestStripControlRunes(t *testing.T) {
+	t.Parallel()
+	long := strings.Repeat("a", MaxSummaryLen+50)
+	tests := []struct {
+		name, in, want string
+	}{
+		{"plain", "atiertant", "atiertant"},
+		{"ansi escape", "evil\x1b[31mname", "evil[31mname"},
+		{"tab, newline and line separator become spaces", "a\tb\nc\u2028d", "a b c d"},
+		{"bidi override", "abc\u202edef", "abcdef"},
+		{"outer spaces trimmed, inner kept", "  bob  smith ", "bob  smith"},
+		{"long kept whole", long, long},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := StripControlRunes(tt.in); got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

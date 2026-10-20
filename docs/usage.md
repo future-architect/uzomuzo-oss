@@ -192,7 +192,7 @@ $ uzomuzo scan --file .github/workflows/ci.yml -f detailed
 
 ### Maintainer E-mail Domains (`--maintainer-domain`)
 
-For versioned npm inputs, `--maintainer-domain` looks up the domain of each current maintainer's e-mail address through RDAP and adds a notice when the domain is lapsing, unregistered, or was registered again after the address first appeared in the package's npm history:
+For versioned npm inputs, `--maintainer-domain` looks up the domain of each current maintainer's e-mail address through RDAP (shared mail providers, private suffixes, invalid addresses, addresses not found in the release history, and TLDs without an https RDAP service are listed as unchecked instead) and adds a notice when the domain is lapsing, unregistered, or was registered again after the address first appeared in the package's npm history:
 
 ```bash
 ./uzomuzo scan --maintainer-domain --format json pkg:npm/express@4.18.2

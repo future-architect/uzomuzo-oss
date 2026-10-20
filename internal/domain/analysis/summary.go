@@ -67,12 +67,18 @@ func SanitizeExternalSummary(raw string) string {
 	return NormalizeSummary(stripped)
 }
 
-// StripControlRunes removes control and format runes, whitespace controls
-// included, from an external identifier that is shown in a terminal. Unlike
-// SanitizeExternalSummary it neither collapses spaces nor truncates, so the
-// identifier is otherwise kept as the source wrote it.
+// StripControlRunes prepares an external identifier for a terminal line: any
+// whitespace rune (tab, newline, line separator) becomes a space, other control
+// and format runes are removed, and surrounding spaces are trimmed. Unlike
+// SanitizeExternalSummary it neither collapses inner spaces nor truncates, so
+// the identifier is otherwise kept as the source wrote it.
 func StripControlRunes(raw string) string {
-	return strings.Map(dropControlRune, raw)
+	return strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return ' '
+		}
+		return dropControlRune(r)
+	}, raw))
 }
 
 func dropControlRune(r rune) rune {

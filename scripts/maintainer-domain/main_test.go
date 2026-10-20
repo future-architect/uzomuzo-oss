@@ -198,7 +198,7 @@ func TestCSVCellQuotesFormulaPrefixes(t *testing.T) {
 	t.Parallel()
 	for in, want := range map[string]string{
 		"": "", "node-ipc": "node-ipc", "@scope/name": "'@scope/name", "=HYPERLINK(1)": "'=HYPERLINK(1)",
-		"+1": "'+1", "-x": "'-x",
+		"+1": "'+1", "-x": "'-x", "\tx": "'\tx",
 	} {
 		if got := csvCell(in); got != want {
 			t.Errorf("csvCell(%q)=%q, want %q", in, got, want)

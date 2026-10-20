@@ -528,12 +528,13 @@ func decodePublishHistory(r io.Reader, retainVersions bool) (*PublishHistory, er
 	return h, nil
 }
 
-// recordFirstSeen keeps the earliest time each person's normalized e-mail appears.
+// recordFirstSeen keeps the earliest time, in UTC, each person's normalized
+// e-mail appears.
 func recordFirstSeen(m map[string]time.Time, at time.Time, people ...Person) {
 	for _, p := range people {
 		email := analysis.NormalizeEmail(p.Email)
 		if email != "" && (m[email].IsZero() || at.Before(m[email])) {
-			m[email] = at
+			m[email] = at.UTC()
 		}
 	}
 }

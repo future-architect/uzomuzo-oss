@@ -420,13 +420,13 @@ func writeRows(path string, rows []row) (err error) {
 	}
 	for _, r := range rows {
 		if len(r.findings) == 0 {
-			if err := w.Write([]string{r.scope, csvCell(r.name), formatTime(r.at), r.missing, "", "", "", "", "", "", "", ""}); err != nil {
+			if err := w.Write([]string{r.scope, r.name, formatTime(r.at), r.missing, "", "", "", "", "", "", "", ""}); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 			continue
 		}
 		for _, finding := range r.findings {
-			if err := w.Write([]string{r.scope, csvCell(r.name), formatTime(r.at), r.missing, csvCell(finding.Account), csvCell(finding.Domain), string(finding.Kind), formatTime(finding.FirstSeen), formatTime(finding.Registered), string(finding.Reason), csvCell(finding.Registrar), fmt.Sprint(finding.DropCatch)}); err != nil {
+			if err := w.Write([]string{r.scope, r.name, formatTime(r.at), r.missing, csvCell(finding.Account), csvCell(finding.Domain), string(finding.Kind), formatTime(finding.FirstSeen), formatTime(finding.Registered), string(finding.Reason), csvCell(finding.Registrar), fmt.Sprint(finding.DropCatch)}); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 		}
@@ -439,9 +439,10 @@ func writeRows(path string, rows []row) (err error) {
 }
 
 // csvCell keeps a spreadsheet from reading an external value as a formula by
-// prefixing a single quote to a cell that starts with =, +, - or @.
+// prefixing a single quote to a cell that starts with =, +, -, @, tab, CR or LF.
+// Package names are written as given so rows join back to the caller's input.
 func csvCell(v string) string {
-	if v != "" && strings.ContainsRune("=+-@", rune(v[0])) {
+	if v != "" && strings.ContainsRune("=+-@\t\r\n", rune(v[0])) {
 		return "'" + v
 	}
 	return v

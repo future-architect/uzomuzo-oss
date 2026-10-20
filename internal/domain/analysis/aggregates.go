@@ -86,8 +86,8 @@ type Analysis struct {
 	// MaintainerDomain holds the maintainer e-mail domain findings. It is nil
 	// when the check is not enabled, when the package is not npm, when
 	// ReleaseHistory is nil (see its nil cases, such as a versionless PURL or
-	// a failed registry request), or when the context was cancelled before
-	// the package's check finished. See ADR-0030.
+	// a failed registry request), or when the context was cancelled during
+	// or before the package's check. See ADR-0030.
 	MaintainerDomain *MaintainerDomainResult
 
 	// DormantRelease is set when the analysed version is a release that
