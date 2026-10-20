@@ -541,6 +541,8 @@ type maintainerDomainFindingJSON struct {
 	Kind       domain.MaintainerDomainKind `json:"kind"`
 	FirstSeen  time.Time                   `json:"first_seen"`
 	Registered time.Time                   `json:"registered"`
+	Registrar  string                      `json:"registrar,omitempty"`
+	DropCatch  bool                        `json:"drop_catch,omitempty"`
 }
 
 type enrichedJSONOutput struct {
@@ -620,7 +622,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 			case domain.MaintainerDomainLookupFailed:
 				m.LookupFailed++
 			case domain.MaintainerDomainUnregistered, domain.MaintainerDomainLapsing, domain.MaintainerDomainReregisteredBefore:
-				m.Flagged = append(m.Flagged, maintainerDomainFindingJSON{Account: f.Account, Domain: f.Domain, Kind: f.Kind, FirstSeen: f.FirstSeen, Registered: f.Registered})
+				m.Flagged = append(m.Flagged, maintainerDomainFindingJSON{Account: f.Account, Domain: f.Domain, Kind: f.Kind, FirstSeen: f.FirstSeen, Registered: f.Registered, Registrar: f.Registrar, DropCatch: f.DropCatch})
 			}
 		}
 		je.MaintainerDomain = m

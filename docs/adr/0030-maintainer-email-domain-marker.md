@@ -17,6 +17,8 @@ Shared mail providers, private public suffixes, and TLDs absent from the embedde
 
 Only `unregistered`, `lapsing`, and `reregistered_before` produce a notice. The notice appears in JSON and the detailed box. It does not change verdicts, lifecycle labels, exit codes, or `--fail-on`. The flag is off by default; the default output and RDAP traffic remain unchanged. Other ecosystems are unaffected.
 
+When RDAP provides a registrar, the notice names it. A fixed list of known drop-catch registrar prefixes adds a separate evidence marker; it does not change the seven classifications. A drop-catch registrar shows the domain was caught at deletion, not who holds it now.
+
 The measurement command uses the same classification and RDAP client for incident and lockfile scopes. It prints aggregate counts to standard output; names and row-level evidence are written only to a caller-selected CSV path. Measurements are performed outside this repository. A public-case check has one checkable package out of one evaluated package, with one `reregistered_before` result; broader counts require the external input populations and are not recorded here.
 
 ## Limits

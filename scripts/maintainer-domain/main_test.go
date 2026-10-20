@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/csv"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,13 +84,69 @@ func TestLockfileCountsUniqueNamesAndNotices(t *testing.T) {
 	if err := printSummary(&summary, c.rows); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"packages=1", "notices=1", "distinct_notice_domains=1", "reregistered_before=1"} {
+	for _, want := range []string{"packages=1", "notices=1", "notice_drop_catch=0", "distinct_notice_domains=1", "reregistered_before=1"} {
 		if !bytes.Contains(summary.Bytes(), []byte(want)) {
 			t.Errorf("summary missing %s: %s", want, summary.String())
 		}
 	}
 	if bytes.Contains(summary.Bytes(), []byte("node-ipc")) {
 		t.Errorf("summary contains package name: %s", summary.String())
+	}
+}
+
+// TestWriteRowsPrivateAndRectangular checks existing permissions and CSV width.
+func TestWriteRowsPrivateAndRectangular(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "results.csv")
+	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rows := []row{{scope: "cases", name: "node-ipc", missing: "packument_unavailable"}, {scope: "cases", name: "example", findings: []analysis.MaintainerDomainFinding{{Kind: analysis.MaintainerDomainReregisteredBefore, Registrar: "DropCatch.com 538 LLC", DropCatch: true}}}}
+	if err := writeRows(path, rows); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode=%v err=%v", info.Mode().Perm(), err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	records, err := csv.NewReader(f).ReadAll()
+	if err != nil || len(records) != 3 || len(records[0]) != 12 || records[2][10] != "DropCatch.com 538 LLC" || records[2][11] != "true" {
+		t.Fatalf("records=%v err=%v", records, err)
+	}
+}
+
+// TestIncidentCasesGroupVersions checks that one case package has one row.
+func TestIncidentCasesGroupVersions(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	population := filepath.Join(dir, "population.csv")
+	cases := filepath.Join(dir, "cases.json")
+	if err := os.WriteFile(population, []byte("package,mal_versions\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cases, []byte(`[{"package":"node-ipc","version":"12.0.1"},{"package":"node-ipc","version":"12.0.0"}]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+	client := rdap.NewClient()
+	client.SetBaseURL("net", srv.URL)
+	c := &command{packumentDir: cachedFixture(t), rdap: client}
+	if err := c.incidents(context.Background(), population, cases); err != nil {
+		t.Fatal(err)
+	}
+	if len(c.rows) != 1 || c.rows[0].name != "node-ipc" || c.rows[0].missing != "" {
+		t.Fatalf("rows=%+v", c.rows)
+	}
+	if !strings.EqualFold(c.rows[0].scope, "cases") {
+		t.Errorf("scope=%s", c.rows[0].scope)
 	}
 }
 

@@ -145,6 +145,7 @@ uzomuzo scan --file input_purls.txt --sample 500
 ```
 
 `--maintainer-domain` is off by default and applies only to npm packages. It adds a notice for manual review without changing the scan verdict. See [ADR-0030](docs/adr/0030-maintainer-email-domain-marker.md).
+When RDAP provides the registrar, the notice names it.
 
 ### Dependency Diet — *Which dependency should I remove first?*
 

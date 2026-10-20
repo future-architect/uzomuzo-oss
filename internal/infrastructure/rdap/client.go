@@ -30,7 +30,10 @@ type diskEntry struct {
 	analysis.DomainRecord
 	RequestURL string `json:"request_url"`
 	FetchedAt  string `json:"fetched_at"`
+	Schema     int    `json:"schema"`
 }
+
+const diskSchema = 2
 
 const (
 	rdapRequestTimeout = 10 * time.Second
@@ -139,6 +142,8 @@ func (c *Client) Check(ctx context.Context, address analysis.MaintainerAddress, 
 	}
 	rec, _ := c.Lookup(ctx, domain)
 	f.Registered = rec.Registered
+	f.Registrar = rec.Registrar
+	f.DropCatch = analysis.IsDropCatchRegistrar(rec.Registrar)
 	f.Kind = analysis.ClassifyMaintainerDomain(address.FirstSeen, base, rec)
 	if rec.Status == analysis.DomainUnsupported {
 		f.Reason = "no_rdap"
@@ -174,7 +179,7 @@ func (c *Client) Lookup(ctx context.Context, domain string) (analysis.DomainReco
 	if c.cacheDir != "" {
 		if data, err := os.ReadFile(c.cachePath(domain)); err == nil {
 			var entry diskEntry
-			if json.Unmarshal(data, &entry) == nil && entry.Status != analysis.DomainLookupFailed {
+			if json.Unmarshal(data, &entry) == nil && entry.Schema == diskSchema && entry.Status != analysis.DomainLookupFailed {
 				rec := entry.DomainRecord
 				c.cache[domain] = rec
 				return rec, nil
@@ -218,7 +223,7 @@ func (c *Client) Lookup(ctx context.Context, domain string) (analysis.DomainReco
 	c.cache[domain] = rec
 	if c.cacheDir != "" && rec.Status != analysis.DomainLookupFailed {
 		if e := os.MkdirAll(c.cacheDir, 0o700); e == nil {
-			data, _ := json.Marshal(diskEntry{DomainRecord: rec, RequestURL: endpoint, FetchedAt: time.Now().UTC().Format(time.RFC3339)})
+			data, _ := json.Marshal(diskEntry{DomainRecord: rec, RequestURL: endpoint, FetchedAt: time.Now().UTC().Format(time.RFC3339), Schema: diskSchema})
 			_ = os.WriteFile(c.cachePath(domain), data, 0o600)
 		}
 	}
@@ -251,7 +256,11 @@ func (c *Client) request(ctx context.Context, endpoint string) (analysis.DomainR
 				Action string `json:"eventAction"`
 				Date   string `json:"eventDate"`
 			} `json:"events"`
-			Status []string `json:"status"`
+			Status   []string `json:"status"`
+			Entities []struct {
+				Roles      []string        `json:"roles"`
+				VCardArray json.RawMessage `json:"vcardArray"`
+			} `json:"entities"`
 		}
 		if err := json.NewDecoder(io.LimitReader(resp.Body, rdapResponseLimit)).Decode(&body); err != nil {
 			return analysis.DomainRecord{Status: analysis.DomainLookupFailed}, nil
@@ -268,10 +277,37 @@ func (c *Client) request(ctx context.Context, endpoint string) (analysis.DomainR
 				return analysis.DomainRecord{Status: analysis.DomainLookupFailed}, nil
 			}
 		}
-		if count != 1 {
+		if count > 1 || (count == 0 && !hasDeletionStatus(body.Status)) {
 			return analysis.DomainRecord{Status: analysis.DomainLookupFailed}, nil
 		}
-		return analysis.DomainRecord{Status: analysis.DomainFound, Registered: registration, Statuses: body.Status}, nil
+		if count != 1 {
+			registration = time.Time{}
+		}
+		rec := analysis.DomainRecord{Status: analysis.DomainFound, Registered: registration, Statuses: body.Status}
+		for _, entity := range body.Entities {
+			if !containsFold(entity.Roles, "registrar") {
+				continue
+			}
+			var card []json.RawMessage
+			if json.Unmarshal(entity.VCardArray, &card) != nil || len(card) != 2 {
+				continue
+			}
+			var fields [][]json.RawMessage
+			if json.Unmarshal(card[1], &fields) != nil {
+				continue
+			}
+			for _, field := range fields {
+				if len(field) < 4 {
+					continue
+				}
+				var key, value string
+				if json.Unmarshal(field[0], &key) == nil && strings.EqualFold(key, "fn") && json.Unmarshal(field[3], &value) == nil {
+					rec.Registrar = strings.Join(strings.Fields(value), " ")
+					return rec, nil
+				}
+			}
+		}
+		return rec, nil
 	default:
 		rec := analysis.DomainRecord{Status: analysis.DomainLookupFailed}
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError {
@@ -279,6 +315,19 @@ func (c *Client) request(ctx context.Context, endpoint string) (analysis.DomainR
 		}
 		return rec, nil
 	}
+}
+
+func containsFold(values []string, target string) bool {
+	for _, value := range values {
+		if strings.EqualFold(value, target) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDeletionStatus(statuses []string) bool {
+	return containsFold(statuses, "redemption period") || containsFold(statuses, "pending delete")
 }
 
 func wait(ctx context.Context, delay time.Duration) error {

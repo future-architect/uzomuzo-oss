@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -27,6 +28,8 @@ func TestClassifyMaintainerDomain(t *testing.T) {
 		{"zero registration", DomainRecord{Status: DomainFound}, MaintainerDomainLookupFailed},
 		{"redemption", DomainRecord{Status: DomainFound, Registered: first, Statuses: []string{"Redemption Period"}}, MaintainerDomainLapsing},
 		{"pending", DomainRecord{Status: DomainFound, Registered: first, Statuses: []string{"pending delete"}}, MaintainerDomainLapsing},
+		{"undated pending", DomainRecord{Status: DomainFound, Statuses: []string{"pending delete"}}, MaintainerDomainLapsing},
+		{"undated redemption", DomainRecord{Status: DomainFound, Statuses: []string{"Redemption Period"}}, MaintainerDomainLapsing},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -37,5 +40,38 @@ func TestClassifyMaintainerDomain(t *testing.T) {
 	}
 	if got := ClassifyMaintainerDomain(time.Time{}, base, DomainRecord{Status: DomainFound, Registered: registered}); got != MaintainerDomainUnchecked {
 		t.Errorf("undated address=%s, want unchecked", got)
+	}
+}
+
+// TestIsDropCatchRegistrar checks the fixed evidence prefixes.
+func TestIsDropCatchRegistrar(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		want bool
+	}{
+		{"DropCatch.com 538 LLC", true}, {"DropCatch.com 1387 LLC", true},
+		{"SnapNames registrar", true}, {"NameJet registrar", true}, {"Pheenix registrar", true},
+		{"GoDaddy.com, LLC", false}, {"NameCheap, Inc.", false}, {"", false},
+	} {
+		if got := IsDropCatchRegistrar(tc.name); got != tc.want {
+			t.Errorf("%q: got %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// TestMaintainerDomainNoticeRegistrar checks optional registrar wording.
+func TestMaintainerDomainNoticeRegistrar(t *testing.T) {
+	for _, tc := range []struct {
+		name, registrar, want string
+		drop                  bool
+	}{
+		{"unknown", "", "registered 2026-05-07, after", false},
+		{"ordinary", "NameCheap, Inc.", "registered 2026-05-07 through NameCheap, Inc., after", false},
+		{"drop catch", "DropCatch.com 538 LLC", "registered 2026-05-07 through DropCatch.com 538 LLC (a drop-catch registrar), after", true},
+	} {
+		a := &Analysis{MaintainerDomain: &MaintainerDomainResult{Findings: []MaintainerDomainFinding{{Domain: "example.com", Kind: MaintainerDomainReregisteredBefore, FirstSeen: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Registered: time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC), Registrar: tc.registrar, DropCatch: tc.drop}}}}
+		if got := a.MaintainerDomainNotice(); !strings.Contains(got, tc.want) {
+			t.Errorf("%s: %q", tc.name, got)
+		}
 	}
 }

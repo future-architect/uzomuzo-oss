@@ -30,6 +30,80 @@ type row struct {
 	findings             []analysis.MaintainerDomainFinding
 }
 
+type incidentCase struct {
+	Package string `json:"package"`
+	Version string `json:"version"`
+}
+
+func parsePopulation(data io.Reader) ([]incidentCase, error) {
+	records, err := csv.NewReader(data).ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("read population CSV: %w", err)
+	}
+	if len(records) == 0 {
+		return nil, errors.New("empty population CSV")
+	}
+	columns := map[string]int{}
+	for i, name := range records[0] {
+		columns[name] = i
+	}
+	packageCol, okPackage := columns["package"]
+	malCol, okMal := columns["mal_versions"]
+	if !okPackage || !okMal {
+		return nil, errors.New("population CSV needs package and mal_versions columns")
+	}
+	var out []incidentCase
+	for _, record := range records[1:] {
+		if len(record) <= packageCol || len(record) <= malCol {
+			continue
+		}
+		out = append(out, incidentCase{Package: record[packageCol], Version: record[malCol]})
+	}
+	return out, nil
+}
+
+func parseCases(data []byte) ([]incidentCase, error) {
+	var cases []incidentCase
+	if err := json.Unmarshal(data, &cases); err != nil {
+		return nil, fmt.Errorf("decode cases JSON: %w", err)
+	}
+	return cases, nil
+}
+
+func parseLockfileNames(data []byte) ([]string, error) {
+	var lock struct {
+		Packages map[string]struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+			Link    bool   `json:"link"`
+		} `json:"packages"`
+	}
+	if err := json.Unmarshal(data, &lock); err != nil {
+		return nil, fmt.Errorf("decode lockfile: %w", err)
+	}
+	if lock.Packages == nil {
+		return nil, errors.New("lockfile requires a packages map")
+	}
+	names := map[string]bool{}
+	for path, p := range lock.Packages {
+		i := strings.LastIndex(path, "node_modules/")
+		if i < 0 || p.Version == "" || p.Link {
+			continue
+		}
+		name := p.Name
+		if name == "" {
+			name = path[i+len("node_modules/"):]
+		}
+		names[name] = true
+	}
+	ordered := make([]string, 0, len(names))
+	for name := range names {
+		ordered = append(ordered, name)
+	}
+	sort.Strings(ordered)
+	return ordered, nil
+}
+
 type command struct {
 	packumentDir string
 	rdap         *rdap.Client
@@ -172,46 +246,37 @@ func (c *command) incidents(ctx context.Context, populationPath, casesPath strin
 		return fmt.Errorf("open population CSV %q: %w", populationPath, err)
 	}
 	defer func() { _ = f.Close() }()
-	records, err := csv.NewReader(f).ReadAll()
+	population, err := parsePopulation(f)
 	if err != nil {
-		return fmt.Errorf("read population CSV %q: %w", populationPath, err)
-	}
-	if len(records) == 0 {
-		return errors.New("empty population CSV")
-	}
-	columns := map[string]int{}
-	for i, name := range records[0] {
-		columns[name] = i
-	}
-	packageCol, okPackage := columns["package"]
-	malCol, okMal := columns["mal_versions"]
-	if !okPackage || !okMal {
-		return errors.New("population CSV needs package and mal_versions columns")
+		return fmt.Errorf("parse population %q: %w", populationPath, err)
 	}
 	seen := map[string]bool{}
-	for _, record := range records[1:] {
-		if len(record) <= packageCol || len(record) <= malCol {
-			continue
-		}
-		name := record[packageCol]
+	for _, record := range population {
+		name := record.Package
 		seen[name] = true
-		c.rows = append(c.rows, c.incidentRow(ctx, "population", name, strings.Fields(record[malCol])))
+		c.rows = append(c.rows, c.incidentRow(ctx, "population", name, strings.Fields(record.Version)))
 	}
 	data, err := os.ReadFile(casesPath)
 	if err != nil {
 		return fmt.Errorf("read cases JSON %q: %w", casesPath, err)
 	}
-	var cases []struct {
-		Package string `json:"package"`
-		Version string `json:"version"`
+	cases, err := parseCases(data)
+	if err != nil {
+		return fmt.Errorf("parse cases %q: %w", casesPath, err)
 	}
-	if err := json.Unmarshal(data, &cases); err != nil {
-		return fmt.Errorf("decode cases JSON %q: %w", casesPath, err)
-	}
+	caseVersions := map[string][]string{}
 	for _, tc := range cases {
 		if !seen[tc.Package] {
-			c.rows = append(c.rows, c.incidentRow(ctx, "cases", tc.Package, []string{tc.Version}))
+			caseVersions[tc.Package] = append(caseVersions[tc.Package], tc.Version)
 		}
+	}
+	caseNames := make([]string, 0, len(caseVersions))
+	for name := range caseVersions {
+		caseNames = append(caseNames, name)
+	}
+	sort.Strings(caseNames)
+	for _, name := range caseNames {
+		c.rows = append(c.rows, c.incidentRow(ctx, "cases", name, caseVersions[name]))
 	}
 	markWaves(c.rows)
 	return nil
@@ -305,36 +370,10 @@ func (c *command) lockfile(ctx context.Context, path string, now time.Time, scop
 	if err != nil {
 		return fmt.Errorf("read lockfile %q: %w", path, err)
 	}
-	var lock struct {
-		Packages map[string]struct {
-			Name    string `json:"name"`
-			Version string `json:"version"`
-			Link    bool   `json:"link"`
-		} `json:"packages"`
+	ordered, err := parseLockfileNames(data)
+	if err != nil {
+		return fmt.Errorf("parse lockfile %q: %w", path, err)
 	}
-	if err := json.Unmarshal(data, &lock); err != nil {
-		return fmt.Errorf("decode lockfile %q: %w", path, err)
-	}
-	if lock.Packages == nil {
-		return errors.New("lockfile requires a packages map")
-	}
-	names := map[string]bool{}
-	for path, p := range lock.Packages {
-		i := strings.LastIndex(path, "node_modules/")
-		if i < 0 || p.Version == "" || p.Link {
-			continue
-		}
-		name := p.Name
-		if name == "" {
-			name = path[i+len("node_modules/"):]
-		}
-		names[name] = true
-	}
-	ordered := make([]string, 0, len(names))
-	for name := range names {
-		ordered = append(ordered, name)
-	}
-	sort.Strings(ordered)
 	for _, name := range ordered {
 		r := row{scope: scope, name: name, at: now}
 		h, err := c.history(ctx, name)
@@ -365,19 +404,22 @@ func writeRows(path string, rows []row) error {
 		return fmt.Errorf("open results CSV %q: %w", path, err)
 	}
 	defer func() { _ = f.Close() }()
+	if err := f.Chmod(0o600); err != nil {
+		return fmt.Errorf("restrict results CSV %q: %w", path, err)
+	}
 	w := csv.NewWriter(f)
-	if err := w.Write([]string{"scope", "package", "date", "missing", "account", "domain", "kind", "first_seen", "registered", "reason"}); err != nil {
+	if err := w.Write([]string{"scope", "package", "date", "missing", "account", "domain", "kind", "first_seen", "registered", "reason", "registrar", "drop_catch"}); err != nil {
 		return fmt.Errorf("write results CSV header: %w", err)
 	}
 	for _, r := range rows {
 		if len(r.findings) == 0 {
-			if err := w.Write([]string{r.scope, r.name, r.at.Format(time.RFC3339), r.missing}); err != nil {
+			if err := w.Write([]string{r.scope, r.name, r.at.Format(time.RFC3339), r.missing, "", "", "", "", "", "", "", ""}); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 			continue
 		}
 		for _, finding := range r.findings {
-			if err := w.Write([]string{r.scope, r.name, r.at.Format(time.RFC3339), r.missing, finding.Account, finding.Domain, string(finding.Kind), finding.FirstSeen.Format(time.RFC3339), finding.Registered.Format(time.RFC3339), finding.Reason}); err != nil {
+			if err := w.Write([]string{r.scope, r.name, r.at.Format(time.RFC3339), r.missing, finding.Account, finding.Domain, string(finding.Kind), finding.FirstSeen.Format(time.RFC3339), finding.Registered.Format(time.RFC3339), finding.Reason, finding.Registrar, fmt.Sprint(finding.DropCatch)}); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 		}
@@ -400,7 +442,7 @@ func printSummary(out io.Writer, rows []row) error {
 	}
 	sort.Strings(scopes[3:])
 	for _, scope := range scopes {
-		var total, checkable, before, every, notices int
+		var total, checkable, before, every, notices, noticeDropCatch int
 		checkableDays, beforeDays := map[time.Time]bool{}, map[time.Time]bool{}
 		domains := map[string]bool{}
 		kindCounts := map[analysis.MaintainerDomainKind]int{}
@@ -413,7 +455,7 @@ func printSummary(out io.Writer, rows []row) error {
 			if r.missing != "" {
 				missing[r.missing]++
 			}
-			anyCheck, anyBefore, allCheck, anyNotice := false, false, len(r.findings) > 0, false
+			anyCheck, anyBefore, allCheck, anyNotice, anyDropCatch := false, false, len(r.findings) > 0, false, false
 			for _, f := range r.findings {
 				kindCounts[f.Kind]++
 				isCheck := f.Kind != analysis.MaintainerDomainUnchecked && f.Kind != analysis.MaintainerDomainLookupFailed
@@ -422,6 +464,7 @@ func printSummary(out io.Writer, rows []row) error {
 				anyBefore = anyBefore || f.Kind == analysis.MaintainerDomainReregisteredBefore
 				if f.Kind == analysis.MaintainerDomainUnregistered || f.Kind == analysis.MaintainerDomainLapsing || f.Kind == analysis.MaintainerDomainReregisteredBefore {
 					anyNotice = true
+					anyDropCatch = anyDropCatch || f.DropCatch
 					domains[f.Domain] = true
 				}
 			}
@@ -439,11 +482,14 @@ func printSummary(out io.Writer, rows []row) error {
 			if anyNotice {
 				notices++
 			}
+			if anyDropCatch {
+				noticeDropCatch++
+			}
 		}
 		if total == 0 {
 			continue
 		}
-		if _, err := fmt.Fprintf(out, "%s: packages=%d checkable=%d reregistered_before=%d checkable_dates=%d reregistered_before_dates=%d notices=%d distinct_notice_domains=%d every_address_checkable=%d\n", scope, total, checkable, before, len(checkableDays), len(beforeDays), notices, len(domains), every); err != nil {
+		if _, err := fmt.Fprintf(out, "%s: packages=%d checkable=%d reregistered_before=%d checkable_dates=%d reregistered_before_dates=%d notices=%d notice_drop_catch=%d distinct_notice_domains=%d every_address_checkable=%d\n", scope, total, checkable, before, len(checkableDays), len(beforeDays), notices, noticeDropCatch, len(domains), every); err != nil {
 			return fmt.Errorf("write summary for %q: %w", scope, err)
 		}
 		for _, kind := range []analysis.MaintainerDomainKind{analysis.MaintainerDomainUnchecked, analysis.MaintainerDomainLookupFailed, analysis.MaintainerDomainUnregistered, analysis.MaintainerDomainLapsing, analysis.MaintainerDomainReregisteredAfter, analysis.MaintainerDomainReregisteredBefore, analysis.MaintainerDomainNormal} {

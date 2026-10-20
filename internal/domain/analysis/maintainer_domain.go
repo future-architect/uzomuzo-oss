@@ -45,6 +45,7 @@ type DomainRecord struct {
 	Status     DomainLookupStatus
 	Registered time.Time
 	Statuses   []string
+	Registrar  string
 }
 
 // ClassifyMaintainerDomain applies the registration rule without I/O.
@@ -60,9 +61,7 @@ func ClassifyMaintainerDomain(firstSeen, base time.Time, rec DomainRecord) Maint
 	case DomainLookupFailed:
 		return MaintainerDomainLookupFailed
 	case DomainFound:
-		if rec.Registered.IsZero() {
-			return MaintainerDomainLookupFailed
-		}
+		// Deletion status is useful even when RDAP omits the registration event.
 	default:
 		return MaintainerDomainLookupFailed
 	}
@@ -70,6 +69,9 @@ func ClassifyMaintainerDomain(firstSeen, base time.Time, rec DomainRecord) Maint
 		if strings.EqualFold(status, "redemption period") || strings.EqualFold(status, "pending delete") {
 			return MaintainerDomainLapsing
 		}
+	}
+	if rec.Registered.IsZero() {
+		return MaintainerDomainLookupFailed
 	}
 	if !rec.Registered.Before(base) {
 		return MaintainerDomainReregisteredAfter
@@ -95,6 +97,20 @@ type MaintainerDomainFinding struct {
 	FirstSeen  time.Time
 	Registered time.Time
 	Reason     string
+	Registrar  string
+	DropCatch  bool
+}
+
+// IsDropCatchRegistrar identifies known drop-catch registrar names.
+// Source: https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/lauinger
+func IsDropCatchRegistrar(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	for _, prefix := range []string{"dropcatch.com", "snapnames", "namejet", "pheenix"} {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // MaintainerDomainResult holds findings for a package's maintainers.
@@ -129,7 +145,14 @@ func (a *Analysis) MaintainerDomainNotice() string {
 	f := a.MaintainerDomain.Flagged()[0]
 	switch f.Kind {
 	case MaintainerDomainReregisteredBefore:
-		return fmt.Sprintf("maintainer e-mail domain %s registered %s, after the address first appeared %s", f.Domain, f.Registered.Format(time.DateOnly), f.FirstSeen.Format(time.DateOnly))
+		registrar := ""
+		if f.Registrar != "" {
+			registrar = " through " + f.Registrar
+			if f.DropCatch {
+				registrar += " (a drop-catch registrar)"
+			}
+		}
+		return fmt.Sprintf("maintainer e-mail domain %s registered %s%s, after the address first appeared %s", f.Domain, f.Registered.Format(time.DateOnly), registrar, f.FirstSeen.Format(time.DateOnly))
 	case MaintainerDomainLapsing:
 		return fmt.Sprintf("maintainer e-mail domain %s is lapsing", f.Domain)
 	case MaintainerDomainUnregistered:
