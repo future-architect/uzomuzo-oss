@@ -70,6 +70,7 @@ func (s *IntegrationService) enrichReleaseHistory(ctx context.Context, analyses 
 			cp.PublisherHistory.Latest[account] = slices.Clone(publishes)
 		}
 		cp.PublisherHistory.HiddenPublishedAt = slices.Clone(h.PublisherHistory.HiddenPublishedAt)
+		cp.PublisherHistory.Maintainers = maps.Clone(h.PublisherHistory.Maintainers)
 		a.ReleaseHistory = &cp
 	})
 }
@@ -84,16 +85,24 @@ func (s *IntegrationService) fetchNpmReleaseHistory(ctx context.Context, fullNam
 		return nil, false, nil
 	}
 	maintainers := make([]domain.MaintainerAddress, 0, len(h.Maintainers))
+	publisherHistory := h.PublisherHistory
 	for _, p := range h.Maintainers {
 		// The account name is shown in the terminal notice; see
 		// StripControlRunes for what it removes.
-		maintainers = append(maintainers, domain.MaintainerAddress{Account: domain.StripControlRunes(p.Name), Email: p.Email, FirstSeen: h.FirstSeen[domain.NormalizeEmail(p.Email)]})
+		account := domain.StripControlRunes(p.Name)
+		maintainers = append(maintainers, domain.MaintainerAddress{Account: account, Email: p.Email, FirstSeen: h.FirstSeen[domain.NormalizeEmail(p.Email)]})
+		if account != "" {
+			if publisherHistory.Maintainers == nil {
+				publisherHistory.Maintainers = make(map[string]struct{}, len(h.Maintainers))
+			}
+			publisherHistory.Maintainers[account] = struct{}{}
+		}
 	}
 	return &domain.ReleaseHistory{
 		Registry:         domain.RegistryNpm,
 		PublishedAt:      h.PublishedAt,
 		Installable:      h.Installable,
 		Maintainers:      maintainers,
-		PublisherHistory: h.PublisherHistory,
+		PublisherHistory: publisherHistory,
 	}, true, nil
 }

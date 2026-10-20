@@ -346,8 +346,11 @@ type PublishHistory struct {
 	// history was built by ParsePublishHistoryWithVersions.
 	VersionPublisher map[string]Person
 	// PublisherHistory summarizes each publisher account's latest dated
-	// publishes and the publish times of versions the registry no longer serves.
+	// publishes and the publish times of versions whose publisher is not
+	// visible.
 	PublisherHistory analysis.PublisherPackageHistory
+	// unattributed holds versions whose manifest names no publisher account.
+	unattributed map[string]struct{}
 }
 
 // Person holds a maintainer or publisher identity from an npm packument.
@@ -537,7 +540,14 @@ func decodePublishHistory(r io.Reader, retainVersions bool) (*PublishHistory, er
 		if at.IsZero() {
 			continue
 		}
-		h.PublisherHistory.AddPublisherPublish(analysis.StripControlRunes(publisher.Name), publisherPublish(doc.Name, v, at, publisher.Email))
+		if account := analysis.StripControlRunes(publisher.Name); account != "" {
+			h.PublisherHistory.AddPublisherPublish(account, publisherPublish(doc.Name, v, at, publisher.Email))
+		} else {
+			if h.unattributed == nil {
+				h.unattributed = make(map[string]struct{})
+			}
+			h.unattributed[v] = struct{}{}
+		}
 		recordFirstSeen(h.FirstSeen, at, people...)
 		recordFirstSeen(h.FirstSeen, at, publisher)
 	}
@@ -545,9 +555,11 @@ func decodePublishHistory(r io.Reader, retainVersions bool) (*PublishHistory, er
 	return h, nil
 }
 
-// hiddenPublishTimes returns the publish times of versions missing from
-// "versions", before cutoff when it is non-zero. It returns nil when
-// "versions" was missing or null, since removal is then unknown.
+// hiddenPublishTimes returns the publish times of versions whose publisher is
+// not visible, before cutoff when it is non-zero: versions missing from
+// "versions", and versions whose manifest names no publisher account. It
+// returns nil when "versions" was missing or null, since removal is then
+// unknown.
 func (h *PublishHistory) hiddenPublishTimes(cutoff time.Time) []time.Time {
 	if h.Installable == nil {
 		return nil
@@ -557,7 +569,9 @@ func (h *PublishHistory) hiddenPublishTimes(cutoff time.Time) []time.Time {
 		if !cutoff.IsZero() && !at.Before(cutoff) {
 			continue
 		}
-		if _, visible := h.Installable[v]; !visible {
+		_, visible := h.Installable[v]
+		_, unattributed := h.unattributed[v]
+		if !visible || unattributed {
 			out = append(out, at)
 		}
 	}

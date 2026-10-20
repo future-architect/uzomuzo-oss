@@ -219,3 +219,30 @@ func TestPublisherEmailEvidenceTieWithMissingEmailConflicts(t *testing.T) {
 		t.Errorf("evidence=%+v, want conflicting with no latest observed", e)
 	}
 }
+
+// TestPublisherEmailEvidenceCountsHiddenPublishesInMaintainedPackages checks
+// that a removed version in another package counts when the account maintains
+// that package, even without a visible publish there.
+func TestPublisherEmailEvidenceCountsHiddenPublishesInMaintainedPackages(t *testing.T) {
+	t.Parallel()
+	older := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	f := MaintainerDomainFinding{Account: "atiertant", Domain: "atlantis-software.net"}
+	source := PublisherPackageHistory{Latest: map[string][]PublisherPublish{"atiertant": {{Package: "x", Version: "1", PublishedAt: older, EmailDomain: "example.com", RegistrableDomain: "example.com"}}}}
+	for _, tc := range []struct {
+		name        string
+		maintainers map[string]struct{}
+		want        bool
+	}{
+		{"maintained", map[string]struct{}{"atiertant": {}}, true},
+		{"not maintained", map[string]struct{}{"someone-else": {}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			other := PublisherPackageHistory{HiddenPublishedAt: []time.Time{older.Add(time.Hour)}, Maintainers: tc.maintainers}
+			e := PublisherEmailEvidenceFor(f, PublisherScopeScanPackuments, source, []PublisherPackageHistory{source, other})
+			if e.NewerPublishUnknown != tc.want {
+				t.Errorf("newer_publish_unknown=%v, want %v", e.NewerPublishUnknown, tc.want)
+			}
+		})
+	}
+}

@@ -450,7 +450,8 @@ func (s *AnalysisService) checkMaintainerDomains(ctx context.Context, analyses m
 	if s.maintainerDomainChecker == nil {
 		return
 	}
-	// Publisher evidence draws on every npm packument fetched in this batch.
+	// Publisher evidence draws on every npm packument fetched in this batch; a
+	// scan analyses PURL and GitHub URL inputs in separate batches.
 	var histories []domain.PublisherPackageHistory
 	for _, a := range analyses {
 		if a != nil && a.ReleaseHistory != nil && a.ReleaseHistory.Registry == domain.RegistryNpm {

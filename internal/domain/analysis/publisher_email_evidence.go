@@ -18,8 +18,11 @@ type PublisherPublish struct {
 type PublisherPackageHistory struct {
 	// Latest maps an account name to its publishes sharing the latest time.
 	Latest map[string][]PublisherPublish
-	// HiddenPublishedAt holds the times of versions whose manifest was removed.
+	// HiddenPublishedAt holds the times of publishes whose publisher is not
+	// visible: the manifest was removed, or it names no publisher account.
 	HiddenPublishedAt []time.Time
+	// Maintainers holds the accounts in the packument's current maintainers.
+	Maintainers map[string]struct{}
 }
 
 // PublisherLatestObserved identifies the latest visible publish without an e-mail local part.
@@ -76,7 +79,8 @@ const (
 type PublisherEvidenceScope string
 
 const (
-	// PublisherScopeScanPackuments is every npm packument fetched by one scan run.
+	// PublisherScopeScanPackuments is every npm packument fetched in one
+	// analysis batch of a scan; PURL and GitHub URL inputs are separate batches.
 	PublisherScopeScanPackuments PublisherEvidenceScope = "scan_packuments"
 	// PublisherScopeIncidentPackument is one packument, limited to publishes
 	// before the incident time.
@@ -138,7 +142,8 @@ func keepLatest(current []PublisherPublish, p PublisherPublish) []PublisherPubli
 // classification. scope names the packuments that histories cover; histories
 // should include source, the packument that raised the finding. A removed
 // version in source counts even when the account has no visible publish, while
-// one in another packument counts only where the account published visibly.
+// one in another packument counts only where the account published visibly or
+// is a current maintainer.
 func PublisherEmailEvidenceFor(f MaintainerDomainFinding, scope PublisherEvidenceScope, source PublisherPackageHistory, histories []PublisherPackageHistory) *PublisherEmailEvidence {
 	e := &PublisherEmailEvidence{Status: PublisherEmailNotObserved, Source: PublisherEvidenceSource, Scope: scope, DomainRelation: PublisherDomainUnknown, RegistrationRelation: PublisherRegistrationUnknown}
 	var latest []PublisherPublish
@@ -194,7 +199,7 @@ func PublisherEmailEvidenceFor(f MaintainerDomainFinding, scope PublisherEvidenc
 		}
 	}
 	for _, h := range histories {
-		if len(h.Latest[f.Account]) == 0 {
+		if _, maintains := h.Maintainers[f.Account]; len(h.Latest[f.Account]) == 0 && !maintains {
 			continue
 		}
 		for _, at := range h.HiddenPublishedAt {

@@ -147,3 +147,26 @@ func TestGetPublishHistoryFillsPublisherPackage(t *testing.T) {
 		t.Errorf("latest=%+v, want package node-ipc", got)
 	}
 }
+
+// TestPublisherHistoryCountsUnattributedPublishesAsHidden checks that a version
+// whose manifest names no publisher is treated like a removed one.
+func TestPublisherHistoryCountsUnattributedPublishesAsHidden(t *testing.T) {
+	t.Parallel()
+	const packument = `{"name":"node-ipc","time":{"1":"2024-01-01T00:00:00Z","2":"2024-01-02T00:00:00Z","3":"2024-01-03T00:00:00Z"},"versions":{"1":{"_npmUser":{"name":"atiertant","email":"a@atlantis-software.net"}},"2":{},"3":{"_npmUser":"legacy string"}}}`
+	h, err := ParsePublishHistoryWithVersions(strings.NewReader(packument))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := h.PublisherHistory.HiddenPublishedAt; len(got) != 2 {
+		t.Errorf("hidden=%v, want versions 2 and 3", got)
+	}
+	before := h.PublisherHistoryBefore("node-ipc", time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC))
+	if len(before.HiddenPublishedAt) != 1 || !before.HiddenPublishedAt[0].Equal(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("hidden before cutoff=%v, want only version 2", before.HiddenPublishedAt)
+	}
+	f := analysis.MaintainerDomainFinding{Account: "atiertant", Domain: "example.com"}
+	e := analysis.PublisherEmailEvidenceFor(f, analysis.PublisherScopeScanPackuments, h.PublisherHistory, []analysis.PublisherPackageHistory{h.PublisherHistory})
+	if !e.NewerPublishUnknown {
+		t.Errorf("evidence=%+v, want newer_publish_unknown for unattributed newer publishes", e)
+	}
+}

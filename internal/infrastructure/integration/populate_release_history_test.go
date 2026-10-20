@@ -174,9 +174,38 @@ func TestAnalyzeFromPURLs_PopulatesMaintainers(t *testing.T) {
 		if m[0].Account != "at[31miertant" || m[0].Email != "A.Tiertant@Atlantis-Software.NET " || !m[0].FirstSeen.Equal(time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)) {
 			t.Errorf("%s: maintainer=%+v", p, m[0])
 		}
+		ph := a.ReleaseHistory.PublisherHistory
+		latest := ph.Latest["atiertant"]
+		if len(latest) != 1 || latest[0].Package != "node-ipc" || latest[0].Version != "1.0.1" || latest[0].RegistrableDomain != "atlantis-software.net" {
+			t.Errorf("%s: latest publisher=%+v", p, latest)
+		}
+		// 1.0.0 names no publisher, so its time is a publish with no visible publisher.
+		if len(ph.HiddenPublishedAt) != 1 || !ph.HiddenPublishedAt[0].Equal(time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("%s: hidden=%v", p, ph.HiddenPublishedAt)
+		}
+		if _, ok := ph.Maintainers["at[31miertant"]; !ok || len(ph.Maintainers) != 1 {
+			t.Errorf("%s: publisher-history maintainers=%v", p, ph.Maintainers)
+		}
 	}
-	analyses[purls[0]].ReleaseHistory.Maintainers[0].Account = "changed"
-	if analyses[purls[1]].ReleaseHistory.Maintainers[0].Account == "changed" {
+	a0, a1 := analyses[purls[0]].ReleaseHistory, analyses[purls[1]].ReleaseHistory
+	a0.Maintainers[0].Account = "changed"
+	a0.PublisherHistory.Latest["atiertant"][0].Version = "changed"
+	a0.PublisherHistory.Latest["added"] = nil
+	a0.PublisherHistory.HiddenPublishedAt[0] = time.Time{}
+	a0.PublisherHistory.Maintainers["added"] = struct{}{}
+	if a1.Maintainers[0].Account == "changed" {
 		t.Error("two analyses share one Maintainers slice")
+	}
+	if a1.PublisherHistory.Latest["atiertant"][0].Version == "changed" {
+		t.Error("two analyses share one per-account publish slice")
+	}
+	if _, ok := a1.PublisherHistory.Latest["added"]; ok {
+		t.Error("two analyses share one Latest map")
+	}
+	if a1.PublisherHistory.HiddenPublishedAt[0].IsZero() {
+		t.Error("two analyses share one HiddenPublishedAt slice")
+	}
+	if _, ok := a1.PublisherHistory.Maintainers["added"]; ok {
+		t.Error("two analyses share one publisher-history Maintainers map")
 	}
 }
