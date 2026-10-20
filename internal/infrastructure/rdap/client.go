@@ -26,6 +26,12 @@ type bootstrap struct {
 	Services [][][]string `json:"services"`
 }
 
+type diskEntry struct {
+	analysis.DomainRecord
+	RequestURL string `json:"request_url"`
+	FetchedAt  string `json:"fetched_at"`
+}
+
 type Client struct {
 	mu              sync.Mutex
 	http            *http.Client
@@ -145,8 +151,9 @@ func (c *Client) Lookup(ctx context.Context, domain string) (analysis.DomainReco
 	}
 	if c.cacheDir != "" {
 		if data, err := os.ReadFile(c.cachePath(domain)); err == nil {
-			var rec analysis.DomainRecord
-			if json.Unmarshal(data, &rec) == nil {
+			var entry diskEntry
+			if json.Unmarshal(data, &entry) == nil && entry.Status != analysis.DomainLookupFailed {
+				rec := entry.DomainRecord
 				c.cache[domain] = rec
 				return rec, nil
 			}
@@ -163,6 +170,7 @@ func (c *Client) Lookup(ctx context.Context, domain string) (analysis.DomainReco
 	}
 	var rec analysis.DomainRecord
 	var err error
+	endpoint := strings.TrimRight(base, "/") + "/domain/" + url.PathEscape(domain)
 	for attempt := 0; attempt < 2; attempt++ {
 		if attempt > 0 {
 			if err = wait(ctx, c.retryDelay); err != nil {
@@ -173,7 +181,7 @@ func (c *Client) Lookup(ctx context.Context, domain string) (analysis.DomainReco
 			break
 		}
 		c.last[host] = time.Now()
-		rec, err = c.request(ctx, strings.TrimRight(base, "/")+"/domain/"+url.PathEscape(domain))
+		rec, err = c.request(ctx, endpoint)
 		if err == nil || rec.Status != analysis.DomainLookupFailed {
 			break
 		}
@@ -186,9 +194,9 @@ func (c *Client) Lookup(ctx context.Context, domain string) (analysis.DomainReco
 		rec = analysis.DomainRecord{Status: analysis.DomainLookupFailed}
 	}
 	c.cache[domain] = rec
-	if c.cacheDir != "" {
+	if c.cacheDir != "" && rec.Status != analysis.DomainLookupFailed {
 		if e := os.MkdirAll(c.cacheDir, 0o700); e == nil {
-			data, _ := json.Marshal(rec)
+			data, _ := json.Marshal(diskEntry{DomainRecord: rec, RequestURL: endpoint, FetchedAt: time.Now().UTC().Format(time.RFC3339)})
 			_ = os.WriteFile(c.cachePath(domain), data, 0o600)
 		}
 	}

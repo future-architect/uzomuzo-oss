@@ -442,8 +442,13 @@ func extractNpmSuccessor(msg string) string {
 	return ""
 }
 
-// parsePublishHistory keeps only dates and maintainer identities from manifests.
+// parsePublishHistory keeps dates and the first occurrence of each maintainer
+// address without retaining per-version identities in the scan result.
 func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
+	return decodePublishHistory(r, false)
+}
+
+func decodePublishHistory(r io.Reader, retainVersions bool) (*PublishHistory, error) {
 	type manifestIdentity struct {
 		Maintainers json.RawMessage `json:"maintainers"`
 		NPMUser     json.RawMessage `json:"_npmUser"`
@@ -456,7 +461,11 @@ func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
 	if err := json.NewDecoder(r).Decode(&doc); err != nil {
 		return nil, fmt.Errorf("npm decode failed: %w", err)
 	}
-	h := &PublishHistory{PublishedAt: make(map[string]time.Time, len(doc.Time)), FirstSeen: make(map[string]time.Time), VersionMaintainers: make(map[string][]Person), VersionPublisher: make(map[string]Person)}
+	h := &PublishHistory{PublishedAt: make(map[string]time.Time, len(doc.Time)), FirstSeen: make(map[string]time.Time)}
+	if retainVersions {
+		h.VersionMaintainers = make(map[string][]Person, len(doc.Versions))
+		h.VersionPublisher = make(map[string]Person, len(doc.Versions))
+	}
 	h.Maintainers = decodePeople(doc.Maintainers)
 	// A missing or null "versions" leaves Installable nil (unknown), so a
 	// burst is not reported as removed without evidence; "{}" stays known-empty.
@@ -485,9 +494,13 @@ func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
 		h.Installable[v] = struct{}{}
 		manifest := doc.Versions[v]
 		people := decodePeople(manifest.Maintainers)
-		h.VersionMaintainers[v] = people
+		if retainVersions {
+			h.VersionMaintainers[v] = people
+		}
 		publisher := decodePerson(manifest.NPMUser)
-		h.VersionPublisher[v] = publisher
+		if retainVersions {
+			h.VersionPublisher[v] = publisher
+		}
 		people = append(people, publisher)
 		at := h.PublishedAt[v]
 		if at.IsZero() {
@@ -504,7 +517,7 @@ func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
 }
 
 // ParsePublishHistory decodes a cached full npm packument for measurements.
-func ParsePublishHistory(r io.Reader) (*PublishHistory, error) { return parsePublishHistory(r) }
+func ParsePublishHistory(r io.Reader) (*PublishHistory, error) { return decodePublishHistory(r, true) }
 
 func decodePeople(raw json.RawMessage) []Person {
 	var people []Person

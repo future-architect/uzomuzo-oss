@@ -31,12 +31,30 @@ func TestParsePublishHistoryMaintainers(t *testing.T) {
 	if len(h.Maintainers) != 2 || h.Maintainers[0].Name != "atiertant" {
 		t.Errorf("maintainers=%+v", h.Maintainers)
 	}
+	if h.VersionMaintainers != nil || h.VersionPublisher != nil {
+		t.Errorf("scan history retained per-version identities")
+	}
 	if _, ok := h.FirstSeen["new@example.com"]; ok {
 		t.Error("version without time counted")
 	}
-	before := h.FirstSeenBefore(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
-	if !before["a.tiertant@atlantis-software.net"].Equal(want) {
-		t.Errorf("before=%v", before)
+}
+
+func TestParsePublishHistoryForMeasurementKeepsVersionIdentities(t *testing.T) {
+	t.Parallel()
+	f, err := os.Open(filepath.Join("testdata", "node-ipc-maintainers.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	h, err := ParsePublishHistory(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(h.VersionMaintainers) == 0 || len(h.VersionPublisher) == 0 {
+		t.Errorf("measurement history missing per-version identities")
+	}
+	if got := h.FirstSeenBefore(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))["a.tiertant@atlantis-software.net"]; !got.Equal(time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("measurement first appearance=%s", got)
 	}
 }
 
@@ -95,6 +113,9 @@ func TestGetPublishHistory(t *testing.T) {
 	}
 	if len(h.PublishedAt) != 2 {
 		t.Fatalf("PublishedAt = %v, want only the two version entries", h.PublishedAt)
+	}
+	if h.VersionMaintainers != nil || h.VersionPublisher != nil {
+		t.Error("scan response retained per-version identity maps")
 	}
 	want := time.Date(2026, 5, 14, 14, 25, 30, 311000000, time.UTC)
 	if !h.PublishedAt["12.0.1"].Equal(want) {

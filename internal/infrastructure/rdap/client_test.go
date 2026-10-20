@@ -2,14 +2,106 @@ package rdap
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
+
+func TestLookupFailedIsNotPersisted(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	var status atomic.Int32
+	status.Store(http.StatusServiceUnavailable)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		if status.Load() == http.StatusOK {
+			_, _ = w.Write([]byte(`{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"}]}`))
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+	cacheDir := t.TempDir()
+	client := NewClient()
+	client.SetBaseURL("net", srv.URL)
+	client.SetCacheDir(cacheDir)
+	client.SetRetryDelay(0)
+	client.SetRequestInterval(0)
+	first, err := client.Lookup(context.Background(), "atlantis-software.net")
+	if err != nil || first.Status != analysis.DomainLookupFailed || calls.Load() != 2 {
+		t.Fatalf("first=%+v err=%v calls=%d", first, err, calls.Load())
+	}
+	if _, err := os.Stat(client.cachePath("atlantis-software.net")); !os.IsNotExist(err) {
+		t.Fatalf("failed lookup cache entry exists or cannot be checked: %v", err)
+	}
+	status.Store(http.StatusOK)
+	client = NewClient()
+	client.SetBaseURL("net", srv.URL)
+	client.SetCacheDir(cacheDir)
+	client.SetRequestInterval(0)
+	second, err := client.Lookup(context.Background(), "atlantis-software.net")
+	if err != nil || second.Status != analysis.DomainFound || calls.Load() != 3 {
+		t.Fatalf("second=%+v err=%v calls=%d, want found after a new request", second, err, calls.Load())
+	}
+}
+
+func TestLookupDiskCacheEvidenceAndLegacyEntry(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		_, _ = w.Write([]byte(`{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+	dir := t.TempDir()
+	c := NewClient()
+	c.SetBaseURL("net", srv.URL)
+	c.SetCacheDir(dir)
+	c.SetRequestInterval(0)
+	before := time.Now().UTC().Add(-time.Second)
+	if rec, err := c.Lookup(context.Background(), "atlantis-software.net"); err != nil || rec.Status != analysis.DomainFound {
+		t.Fatalf("record=%+v err=%v", rec, err)
+	}
+	data, err := os.ReadFile(c.cachePath("atlantis-software.net"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var entry struct {
+		RequestURL string `json:"request_url"`
+		FetchedAt  string `json:"fetched_at"`
+	}
+	if err := json.Unmarshal(data, &entry); err != nil {
+		t.Fatal(err)
+	}
+	if want := srv.URL + "/domain/atlantis-software.net"; entry.RequestURL != want {
+		t.Errorf("request_url=%q, want %q", entry.RequestURL, want)
+	}
+	fetched, err := time.Parse(time.RFC3339, entry.FetchedAt)
+	if err != nil || fetched.Before(before) || fetched.After(time.Now().UTC().Add(time.Second)) {
+		t.Errorf("fetched_at=%q err=%v", entry.FetchedAt, err)
+	}
+	other := NewClient()
+	other.SetBaseURL("net", srv.URL)
+	other.SetCacheDir(dir)
+	rec, err := other.Lookup(context.Background(), "atlantis-software.net")
+	if err != nil || rec.Status != analysis.DomainFound || calls.Load() != 1 {
+		t.Errorf("cached record=%+v err=%v calls=%d", rec, err, calls.Load())
+	}
+	legacy := []byte(`{"Status":0,"Registered":"2020-01-01T00:00:00Z"}`)
+	if err := os.WriteFile(c.cachePath("legacy.net"), legacy, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rec, err = other.Lookup(context.Background(), "legacy.net")
+	if err != nil || rec.Status != analysis.DomainFound || rec.Registered.Year() != 2020 || calls.Load() != 1 {
+		t.Errorf("legacy record=%+v err=%v calls=%d", rec, err, calls.Load())
+	}
+}
 
 func TestLookup(t *testing.T) {
 	t.Parallel()
