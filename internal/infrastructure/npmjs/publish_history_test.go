@@ -92,12 +92,14 @@ func TestGetPublishHistory(t *testing.T) {
 	  "versions": {"12.0.0": {"name": "node-ipc"}}
 	}`
 	var (
-		mu      sync.Mutex
-		gotPath string
+		mu       sync.Mutex
+		gotPath  string
+		requests int
 	)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		gotPath = r.URL.EscapedPath()
+		requests++
 		mu.Unlock()
 		switch r.URL.EscapedPath() {
 		case "/node-ipc", "/@solana%2Fweb3.js":
@@ -114,6 +116,11 @@ func TestGetPublishHistory(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("found=%v err=%v", found, err)
 	}
+	mu.Lock()
+	if requests != 1 {
+		t.Errorf("packument requests=%d, want one", requests)
+	}
+	mu.Unlock()
 	if len(h.PublishedAt) != 2 {
 		t.Fatalf("PublishedAt = %v, want only the two version entries", h.PublishedAt)
 	}

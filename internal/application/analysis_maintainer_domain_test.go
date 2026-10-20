@@ -144,3 +144,28 @@ func TestRDAPBootstrapRefreshedOnceWhenNeeded(t *testing.T) {
 		t.Errorf("check off: info=%+v, want nil", off.RDAPBootstrap())
 	}
 }
+
+func TestMaintainerDomainPublisherEvidenceUsesAllFetchedPackuments(t *testing.T) {
+	first := time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)
+	registered := time.Date(2026, 5, 7, 11, 49, 33, 0, time.UTC)
+	older := time.Date(2024, 8, 12, 0, 0, 0, 0, time.UTC)
+	newer := time.Date(2026, 5, 8, 0, 0, 0, 0, time.UTC)
+	purl := "pkg:npm/node-ipc@12.0.0"
+	otherPURL := "pkg:npm/example@1.0.0"
+	a := &domain.Analysis{Package: &domain.Package{PURL: purl, Ecosystem: "npm", Version: "12.0.0"}, ReleaseHistory: &domain.ReleaseHistory{Registry: domain.RegistryNpm, Maintainers: []domain.MaintainerAddress{{Account: "atiertant", Email: "a.tiertant@atlantis-software.net", FirstSeen: first}}, PublisherHistory: domain.PublisherPackageHistory{Latest: map[string][]domain.PublisherPublish{"atiertant": {{Package: "node-ipc", Version: "12.0.0", PublishedAt: older, EmailDomain: "atlantis-software.net", RegistrableDomain: "atlantis-software.net"}}}}}}
+	other := &domain.Analysis{Package: &domain.Package{PURL: otherPURL, Ecosystem: "npm", Version: "1.0.0"}, ReleaseHistory: &domain.ReleaseHistory{Registry: domain.RegistryNpm, PublisherHistory: domain.PublisherPackageHistory{Latest: map[string][]domain.PublisherPublish{"atiertant": {{Package: "example", Version: "1.0.0", PublishedAt: newer, EmailDomain: "example.com", RegistrableDomain: "example.com"}}}}}}
+	s := NewAnalysisService(&fakeAnalysisSource{analyses: map[string]*domain.Analysis{purl: a, otherPURL: other}})
+	factory, _ := newFakeEOLFactory(map[string]domain.EOLStatus{})
+	s.newEOLEvaluator = factory
+	s.maintainerDomainChecker = &fakeMaintainerDomainChecker{registered: registered}
+	if _, err := s.ProcessBatchPURLs(context.Background(), []string{purl, otherPURL}); err != nil {
+		t.Fatal(err)
+	}
+	if a.MaintainerDomain == nil || len(a.MaintainerDomain.Flagged()) != 1 {
+		t.Fatalf("findings=%+v", a.MaintainerDomain)
+	}
+	e := a.MaintainerDomain.Flagged()[0].PublisherEmailEvidence
+	if e == nil || e.Status != "observed" || e.DomainRelation != "different" || e.RegistrationRelation != "after" || e.LatestObserved == nil || e.LatestObserved.Package != "example" {
+		t.Fatalf("evidence=%+v", e)
+	}
+}

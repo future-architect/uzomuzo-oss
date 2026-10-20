@@ -160,6 +160,8 @@ type MaintainerDomainFinding struct {
 	Reason    MaintainerDomainReason
 	Registrar string
 	DropCatch bool
+	// PublisherEmailEvidence is the npm publisher e-mail evidence, when collected.
+	PublisherEmailEvidence *PublisherEmailEvidence
 }
 
 // IsDropCatchRegistrar identifies known drop-catch registrar names by prefix.
@@ -215,6 +217,7 @@ func maintainerDomainNotice(f MaintainerDomainFinding) string {
 		who = "maintainer " + f.Account
 	}
 	const action = " Ask the maintainer to confirm the account e-mail and 2FA."
+	clause := publisherNoticeClause(f.PublisherEmailEvidence)
 	switch f.Kind {
 	case MaintainerDomainReregisteredBefore:
 		registrar := ""
@@ -224,11 +227,32 @@ func maintainerDomainNotice(f MaintainerDomainFinding) string {
 				registrar += " (a drop-catch registrar)"
 			}
 		}
-		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever now holds %s (registered %s%s, after the address first appeared %s).%s", who, f.Domain, f.Registered.UTC().Format(time.DateOnly), registrar, f.FirstSeen.UTC().Format(time.DateOnly), action)
+		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever now holds %s (registered %s%s, after the address first appeared %s).%s%s", who, f.Domain, f.Registered.UTC().Format(time.DateOnly), registrar, f.FirstSeen.UTC().Format(time.DateOnly), action, clause)
 	case MaintainerDomainLapsing:
-		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever registers %s next (the domain is being deleted).%s", who, f.Domain, action)
+		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever registers %s next (the domain is being deleted).%s%s", who, f.Domain, action, clause)
 	case MaintainerDomainUnregistered:
-		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever registers %s (RDAP has no registration).%s", who, f.Domain, action)
+		return fmt.Sprintf("if %s still uses this address, npm password-reset mail may reach whoever registers %s (RDAP has no registration).%s%s", who, f.Domain, action, clause)
+	default:
+		return ""
+	}
+}
+
+func publisherNoticeClause(e *PublisherEmailEvidence) string {
+	if e == nil {
+		return ""
+	}
+	if e.Status != "observed" || e.LatestObserved == nil {
+		return ""
+	}
+	if e.NewerPublishUnknown {
+		return " A newer publish exists whose publisher is not visible."
+	}
+	day := e.LatestObserved.PublishedAt.UTC().Format(time.DateOnly)
+	switch e.DomainRelation {
+	case "same":
+		return " The account's latest publish seen in this scan (" + day + ") still used this domain."
+	case "different":
+		return " The account's latest publish seen in this scan (" + day + ") used another domain."
 	default:
 		return ""
 	}

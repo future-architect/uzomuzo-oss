@@ -38,6 +38,8 @@ type ReleaseHistory struct {
 	// Maintainers lists the packument's current top-level maintainers, each
 	// with the earliest publish time of a version that names its address.
 	Maintainers []MaintainerAddress
+	// PublisherHistory summarizes visible publishers and hidden version times.
+	PublisherHistory PublisherPackageHistory
 }
 
 // DormantBurst describes a release that came out after a long silence, together

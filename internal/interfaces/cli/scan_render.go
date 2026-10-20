@@ -540,13 +540,14 @@ type maintainerDomainUncheckedJSON struct {
 // maintainerDomainFindingJSON omits registered when RDAP gave no registration
 // date (unregistered, and lapsing without a date).
 type maintainerDomainFindingJSON struct {
-	Account    string                      `json:"account"`
-	Domain     string                      `json:"domain"`
-	Kind       domain.MaintainerDomainKind `json:"kind"`
-	FirstSeen  time.Time                   `json:"first_seen"`
-	Registered time.Time                   `json:"registered,omitzero"`
-	Registrar  string                      `json:"registrar,omitempty"`
-	DropCatch  bool                        `json:"drop_catch"`
+	Account                string                         `json:"account"`
+	Domain                 string                         `json:"domain"`
+	Kind                   domain.MaintainerDomainKind    `json:"kind"`
+	FirstSeen              time.Time                      `json:"first_seen"`
+	Registered             time.Time                      `json:"registered,omitzero"`
+	Registrar              string                         `json:"registrar,omitempty"`
+	DropCatch              bool                           `json:"drop_catch"`
+	PublisherEmailEvidence *domain.PublisherEmailEvidence `json:"publisher_email_evidence,omitempty"`
 }
 
 type enrichedJSONOutput struct {
@@ -637,7 +638,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 			case f.Kind == domain.MaintainerDomainLookupFailed:
 				m.LookupFailed++
 			case f.Kind.WarrantsNotice():
-				m.Flagged = append(m.Flagged, maintainerDomainFindingJSON{Account: f.Account, Domain: f.Domain, Kind: f.Kind, FirstSeen: f.FirstSeen, Registered: f.Registered, Registrar: f.Registrar, DropCatch: f.DropCatch})
+				m.Flagged = append(m.Flagged, maintainerDomainFindingJSON{Account: f.Account, Domain: f.Domain, Kind: f.Kind, FirstSeen: f.FirstSeen, Registered: f.Registered, Registrar: f.Registrar, DropCatch: f.DropCatch, PublisherEmailEvidence: f.PublisherEmailEvidence})
 			}
 		}
 		je.MaintainerDomain = m

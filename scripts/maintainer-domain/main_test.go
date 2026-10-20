@@ -57,6 +57,10 @@ func TestIncidentUsesPrecedingManifestAndFirstAppearance(t *testing.T) {
 	if r.missing != "" || len(r.findings) != 1 || r.findings[0].Kind != analysis.MaintainerDomainReregisteredBefore || !r.findings[0].FirstSeen.Equal(time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("row=%+v", r)
 	}
+	e := r.findings[0].PublisherEmailEvidence
+	if e == nil || e.Status != "observed" || e.DomainRelation != "same" || e.RegistrationRelation != "before" || e.NewerPublishUnknown || e.LatestObserved == nil || e.LatestObserved.Version != "12.0.0" {
+		t.Fatalf("publisher evidence=%+v latest=%+v", e, e.LatestObserved)
+	}
 }
 
 // TestLockfileCountsUniqueNamesAndNotices checks lockfile deduplication.
@@ -102,7 +106,7 @@ func TestWriteRowsPrivateAndRectangular(t *testing.T) {
 	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	rows := []row{{scope: "cases", name: "node-ipc", missing: "packument_unavailable"}, {scope: "cases", name: "example", findings: []analysis.MaintainerDomainFinding{{Kind: analysis.MaintainerDomainReregisteredBefore, Registrar: "DropCatch.com 538 LLC", DropCatch: true}}}}
+	rows := []row{{scope: "cases", name: "node-ipc", missing: "packument_unavailable"}, {scope: "cases", name: "example", findings: []analysis.MaintainerDomainFinding{{Kind: analysis.MaintainerDomainReregisteredBefore, Registrar: "DropCatch.com 538 LLC", DropCatch: true, PublisherEmailEvidence: &analysis.PublisherEmailEvidence{Status: "observed", Source: "versions._npmUser", Scope: "scan_packuments", DomainRelation: "same", RegistrationRelation: "before", LatestObserved: &analysis.PublisherLatestObserved{Package: "node-ipc", Version: "12.0.0", EmailDomain: "atlantis-software.net"}}}}}}
 	if err := writeRows(path, rows); err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +120,7 @@ func TestWriteRowsPrivateAndRectangular(t *testing.T) {
 	}
 	defer func() { _ = f.Close() }()
 	records, err := csv.NewReader(f).ReadAll()
-	if err != nil || len(records) != 3 || len(records[0]) != 12 || records[2][10] != "DropCatch.com 538 LLC" || records[2][11] != "true" {
+	if err != nil || len(records) != 3 || len(records[0]) != 23 || len(records[1]) != 23 || len(records[2]) != 23 || records[2][10] != "DropCatch.com 538 LLC" || records[2][11] != "true" || records[2][12] != "observed" || records[2][17] != "node-ipc" || records[2][19] != "atlantis-software.net" {
 		t.Fatalf("records=%v err=%v", records, err)
 	}
 	// Unknown times (row date, first_seen, registered) are empty cells, not year 1.

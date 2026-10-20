@@ -65,6 +65,11 @@ func (s *IntegrationService) enrichReleaseHistory(ctx context.Context, analyses 
 		cp.PublishedAt = maps.Clone(h.PublishedAt)
 		cp.Installable = maps.Clone(h.Installable)
 		cp.Maintainers = slices.Clone(h.Maintainers)
+		cp.PublisherHistory.Latest = make(map[string][]domain.PublisherPublish, len(h.PublisherHistory.Latest))
+		for account, publishes := range h.PublisherHistory.Latest {
+			cp.PublisherHistory.Latest[account] = slices.Clone(publishes)
+		}
+		cp.PublisherHistory.HiddenPublishedAt = slices.Clone(h.PublisherHistory.HiddenPublishedAt)
 		a.ReleaseHistory = &cp
 	})
 }
@@ -85,9 +90,10 @@ func (s *IntegrationService) fetchNpmReleaseHistory(ctx context.Context, fullNam
 		maintainers = append(maintainers, domain.MaintainerAddress{Account: domain.StripControlRunes(p.Name), Email: p.Email, FirstSeen: h.FirstSeen[domain.NormalizeEmail(p.Email)]})
 	}
 	return &domain.ReleaseHistory{
-		Registry:    domain.RegistryNpm,
-		PublishedAt: h.PublishedAt,
-		Installable: h.Installable,
-		Maintainers: maintainers,
+		Registry:         domain.RegistryNpm,
+		PublishedAt:      h.PublishedAt,
+		Installable:      h.Installable,
+		Maintainers:      maintainers,
+		PublisherHistory: h.PublisherHistory,
 	}, true, nil
 }

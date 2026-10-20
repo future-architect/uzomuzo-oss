@@ -16,6 +16,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/common/links"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rdap"
 )
 
 // Client is a minimal npm registry client used to resolve repository URLs.
@@ -344,6 +345,9 @@ type PublishHistory struct {
 	// VersionPublisher maps version to its "_npmUser". It is nil unless the
 	// history was built by ParsePublishHistoryWithVersions.
 	VersionPublisher map[string]Person
+	// PublisherHistory summarizes each publisher account's latest dated
+	// publishes and the publish times of versions the registry no longer serves.
+	PublisherHistory analysis.PublisherPackageHistory
 }
 
 // Person holds a maintainer or publisher identity from an npm packument.
@@ -417,6 +421,14 @@ func (c *Client) GetPublishHistory(ctx context.Context, fullName string) (*Publi
 	if err != nil {
 		return nil, false, fmt.Errorf("npm packument %q: %w", fullName, err)
 	}
+	for account, publishes := range h.PublisherHistory.Latest {
+		for i := range publishes {
+			if publishes[i].Package == "" {
+				publishes[i].Package = fullName
+			}
+		}
+		h.PublisherHistory.Latest[account] = publishes
+	}
 	return h, true, nil
 }
 
@@ -471,6 +483,7 @@ func decodePublishHistory(r io.Reader, retainVersions bool) (*PublishHistory, er
 		NPMUser     json.RawMessage `json:"_npmUser"`
 	}
 	var doc struct {
+		Name        string                      `json:"name"`
 		Time        map[string]json.RawMessage  `json:"time"`
 		Versions    map[string]manifestIdentity `json:"versions"`
 		Maintainers json.RawMessage             `json:"maintainers"`
@@ -522,8 +535,16 @@ func decodePublishHistory(r io.Reader, retainVersions bool) (*PublishHistory, er
 		if at.IsZero() {
 			continue
 		}
+		if publisher.Name != "" {
+			h.PublisherHistory.AddPublisherPublish(publisher.Name, publisherPublish(doc.Name, v, at, publisher.Email))
+		}
 		recordFirstSeen(h.FirstSeen, at, people...)
 		recordFirstSeen(h.FirstSeen, at, publisher)
+	}
+	for v, at := range h.PublishedAt {
+		if _, visible := h.Installable[v]; !visible {
+			h.PublisherHistory.HiddenPublishedAt = append(h.PublisherHistory.HiddenPublishedAt, at)
+		}
 	}
 	return h, nil
 }
@@ -537,6 +558,45 @@ func recordFirstSeen(m map[string]time.Time, at time.Time, people ...Person) {
 			m[email] = at.UTC()
 		}
 	}
+}
+
+func publisherEmailDomain(email string) string {
+	email = analysis.NormalizeEmail(email)
+	at := strings.LastIndexByte(email, '@')
+	if at < 0 || at == len(email)-1 {
+		return ""
+	}
+	return email[at+1:]
+}
+
+func publisherPublish(packageName, version string, at time.Time, email string) analysis.PublisherPublish {
+	domain := publisherEmailDomain(email)
+	registrable, _ := rdap.Registrable(domain)
+	return analysis.PublisherPublish{Package: packageName, Version: version, PublishedAt: at, EmailDomain: domain, RegistrableDomain: registrable}
+}
+
+// PublisherHistoryBefore builds a summary using only publishes before cutoff.
+func (h *PublishHistory) PublisherHistoryBefore(packageName string, cutoff time.Time) analysis.PublisherPackageHistory {
+	var out analysis.PublisherPackageHistory
+	if h == nil {
+		return out
+	}
+	for version, publisher := range h.VersionPublisher {
+		at := h.PublishedAt[version]
+		if at.IsZero() || !at.Before(cutoff) {
+			continue
+		}
+		out.AddPublisherPublish(publisher.Name, publisherPublish(packageName, version, at, publisher.Email))
+	}
+	for version, at := range h.PublishedAt {
+		if at.IsZero() || !at.Before(cutoff) {
+			continue
+		}
+		if _, visible := h.Installable[version]; !visible {
+			out.HiddenPublishedAt = append(out.HiddenPublishedAt, at)
+		}
+	}
+	return out
 }
 
 func decodePeople(raw json.RawMessage) []Person {

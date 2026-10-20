@@ -380,7 +380,11 @@ func (c *command) incidentRow(ctx context.Context, scope, name string, versions 
 	}
 	firstSeen := h.FirstSeenBefore(r.at)
 	for _, p := range people {
-		r.findings = append(r.findings, c.rdap.Check(ctx, analysis.MaintainerAddress{Account: p.Name, Email: p.Email, FirstSeen: firstSeen[analysis.NormalizeEmail(p.Email)]}, r.at))
+		finding := c.rdap.Check(ctx, analysis.MaintainerAddress{Account: p.Name, Email: p.Email, FirstSeen: firstSeen[analysis.NormalizeEmail(p.Email)]}, r.at)
+		if finding.Kind.WarrantsNotice() {
+			finding.PublisherEmailEvidence = analysis.PublisherEmailEvidenceFor(finding, []analysis.PublisherPackageHistory{h.PublisherHistoryBefore(name, r.at)})
+		}
+		r.findings = append(r.findings, finding)
 	}
 	return r
 }
@@ -469,18 +473,18 @@ func writeRows(path string, rows []row) (err error) {
 		return fmt.Errorf("restrict results CSV %q: %w", path, err)
 	}
 	w := csv.NewWriter(f)
-	if err := w.Write([]string{"scope", "package", "date", "missing", "account", "domain", "kind", "first_seen", "registered", "reason", "registrar", "drop_catch"}); err != nil {
+	if err := w.Write([]string{"scope", "package", "date", "missing", "account", "domain", "kind", "first_seen", "registered", "reason", "registrar", "drop_catch", "publisher_status", "publisher_source", "publisher_scope", "account_history_complete", "publisher_published_at", "publisher_package", "publisher_version", "publisher_email_domain", "publisher_domain_relation", "publisher_registration_relation", "newer_publish_unknown"}); err != nil {
 		return fmt.Errorf("write results CSV header: %w", err)
 	}
 	for _, r := range rows {
 		if len(r.findings) == 0 {
-			if err := w.Write([]string{r.scope, packageCell(r.name), formatTime(r.at), r.missing, "", "", "", "", "", "", "", ""}); err != nil {
+			if err := w.Write(append([]string{r.scope, packageCell(r.name), formatTime(r.at), r.missing, "", "", "", "", "", "", "", ""}, make([]string, 11)...)); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 			continue
 		}
 		for _, finding := range r.findings {
-			if err := w.Write([]string{r.scope, packageCell(r.name), formatTime(r.at), r.missing, csvCell(finding.Account), csvCell(finding.Domain), string(finding.Kind), formatTime(finding.FirstSeen), formatTime(finding.Registered), string(finding.Reason), csvCell(finding.Registrar), fmt.Sprint(finding.DropCatch)}); err != nil {
+			if err := w.Write(append([]string{r.scope, packageCell(r.name), formatTime(r.at), r.missing, csvCell(finding.Account), csvCell(finding.Domain), string(finding.Kind), formatTime(finding.FirstSeen), formatTime(finding.Registered), string(finding.Reason), csvCell(finding.Registrar), fmt.Sprint(finding.DropCatch)}, publisherCSVFields(finding.PublisherEmailEvidence)...)); err != nil {
 				return fmt.Errorf("write results CSV row for %q: %w", r.name, err)
 			}
 		}
@@ -520,6 +524,19 @@ func formatTime(t time.Time) string {
 		return ""
 	}
 	return t.Format(time.RFC3339)
+}
+
+func publisherCSVFields(e *analysis.PublisherEmailEvidence) []string {
+	fields := make([]string, 11)
+	if e == nil {
+		return fields
+	}
+	fields[0], fields[1], fields[2], fields[3] = e.Status, e.Source, e.Scope, fmt.Sprint(e.AccountHistoryComplete)
+	if e.LatestObserved != nil {
+		fields[4], fields[5], fields[6], fields[7] = formatTime(e.LatestObserved.PublishedAt), packageCell(e.LatestObserved.Package), csvCell(e.LatestObserved.Version), csvCell(e.LatestObserved.EmailDomain)
+	}
+	fields[8], fields[9], fields[10] = e.DomainRelation, e.RegistrationRelation, fmt.Sprint(e.NewerPublishUnknown)
+	return fields
 }
 
 func printSummary(out io.Writer, rows []row) error {
