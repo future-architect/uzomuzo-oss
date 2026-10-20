@@ -27,16 +27,45 @@ type PublisherLatestObserved struct {
 	EmailDomain string    `json:"email_domain,omitempty"`
 }
 
+// PublisherEmailStatus describes whether the latest visible publisher e-mail is usable.
+type PublisherEmailStatus string
+
+const (
+	PublisherEmailNotObserved PublisherEmailStatus = "not_observed"
+	PublisherEmailObserved    PublisherEmailStatus = "observed"
+	PublisherEmailMissing     PublisherEmailStatus = "email_missing"
+	PublisherEmailConflicting PublisherEmailStatus = "conflicting"
+)
+
+// PublisherDomainRelation compares the visible e-mail domain with the finding domain.
+type PublisherDomainRelation string
+
+const (
+	PublisherDomainUnknown   PublisherDomainRelation = "unknown"
+	PublisherDomainSame      PublisherDomainRelation = "same"
+	PublisherDomainDifferent PublisherDomainRelation = "different"
+)
+
+// PublisherRegistrationRelation compares the visible publish with registration.
+type PublisherRegistrationRelation string
+
+const (
+	PublisherRegistrationUnknown PublisherRegistrationRelation = "unknown"
+	PublisherRegistrationBefore  PublisherRegistrationRelation = "before"
+	PublisherRegistrationEqual   PublisherRegistrationRelation = "equal"
+	PublisherRegistrationAfter   PublisherRegistrationRelation = "after"
+)
+
 // PublisherEmailEvidence describes limited publisher e-mail evidence from this scan.
 type PublisherEmailEvidence struct {
-	Status                 string                   `json:"status"`
-	Source                 string                   `json:"source"`
-	Scope                  string                   `json:"scope"`
-	AccountHistoryComplete bool                     `json:"account_history_complete"`
-	LatestObserved         *PublisherLatestObserved `json:"latest_observed,omitempty"`
-	DomainRelation         string                   `json:"domain_relation"`
-	RegistrationRelation   string                   `json:"registration_relation"`
-	NewerPublishUnknown    bool                     `json:"newer_publish_unknown"`
+	Status                 PublisherEmailStatus          `json:"status"`
+	Source                 string                        `json:"source"`
+	Scope                  string                        `json:"scope"`
+	AccountHistoryComplete bool                          `json:"account_history_complete"`
+	LatestObserved         *PublisherLatestObserved      `json:"latest_observed,omitempty"`
+	DomainRelation         PublisherDomainRelation       `json:"domain_relation"`
+	RegistrationRelation   PublisherRegistrationRelation `json:"registration_relation"`
+	NewerPublishUnknown    bool                          `json:"newer_publish_unknown"`
 }
 
 // AddPublisherPublish retains only greatest-time candidates for an account.
@@ -56,8 +85,8 @@ func (h *PublisherPackageHistory) AddPublisherPublish(account string, p Publishe
 }
 
 // PublisherEmailEvidenceFor evaluates one finding without changing its classification.
-func PublisherEmailEvidenceFor(f MaintainerDomainFinding, histories []PublisherPackageHistory) *PublisherEmailEvidence {
-	e := &PublisherEmailEvidence{Status: "not_observed", Source: "versions._npmUser", Scope: "scan_packuments", DomainRelation: "unknown", RegistrationRelation: "unknown"}
+func PublisherEmailEvidenceFor(f MaintainerDomainFinding, source PublisherPackageHistory, histories []PublisherPackageHistory) *PublisherEmailEvidence {
+	e := &PublisherEmailEvidence{Status: PublisherEmailNotObserved, Source: "versions._npmUser", Scope: "scan_packuments", DomainRelation: PublisherDomainUnknown, RegistrationRelation: PublisherRegistrationUnknown}
 	var latest []PublisherPublish
 	for _, h := range histories {
 		for _, p := range h.Latest[f.Account] {
@@ -82,18 +111,18 @@ func PublisherEmailEvidenceFor(f MaintainerDomainFinding, histories []PublisherP
 		domains[p.EmailDomain] = true
 	}
 	if len(domains) > 1 {
-		e.Status = "conflicting"
+		e.Status = PublisherEmailConflicting
 	} else {
 		e.LatestObserved = &PublisherLatestObserved{PublishedAt: latest[0].PublishedAt, Package: latest[0].Package, Version: latest[0].Version, EmailDomain: latest[0].EmailDomain}
 		if latest[0].EmailDomain == "" {
-			e.Status = "email_missing"
+			e.Status = PublisherEmailMissing
 		} else {
-			e.Status = "observed"
+			e.Status = PublisherEmailObserved
 			if latest[0].RegistrableDomain != "" && f.Domain != "" {
 				if latest[0].RegistrableDomain == f.Domain {
-					e.DomainRelation = "same"
+					e.DomainRelation = PublisherDomainSame
 				} else {
-					e.DomainRelation = "different"
+					e.DomainRelation = PublisherDomainDifferent
 				}
 			}
 		}
@@ -101,11 +130,17 @@ func PublisherEmailEvidenceFor(f MaintainerDomainFinding, histories []PublisherP
 	if f.Kind == MaintainerDomainReregisteredBefore && !f.Registered.IsZero() {
 		switch {
 		case latest[0].PublishedAt.Before(f.Registered):
-			e.RegistrationRelation = "before"
+			e.RegistrationRelation = PublisherRegistrationBefore
 		case latest[0].PublishedAt.After(f.Registered):
-			e.RegistrationRelation = "after"
+			e.RegistrationRelation = PublisherRegistrationAfter
 		default:
-			e.RegistrationRelation = "equal"
+			e.RegistrationRelation = PublisherRegistrationEqual
+		}
+	}
+	for _, at := range source.HiddenPublishedAt {
+		if at.After(latest[0].PublishedAt) {
+			e.NewerPublishUnknown = true
+			return e
 		}
 	}
 	for _, h := range histories {

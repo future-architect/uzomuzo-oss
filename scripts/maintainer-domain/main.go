@@ -382,7 +382,8 @@ func (c *command) incidentRow(ctx context.Context, scope, name string, versions 
 	for _, p := range people {
 		finding := c.rdap.Check(ctx, analysis.MaintainerAddress{Account: p.Name, Email: p.Email, FirstSeen: firstSeen[analysis.NormalizeEmail(p.Email)]}, r.at)
 		if finding.Kind.WarrantsNotice() {
-			finding.PublisherEmailEvidence = analysis.PublisherEmailEvidenceFor(finding, []analysis.PublisherPackageHistory{h.PublisherHistoryBefore(name, r.at)})
+			source := h.PublisherHistoryBefore(name, r.at)
+			finding.PublisherEmailEvidence = analysis.PublisherEmailEvidenceFor(finding, source, []analysis.PublisherPackageHistory{source})
 		}
 		r.findings = append(r.findings, finding)
 	}
@@ -531,11 +532,11 @@ func publisherCSVFields(e *analysis.PublisherEmailEvidence) []string {
 	if e == nil {
 		return fields
 	}
-	fields[0], fields[1], fields[2], fields[3] = e.Status, e.Source, e.Scope, fmt.Sprint(e.AccountHistoryComplete)
+	fields[0], fields[1], fields[2], fields[3] = string(e.Status), e.Source, e.Scope, fmt.Sprint(e.AccountHistoryComplete)
 	if e.LatestObserved != nil {
 		fields[4], fields[5], fields[6], fields[7] = formatTime(e.LatestObserved.PublishedAt), packageCell(e.LatestObserved.Package), csvCell(e.LatestObserved.Version), csvCell(e.LatestObserved.EmailDomain)
 	}
-	fields[8], fields[9], fields[10] = e.DomainRelation, e.RegistrationRelation, fmt.Sprint(e.NewerPublishUnknown)
+	fields[8], fields[9], fields[10] = string(e.DomainRelation), string(e.RegistrationRelation), fmt.Sprint(e.NewerPublishUnknown)
 	return fields
 }
 

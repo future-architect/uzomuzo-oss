@@ -165,7 +165,27 @@ func TestMaintainerDomainPublisherEvidenceUsesAllFetchedPackuments(t *testing.T)
 		t.Fatalf("findings=%+v", a.MaintainerDomain)
 	}
 	e := a.MaintainerDomain.Flagged()[0].PublisherEmailEvidence
-	if e == nil || e.Status != "observed" || e.DomainRelation != "different" || e.RegistrationRelation != "after" || e.LatestObserved == nil || e.LatestObserved.Package != "example" {
+	if e == nil || e.Status != domain.PublisherEmailObserved || e.DomainRelation != domain.PublisherDomainDifferent || e.RegistrationRelation != domain.PublisherRegistrationAfter || e.LatestObserved == nil || e.LatestObserved.Package != "example" {
 		t.Fatalf("evidence=%+v", e)
+	}
+}
+
+func TestMaintainerDomainPublisherEvidenceUsesHiddenFindingSource(t *testing.T) {
+	first := time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)
+	visible := time.Date(2024, 8, 12, 0, 0, 0, 0, time.UTC)
+	purl := "pkg:npm/node-ipc@12.0.0"
+	otherPURL := "pkg:npm/example@1.0.0"
+	a := &domain.Analysis{Package: &domain.Package{PURL: purl, Ecosystem: "npm", Version: "12.0.0"}, ReleaseHistory: &domain.ReleaseHistory{Registry: domain.RegistryNpm, Maintainers: []domain.MaintainerAddress{{Account: "atiertant", Email: "a@atlantis-software.net", FirstSeen: first}}, PublisherHistory: domain.PublisherPackageHistory{HiddenPublishedAt: []time.Time{visible.Add(time.Hour)}}}}
+	other := &domain.Analysis{Package: &domain.Package{PURL: otherPURL, Ecosystem: "npm", Version: "1.0.0"}, ReleaseHistory: &domain.ReleaseHistory{Registry: domain.RegistryNpm, PublisherHistory: domain.PublisherPackageHistory{Latest: map[string][]domain.PublisherPublish{"atiertant": {{Package: "example", Version: "1.0.0", PublishedAt: visible, EmailDomain: "atlantis-software.net", RegistrableDomain: "atlantis-software.net"}}}}}}
+	s := NewAnalysisService(&fakeAnalysisSource{analyses: map[string]*domain.Analysis{purl: a, otherPURL: other}})
+	factory, _ := newFakeEOLFactory(map[string]domain.EOLStatus{})
+	s.newEOLEvaluator = factory
+	s.maintainerDomainChecker = &fakeMaintainerDomainChecker{registered: first.Add(time.Hour)}
+	if _, err := s.ProcessBatchPURLs(context.Background(), []string{purl, otherPURL}); err != nil {
+		t.Fatal(err)
+	}
+	findings := a.MaintainerDomain.Flagged()
+	if len(findings) != 1 || findings[0].PublisherEmailEvidence == nil || !findings[0].PublisherEmailEvidence.NewerPublishUnknown {
+		t.Fatalf("findings=%+v", findings)
 	}
 }

@@ -58,7 +58,7 @@ func TestIncidentUsesPrecedingManifestAndFirstAppearance(t *testing.T) {
 		t.Errorf("row=%+v", r)
 	}
 	e := r.findings[0].PublisherEmailEvidence
-	if e == nil || e.Status != "observed" || e.DomainRelation != "same" || e.RegistrationRelation != "before" || e.NewerPublishUnknown || e.LatestObserved == nil || e.LatestObserved.Version != "12.0.0" {
+	if e == nil || e.Status != analysis.PublisherEmailObserved || e.DomainRelation != analysis.PublisherDomainSame || e.RegistrationRelation != analysis.PublisherRegistrationBefore || e.NewerPublishUnknown || e.LatestObserved == nil || e.LatestObserved.Version != "12.0.0" {
 		t.Fatalf("publisher evidence=%+v latest=%+v", e, e.LatestObserved)
 	}
 }
@@ -106,7 +106,7 @@ func TestWriteRowsPrivateAndRectangular(t *testing.T) {
 	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	rows := []row{{scope: "cases", name: "node-ipc", missing: "packument_unavailable"}, {scope: "cases", name: "example", findings: []analysis.MaintainerDomainFinding{{Kind: analysis.MaintainerDomainReregisteredBefore, Registrar: "DropCatch.com 538 LLC", DropCatch: true, PublisherEmailEvidence: &analysis.PublisherEmailEvidence{Status: "observed", Source: "versions._npmUser", Scope: "scan_packuments", DomainRelation: "same", RegistrationRelation: "before", LatestObserved: &analysis.PublisherLatestObserved{Package: "node-ipc", Version: "12.0.0", EmailDomain: "atlantis-software.net"}}}}}}
+	rows := []row{{scope: "cases", name: "node-ipc", missing: "packument_unavailable"}, {scope: "cases", name: "example", findings: []analysis.MaintainerDomainFinding{{Kind: analysis.MaintainerDomainReregisteredBefore, Registrar: "DropCatch.com 538 LLC", DropCatch: true, PublisherEmailEvidence: &analysis.PublisherEmailEvidence{Status: analysis.PublisherEmailObserved, Source: "versions._npmUser", Scope: "scan_packuments", DomainRelation: analysis.PublisherDomainSame, RegistrationRelation: analysis.PublisherRegistrationBefore, LatestObserved: &analysis.PublisherLatestObserved{Package: "node-ipc", Version: "12.0.0", EmailDomain: "atlantis-software.net"}}}}}}
 	if err := writeRows(path, rows); err != nil {
 		t.Fatal(err)
 	}

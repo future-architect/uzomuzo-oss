@@ -241,7 +241,7 @@ func publisherNoticeClause(e *PublisherEmailEvidence) string {
 	if e == nil {
 		return ""
 	}
-	if e.Status != "observed" || e.LatestObserved == nil {
+	if e.Status != PublisherEmailObserved || e.LatestObserved == nil {
 		return ""
 	}
 	if e.NewerPublishUnknown {
@@ -249,9 +249,9 @@ func publisherNoticeClause(e *PublisherEmailEvidence) string {
 	}
 	day := e.LatestObserved.PublishedAt.UTC().Format(time.DateOnly)
 	switch e.DomainRelation {
-	case "same":
+	case PublisherDomainSame:
 		return " The account's latest publish seen in this scan (" + day + ") still used this domain."
-	case "different":
+	case PublisherDomainDifferent:
 		return " The account's latest publish seen in this scan (" + day + ") used another domain."
 	default:
 		return ""
