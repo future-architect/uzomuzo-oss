@@ -5,12 +5,52 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestParsePublishHistoryMaintainers(t *testing.T) {
+	t.Parallel()
+	f, err := os.Open(filepath.Join("testdata", "node-ipc-maintainers.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	h, err := parsePublishHistory(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2020, 11, 11, 0, 0, 0, 0, time.UTC)
+	if got := h.FirstSeen["a.tiertant@atlantis-software.net"]; !got.Equal(want) {
+		t.Errorf("first seen=%s, want %s", got, want)
+	}
+	if len(h.Maintainers) != 2 || h.Maintainers[0].Name != "atiertant" {
+		t.Errorf("maintainers=%+v", h.Maintainers)
+	}
+	if _, ok := h.FirstSeen["new@example.com"]; ok {
+		t.Error("version without time counted")
+	}
+	before := h.FirstSeenBefore(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	if !before["a.tiertant@atlantis-software.net"].Equal(want) {
+		t.Errorf("before=%v", before)
+	}
+}
+
+func TestParsePublishHistoryLegacyMaintainerShapes(t *testing.T) {
+	t.Parallel()
+	const raw = `{"time":{"1.0.0":"2020-01-01T00:00:00Z"},"maintainers":"legacy","versions":{"1.0.0":{"maintainers":"legacy","_npmUser":"legacy"}}}`
+	h, err := parsePublishHistory(strings.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(h.Maintainers) != 0 || len(h.FirstSeen) != 0 || len(h.PublishedAt) != 1 {
+		t.Errorf("history=%+v", h)
+	}
+}
 
 // TestGetPublishHistory covers a removed version, malformed time entries, a
 // scoped name and a missing package.

@@ -81,7 +81,8 @@ type Analysis struct {
 	// package, including removed ones. Read against Package.Version to detect a
 	// return from a long silence (see DetectDormantBurst and
 	// DetectFreshDormantRelease).
-	ReleaseHistory *ReleaseHistory
+	ReleaseHistory   *ReleaseHistory
+	MaintainerDomain *MaintainerDomainResult
 
 	// DormantRelease is set when the analysed version is a release that
 	// followed a long silence. Filled after enrichment by

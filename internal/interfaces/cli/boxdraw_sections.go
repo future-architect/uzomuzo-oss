@@ -306,6 +306,7 @@ func writeBoxOrigin(ctx *boxContext) error {
 // dormantReleasePrefix starts the line that shows the dormant-release marker
 // (ADR-0028) in the detailed view.
 const dormantReleasePrefix = "⚠ Release after silence:"
+const maintainerDomainPrefix = "⚠ Maintainer domain:"
 
 // writeBoxVerdict writes lifecycle verdict inline (no section bar).
 // Format: "icon Label: reason" on a single line (word-wrapped if long).
@@ -322,6 +323,11 @@ func writeBoxVerdict(ctx *boxContext) error {
 	}
 	if notice := ctx.analysis.DormantReleaseNotice(); notice != "" {
 		if err := writeLine(ctx, "%s %s", dormantReleasePrefix, notice); err != nil {
+			return err
+		}
+	}
+	if notice := ctx.analysis.MaintainerDomainNotice(); notice != "" {
+		if err := writeLine(ctx, "%s %s", maintainerDomainPrefix, notice); err != nil {
 			return err
 		}
 	}

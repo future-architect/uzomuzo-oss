@@ -464,15 +464,16 @@ func buildIntegrityDisplay(a *domain.Analysis, verdict domainaudit.Verdict) stri
 
 // enrichedJSONEntry is the DTO for --format json with full analysis data.
 type enrichedJSONEntry struct {
-	PURL                string         `json:"purl"`
-	Verdict             string         `json:"verdict"`
-	Lifecycle           string         `json:"lifecycle"`
-	Malicious           *maliciousJSON `json:"malicious,omitempty"`
-	MaliciousCheck      string         `json:"malicious_check,omitempty"`
-	DormantRelease      *dormantJSON   `json:"dormant_release,omitempty"`
-	BuildIntegrity      string         `json:"build_integrity,omitempty"`
-	BuildIntegrityScore *float64       `json:"build_integrity_score,omitempty"`
-	Successor           string         `json:"successor,omitempty"`
+	PURL                string                `json:"purl"`
+	Verdict             string                `json:"verdict"`
+	Lifecycle           string                `json:"lifecycle"`
+	Malicious           *maliciousJSON        `json:"malicious,omitempty"`
+	MaliciousCheck      string                `json:"malicious_check,omitempty"`
+	DormantRelease      *dormantJSON          `json:"dormant_release,omitempty"`
+	MaintainerDomain    *maintainerDomainJSON `json:"maintainer_domain,omitempty"`
+	BuildIntegrity      string                `json:"build_integrity,omitempty"`
+	BuildIntegrityScore *float64              `json:"build_integrity_score,omitempty"`
+	Successor           string                `json:"successor,omitempty"`
 
 	RepoURL        string  `json:"repo_url,omitempty"`
 	Archived       bool    `json:"archived"`
@@ -519,6 +520,27 @@ type dormantJSON struct {
 	Lines         []string                  `json:"lines"`
 	Removed       bool                      `json:"removed"`
 	Until         time.Time                 `json:"until"`
+}
+
+type maintainerDomainJSON struct {
+	Flagged           []maintainerDomainFindingJSON   `json:"flagged"`
+	Unchecked         int                             `json:"unchecked"`
+	LookupFailed      int                             `json:"lookup_failed"`
+	UncheckedFindings []maintainerDomainUncheckedJSON `json:"unchecked_findings,omitempty"`
+}
+
+type maintainerDomainUncheckedJSON struct {
+	Account string `json:"account"`
+	Domain  string `json:"domain"`
+	Reason  string `json:"reason"`
+}
+
+type maintainerDomainFindingJSON struct {
+	Account    string                      `json:"account"`
+	Domain     string                      `json:"domain"`
+	Kind       domain.MaintainerDomainKind `json:"kind"`
+	FirstSeen  time.Time                   `json:"first_seen"`
+	Registered time.Time                   `json:"registered"`
 }
 
 type enrichedJSONOutput struct {
@@ -587,6 +609,21 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 		d := a.DormantRelease
 		je.DormantRelease = &dormantJSON{Kind: d.Kind, PublishedAt: d.Burst.PublishedAt, SilentDays: d.Burst.SilentDays,
 			BurstVersions: d.Burst.Versions, Lines: d.Burst.Lines, Removed: d.Burst.Removed, Until: d.Until}
+	}
+	if a.MaintainerDomain != nil {
+		m := &maintainerDomainJSON{Flagged: []maintainerDomainFindingJSON{}}
+		for _, f := range a.MaintainerDomain.Findings {
+			switch f.Kind {
+			case domain.MaintainerDomainUnchecked:
+				m.Unchecked++
+				m.UncheckedFindings = append(m.UncheckedFindings, maintainerDomainUncheckedJSON{Account: f.Account, Domain: f.Domain, Reason: f.Reason})
+			case domain.MaintainerDomainLookupFailed:
+				m.LookupFailed++
+			case domain.MaintainerDomainUnregistered, domain.MaintainerDomainLapsing, domain.MaintainerDomainReregisteredBefore:
+				m.Flagged = append(m.Flagged, maintainerDomainFindingJSON{Account: f.Account, Domain: f.Domain, Kind: f.Kind, FirstSeen: f.FirstSeen, Registered: f.Registered})
+			}
+		}
+		je.MaintainerDomain = m
 	}
 
 	if a.ReleaseInfo != nil {

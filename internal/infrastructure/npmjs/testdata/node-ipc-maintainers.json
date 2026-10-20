@@ -1,0 +1,11 @@
+{
+  "name": "node-ipc",
+  "maintainers": [{"name":"atiertant","email":"A.Tiertant@Atlantis-Software.NET "},{"name":"other","email":"user@example.com"}],
+  "time": {"9.1.2":"2020-11-11T00:00:00Z","12.0.0":"2024-08-12T00:00:00Z","12.0.1":"2026-05-14T14:25:30Z"},
+  "versions": {
+    "9.1.2":{"maintainers":[{"name":"atiertant","email":"a.tiertant@atlantis-software.net"}]},
+    "12.0.0":{"maintainers":[{"name":"atiertant","email":"a.tiertant@atlantis-software.net"}],"_npmUser":{"name":"atiertant","email":"A.Tiertant@Atlantis-Software.NET "}},
+    "12.0.1":{"_npmUser":"atiertant"},
+    "no-time":{"maintainers":[{"name":"other","email":"new@example.com"}]}
+  }
+}

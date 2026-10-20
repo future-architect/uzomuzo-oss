@@ -46,6 +46,7 @@ func scanFlags() []urfcli.Flag {
 
 		// Transitive dependency display
 		&urfcli.BoolFlag{Name: "show-transitive", Usage: "Include transitive dependencies in output (SBOM/go.mod: transitive deps; --include-actions: composite action deps)"},
+		&urfcli.BoolFlag{Name: "maintainer-domain", Usage: "Check npm maintainer e-mail domain registration"},
 
 		// Output filtering
 		&urfcli.StringFlag{Name: "show-only", Usage: "Show only entries with specified verdicts (comma-separated: ok,caution,replace,review). Replace means the dependency should be replaced (EOL, archived, etc.)."},
@@ -248,12 +249,13 @@ func buildScanOptions(cmd *urfcli.Command) (cli.ScanOptions, error) {
 			SampleSize: int(cmd.Int("sample")),
 			Filename:   cmd.String("file"),
 		},
-		Format:         cmd.String("format"),
-		FailOnRaw:      cmd.String("fail-on"),
-		ShowOnlyRaw:    cmd.String("show-only"),
-		SBOMPath:       cmd.String("sbom"),
-		IncludeActions: cmd.Bool("include-actions"),
-		ShowTransitive: cmd.Bool("show-transitive"),
+		Format:           cmd.String("format"),
+		FailOnRaw:        cmd.String("fail-on"),
+		ShowOnlyRaw:      cmd.String("show-only"),
+		SBOMPath:         cmd.String("sbom"),
+		IncludeActions:   cmd.Bool("include-actions"),
+		ShowTransitive:   cmd.Bool("show-transitive"),
+		MaintainerDomain: cmd.Bool("maintainer-domain"),
 	}
 	if raw := cmd.String("line-range"); raw != "" {
 		ls, le, err := cli.ParseLineRange(raw)

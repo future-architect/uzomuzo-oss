@@ -120,7 +120,7 @@ func isWrappableLine(s string) bool {
 		return true
 	case strings.HasPrefix(trimmed, "Catalog Reason:"):
 		return true
-	case strings.HasPrefix(trimmed, dormantReleasePrefix):
+	case strings.HasPrefix(trimmed, dormantReleasePrefix), strings.HasPrefix(trimmed, maintainerDomainPrefix):
 		return true
 	case strings.HasPrefix(trimmed, "Description:"):
 		return true
@@ -348,6 +348,11 @@ func renderBoxEntryError(ctx *boxContext) error {
 	// failed.
 	if notice := ctx.analysis.DormantReleaseNotice(); notice != "" {
 		if err := writeLine(ctx, "%s %s", dormantReleasePrefix, notice); err != nil {
+			return wrap(err)
+		}
+	}
+	if notice := ctx.analysis.MaintainerDomainNotice(); notice != "" {
+		if err := writeLine(ctx, "%s %s", maintainerDomainPrefix, notice); err != nil {
 			return wrap(err)
 		}
 	}

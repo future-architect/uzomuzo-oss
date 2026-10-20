@@ -328,7 +328,41 @@ type PublishHistory struct {
 	PublishedAt map[string]time.Time
 	// Installable holds the versions present in the packument's "versions".
 	// It is nil when "versions" is missing or null, meaning unknown.
-	Installable map[string]struct{}
+	Installable        map[string]struct{}
+	Maintainers        []Person
+	FirstSeen          map[string]time.Time
+	VersionMaintainers map[string][]Person
+	VersionPublisher   map[string]Person
+}
+
+type Person struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// NormalizeEmail matches packument addresses despite surrounding space or case.
+func NormalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
+
+// FirstSeenBefore returns the first dated appearance strictly before cutoff.
+func (h *PublishHistory) FirstSeenBefore(cutoff time.Time) map[string]time.Time {
+	out := make(map[string]time.Time)
+	if h == nil {
+		return out
+	}
+	for version, people := range h.VersionMaintainers {
+		at := h.PublishedAt[version]
+		if at.IsZero() || !at.Before(cutoff) {
+			continue
+		}
+		people = append(append([]Person(nil), people...), h.VersionPublisher[version])
+		for _, p := range people {
+			email := NormalizeEmail(p.Email)
+			if email != "" && (out[email].IsZero() || at.Before(out[email])) {
+				out[email] = at
+			}
+		}
+	}
+	return out
 }
 
 // GetPublishHistory fetches the full packument of the named package ("name" or
@@ -408,19 +442,22 @@ func extractNpmSuccessor(msg string) string {
 	return ""
 }
 
-// parsePublishHistory decodes the "time" and "versions" keys of a packument.
-// Version manifests are decoded into empty structs so that only their keys are
-// kept: a packument with thousands of versions runs to megabytes, and the
-// manifests are not needed here.
+// parsePublishHistory keeps only dates and maintainer identities from manifests.
 func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
+	type manifestIdentity struct {
+		Maintainers json.RawMessage `json:"maintainers"`
+		NPMUser     json.RawMessage `json:"_npmUser"`
+	}
 	var doc struct {
-		Time     map[string]json.RawMessage `json:"time"`
-		Versions map[string]struct{}        `json:"versions"`
+		Time        map[string]json.RawMessage  `json:"time"`
+		Versions    map[string]manifestIdentity `json:"versions"`
+		Maintainers json.RawMessage             `json:"maintainers"`
 	}
 	if err := json.NewDecoder(r).Decode(&doc); err != nil {
 		return nil, fmt.Errorf("npm decode failed: %w", err)
 	}
-	h := &PublishHistory{PublishedAt: make(map[string]time.Time, len(doc.Time))}
+	h := &PublishHistory{PublishedAt: make(map[string]time.Time, len(doc.Time)), FirstSeen: make(map[string]time.Time), VersionMaintainers: make(map[string][]Person), VersionPublisher: make(map[string]Person)}
+	h.Maintainers = decodePeople(doc.Maintainers)
 	// A missing or null "versions" leaves Installable nil (unknown), so a
 	// burst is not reported as removed without evidence; "{}" stays known-empty.
 	if doc.Versions != nil {
@@ -446,6 +483,39 @@ func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
 	}
 	for v := range doc.Versions {
 		h.Installable[v] = struct{}{}
+		manifest := doc.Versions[v]
+		people := decodePeople(manifest.Maintainers)
+		h.VersionMaintainers[v] = people
+		publisher := decodePerson(manifest.NPMUser)
+		h.VersionPublisher[v] = publisher
+		people = append(people, publisher)
+		at := h.PublishedAt[v]
+		if at.IsZero() {
+			continue
+		}
+		for _, p := range people {
+			email := NormalizeEmail(p.Email)
+			if email != "" && (h.FirstSeen[email].IsZero() || at.Before(h.FirstSeen[email])) {
+				h.FirstSeen[email] = at
+			}
+		}
 	}
 	return h, nil
+}
+
+// ParsePublishHistory decodes a cached full npm packument for measurements.
+func ParsePublishHistory(r io.Reader) (*PublishHistory, error) { return parsePublishHistory(r) }
+
+func decodePeople(raw json.RawMessage) []Person {
+	var people []Person
+	if json.Unmarshal(raw, &people) != nil {
+		return nil
+	}
+	return people
+}
+
+func decodePerson(raw json.RawMessage) Person {
+	var p Person
+	_ = json.Unmarshal(raw, &p)
+	return p
 }

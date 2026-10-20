@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/future-architect/uzomuzo-oss/internal/application"
 	scanapp "github.com/future-architect/uzomuzo-oss/internal/application/scan"
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
@@ -43,6 +44,7 @@ type ScanOptions struct {
 	ConfigSampleDefault int    // Config-level default sample size (applied only to PURL/URL list files)
 	IncludeActions      bool   // --include-actions: scan GitHub Actions referenced by input repos
 	ShowTransitive      bool   // --show-transitive: include transitive dependencies in output
+	MaintainerDomain    bool   // --maintainer-domain: check npm maintainer e-mail domains
 }
 
 // ActionsDiscovererFactory creates an ActionsDiscoverer from the scan service's analysis service.
@@ -69,7 +71,11 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 		return fmt.Errorf("--fail-on archived and disabled require GITHUB_TOKEN to read the repository state")
 	}
 
-	analysisService := createAnalysisService(cfg)
+	var serviceOptions []application.Option
+	if opts.MaintainerDomain {
+		serviceOptions = append(serviceOptions, application.WithMaintainerDomain())
+	}
+	analysisService := createAnalysisService(cfg, serviceOptions...)
 	scanService, err := scanapp.NewService(analysisService)
 	if err != nil {
 		return fmt.Errorf("failed to initialize scan service: %w", err)

@@ -9,6 +9,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/common/links"
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
 )
 
 // enrichReleaseHistory populates Analysis.ReleaseHistory for npm analyses with
@@ -61,6 +62,8 @@ func (s *IntegrationService) enrichReleaseHistory(ctx context.Context, analyses 
 		cp := *h
 		cp.PublishedAt = maps.Clone(h.PublishedAt)
 		cp.Installable = maps.Clone(h.Installable)
+		cp.Maintainers = append([]domain.MaintainerAddress(nil), h.Maintainers...)
+		cp.FirstSeen = maps.Clone(h.FirstSeen)
 		a.ReleaseHistory = &cp
 	})
 }
@@ -74,9 +77,15 @@ func (s *IntegrationService) fetchNpmReleaseHistory(ctx context.Context, fullNam
 	if !found || h == nil {
 		return nil, false, nil
 	}
+	maintainers := make([]domain.MaintainerAddress, 0, len(h.Maintainers))
+	for _, p := range h.Maintainers {
+		maintainers = append(maintainers, domain.MaintainerAddress{Account: p.Name, Email: p.Email, FirstSeen: h.FirstSeen[npmjs.NormalizeEmail(p.Email)]})
+	}
 	return &domain.ReleaseHistory{
 		Registry:    domain.RegistryNpm,
 		PublishedAt: h.PublishedAt,
 		Installable: h.Installable,
+		Maintainers: maintainers,
+		FirstSeen:   h.FirstSeen,
 	}, true, nil
 }
