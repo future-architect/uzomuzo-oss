@@ -179,9 +179,10 @@ func (c *Client) expiry(h http.Header) time.Time {
 	if _, ok := directives["no-cache"]; ok {
 		return now
 	}
-	if seconds, ok := headerSeconds(directives["max-age"]); ok {
-		age, _ := headerSeconds(h.Get("Age"))
-		return now.Add(max(min(seconds, maxBootstrapLifetime)-age, 0))
+	if maxAge, ok := headerSeconds(directives["max-age"]); ok {
+		age, _ := headerSeconds(h.Get("Age")) // a missing or malformed Age counts as 0
+		remaining := min(max(maxAge-age, 0), int64(maxBootstrapLifetime/time.Second))
+		return now.Add(time.Duration(remaining) * time.Second)
 	}
 	if at, err := http.ParseTime(h.Get("Expires")); err == nil {
 		if limit := now.Add(maxBootstrapLifetime); at.After(limit) {
@@ -211,17 +212,18 @@ func cacheDirectives(h http.Header) map[string]string {
 	return out
 }
 
-// headerSeconds parses a non-negative delta-seconds value, saturating at
-// maxBootstrapLifetime so a huge value cannot overflow.
-func headerSeconds(v string) (time.Duration, bool) {
+// headerSeconds parses a non-negative delta-seconds value. A value too large
+// for int64 saturates (RFC 9111 section 1.2.2), so later arithmetic cannot
+// overflow once the caller caps it.
+func headerSeconds(v string) (int64, bool) {
 	seconds, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+	if errors.Is(err, strconv.ErrRange) && !strings.HasPrefix(strings.TrimSpace(v), "-") {
+		return 1 << 62, true
+	}
 	if err != nil || seconds < 0 {
 		return 0, false
 	}
-	if seconds > int64(maxBootstrapLifetime/time.Second) {
-		return maxBootstrapLifetime, true
-	}
-	return time.Duration(seconds) * time.Second, true
+	return min(seconds, 1<<62), true
 }
 
 func (c *Client) readBootstrapCache() (bootstrapCacheEntry, error) {

@@ -124,7 +124,7 @@ trivy fs . --format cyclonedx | uzomuzo scan --sbom - --show-transitive  # inclu
 uzomuzo scan                     # auto-detect go.mod in cwd
 uzomuzo scan --format json       # JSON output for CI integration
 
-# Optional npm maintainer e-mail domain notice (makes RDAP requests)
+# Optional npm maintainer e-mail domain notice (makes RDAP requests; caches IANA's RDAP server list)
 uzomuzo scan --maintainer-domain pkg:npm/express@4.18.2
 
 # CI gate: exit 1 if any EOL dependency found
