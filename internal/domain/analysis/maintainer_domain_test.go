@@ -89,11 +89,11 @@ func TestMaintainerDomainNotices(t *testing.T) {
 		want string
 	}{
 		{"reregistered before", MaintainerDomainFinding{Account: "atiertant", Domain: "atlantis-software.net", Kind: MaintainerDomainReregisteredBefore, FirstSeen: first, Registered: registered},
-			"RDAP shows atlantis-software.net registered on 2026-05-07. That is after npm records first showed maintainer atiertant with an address at this domain (2020-11-11). If the account still uses that address, npm password-reset mail may reach whoever holds the domain now. Ask the maintainer to confirm the account e-mail and 2FA."},
+			"RDAP shows atlantis-software.net registered on 2026-05-07. That is after npm records first showed maintainer atiertant with an address at this domain (2020-11-11). If the account still uses that address, npm password-reset mail may reach whoever holds the domain now. Before upgrading, check who published newer versions of this package."},
 		{"lapsing", MaintainerDomainFinding{Account: "atiertant", Domain: "example.com", Kind: MaintainerDomainLapsing, FirstSeen: first},
-			"RDAP shows example.com is being deleted. npm records show maintainer atiertant with an address at this domain (first seen 2020-11-11). If the account still uses that address, npm password-reset mail may reach whoever registers the domain next. Ask the maintainer to confirm the account e-mail and 2FA."},
+			"RDAP shows example.com is being deleted. npm records show maintainer atiertant with an address at this domain (first seen 2020-11-11). If the account still uses that address, npm password-reset mail may reach whoever registers the domain next. Before upgrading, check who published newer versions of this package."},
 		{"unregistered without account", MaintainerDomainFinding{Domain: "example.com", Kind: MaintainerDomainUnregistered, FirstSeen: first},
-			"RDAP has no registration for example.com. npm records show a maintainer with an address at this domain (first seen 2020-11-11). If the account still uses that address, npm password-reset mail may reach whoever registers the domain. Ask the maintainer to confirm the account e-mail and 2FA."},
+			"RDAP has no registration for example.com. npm records show a maintainer with an address at this domain (first seen 2020-11-11). If the account still uses that address, npm password-reset mail may reach whoever registers the domain. Before upgrading, check who published newer versions of this package."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

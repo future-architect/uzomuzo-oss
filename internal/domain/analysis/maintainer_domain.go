@@ -215,13 +215,17 @@ func maintainerDomainNotice(f MaintainerDomainFinding) string {
 	// The notice states the RDAP fact first, then the npm record, then the
 	// conditional risk and one action. The address itself is not printed:
 	// the account name and domain are enough to act on, and the address
-	// would otherwise land in terminals and CI logs.
+	// would otherwise land in terminals and CI logs. The action is one the
+	// user can take alone: every user of a popular package sees the same
+	// notice, so asking each of them to contact the maintainer would send the
+	// maintainer the same question many times. Only the registry can see the
+	// account's current e-mail.
 	who := "a maintainer"
 	if f.Account != "" {
 		who = "maintainer " + f.Account
 	}
 	first := f.FirstSeen.UTC().Format(time.DateOnly)
-	const action = " Ask the maintainer to confirm the account e-mail and 2FA."
+	const action = " Before upgrading, check who published newer versions of this package."
 	clause := publisherNoticeClause(f.PublisherEmailEvidence)
 	switch f.Kind {
 	case MaintainerDomainReregisteredBefore:
