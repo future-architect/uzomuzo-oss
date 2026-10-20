@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/csv"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -255,5 +256,53 @@ func TestPackumentCachePathDistinct(t *testing.T) {
 	}
 	if strings.Contains(filepath.Base(a), "/") {
 		t.Errorf("file name %q contains a separator", a)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// TestHistoryCachesOnlyParsedPackuments checks that a malformed response is
+// not cached, so a later valid response is fetched and cached.
+func TestHistoryCachesOnlyParsedPackuments(t *testing.T) {
+	t.Parallel()
+	valid, err := os.ReadFile(filepath.Join("..", "..", "internal", "infrastructure", "npmjs", "testdata", "node-ipc-maintainers.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bodies := []string{`{"time":`, string(valid)}
+	var calls int
+	c := &command{packumentDir: t.TempDir(), http: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		body := bodies[min(calls, len(bodies)-1)]
+		calls++
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}}, nil
+	})}}
+	cachePath := packumentCachePath(c.packumentDir, "node-ipc")
+	if _, err := c.history(context.Background(), "node-ipc"); err == nil {
+		t.Fatal("malformed packument: want error")
+	}
+	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
+		t.Fatalf("malformed packument was cached: stat err=%v", err)
+	}
+	if _, err := c.history(context.Background(), "node-ipc"); err != nil {
+		t.Fatalf("valid packument: %v", err)
+	}
+	if _, err := c.history(context.Background(), "node-ipc"); err != nil {
+		t.Fatalf("cached packument: %v", err)
+	}
+	if calls != 2 {
+		t.Errorf("calls=%d, want 2 (third read served from cache)", calls)
+	}
+}
+
+// TestReadLimited checks that a body over the limit is rejected, not truncated.
+func TestReadLimited(t *testing.T) {
+	t.Parallel()
+	if got, err := readLimited(strings.NewReader("abcd"), 4); err != nil || string(got) != "abcd" {
+		t.Errorf("at limit: got %q, %v", got, err)
+	}
+	if got, err := readLimited(strings.NewReader("abcde"), 4); err == nil {
+		t.Errorf("over limit: got %q, want error", got)
 	}
 }

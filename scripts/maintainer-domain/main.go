@@ -226,7 +226,7 @@ func (c *command) history(ctx context.Context, name string) (*npmjs.PublishHisto
 		case err == nil:
 			zr, err := gzip.NewReader(f)
 			if err == nil {
-				data, err = io.ReadAll(io.LimitReader(zr, packumentReadLimit))
+				data, err = readLimited(zr, packumentReadLimit)
 				_ = zr.Close() // read-only; a read error is reported below
 			}
 			_ = f.Close() // read-only; a read error is reported below
@@ -251,32 +251,59 @@ func (c *command) history(ctx context.Context, name string) (*npmjs.PublishHisto
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("fetch npm packument for %q: HTTP %d", name, resp.StatusCode)
 		}
-		data, err = io.ReadAll(io.LimitReader(resp.Body, packumentReadLimit))
+		data, err = readLimited(resp.Body, packumentReadLimit)
 		if err != nil {
 			return nil, fmt.Errorf("read npm packument for %q: %w", name, err)
 		}
+		// Parse before caching so a malformed or oversized response is
+		// fetched again on the next run instead of being reused.
+		h, err := npmjs.ParsePublishHistoryWithVersions(bytes.NewReader(data))
+		if err != nil {
+			return nil, fmt.Errorf("parse npm packument for %q: %w", name, err)
+		}
 		if cachePath != "" {
-			if err := os.MkdirAll(c.packumentDir, 0o700); err != nil {
-				return nil, fmt.Errorf("create packument cache directory: %w", err)
-			}
-			f, err := os.OpenFile(cachePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-			if err != nil {
-				return nil, fmt.Errorf("open packument cache %q: %w", cachePath, err)
-			}
-			zw := gzip.NewWriter(f)
-			_, err = zw.Write(data)
-			if closeErr := zw.Close(); err == nil {
-				err = closeErr
-			}
-			if closeErr := f.Close(); err == nil {
-				err = closeErr
-			}
-			if err != nil {
-				return nil, fmt.Errorf("write packument cache %q: %w", cachePath, err)
+			if err := writePackumentCache(c.packumentDir, cachePath, data); err != nil {
+				return nil, err
 			}
 		}
+		return h, nil
 	}
 	return npmjs.ParsePublishHistoryWithVersions(bytes.NewReader(data))
+}
+
+// readLimited reads all of r, failing when it holds more than limit bytes
+// rather than returning a silently truncated body.
+func readLimited(r io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("body exceeds %d bytes", limit)
+	}
+	return data, nil
+}
+
+func writePackumentCache(dir, cachePath string, data []byte) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create packument cache directory: %w", err)
+	}
+	f, err := os.OpenFile(cachePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return fmt.Errorf("open packument cache %q: %w", cachePath, err)
+	}
+	zw := gzip.NewWriter(f)
+	_, err = zw.Write(data)
+	if closeErr := zw.Close(); err == nil {
+		err = closeErr
+	}
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return fmt.Errorf("write packument cache %q: %w", cachePath, err)
+	}
+	return nil
 }
 
 func (c *command) incidents(ctx context.Context, populationPath, casesPath string) error {
