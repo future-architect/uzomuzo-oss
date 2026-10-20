@@ -239,7 +239,7 @@ func (c *Client) Lookup(ctx context.Context, domain string) (analysis.DomainReco
 		}
 		c.last[host] = time.Now()
 		rec, err = c.request(ctx, endpoint)
-		// Only transport failures and HTTP 408, 429 and 5xx are retried.
+		// Only transport failures, cut-off bodies and HTTP 408, 429 and 5xx are retried.
 		var retry retryableError
 		if err == nil || !errors.As(err, &retry) {
 			break
@@ -336,7 +336,12 @@ func (c *Client) request(ctx context.Context, endpoint string) (analysis.DomainR
 				VCardArray json.RawMessage `json:"vcardArray"`
 			} `json:"entities"`
 		}
-		if err := json.NewDecoder(io.LimitReader(resp.Body, rdapResponseLimit)).Decode(&body); err != nil {
+		// A body cut off by the connection is retried; malformed JSON is not.
+		data, err := io.ReadAll(io.LimitReader(resp.Body, rdapResponseLimit))
+		if err != nil {
+			return failed, retryableError{fmt.Errorf("read response: %w", err)}
+		}
+		if err := json.Unmarshal(data, &body); err != nil {
 			return failed, fmt.Errorf("decode response: %w", err)
 		}
 		var registration time.Time

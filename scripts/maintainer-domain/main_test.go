@@ -218,3 +218,42 @@ func TestPackageCell(t *testing.T) {
 		}
 	}
 }
+
+// TestLockfilePathName matches whole node_modules path components only.
+func TestLockfilePathName(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		path, want string
+		ok         bool
+	}{
+		{"node_modules/left-pad", "left-pad", true},
+		{"node_modules/@scope/name", "@scope/name", true},
+		{"node_modules/a/node_modules/b", "b", true},
+		{"node_modules/@node_modules/pkg", "@node_modules/pkg", true},
+		{"packages/app", "", false},
+		{"", "", false},
+		{"node_modules/@scope", "", false},
+	}
+	for _, tt := range tests {
+		got, ok := lockfilePathName(tt.path)
+		if got != tt.want || ok != tt.ok {
+			t.Errorf("lockfilePathName(%q)=%q,%v, want %q,%v", tt.path, got, ok, tt.want, tt.ok)
+		}
+	}
+}
+
+// TestPackumentCachePathDistinct checks names that a separator substitution would merge.
+func TestPackumentCachePathDistinct(t *testing.T) {
+	t.Parallel()
+	a := packumentCachePath("dir", "@scope/name__other")
+	b := packumentCachePath("dir", "@scope__name/other")
+	if a == b {
+		t.Errorf("both names map to %q", a)
+	}
+	if got, want := packumentCachePath("dir", "node-ipc"), filepath.Join("dir", "node-ipc.json.gz"); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if strings.Contains(filepath.Base(a), "/") {
+		t.Errorf("file name %q contains a separator", a)
+	}
+}

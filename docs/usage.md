@@ -198,7 +198,7 @@ For versioned npm inputs, `--maintainer-domain` looks up the domain of each curr
 ./uzomuzo scan --maintainer-domain --format json pkg:npm/express@4.18.2
 ```
 
-The result appears as `maintainer_domain` in `--format json` and as a `⚠ Maintainer domain:` line in the detailed view; table and CSV output are unchanged. The flag is off by default, makes RDAP requests (at least one second apart per RDAP server), and does not change verdicts, exit codes, or `--fail-on`. It also fetches IANA's list of RDAP servers (<https://data.iana.org/rdap/dns.json>), keeps it under the user cache directory until it expires, and falls back to the copy built into the binary when the fetch fails; `rdap_bootstrap` in the JSON output says which list was used. See [ADR-0030](adr/0030-maintainer-email-domain-marker.md).
+The result appears as `maintainer_domain` in `--format json` and as a `⚠ Maintainer domain:` line in the detailed view; table and CSV output are unchanged. The flag is off by default, makes RDAP requests (lookups at least one second apart per RDAP server), and does not change verdicts, exit codes, or `--fail-on`. It also fetches IANA's list of RDAP servers (<https://data.iana.org/rdap/dns.json>), keeps it under the user cache directory until it expires, and falls back to the copy built into the binary when the fetch fails; `rdap_bootstrap` in the JSON output says which list was used. See [ADR-0030](adr/0030-maintainer-email-domain-marker.md).
 
 ### Actions Discovery (`--include-actions`)
 

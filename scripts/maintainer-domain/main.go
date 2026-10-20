@@ -100,13 +100,13 @@ func parseLockfileNames(data []byte) ([]string, error) {
 	}
 	names := map[string]bool{}
 	for path, p := range lock.Packages {
-		i := strings.LastIndex(path, "node_modules/")
-		if i < 0 || p.Version == "" || p.Link {
+		pathName, ok := lockfilePathName(path)
+		if !ok || p.Version == "" || p.Link {
 			continue
 		}
 		name := p.Name
 		if name == "" {
-			name = path[i+len("node_modules/"):]
+			name = pathName
 		}
 		names[name] = true
 	}
@@ -190,11 +190,37 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	return printSummary(out, c.rows)
 }
 
+// lockfilePathName returns the package name after the last node_modules path
+// component, e.g. "@scope/name" for "a/node_modules/@scope/name".
+func lockfilePathName(path string) (string, bool) {
+	parts := strings.Split(path, "/")
+	for i := len(parts) - 2; i >= 0; i-- {
+		if parts[i] != "node_modules" {
+			continue
+		}
+		rest := parts[i+1:]
+		if strings.HasPrefix(rest[0], "@") {
+			if len(rest) < 2 {
+				return "", false
+			}
+			return rest[0] + "/" + rest[1], true
+		}
+		return rest[0], true
+	}
+	return "", false
+}
+
+// packumentCachePath names the cached packument file. PathEscape is
+// one-to-one, so two package names never share a file.
+func packumentCachePath(dir, name string) string {
+	return filepath.Join(dir, url.PathEscape(name)+".json.gz")
+}
+
 func (c *command) history(ctx context.Context, name string) (*npmjs.PublishHistory, error) {
 	var data []byte
 	cachePath := ""
 	if c.packumentDir != "" {
-		cachePath = filepath.Join(c.packumentDir, strings.ReplaceAll(name, "/", "__")+".json.gz")
+		cachePath = packumentCachePath(c.packumentDir, name)
 		f, err := os.Open(cachePath)
 		switch {
 		case err == nil:

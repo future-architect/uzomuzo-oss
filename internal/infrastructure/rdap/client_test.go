@@ -396,3 +396,29 @@ type roundTripper func(*http.Request) (*http.Response, error)
 
 // RoundTrip invokes the test transport function.
 func (f roundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// TestLookupRetriesBrokenBody checks that a body cut off after the headers is
+// retried, while malformed JSON is not (see TestLookup).
+func TestLookupRetriesBrokenBody(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	c := NewClient()
+	c.SetHTTPClient(&http.Client{Transport: roundTripper(func(r *http.Request) (*http.Response, error) {
+		if calls.Add(1) == 1 {
+			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(io.MultiReader(strings.NewReader(`{"events":`), errReader{})), Request: r}, nil
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"events":[{"eventAction":"registration","eventDate":"2026-05-07T11:49:33Z"}]}`)), Request: r}, nil
+	})})
+	c.SetBaseURL("net", "https://rdap.example")
+	c.SetRetryDelay(0)
+	c.SetRequestInterval(0)
+	rec, err := c.Lookup(context.Background(), "example.net")
+	if err != nil || rec.Status != analysis.DomainFound || calls.Load() != 2 {
+		t.Fatalf("record=%+v err=%v calls=%d, want found on the second attempt", rec, err, calls.Load())
+	}
+}
+
+type errReader struct{}
+
+// Read fails like a reset connection.
+func (errReader) Read([]byte) (int, error) { return 0, errors.New("connection reset by peer") }
