@@ -472,6 +472,7 @@ type enrichedJSONEntry struct {
 	Malicious           *maliciousJSON        `json:"malicious,omitempty"`
 	MaliciousCheck      string                `json:"malicious_check,omitempty"`
 	DormantRelease      *dormantJSON          `json:"dormant_release,omitempty"`
+	ReleaseAge          *releaseAgeJSON       `json:"release_age,omitempty"`
 	MaintainerDomain    *maintainerDomainJSON `json:"maintainer_domain,omitempty"`
 	BuildIntegrity      string                `json:"build_integrity,omitempty"`
 	BuildIntegrityScore *float64              `json:"build_integrity_score,omitempty"`
@@ -522,6 +523,15 @@ type dormantJSON struct {
 	Lines         []string                  `json:"lines"`
 	Removed       bool                      `json:"removed"`
 	Until         time.Time                 `json:"until"`
+}
+
+// releaseAgeJSON is the publish-age marker in --format json. See ADR-0031.
+type releaseAgeJSON struct {
+	Status      string    `json:"status"`
+	PublishedAt time.Time `json:"published_at,omitzero"`
+	Source      string    `json:"source,omitempty"`
+	WindowDays  int       `json:"window_days"`
+	Until       time.Time `json:"until,omitzero"`
 }
 
 type maintainerDomainJSON struct {
@@ -656,6 +666,10 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 		d := a.DormantRelease
 		je.DormantRelease = &dormantJSON{Kind: d.Kind, PublishedAt: d.Burst.PublishedAt, SilentDays: d.Burst.SilentDays,
 			BurstVersions: d.Burst.Versions, Lines: d.Burst.Lines, Removed: d.Burst.Removed, Until: d.Until}
+	}
+	if a.ReleaseAge != nil {
+		r := a.ReleaseAge
+		je.ReleaseAge = &releaseAgeJSON{Status: r.Status, PublishedAt: r.PublishedAt, Source: r.Source, WindowDays: r.WindowDays, Until: r.Until}
 	}
 	if a.MaintainerDomain != nil {
 		m := &maintainerDomainJSON{Flagged: []maintainerDomainFindingJSON{}, UncheckedFindings: []maintainerDomainUncheckedJSON{}}

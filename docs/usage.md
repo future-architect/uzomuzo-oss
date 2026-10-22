@@ -507,6 +507,25 @@ STATUS     PURL                    LIFECYCLE      BUILD
 
 </details>
 
+## Young-release notice
+
+For a versioned input published within the last seven days, `--format detailed`
+shows a publish-age notice and `--format json` includes `release_age` with
+`status: "young"`, `published_at`, `source`, `window_days`, and `until`. The
+source is `npm`, `pypi`, or `deps.dev`. If no publish time is available, JSON
+reports `status: "unknown"` and `window_days`; the detailed view has no notice.
+Versions older than the window have no `release_age` field. A dormant-release
+marker or malicious advisory suppresses the young-release notice, while JSON
+keeps both facts. Table and CSV output are unchanged.
+
+Set `LIFECYCLE_ASSESS_YOUNG_RELEASE_DAYS` to change the window from its default
+of seven days. This notice does not change a label, verdict, exit code, or
+`--fail-on` decision. Run scans on dependency-update PRs or builds before
+installing dependencies: a monthly scan may miss the window. Transitive
+dependencies are scanned only with `--show-transitive`. This measures version
+age, not the upload age of every distribution file. See
+[ADR-0031](adr/0031-young-release-marker.md).
+
 ## Verdict Mapping
 
 | Verdict | Lifecycle states | Action |

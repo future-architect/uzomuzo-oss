@@ -351,6 +351,11 @@ func renderBoxEntryError(ctx *boxContext) error {
 			return wrap(err)
 		}
 	}
+	if notice := ctx.analysis.ReleaseAgeNotice(); notice != "" {
+		if err := writeLine(ctx, "%s %s", releaseAgePrefix, notice); err != nil {
+			return wrap(err)
+		}
+	}
 	if err := writeMaintainerDomainNotices(ctx); err != nil {
 		return wrap(err)
 	}

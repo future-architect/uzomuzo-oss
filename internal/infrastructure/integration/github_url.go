@@ -475,5 +475,7 @@ func detachPackageIdentity(analysis *domain.Analysis, githubURL string) {
 	analysis.AdvisoryDBState = nil
 	analysis.MaliciousState = nil
 	analysis.ReleaseHistory = nil
+	analysis.PyPIPublishedAt = time.Time{}
+	analysis.ReleaseAge = nil
 	analysis.EnsureCanonical()
 }

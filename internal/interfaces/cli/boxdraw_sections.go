@@ -307,6 +307,9 @@ func writeBoxOrigin(ctx *boxContext) error {
 // (ADR-0028) in the detailed view.
 const dormantReleasePrefix = "⚠ Release after silence:"
 
+// releaseAgePrefix starts the young-release notice. See ADR-0031.
+const releaseAgePrefix = "⚠ Release age:"
+
 // maintainerDomainPrefix starts each line that shows a maintainer e-mail domain
 // notice (ADR-0030) in the detailed view.
 const maintainerDomainPrefix = "⚠ Maintainer domain:"
@@ -336,6 +339,11 @@ func writeBoxVerdict(ctx *boxContext) error {
 	}
 	if notice := ctx.analysis.DormantReleaseNotice(); notice != "" {
 		if err := writeLine(ctx, "%s %s", dormantReleasePrefix, notice); err != nil {
+			return err
+		}
+	}
+	if notice := ctx.analysis.ReleaseAgeNotice(); notice != "" {
+		if err := writeLine(ctx, "%s %s", releaseAgePrefix, notice); err != nil {
 			return err
 		}
 	}

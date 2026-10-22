@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
@@ -12,11 +14,13 @@ import (
 
 func TestEvaluator_PyPI_InactiveClassifier(t *testing.T) {
 	// Mock minimal PyPI JSON response with inactive classifier only (no text phrases)
+	var requests atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
 		if r.URL.Path == "/pypi/inactivepkg/json" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			_, _ = w.Write([]byte(`{"info":{"name":"inactivepkg","summary":"","description":"","classifiers":["Development Status :: 7 - Inactive"]}}`))
+			_, _ = w.Write([]byte(`{"info":{"name":"inactivepkg","summary":"","description":"","classifiers":["Development Status :: 7 - Inactive"]},"releases":{"1.0.0":[{"upload_time_iso_8601":"2026-10-21T00:00:00Z"}]}}`))
 			return
 		}
 		http.NotFound(w, r)
@@ -31,7 +35,7 @@ func TestEvaluator_PyPI_InactiveClassifier(t *testing.T) {
 	ev.SetMaxWorkers(1)
 	ev.SetPyPIClient(pc)
 
-	analysis := &domain.Analysis{Package: &domain.Package{PURL: "pkg:pypi/inactivepkg@1.0.0", Ecosystem: "pypi"}}
+	analysis := &domain.Analysis{OriginalPURL: "pkg:pypi/inactivepkg@1.0.0", Package: &domain.Package{PURL: "pkg:pypi/inactivepkg@1.0.0", Ecosystem: "pypi", Version: "1.0.0"}}
 	out, err := ev.EvaluateBatch(context.Background(), map[string]*domain.Analysis{"k": analysis})
 	if err != nil {
 		panic(err)
@@ -39,6 +43,12 @@ func TestEvaluator_PyPI_InactiveClassifier(t *testing.T) {
 	st := out["k"]
 	if st.State != domain.EOLEndOfLife {
 		t.Fatalf("expected EOLEndOfLife from inactive classifier, got %v", st.State)
+	}
+	if want := time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC); !analysis.PyPIPublishedAt.Equal(want) {
+		t.Fatalf("project response publish time = %v, want %v", analysis.PyPIPublishedAt, want)
+	}
+	if got := requests.Load(); got != 1 {
+		t.Fatalf("registry requests = %d, want only the existing project request", got)
 	}
 	found := false
 	for _, evd := range st.Evidences {

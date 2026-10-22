@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
@@ -83,7 +84,7 @@ func TestEnrichPyPISummary_DedupesByPackageName(t *testing.T) {
 	var hits int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&hits, 1)
-		_, _ = fmt.Fprintf(w, `{"info":{"name":"requests","summary":%q,"description":"long readme"}}`, wantSummary)
+		_, _ = fmt.Fprintf(w, `{"info":{"name":"requests","summary":%q,"description":"long readme"},"releases":{"2.31.0":[{"upload_time_iso_8601":"2026-10-21T00:00:00Z"}],"2.30.0":[{"upload_time_iso_8601":"2026-10-20T00:00:00Z"}]}}`, wantSummary)
 	}))
 	defer srv.Close()
 
@@ -93,12 +94,12 @@ func TestEnrichPyPISummary_DedupesByPackageName(t *testing.T) {
 	svc := &IntegrationService{pypiClient: pyClient}
 
 	a1 := &domain.Analysis{
-		Package:    &domain.Package{PURL: "pkg:pypi/requests@2.31.0", Ecosystem: "pypi"},
+		Package:    &domain.Package{PURL: "pkg:pypi/requests@2.31.0", Ecosystem: "pypi", Version: "2.31.0"},
 		Repository: &domain.Repository{Summary: ""},
 	}
 	a2 := &domain.Analysis{
 		// Different version, same package name — should share one fetch.
-		Package:    &domain.Package{PURL: "pkg:pypi/requests@2.30.0", Ecosystem: "pypi"},
+		Package:    &domain.Package{PURL: "pkg:pypi/requests@2.30.0", Ecosystem: "pypi", Version: "2.30.0"},
 		Repository: &domain.Repository{Summary: ""},
 	}
 	svc.enrichPyPISummary(context.Background(), map[string]*domain.Analysis{
@@ -107,6 +108,9 @@ func TestEnrichPyPISummary_DedupesByPackageName(t *testing.T) {
 
 	if got := atomic.LoadInt32(&hits); got != 1 {
 		t.Errorf("expected 1 PyPI fetch (deduped by name), got %d", got)
+	}
+	if a1.PyPIPublishedAt.Format(time.RFC3339) != "2026-10-21T00:00:00Z" || a2.PyPIPublishedAt.Format(time.RFC3339) != "2026-10-20T00:00:00Z" {
+		t.Errorf("PyPI times = %s, %s", a1.PyPIPublishedAt, a2.PyPIPublishedAt)
 	}
 	if a1.Repository.Summary != wantSummary || a2.Repository.Summary != wantSummary {
 		t.Errorf("both analyses should receive summary; a1=%q a2=%q", a1.Repository.Summary, a2.Repository.Summary)

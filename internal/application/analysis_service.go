@@ -388,6 +388,9 @@ func (s *AnalysisService) enrichAndAssess(ctx context.Context, analyses map[stri
 	now := time.Now()
 	s.checkMaintainerDomains(ctx, analyses, now)
 	lifecycleConfig := config.GetDefaultLifecycle()
+	if s.cfg != nil {
+		lifecycleConfig.YoungReleaseDays = s.cfg.Lifecycle.YoungReleaseDays
+	}
 	config.NormalizeLifecycleConfig(&lifecycleConfig)
 	silence, flag := lifecycleConfig.DormantWindows()
 	for key, analysis := range analyses {
@@ -397,6 +400,7 @@ func (s *AnalysisService) enrichAndAssess(ctx context.Context, analyses map[stri
 		// Evaluated before the error check: the release history comes from the
 		// registry, not deps.dev, so it can be present when deps.dev failed.
 		analysis.DormantRelease = analysis.EvaluateDormantRelease(now, silence, flag)
+		analysis.ReleaseAge = analysis.EvaluateReleaseAge(now, lifecycleConfig.YoungReleaseWindow())
 		if analysis.Error != nil {
 			continue
 		}

@@ -95,6 +95,12 @@ type Analysis struct {
 	// EvaluateDormantRelease. See ADR-0028.
 	DormantRelease *DormantRelease
 
+	// PyPIPublishedAt is the earliest upload time for the requested version
+	// observed in a PyPI response already fetched during this analysis.
+	PyPIPublishedAt time.Time
+	// ReleaseAge records a recent or unknown publish time. See ADR-0031.
+	ReleaseAge *ReleaseAge
+
 	// Release information
 	ReleaseInfo *ReleaseInfo
 

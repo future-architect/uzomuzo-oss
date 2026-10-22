@@ -350,6 +350,9 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 	if !found || info == nil {
 		return false
 	}
+	if at := info.ReleasePublishedAt[a.Package.Version]; !at.IsZero() && (a.PyPIPublishedAt.IsZero() || at.Before(a.PyPIPublishedAt)) {
+		a.PyPIPublishedAt = at
+	}
 	if hasPyPIInactiveClassifier(info.Classifiers) { // explicit EOL
 		status.State = domain.EOLEndOfLife
 		status.Evidences = append(status.Evidences, domain.EOLEvidence{
@@ -447,6 +450,9 @@ func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, sta
 			info, found, err := e.pypi.GetVersion(ctx, name, version)
 			if err != nil || !found || info == nil {
 				return false, "", "", found, err
+			}
+			if !info.PublishedAt.IsZero() && (a.PyPIPublishedAt.IsZero() || info.PublishedAt.Before(a.PyPIPublishedAt)) {
+				a.PyPIPublishedAt = info.PublishedAt
 			}
 			summary := "Version yanked on PyPI"
 			if info.YankedReason != "" {

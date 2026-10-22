@@ -76,11 +76,13 @@ func (s *IntegrationService) enrichPyPISummary(ctx context.Context, analyses map
 				return
 			}
 			summary := domain.NormalizeSummary(info.Summary)
-			if summary == "" {
-				return
-			}
 			for _, a := range targets {
-				a.Repository.Summary = summary
+				if summary != "" {
+					a.Repository.Summary = summary
+				}
+				if !info.ReleasePublishedAt[a.Package.Version].IsZero() {
+					a.PyPIPublishedAt = info.ReleasePublishedAt[a.Package.Version]
+				}
 			}
 		}(name, targets)
 	}
