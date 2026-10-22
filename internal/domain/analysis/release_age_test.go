@@ -63,6 +63,27 @@ func TestEvaluateReleaseAgeFallbackAndIdentity(t *testing.T) {
 	if got := a.EvaluateReleaseAge(now, 7*24*time.Hour); got == nil || got.Status != "unknown" || !got.PublishedAt.IsZero() {
 		t.Fatalf("unknown time: %+v", got)
 	}
+	for _, tc := range []struct {
+		name      string
+		purl      string
+		version   string
+		ecosystem string
+	}{
+		{"version mismatch", "pkg:pypi/example@2.0.0", "1.0.0", "pypi"},
+		{"ecosystem mismatch", "pkg:npm/example@1.0.0", "1.0.0", "pypi"},
+		{"invalid versioned PURL", "pkg:bad type/example@1.0.0", "1.0.0", "pypi"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mismatch := newAnalysis()
+			mismatch.OriginalPURL = tc.purl
+			mismatch.Package.Version = tc.version
+			mismatch.Package.Ecosystem = tc.ecosystem
+			got := mismatch.EvaluateReleaseAge(now, 7*24*time.Hour)
+			if got == nil || got.Status != "unknown" || !got.PublishedAt.IsZero() || got.Source != "" {
+				t.Fatalf("mismatched identity: %+v", got)
+			}
+		})
+	}
 	a.OriginalPURL = "pkg:pypi/example"
 	if got := a.EvaluateReleaseAge(now, 7*24*time.Hour); got != nil {
 		t.Fatalf("unversioned input: %+v", got)
@@ -77,7 +98,7 @@ func TestEvaluateReleaseAgeFallbackAndIdentity(t *testing.T) {
 func TestReleaseAgeNoticeSuppression(t *testing.T) {
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	a := &Analysis{ReleaseAge: &ReleaseAge{Status: "young", PublishedAt: now.Add(-2 * time.Hour), Until: now.Add(7*24*time.Hour - 2*time.Hour), WindowDays: 7, AgeDays: 0}}
-	if notice := a.ReleaseAgeNotice(); !strings.Contains(notice, "0 days") || !strings.Contains(notice, "2026-10-29") {
+	if notice := a.ReleaseAgeNotice(); !strings.Contains(notice, "less than a day before this scan") || !strings.Contains(notice, "can take up to a week to appear") || !strings.Contains(notice, "a clean malicious-package check is not yet conclusive") || strings.Contains(notice, "none could have named it yet") || !strings.Contains(notice, "2026-10-29") {
 		t.Fatalf("notice: %q", notice)
 	}
 	a.DormantRelease = &DormantRelease{Burst: &DormantBurst{}}

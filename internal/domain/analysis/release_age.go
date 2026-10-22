@@ -25,11 +25,22 @@ func (a *Analysis) EvaluateReleaseAge(now time.Time, window time.Duration) *Rele
 	if a == nil || a.Package == nil || a.Package.Version == "" || window <= 0 {
 		return nil
 	}
+	result := &ReleaseAge{Status: "unknown", WindowDays: int(window / (24 * time.Hour))}
 	parsed, err := purl.NewParser().Parse(a.OriginalPURL)
-	if err != nil || parsed.Version() == "" || parsed.Version() != a.Package.Version || !strings.EqualFold(parsed.Ecosystem(), a.Package.Ecosystem) {
+	if err != nil {
+		identity := strings.SplitN(a.OriginalPURL, "?", 2)[0]
+		identity = strings.SplitN(identity, "#", 2)[0]
+		if strings.LastIndex(identity, "@") > strings.LastIndex(identity, "/") {
+			return result
+		}
 		return nil
 	}
-	result := &ReleaseAge{Status: "unknown", WindowDays: int(window / (24 * time.Hour))}
+	if parsed.Version() == "" {
+		return nil
+	}
+	if parsed.Version() != a.Package.Version || !strings.EqualFold(parsed.Ecosystem(), a.Package.Ecosystem) {
+		return result
+	}
 	var at time.Time
 	if a.ReleaseHistory != nil && a.ReleaseHistory.Registry == RegistryNpm {
 		at = a.ReleaseHistory.PublishedAt[a.Package.Version]
@@ -69,6 +80,10 @@ func (a *Analysis) ReleaseAgeNotice() string {
 		return ""
 	}
 	r := a.ReleaseAge
-	return fmt.Sprintf("This version was published on %s, %d days before this scan. Malicious-package records usually appear within a week of publication, so none could have named it yet. If you can, wait until %s before adopting it, or check who published it.",
-		r.PublishedAt.UTC().Format(time.DateOnly), r.AgeDays, r.Until.UTC().Format(time.DateOnly))
+	age := fmt.Sprintf("%d days before this scan", r.AgeDays)
+	if r.AgeDays == 0 {
+		age = "less than a day before this scan"
+	}
+	return fmt.Sprintf("This version was published on %s, %s. Malicious-package records can take up to a week to appear, so a clean malicious-package check is not yet conclusive. If you can, wait until %s before adopting it, or check who published it.",
+		r.PublishedAt.UTC().Format(time.DateOnly), age, r.Until.UTC().Format(time.DateOnly))
 }
