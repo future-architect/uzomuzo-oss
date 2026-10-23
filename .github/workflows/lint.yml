@@ -53,7 +53,7 @@ jobs:
         # Pin to v1.72.0 SHA (released 2026-03-31). Update manually or add a
         # `.github/dependabot.yml` entry for github-actions to automate bumps.
         # Wraps `rhysd/actionlint` v1.7.x which is the upstream linter.
-        uses: reviewdog/action-actionlint@1129829fb3230509a1c9aa4e93cec2b234746a68 # v1.78.0
+        uses: reviewdog/action-actionlint@13465d022aa41c282f730be17574b5ce692d0186 # v1.78.1
         with:
           # `github-pr-check` posts annotations on the PR diff via the Checks
           # API (requires `checks: write`, granted above). `level=error` makes
