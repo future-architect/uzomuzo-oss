@@ -79,8 +79,9 @@ func TestEvaluateReleaseAgeFallbackAndIdentity(t *testing.T) {
 		name, input, analysed, ecosystem string
 	}{
 		{"pypi PEP 503", "pkg:pypi/Typing_Extensions@1.0.0", "pkg:pypi/typing-extensions@1.0.0", "pypi"},
-		{"npm scope case", "pkg:npm/%40Scope/Name@1.0.0", "pkg:npm/%40scope/name@1.0.0", "npm"},
-		{"golang path case", "pkg:golang/github.com/Owner/Repo@1.0.0", "pkg:golang/github.com/owner/repo@1.0.0", "golang"},
+		{"npm scope encoding", "pkg:npm/@scope/name@1.0.0", "pkg:npm/%40scope/name@1.0.0", "npm"},
+		{"nuget ID case", "pkg:nuget/Newtonsoft.Json@1.0.0", "pkg:nuget/newtonsoft.json@1.0.0", "nuget"},
+		{"golang path lowercased by the PURL parser", "pkg:golang/github.com/Owner/Repo@1.0.0", "pkg:golang/github.com/owner/repo@1.0.0", "golang"},
 		{"maven qualifier", "pkg:maven/org.example/lib@1.0.0?type=jar", "pkg:maven/org.example/lib@1.0.0", "maven"},
 	} {
 		t.Run("match "+tc.name, func(t *testing.T) {
@@ -114,6 +115,8 @@ func TestEvaluateReleaseAgeFallbackAndIdentity(t *testing.T) {
 		{"ecosystem mismatch", "pkg:npm/example@1.0.0", "pkg:pypi/example@1.0.0", "1.0.0", "pypi"},
 		{"name mismatch", "pkg:pypi/alpha@1.0.0", "pkg:pypi/beta@1.0.0", "1.0.0", "pypi"},
 		{"namespace mismatch", "pkg:npm/%40alpha/lib@1.0.0", "pkg:npm/%40beta/lib@1.0.0", "1.0.0", "npm"},
+		{"npm case-only mismatch", "pkg:npm/JSONStream@1.0.0", "pkg:npm/jsonstream@1.0.0", "1.0.0", "npm"},
+		{"maven case-only mismatch", "pkg:maven/org.example/Lib@1.0.0", "pkg:maven/org.example/lib@1.0.0", "1.0.0", "maven"},
 		{"analysed PURL unparsable", "pkg:pypi/example@1.0.0", "", "1.0.0", "pypi"},
 		{"invalid versioned PURL", "pkg:bad type/example@1.0.0", "pkg:bad type/example@1.0.0", "", ""},
 	} {

@@ -156,6 +156,7 @@ Zero new dependency. Required for any code path that parses external content
   - `internal/infrastructure/eolevaluator/fuzz_test.go`
   - `internal/infrastructure/eoltext/fuzz_test.go`
   - `internal/infrastructure/golangresolve/fuzz_test.go`
+  - `internal/infrastructure/pypi/fuzz_test.go`
   - `internal/infrastructure/treesitter/fuzz_test.go`
   - `internal/interfaces/cli/fuzz_test.go`
 - Future candidates: add a fuzz target whenever a new parser or normalizer is

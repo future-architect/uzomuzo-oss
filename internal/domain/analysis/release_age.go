@@ -125,8 +125,8 @@ func (a *Analysis) ReleaseAgeNotice() string {
 }
 
 // identifiesPackage reports whether the parsed caller input names the same
-// release as pkg. PyPI names compare after PEP 503 normalization; other names
-// compare case-insensitively.
+// release as pkg. PyPI names compare after PEP 503 normalization and NuGet IDs
+// case-insensitively, as their registries do; other names compare exactly.
 func identifiesPackage(input *purl.ParsedPURL, pkg *Package) bool {
 	if input.Version() != pkg.Version || !strings.EqualFold(input.Ecosystem(), pkg.Ecosystem) {
 		return false
@@ -135,9 +135,12 @@ func identifiesPackage(input *purl.ParsedPURL, pkg *Package) bool {
 	if err != nil || analysed.Version() != pkg.Version || !strings.EqualFold(analysed.Ecosystem(), input.Ecosystem()) {
 		return false
 	}
-	normalize := strings.ToLower
-	if strings.EqualFold(input.Ecosystem(), "pypi") {
+	normalize := func(s string) string { return s }
+	switch strings.ToLower(input.Ecosystem()) {
+	case "pypi":
 		normalize = NormalizePyPIName
+	case "nuget":
+		normalize = strings.ToLower
 	}
 	return normalize(input.Namespace()) == normalize(analysed.Namespace()) &&
 		normalize(input.Name()) == normalize(analysed.Name())
