@@ -41,8 +41,9 @@ type ReleaseHistory struct {
 	// PublisherHistory summarizes visible publishers and hidden version times.
 	PublisherHistory PublisherPackageHistory
 	// Publishers maps visible versions to _npmUser.name after StripControlRunes.
-	// A version is absent when it is not in versions, lacks _npmUser, has a
-	// legacy string _npmUser, or has an empty name. Unlike the raw Person in
+	// The map is nil when history was not obtained or versions is missing or
+	// null. A version is absent when it is not in versions, lacks _npmUser, has
+	// a legacy string _npmUser, or has an empty name. Unlike the raw Person in
 	// npmjs.PublishHistory.VersionPublisher, these names are sanitized.
 	Publishers map[string]string
 }

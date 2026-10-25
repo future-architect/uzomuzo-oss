@@ -505,7 +505,7 @@ func decodePublishHistory(r io.Reader, retainVersions bool) (*PublishHistory, er
 		h.VersionPublisher = make(map[string]Person, len(doc.Versions))
 	}
 	if doc.Versions != nil {
-		h.Publishers = make(map[string]string)
+		h.Publishers = make(map[string]string, len(doc.Versions))
 	}
 	h.Maintainers = decodePeople(doc.Maintainers)
 	// A missing or null "versions" leaves Installable nil (unknown), so a

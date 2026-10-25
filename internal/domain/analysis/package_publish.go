@@ -16,9 +16,14 @@ const (
 
 // PackagePublish is the latest dated publish by an account in one package.
 type PackagePublish struct {
-	Status          PackagePublishStatus
+	// Status is found when a dated version names the account; otherwise it is not_found.
+	Status PackagePublishStatus
+	// LastPublishedAt is the latest dated publish by the account in this package.
+	// It is zero when Status is not_found.
 	LastPublishedAt time.Time
-	Version         string
+	// Version is the lowest string-ordered version published at LastPublishedAt.
+	// It is empty when Status is not_found.
+	Version string
 }
 
 // PackagePublishFor reads only the supplied package's visible publish history.
