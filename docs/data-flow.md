@@ -115,7 +115,7 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 #### PyPI registry (GET https://pypi.org/pypi/<project>/json; conditional GET https://pypi.org/pypi/<project>/<version>/json)
 
 - Fields consumed for release age: `releases[version][].upload_time_iso_8601` in the project response and `urls[].upload_time_iso_8601` in the version response; the earliest valid file time for the analysed version becomes `Analysis.PyPIPublishedAt`.
-- Purpose: feed `Analysis.ReleaseAge` when a PyPI response is already fetched for registry state, summary, inactivity classification, or version-yank evaluation. The release-age marker makes no new request. If neither response yields a time, deps.dev's requested-version time is used; absent that, JSON reports `unknown` (ADR-0031).
+- Purpose: feed `Analysis.ReleaseAge` when a PyPI response is already fetched for the summary, inactivity classification, or version-yank evaluation. The release-age marker makes no new request. If neither response yields a time, deps.dev's requested-version time is used; absent that, JSON reports `unknown` (ADR-0031).
 - Code: `pypi.Client.GetProject` and `GetVersion` (`internal/infrastructure/pypi/client.go`), `IntegrationService.enrichPyPISummary` (`internal/infrastructure/integration/populate_summary.go`), and `eolevaluator.Evaluator` (`internal/infrastructure/eolevaluator/evaluator.go`).
 
 #### IANA — RDAP bootstrap registry (GET https://data.iana.org/rdap/dns.json)

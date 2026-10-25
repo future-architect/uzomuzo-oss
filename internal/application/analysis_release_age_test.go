@@ -33,13 +33,14 @@ func TestProcessBatchPURLsReleaseAgeUsesConfiguredWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r := got["pkg:npm/recent@1.0.0"].ReleaseAge; r == nil || r.Status != "young" || r.WindowDays != 1 {
+	if r := got["pkg:npm/recent@1.0.0"].ReleaseAge; r == nil || r.Status != domain.ReleaseAgeYoung || r.WindowDays != 1 ||
+		r.Source != domain.ReleaseAgeSourceNpm || !r.PublishedAt.Equal(now.Add(-12*time.Hour)) {
 		t.Fatalf("recent: %+v", r)
 	}
 	if r := got["pkg:npm/older@1.0.0"].ReleaseAge; r != nil {
 		t.Fatalf("old: %+v", r)
 	}
-	if r := got["pkg:npm/unknown@1.0.0"].ReleaseAge; r == nil || r.Status != "unknown" || r.WindowDays != 1 {
+	if r := got["pkg:npm/unknown@1.0.0"].ReleaseAge; r == nil || r.Status != domain.ReleaseAgeUnknown || r.WindowDays != 1 {
 		t.Fatalf("unknown: %+v", r)
 	}
 }

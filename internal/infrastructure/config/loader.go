@@ -168,9 +168,10 @@ func (s *ConfigService) loadFromEnvironment(config *domainConfig.Config) {
 	loadFloat("LIFECYCLE_ASSESS_MAX_BOT_COMMIT_RATIO", func(v float64) { config.Lifecycle.MaxBotCommitRatio = v })
 	loadInt("LIFECYCLE_ASSESS_RESIDUAL_ADVISORY_THRESHOLD", func(v int) { config.Lifecycle.ResidualAdvisoryThreshold = v })
 	loadInt("LIFECYCLE_ASSESS_COMMIT_ACTIVITY_WINDOW_DAYS", func(v int) { config.Lifecycle.CommitActivityWindowDays = v })
+	// Rationale: the young-release window is under noise measurement (ADR-0031).
 	loadInt("LIFECYCLE_ASSESS_YOUNG_RELEASE_DAYS", func(v int) { config.Lifecycle.YoungReleaseDays = v })
 
-	// Fill zero values, and non-positive dormant windows, with defaults
+	// Fill zero values, and non-positive dormant and young-release windows, with defaults
 	domainConfig.NormalizeLifecycleConfig(&config.Lifecycle)
 
 }

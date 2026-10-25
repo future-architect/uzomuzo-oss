@@ -96,7 +96,9 @@ type Analysis struct {
 	DormantRelease *DormantRelease
 
 	// PyPIPublishedAt is the earliest upload time for the requested version
-	// observed in a PyPI response already fetched during this analysis.
+	// observed in a PyPI response already fetched during this analysis; set it
+	// through ObservePyPIPublishedAt. Kept outside ReleaseHistory so the
+	// dormant-release rules stay npm-only. See ADR-0031.
 	PyPIPublishedAt time.Time
 	// ReleaseAge records a recent or unknown publish time. See ADR-0031.
 	ReleaseAge *ReleaseAge
@@ -198,6 +200,14 @@ func (a *Analysis) HasRecentStableRelease(days int) bool {
 // HasRecentPrereleaseRelease determines if there was a recent prerelease within the given days
 func (a *Analysis) HasRecentPrereleaseRelease(days int) bool {
 	return a.hasRecentPrereleaseReleaseAt(days, time.Now())
+}
+
+// ObservePyPIPublishedAt records at as PyPIPublishedAt when it is non-zero and
+// earlier than the time already recorded.
+func (a *Analysis) ObservePyPIPublishedAt(at time.Time) {
+	if !at.IsZero() && (a.PyPIPublishedAt.IsZero() || at.Before(a.PyPIPublishedAt)) {
+		a.PyPIPublishedAt = at
+	}
 }
 
 // HasRequestedVersionInfo determines if requested version information is available

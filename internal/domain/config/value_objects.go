@@ -166,7 +166,7 @@ func (c LifecycleAssessmentConfig) YoungReleaseWindow() time.Duration {
 }
 
 // NormalizeLifecycleConfig fills zero fields of c with defaults from DefaultValues.Lifecycle,
-// and also replaces non-positive DormantSilenceDays and DormantFlagDays. It is safe to call
+// and also replaces non-positive DormantSilenceDays, DormantFlagDays and YoungReleaseDays. It is safe to call
 // multiple times; other fields already set to non-zero values are left unchanged.
 func NormalizeLifecycleConfig(c *LifecycleAssessmentConfig) {
 	def := DefaultValues.Lifecycle
@@ -217,6 +217,7 @@ func NormalizeLifecycleConfig(c *LifecycleAssessmentConfig) {
 	if c.DormantFlagDays <= 0 {
 		c.DormantFlagDays = def.DormantFlagDays
 	}
+	// A non-positive young-release window would disable the marker.
 	if c.YoungReleaseDays <= 0 {
 		c.YoungReleaseDays = def.YoungReleaseDays
 	}

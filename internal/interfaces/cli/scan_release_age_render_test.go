@@ -14,7 +14,7 @@ import (
 func TestReleaseAgeDetailedAndJSONOnly(t *testing.T) {
 	published := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	entry := audit.AuditEntry{PURL: "pkg:npm/sample@1.0.0", Verdict: audit.VerdictOK, Analysis: &analysis.Analysis{
-		ReleaseAge: &analysis.ReleaseAge{Status: "young", PublishedAt: published, Source: "npm", WindowDays: 7, Until: published.Add(7 * 24 * time.Hour), AgeDays: 2},
+		ReleaseAge: &analysis.ReleaseAge{Status: analysis.ReleaseAgeYoung, PublishedAt: published, Source: analysis.ReleaseAgeSourceNpm, WindowDays: 7, Until: published.Add(7 * 24 * time.Hour), AgeDays: 2},
 	}}
 	var detailed bytes.Buffer
 	if err := renderBoxEntry(&detailed, &entry); err != nil {
@@ -65,7 +65,7 @@ func TestReleaseAgeDetailedAndJSONOnly(t *testing.T) {
 
 func TestReleaseAgeUnknownJSONHasNoDetailedNotice(t *testing.T) {
 	entry := audit.AuditEntry{PURL: "pkg:maven/example/lib@1.0", Verdict: audit.VerdictReview, Analysis: &analysis.Analysis{
-		ReleaseAge: &analysis.ReleaseAge{Status: "unknown", WindowDays: 7},
+		ReleaseAge: &analysis.ReleaseAge{Status: analysis.ReleaseAgeUnknown, WindowDays: 7},
 	}}
 	var detailed bytes.Buffer
 	if err := renderBoxEntry(&detailed, &entry); err != nil {

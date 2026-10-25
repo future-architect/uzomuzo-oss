@@ -132,6 +132,25 @@ const (
 	DormantReleaseFresh = domain.DormantReleaseFresh
 )
 
+// ReleaseAge marks an analysed version published within the young-release
+// window, or one with no trustworthy publish time (see ADR-0031).
+type ReleaseAge = domain.ReleaseAge
+
+// ReleaseAgeStatus names the state of a ReleaseAge.
+type ReleaseAgeStatus = domain.ReleaseAgeStatus
+
+// ReleaseAgeSource names where a young version's publish time came from.
+type ReleaseAgeSource = domain.ReleaseAgeSource
+
+// ReleaseAge statuses and sources.
+const (
+	ReleaseAgeYoung         = domain.ReleaseAgeYoung
+	ReleaseAgeUnknown       = domain.ReleaseAgeUnknown
+	ReleaseAgeSourceNpm     = domain.ReleaseAgeSourceNpm
+	ReleaseAgeSourcePyPI    = domain.ReleaseAgeSourcePyPI
+	ReleaseAgeSourceDepsDev = domain.ReleaseAgeSourceDepsDev
+)
+
 // Registry names recorded in RegistryState.Registry.
 const (
 	RegistryPyPI   = domain.RegistryPyPI

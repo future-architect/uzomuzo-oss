@@ -10,10 +10,12 @@ import (
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
-// enrichPyPISummary overrides Repository.Summary with PyPI info.summary for analyses
-// whose ecosystem is pypi. No-op when the PyPI client is unwired or no PyPI analyses
-// are present. Best-effort: per-package fetch failures are logged at debug level and
-// leave the existing Summary untouched.
+// enrichPyPISummary overrides Repository.Summary with a non-empty PyPI info.summary
+// for analyses whose ecosystem is pypi, and records the requested version's earliest
+// upload time from the same response (Analysis.ObservePyPIPublishedAt, ADR-0031).
+// No-op when the PyPI client is unwired or no PyPI analyses are present. Best-effort:
+// per-package fetch failures are logged at debug level and leave the existing
+// Summary untouched.
 //
 // Precondition: analyses without a populated Repository (e.g., a PyPI package for
 // which deps.dev returned no Project and no repository URL could be inferred) are
@@ -80,9 +82,7 @@ func (s *IntegrationService) enrichPyPISummary(ctx context.Context, analyses map
 				if summary != "" {
 					a.Repository.Summary = summary
 				}
-				if !info.ReleasePublishedAt[a.Package.Version].IsZero() {
-					a.PyPIPublishedAt = info.ReleasePublishedAt[a.Package.Version]
-				}
+				a.ObservePyPIPublishedAt(info.ReleasePublishedAt[a.Package.Version])
 			}
 		}(name, targets)
 	}

@@ -381,10 +381,11 @@ func (s *AnalysisService) enrichAndAssess(ctx context.Context, analyses map[stri
 		domain.NewLifecycleAssessorService(),
 		domain.NewBuildHealthAssessorService(),
 	)
-	// One clock for the lifecycle rules, the dormant-release marker and the
-	// maintainer domain check, and the same default thresholds the assessor
-	// reads, so the lifecycle rules and the dormant-release marker agree on
-	// whether a release is still fresh.
+	// One clock for the lifecycle rules, the dormant-release marker, the
+	// young-release marker and the maintainer domain check. The dormant windows
+	// are the same default thresholds the assessor reads, so the lifecycle rules
+	// and the dormant-release marker agree on whether a release is still fresh;
+	// the young-release window comes from configuration (ADR-0031).
 	now := time.Now()
 	s.checkMaintainerDomains(ctx, analyses, now)
 	lifecycleConfig := config.GetDefaultLifecycle()

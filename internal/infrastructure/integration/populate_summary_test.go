@@ -118,12 +118,13 @@ func TestEnrichPyPISummary_DedupesByPackageName(t *testing.T) {
 }
 
 // TestEnrichPyPISummary_EmptyServerSummary_KeepsExisting ensures a PyPI response
-// with an empty "summary" field does NOT clobber the existing Repository.Summary.
+// with an empty "summary" field does NOT clobber the existing Repository.Summary,
+// while the same response still records the version's publish time.
 func TestEnrichPyPISummary_EmptyServerSummary_KeepsExisting(t *testing.T) {
 	var hits int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&hits, 1)
-		_, _ = fmt.Fprintln(w, `{"info":{"name":"empty","summary":"   ","description":"long readme"}}`)
+		_, _ = fmt.Fprintln(w, `{"info":{"name":"empty","summary":"   ","description":"long readme"},"releases":{"1.0.0":[{"upload_time_iso_8601":"2026-10-21T00:00:00Z"}]}}`)
 	}))
 	defer srv.Close()
 
@@ -133,7 +134,7 @@ func TestEnrichPyPISummary_EmptyServerSummary_KeepsExisting(t *testing.T) {
 	svc := &IntegrationService{pypiClient: pyClient}
 
 	a := &domain.Analysis{
-		Package:    &domain.Package{PURL: "pkg:pypi/empty@1.0.0", Ecosystem: "pypi"},
+		Package:    &domain.Package{PURL: "pkg:pypi/empty@1.0.0", Ecosystem: "pypi", Version: "1.0.0"},
 		Repository: &domain.Repository{Summary: "kept-fallback"},
 	}
 	svc.enrichPyPISummary(context.Background(), map[string]*domain.Analysis{"k": a})
@@ -143,5 +144,8 @@ func TestEnrichPyPISummary_EmptyServerSummary_KeepsExisting(t *testing.T) {
 	}
 	if a.Repository.Summary != "kept-fallback" {
 		t.Errorf("Summary clobbered by empty PyPI summary: got %q", a.Repository.Summary)
+	}
+	if want := time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC); !a.PyPIPublishedAt.Equal(want) {
+		t.Errorf("PyPIPublishedAt = %v, want %v", a.PyPIPublishedAt, want)
 	}
 }

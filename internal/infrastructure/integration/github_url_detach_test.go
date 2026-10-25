@@ -30,7 +30,7 @@ func TestDetachPackageIdentity(t *testing.T) {
 		MaliciousState:  &domain.MaliciousState{Status: domain.MaliciousStatusFlagged},
 		ReleaseHistory:  &domain.ReleaseHistory{Registry: domain.RegistryNpm},
 		PyPIPublishedAt: time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC),
-		ReleaseAge:      &domain.ReleaseAge{Status: "young"},
+		ReleaseAge:      &domain.ReleaseAge{Status: domain.ReleaseAgeYoung},
 		RepoState:       &domain.RepoState{},
 		RepoURL:         githubURL,
 	}

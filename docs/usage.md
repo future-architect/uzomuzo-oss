@@ -509,10 +509,11 @@ STATUS     PURL                    LIFECYCLE      BUILD
 
 ## Young-release notice
 
-For a versioned input published within the last seven days, `--format detailed`
+For a versioned input published within the last seven days (configurable), `--format detailed`
 shows a publish-age notice and `--format json` includes `release_age` with
 `status: "young"`, `published_at`, `source`, `window_days`, and `until`. The
-source is `npm`, `pypi`, or `deps.dev`. If no publish time is available, JSON
+source is `npm`, `pypi`, or `deps.dev`. If no publish time is available, the
+time is in the future, or the input does not identify the analysed package, JSON
 reports `status: "unknown"` and `window_days`; the detailed view has no notice.
 Versions older than the window have no `release_age` field. A dormant-release
 marker or malicious advisory suppresses the young-release notice, while JSON

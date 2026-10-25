@@ -669,7 +669,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	}
 	if a.ReleaseAge != nil {
 		r := a.ReleaseAge
-		je.ReleaseAge = &releaseAgeJSON{Status: r.Status, PublishedAt: r.PublishedAt, Source: r.Source, WindowDays: r.WindowDays, Until: r.Until}
+		je.ReleaseAge = &releaseAgeJSON{Status: string(r.Status), PublishedAt: r.PublishedAt, Source: string(r.Source), WindowDays: r.WindowDays, Until: r.Until}
 	}
 	if a.MaintainerDomain != nil {
 		m := &maintainerDomainJSON{Flagged: []maintainerDomainFindingJSON{}, UncheckedFindings: []maintainerDomainUncheckedJSON{}}

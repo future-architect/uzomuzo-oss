@@ -332,6 +332,8 @@ func (e *Evaluator) applyMavenRelocation(ctx context.Context, a *domain.Analysis
 // applyPyPIExplicit checks PyPI project metadata for explicit deprecation/EOL phrases.
 // Short-circuits on confirmed EOL. This is a primary-source registry signal.
 // applyPyPIClassifier: terminal rule – only classifier-based explicit inactivity.
+// It also records the requested version's earliest upload time from the project
+// response on the analysis, before the classifier check (ADR-0031).
 func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
 	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" || e.pypi == nil {
 		return false
@@ -350,9 +352,7 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 	if !found || info == nil {
 		return false
 	}
-	if at := info.ReleasePublishedAt[a.Package.Version]; !at.IsZero() && (a.PyPIPublishedAt.IsZero() || at.Before(a.PyPIPublishedAt)) {
-		a.PyPIPublishedAt = at
-	}
+	a.ObservePyPIPublishedAt(info.ReleasePublishedAt[a.Package.Version])
 	if hasPyPIInactiveClassifier(info.Classifiers) { // explicit EOL
 		status.State = domain.EOLEndOfLife
 		status.Evidences = append(status.Evidences, domain.EOLEvidence{
@@ -441,6 +441,8 @@ func (e *Evaluator) applyRegistryYanked(
 // unversioned OriginalPURL is a no-op. See ADR-0021.
 //
 // Yanked semantics: see pypi.Client.GetVersion (info.yanked OR all urls[].yanked).
+// A fetched version response also records its earliest upload time on the
+// analysis (ADR-0031).
 func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) bool {
 	if e.pypi == nil {
 		return false
@@ -451,9 +453,7 @@ func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, sta
 			if err != nil || !found || info == nil {
 				return false, "", "", found, err
 			}
-			if !info.PublishedAt.IsZero() && (a.PyPIPublishedAt.IsZero() || info.PublishedAt.Before(a.PyPIPublishedAt)) {
-				a.PyPIPublishedAt = info.PublishedAt
-			}
+			a.ObservePyPIPublishedAt(info.PublishedAt)
 			summary := "Version yanked on PyPI"
 			if info.YankedReason != "" {
 				summary = summary + ": " + info.YankedReason
@@ -546,6 +546,8 @@ func (e *Evaluator) applyDepsDevDeprecated(_ context.Context, a *domain.Analysis
 }
 
 // EvaluateBatch computes EOL status for the given analyses keyed by input key.
+// PyPI rules also record the publish time they observe on each analysis
+// (Analysis.ObservePyPIPublishedAt).
 func (e *Evaluator) EvaluateBatch(ctx context.Context, analyses map[string]*domain.Analysis) (map[string]domain.EOLStatus, error) {
 	out := make(map[string]domain.EOLStatus, len(analyses))
 	type job struct {
