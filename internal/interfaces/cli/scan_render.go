@@ -535,6 +535,7 @@ type releaseAgeJSON struct {
 }
 
 type maintainerDomainJSON struct {
+	VersionPublisher  domain.VersionPublisherKind     `json:"version_publisher,omitempty"`
 	Flagged           []maintainerDomainFindingJSON   `json:"flagged"`
 	Unchecked         int                             `json:"unchecked"`
 	LookupFailed      int                             `json:"lookup_failed"`
@@ -558,6 +559,20 @@ type maintainerDomainFindingJSON struct {
 	Registrar              string                      `json:"registrar,omitempty"`
 	DropCatch              bool                        `json:"drop_catch"`
 	PublisherEmailEvidence *publisherEmailEvidenceJSON `json:"publisher_email_evidence,omitempty"`
+	PackagePublish         *packagePublishJSON         `json:"package_publish,omitempty"`
+}
+
+type packagePublishJSON struct {
+	Status          domain.PackagePublishStatus `json:"status"`
+	LastPublishedAt time.Time                   `json:"last_published_at,omitzero"`
+	Version         string                      `json:"version,omitempty"`
+}
+
+func newPackagePublishJSON(p *domain.PackagePublish) *packagePublishJSON {
+	if p == nil {
+		return nil
+	}
+	return &packagePublishJSON{Status: p.Status, LastPublishedAt: p.LastPublishedAt, Version: p.Version}
 }
 
 type publisherEmailEvidenceJSON struct {
@@ -672,7 +687,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 		je.ReleaseAge = &releaseAgeJSON{Status: string(r.Status), PublishedAt: r.PublishedAt, Source: string(r.Source), WindowDays: r.WindowDays, Until: r.Until}
 	}
 	if a.MaintainerDomain != nil {
-		m := &maintainerDomainJSON{Flagged: []maintainerDomainFindingJSON{}, UncheckedFindings: []maintainerDomainUncheckedJSON{}}
+		m := &maintainerDomainJSON{VersionPublisher: a.MaintainerDomain.AnalysedVersionPublisher, Flagged: []maintainerDomainFindingJSON{}, UncheckedFindings: []maintainerDomainUncheckedJSON{}}
 		for _, f := range a.MaintainerDomain.Findings {
 			switch {
 			case f.Kind == domain.MaintainerDomainUnchecked:
@@ -681,7 +696,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 			case f.Kind == domain.MaintainerDomainLookupFailed:
 				m.LookupFailed++
 			case f.Kind.WarrantsNotice():
-				m.Flagged = append(m.Flagged, maintainerDomainFindingJSON{Account: f.Account, Domain: f.Domain, Kind: f.Kind, FirstSeen: f.FirstSeen, Registered: f.Registered, Registrar: f.Registrar, DropCatch: f.DropCatch, PublisherEmailEvidence: newPublisherEmailEvidenceJSON(f.PublisherEmailEvidence)})
+				m.Flagged = append(m.Flagged, maintainerDomainFindingJSON{Account: f.Account, Domain: f.Domain, Kind: f.Kind, FirstSeen: f.FirstSeen, Registered: f.Registered, Registrar: f.Registrar, DropCatch: f.DropCatch, PublisherEmailEvidence: newPublisherEmailEvidenceJSON(f.PublisherEmailEvidence), PackagePublish: newPackagePublishJSON(f.PackagePublish)})
 			}
 		}
 		je.MaintainerDomain = m

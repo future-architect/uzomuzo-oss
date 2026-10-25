@@ -345,6 +345,8 @@ type PublishHistory struct {
 	// VersionPublisher maps version to its "_npmUser". It is nil unless the
 	// history was built by ParsePublishHistoryWithVersions.
 	VersionPublisher map[string]Person
+	// Publishers maps visible versions to sanitized named publisher accounts.
+	Publishers map[string]string
 	// PublisherHistory summarizes each publisher account's latest dated
 	// publishes and the publish times of versions whose publisher is not
 	// visible.
@@ -477,7 +479,8 @@ func extractNpmSuccessor(msg string) string {
 // "_npmUser" are kept, as raw JSON: a packument with thousands of versions runs
 // to megabytes, and the rest of the manifest is not needed here. Per-version
 // identities are folded into FirstSeen, and each "_npmUser" into
-// PublisherHistory; the identities themselves are not retained.
+// PublisherHistory. Only sanitized publisher names are retained per version
+// in scan mode; full identities are not retained.
 func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
 	return decodePublishHistory(r, false)
 }
@@ -500,6 +503,9 @@ func decodePublishHistory(r io.Reader, retainVersions bool) (*PublishHistory, er
 	if retainVersions {
 		h.VersionMaintainers = make(map[string][]Person, len(doc.Versions))
 		h.VersionPublisher = make(map[string]Person, len(doc.Versions))
+	}
+	if doc.Versions != nil {
+		h.Publishers = make(map[string]string)
 	}
 	h.Maintainers = decodePeople(doc.Maintainers)
 	// A missing or null "versions" leaves Installable nil (unknown), so a
@@ -533,6 +539,10 @@ func decodePublishHistory(r io.Reader, retainVersions bool) (*PublishHistory, er
 			h.VersionMaintainers[v] = people
 		}
 		publisher := decodePerson(manifest.NPMUser)
+		account := analysis.StripControlRunes(publisher.Name)
+		if account != "" {
+			h.Publishers[v] = account
+		}
 		if retainVersions {
 			h.VersionPublisher[v] = publisher
 		}
@@ -540,7 +550,7 @@ func decodePublishHistory(r io.Reader, retainVersions bool) (*PublishHistory, er
 		if at.IsZero() {
 			continue
 		}
-		if account := analysis.StripControlRunes(publisher.Name); account != "" {
+		if account != "" {
 			h.PublisherHistory.AddPublisherPublish(account, publisherPublish(doc.Name, v, at, publisher.Email))
 		} else {
 			if h.unattributed == nil {

@@ -162,6 +162,8 @@ type MaintainerDomainFinding struct {
 	DropCatch bool
 	// PublisherEmailEvidence is the npm publisher e-mail evidence, when collected.
 	PublisherEmailEvidence *PublisherEmailEvidence
+	// PackagePublish describes dated publishes by this account in this package.
+	PackagePublish *PackagePublish
 }
 
 // IsDropCatchRegistrar identifies known drop-catch registrar names by prefix.
@@ -179,6 +181,8 @@ func IsDropCatchRegistrar(name string) bool {
 // MaintainerDomainResult holds findings for a package's maintainers.
 type MaintainerDomainResult struct {
 	Findings []MaintainerDomainFinding
+	// AnalysedVersionPublisher describes the exact version being analysed.
+	AnalysedVersionPublisher VersionPublisherKind
 }
 
 // Flagged returns findings that warrant a maintainer domain notice.
@@ -204,14 +208,14 @@ func (a *Analysis) MaintainerDomainNotices() []string {
 	flagged := a.MaintainerDomain.Flagged()
 	notices := make([]string, 0, len(flagged))
 	for _, f := range flagged {
-		if notice := maintainerDomainNotice(f); notice != "" {
+		if notice := maintainerDomainNotice(f, a.MaintainerDomain.AnalysedVersionPublisher); notice != "" {
 			notices = append(notices, notice)
 		}
 	}
 	return notices
 }
 
-func maintainerDomainNotice(f MaintainerDomainFinding) string {
+func maintainerDomainNotice(f MaintainerDomainFinding, versionPublisher VersionPublisherKind) string {
 	// The notice states the RDAP fact first, then the npm record, then the
 	// conditional risk and one action. The address itself is not printed:
 	// the account name and domain are enough to act on, and the address
@@ -226,7 +230,7 @@ func maintainerDomainNotice(f MaintainerDomainFinding) string {
 	}
 	first := f.FirstSeen.UTC().Format(time.DateOnly)
 	const action = " Before upgrading, check who published newer versions of this package."
-	clause := publisherNoticeClause(f.PublisherEmailEvidence)
+	clause := publisherNoticeClause(f.PublisherEmailEvidence) + packagePublishNoticeClause(f, versionPublisher)
 	switch f.Kind {
 	case MaintainerDomainReregisteredBefore:
 		registrar := ""
@@ -245,6 +249,22 @@ func maintainerDomainNotice(f MaintainerDomainFinding) string {
 	default:
 		return ""
 	}
+}
+
+func packagePublishNoticeClause(f MaintainerDomainFinding, versionPublisher VersionPublisherKind) string {
+	var clause string
+	if f.Account != "" && f.PackagePublish != nil {
+		switch f.PackagePublish.Status {
+		case PackagePublishFound:
+			clause = " The last publish by this account found in this package's npm records was on " + f.PackagePublish.LastPublishedAt.UTC().Format(time.DateOnly) + "."
+		case PackagePublishNotFound:
+			clause = " The npm records retrieved for this package show no publish by this account."
+		}
+	}
+	if versionPublisher == VersionPublisherTrustedPublishing {
+		clause += " This version was published from GitHub Actions through npm trusted publishing."
+	}
+	return clause
 }
 
 func publisherNoticeClause(e *PublisherEmailEvidence) string {

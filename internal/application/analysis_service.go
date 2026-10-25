@@ -472,11 +472,16 @@ func (s *AnalysisService) checkMaintainerDomains(ctx context.Context, analyses m
 			continue
 		}
 		s.refreshRDAPBootstrap(ctx)
-		result := &domain.MaintainerDomainResult{}
+		version := ""
+		if a.Package != nil {
+			version = a.Package.Version
+		}
+		result := &domain.MaintainerDomainResult{AnalysedVersionPublisher: domain.VersionPublisherKindFor(a.ReleaseHistory, version)}
 		for _, address := range a.ReleaseHistory.Maintainers {
 			finding := s.maintainerDomainChecker.Check(ctx, address, now)
 			if finding.Kind.WarrantsNotice() {
 				finding.PublisherEmailEvidence = domain.PublisherEmailEvidenceFor(finding, domain.PublisherScopeScanPackuments, a.ReleaseHistory.PublisherHistory, histories)
+				finding.PackagePublish = domain.PackagePublishFor(finding.Account, a.ReleaseHistory.PublisherHistory)
 			}
 			result.Findings = append(result.Findings, finding)
 			// A package interrupted by cancellation would report the cut-short

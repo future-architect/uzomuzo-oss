@@ -143,6 +143,58 @@ func TestEmptyScanJSONGolden(t *testing.T) {
 	}
 }
 
+func TestMaintainerDomainPackageContextJSON(t *testing.T) {
+	at := time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC)
+	finding := analysis.MaintainerDomainFinding{Account: "alice", Domain: "example.test", Kind: analysis.MaintainerDomainUnregistered, PackagePublish: &analysis.PackagePublish{Status: analysis.PackagePublishFound, LastPublishedAt: at, Version: "1.0.0"}}
+	a := &analysis.Analysis{MaintainerDomain: &analysis.MaintainerDomainResult{AnalysedVersionPublisher: analysis.VersionPublisherTrustedPublishing, Findings: []analysis.MaintainerDomainFinding{finding}}}
+	e := audit.AuditEntry{PURL: "pkg:npm/example@1.0.0", Verdict: audit.VerdictOK, Analysis: a}
+	render := func() string {
+		t.Helper()
+		var buf bytes.Buffer
+		if err := renderScanJSON(&buf, []audit.AuditEntry{e}, []audit.AuditEntry{e}, false, nil); err != nil {
+			t.Fatal(err)
+		}
+		return buf.String()
+	}
+	got := render()
+	for _, part := range []string{`"version_publisher": "trusted_publishing"`, `"package_publish": {`, `"status": "found"`, `"last_published_at": "2025-03-01T10:00:00Z"`, `"version": "1.0.0"`} {
+		if !strings.Contains(got, part) {
+			t.Errorf("missing %s in %s", part, got)
+		}
+	}
+	if notice := strings.Join(a.MaintainerDomainNotices(), "\n"); !strings.Contains(notice, "This version was published from GitHub Actions through npm trusted publishing.") || strings.Contains(notice, "alice@") {
+		t.Errorf("notice=%q", notice)
+	}
+	var box bytes.Buffer
+	if err := renderBoxEntry(&box, &e); err != nil {
+		t.Fatal(err)
+	}
+	boxText := strings.Join(strings.Fields(strings.ReplaceAll(box.String(), "│", "")), " ")
+	if !strings.Contains(boxText, "The last publish by this account found in this package's npm records was on 2025-03-01.") || !strings.Contains(boxText, "This version was published from GitHub Actions through npm trusted publishing.") || strings.Contains(boxText, "alice@") {
+		t.Errorf("detailed box=%q", box.String())
+	}
+	finding.Account = ""
+	finding.PackagePublish = &analysis.PackagePublish{Status: analysis.PackagePublishNotFound}
+	a.MaintainerDomain.Findings = []analysis.MaintainerDomainFinding{finding}
+	got = render()
+	if !strings.Contains(got, `"status": "not_found"`) || strings.Contains(got, `"last_published_at"`) {
+		t.Errorf("not_found JSON=%s", got)
+	}
+	if notice := strings.Join(a.MaintainerDomainNotices(), "\n"); strings.Contains(notice, "no publish by this account") {
+		t.Errorf("unnamed account notice=%q", notice)
+	}
+	a.MaintainerDomain.Findings = nil
+	got = render()
+	if !strings.Contains(got, `"version_publisher": "trusted_publishing"`) || !strings.Contains(got, `"flagged": []`) || len(a.MaintainerDomainNotices()) != 0 {
+		t.Errorf("empty findings JSON=%s", got)
+	}
+	a.MaintainerDomain = nil
+	got = render()
+	if strings.Contains(got, "version_publisher") || strings.Contains(got, "package_publish") || strings.Contains(got, "maintainer_domain") {
+		t.Errorf("flag-off JSON=%s", got)
+	}
+}
+
 // TestScanJSONRDAPBootstrap checks that rdap_bootstrap appears only when the
 // maintainer domain check ran.
 func TestScanJSONRDAPBootstrap(t *testing.T) {

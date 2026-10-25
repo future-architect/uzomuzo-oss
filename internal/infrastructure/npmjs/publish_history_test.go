@@ -2,6 +2,7 @@ package npmjs
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -70,6 +71,34 @@ func TestParsePublishHistoryLegacyMaintainerShapes(t *testing.T) {
 	}
 	if len(h.Maintainers) != 0 || len(h.FirstSeen) != 0 || len(h.PublishedAt) != 1 {
 		t.Errorf("history=%+v", h)
+	}
+}
+
+func TestParsePublishHistoryPublisherNames(t *testing.T) {
+	t.Parallel()
+	const raw = `{"time":{"1":"2025-01-01T00:00:00Z","2":"2025-01-02T00:00:00Z"},"versions":{"1":{"_npmUser":{"name":"GitHub\u0000 Actions"}},"2":{"_npmUser":{"name":"alice"}},"3":{"_npmUser":{"name":"GitHub Actions"}},"4":{"_npmUser":"legacy"},"5":{}}}`
+	for _, parse := range []struct {
+		name string
+		fn   func(io.Reader) (*PublishHistory, error)
+	}{
+		{"scan", parsePublishHistory},
+		{"measurement", ParsePublishHistoryWithVersions},
+	} {
+		t.Run(parse.name, func(t *testing.T) {
+			h, err := parse.fn(strings.NewReader(raw))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(h.Publishers) != 3 || h.Publishers["1"] != "GitHub Actions" || h.Publishers["2"] != "alice" || h.Publishers["3"] != "GitHub Actions" {
+				t.Errorf("publishers=%v", h.Publishers)
+			}
+			if _, ok := h.PublisherHistory.Latest["GitHub Actions"]; !ok {
+				t.Error("dated sanitized publisher missing")
+			}
+			if parse.name == "scan" && h.VersionPublisher != nil {
+				t.Error("scan retained measurement identities")
+			}
+		})
 	}
 }
 

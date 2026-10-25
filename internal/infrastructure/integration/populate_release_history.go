@@ -64,6 +64,7 @@ func (s *IntegrationService) enrichReleaseHistory(ctx context.Context, analyses 
 		cp := *h
 		cp.PublishedAt = maps.Clone(h.PublishedAt)
 		cp.Installable = maps.Clone(h.Installable)
+		cp.Publishers = maps.Clone(h.Publishers)
 		cp.Maintainers = slices.Clone(h.Maintainers)
 		cp.PublisherHistory.Latest = make(map[string][]domain.PublisherPublish, len(h.PublisherHistory.Latest))
 		for account, publishes := range h.PublisherHistory.Latest {
@@ -104,5 +105,6 @@ func (s *IntegrationService) fetchNpmReleaseHistory(ctx context.Context, fullNam
 		Installable:      h.Installable,
 		Maintainers:      maintainers,
 		PublisherHistory: publisherHistory,
+		Publishers:       h.Publishers,
 	}, true, nil
 }
