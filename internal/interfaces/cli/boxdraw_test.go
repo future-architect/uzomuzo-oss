@@ -855,6 +855,7 @@ func TestIsWrappableLine(t *testing.T) {
 		{"🔍 Review Needed", true},
 		{"Catalog Reason: why this is EOL", true},
 		{"⚠ Release after silence: This version came out 2026-10-04.", true},
+		{"⚠ Release age: This version was published on 2026-10-21, 4 days before this scan.", true},
 		{"Fast, unopinionated, minimalist web framework for node.", false},
 		{"[npmjs] Stable version is deprecated in npm registry.", false},
 		{"→ https://github.com/advisories/GHSA-xxxx", false},

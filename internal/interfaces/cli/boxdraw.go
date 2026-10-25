@@ -120,7 +120,8 @@ func isWrappableLine(s string) bool {
 		return true
 	case strings.HasPrefix(trimmed, "Catalog Reason:"):
 		return true
-	case strings.HasPrefix(trimmed, dormantReleasePrefix), strings.HasPrefix(trimmed, maintainerDomainPrefix):
+	case strings.HasPrefix(trimmed, dormantReleasePrefix), strings.HasPrefix(trimmed, releaseAgePrefix),
+		strings.HasPrefix(trimmed, maintainerDomainPrefix):
 		return true
 	case strings.HasPrefix(trimmed, "Description:"):
 		return true

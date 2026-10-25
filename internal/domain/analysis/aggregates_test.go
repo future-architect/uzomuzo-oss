@@ -446,4 +446,8 @@ func TestAnalysis_ObservePyPIPublishedAt(t *testing.T) {
 			}
 		})
 	}
+	t.Run("nil receiver is a no-op", func(t *testing.T) {
+		var a *Analysis
+		a.ObservePyPIPublishedAt(t1)
+	})
 }

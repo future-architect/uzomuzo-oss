@@ -203,7 +203,8 @@ func (a *Analysis) HasRecentPrereleaseRelease(days int) bool {
 }
 
 // ObservePyPIPublishedAt records at as PyPIPublishedAt when at is non-zero and
-// either no time is recorded yet or at is earlier than the recorded one.
+// either no time is recorded yet or at is earlier than the recorded one. A nil
+// receiver is a no-op.
 func (a *Analysis) ObservePyPIPublishedAt(at time.Time) {
 	if a == nil {
 		return
