@@ -202,9 +202,12 @@ func (a *Analysis) HasRecentPrereleaseRelease(days int) bool {
 	return a.hasRecentPrereleaseReleaseAt(days, time.Now())
 }
 
-// ObservePyPIPublishedAt records at as PyPIPublishedAt when it is non-zero and
-// earlier than the time already recorded.
+// ObservePyPIPublishedAt records at as PyPIPublishedAt when at is non-zero and
+// either no time is recorded yet or at is earlier than the recorded one.
 func (a *Analysis) ObservePyPIPublishedAt(at time.Time) {
+	if a == nil {
+		return
+	}
 	if !at.IsZero() && (a.PyPIPublishedAt.IsZero() || at.Before(a.PyPIPublishedAt)) {
 		a.PyPIPublishedAt = at
 	}

@@ -115,13 +115,15 @@ type ProjectInfo struct {
 }
 
 // VersionInfo is the minimal subset of PyPI version-level metadata we need.
-// Currently used for yanked-version detection during EOL evaluation.
+// Used for yanked-version detection during EOL evaluation and for the
+// young-release marker's publish time (ADR-0031).
 type VersionInfo struct {
 	Name         string
 	Version      string
 	Yanked       bool
 	YankedReason string // info.yanked_reason; optional
-	PublishedAt  time.Time
+	// PublishedAt is the earliest valid urls[].upload_time_iso_8601; zero when none parse.
+	PublishedAt time.Time
 }
 
 // GetVersion retrieves PyPI version-level metadata. Returns (info, found, err).
@@ -277,7 +279,8 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 	return info, true, nil
 }
 
-// earlierUpload returns the earliest valid upload time seen in a PyPI file list.
+// earlierUpload returns the earlier of current and raw parsed as RFC 3339, or
+// current when raw is not a valid time.
 func earlierUpload(current time.Time, raw string) time.Time {
 	at, err := time.Parse(time.RFC3339Nano, raw)
 	if err != nil {

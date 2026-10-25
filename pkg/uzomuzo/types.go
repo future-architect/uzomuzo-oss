@@ -144,10 +144,15 @@ type ReleaseAgeSource = domain.ReleaseAgeSource
 
 // ReleaseAge statuses and sources.
 const (
-	ReleaseAgeYoung         = domain.ReleaseAgeYoung
-	ReleaseAgeUnknown       = domain.ReleaseAgeUnknown
-	ReleaseAgeSourceNpm     = domain.ReleaseAgeSourceNpm
-	ReleaseAgeSourcePyPI    = domain.ReleaseAgeSourcePyPI
+	// ReleaseAgeYoung means the version was published within the window.
+	ReleaseAgeYoung = domain.ReleaseAgeYoung
+	// ReleaseAgeUnknown means no trustworthy publish time was available.
+	ReleaseAgeUnknown = domain.ReleaseAgeUnknown
+	// ReleaseAgeSourceNpm is the npm packument's time[version].
+	ReleaseAgeSourceNpm = domain.ReleaseAgeSourceNpm
+	// ReleaseAgeSourcePyPI is the earliest file upload in a PyPI response.
+	ReleaseAgeSourcePyPI = domain.ReleaseAgeSourcePyPI
+	// ReleaseAgeSourceDepsDev is deps.dev's requested-version release time.
 	ReleaseAgeSourceDepsDev = domain.ReleaseAgeSourceDepsDev
 )
 

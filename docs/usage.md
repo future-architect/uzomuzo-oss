@@ -520,7 +520,7 @@ marker or malicious advisory suppresses the young-release notice, while JSON
 keeps both facts. Table and CSV output are unchanged.
 
 Set `LIFECYCLE_ASSESS_YOUNG_RELEASE_DAYS` to change the window from its default
-of seven days. This notice does not change a label, verdict, exit code, or
+of seven days (0 or less falls back to seven). This notice does not change a label, verdict, exit code, or
 `--fail-on` decision. Run scans on dependency-update PRs or builds before
 installing dependencies: a monthly scan may miss the window. Transitive
 dependencies are scanned only with `--show-transitive`. This measures version

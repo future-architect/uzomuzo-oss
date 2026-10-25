@@ -1,7 +1,6 @@
 package analysis
 
 import (
-	"strings"
 	"testing"
 	"time"
 )
@@ -68,7 +67,7 @@ func TestEvaluateReleaseAgeFallbackAndIdentity(t *testing.T) {
 		t.Fatalf("PyPI precedence: %+v", got)
 	}
 	a.PyPIPublishedAt = time.Time{}
-	if got := a.EvaluateReleaseAge(now, window); got == nil || got.Source != ReleaseAgeSourceDepsDev {
+	if got := a.EvaluateReleaseAge(now, window); got == nil || got.Source != ReleaseAgeSourceDepsDev || !got.PublishedAt.Equal(now.Add(-3*time.Hour)) {
 		t.Fatalf("deps.dev fallback: %+v", got)
 	}
 	a.ReleaseInfo = nil
@@ -76,18 +75,31 @@ func TestEvaluateReleaseAgeFallbackAndIdentity(t *testing.T) {
 		t.Fatalf("unknown time: %+v", got)
 	}
 
-	t.Run("normalized names match", func(t *testing.T) {
-		for _, tc := range []struct{ input, analysed string }{
-			{"pkg:pypi/Typing_Extensions@1.0.0", "pkg:pypi/typing-extensions@1.0.0"},
-			{"pkg:npm/%40Scope/Name@1.0.0", "pkg:npm/%40scope/name@1.0.0"},
-		} {
+	for _, tc := range []struct {
+		name, input, analysed, ecosystem string
+	}{
+		{"pypi PEP 503", "pkg:pypi/Typing_Extensions@1.0.0", "pkg:pypi/typing-extensions@1.0.0", "pypi"},
+		{"npm scope case", "pkg:npm/%40Scope/Name@1.0.0", "pkg:npm/%40scope/name@1.0.0", "npm"},
+		{"golang path case", "pkg:golang/github.com/Owner/Repo@1.0.0", "pkg:golang/github.com/owner/repo@1.0.0", "golang"},
+		{"maven qualifier", "pkg:maven/org.example/lib@1.0.0?type=jar", "pkg:maven/org.example/lib@1.0.0", "maven"},
+	} {
+		t.Run("match "+tc.name, func(t *testing.T) {
 			m := newAnalysis()
 			m.OriginalPURL = tc.input
-			m.Package.PURL = tc.analysed
-			m.Package.Ecosystem = strings.TrimPrefix(strings.SplitN(tc.analysed, "/", 2)[0], "pkg:")
+			m.Package = &Package{PURL: tc.analysed, Ecosystem: tc.ecosystem, Version: "1.0.0"}
 			if got := m.EvaluateReleaseAge(now, window); got == nil || got.Status != ReleaseAgeYoung {
 				t.Fatalf("%s vs %s: %+v", tc.input, tc.analysed, got)
 			}
+		})
+	}
+
+	t.Run("PyPI time ignored outside pypi", func(t *testing.T) {
+		m := newAnalysis()
+		m.OriginalPURL = "pkg:npm/example@1.0.0"
+		m.Package = &Package{PURL: "pkg:npm/example@1.0.0", Ecosystem: "npm", Version: "1.0.0"}
+		m.PyPIPublishedAt = now.Add(-time.Hour)
+		if got := m.EvaluateReleaseAge(now, window); got == nil || got.Source != ReleaseAgeSourceDepsDev {
+			t.Fatalf("npm with PyPI time: %+v", got)
 		}
 	})
 
@@ -130,6 +142,8 @@ func TestEvaluateReleaseAgeFallbackAndIdentity(t *testing.T) {
 	}
 }
 
+// The notice renders the fields as given, so PublishedAt and Until stay fixed
+// while AgeDays varies.
 func TestReleaseAgeNotice(t *testing.T) {
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	for _, tc := range []struct {

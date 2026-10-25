@@ -78,11 +78,20 @@ func TestReleaseAgeUnknownJSONHasNoDetailedNotice(t *testing.T) {
 	if err := renderScanJSON(&output, []audit.AuditEntry{entry}, []audit.AuditEntry{entry}, false, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output.String(), `"release_age"`) || !strings.Contains(output.String(), `"status": "unknown"`) {
-		t.Fatalf("unknown JSON: %s", output.String())
+	var doc struct {
+		Packages []struct {
+			ReleaseAge map[string]json.RawMessage `json:"release_age"`
+		} `json:"packages"`
 	}
-	if strings.Contains(output.String(), `"published_at"`) || strings.Contains(output.String(), `"until"`) || strings.Contains(output.String(), `"source"`) {
-		t.Fatalf("unknown JSON has time/source: %s", output.String())
+	if err := json.Unmarshal(output.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Packages) != 1 {
+		t.Fatalf("packages: %s", output.String())
+	}
+	got := doc.Packages[0].ReleaseAge
+	if string(got["status"]) != `"unknown"` || string(got["window_days"]) != "7" || len(got) != 2 {
+		t.Fatalf("unknown release_age: %s", output.String())
 	}
 }
 

@@ -422,3 +422,28 @@ func TestAnalysis_HasDeprecatedRequestedVersion(t *testing.T) {
 		}
 	})
 }
+
+func TestAnalysis_ObservePyPIPublishedAt(t *testing.T) {
+	t1 := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	t2 := t1.Add(time.Hour)
+	tests := []struct {
+		name   string
+		stored time.Time
+		at     time.Time
+		want   time.Time
+	}{
+		{"zero start records", time.Time{}, t2, t2},
+		{"earlier replaces", t2, t1, t1},
+		{"later keeps stored", t1, t2, t1},
+		{"zero keeps stored", t1, time.Time{}, t1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &Analysis{PyPIPublishedAt: tc.stored}
+			a.ObservePyPIPublishedAt(tc.at)
+			if !a.PyPIPublishedAt.Equal(tc.want) {
+				t.Fatalf("got %v, want %v", a.PyPIPublishedAt, tc.want)
+			}
+		})
+	}
+}

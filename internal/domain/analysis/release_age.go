@@ -31,8 +31,8 @@ const (
 )
 
 // ReleaseAge records whether the analysed version is within the configured
-// publish window or has no trustworthy publish time. A nil pointer means the
-// version is older than the window, or the input names no version. See ADR-0031.
+// publish window or has no trustworthy publish time. A nil pointer means one of
+// the nil cases listed on EvaluateReleaseAge. See ADR-0031.
 type ReleaseAge struct {
 	// Status is ReleaseAgeYoung or ReleaseAgeUnknown.
 	Status ReleaseAgeStatus
@@ -50,11 +50,11 @@ type ReleaseAge struct {
 }
 
 // EvaluateReleaseAge evaluates the caller-selected version at the scan clock.
-// It returns nil for an older version, an input without a version, or a
-// non-positive window. It returns unknown when no publish time is available,
-// the time is in the future, or the versioned input does not identify the
-// analysed package (different ecosystem, namespace, name, or version, or an
-// input that cannot be parsed).
+// It returns nil for a nil receiver or Package, a non-positive window, an input
+// without a version, or a version older than the window. It returns unknown
+// when no publish time is available, the time is in the future, or the
+// versioned input does not identify the analysed package (different ecosystem,
+// namespace, name, or version, or the input or Package.PURL cannot be parsed).
 func (a *Analysis) EvaluateReleaseAge(now time.Time, window time.Duration) *ReleaseAge {
 	if a == nil || a.Package == nil || window <= 0 {
 		return nil
@@ -144,7 +144,7 @@ func identifiesPackage(input *purl.ParsedPURL, pkg *Package) bool {
 }
 
 // hasVersionSegment reports whether an input the PURL parser rejected still
-// carries "@version" after its last path segment, so a scoped npm name such as
+// carries "@version" after its last '/', so a scoped npm name such as
 // "@scope/name" without a version does not count.
 func hasVersionSegment(raw string) bool {
 	identity, _, _ := strings.Cut(raw, "?")
