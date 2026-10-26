@@ -60,7 +60,8 @@ type ParserConfig struct {
 
 // RunFromParser executes the scan pipeline from a dependency parser (SBOM/go.mod).
 // By default, transitive dependencies are excluded when the parser provides relation info.
-// Set parserCfg.ShowTransitive to include them.
+// Set parserCfg.ShowTransitive to include them. Returns an empty Result when
+// the parser yields nothing or every dependency is filtered out.
 func (s *Service) RunFromParser(ctx context.Context, parser depparser.DependencyParser, data []byte, policy domainscan.FailPolicy, parserCfg ParserConfig) (*Result, error) {
 	if parser == nil {
 		return nil, fmt.Errorf("scan service: parser is nil")

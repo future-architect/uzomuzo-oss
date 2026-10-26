@@ -81,7 +81,7 @@ STATUS      RELATION                  PURL                        LIFECYCLE   EO
 Not all SBOMs include a `dependencies` section (older tools, minimal SBOM profiles). When the section is absent:
 
 - All components are shown regardless of `--show-transitive`
-- The `RELATION` column displays `Unknown` for all entries
+- The `RELATION` column displays `Unknown` for all entries (corrected: see Amendments, 2026-10-27)
 - No error is raised — the tool degrades gracefully
 
 ### No additional CLI flags
@@ -119,6 +119,10 @@ via-parent, because go.mod does not record which direct dependency pulls them in
 through the same `--show-transitive` filter as SBOM transitive dependencies. When the same
 PURL appears as both direct and transitive (for example, two requirements replaced by the
 same module), it is reported as direct, for every input format.
+
+Also corrected: the fallback section above says the `RELATION` column displays `Unknown`
+for SBOMs without a `dependencies` section. The renderers omit the column (table) and the
+`relation` field (JSON) instead; no `Unknown` value is printed.
 
 ## References
 

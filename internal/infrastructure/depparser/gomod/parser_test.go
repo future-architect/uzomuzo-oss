@@ -111,6 +111,7 @@ func TestParser_Parse_VersionedReplace(t *testing.T) {
 		"pkg:golang/github.com/exact/fork@v1.0.1",        // replace for this exact version
 		"pkg:golang/github.com/other/version@v1.0.0",     // replace names another version: not applied
 		"pkg:golang/github.com/both/this-version@v1.0.1", // exact version wins over every-version replace
+		"pkg:golang/github.com/local/exact@v1.0.0",       // exact local-path replace wins, and keeps the original
 	}
 	got := make([]string, 0, len(deps))
 	for _, d := range deps {
