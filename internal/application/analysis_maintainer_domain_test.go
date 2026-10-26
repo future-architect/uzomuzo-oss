@@ -201,7 +201,7 @@ func TestMaintainerDomainPublisherEvidenceUsesHiddenFindingSource(t *testing.T) 
 func TestMaintainerDomainUsesAnalysedVersionPublisher(t *testing.T) {
 	at := time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC)
 	address := domain.MaintainerAddress{Account: "alice", Email: "alice@example.test", FirstSeen: at}
-	h := &domain.ReleaseHistory{Registry: domain.RegistryNpm, Maintainers: []domain.MaintainerAddress{address}, Publishers: map[string]string{"1.0.0": "alice", "2.0.0": "GitHub Actions"}}
+	h := &domain.ReleaseHistory{Registry: domain.RegistryNpm, Maintainers: []domain.MaintainerAddress{address}, PublisherKinds: map[string]domain.VersionPublisherKind{"1.0.0": domain.VersionPublisherOther, "2.0.0": domain.VersionPublisherTrustedPublishing}}
 	a := &domain.Analysis{Package: &domain.Package{Version: "1.0.0"}, ReleaseHistory: h}
 	s := &AnalysisService{maintainerDomainChecker: &fakeMaintainerDomainChecker{registered: at.Add(time.Hour)}}
 	s.checkMaintainerDomains(context.Background(), map[string]*domain.Analysis{"a": a}, at.Add(2*time.Hour))
@@ -232,7 +232,7 @@ func TestMaintainerDomainPackagePublishEdges(t *testing.T) {
 		return a.MaintainerDomain.Flagged()[0]
 	}
 	t.Run("undated publish is not_found", func(t *testing.T) {
-		h := &domain.ReleaseHistory{Registry: domain.RegistryNpm, Maintainers: []domain.MaintainerAddress{{Account: "alice", Email: "alice@example.test", FirstSeen: at}}, Publishers: map[string]string{"1.0.0": "alice"}}
+		h := &domain.ReleaseHistory{Registry: domain.RegistryNpm, Maintainers: []domain.MaintainerAddress{{Account: "alice", Email: "alice@example.test", FirstSeen: at}}, PublisherKinds: map[string]domain.VersionPublisherKind{"1.0.0": domain.VersionPublisherOther}}
 		a := &domain.Analysis{Package: &domain.Package{Version: "1.0.0"}, ReleaseHistory: h}
 		f := check(t, a)
 		if f.PackagePublish == nil || f.PackagePublish.Status != domain.PackagePublishNotFound {
@@ -250,7 +250,7 @@ func TestMaintainerDomainPackagePublishEdges(t *testing.T) {
 		}
 	})
 	t.Run("nil package is unknown", func(t *testing.T) {
-		h := &domain.ReleaseHistory{Registry: domain.RegistryNpm, Maintainers: []domain.MaintainerAddress{{Account: "alice", Email: "alice@example.test", FirstSeen: at}}, Publishers: map[string]string{"1.0.0": "GitHub Actions"}}
+		h := &domain.ReleaseHistory{Registry: domain.RegistryNpm, Maintainers: []domain.MaintainerAddress{{Account: "alice", Email: "alice@example.test", FirstSeen: at}}, PublisherKinds: map[string]domain.VersionPublisherKind{"1.0.0": domain.VersionPublisherTrustedPublishing}}
 		a := &domain.Analysis{ReleaseHistory: h}
 		check(t, a)
 		if got := a.MaintainerDomain.AnalysedVersionPublisher; got != domain.VersionPublisherUnknown {

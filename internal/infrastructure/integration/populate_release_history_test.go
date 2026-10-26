@@ -63,15 +63,15 @@ func TestEnrichReleaseHistory(t *testing.T) {
 	// would change the other's burst result.
 	analyses["a"].ReleaseHistory.PublishedAt["9.9.9"] = time.Time{}
 	delete(analyses["a"].ReleaseHistory.Installable, "1.0.0")
-	analyses["a"].ReleaseHistory.Publishers["1.0.0"] = "changed"
+	analyses["a"].ReleaseHistory.PublisherKinds["1.0.0"] = domain.VersionPublisherTrustedPublishing
 	if _, leaked := analyses["b"].ReleaseHistory.PublishedAt["9.9.9"]; leaked {
 		t.Error("two analyses share one PublishedAt map")
 	}
 	if _, ok := analyses["b"].ReleaseHistory.Installable["1.0.0"]; !ok {
 		t.Error("two analyses share one Installable map")
 	}
-	if got := analyses["b"].ReleaseHistory.Publishers["1.0.0"]; got != "alice" {
-		t.Errorf("two analyses share one Publishers map: %q", got)
+	if got := analyses["b"].ReleaseHistory.PublisherKinds["1.0.0"]; got != domain.VersionPublisherOther {
+		t.Errorf("two analyses share one PublisherKinds map: %q", got)
 	}
 	if paths["/left-pad"] != 1 {
 		t.Errorf("left-pad fetched %d times, want once for two versions", paths["/left-pad"])

@@ -27,9 +27,13 @@ type PackagePublish struct {
 }
 
 // PackagePublishFor reads only the supplied package's visible publish history.
+// It returns nil for an empty account, which has nothing to look up.
 func PackagePublishFor(account string, h PublisherPackageHistory) *PackagePublish {
+	if account == "" {
+		return nil
+	}
 	result := &PackagePublish{Status: PackagePublishNotFound}
-	if account == "" || len(h.Latest[account]) == 0 {
+	if len(h.Latest[account]) == 0 {
 		return result
 	}
 	latest := h.Latest[account]
@@ -58,21 +62,30 @@ const (
 	VersionPublisherUnknown VersionPublisherKind = "unknown"
 )
 
-// TrustedPublishingPublisher is npm's GitHub Actions publisher identity. It is
-// compared with the unsanitized _npmUser.name.
+// TrustedPublishingPublisher is npm's GitHub Actions publisher identity.
 const TrustedPublishingPublisher = "GitHub Actions"
 
-// VersionPublisherKindFor classifies the exact analysed version in a release history.
+// ClassifyVersionPublisher classifies one version's raw _npmUser.name. Only the
+// exact name TrustedPublishingPublisher is trusted publishing; a name that is
+// empty after StripControlRunes is unknown.
+func ClassifyVersionPublisher(name string) VersionPublisherKind {
+	switch {
+	case StripControlRunes(name) == "":
+		return VersionPublisherUnknown
+	case name == TrustedPublishingPublisher:
+		return VersionPublisherTrustedPublishing
+	default:
+		return VersionPublisherOther
+	}
+}
+
+// VersionPublisherKindFor returns the publisher kind of the exact analysed version.
 func VersionPublisherKindFor(h *ReleaseHistory, version string) VersionPublisherKind {
 	if h == nil || version == "" {
 		return VersionPublisherUnknown
 	}
-	name := h.Publishers[version]
-	if name == "" {
-		return VersionPublisherUnknown
+	if kind, ok := h.PublisherKinds[version]; ok {
+		return kind
 	}
-	if name == TrustedPublishingPublisher {
-		return VersionPublisherTrustedPublishing
-	}
-	return VersionPublisherOther
+	return VersionPublisherUnknown
 }

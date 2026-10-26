@@ -3,6 +3,7 @@ package npmjs
 import (
 	"context"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 // TestParsePublishHistoryMaintainers checks first appearance and current maintainers.
@@ -89,8 +92,9 @@ func TestParsePublishHistoryPublisherNames(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(h.Publishers) != 3 || h.Publishers["1"] != "GitHub\x00 Actions" || h.Publishers["2"] != "alice" || h.Publishers["3"] != "GitHub Actions" {
-				t.Errorf("publishers=%v", h.Publishers)
+			want := map[string]analysis.VersionPublisherKind{"1": analysis.VersionPublisherOther, "2": analysis.VersionPublisherOther, "3": analysis.VersionPublisherTrustedPublishing}
+			if !maps.Equal(h.PublisherKinds, want) {
+				t.Errorf("publisher kinds=%v", h.PublisherKinds)
 			}
 			if _, ok := h.PublisherHistory.Latest["GitHub Actions"]; !ok {
 				t.Error("dated sanitized publisher missing")
@@ -186,7 +190,7 @@ func TestGetPublishHistory(t *testing.T) {
 }
 
 // TestParsePublishHistory_Versions pins that a missing or null "versions"
-// leaves Installable and Publishers nil (unknown), while "{}" is a
+// leaves Installable and PublisherKinds nil (unknown), while "{}" is a
 // known-empty set.
 func TestParsePublishHistory_Versions(t *testing.T) {
 	t.Parallel()
@@ -211,8 +215,8 @@ func TestParsePublishHistory_Versions(t *testing.T) {
 			if got := h.Installable == nil; got != tt.wantNil {
 				t.Fatalf("Installable nil = %v, want %v", got, tt.wantNil)
 			}
-			if got := h.Publishers == nil; got != tt.wantNil {
-				t.Errorf("Publishers nil = %v, want %v", got, tt.wantNil)
+			if got := h.PublisherKinds == nil; got != tt.wantNil {
+				t.Errorf("PublisherKinds nil = %v, want %v", got, tt.wantNil)
 			}
 			if !tt.wantNil && len(h.Installable) != tt.wantLen {
 				t.Errorf("len(Installable) = %d, want %d", len(h.Installable), tt.wantLen)

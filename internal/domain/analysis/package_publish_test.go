@@ -19,7 +19,6 @@ func TestPackagePublishFor(t *testing.T) {
 	}{
 		{"alice", PackagePublishFound, "1.9.0"},
 		{"bob", PackagePublishNotFound, ""},
-		{"", PackagePublishNotFound, ""},
 	} {
 		got := PackagePublishFor(tc.account, h)
 		if got.Status != tc.status || got.Version != tc.version {
@@ -34,8 +33,32 @@ func TestPackagePublishFor(t *testing.T) {
 	}
 }
 
+func TestPackagePublishForEmptyAccount(t *testing.T) {
+	if got := PackagePublishFor("", PublisherPackageHistory{}); got != nil {
+		t.Errorf("got %+v, want nil", got)
+	}
+}
+
+func TestClassifyVersionPublisher(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		want VersionPublisherKind
+	}{
+		{"GitHub Actions", VersionPublisherTrustedPublishing},
+		{"GitHub\x00 Actions", VersionPublisherOther},
+		{"github actions", VersionPublisherOther},
+		{"alice", VersionPublisherOther},
+		{"", VersionPublisherUnknown},
+		{"\x00", VersionPublisherUnknown},
+	} {
+		if got := ClassifyVersionPublisher(tc.name); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestVersionPublisherKindFor(t *testing.T) {
-	h := &ReleaseHistory{Publishers: map[string]string{"1": "GitHub Actions", "2": "alice", "4": "GitHub\x00 Actions"}}
+	h := &ReleaseHistory{PublisherKinds: map[string]VersionPublisherKind{"1": VersionPublisherTrustedPublishing, "2": VersionPublisherOther}}
 	for _, tc := range []struct {
 		h       *ReleaseHistory
 		version string
@@ -44,7 +67,6 @@ func TestVersionPublisherKindFor(t *testing.T) {
 		{h, "1", VersionPublisherTrustedPublishing},
 		{h, "2", VersionPublisherOther},
 		{h, "3", VersionPublisherUnknown},
-		{h, "4", VersionPublisherOther},
 		{h, "", VersionPublisherUnknown},
 		{nil, "1", VersionPublisherUnknown},
 	} {
