@@ -104,6 +104,96 @@ func TestConvertRepoURLToProjectKey(t *testing.T) {
 			expected: "",
 		},
 		{
+			name:     "scp_style_without_user",
+			input:    "github.com:Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "scp_style_with_git_suffix",
+			input:    "git@github.com:Owner/Repo.git",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "scp_style_after_ssh_scheme",
+			input:    "ssh://git@github.com:Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "scp_style_after_git_ssh_scheme",
+			input:    "git+ssh://git@github.com:Owner/Repo.git",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "ssh_scheme_with_port",
+			input:    "ssh://git@github.com:22/Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "scheme_less_host_with_port",
+			input:    "github.com:443/Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "git_https_scheme",
+			input:    "git+https://github.com/Owner/Repo.git",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "git_scheme",
+			input:    "git://github.com/Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "userinfo_with_password",
+			input:    "https://user:pw@github.com/Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "www_github_host",
+			input:    "https://www.github.com/Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "uppercase_git_suffix",
+			input:    "https://github.com/Owner/Repo.GIT",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "userinfo_hiding_real_host_returns_empty",
+			input:    "https://git@github.com:443@evil.example/Owner/Repo",
+			expected: "",
+		},
+		{
+			name:     "github_subdomain_returns_empty",
+			input:    "https://gist.github.com/Owner/Repo",
+			expected: "",
+		},
+		{
+			name:     "github_prefixed_host_returns_empty",
+			input:    "https://github.com.evil.example/Owner/Repo",
+			expected: "",
+		},
+		{
+			name:     "escaped_slash_in_repo_returns_empty",
+			input:    "https://github.com/Owner/Repo%2Fx",
+			expected: "",
+		},
+		{
+			name:     "space_in_repo_returns_empty",
+			input:    "https://github.com/Owner/Repo with space",
+			expected: "",
+		},
+		{
+			name:     "single_segment_returns_empty",
+			input:    "https://github.com/Owner",
+			expected: "",
+		},
+		{
+			name:     "git_suffix_only_returns_empty",
+			input:    "https://github.com/Owner/.git",
+			expected: "",
+		},
+		{
 			name:     "non_github_domain_returns_empty",
 			input:    "https://gitlab.com/Owner/Repo",
 			expected: "",

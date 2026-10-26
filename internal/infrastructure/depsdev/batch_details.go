@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	neturl "net/url"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -513,73 +514,119 @@ func (c *DepsDevClient) buildCompleteResult(purl string, packageResp *PackageRes
 	return result
 }
 
-// convertRepoURLToProjectKey converts repository URL to deps.dev project key format
+// githubOwnerPattern and githubRepoPattern accept only the characters GitHub
+// allows in account and repository names, so a URL that merely mentions
+// github.com somewhere cannot turn into a project key.
+var (
+	githubOwnerPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
+	githubRepoPattern  = regexp.MustCompile(`^[a-z0-9._-]+$`)
+)
+
+// convertRepoURLToProjectKey converts a repository URL to the deps.dev project key
+// github.com/<owner>/<repo> (lowercased, ".git" suffix removed).
+//
+// The host must be exactly github.com or www.github.com (case-insensitive, any port);
+// any other host, or a path without valid owner and repository segments, returns "".
+// Supported inputs:
+//   - https://github.com/owner/repo, http://, git://, git+https:// (optionally with user@ and :port)
+//   - ssh://git@github.com/owner/repo, git+ssh://git@github.com/owner/repo
+//   - a scheme wrapped around another one, e.g. https://git+ssh://git@github.com/owner/repo
+//   - ssh://git@github.com:owner/repo, git+ssh://git@github.com:owner/repo (scp-style path after a scheme)
+//   - git@github.com:owner/repo, github.com:owner/repo (scp-style, no scheme)
+//   - github.com/owner/repo, git@github.com/owner/repo (no scheme)
+//
+// Query strings, fragments, trailing slashes and path segments below owner/repo are ignored.
 func convertRepoURLToProjectKey(repoURL string) string {
-	// Normalize and extract the GitHub owner/repo into github.com/owner/repo
-	// Supports inputs like:
-	// - https://github.com/owner/repo
-	// - http://github.com/owner/repo
-	// - github.com/owner/repo
-	// - git+ssh://git@github.com/owner/repo
-	// - ssh://git@github.com/owner/repo
-	// - git@github.com:owner/repo
 	s := strings.TrimSpace(repoURL)
+	if i := strings.IndexAny(s, "?#"); i >= 0 {
+		s = s[:i]
+	}
 	if s == "" {
 		return ""
 	}
-
+	lower := strings.ToLower(s)
+	// Peel an outer scheme wrapped around another one (https://git+ssh://...);
+	// the inner URL is then parsed and host-checked as a whole.
 	for {
-		lower := strings.ToLower(s)
-		idx := strings.Index(lower, "://")
-		if idx == -1 {
+		_, rest, ok := strings.Cut(lower, "://")
+		inner, _, hasInner := strings.Cut(rest, "://")
+		if !ok || !hasInner || !isURLScheme(inner) {
 			break
 		}
-		rest := s[idx+len("://"):]
-		restLower := strings.ToLower(rest)
-		if strings.HasPrefix(restLower, "git+ssh://") ||
-			strings.HasPrefix(restLower, "ssh://") ||
-			strings.HasPrefix(restLower, "git@github.com:") ||
-			strings.HasPrefix(restLower, "git@github.com/") {
-			s = rest
-			continue
-		}
-		break
+		s = s[len(s)-len(rest):]
+		lower = rest
 	}
 
-	lower := strings.ToLower(s)
-	if strings.HasPrefix(lower, "git@github.com:") {
-		path := s[len("git@github.com:"):]
-		return githubProjectKeyFromPath(path)
-	}
-	if strings.HasPrefix(lower, "git@github.com/") {
-		s = s[len("git@"):]
-		lower = strings.ToLower(s)
-	}
-	if strings.HasPrefix(lower, "github.com/") || strings.HasPrefix(lower, "github.com:") {
-		s = "https://" + s
+	if !strings.Contains(lower, "://") {
+		if path, ok := trimGitHubSCPPrefix(s); ok {
+			return githubProjectKeyFromPath(path)
+		}
+		if !strings.HasPrefix(s, "//") {
+			s = "https://" + s
+		}
 	}
 
 	parsed, err := neturl.Parse(s)
-	if err != nil || !strings.EqualFold(parsed.Hostname(), "github.com") {
+	if err != nil {
+		// ssh://git@github.com:owner/repo is not a valid URL ("owner" is not a port),
+		// but it is a common way to write an scp-style path behind an ssh scheme.
+		for _, scheme := range []string{"ssh://", "git+ssh://"} {
+			if strings.HasPrefix(lower, scheme) {
+				if path, ok := trimGitHubSCPPrefix(s[len(scheme):]); ok {
+					return githubProjectKeyFromPath(path)
+				}
+			}
+		}
 		return ""
 	}
-	return githubProjectKeyFromPath(parsed.Path)
+	if !isGitHubHost(parsed.Hostname()) {
+		return ""
+	}
+	return githubProjectKeyFromPath(parsed.EscapedPath())
 }
 
+// trimGitHubSCPPrefix strips an scp-style "git@github.com:" or "github.com:" prefix
+// and reports whether one was present. "github.com:<digits>/..." is a host with a
+// port, not an scp-style path, so it is not stripped.
+func trimGitHubSCPPrefix(s string) (string, bool) {
+	lower := strings.ToLower(s)
+	if strings.HasPrefix(lower, "git@github.com:") {
+		return s[len("git@github.com:"):], true
+	}
+	if strings.HasPrefix(lower, "github.com:") {
+		rest := s[len("github.com:"):]
+		port, _, _ := strings.Cut(rest, "/")
+		if port != "" && strings.Trim(port, "0123456789") == "" {
+			return "", false
+		}
+		return rest, true
+	}
+	return "", false
+}
+
+// isURLScheme reports whether s is a syntactically valid URL scheme (RFC 3986).
+func isURLScheme(s string) bool {
+	if s == "" || s[0] < 'a' || s[0] > 'z' {
+		return false
+	}
+	return strings.Trim(s, "abcdefghijklmnopqrstuvwxyz0123456789+.-") == ""
+}
+
+// isGitHubHost reports whether host (without port) is github.com or www.github.com.
+func isGitHubHost(host string) bool {
+	return strings.EqualFold(host, "github.com") || strings.EqualFold(host, "www.github.com")
+}
+
+// githubProjectKeyFromPath builds github.com/<owner>/<repo> from the first two
+// segments of path, or returns "" when they are missing or not valid GitHub names.
 func githubProjectKeyFromPath(path string) string {
-	if i := strings.Index(path, "#"); i >= 0 {
-		path = path[:i]
-	}
-	if i := strings.Index(path, "?"); i >= 0 {
-		path = path[:i]
-	}
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) < 2 {
 		return ""
 	}
 	owner := strings.ToLower(parts[0])
-	repo := strings.ToLower(strings.TrimSuffix(parts[1], ".git"))
-	if owner == "" || repo == "" {
+	repo := strings.TrimSuffix(strings.ToLower(parts[1]), ".git")
+	if !githubOwnerPattern.MatchString(owner) || !githubRepoPattern.MatchString(repo) || repo == "." || repo == ".." {
 		return ""
 	}
 	return "github.com/" + owner + "/" + repo
