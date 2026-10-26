@@ -1,6 +1,9 @@
 package analysis
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // AssessmentAxis enumerates supported assessment dimensions (extensible).
 type AssessmentAxis string
@@ -17,6 +20,11 @@ type AssessmentInput struct {
 	Analysis *Analysis
 	Scores   map[string]*ScoreEntity
 	EOL      EOLStatus
+	// Now is the evaluation time for every age the lifecycle assessor checks
+	// (release and commit recency, days since publish, the dormant burst of
+	// ADR-0026). Zero means the wall clock. RepoState.DaysSinceLastCommit is
+	// the exception: it is computed when the repository is fetched.
+	Now time.Time
 }
 
 // SignalRole classifies how a signal contributed to the assessment decision.
@@ -58,6 +66,15 @@ const (
 	// SignalAdvisoryDBUnmaintained carries the advisory ID of a third-party
 	// advisory database's unmaintained marker (see AdvisoryDBState).
 	SignalAdvisoryDBUnmaintained = "advisory_db_unmaintained"
+	// SignalDormantReleaseBurst lists the releases published together, across
+	// release lines, after a long silence (see DormantBurst).
+	SignalDormantReleaseBurst = "dormant_release_burst"
+	// SignalDaysSilentBeforeRelease is the silence, in days, that preceded the
+	// burst.
+	SignalDaysSilentBeforeRelease = "days_silent_before_release"
+	// SignalVersionRemoved is set when the registry no longer serves the
+	// analysed version. It is shown with the burst and never changes the label.
+	SignalVersionRemoved = "version_removed_from_registry"
 )
 
 // AssessmentResult is the normalized output for a single axis assessment.

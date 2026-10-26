@@ -7,8 +7,7 @@ import (
 )
 
 // MaxSummaryLen is the maximum rune length of the short free-text fields
-// normalized by NormalizeSummary, currently Repository.Summary and
-// RegistryState.Reason.
+// normalized by NormalizeSummary and SanitizeExternalSummary.
 // Exported for consumers that want to validate ingest-side values against the same cap.
 const MaxSummaryLen = 200
 
@@ -61,14 +60,32 @@ func SanitizeExternalSummary(raw string) string {
 		if unicode.IsSpace(r) {
 			return r
 		}
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
-			return -1
-		}
-		return r
+		return dropControlRune(r)
 	}, raw)
 	// NormalizeSummary caps the length by rune count; capping by byte here as
 	// well would split a multi-byte rune.
 	return NormalizeSummary(stripped)
+}
+
+// StripControlRunes prepares an external identifier for a terminal line: any
+// whitespace rune (tab, newline, line separator) becomes a space, other control
+// and format runes are removed, and surrounding spaces are trimmed. Unlike
+// SanitizeExternalSummary it neither collapses inner spaces nor truncates, so
+// the identifier is otherwise kept as the source wrote it.
+func StripControlRunes(raw string) string {
+	return strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return ' '
+		}
+		return dropControlRune(r)
+	}, raw))
+}
+
+func dropControlRune(r rune) rune {
+	if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+		return -1
+	}
+	return r
 }
 
 // truncateSummary truncates s to MaxSummaryLen runes with an ellipsis by iterating

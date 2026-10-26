@@ -110,15 +110,20 @@ type ProjectInfo struct {
 	// YankedReason mirrors info.yanked_reason. Empty when PyPI has none, which
 	// happens even for yanked releases.
 	YankedReason string
+	// ReleasePublishedAt holds the earliest file upload time for each release.
+	ReleasePublishedAt map[string]time.Time
 }
 
 // VersionInfo is the minimal subset of PyPI version-level metadata we need.
-// Currently used for yanked-version detection during EOL evaluation.
+// Used for yanked-version detection during EOL evaluation and for the
+// young-release marker's publish time (ADR-0031).
 type VersionInfo struct {
 	Name         string
 	Version      string
 	Yanked       bool
 	YankedReason string // info.yanked_reason; optional
+	// PublishedAt is the earliest valid urls[].upload_time_iso_8601; zero when none parse.
+	PublishedAt time.Time
 }
 
 // GetVersion retrieves PyPI version-level metadata. Returns (info, found, err).
@@ -164,7 +169,8 @@ func (c *Client) GetVersion(ctx context.Context, name, version string) (*Version
 			YankedReason string `json:"yanked_reason"`
 		} `json:"info"`
 		URLs []struct {
-			Yanked bool `json:"yanked"`
+			Yanked     bool   `json:"yanked"`
+			UploadTime string `json:"upload_time_iso_8601"`
 		} `json:"urls"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&raw); err != nil {
@@ -191,6 +197,9 @@ func (c *Client) GetVersion(ctx context.Context, name, version string) (*Version
 		Version:      raw.Info.Version,
 		Yanked:       yanked,
 		YankedReason: raw.Info.YankedReason,
+	}
+	for _, u := range raw.URLs {
+		info.PublishedAt = earlierUpload(info.PublishedAt, u.UploadTime)
 	}
 	c.versionCache.Set(key, info)
 	return info, true, nil
@@ -237,6 +246,9 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 			Yanked       bool              `json:"yanked"`
 			YankedReason string            `json:"yanked_reason"`
 		} `json:"info"`
+		Releases map[string][]struct {
+			UploadTime string `json:"upload_time_iso_8601"`
+		} `json:"releases"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJSONResponseSize)).Decode(&raw); err != nil {
 		return nil, false, fmt.Errorf("pypi decode failed: %w", err)
@@ -247,18 +259,37 @@ func (c *Client) GetProject(ctx context.Context, name string) (*ProjectInfo, boo
 		return nil, false, fmt.Errorf("pypi project response for %q carried no project name", n)
 	}
 	info := &ProjectInfo{
-		Name:         raw.Info.Name,
-		Summary:      raw.Info.Summary,
-		Description:  raw.Info.Description,
-		Classifiers:  raw.Info.Classifiers,
-		ProjectURLs:  raw.Info.ProjectURLs,
-		HomePage:     raw.Info.HomePage,
-		Version:      strings.TrimSpace(raw.Info.Version),
-		Yanked:       raw.Info.Yanked,
-		YankedReason: raw.Info.YankedReason,
+		Name:               raw.Info.Name,
+		Summary:            raw.Info.Summary,
+		Description:        raw.Info.Description,
+		Classifiers:        raw.Info.Classifiers,
+		ProjectURLs:        raw.Info.ProjectURLs,
+		HomePage:           raw.Info.HomePage,
+		Version:            strings.TrimSpace(raw.Info.Version),
+		Yanked:             raw.Info.Yanked,
+		YankedReason:       raw.Info.YankedReason,
+		ReleasePublishedAt: make(map[string]time.Time),
+	}
+	for version, files := range raw.Releases {
+		for _, file := range files {
+			info.ReleasePublishedAt[version] = earlierUpload(info.ReleasePublishedAt[version], file.UploadTime)
+		}
 	}
 	c.cache.Set(lower, info)
 	return info, true, nil
+}
+
+// earlierUpload returns the earlier of current and raw parsed as RFC 3339, or
+// current when raw is not a valid time.
+func earlierUpload(current time.Time, raw string) time.Time {
+	at, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		return current
+	}
+	if current.IsZero() || at.Before(current) {
+		return at
+	}
+	return current
 }
 
 // GetRepoURL resolves a GitHub repository URL for a PyPI package by inspecting

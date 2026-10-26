@@ -35,7 +35,7 @@ func scanFlags() []urfcli.Flag {
 		&urfcli.StringFlag{Name: "format", Aliases: []string{"f"}, Usage: "Output format: detailed, table, json, csv (default: auto)"},
 
 		// CI gate
-		&urfcli.StringFlag{Name: "fail-on", Usage: "Comma-separated lifecycle labels that trigger exit 1 (" + strings.Join(domainscan.ValidFailLabels(), ",") + ")"},
+		&urfcli.StringFlag{Name: "fail-on", Usage: "Comma-separated lifecycle labels or facts (malicious, dormant-release, archived, disabled) that trigger exit 1; any selection also fails on malicious versions, the other facts only when named (" + strings.Join(domainscan.ValidFailLabels(), ",") + ")"},
 
 		// File mode options
 		&urfcli.IntFlag{Name: "sample", Usage: "Randomly sample up to N PURLs and N GitHub URLs (file mode only)"},
@@ -46,6 +46,7 @@ func scanFlags() []urfcli.Flag {
 
 		// Transitive dependency display
 		&urfcli.BoolFlag{Name: "show-transitive", Usage: "Include transitive dependencies in output (SBOM/go.mod: transitive deps; --include-actions: composite action deps)"},
+		&urfcli.BoolFlag{Name: "maintainer-domain", Usage: "Check whether e-mail domains of npm maintainers lapsed or were re-registered (versioned npm inputs; shown in json and detailed output; makes RDAP requests and caches IANA's RDAP server list under the user cache directory)"},
 
 		// Output filtering
 		&urfcli.StringFlag{Name: "show-only", Usage: "Show only entries with specified verdicts (comma-separated: ok,caution,replace,review). Replace means the dependency should be replaced (EOL, archived, etc.)."},
@@ -107,7 +108,7 @@ Examples:
 			scanCommand(cfg),
 			{
 				Name:            "diet",
-				Usage:           "Analyze dependency removability (delegates to uzomuzo-diet)",
+				Usage:           "[experimental] Analyze dependency removability (delegates to uzomuzo-diet)",
 				SkipFlagParsing: true,
 				Action: func(ctx context.Context, cmd *urfcli.Command) error {
 					return delegateToDiet(ctx, cmd)
@@ -248,12 +249,13 @@ func buildScanOptions(cmd *urfcli.Command) (cli.ScanOptions, error) {
 			SampleSize: int(cmd.Int("sample")),
 			Filename:   cmd.String("file"),
 		},
-		Format:         cmd.String("format"),
-		FailOnRaw:      cmd.String("fail-on"),
-		ShowOnlyRaw:    cmd.String("show-only"),
-		SBOMPath:       cmd.String("sbom"),
-		IncludeActions: cmd.Bool("include-actions"),
-		ShowTransitive: cmd.Bool("show-transitive"),
+		Format:           cmd.String("format"),
+		FailOnRaw:        cmd.String("fail-on"),
+		ShowOnlyRaw:      cmd.String("show-only"),
+		SBOMPath:         cmd.String("sbom"),
+		IncludeActions:   cmd.Bool("include-actions"),
+		ShowTransitive:   cmd.Bool("show-transitive"),
+		MaintainerDomain: cmd.Bool("maintainer-domain"),
 	}
 	if raw := cmd.String("line-range"); raw != "" {
 		ls, le, err := cli.ParseLineRange(raw)

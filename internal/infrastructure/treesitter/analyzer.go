@@ -6,6 +6,7 @@ package treesitter
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -35,10 +36,46 @@ var skipDirs = map[string]bool{
 	".git":         true,
 	"testdata":     true,
 	"__pycache__":  true,
-	"build":        true,
-	"dist":         true,
-	"target":       true,
 }
+
+// buildOutputManifests maps each directory name that build tools use for
+// their output to the manifests of the tools that write there. Such a
+// directory is skipped only when its parent holds one of those manifests (see
+// isBuildOutputDir), because the same names are also real package names:
+// Go internal/build, Java com/example/build, Python src/build (#546). A
+// manifest only marks the directories its own tool writes: Cargo and sbt
+// write target/, so a build/ next to Cargo.toml is still read. go.mod is not
+// listed: Go build output (binaries, goreleaser dist/) contains no .go source,
+// so reading it adds no imports, while a build/ directory next to go.mod
+// usually holds hand-written code or scripts.
+var buildOutputManifests = map[string][]string{
+	"build": {
+		"package.json",
+		"build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts",
+		"build.xml",
+		"pyproject.toml", "setup.py", "setup.cfg",
+	},
+	"dist": {
+		"package.json",
+		"build.xml",
+		"pyproject.toml", "setup.py", "setup.cfg",
+	},
+	"target": {
+		"pom.xml",
+		"Cargo.toml",
+		"build.sbt",
+	},
+}
+
+// largeFileBytes is the size above which a file is not fully parsed.
+// largeFilePrefixBytes is how much of such a file is still parsed for imports,
+// so that a large generated file (e.g. a .pb.go) that is the only importer of a
+// dependency does not make that dependency look unused (#546). Imports sit at
+// the top of the file in Go and Java and usually in Python and JS/TS.
+const (
+	largeFileBytes       = 1 << 20
+	largeFilePrefixBytes = 64 << 10
+)
 
 // langID identifies a programming language for parsing.
 type langID int
@@ -222,6 +259,9 @@ func (a *Analyzer) AnalyzeCoupling(
 			if skipDirs[d.Name()] {
 				return filepath.SkipDir
 			}
+			if path != sourceRoot && isBuildOutputDir(path) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
@@ -361,10 +401,7 @@ func (a *Analyzer) analyzeFile(
 	if err != nil {
 		return // skip
 	}
-	if info.Size() > 1<<20 { // 1 MB
-		slog.Debug("skipping large file for coupling analysis", "path", path, "size", info.Size())
-		return
-	}
+	importsOnly := info.Size() > largeFileBytes
 
 	ext := filepath.Ext(path)
 	lid, ok := extToLang(ext)
@@ -378,7 +415,13 @@ func (a *Analyzer) analyzeFile(
 	}
 	cfg.ensureCompiled()
 
-	src, err := os.ReadFile(path)
+	var src []byte
+	if importsOnly {
+		slog.Debug("large_file_imports_only", "path", path, "size", info.Size(), "prefix_bytes", largeFilePrefixBytes)
+		src, err = readPrefix(path, largeFilePrefixBytes)
+	} else {
+		src, err = os.ReadFile(path)
+	}
 	if err != nil {
 		slog.Debug("failed to read file", "path", path, "error", err)
 		return
@@ -392,8 +435,9 @@ func (a *Analyzer) analyzeFile(
 	// failure; we skip the file. The official binding's ParseCtx is
 	// deprecated and will be removed in v0.26 — file-level context
 	// cancellation is already enforced by the ctx.Err() guard at the top
-	// of the WalkDir callback, and per-file parsing is bounded (1 MB cap
-	// above), so dropping mid-parse cancellation here is safe.
+	// of the WalkDir callback, and per-file parsing is bounded (large files
+	// are cut to largeFilePrefixBytes), so dropping mid-parse cancellation
+	// here is safe.
 	tree := parser.Parse(src, nil)
 	if tree == nil {
 		slog.Debug("failed to parse file", "path", path, "lang", lid)
@@ -432,8 +476,11 @@ func (a *Analyzer) analyzeFile(
 		}
 	}
 
-	// Phase 2: Count call sites using alias->PURL mapping.
-	a.countCallSites(cfg, root, src, fileAliases, accum, cursor)
+	// Phase 2: Count call sites using alias->PURL mapping. A large file is cut
+	// at largeFilePrefixBytes, so its calls are not counted.
+	if !importsOnly {
+		a.countCallSites(cfg, root, src, fileAliases, accum, cursor)
+	}
 
 	// Close immediately — defer in WalkDir callback accumulates across all files.
 	cursor.Close()
@@ -694,4 +741,31 @@ type accumulator struct {
 	hasDotImport      bool // true if any file uses dot import for this PURL
 	hasBlankImport    bool // true if any file uses blank import for this PURL
 	hasWildcardImport bool // true if any file uses wildcard import for this PURL
+}
+
+// isBuildOutputDir reports whether dir is a build output directory: its name
+// is in buildOutputManifests and its parent contains a manifest file of a tool
+// that writes there.
+func isBuildOutputDir(dir string) bool {
+	parent := filepath.Dir(dir)
+	for _, m := range buildOutputManifests[filepath.Base(dir)] {
+		if fi, err := os.Stat(filepath.Join(parent, m)); err == nil && fi.Mode().IsRegular() {
+			return true
+		}
+	}
+	return false
+}
+
+// readPrefix reads at most n bytes from the start of the file at path.
+func readPrefix(path string, n int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("read file prefix: %w", err)
+	}
+	defer func() { _ = f.Close() }() // read-only handle; a close error loses no data
+	b, err := io.ReadAll(io.LimitReader(f, n))
+	if err != nil {
+		return nil, fmt.Errorf("read file prefix: %w", err)
+	}
+	return b, nil
 }

@@ -791,6 +791,8 @@ func TestIsWrappableLine(t *testing.T) {
 		{"⚠️ Stalled: Low maintenance; last human commit within 2 yrs", true},
 		{"🔍 Review Needed", true},
 		{"Catalog Reason: why this is EOL", true},
+		{"⚠ Release after silence: This version came out 2026-10-04.", true},
+		{"⚠ Release age: This version was published on 2026-10-21, 4 days before this scan.", true},
 		{"Fast, unopinionated, minimalist web framework for node.", false},
 		{"[npmjs] Stable version is deprecated in npm registry.", false},
 		{"→ https://github.com/advisories/GHSA-xxxx", false},
@@ -1257,5 +1259,40 @@ func TestWriteBoxOrigin_DirectPURL(t *testing.T) {
 	}
 	if buf.Len() != 0 {
 		t.Error("writeBoxOrigin should produce no output for direct PURL with unknown relation")
+	}
+}
+
+func TestWriteBoxIdentity_UnmatchedPackage(t *testing.T) {
+	tests := []struct {
+		name    string
+		repoURL string
+		want    string
+	}{
+		{
+			name: "no repository link",
+			want: "Unmatched package: pkg:pypi/pycrypto@2.6.1 (not used: it has no repository link)",
+		},
+		{
+			name:    "links to another repository",
+			repoURL: "https://github.com/bmeck/node-checkout",
+			want:    "Unmatched package: pkg:pypi/pycrypto@2.6.1 (not used: it links to https://github.com/bmeck/node-checkout)",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			entry := &domainaudit.AuditEntry{
+				PURL: "https://github.com/dlitz/pycrypto",
+				Analysis: &analysis.Analysis{
+					UnmatchedPackage: &analysis.UnmatchedPackage{PURL: "pkg:pypi/pycrypto@2.6.1", RepoURL: tt.repoURL},
+				},
+			}
+			if err := writeBoxIdentity(newBoxContext(&buf, entry, 200)); err != nil {
+				t.Fatalf("writeBoxIdentity() error = %v", err)
+			}
+			if !strings.Contains(buf.String(), tt.want) {
+				t.Errorf("output = %q, want it to contain %q", buf.String(), tt.want)
+			}
+		})
 	}
 }

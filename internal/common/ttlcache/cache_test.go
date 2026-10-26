@@ -124,3 +124,38 @@ func TestCache_SetTTLToggle(t *testing.T) {
 		t.Error("Get returned hit after TTL set to 0; want miss")
 	}
 }
+
+func TestCache_SetAt(t *testing.T) {
+	t.Parallel()
+	var c Cache[string]
+	c.SetTTL(time.Minute)
+	c.SetAt("old", "v", time.Now().Add(-2*time.Minute))
+	if _, ok := c.Get("old"); ok {
+		t.Error("entry stamped before the TTL window was served; want miss")
+	}
+	c.SetAt("recent", "v", time.Now().Add(-30*time.Second))
+	if got, ok := c.Get("recent"); !ok || got != "v" {
+		t.Errorf("Get(recent) = %q, %v; want v, true", got, ok)
+	}
+	c.SetTTL(0)
+	c.SetAt("off", "v", time.Now())
+	c.SetTTL(time.Minute)
+	if _, ok := c.Get("off"); ok {
+		t.Error("SetAt stored while caching was disabled; want no-op")
+	}
+}
+
+func TestCache_Clear(t *testing.T) {
+	t.Parallel()
+	var c Cache[string]
+	c.SetTTL(time.Minute)
+	c.Set("a", "v")
+	c.Clear()
+	if _, ok := c.Get("a"); ok {
+		t.Error("Get after Clear returned hit; want miss")
+	}
+	c.Set("b", "v")
+	if _, ok := c.Get("b"); !ok {
+		t.Error("Set after Clear did not store; want hit")
+	}
+}

@@ -36,10 +36,10 @@ func TestValidateRepoURLMatch(t *testing.T) {
 			wantMatch:       false,
 		},
 		{
-			name:            "empty_resolved_url_passes",
+			name:            "empty_resolved_url_is_mismatch",
 			resolvedRepoURL: "",
-			inputGitHubURL:  "https://github.com/actions/checkout",
-			wantMatch:       true,
+			inputGitHubURL:  "https://github.com/grafana/grafana",
+			wantMatch:       false,
 		},
 		{
 			name:            "resolved_with_git_suffix",

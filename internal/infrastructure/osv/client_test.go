@@ -305,15 +305,25 @@ func TestQueryPackage_UnrecognizedEventsAreNotSilentlyDropped(t *testing.T) {
 func TestQueryPackage_EventsCarryingMoreThanOneBoundAreRejected(t *testing.T) {
 	t.Parallel()
 	// OSV events carry exactly one key. A second key that decodes to an empty
-	// string — `"fixed": null`, or an empty literal — would otherwise read as
-	// "no upper bound" and let a bounded range pass as package-wide.
+	// string would otherwise read as "no upper bound" and let a bounded range
+	// pass as package-wide. An empty literal is read and the event rejected;
+	// `"fixed": null` fails the whole lookup (see checkUnambiguousKeys).
 	const page = `{"vulns":[{"id":"RUSTSEC-2024-0375","affected":[{"package":{"name":"atty","ecosystem":"crates.io"},
-	 "ranges":[{"type":"SEMVER","events":[{"introduced":"0","fixed":null},{"introduced":"0","limit":""}]}]}]}]}`
+	 "ranges":[{"type":"SEMVER","events":[{"introduced":"0","fixed":""},{"introduced":"0","limit":""}]}]}]}]}`
+	const nullPage = `{"vulns":[{"id":"RUSTSEC-2024-0375","affected":[{"package":{"name":"atty","ecosystem":"crates.io"},
+	 "ranges":[{"type":"SEMVER","events":[{"introduced":"0","fixed":null}]}]}]}]}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprint(w, page)
 	}))
 	defer srv.Close()
+	nullSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, nullPage)
+	}))
+	defer nullSrv.Close()
 
+	if _, err := newTestClient(t, nullSrv.URL).QueryPackage(context.Background(), "crates.io", "atty"); err == nil {
+		t.Error(`an event with "fixed": null must fail the lookup`)
+	}
 	recs, err := newTestClient(t, srv.URL).QueryPackage(context.Background(), "crates.io", "atty")
 	if err != nil {
 		t.Fatalf("QueryPackage failed: %v", err)
@@ -348,6 +358,61 @@ func TestQueryPackage_ExplicitNullVulnsIsNotACleanAnswer(t *testing.T) {
 	}
 	if got := calls.Load(); got != 2 {
 		t.Errorf("HTTP calls: got %d, want 2 (an error must not be cached)", got)
+	}
+}
+
+// A key this client reads that appears twice, is spelled other than exactly,
+// or is null where that would drop data could make a lenient decode lose
+// advisories, a record's ID or the next page, so the body must be an error,
+// not a clean answer. Keys the client does not read are not checked.
+func TestQueryPackage_AmbiguousKeysAreNotAnAnswer(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		body    string
+		wantErr bool
+	}{
+		{"upper-case null vulns", `{"VULNS":null}`, true},
+		{"long-s null vulns", `{"vulnſ":null}`, true},
+		{"repeated vulns", `{"vulns":[{"id":"MAL-1"}],"vulns":[]}`, true},
+		{"variant vulns pair", `{"vulns":[{"id":"MAL-1"}],"Vulns":[]}`, true},
+		{"repeated next page token", `{"vulns":[{"id":"MAL-1"}],"next_page_token":"p","next_page_token":""}`, true},
+		{"repeated record id", `{"vulns":[{"id":"MAL-1","ID":""}]}`, true},
+		{"repeated package name deep inside", `{"vulns":[{"id":"MAL-1","affected":[{"package":{"name":"chalk","NAME":"x"}}]}]}`, true},
+		{"same key in sibling objects is fine", `{"vulns":[{"id":"MAL-1"},{"id":"MAL-2"}]}`, false},
+		{"empty object is fine", `{}`, false},
+		{"single upper-case vulns", `{"VULNS":[{"id":"MAL-1"}]}`, true},
+		{"upper-case range type", `{"vulns":[{"id":"MAL-1","affected":[{"package":{"name":"chalk","ecosystem":"npm"},"ranges":[{"TYPE":"SEMVER","events":[{"introduced":"0"}]}]}]}]}`, true},
+		{"mixed-case event key", `{"vulns":[{"id":"MAL-1","affected":[{"package":{"name":"chalk","ecosystem":"npm"},"ranges":[{"type":"SEMVER","events":[{"Introduced":"0"}]}]}]}]}`, true},
+		{"null record id", `{"vulns":[{"id":null}]}`, true},
+		{"null package name", `{"vulns":[{"id":"MAL-1","affected":[{"package":{"name":null,"ecosystem":"npm"}}]}]}`, true},
+		{"null versions", `{"vulns":[{"id":"MAL-1","affected":[{"package":{"name":"chalk","ecosystem":"npm"},"versions":null}]}]}`, true},
+		{"null in a field not read", `{"vulns":[{"id":"MAL-1","database_specific":{"nvd_published_at":null}}]}`, false},
+		{"read key name used in open metadata", `{"vulns":[{"id":"MAL-1","database_specific":{"type":null,"Name":"x","name":"y"}}]}`, false},
+		{"unknown key spelled like a path", `{"vulns":[{"id":"MAL-1"}],"vulns/affected":{"package":null}}`, false},
+		{"read names nested under an unknown key", `{"vulns":[{"id":"MAL-1","x":{"affected":[{"package":null}]}}]}`, false},
+		{"read key name in ecosystem_specific", `{"vulns":[{"id":"MAL-1","affected":[{"package":{"name":"chalk","ecosystem":"npm"},"ecosystem_specific":{"TYPE":null,"id":null}}]}]}`, false},
+		{"null published", `{"vulns":[{"id":"RUSTSEC-1","published":null}]}`, true},
+		// RustSec sends this on every advisory that is not informational.
+		{"null informational is no marker", `{"vulns":[{"id":"RUSTSEC-1","affected":[{"package":{"name":"atty","ecosystem":"crates.io"},"database_specific":{"informational":null}}]}]}`, false},
+		{"null cwe_ids", `{"vulns":[{"id":"GHSA-1","database_specific":{"cwe_ids":null}}]}`, true},
+		{"unknown key in another spelling", `{"vulns":[{"id":"MAL-1","Modified":"x"}]}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = fmt.Fprint(w, tt.body)
+			}))
+			defer srv.Close()
+			c := NewClient()
+			c.SetBaseURL(srv.URL)
+			c.SetCacheTTL(time.Minute)
+			_, err := c.QueryPackage(context.Background(), "npm", "chalk")
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("error = %v, want error %v", err, tt.wantErr)
+			}
+		})
 	}
 }
 

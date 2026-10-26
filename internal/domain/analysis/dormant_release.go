@@ -1,0 +1,105 @@
+package analysis
+
+import (
+	"fmt"
+	"time"
+)
+
+// DormantReleaseKind names which rule flagged a return from silence.
+type DormantReleaseKind string
+
+const (
+	// DormantReleaseBurstAcrossLines means the release came out in a burst that
+	// touched at least DormantBurstMinLines release lines (ADR-0026).
+	DormantReleaseBurstAcrossLines DormantReleaseKind = "burst_across_lines"
+	// DormantReleaseFresh means the release is a recent return from silence on
+	// any number of lines (ADR-0028).
+	DormantReleaseFresh DormantReleaseKind = "fresh"
+)
+
+// DormantRelease records that the analysed version is a release that followed
+// a long silence. It is carried next to the lifecycle label, whatever label the
+// decision tree chose. A nil pointer means no rule matched or no release
+// history was available. See ADR-0028.
+type DormantRelease struct {
+	// Kind names the rule that matched. A burst across lines takes precedence
+	// over a fresh release when both match.
+	Kind DormantReleaseKind
+	// Burst describes the release and the burst it belongs to. Never nil on a
+	// value from EvaluateDormantRelease; see HasDormantRelease.
+	Burst *DormantBurst
+	// Until is when the marker clears: the publish time plus the period the
+	// matching rule keeps a release flagged.
+	Until time.Time
+}
+
+// EvaluateDormantRelease applies the ADR-0026 and ADR-0028 rules to the
+// analysed version at now: a return after at least silence without a release
+// is marked for flag after publication. flag must be positive; flag <= 0
+// marks nothing. Returns nil when the analysis, its package or its release
+// history is missing, or no rule matches.
+func (a *Analysis) EvaluateDormantRelease(now time.Time, silence, flag time.Duration) *DormantRelease {
+	if a == nil || a.Package == nil || flag <= 0 {
+		return nil
+	}
+	// One pass over the history serves both rules: they share the silence and
+	// the age limit, and differ only in the lines touched and prereleases, as
+	// DetectDormantBurst and DetectFreshDormantRelease do.
+	b := detectDormantReturn(a.ReleaseHistory, a.Package.Version, now, silence)
+	if b == nil || now.Sub(b.PublishedAt) > flag {
+		return nil
+	}
+	if len(b.Lines) >= DormantBurstMinLines {
+		return &DormantRelease{Kind: DormantReleaseBurstAcrossLines, Burst: b, Until: b.PublishedAt.Add(flag)}
+	}
+	if !IsPrerelease(a.Package.Version) {
+		return &DormantRelease{Kind: DormantReleaseFresh, Burst: b, Until: b.PublishedAt.Add(flag)}
+	}
+	return nil
+}
+
+// HasDormantRelease reports whether the analysed version carries a usable
+// dormant-release marker: one with its burst. Every output and the --fail-on
+// policy use it, so a marker without a burst counts as none everywhere.
+func (a *Analysis) HasDormantRelease() bool {
+	return a != nil && a.DormantRelease != nil && a.DormantRelease.Burst != nil
+}
+
+// DormantReleaseNotice returns the text to show for the dormant-release marker,
+// or "" when there is nothing to add: no marker, a malicious advisory already
+// names the version, or the lifecycle result already explains the burst
+// because ADR-0026 turned its label into Review Needed.
+func (a *Analysis) DormantReleaseNotice() string {
+	if !a.HasDormantRelease() || a.Malicious() {
+		return ""
+	}
+	if lr := a.GetLifecycleResult(); lr != nil {
+		for _, s := range lr.Signals {
+			if s.Name == SignalDormantReleaseBurst {
+				return ""
+			}
+		}
+	}
+	d := a.DormantRelease
+	if d.Kind == DormantReleaseBurstAcrossLines {
+		return dormantBurstReason(d.Burst)
+	}
+	b := d.Burst
+	reason := fmt.Sprintf("This version came out %s, after %d days with no release. "+
+		"Takeovers of npm packages that had gone quiet looked like this, and so does a maintainer who ships again after a break.",
+		b.PublishedAt.UTC().Format(time.DateOnly), b.SilentDays)
+	if a.MaliciousState != nil {
+		switch a.MaliciousState.Status {
+		case MaliciousStatusClean:
+			reason += " No OSV malicious-package record names it yet."
+		case MaliciousStatusLookupFailed:
+			reason += " The OSV malicious-package check did not complete."
+		}
+	}
+	if b.Removed {
+		reason += " npm has since removed this version."
+	} else {
+		reason += " Before using it, check who published it (npm view <package>@<version> _npmUser)."
+	}
+	return reason + fmt.Sprintf(" This marker clears on %s.", d.Until.UTC().Format(time.DateOnly))
+}

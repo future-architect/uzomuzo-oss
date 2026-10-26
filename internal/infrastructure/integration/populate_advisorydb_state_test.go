@@ -40,15 +40,23 @@ func newAdvisoryDBService(t *testing.T, srvURL string) *IntegrationService {
 	return &IntegrationService{osvClient: c}
 }
 
-// osvRecorder answers every query with body and records the names requested.
+// osvRecorder fakes OSV.dev. A /v1/query is answered with body and counted in
+// calls and names. A /v1/querybatch is answered from the same body, reduced to
+// the advisory IDs the real endpoint returns, and counted in batches only.
 type osvRecorder struct {
-	mu    sync.Mutex
-	names []string
-	calls atomic.Int32
+	mu      sync.Mutex
+	names   []string
+	calls   atomic.Int32
+	batches atomic.Int32
 }
 
 func (rec *osvRecorder) handler(body func(name string) string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/querybatch" {
+			rec.batches.Add(1)
+			rec.answerBatch(w, r, body)
+			return
+		}
 		rec.calls.Add(1)
 		raw, _ := io.ReadAll(r.Body)
 		var req struct {
@@ -63,6 +71,39 @@ func (rec *osvRecorder) handler(body func(name string) string) http.HandlerFunc 
 		rec.mu.Unlock()
 		_, _ = fmt.Fprint(w, body(req.Package.Name))
 	}
+}
+
+func (rec *osvRecorder) answerBatch(w http.ResponseWriter, r *http.Request, body func(name string) string) {
+	var req struct {
+		Queries []struct {
+			Package struct {
+				Name string `json:"name"`
+			} `json:"package"`
+		} `json:"queries"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	type idOnly struct {
+		ID string `json:"id"`
+	}
+	type result struct {
+		Vulns []idOnly `json:"vulns,omitempty"`
+	}
+	out := struct {
+		Results []result `json:"results"`
+	}{Results: make([]result, len(req.Queries))}
+	for i, q := range req.Queries {
+		var page struct {
+			Vulns []idOnly `json:"vulns"`
+		}
+		if err := json.Unmarshal([]byte(body(q.Package.Name)), &page); err != nil || page.Vulns == nil {
+			// Not a clean answer for this package: name an advisory so the
+			// client falls back to /v1/query, where the body is served as is.
+			out.Results[i].Vulns = []idOnly{{ID: "UNCLEAR"}}
+			continue
+		}
+		out.Results[i].Vulns = page.Vulns
+	}
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 func (rec *osvRecorder) requested() []string {

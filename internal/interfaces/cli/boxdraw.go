@@ -98,8 +98,8 @@ func writeLine(ctx *boxContext, format string, args ...any) error {
 }
 
 // isWrappableLine returns true only for the labeled free-text fields handled
-// by writeLine: verdict+reason lines (emoji prefix), Catalog Reason, and
-// Description: lines.
+// by writeLine: verdict+reason lines (emoji prefix), the dormant-release
+// notice, maintainer domain notices, Catalog Reason, and Description: lines.
 // Unlabeled description text is wrapped separately by writeBoxIdentity.
 // Everything else — including URLs, identifiers, structured data, and
 // evidence summary lines — is left unwrapped.
@@ -119,6 +119,9 @@ func isWrappableLine(s string) bool {
 		// Verdict line: "icon Label: reason"
 		return true
 	case strings.HasPrefix(trimmed, "Catalog Reason:"):
+		return true
+	case strings.HasPrefix(trimmed, dormantReleasePrefix), strings.HasPrefix(trimmed, releaseAgePrefix),
+		strings.HasPrefix(trimmed, maintainerDomainPrefix):
 		return true
 	case strings.HasPrefix(trimmed, "Description:"):
 		return true
@@ -327,6 +330,35 @@ func renderBoxEntryError(ctx *boxContext) error {
 		if err := writeLine(ctx, "Via: %s", ctx.entry.Via); err != nil {
 			return wrap(err)
 		}
+	}
+	if ctx.analysis != nil && ctx.analysis.Malicious() {
+		if err := writeBoxVerdict(ctx); err != nil {
+			return wrap(err)
+		}
+		if ctx.entry.ErrorMsg != "" {
+			if err := writeLine(ctx, "Error: %s", ctx.entry.ErrorMsg); err != nil {
+				return wrap(err)
+			}
+		}
+		if err := writeBottomBar(ctx); err != nil {
+			return wrap(err)
+		}
+		return nil
+	}
+	// The marker comes from the registry, so it can be present when deps.dev
+	// failed.
+	if notice := ctx.analysis.DormantReleaseNotice(); notice != "" {
+		if err := writeLine(ctx, "%s %s", dormantReleasePrefix, notice); err != nil {
+			return wrap(err)
+		}
+	}
+	if notice := ctx.analysis.ReleaseAgeNotice(); notice != "" {
+		if err := writeLine(ctx, "%s %s", releaseAgePrefix, notice); err != nil {
+			return wrap(err)
+		}
+	}
+	if err := writeMaintainerDomainNotices(ctx); err != nil {
+		return wrap(err)
 	}
 	icon := verdictIcon(ctx.entry.Verdict)
 	label := verdictLabel(ctx.entry.Verdict)

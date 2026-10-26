@@ -15,15 +15,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	"github.com/future-architect/uzomuzo-oss/internal/common/ttlcache"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
@@ -49,17 +53,50 @@ const advisoryReferenceType = "ADVISORY"
 type Client struct {
 	http    *httpclient.Client
 	baseURL string
-	cache   ttlcache.Cache[[]domain.AdvisoryRecord]
+	cache   ttlcache.Cache[cachedAnswer]
+	// batchHTTP sends /v1/querybatch without retries: the batch is an
+	// optimisation, and a retried timeout would only delay the fallback.
+	batchHTTP *httpclient.Client
+	// storeMu serialises the ticket counter and every write to cache, so that
+	// "compare tickets, then store" is one step.
+	storeMu sync.Mutex
+	// lastTicket numbers requests in the order they are sent. Guarded by storeMu.
+	lastTicket uint64
+	// ttlTicket is lastTicket at the last SetCacheTTL. An answer to a request
+	// numbered at or below it is not stored. Guarded by storeMu.
+	ttlTicket uint64
 }
+
+// cachedAnswer is one stored OSV answer for a package, numbered by the request
+// that produced it. needsQuery marks a querybatch result that named an
+// advisory: the records must come from /v1/query, and until they do no
+// "no advisory" answer may be stored for the package. See replaces.
+type cachedAnswer struct {
+	recs       []domain.AdvisoryRecord
+	ticket     uint64
+	needsQuery bool
+	fromBatch  bool
+}
+
+// noRetry is the retry policy for the querybatch prime.
+var noRetry = httpclient.RetryConfig{}
 
 // NewClient returns an OSV.dev client with sensible HTTP defaults.
 func NewClient() *Client {
-	hc := &http.Client{Timeout: 5 * time.Second}
+	return newClient(5 * time.Second)
+}
+
+// newClient takes the per-request timeout of /v1/query so tests can shorten it.
+func newClient(queryTimeout time.Duration) *Client {
 	c := &Client{
-		http:    httpclient.NewClient(hc, httpclient.RegistryRetryConfig()),
-		baseURL: "https://api.osv.dev",
+		http: httpclient.NewClient(&http.Client{Timeout: queryTimeout}, httpclient.RegistryRetryConfig()),
+		// No http.Client timeout here: batchTimeout bounds the batch through its
+		// context. Sharing the /v1/query client would cut a batch off at that
+		// client's shorter timeout, below OSV.dev's stated querybatch latency.
+		batchHTTP: httpclient.NewClient(&http.Client{}, noRetry),
+		baseURL:   "https://api.osv.dev",
 	}
-	c.cache.SetTTL(10 * time.Minute)
+	c.SetCacheTTL(10 * time.Minute)
 	return c
 }
 
@@ -69,13 +106,81 @@ func (c *Client) SetHTTPClient(h *http.Client) {
 		return
 	}
 	c.http = httpclient.NewClient(h, httpclient.RegistryRetryConfig())
+	c.batchHTTP = httpclient.NewClient(h, noRetry)
 }
 
 // SetBaseURL overrides the base host (tests).
 func (c *Client) SetBaseURL(u string) { c.baseURL = strings.TrimRight(u, "/") }
 
 // SetCacheTTL sets the in-memory cache TTL (<=0 disables caching).
-func (c *Client) SetCacheTTL(d time.Duration) { c.cache.SetTTL(d) }
+func (c *Client) SetCacheTTL(d time.Duration) {
+	c.storeMu.Lock()
+	defer c.storeMu.Unlock()
+	// Advisories found while caching was off were never stored, so an older
+	// clean answer must not come back when caching is turned on again.
+	c.cache.Clear()
+	c.cache.SetTTL(d)
+	c.ttlTicket = c.lastTicket
+}
+
+// nextTicket numbers a request about to be sent, and the time it is sent.
+func (c *Client) nextTicket() (uint64, time.Time) {
+	c.storeMu.Lock()
+	defer c.storeMu.Unlock()
+	c.lastTicket++
+	return c.lastTicket, time.Now()
+}
+
+// storeAnswer caches ans for key unless replaces refuses it, or its request
+// predates the last SetCacheTTL. The entry's lifetime is counted from asked,
+// the time the request was sent.
+func (c *Client) storeAnswer(key string, ans cachedAnswer, asked time.Time, fromBatch bool) bool {
+	c.storeMu.Lock()
+	defer c.storeMu.Unlock()
+	if ans.ticket <= c.ttlTicket {
+		return false
+	}
+	ans.fromBatch = fromBatch
+	if old, has := c.cache.Get(key); has && !replaces(ans, old) {
+		return false
+	}
+	c.cache.SetAt(key, ans, asked)
+	return true
+}
+
+// replaces decides whether ans may overwrite the cached old for one package.
+//
+// The rule is "an answer naming an advisory is never replaced by one that
+// does not", because request order cannot tell which of two overlapping
+// answers is current: a ticket is taken before the request is built, so it
+// does not prove which request reached OSV.dev first. The cost: when an
+// advisory is withdrawn (OSV.dev then leaves it out of query answers) or its
+// affected list drops the package, the cached records keep reporting it until
+// the entry expires. That errs toward reporting an advisory, never toward
+// hiding one, and a new process starts with an empty cache.
+func replaces(ans, old cachedAnswer) bool {
+	oldHasRecords := !old.needsQuery && len(old.recs) > 0
+	switch {
+	case oldHasRecords:
+		// Only newer query records refresh query records.
+		return !ans.needsQuery && len(ans.recs) > 0 && ans.ticket > old.ticket
+	case ans.needsQuery:
+		// A batch named an advisory: the package must get its own query.
+		return true
+	case ans.fromBatch:
+		// A batch "no advisory" only refreshes another empty answer, and never
+		// clears a needs-query mark.
+		return !old.needsQuery
+	case old.needsQuery && len(ans.recs) == 0:
+		// An empty query clears a mark only if it was asked after the batch
+		// that set it; an older one may predate the advisory. Kept, the mark
+		// sends the next lookup to a fresh query.
+		return ans.ticket > old.ticket
+	default:
+		// Query records settle a mark; a query answer refreshes an empty one.
+		return true
+	}
+}
 
 // QueryPackage returns every advisory OSV.dev holds for one package, reduced to
 // the fields the domain classifies.
@@ -94,11 +199,12 @@ func (c *Client) QueryPackage(ctx context.Context, ecosystem, name string) ([]do
 	// case-sensitively, so a folded key would serve one package's advisories
 	// for another's name.
 	key := eco + "/" + n
-	if recs, ok := c.cache.Get(key); ok {
+	if ans, ok := c.cache.Get(key); ok && !ans.needsQuery {
 		slog.Debug("osv_cache_hit", "ecosystem", eco, "name", n)
-		return recs, nil
+		return ans.recs, nil
 	}
 
+	ticket, started := c.nextTicket()
 	var out []domain.AdvisoryRecord
 	seenTokens := map[string]bool{}
 	pageToken := ""
@@ -117,7 +223,7 @@ func (c *Client) QueryPackage(ctx context.Context, ecosystem, name string) ([]do
 		}
 		next := strings.TrimSpace(resp.NextPageToken)
 		if next == "" {
-			c.cache.Set(key, out)
+			c.storeAnswer(key, cachedAnswer{recs: out, ticket: ticket}, started, false)
 			return out, nil
 		}
 		// A repeated token means the server is not advancing. Continuing would
@@ -176,21 +282,155 @@ func (c *Client) queryPage(ctx context.Context, ecosystem, name, pageToken strin
 	if trimmed := bytes.TrimLeft(raw, " \t\r\n"); len(trimmed) == 0 || trimmed[0] != '{' {
 		return nil, fmt.Errorf("osv query response was not a JSON object")
 	}
-	// A package with no advisories answers `{}`, so an absent vulns field is a
-	// clean answer. An explicit null is not: the schema has an array there, and
-	// caching it as "no advisories" would hide one for the cache's lifetime.
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
+	// The struct decode below folds key case, lets a repeated key replace the
+	// first and turns null into an empty value, so such a body could read as
+	// fewer advisories than OSV.dev sent ({"vulns":null}, {"id":null}, a range
+	// key spelled "TYPE"). It is an error, not an answer. A package with no
+	// advisories answers `{}`, so an absent vulns field stays a clean answer.
+	if err := checkUnambiguousKeys(raw); err != nil {
 		return nil, fmt.Errorf("osv query decode failed: %w", err)
-	}
-	if v, ok := fields["vulns"]; ok && string(bytes.TrimSpace(v)) == "null" {
-		return nil, fmt.Errorf("osv query response carried a null vulns field")
 	}
 	var out queryResponse
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil, fmt.Errorf("osv query decode failed: %w", err)
 	}
 	return &out, nil
+}
+
+// readField is one key this package reads from a /v1/query body. nonNull marks
+// the keys whose null value would silently drop an advisory or a match (a
+// record without its ID, a range without its events, an unmaintained marker
+// turned into an empty string).
+type readField struct {
+	name    string
+	nonNull bool
+}
+
+// readFields lists every key queryPage and the range checks read, by parent
+// path (canonical key names joined by "/", arrays transparent) and folded key.
+// Only these keys are held to exact spelling, uniqueness and the null rule:
+// the OSV schema leaves database_specific and ecosystem_specific contents
+// open, so a key there that this package does not read must not fail a lookup.
+var readFields = func() map[string]readField {
+	byParent := map[string][]readField{
+		"":                             {{"vulns", true}, {"next_page_token", false}},
+		"vulns":                        {{"id", true}, {"aliases", false}, {"summary", false}, {"published", true}, {"withdrawn", false}, {"references", false}, {"database_specific", true}, {"affected", true}},
+		"vulns/references":             {{"type", false}, {"url", false}},
+		"vulns/database_specific":      {{"cwe_ids", true}},
+		"vulns/affected":               {{"package", true}, {"ranges", true}, {"versions", true}, {"database_specific", true}},
+		"vulns/affected/package":       {{"name", true}, {"ecosystem", true}},
+		"vulns/affected/ranges":        {{"type", true}, {"events", true}},
+		"vulns/affected/ranges/events": {{"introduced", true}, {"fixed", true}, {"last_affected", true}, {"limit", true}},
+		// RustSec sends "informational": null on every advisory that is not
+		// informational (RUSTSEC-2022-0042 does), so null here means "no marker".
+		"vulns/affected/database_specific": {{"informational", false}},
+	}
+	out := map[string]readField{}
+	for parent, fields := range byParent {
+		for _, f := range fields {
+			out[parent+"\x00"+foldKey(f.name)] = f
+		}
+	}
+	return out
+}()
+
+// checkUnambiguousKeys fails when the JSON document could decode to less than
+// OSV.dev sent. For each key in readFields, that is when its object holds it
+// twice or under two spellings encoding/json would fold together (the Kelvin
+// sign and the long s included), when it is spelled other than exactly (the
+// struct decode would accept it, the exact-key range checks would not), or
+// when a nonNull key is null. Keys this package does not read are not checked.
+// It walks tokens rather than decoding, so its cost is linear in the body size.
+func checkUnambiguousKeys(raw []byte) error {
+	type frame struct {
+		object    bool
+		expectKey bool
+		path      string
+		unread    bool // inside a value this package does not read: no checks
+		seen      map[string]bool
+		lastKey   string
+		lastField *readField
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	var stack []*frame
+	for {
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("read JSON token: %w", err)
+		}
+		var top *frame
+		if len(stack) > 0 {
+			top = stack[len(stack)-1]
+		}
+		if key, isKey := tok.(string); isKey && top != nil && top.object && top.expectKey {
+			top.expectKey = false
+			top.lastKey = key
+			top.lastField = nil
+			if top.unread {
+				continue
+			}
+			folded := foldKey(key)
+			f, read := readFields[top.path+"\x00"+folded]
+			if !read {
+				continue
+			}
+			if key != f.name {
+				return fmt.Errorf("object key %q is a variant spelling of %q", key, f.name)
+			}
+			if top.seen[folded] {
+				return fmt.Errorf("object key %q is repeated", key)
+			}
+			top.seen[folded] = true
+			top.lastField = &f
+			continue
+		}
+		if tok == nil && top != nil && top.object && top.lastField != nil && top.lastField.nonNull {
+			return fmt.Errorf("object key %q is null", top.lastKey)
+		}
+		switch tok {
+		case json.Delim('{'), json.Delim('['):
+			// The child's path is built from readFields names only, never from
+			// raw keys, so a key such as "vulns/affected" cannot pose as a path.
+			child := &frame{object: tok == json.Delim('{'), expectKey: tok == json.Delim('{'), seen: map[string]bool{}}
+			switch {
+			case top == nil:
+			case top.unread || (top.object && top.lastField == nil):
+				child.unread = true
+			case top.object:
+				child.path = strings.TrimPrefix(top.path+"/"+top.lastField.name, "/")
+			default:
+				child.path = top.path // array elements share the array's path
+			}
+			stack = append(stack, child)
+			continue
+		case json.Delim('}'), json.Delim(']'):
+			stack = stack[:len(stack)-1]
+		}
+		// A value (scalar, or a container just closed) ends a key/value pair.
+		if len(stack) > 0 && stack[len(stack)-1].object {
+			stack[len(stack)-1].expectKey = true
+		}
+	}
+}
+
+// foldKey maps s to one representative of its case-folding class, so two keys
+// share a result exactly when strings.EqualFold reports them equal.
+func foldKey(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		low := r
+		for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+			if f < low {
+				low = f
+			}
+		}
+		b.WriteRune(low)
+	}
+	return b.String()
 }
 
 func (c *Client) resolvedBaseURL() string {
@@ -217,10 +457,17 @@ type queryResponse struct {
 	NextPageToken string     `json:"next_page_token"`
 }
 
+type batchRequest struct {
+	Queries []queryRequest `json:"queries"`
+}
+
 type wireVuln struct {
-	ID      string   `json:"id"`
-	Aliases []string `json:"aliases"`
-	Summary string   `json:"summary"`
+	ID               string   `json:"id"`
+	Aliases          []string `json:"aliases"`
+	Summary          string   `json:"summary"`
+	DatabaseSpecific struct {
+		CWEIDs []string `json:"cwe_ids"`
+	} `json:"database_specific"`
 	// Published is RFC3339. An unparseable or absent value leaves the record's
 	// Published zero, which the domain treats as a non-match.
 	Published string `json:"published"`
@@ -360,6 +607,11 @@ func toRecord(v *wireVuln) (domain.AdvisoryRecord, bool) {
 		Reference: advisoryReference(v.References),
 		Withdrawn: strings.TrimSpace(v.Withdrawn) != "",
 	}
+	for _, cwe := range v.DatabaseSpecific.CWEIDs {
+		if cweIDPattern.MatchString(cwe) {
+			rec.CWEIDs = append(rec.CWEIDs, cwe)
+		}
+	}
 	for _, alias := range v.Aliases {
 		// A malformed alias is dropped like a malformed ID; losing one only
 		// costs the assessor an exclusion.
@@ -408,6 +660,53 @@ func toRecord(v *wireVuln) (domain.AdvisoryRecord, bool) {
 		rec.Affected = append(rec.Affected, out)
 	}
 	return rec, true
+}
+
+var cweIDPattern = regexp.MustCompile(`^CWE-[0-9]+$`)
+
+// OSVPackageFor maps a parsed PURL to the ecosystem and name used by OSV.
+func OSVPackageFor(parsed *purl.ParsedPURL) (string, string, bool) {
+	if parsed == nil {
+		return "", "", false
+	}
+	name := parsed.Name()
+	namespace := parsed.Namespace()
+	switch parsed.Ecosystem() {
+	case "npm":
+		if namespace != "" {
+			name = namespace + "/" + name
+		}
+		return "npm", name, name != ""
+	case "pypi":
+		if namespace != "" {
+			return "", "", false
+		}
+		name = domain.NormalizePyPIName(name)
+		return "PyPI", name, name != ""
+	case "cargo":
+		if namespace == "" {
+			return "crates.io", name, name != ""
+		}
+	case "golang":
+		return "Go", name, name != ""
+	case "maven":
+		if namespace != "" && name != "" {
+			return "Maven", namespace + ":" + name, true
+		}
+	case "nuget":
+		if namespace == "" {
+			return "NuGet", name, name != ""
+		}
+	case "gem":
+		if namespace == "" {
+			return "RubyGems", name, name != ""
+		}
+	case "composer":
+		if namespace != "" && name != "" {
+			return "Packagist", namespace + "/" + name, true
+		}
+	}
+	return "", "", false
 }
 
 // advisoryReference returns the URL of the advisory's own page, preferring the

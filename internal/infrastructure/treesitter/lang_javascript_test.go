@@ -1209,6 +1209,137 @@ const name = basename("/foo/bar.txt");
 			wantSymbols: []string{"basename", "join", "resolve"},
 		},
 		{
+			name:     "member of require bound to a variable: const x = require('pkg').default (#543)",
+			filename: "index.js",
+			code: `const ipc = require("node-ipc").default;
+
+ipc.config.id = "broker";
+ipc.serve(() => {});
+ipc.server.start();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/node-ipc@10.1.0": {"node-ipc"},
+			},
+			purl:        "pkg:npm/node-ipc@10.1.0",
+			wantImports: 1,
+			wantCalls:   3,
+			wantBreadth: 3,
+			wantSymbols: []string{"config", "serve", "server"},
+		},
+		{
+			name:     "named member of require bound to a variable: const post = require('pkg').post (#543)",
+			filename: "index.js",
+			code: `const post = require("request").post;
+
+post({ url: "https://a.example" });
+post({ url: "https://b.example" });
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/request@2.88.2": {"request"},
+			},
+			purl:        "pkg:npm/request@2.88.2",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 1,
+			wantSymbols: []string{"post"},
+		},
+		{
+			name:     "nested member chain of require bound to a variable",
+			filename: "index.js",
+			code: `const sub = require("deep-pkg").api.v2;
+
+sub.run();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/deep-pkg@1.0.0": {"deep-pkg"},
+			},
+			purl:        "pkg:npm/deep-pkg@1.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"run"},
+		},
+		{
+			name:     "member of require in a compound fallback: var X = root.X || require('pkg').X",
+			filename: "index.js",
+			code: `var Hammer = window.Hammer || require("hammerjs").default;
+
+Hammer.on("tap");
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/hammerjs@2.0.8": {"hammerjs"},
+			},
+			purl:        "pkg:npm/hammerjs@2.0.8",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"on"},
+		},
+		{
+			name:     "member of require on the right of && and in a ternary branch is bound",
+			filename: "index.js",
+			code: `const a = ready && require("ready-pkg").api;
+a.run();
+const b = useNew ? require("ready-pkg").next : legacy;
+b.start();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/ready-pkg@1.0.0": {"ready-pkg"},
+			},
+			purl:        "pkg:npm/ready-pkg@1.0.0",
+			wantImports: 1,
+			wantCalls:   2,
+			wantBreadth: 2,
+			wantSymbols: []string{"run", "start"},
+		},
+		{
+			name:     "parenthesized member of require is bound",
+			filename: "index.js",
+			code: `const p = (require("paren-pkg").api);
+p.call();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/paren-pkg@1.0.0": {"paren-pkg"},
+			},
+			purl:        "pkg:npm/paren-pkg@1.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"call"},
+		},
+		{
+			name:     "member of require in a ?? fallback is bound",
+			filename: "index.js",
+			code: `const c = globalThis.cfg ?? require("cfg-pkg").defaults;
+c.load();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/cfg-pkg@1.0.0": {"cfg-pkg"},
+			},
+			purl:        "pkg:npm/cfg-pkg@1.0.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"load"},
+		},
+		{
+			name:     "member of require assigned to an object property",
+			filename: "index.js",
+			code: `const deps = {};
+deps.ipc = require("node-ipc").default;
+
+deps.ipc.serve(() => {});
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/node-ipc@10.1.0": {"node-ipc"},
+			},
+			purl:        "pkg:npm/node-ipc@10.1.0",
+			wantImports: 1,
+			wantCalls:   1,
+			wantBreadth: 1,
+			wantSymbols: []string{"serve"},
+		},
+		{
 			name:     "simple CJS require still works alongside destructured",
 			filename: "index.js",
 			code: `const axios = require("axios");
@@ -1346,6 +1477,124 @@ serialize(document);
 			wantIsUnused: false,
 			wantBlank:    false,
 			wantBreadth:  1,
+		},
+		{
+			name:     "member of require bound to a variable that is never called keeps the usage baseline (#543)",
+			filename: "index.js",
+			code: `var version = require('some-pkg').version;
+console.log(version);
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    1, // the member read is a use the call-site queries cannot see
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "member of require used only in a ternary condition is not an alias",
+			filename: "index.js",
+			code: `const local = () => 1;
+const other = () => 2;
+const x = require('some-pkg').enabled ? local : other;
+x();
+x();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    1, // baseline only; x() calls local/other, not the package
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "member of require on the left of && is not an alias",
+			filename: "index.js",
+			code: `const local = () => 1;
+const x = require('some-pkg').flag && local;
+x();
+x();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    1, // baseline only; x is local when the flag is truthy
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "member of require transformed by an operator is not an alias",
+			filename: "index.js",
+			code: `const s = require('some-pkg').version + ' suffix';
+s.trim();
+s.trim();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    1,
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "assignment to a member of require is not a binding",
+			filename: "index.js",
+			code: `const local = () => 1;
+const x = require('some-pkg').hook = local;
+x();
+x();
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    1,
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "member of require re-exported through module.exports keeps the usage baseline",
+			filename: "index.js",
+			code: `module.exports = require('some-pkg').helpers;
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    1,
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
+		},
+		{
+			name:     "chained member access without a binding: f(require('pkg').prop)",
+			filename: "index.js",
+			code: `console.log(require('some-pkg').version);
+`,
+			importPaths: map[string][]string{
+				"pkg:npm/some-pkg@1.0.0": {"some-pkg"},
+			},
+			purl:         "pkg:npm/some-pkg@1.0.0",
+			wantImports:  1,
+			wantCalls:    1, // baseline for blank/side-effect import (#261)
+			wantIsUnused: false,
+			wantBlank:    true,
+			wantBreadth:  0,
 		},
 	}
 

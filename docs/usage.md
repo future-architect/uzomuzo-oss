@@ -190,6 +190,20 @@ $ uzomuzo scan --file .github/workflows/ci.yml -f detailed
 
 </details>
 
+### Maintainer E-mail Domains (`--maintainer-domain`)
+
+For versioned npm inputs, `--maintainer-domain` looks up the domain of each current maintainer's e-mail address through RDAP (shared mail providers, private suffixes, invalid addresses, addresses not found in the release history, and TLDs without an https RDAP service are listed as unchecked instead) and adds a notice when the domain is lapsing, unregistered, or was registered again after the address first appeared in the package's npm history:
+
+```bash
+./uzomuzo scan --maintainer-domain --format json pkg:npm/express@4.18.2
+```
+
+The result appears as `maintainer_domain` in `--format json` and as a `⚠ Maintainer domain:` line in the detailed view; table and CSV output are unchanged. The flag is off by default, makes RDAP requests (lookups at least one second apart per RDAP server), and does not change verdicts, exit codes, or `--fail-on`. It also fetches IANA's list of RDAP servers (<https://data.iana.org/rdap/dns.json>), keeps it under the user cache directory until it expires, and falls back to the copy built into the binary when the fetch fails; `rdap_bootstrap` in the JSON output says which list was used.
+
+Each flagged finding also carries `publisher_email_evidence`: the account's latest visible publish (`versions[v]._npmUser`) among the npm packuments analysed in the same batch (PURL inputs and GitHub URL inputs are separate batches), with its `status` (`observed`, `email_missing`, `conflicting`, `not_observed`), `domain_relation` to the flagged domain (`same`, `different`, `unknown`), `registration_relation` to the re-registration date (`before`, `equal`, `after`, `unknown`), and `newer_publish_unknown`. That flag is true when a version newer than the latest visible publish has no visible publisher (its manifest was removed, or it names no `_npmUser`), in the flagged package or in another package of the batch that the account published or maintains, or, when no visible publish was found, when any version of the flagged package has none. `latest_observed` names the latest visible publish; it is absent for `not_observed` and `conflicting`, and has no `email_domain` for `email_missing`. `source` is always `versions._npmUser`, `scope` is `scan_packuments`, and `account_history_complete` is always false because the scan does not list every package of the account. Only the e-mail domain is reported. When the status is `observed`, the notice adds one sentence: that a newer publish exists whose publisher is not visible, or else whether the latest publish used the same domain or another one. See [ADR-0030](adr/0030-maintainer-email-domain-marker.md).
+
+Each flagged finding also has `package_publish`: `found` includes `last_published_at` and `version` for the account's latest dated publish found in this package's npm records (when several versions share that time, `version` is the lowest by string order); `not_found` means those records show no dated, attributable publish by the account. It does not mean the account never published the package. The notice adds the corresponding package sentence without printing an e-mail address. A finding without an account name has no `package_publish` and no package sentence. The package-level `version_publisher` is `trusted_publishing` when the analysed version's `_npmUser.name` is exactly `GitHub Actions`, `other` for any other named publisher, or `unknown` without a named publisher record. The trusted case adds a notice sentence. `other` does not imply a manual publish. `version_publisher` is present when the flag produces a result even if `flagged` is empty; a package without a flagged finding has no maintainer-domain notice.
+
 ### Actions Discovery (`--include-actions`)
 
 When scanning GitHub URLs, `--include-actions` automatically fetches the target repository's workflow files and evaluates referenced Actions:
@@ -198,9 +212,13 @@ When scanning GitHub URLs, `--include-actions` automatically fetches the target 
 # Scan a repo AND its GitHub Actions dependencies
 ./uzomuzo scan https://github.com/owner/repo --include-actions
 
-# Combined with fail policy
-./uzomuzo scan https://github.com/owner/repo --include-actions --fail-on stalled
+# Fail when a referenced Action's repository is archived
+./uzomuzo scan https://github.com/owner/repo --include-actions --fail-on archived
 ```
+
+An Action has no registry, so no end-of-life is ever declared for it and
+`--fail-on eol-confirmed` does not fire. `--fail-on archived` fails on archived
+Actions only; `--fail-on stalled` also fails on Actions that have merely gone quiet.
 
 Output includes a `SOURCE` column to distinguish direct results from discovered Actions. JSON and CSV formats include a `source` field (`"actions"` for discovered entries).
 
@@ -402,11 +420,37 @@ Exit with code 1 when any dependency matches the specified lifecycle labels:
 ./uzomuzo scan --sbom bom.json --fail-on eol-confirmed,eol-effective,stalled
 ```
 
-Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `legacy-safe`, `review-needed`
+Valid labels: `eol-confirmed`, `eol-effective`, `eol-scheduled`, `stalled`, `legacy-safe`, `review-needed`, `malicious`, `dormant-release`, `archived`, `disabled`
+
+`malicious` fails on a version named in an OSV malicious-package advisory. Any
+other non-empty `--fail-on` selection also fails on such a version (see
+[ADR-0027](adr/0027-osv-malicious-advisories.md)).
+
+`dormant-release` fails on an npm version that came out in the last 7 days after
+a year with no releases, whatever its lifecycle label: any stable version, or
+any version in a burst across release lines. No other value implies it: it is a reason to look before adopting, not
+a finding, and ordinary releases carry it too (see
+[ADR-0028](adr/0028-dormant-release-marker.md)). `review-needed` stops only on
+the narrower case below, and only while the label is Review Needed.
+
+`archived` fails when the repository is archived, and `disabled` when GitHub has
+disabled it, whatever the lifecycle label or verdict, including entries whose
+analysis failed. An archived repository is usually labelled Stalled (see
+[ADR-0020](adr/0020-archived-registry-liveness.md)), so `stalled` also catches
+it but fails on quiet, unarchived repositories too. No other value implies
+either one, and neither implies the other. Both need `GITHUB_TOKEN`: without it
+the disabled state is never read and the archived state only through Scorecard,
+so the scan refuses these values instead of passing entries it did not check (see
+[ADR-0029](adr/0029-archived-disabled-are-facts.md)). The table shows
+`· archived` / `· disabled` after the lifecycle label; JSON has `archived` and
+`disabled` booleans, and CSV has `archived` and `disabled` columns.
 
 `review-needed` covers the cases uzomuzo cannot decide on its own — including a
 package whose every published release is yanked (see
-[ADR-0022](adr/0022-all-releases-yanked-is-not-eol.md)). Add it to `--fail-on`
+[ADR-0022](adr/0022-all-releases-yanked-is-not-eol.md)), and an npm version
+published in the last 7 days after a year with no releases, together with versions on other release
+lines (other major versions, or other minor versions below 1.0) within a day: the way past takeovers of npm packages that had gone quiet
+(node-ipc, rc) have looked (see [ADR-0026](adr/0026-dormant-release-burst.md)). Add it to `--fail-on`
 when CI should stop for a human to look, rather than only for a confirmed
 end-of-life.
 
@@ -465,13 +509,33 @@ STATUS     PURL                    LIFECYCLE      BUILD
 
 </details>
 
+## Young-release notice
+
+For a versioned input published within the last seven days (configurable), `--format detailed`
+shows a publish-age notice and `--format json` includes `release_age` with
+`status: "young"`, `published_at`, `source`, `window_days`, and `until`. The
+source is `npm`, `pypi`, or `deps.dev`. If no publish time is available, the
+time is in the future, or the input does not identify the analysed package, JSON
+reports `status: "unknown"` and `window_days`; the detailed view has no notice.
+Versions older than the window have no `release_age` field. A dormant-release
+marker or malicious advisory suppresses the young-release notice, while JSON
+keeps both facts. Table and CSV output are unchanged.
+
+Set `LIFECYCLE_ASSESS_YOUNG_RELEASE_DAYS` to change the window from its default
+of seven days (0 or less falls back to seven). This notice does not change a label, verdict, exit code, or
+`--fail-on` decision. Run scans on dependency-update PRs or builds before
+installing dependencies: a monthly scan may miss the window. Transitive
+dependencies are scanned only with `--show-transitive`. This measures version
+age, not the upload age of every distribution file. See
+[ADR-0031](adr/0031-young-release-marker.md).
+
 ## Verdict Mapping
 
 | Verdict | Lifecycle states | Action |
 |---------|-----------------|--------|
 | `ok` | Active, Legacy-Safe | No action needed |
 | `caution` | Stalled, EOL-Scheduled | Monitor; plan migration |
-| `replace` | EOL-Confirmed, EOL-Effective, Archived | Migrate immediately |
+| `replace` | EOL-Confirmed, EOL-Effective; also any label when a malicious-package advisory names the version, or when the repository is archived and the analysis succeeded (the table shows `· archived`) | Migrate immediately |
 | `review` | Insufficient data, analysis error | Manual investigation |
 
 ### Built-in Flags

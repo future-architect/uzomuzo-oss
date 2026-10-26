@@ -74,8 +74,43 @@ type Analysis struct {
 	// own assertions) and from EOL (primary-source lifecycle declarations).
 	AdvisoryDBState *AdvisoryDBState
 
+	// MaliciousState records the result of the OSV malicious advisory check.
+	MaliciousState *MaliciousState
+
+	// ReleaseHistory holds the registry's publish time for every version of the
+	// package, including removed ones. Read against Package.Version to detect a
+	// return from a long silence (see DetectDormantBurst and
+	// DetectFreshDormantRelease).
+	ReleaseHistory *ReleaseHistory
+
+	// MaintainerDomain holds the maintainer e-mail domain findings. It is nil
+	// when the check is not enabled, when the package is not npm, when
+	// ReleaseHistory is nil (see its nil cases, such as a versionless PURL or
+	// a failed registry request), or when the context was cancelled during
+	// or before the package's check. See ADR-0030.
+	MaintainerDomain *MaintainerDomainResult
+
+	// DormantRelease is set when the analysed version is a release that
+	// followed a long silence. Filled after enrichment by
+	// EvaluateDormantRelease. See ADR-0028.
+	DormantRelease *DormantRelease
+
+	// PyPIPublishedAt is the earliest upload time for the requested version
+	// observed in a PyPI response already fetched during this analysis; set it
+	// through ObservePyPIPublishedAt. Kept outside ReleaseHistory so the
+	// dormant-release rules stay npm-only. See ADR-0031.
+	PyPIPublishedAt time.Time
+	// ReleaseAge records a recent or unknown publish time. See ADR-0031.
+	ReleaseAge *ReleaseAge
+
 	// Release information
 	ReleaseInfo *ReleaseInfo
+
+	// UnmatchedPackage is the registry package a GitHub URL input was mapped to by
+	// name and then discarded because its repository link does not point back to
+	// that repository. Nil unless that happened. It is kept so the report can
+	// name the package the user may still want to check by hand (see #539).
+	UnmatchedPackage *UnmatchedPackage
 
 	// AxisResults stores per-axis assessment outputs (extensible: lifecycle, build_health, etc.)
 	AxisResults map[AssessmentAxis]*AssessmentResult
@@ -159,26 +194,24 @@ type Analysis struct {
 
 // HasRecentStableRelease determines if there was a recent stable release within the given days
 func (a *Analysis) HasRecentStableRelease(days int) bool {
-	if a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil {
-		return false
-	}
-	if a.ReleaseInfo.StableVersion.PublishedAt.IsZero() {
-		return false
-	}
-	daysAgo := int(time.Since(a.ReleaseInfo.StableVersion.PublishedAt).Hours() / 24)
-	return daysAgo <= days
+	return a.hasRecentStableReleaseAt(days, time.Now())
 }
 
 // HasRecentPrereleaseRelease determines if there was a recent prerelease within the given days
 func (a *Analysis) HasRecentPrereleaseRelease(days int) bool {
-	if a.ReleaseInfo == nil || a.ReleaseInfo.PreReleaseVersion == nil {
-		return false
+	return a.hasRecentPrereleaseReleaseAt(days, time.Now())
+}
+
+// ObservePyPIPublishedAt records at as PyPIPublishedAt when at is non-zero and
+// either no time is recorded yet or at is earlier than the recorded one. A nil
+// receiver is a no-op.
+func (a *Analysis) ObservePyPIPublishedAt(at time.Time) {
+	if a == nil {
+		return
 	}
-	if a.ReleaseInfo.PreReleaseVersion.PublishedAt.IsZero() {
-		return false
+	if !at.IsZero() && (a.PyPIPublishedAt.IsZero() || at.Before(a.PyPIPublishedAt)) {
+		a.PyPIPublishedAt = at
 	}
-	daysAgo := int(time.Since(a.ReleaseInfo.PreReleaseVersion.PublishedAt).Hours() / 24)
-	return daysAgo <= days
 }
 
 // HasRequestedVersionInfo determines if requested version information is available
@@ -228,10 +261,7 @@ func (a *Analysis) HasRecentCommit(days int) bool {
 
 // HasRecentHumanCommit checks if there's a recent human commit within the given days
 func (a *Analysis) HasRecentHumanCommit(days int) bool {
-	if a.RepoState == nil {
-		return false
-	}
-	return a.GetDaysSinceLastHumanCommit() <= days
+	return a.hasRecentHumanCommitAt(days, time.Now())
 }
 
 // GetDaysSinceLastCommit returns days since the last commit
@@ -244,50 +274,24 @@ func (a *Analysis) GetDaysSinceLastCommit() int {
 
 // GetDaysSinceLastHumanCommit returns days since the last human commit
 func (a *Analysis) GetDaysSinceLastHumanCommit() int {
-	if a.RepoState == nil || a.RepoState.LatestHumanCommit == nil {
-		return 9999 // Large number if no data
-	}
-	days := int(time.Since(*a.RepoState.LatestHumanCommit).Hours() / 24)
-	return days
+	return a.daysSinceLastHumanCommitAt(time.Now())
 }
 
 // GetLastHumanCommitYears returns years since the last human commit
 func (a *Analysis) GetLastHumanCommitYears() float64 {
-	days := a.GetDaysSinceLastHumanCommit()
-	if days == 9999 {
-		return 999.0 // Large number if no data
-	}
-	return float64(days) / 365.0
+	return a.lastHumanCommitYearsAt(time.Now())
 }
 
 // HasPublishData returns true when at least one version slot has a non-zero publish date.
 func (a *Analysis) HasPublishData() bool {
-	return a.GetDaysSinceLatestPublish() != 9999
+	return a.hasPublishDataAt(time.Now())
 }
 
 // GetDaysSinceLatestPublish returns the number of days since the most recently
 // published version across all known version slots (stable, prerelease, maxSemver, requested).
 // Returns 9999 when no publish date is available.
 func (a *Analysis) GetDaysSinceLatestPublish() int {
-	if a.ReleaseInfo == nil {
-		return 9999
-	}
-	minDays := 9999
-	candidates := []*VersionDetail{
-		a.ReleaseInfo.StableVersion,
-		a.ReleaseInfo.PreReleaseVersion,
-		a.ReleaseInfo.MaxSemverVersion,
-		a.ReleaseInfo.RequestedVersion,
-	}
-	for _, v := range candidates {
-		if v != nil && !v.PublishedAt.IsZero() {
-			days := int(time.Since(v.PublishedAt).Hours() / 24)
-			if days < minDays {
-				minDays = days
-			}
-		}
-	}
-	return minDays
+	return a.daysSinceLatestPublishAt(time.Now())
 }
 
 // GetBotRatio gets the ratio of bot commits
@@ -300,7 +304,7 @@ func (a *Analysis) GetBotRatio() float64 {
 
 // IsArchived returns whether the repository is archived
 func (a *Analysis) IsArchived() bool {
-	if a.RepoState == nil {
+	if a == nil || a.RepoState == nil {
 		return false
 	}
 	return a.RepoState.IsArchived
@@ -318,9 +322,18 @@ func (a *Analysis) AllReleasesYanked() bool {
 	return a != nil && a.RegistryState != nil && a.RegistryState.AllReleasesYanked
 }
 
+// DormantBurst reports whether the analysed version came out in a burst across
+// release lines after a long silence. See DetectDormantBurst for the parameters.
+func (a *Analysis) DormantBurst(now time.Time, minSilence, maxAge time.Duration) *DormantBurst {
+	if a == nil || a.Package == nil {
+		return nil
+	}
+	return DetectDormantBurst(a.ReleaseHistory, a.Package.Version, now, minSilence, maxAge)
+}
+
 // IsDisabled returns whether the repository is disabled
 func (a *Analysis) IsDisabled() bool {
-	if a.RepoState == nil {
+	if a == nil || a.RepoState == nil {
 		return false
 	}
 	return a.RepoState.IsDisabled
@@ -470,4 +483,91 @@ func (a *Analysis) EnsureCanonical() {
 		return
 	}
 	a.CanonicalKey = purl.CanonicalKey(raw)
+}
+
+// hasRecentStableReleaseAt is HasRecentStableRelease judged at now, so the
+// lifecycle assessor reads every age against one AssessmentInput.Now.
+func (a *Analysis) hasRecentStableReleaseAt(days int, now time.Time) bool {
+	if a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil {
+		return false
+	}
+	if a.ReleaseInfo.StableVersion.PublishedAt.IsZero() {
+		return false
+	}
+	return daysBetween(a.ReleaseInfo.StableVersion.PublishedAt, now) <= days
+}
+
+// hasRecentPrereleaseReleaseAt is HasRecentPrereleaseRelease judged at now.
+func (a *Analysis) hasRecentPrereleaseReleaseAt(days int, now time.Time) bool {
+	if a.ReleaseInfo == nil || a.ReleaseInfo.PreReleaseVersion == nil {
+		return false
+	}
+	if a.ReleaseInfo.PreReleaseVersion.PublishedAt.IsZero() {
+		return false
+	}
+	return daysBetween(a.ReleaseInfo.PreReleaseVersion.PublishedAt, now) <= days
+}
+
+// hasRecentHumanCommitAt is HasRecentHumanCommit judged at now.
+func (a *Analysis) hasRecentHumanCommitAt(days int, now time.Time) bool {
+	if a.RepoState == nil {
+		return false
+	}
+	return a.daysSinceLastHumanCommitAt(now) <= days
+}
+
+// daysSinceLastHumanCommitAt is GetDaysSinceLastHumanCommit judged at now.
+func (a *Analysis) daysSinceLastHumanCommitAt(now time.Time) int {
+	if a.RepoState == nil || a.RepoState.LatestHumanCommit == nil {
+		return 9999 // Large number if no data
+	}
+	return daysBetween(*a.RepoState.LatestHumanCommit, now)
+}
+
+// lastHumanCommitYearsAt is GetLastHumanCommitYears judged at now.
+func (a *Analysis) lastHumanCommitYearsAt(now time.Time) float64 {
+	days := a.daysSinceLastHumanCommitAt(now)
+	if days == 9999 {
+		return 999.0 // Large number if no data
+	}
+	return float64(days) / 365.0
+}
+
+// hasPublishDataAt is HasPublishData judged at now.
+func (a *Analysis) hasPublishDataAt(now time.Time) bool {
+	return a.daysSinceLatestPublishAt(now) != 9999
+}
+
+// daysSinceLatestPublishAt is GetDaysSinceLatestPublish judged at now.
+func (a *Analysis) daysSinceLatestPublishAt(now time.Time) int {
+	if a.ReleaseInfo == nil {
+		return 9999
+	}
+	minDays := 9999
+	candidates := []*VersionDetail{
+		a.ReleaseInfo.StableVersion,
+		a.ReleaseInfo.PreReleaseVersion,
+		a.ReleaseInfo.MaxSemverVersion,
+		a.ReleaseInfo.RequestedVersion,
+	}
+	for _, v := range candidates {
+		if v != nil && !v.PublishedAt.IsZero() {
+			days := daysBetween(v.PublishedAt, now)
+			if days < minDays {
+				minDays = days
+			}
+		}
+	}
+	return minDays
+}
+
+// daysBetween counts whole days from t to now.
+func daysBetween(t, now time.Time) int { return int(now.Sub(t).Hours() / 24) }
+
+// UnmatchedPackage records a same-named registry package that was not used for
+// a GitHub URL input. RepoURL is the package's own repository link, empty when
+// the package has none.
+type UnmatchedPackage struct {
+	PURL    string
+	RepoURL string
 }

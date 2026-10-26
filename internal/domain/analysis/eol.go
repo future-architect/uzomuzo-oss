@@ -128,5 +128,7 @@ func (s EOLStatus) HumanState() string {
 // Implementations live in the Infrastructure layer.
 type EOLEvaluatorPort interface {
 	// EvaluateBatch computes EOL status for analyses keyed by input key (PURL or repo URL).
+	// Implementations may record registry facts they observe on the analyses,
+	// such as Analysis.PyPIPublishedAt.
 	EvaluateBatch(ctx context.Context, analyses map[string]*Analysis) (map[string]EOLStatus, error)
 }

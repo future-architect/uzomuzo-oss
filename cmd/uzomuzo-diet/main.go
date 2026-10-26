@@ -43,7 +43,7 @@ func main() {
 
 	app := &urfcli.Command{
 		Name:    "uzomuzo-diet",
-		Usage:   "Analyze dependency removability and produce a prioritized diet plan",
+		Usage:   "[experimental] Analyze dependency removability and produce a prioritized diet plan",
 		Version: version,
 		Flags: []urfcli.Flag{
 			&urfcli.StringFlag{
