@@ -21,6 +21,7 @@
 - [ ] `goimports -w . && golangci-lint run` passes
 - [ ] Documentation updated (if applicable)
 - [ ] Commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format
+- [ ] The **pull request title** follows it too — this branch is squash-merged, so the title is the subject the release notes are built from ([type and scope rules](/CONTRIBUTING.md#commit-message-format))
 
 ## Test Plan
 

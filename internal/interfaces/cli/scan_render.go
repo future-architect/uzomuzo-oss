@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
@@ -155,14 +156,16 @@ func ResolveFormat(explicit string, inputCount int) (string, error) {
 // renderScanOutput dispatches to the correct renderer by format.
 // allEntries is used for summary counts; displayEntries is the (possibly filtered) set to render.
 // filterActive indicates whether --show-only was explicitly provided (even if all entries match).
-func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, format string, filterActive bool) error {
+// bootstrap is the RDAP service list used by --maintainer-domain, nil when the check did not run;
+// only JSON reports it.
+func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, format string, filterActive bool, bootstrap *domain.RDAPBootstrapInfo) error {
 	switch format {
 	case FormatDetailed:
 		return renderScanDetailed(w, allEntries, displayEntries, filterActive)
 	case FormatTable:
 		return renderScanTable(w, allEntries, displayEntries, filterActive)
 	case FormatJSON:
-		return renderScanJSON(w, allEntries, displayEntries, filterActive)
+		return renderScanJSON(w, allEntries, displayEntries, filterActive, bootstrap)
 	case FormatCSV:
 		return renderScanCSV(w, displayEntries)
 	default:
@@ -274,6 +277,36 @@ func renderScanDetailed(w io.Writer, allEntries, displayEntries []domainaudit.Au
 // The result is fixed-width padded so tabwriter aligns subsequent columns correctly
 // despite emoji taking variable display width.
 func tableVerdictDisplay(v domainaudit.Verdict) string {
+	if s, ok := tableVerdictCells[v]; ok {
+		return s
+	}
+	// Verdict added to the domain without being listed below: format on demand
+	// rather than rendering a blank cell.
+	return formatTableVerdictCell(v)
+}
+
+// tableVerdictCells holds the rendered cell for every known verdict.
+//
+// The cell depends only on the verdict, but renderScanTable formatted one per
+// row, which made this the single largest allocation source in table rendering.
+// Precomputing costs four strings at init.
+var tableVerdictCells = func() map[domainaudit.Verdict]string {
+	known := []domainaudit.Verdict{
+		domainaudit.VerdictOK,
+		domainaudit.VerdictCaution,
+		domainaudit.VerdictReplace,
+		domainaudit.VerdictReview,
+	}
+	m := make(map[domainaudit.Verdict]string, len(known))
+	for _, v := range known {
+		m[v] = formatTableVerdictCell(v)
+	}
+	return m
+}()
+
+// formatTableVerdictCell renders one verdict cell. Both the cache and the
+// unknown-verdict fallback go through here so the two cannot format differently.
+func formatTableVerdictCell(v domainaudit.Verdict) string {
 	icon := verdictIcon(v)
 	// Pad verdict text to 7 chars (length of "replace") so columns after it align.
 	return fmt.Sprintf("%s %-7s", icon, string(v))
@@ -310,9 +343,26 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		return fmt.Errorf("write scan table header: %w", err)
 	}
 
+	// Rows are assembled into buffers that persist across iterations, then handed
+	// to the tabwriter in one Write. Allocating a fresh []string per row and
+	// joining it cost about six allocations per row for bytes the tabwriter
+	// consumes immediately.
+	//
+	// Why not write each cell straight to the tabwriter instead: tabwriter.Writer
+	// does not implement io.StringWriter, so io.WriteString falls back to
+	// Write([]byte(s)) and allocates a conversion per call. Measured, that traded
+	// one allocation per row for nine — fewer bytes, half again as many objects.
+	cols := make([]string, 0, maxTableColumns)
+	rowBuf := make([]byte, 0, initialRowBufBytes)
 	for i := range displayEntries {
 		maintenance, _ := entryMaintenanceEOL(&displayEntries[i], "—")
-		var cols []string
+		if a := displayEntries[i].Analysis; a != nil && a.Malicious() {
+			maintenance += " ☠ " + a.MaliciousState.AdvisoryID
+		} else if a.HasDormantRelease() {
+			maintenance += fmt.Sprintf(" ⚠ %dd silence", a.DormantRelease.Burst.SilentDays)
+		}
+		maintenance = appendRepoStateMarkers(maintenance, displayEntries[i].Analysis)
+		cols = cols[:0]
 		cols = append(cols, tableVerdictDisplay(displayEntries[i].Verdict))
 		if showSource {
 			cols = append(cols, sourceDisplayName(displayEntries[i].Source))
@@ -323,7 +373,9 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		}
 		cols = append(cols, maintenance)
 		cols = append(cols, buildIntegrityDisplay(displayEntries[i].Analysis, displayEntries[i].Verdict))
-		if _, err := fmt.Fprintln(tw, strings.Join(cols, "\t")); err != nil {
+
+		rowBuf = appendTabbedRow(rowBuf[:0], cols)
+		if _, err := tw.Write(rowBuf); err != nil {
 			return fmt.Errorf("failed to write table row: %w", err)
 		}
 	}
@@ -335,6 +387,49 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		return fmt.Errorf("failed to write summary box: %w", err)
 	}
 	return nil
+}
+
+// appendRepoStateMarkers appends the archived and disabled repository facts to
+// a LIFECYCLE cell, after any malicious or dormant-release marker (ADR-0029).
+// Plain words, not an emoji: a double-width glyph breaks tabwriter alignment.
+func appendRepoStateMarkers(cell string, a *domain.Analysis) string {
+	if a.IsArchived() {
+		cell += " · archived"
+	}
+	if a.IsDisabled() {
+		cell += " · disabled"
+	}
+	return cell
+}
+
+// maxCSVColumns is the widest a CSV row gets: verdict and purl, the two
+// conditional relation columns, then the eighteen fixed columns. Rows without
+// relation info are shorter — this is the buffer's capacity, not its length.
+// Keep in step with the header built in renderScanCSV.
+const maxCSVColumns = 22
+
+// initialRowBufBytes is the starting capacity of the reused table row buffer.
+// A row is a verdict cell, a PURL and four short fields, so most rows fit
+// without growing; the buffer grows once on the first longer row and is reused
+// from then on.
+const initialRowBufBytes = 256
+
+// maxTableColumns is the widest the scan table gets: STATUS, SOURCE, PURL,
+// RELATION, LIFECYCLE, BUILD. SOURCE and RELATION are conditional, so a given
+// run may use fewer — this is the row buffer's capacity, not its length.
+const maxTableColumns = 6
+
+// appendTabbedRow appends cells separated by tabs and terminated by a newline,
+// producing the same bytes as Fprintln of a tab-joined string. Callers pass
+// dst[:0] to reuse a buffer across rows.
+func appendTabbedRow(dst []byte, cells []string) []byte {
+	for i, c := range cells {
+		if i > 0 {
+			dst = append(dst, '\t')
+		}
+		dst = append(dst, c...)
+	}
+	return append(dst, '\n')
 }
 
 // renderSummaryBox renders the summary line in a left-border box.
@@ -371,15 +466,21 @@ func buildIntegrityDisplay(a *domain.Analysis, verdict domainaudit.Verdict) stri
 
 // enrichedJSONEntry is the DTO for --format json with full analysis data.
 type enrichedJSONEntry struct {
-	PURL                string   `json:"purl"`
-	Verdict             string   `json:"verdict"`
-	Lifecycle           string   `json:"lifecycle"`
-	BuildIntegrity      string   `json:"build_integrity,omitempty"`
-	BuildIntegrityScore *float64 `json:"build_integrity_score,omitempty"`
-	Successor           string   `json:"successor,omitempty"`
+	PURL                string                `json:"purl"`
+	Verdict             string                `json:"verdict"`
+	Lifecycle           string                `json:"lifecycle"`
+	Malicious           *maliciousJSON        `json:"malicious,omitempty"`
+	MaliciousCheck      string                `json:"malicious_check,omitempty"`
+	DormantRelease      *dormantJSON          `json:"dormant_release,omitempty"`
+	ReleaseAge          *releaseAgeJSON       `json:"release_age,omitempty"`
+	MaintainerDomain    *maintainerDomainJSON `json:"maintainer_domain,omitempty"`
+	BuildIntegrity      string                `json:"build_integrity,omitempty"`
+	BuildIntegrityScore *float64              `json:"build_integrity_score,omitempty"`
+	Successor           string                `json:"successor,omitempty"`
 
 	RepoURL        string  `json:"repo_url,omitempty"`
 	Archived       bool    `json:"archived"`
+	Disabled       bool    `json:"disabled"`
 	OverallScore   float64 `json:"overall_score"`
 	DependentCount int     `json:"dependent_count,omitempty"`
 	StableVersion  string  `json:"stable_version,omitempty"`
@@ -406,19 +507,127 @@ type enrichedJSONEntry struct {
 	RelationVia []string `json:"relation_via,omitempty"`
 }
 
+type maliciousJSON struct {
+	AdvisoryID string                `json:"advisory_id"`
+	Summary    string                `json:"summary"`
+	Reference  string                `json:"reference"`
+	Scope      domain.MaliciousScope `json:"scope"`
+}
+
+// dormantJSON is the dormant-release marker (ADR-0028) in --format json.
+type dormantJSON struct {
+	Kind          domain.DormantReleaseKind `json:"kind"`
+	PublishedAt   time.Time                 `json:"published_at"`
+	SilentDays    int                       `json:"silent_days"`
+	BurstVersions []string                  `json:"burst_versions"`
+	Lines         []string                  `json:"lines"`
+	Removed       bool                      `json:"removed"`
+	Until         time.Time                 `json:"until"`
+}
+
+// releaseAgeJSON is the publish-age marker in --format json. See ADR-0031.
+type releaseAgeJSON struct {
+	Status      string    `json:"status"`
+	PublishedAt time.Time `json:"published_at,omitzero"`
+	Source      string    `json:"source,omitempty"`
+	WindowDays  int       `json:"window_days"`
+	Until       time.Time `json:"until,omitzero"`
+}
+
+type maintainerDomainJSON struct {
+	VersionPublisher  domain.VersionPublisherKind     `json:"version_publisher,omitempty"`
+	Flagged           []maintainerDomainFindingJSON   `json:"flagged"`
+	Unchecked         int                             `json:"unchecked"`
+	LookupFailed      int                             `json:"lookup_failed"`
+	UncheckedFindings []maintainerDomainUncheckedJSON `json:"unchecked_findings"`
+}
+
+type maintainerDomainUncheckedJSON struct {
+	Account string                        `json:"account"`
+	Domain  string                        `json:"domain"`
+	Reason  domain.MaintainerDomainReason `json:"reason"`
+}
+
+// maintainerDomainFindingJSON omits registered when RDAP gave no registration
+// date (unregistered, and lapsing without a date).
+type maintainerDomainFindingJSON struct {
+	Account                string                      `json:"account"`
+	Domain                 string                      `json:"domain"`
+	Kind                   domain.MaintainerDomainKind `json:"kind"`
+	FirstSeen              time.Time                   `json:"first_seen"`
+	Registered             time.Time                   `json:"registered,omitzero"`
+	Registrar              string                      `json:"registrar,omitempty"`
+	DropCatch              bool                        `json:"drop_catch"`
+	PublisherEmailEvidence *publisherEmailEvidenceJSON `json:"publisher_email_evidence,omitempty"`
+	PackagePublish         *packagePublishJSON         `json:"package_publish,omitempty"`
+}
+
+type packagePublishJSON struct {
+	Status          domain.PackagePublishStatus `json:"status"`
+	LastPublishedAt time.Time                   `json:"last_published_at,omitzero"`
+	Version         string                      `json:"version,omitempty"`
+}
+
+func newPackagePublishJSON(p *domain.PackagePublish) *packagePublishJSON {
+	if p == nil {
+		return nil
+	}
+	return &packagePublishJSON{Status: p.Status, LastPublishedAt: p.LastPublishedAt, Version: p.Version}
+}
+
+type publisherEmailEvidenceJSON struct {
+	Status                 domain.PublisherEmailStatus          `json:"status"`
+	Source                 string                               `json:"source"`
+	Scope                  domain.PublisherEvidenceScope        `json:"scope"`
+	AccountHistoryComplete bool                                 `json:"account_history_complete"`
+	LatestObserved         *publisherLatestObservedJSON         `json:"latest_observed,omitempty"`
+	DomainRelation         domain.PublisherDomainRelation       `json:"domain_relation"`
+	RegistrationRelation   domain.PublisherRegistrationRelation `json:"registration_relation"`
+	NewerPublishUnknown    bool                                 `json:"newer_publish_unknown"`
+}
+
+type publisherLatestObservedJSON struct {
+	PublishedAt time.Time `json:"published_at"`
+	Package     string    `json:"package"`
+	Version     string    `json:"version"`
+	EmailDomain string    `json:"email_domain,omitempty"`
+}
+
+func newPublisherEmailEvidenceJSON(e *domain.PublisherEmailEvidence) *publisherEmailEvidenceJSON {
+	if e == nil {
+		return nil
+	}
+	out := &publisherEmailEvidenceJSON{Status: e.Status, Source: e.Source, Scope: e.Scope, AccountHistoryComplete: e.AccountHistoryComplete, DomainRelation: e.DomainRelation, RegistrationRelation: e.RegistrationRelation, NewerPublishUnknown: e.NewerPublishUnknown}
+	if o := e.LatestObserved; o != nil {
+		out.LatestObserved = &publisherLatestObservedJSON{PublishedAt: o.PublishedAt, Package: o.Package, Version: o.Version, EmailDomain: o.EmailDomain}
+	}
+	return out
+}
+
 type enrichedJSONOutput struct {
-	Summary  jsonSummary         `json:"summary"`
-	Entries  []enrichedJSONEntry `json:"packages"`
-	Filtered bool                `json:"filtered,omitempty"`
-	Shown    int                 `json:"shown"`
+	Summary       jsonSummary         `json:"summary"`
+	Entries       []enrichedJSONEntry `json:"packages"`
+	Filtered      bool                `json:"filtered,omitempty"`
+	Shown         int                 `json:"shown"`
+	RDAPBootstrap *rdapBootstrapJSON  `json:"rdap_bootstrap,omitempty"`
+}
+
+// rdapBootstrapJSON reports the IANA RDAP service list --maintainer-domain used.
+type rdapBootstrapJSON struct {
+	Source      domain.RDAPBootstrapSource `json:"source"`
+	Publication string                     `json:"publication"`
 }
 
 // renderScanJSON renders the JSON output format.
 // filterActive indicates whether --show-only was explicitly provided.
-func renderScanJSON(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool) error {
+// bootstrap, when non-nil, is written as rdap_bootstrap.
+func renderScanJSON(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool, bootstrap *domain.RDAPBootstrapInfo) error {
 	out := enrichedJSONOutput{
 		Summary: computeSummary(allEntries),
 		Entries: make([]enrichedJSONEntry, 0, len(displayEntries)),
+	}
+	if bootstrap != nil {
+		out.RDAPBootstrap = &rdapBootstrapJSON{Source: bootstrap.Source, Publication: bootstrap.Publication}
 	}
 	if filterActive {
 		out.Filtered = true
@@ -462,6 +671,36 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	je.DependentCount = a.DependentCount
 	je.Successor = a.EOL.Successor
 	je.Archived = a.IsArchived()
+	je.Disabled = a.IsDisabled()
+	if a.Malicious() {
+		je.Malicious = &maliciousJSON{AdvisoryID: a.MaliciousState.AdvisoryID, Summary: a.MaliciousState.Summary, Reference: a.MaliciousState.Reference, Scope: a.MaliciousState.Scope}
+	} else if a.MaliciousState != nil && a.MaliciousState.Status == domain.MaliciousStatusLookupFailed {
+		je.MaliciousCheck = "unknown"
+	}
+	if a.HasDormantRelease() {
+		d := a.DormantRelease
+		je.DormantRelease = &dormantJSON{Kind: d.Kind, PublishedAt: d.Burst.PublishedAt, SilentDays: d.Burst.SilentDays,
+			BurstVersions: d.Burst.Versions, Lines: d.Burst.Lines, Removed: d.Burst.Removed, Until: d.Until}
+	}
+	if a.ReleaseAge != nil {
+		r := a.ReleaseAge
+		je.ReleaseAge = &releaseAgeJSON{Status: string(r.Status), PublishedAt: r.PublishedAt, Source: string(r.Source), WindowDays: r.WindowDays, Until: r.Until}
+	}
+	if a.MaintainerDomain != nil {
+		m := &maintainerDomainJSON{VersionPublisher: a.MaintainerDomain.AnalysedVersionPublisher, Flagged: []maintainerDomainFindingJSON{}, UncheckedFindings: []maintainerDomainUncheckedJSON{}}
+		for _, f := range a.MaintainerDomain.Findings {
+			switch {
+			case f.Kind == domain.MaintainerDomainUnchecked:
+				m.Unchecked++
+				m.UncheckedFindings = append(m.UncheckedFindings, maintainerDomainUncheckedJSON{Account: f.Account, Domain: f.Domain, Reason: f.Reason})
+			case f.Kind == domain.MaintainerDomainLookupFailed:
+				m.LookupFailed++
+			case f.Kind.WarrantsNotice():
+				m.Flagged = append(m.Flagged, maintainerDomainFindingJSON{Account: f.Account, Domain: f.Domain, Kind: f.Kind, FirstSeen: f.FirstSeen, Registered: f.Registered, Registrar: f.Registrar, DropCatch: f.DropCatch, PublisherEmailEvidence: newPublisherEmailEvidenceJSON(f.PublisherEmailEvidence), PackagePublish: newPackagePublishJSON(f.PackagePublish)})
+			}
+		}
+		je.MaintainerDomain = m
+	}
 
 	if a.ReleaseInfo != nil {
 		if a.ReleaseInfo.StableVersion != nil {
@@ -515,10 +754,14 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	}
 	header = append(header, "lifecycle", "build_integrity", "build_integrity_score", "successor", "advisory_count", "max_advisory_severity", "max_cvss3_score",
 		"direct_advisory_count", "transitive_advisory_count", "max_transitive_advisory_severity", "max_transitive_cvss3_score",
-		"repo_url", "source", "via")
+		"repo_url", "source", "via", "malicious_advisory", "dormant_release", "archived", "disabled")
 	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
+	// Reused across rows: csv.Writer copies what it needs out of the slice and
+	// does not retain it, so one backing array serves every row.
+	row := make([]string, 0, maxCSVColumns)
+
 	for i := range entries {
 		e := &entries[i]
 		maintenance, _ := entryMaintenanceEOL(e, "")
@@ -532,7 +775,15 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		transitiveAdvisoryCount := ""
 		maxTransitiveSeverity := ""
 		maxTransitiveCVSS3Score := ""
+		maliciousAdvisory := ""
+		dormantRelease := ""
 		if a := e.Analysis; a != nil {
+			if a.Malicious() {
+				maliciousAdvisory = a.MaliciousState.AdvisoryID
+			}
+			if a.HasDormantRelease() {
+				dormantRelease = string(a.DormantRelease.Kind)
+			}
 			successor = a.EOL.Successor
 			repoURL = a.RepoURL
 			if a.ReleaseInfo != nil {
@@ -565,13 +816,14 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 			}
 		}
 
-		row := []string{string(e.Verdict), e.PURL}
+		row = append(row[:0], string(e.Verdict), e.PURL)
 		if showRelation {
 			row = append(row, e.Relation.String(), strings.Join(e.ViaParents, ";"))
 		}
 		row = append(row, maintenance, buildIntegrity, buildIntegrityScore, successor, advisoryCount, maxSeverity, maxCVSS3Score,
 			directAdvisoryCount, transitiveAdvisoryCount, maxTransitiveSeverity, maxTransitiveCVSS3Score,
-			repoURL, string(e.Source), e.Via)
+			repoURL, string(e.Source), e.Via, maliciousAdvisory, dormantRelease,
+			strconv.FormatBool(e.Analysis.IsArchived()), strconv.FormatBool(e.Analysis.IsDisabled()))
 		if err := cw.Write(row); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}

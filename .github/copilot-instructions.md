@@ -14,7 +14,7 @@ See `.github/instructions/` for detailed rules.
 | [testing-performance](instructions/testing-performance.instructions.md) | Table-driven tests, benchmarks, concurrency (how to write Go tests) |
 | [test-design](instructions/test-design.instructions.md) | Pre-PR lens: classical QA techniques, fuzz/PBT policy, DDD layer placement (what to test) |
 | [project-conventions](instructions/project-conventions.instructions.md) | Configuration policy, test data, JSON tooling constraints |
-| [git-workflow](instructions/git-workflow.instructions.md) | Commit messages, PR workflow, TDD |
+| [git-workflow](instructions/git-workflow.instructions.md) | Commit messages, PR workflow, runtime verification, TDD |
 | [security](instructions/security.instructions.md) | Prompt injection defense, credentials, Go security |
 | [agent-orchestration](instructions/agent-orchestration.instructions.md) | Available agents, usage rules, parallel execution |
 
@@ -37,7 +37,8 @@ When performing code review on pull requests, **do not review or comment on Mark
 
 `.github/` is the **single source of truth** for all shared instructions, agents, and prompts.
 
-- **Instructions**: Edit `.github/instructions/`. Run `make sync-instructions` to regenerate `.claude/rules/`.
+- **Instructions**: Edit `.github/instructions/`. Run `make sync-instructions` to regenerate `.claude/rules/` (except the hand-maintained `instruction-sync.md`) and `AGENTS.md`.
+- **Codex entry point**: Edit `.github/AGENTS.base.md`. The root `AGENTS.md` is generated from it by `make sync-instructions` — never edit `AGENTS.md` directly.
 - **Agents**: Edit `.github/agents/`. `.claude/agents/` are thin shims that delegate here.
 - **Prompts**: Edit `.github/prompts/`. `.claude/skills/` are thin shims that delegate here.
 

@@ -41,6 +41,7 @@ type AuditEntry struct {
 	// relative to the user's project. Populated when input is an SBOM or go.mod.
 	Relation depparser.DependencyRelation
 	// ViaParents lists short names of direct dependencies through which this
-	// transitive dependency is pulled in. Populated when input is an SBOM.
+	// transitive dependency is pulled in. Populated when input is an SBOM whose
+	// dependency graph records parents; empty for direct deps and go.mod "// indirect" deps.
 	ViaParents []string
 }

@@ -2,6 +2,8 @@
 package analysis
 
 import (
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -283,6 +285,25 @@ func (vd *VersionDetail) HighSeverityAdvisoryCount(threshold float64) int {
 	return count
 }
 
+// ExcludingAdvisories returns a copy of vd holding only the advisories whose ID
+// is not in ids (compared case-insensitively). Returns vd unchanged when ids is
+// empty, and never mutates the receiver.
+func (vd *VersionDetail) ExcludingAdvisories(ids []string) *VersionDetail {
+	if vd == nil || len(ids) == 0 || len(vd.Advisories) == 0 {
+		return vd
+	}
+	kept := make([]Advisory, 0, len(vd.Advisories))
+	for _, a := range vd.Advisories {
+		if slices.ContainsFunc(ids, func(id string) bool { return id != "" && strings.EqualFold(a.ID, id) }) {
+			continue
+		}
+		kept = append(kept, a)
+	}
+	out := *vd
+	out.Advisories = kept
+	return &out
+}
+
 // UnknownSeverityAdvisoryCount returns the count of advisories without severity data (CVSS3Score == 0).
 func (vd *VersionDetail) UnknownSeverityAdvisoryCount() int {
 	count := 0
@@ -332,6 +353,38 @@ type CommitStats struct {
 	UserCommits int
 	BotRatio    float64
 	UserRatio   float64
+}
+
+// Registry names recorded in RegistryState.Registry.
+const (
+	// RegistryPyPI identifies pypi.org.
+	RegistryPyPI = "PyPI"
+	// RegistryCrates identifies crates.io.
+	RegistryCrates = "crates.io"
+)
+
+// RegistryState captures package-level facts asserted by the package registry
+// itself, as opposed to RepoState which describes the source repository host.
+// The two can disagree: a repository may be actively developed while the
+// registry has withdrawn every published release (e.g. conda on PyPI).
+//
+// A nil pointer means the facts were not obtained — the ecosystem is not one we
+// ask, the client is unwired, the PURL was unparseable or carried a namespace,
+// the package was not found, or the request failed. A non-nil value always means
+// the registry answered, including when nothing is yanked.
+type RegistryState struct {
+	// AllReleasesYanked is true when the registry reports that every published
+	// release of the package is yanked. It is a distribution-withdrawal signal
+	// ("do not install this from here"), not end-of-life. See ADR-0022.
+	AllReleasesYanked bool
+	// Registry names the asserting registry: RegistryPyPI or RegistryCrates.
+	Registry string
+	// Reason is the registry-provided yank reason, normalized to a single line.
+	// Empty when the registry does not carry one: crates.io never does, and
+	// PyPI's yanked_reason may be null.
+	Reason string
+	// Reference is a registry UI URL where the fact can be verified.
+	Reference string
 }
 
 // RepoState represents repository state information

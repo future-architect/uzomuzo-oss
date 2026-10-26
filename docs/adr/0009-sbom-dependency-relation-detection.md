@@ -81,7 +81,7 @@ STATUS      RELATION                  PURL                        LIFECYCLE   EO
 Not all SBOMs include a `dependencies` section (older tools, minimal SBOM profiles). When the section is absent:
 
 - All components are shown regardless of `--show-transitive`
-- The `RELATION` column displays `Unknown` for all entries
+- The `RELATION` column displays `Unknown` for all entries (corrected: see Amendments, 2026-10-27)
 - No error is raised — the tool degrades gracefully
 
 ### No additional CLI flags
@@ -105,8 +105,24 @@ Following the Configuration & Flags Policy (YAGNI), no new flags are introduced.
 
 ### Neutral
 
-- The `RELATION` column only appears for SBOM inputs with dependency information. Non-SBOM inputs (PURL, go.mod, GitHub URL) are unaffected.
+- The `RELATION` column only appears for SBOM inputs with dependency information. Non-SBOM inputs (PURL, go.mod, GitHub URL) are unaffected. (go.mod: see Amendments, 2026-10-27.)
 - ADR-0008's note about `--show-transitive` being "input-mode agnostic" is now realized for SBOM inputs. Future input modes can follow the same pattern.
+
+## Amendments
+
+### 2026-10-27 — corrected: go.mod input has relations too (#563, #587)
+
+The Neutral note above says non-SBOM inputs, go.mod included, are unaffected. That was
+already inexact (go.mod output had a `RELATION` column showing `direct`), and since #587
+it is wrong: the go.mod parser returns `// indirect` requirements as `transitive` with no
+via-parent, because go.mod does not record which direct dependency pulls them in. They go
+through the same `--show-transitive` filter as SBOM transitive dependencies. When the same
+PURL appears as both direct and transitive (for example, two requirements replaced by the
+same module), it is reported as direct, for every input format.
+
+Also corrected: the fallback section above says the `RELATION` column displays `Unknown`
+for SBOMs without a `dependencies` section. The renderers omit the column (table) and the
+`relation` field (JSON) instead; no `Unknown` value is printed.
 
 ## References
 

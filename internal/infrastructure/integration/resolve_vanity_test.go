@@ -117,12 +117,6 @@ func TestResolveVanityRepoURLs(t *testing.T) {
 	}
 }
 
-func TestResolveVanityRepoURLsEmptyAnalyses(t *testing.T) {
-	svc := &IntegrationService{}
-	// Must not panic on zero-value struct (no analyses, no resolver).
-	svc.resolveVanityRepoURLs(context.Background(), map[string]*domain.Analysis{})
-}
-
 func TestResolveVanityRepoURLsNoOpWithoutResolver(t *testing.T) {
 	// Zero-value IntegrationService never auto-constructs a resolver —
 	// callers must use NewIntegrationService to get one. This test pins

@@ -142,7 +142,6 @@ func registerJavaConfig(a *Analyzer) {
 			return importPath
 		},
 	}
-	compileQueries(a.configs[langJava])
 }
 
 // handleJavaImport handles matching Java fully-qualified imports, including static imports.

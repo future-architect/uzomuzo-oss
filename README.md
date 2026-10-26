@@ -1,4 +1,9 @@
-# uzomuzo
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo/uzomuzo-logo-white.png">
+    <img src="docs/assets/logo/uzomuzo-logo.png" alt="uzomuzo" width="600">
+  </picture>
+</h1>
 
 [![CI](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/ci.yml) [![Dependency Scan](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml/badge.svg)](https://github.com/future-architect/uzomuzo-oss/actions/workflows/dependency-scan.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/future-architect/uzomuzo-oss)](https://goreportcard.com/report/github.com/future-architect/uzomuzo-oss) [![Go Reference](https://pkg.go.dev/badge/github.com/future-architect/uzomuzo-oss.svg)](https://pkg.go.dev/github.com/future-architect/uzomuzo-oss) [![Release](https://img.shields.io/github/v/release/future-architect/uzomuzo-oss)](https://github.com/future-architect/uzomuzo-oss/releases/latest) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
@@ -17,7 +22,7 @@ uzomuzo does two things SCA tools can't:
 
 Standard SCA tools (Trivy, Syft, Snyk) excel at flagging known CVEs. But they cannot answer: **is this package still maintained?**
 
-A package with zero CVEs today may have been abandoned for years — no one is watching for new vulnerabilities, no one will patch them, and no one will respond to security reports. These are precisely the targets of supply chain attacks (xz-utils 2024, event-stream 2018).
+A package with zero CVEs today may have stopped being maintained. When a vulnerability is found, no fix may come — and the CVE record may not even list the version you run. (Apache Tomcat 8.5: [CVE-2025-24813](https://www.cve.org/CVERecord?id=CVE-2025-24813) was published on 2025-03-10 without 8.5 in its affected versions; 8.5 was added about five months later, on 2025-08-08.)
 
 ### What SCA misses — EOL-Effective
 
@@ -116,8 +121,11 @@ uzomuzo scan https://github.com/expressjs/express
 # are resolved by updating the direct dep that pulls them in)
 trivy fs . --format cyclonedx | uzomuzo scan --sbom -
 trivy fs . --format cyclonedx | uzomuzo scan --sbom - --show-transitive  # include transitive
-uzomuzo scan                     # auto-detect go.mod in cwd
+uzomuzo scan                     # auto-detect go.mod in cwd (add --show-transitive for // indirect)
 uzomuzo scan --format json       # JSON output for CI integration
+
+# Optional npm maintainer e-mail domain notice (makes RDAP requests; caches IANA's RDAP server list)
+uzomuzo scan --maintainer-domain pkg:npm/express@4.18.2
 
 # CI gate: exit 1 if any EOL dependency found
 uzomuzo scan --sbom bom.json --fail-on eol-confirmed
@@ -136,9 +144,16 @@ uzomuzo scan --file .github/workflows/ci.yml
 uzomuzo scan --file input_purls.txt --sample 500
 ```
 
+`--maintainer-domain` is off by default and applies only to versioned npm inputs. It adds a notice for manual review without changing the scan verdict, in `--format json` (`maintainer_domain`) and the detailed view; table and CSV output are unchanged. The notice states what RDAP shows for the domain and when npm records first showed the maintainer with an address there, then what may happen (if the account still uses that address, npm password-reset mail may reach whoever holds or next registers the domain), and asks the user to check who published newer versions before upgrading. It may also state the account's last publish found in this package's npm records, or that no dated publish was found there, and whether the analysed version came from GitHub Actions trusted publishing. It names the account and the domain but not the address. See [ADR-0030](docs/adr/0030-maintainer-email-domain-marker.md).
+When RDAP provides the registrar of a re-registered domain, the notice names it. The list of RDAP servers is fetched from IANA and cached under the user cache directory, with the copy built into the binary as the fallback.
+
+Flagged npm findings also include publisher e-mail domain evidence from packuments already fetched in the same analysis batch. When the account's latest visible publish has a usable e-mail, the notice gains one sentence saying whether that publish used the same domain or another one, or that a newer publish exists whose publisher is not visible. The evidence never removes a notice and does not change the verdict.
+
 ### Dependency Diet — *Which dependency should I remove first?*
 
 Most projects have dependencies they don't really need, but knowing **which ones to remove** and **how hard it will be** is the real problem. `uzomuzo diet` answers both:
+
+> **Experimental.** Diet can report a dependency that is in use as `unused` or `trivial`. Check before removing; see [Accuracy](docs/diet.md#accuracy).
 
 ```bash
 # Pipe from trivy (no intermediate file)
@@ -223,11 +238,21 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | --- | --- | --- |
 | **Active** | Recent human commits + releases + healthy maintenance score | No action needed |
 | **Legacy-Safe** | No recent activity, but zero vulnerabilities — frozen and stable | Accept risk or pin version |
-| **Stalled** | Maintenance declining: low score or commits stopped | Monitor; plan migration |
-| **EOL-Confirmed** | Repository archived/disabled, or registry explicitly marks EOL | Migrate immediately |
-| **EOL-Effective** | No official EOL, but 2+ yrs without human commits AND HIGH/CRITICAL unpatched vulns | Migrate; treat as EOL |
+| **Stalled** | Maintenance declining: low score or commits stopped; repository archived/disabled without an explicit end-of-life signal; or an advisory database reports the whole package unmaintained | Monitor; plan migration |
+| **EOL-Confirmed** | Registry explicitly declares end-of-life (deprecated / yanked / abandoned / relocation) | Migrate immediately |
+| **EOL-Effective** | No official EOL, but HIGH/CRITICAL unpatched vulns together with either 2+ yrs without human commits or an advisory database reporting the package unmaintained | Migrate; treat as EOL |
 | **EOL-Scheduled** | Future EOL date announced (not yet reached) | Plan migration before EOL date |
-| **Review Needed** | Insufficient data for automated classification | Manual investigation required |
+| **Review Needed** | Insufficient data for automated classification; the registry has yanked every release, so no version is offered to normal dependency resolution; or (npm) the version was published in the last 7 days, after a year with no releases, together with versions on other release lines (other major versions, or other minor versions below 1.0) within a day: the way past takeovers of npm packages that had gone quiet have looked, and also how a returning maintainer's last fix to an old line can look ([ADR-0026](docs/adr/0026-dormant-release-burst.md)) | Manual investigation required |
+
+OSV malicious-package advisories are checked separately from the lifecycle label. A version named by a `MAL-` advisory or a GHSA tagged CWE-506 has status `replace` even when its lifecycle is Active or the package has disappeared from a registry. The detailed and table views name the advisory; JSON includes a `malicious` object, and CSV has a `malicious_advisory` column. A failed lookup is shown as `malicious_check: "unknown"` in JSON and produces a warning.
+
+`--fail-on malicious` gates on these advisories. Any other non-empty `--fail-on` selection also fails when a malicious version is found, including a selection containing only `eol-confirmed`. See [ADR-0027](docs/adr/0027-osv-malicious-advisories.md) for the matching rules and limits.
+
+An npm version that came out after a year with no releases is marked as well (a prerelease only when it is part of a burst across release lines), next to whatever lifecycle label it has, for a week after it came out. The table view shows `⚠ 639d silence`, the detailed view explains the release unless a malicious-package advisory already names the version (for a single-line return, also whether an OSV malicious-package record names it yet and when the marker clears), JSON includes a `dormant_release` object, and CSV has a `dormant_release` column. `--fail-on dormant-release` gates on the marker; no other `--fail-on` value implies it, because it is a heuristic, not a finding. See [ADR-0028](docs/adr/0028-dormant-release-marker.md).
+
+A version published within the last seven days (configurable) gets a `release_age` object in JSON, regardless of ecosystem or lifecycle label, and a young-release notice in detailed output unless a dormant-release marker or malicious advisory already covers it. JSON reports `status: "unknown"` when the publish time is missing, in the future, or not for the package the input names. See [ADR-0031](docs/adr/0031-young-release-marker.md).
+
+An archived or disabled repository keeps its lifecycle label (usually Stalled; see [ADR-0020](docs/adr/0020-archived-registry-liveness.md)), and the fact is shown next to it: the table view appends `· archived` or `· disabled`, JSON has `archived` and `disabled` booleans, and CSV ends with `archived` and `disabled` columns. `--fail-on archived` and `--fail-on disabled` gate on them whatever the label — useful for GitHub Actions (`--include-actions`), which have no registry and so never get an EOL label. Both values require `GITHUB_TOKEN`. See [ADR-0029](docs/adr/0029-archived-disabled-are-facts.md).
 
 <a id="assessment-precision-by-data-availability"></a>
 
@@ -441,13 +466,59 @@ STATUS     PURL                 LIFECYCLE      BUILD
 
 No deprecation, no archive — but unpatched ReDoS + zero maintenance. **SCA blind spot.**
 
-### EOL-Effective — `dgrijalva/jwt-go` (archived repository)
+### EOL-Effective — `xlsx` (SheetJS — popular, but frozen on npm)
+
+<!-- begin:output:xlsx-detailed -->
+```text
+--- Summary Table ---
+STATUS     PURL                 LIFECYCLE      BUILD
+🔴 replace  pkg:npm/xlsx@0.18.5  EOL-Effective  —
+
+── Summary ─────────────────────────────────────────────────
+│ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
+└───────────────────────────────────────────────────────────
+
+--- Detailed Report ---
+
+--- PURL 1 ---
+── pkg:npm/xlsx@0.18.5 ─────────────────────────────────────
+│ 📗 SheetJS Spreadsheet Data Toolkit -- New home
+│   https://git.sheetjs.com/SheetJS/sheetjs
+│ 🔴 EOL-Effective: Unmaintained, unpatched vulnerabilities
+├─ Signals ─────────────────────────────────────────────────
+│ Last Human Commit: 2024-02-01
+│ Maintained Score: 0/10
+│ Advisories: 2
+│ Max Advisory Severity: HIGH 7.8
+├─ Health ──────────────────────────────────────────────────
+│ 36278 stars
+│ Used by: 5145 packages
+│ Depends on: 7 direct, 1 transitive
+│ Scorecard Overall: 2.3/10  Maintained: 0.0/10
+│ Last Commit: 2024-02-01
+├─ Releases ────────────────────────────────────────────────
+│ Stable: 0.18.5 (2022-03-24)  ⚠️ 2 advisories
+│   HIGH     (7.8)  GHSA-4r6h-8v6p-xvw6
+│   HIGH     (7.5)  GHSA-5pgg-2g8v-p4x9
+│   → https://deps.dev/npm/xlsx/0.18.5
+├─ Links ───────────────────────────────────────────────────
+│ Homepage: https://sheetjs.com/
+│ Repository: https://github.com/sheetjs/sheetjs
+│ Registry: https://www.npmjs.com/package/xlsx
+│ deps.dev: https://deps.dev/npm/xlsx
+└───────────────────────────────────────────────────────────
+```
+<!-- end:output:xlsx-detailed -->
+
+Not deprecated, not archived — npm still resolves `0.18.5`. But SheetJS stopped publishing to npm years ago (newer builds ship only from its own CDN), so the artifact your lockfile pins is frozen with the unpatched advisories shown above. Popular and healthy-looking, yet effectively end-of-life on npm — **the textbook SCA blind spot.**
+
+### Stalled — `dgrijalva/jwt-go` (archived & relocated, but no declared EOL)
 
 <!-- begin:output:jwt-go-detailed -->
 ```text
 --- Summary Table ---
-STATUS     PURL                                          LIFECYCLE      BUILD
-🔴 replace  pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  —
+STATUS     PURL                                          LIFECYCLE  BUILD
+🔴 replace  pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  Stalled    —
 
 ── Summary ─────────────────────────────────────────────────
 │ 1 dependencies | ✅ 0 ok | ⚠️ 0 caution | 🔴 1 replace | 🔍 0 review
@@ -459,30 +530,31 @@ STATUS     PURL                                          LIFECYCLE      BUILD
 ── pkg:golang/github.com/dgrijalva/jwt-go@3.2.0 ────────────
 │ ARCHIVE - Golang implementation of JSON Web Tokens (JWT).
 │   This project is now maintained at:
-│ 🔴 EOL-Confirmed: Repository archived or disabled
+│ 🔴 Stalled: Repository archived/disabled but not declared
+│            end-of-life
 ├─ Signals ─────────────────────────────────────────────────
 │ Repo Archived: true
 ├─ Health ──────────────────────────────────────────────────
 │ 📦 Archived
-│ 10759 stars
+│ 10747 stars
 │ Scorecard Overall: 2.8/10  Maintained: 0.0/10
 │ Last Commit: 2021-08-02
 ├─ Releases ────────────────────────────────────────────────
 │ Stable: v3.2.0+incompatible (2018-03-08)  ⚠️ 2 advisories
 │   HIGH     (7.5)  GHSA-w73w-5m7g-f7qc
 │                   GO-2020-0017
-│   → https://deps.dev/go/github.com/dgrijalva/jwt-go/v3.2.0+incompatible
+│   → https://deps.dev/go/github.com%2Fdgrijalva%2Fjwt-go/v3.2.0+incompatible
 │ Highest (SemVer): v4.0.0-20210802184156-9742bd7fca1c+incompatible (2021-08-02)
 ├─ Links ───────────────────────────────────────────────────
 │ Homepage: https://github.com/golang-jwt/jwt
 │ Repository: https://github.com/dgrijalva/jwt-go
 │ Registry: https://pkg.go.dev/github.com%2Fdgrijalva%2Fjwt-go
-│ deps.dev: https://deps.dev/go/github.com/dgrijalva/jwt-go
+│ deps.dev: https://deps.dev/go/github.com%2Fdgrijalva%2Fjwt-go
 └───────────────────────────────────────────────────────────
 ```
 <!-- end:output:jwt-go-detailed -->
 
-Successor is `golang-jwt/jwt`. **Migrate immediately.**
+Archived, relocated to `golang-jwt/jwt`, two unpatched HIGH advisories — you might expect EOL-Confirmed. But Go has no registry-level deprecation signal, so uzomuzo will not *mechanically* declare end-of-life on the archive flag alone ([ADR-0020](docs/adr/0020-archived-registry-liveness.md)): it reports **Stalled** and surfaces the archive, the advisories, and the successor for a policy/human layer to act on. **Migrate to `golang-jwt/jwt`.**
 
 ### EOL-Confirmed — `request` (186K dependents, npm deprecated)
 
@@ -549,7 +621,7 @@ STATUS      PURL                                          LIFECYCLE      BUILD
 ✅ ok        pkg:npm/moment@2.29.4                         Legacy-Safe    Moderate 4.7
 ⚠️ caution  pkg:golang/github.com/gorilla/mux@1.8.1       Stalled        Moderate 6.5
 🔴 replace   pkg:npm/dicer@0.3.1                           EOL-Effective  —
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  EOL-Confirmed  —
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@3.2.0  Stalled        —
 🔴 replace   pkg:npm/request@2.88.2                        EOL-Confirmed  —
 
 ── Summary ─────────────────────────────────────────────────
@@ -568,7 +640,7 @@ STATUS      PURL                                          LIFECYCLE      BUILD
 $ uzomuzo scan --file go.mod -f table
 
 STATUS      PURL                                                        RELATION  LIFECYCLE      BUILD
-🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    EOL-Confirmed  —
+🔴 replace   pkg:golang/github.com/dgrijalva/jwt-go@v3.2.0+incompatible  direct    Stalled        —
 ⚠️ caution  pkg:golang/github.com/gorilla/mux@v1.8.1                    direct    Stalled        Moderate 6.5
 ✅ ok        pkg:golang/github.com/stretchr/testify@v1.9.0               direct    Active         Moderate 6.7
 
@@ -578,7 +650,7 @@ STATUS      PURL                                                        RELATION
 ```
 <!-- end:output:gomod-table -->
 
-go.mod input adds a `RELATION` column showing `direct` or `indirect` dependency relationship.
+go.mod input adds a `RELATION` column. Requirements marked `// indirect` are scanned only with `--show-transitive` and appear as `transitive`, with no parent shown, because go.mod does not record which direct dependency pulls them in.
 
 </details>
 

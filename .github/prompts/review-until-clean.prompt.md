@@ -4,7 +4,7 @@ Running `/review-until-clean` once drives the following sequence to bring a PR t
 
 | Phase | What | Exit condition |
 |---|---|---|
-| **A**: Local agent review | 5 or 6 agents (code-reviewer + architect + Code Reuse + Code Quality + PR Hygiene; +consistency-auditor when the diff touches any **claim-bearing file** — markdown / advisory / manifest content for narrative drift, OR `_test.go` / `testdata/**` / `internal/testdata/**` golden fixtures for identifier-literal claims) in parallel, iterate until subjective only. Optional Step 1.5 generates a fact map for claim-bearing PRs. Step 2 has the pre-filter that selects the Task-agent count. The local Copilot CLI (gpt-5.5, a separate-vendor LLM) is **always** spawned as a 7th reviewer every round — a Bash subprocess, not a Task agent. | max 5 rounds / no mechanical findings left AND Copilot CLI APPROVE (or unavailable) |
+| **A**: Local agent review | 5 or 6 agents (code-reviewer + architect + Code Reuse + Code Quality + PR Hygiene; +consistency-auditor when the diff touches any **claim-bearing file** — markdown / advisory / manifest content for narrative drift, OR `_test.go` / `testdata/**` / `internal/testdata/**` golden fixtures for identifier-literal claims) in parallel, iterate until subjective only. Optional Step 1.5 generates a fact map for claim-bearing PRs. Step 2 has the pre-filter that selects the Task-agent count. The local Copilot CLI (gpt-5.6-sol, a separate-vendor LLM) is **always** spawned as a 7th reviewer every round — a Bash subprocess, not a Task agent. | max 5 rounds / no mechanical findings left AND Copilot CLI APPROVE (or unavailable) |
 | **B**: Copilot review iteration | push → Copilot re-review → fix → push → repeat | max 5 rounds / "no (new) comments" |
 | **C**: Reply + resolve | Discover all unresolved Copilot threads, reply + resolve mutation | All threads processed |
 
@@ -17,6 +17,14 @@ This command exists to catch issues **before** Copilot sees them, then handle th
 This skill runs **only from your own machine** — there is no CI auto-fix path. GitHub Actions never runs Claude to fix Copilot findings. Phase B drives the Copilot re-review itself (the skill calls the GraphQL `requestReviews` mutation after each push; see Step 8.3), using your `gh` auth.
 
 Phase B posts a single **`<!-- copilot-fix-local:<HEAD_SHA> -->` marker comment** that acts purely as a **local concurrency lock**: it prevents a second `/review-until-clean` invocation from running on the same PR/HEAD in parallel (which would race on pushes). The lock is keyed on the marker's `updated_at`; the skill heartbeats it (PATCH) on each round entry and after long steps, and deletes it on exit. If a session crashes without cleanup, the lock auto-expires after `LOCAL_MARKER_MAX_AGE_MIN` (default 30 min), after which a fresh invocation may start.
+
+## Model policy — Sonnet 5 default for Phase A fan-out
+
+Step 2 below fans out 5 or 6 `Agent` tool calls per round, up to 5 rounds — the single biggest token driver in this skill. Every `Agent` call issued there MUST pass an explicit `model` parameter; never leave it unset and let the call silently inherit whatever model is orchestrating the skill itself.
+
+- **Default: `model="sonnet"` for every Phase A agent.** Running the whole skill under Fable — orchestrator and all Phase A agents inheriting Fable — has exhausted the token budget in practice. Fable is reserved for release-track implementation work, not this review loop's subagent fan-out.
+- **Combining Fable with Sonnet is fine when there's a concrete reason** — e.g. a high-stakes PR where one specific agent role (`architect` or `code-reviewer`) benefits from Fable's review quality. Pass `model="fable"` for that one `Agent` call only; leave the rest at `model="sonnet"`. Do not default every agent to Fable "just in case" — that's the exact pattern that exhausted the budget.
+- **Fallback when Fable is unavailable**: if an `Agent` call with `model="fable"` errors because Fable isn't reachable in the current session/plan, retry that same call with `model="opus"` instead of silently dropping to Sonnet or giving up. Opus is the next-highest quality tier when Fable was the deliberate choice for that agent.
 
 ## Phase A: Local agent review iteration
 
@@ -134,7 +142,7 @@ fi
 
 If `AGENT_COUNT=5` (pure non-test Go PRs with no markdown / advisory / manifest / test / golden file changes), skip Agent 6's spawn entirely and proceed with five agents — Agent 6 has no claims to verify and would only return "no claims to check" after burning a spawn round-trip.
 
-Issue the configured `AGENT_COUNT` `Task` tool calls **plus one Bash tool call for Reviewer 7 (local Copilot CLI — see sub-section below)** in a single message — all reviewers run in parallel. Pass each Task agent the full diff (and, for `consistency-auditor`, the fact map from Step 1.5 if generated). Reviewer 7 reads the diff from a `mktemp`-generated temporary directory (file-read pattern, see its sub-section).
+Issue the configured `AGENT_COUNT` `Task` tool calls **plus one Bash tool call for Reviewer 7 (local Copilot CLI — see sub-section below)** in a single message — all reviewers run in parallel. Pass each Task agent the full diff (and, for `consistency-auditor`, the fact map from Step 1.5 if generated). Reviewer 7 reads the diff from a `mktemp`-generated temporary directory (file-read pattern, see its sub-section). **Every one of these calls sets an explicit `model` parameter per the "Model policy" section above** — default `model="sonnet"`, override individual agents to `model="fable"` only with a stated reason, fall back to `model="opus"` if a `fable` call errors.
 
 The named subagent_types invocable here are `code-reviewer`, `architect`, and (when `AGENT_COUNT=6`) `consistency-auditor`. **`consistency-auditor` is invoked by file presence at `.claude/agents/consistency-auditor.md`** — Claude Code resolves named subagents by scanning that directory, not by reading any registry. `.claude/rules/agents.md` is a generated mirror of `.github/instructions/agent-orchestration.instructions.md` (see the `<!-- Generated from ... DO NOT EDIT DIRECTLY -->` header in the mirror) and is documentation, not the registration source — `consistency-auditor` does not need to be listed in either to be invocable. The instruction-file SoT may be updated in a follow-up to mention the new agent for documentation purposes; that is independent of this skill working. The remaining three Phase A agents are **`general-purpose` Task agents with specialized prompts** (Code Reuse, Code Quality, PR Hygiene — generic agent + custom focus). For `AGENT_COUNT=5`: 2 named + 3 general-purpose. For `AGENT_COUNT=6`: 3 named + 3 general-purpose.
 
@@ -144,13 +152,14 @@ The named subagent_types invocable here are `code-reviewer`, `architect`, and (w
 
 #### Agent 1: subagent_type=`code-reviewer` (named)
 
-Code quality, Go idioms, error handling, security. Returns CRITICAL / HIGH / MEDIUM / LOW + file + line + suggested fix.
+Generic correctness (Generic Correctness ①②④⑤⑥), Go idioms, error handling, security. Returns CRITICAL / HIGH / MEDIUM / LOW + file + line + suggested fix.
 
-Focus areas:
+Owns the generic correctness perspectives (correctness / edge-case / functional-loss / test sufficiency + coverage) — see the `## Review Checklist` → `Generic Correctness` section of `.github/agents/code-reviewer.agent.md`. Focus areas:
 
 - error handling: silenced errors (`_ = err`), missing error wrapping, inconsistent patterns
 - resource cleanup: `t.Cleanup` for process-global state AND explicit error-checked close on the normal path (both required, not either/or)
-- API contracts, nil safety, race conditions
+- API contracts, nil safety, race conditions, logic errors, boundary values
+- functional loss (④): apply the caller-observable-surface checklist in `.github/agents/code-reviewer.agent.md`'s Generic Correctness ④ (single source of truth). Cross-agent boundary: internal unexported churn is out of scope (the Code Reuse reviewer / `/deadcode` skill / `refactor-cleaner` agent handle it), and "PR body vs diff mismatch" is Agent 5's job, not this.
 
 #### Agent 2: subagent_type=`architect` (named)
 
@@ -171,7 +180,7 @@ DDD layer compliance, dependency direction, package structure. Returns CRITICAL 
 - redundant state, parameter sprawl, copy-paste with variation
 - leaky abstractions, stringly-typed code
 - unnecessary comments (WHAT not WHY)
-- bugs: nil dereference, panics, edge cases
+- correctness bugs (nil deref / panics / edge cases) — Agent 1's Generic Correctness ①② (correctness / edge-case), not duplicated here
 
 #### Agent 5: general-purpose with "PR Hygiene" prompt
 
@@ -192,9 +201,9 @@ Skip this agent's work only when the PR is pure Go code (no markdown / manifest 
 
 #### Reviewer 7: Local Copilot CLI (always-spawned Bash subprocess, every round)
 
-In addition to the `AGENT_COUNT` Task agents above, **issue ONE Bash tool call in the SAME message** that invokes the local `@github/copilot` standalone agentic CLI as a 7th parallel reviewer. Unlike the Task agents this is a Bash subprocess, not a subagent — Copilot CLI is itself an agent, so wrapping it in a Task subagent would nest agent-in-agent for no gain. It contributes a separate-vendor (OpenAI gpt-5.5) perspective that the Claude Task agents structurally cannot.
+In addition to the `AGENT_COUNT` Task agents above, **issue ONE Bash tool call in the SAME message** that invokes the local `@github/copilot` standalone agentic CLI as a 7th parallel reviewer. Unlike the Task agents this is a Bash subprocess, not a subagent — Copilot CLI is itself an agent, so wrapping it in a Task subagent would nest agent-in-agent for no gain. It contributes a separate-vendor (OpenAI gpt-5.6-sol) perspective that the Claude Task agents structurally cannot.
 
-**Always spawned** — no `AGENT_COUNT` gate, no diff-shape filter, no skip env var. The cost (gpt-5.5 = ~7.5 Premium requests per call, multiplied by the Phase A round count = typically 15-40 Premium requests per `/review-until-clean` run on a non-trivial PR) is intentional: it catches as many bugs as possible in Phase A before Phase B (the GitHub-side Copilot bot) burns a push round-trip. To reduce cost without removing the integration, set `COPILOT_MODEL=` (empty) in the operator shell before invoking the skill — Copilot CLI then falls back to the server-default model (~1 Premium per call, less thorough).
+**Always spawned** — no `AGENT_COUNT` gate, no diff-shape filter, no skip env var. The cost (`gpt-5.6-sol` is billed in **GitHub AI Credits**, not Premium requests — see `.github/prompts/review-diff.prompt.md`'s Cost note for the observed values; the `gpt-5.5`-era `~7.5 Premium requests per call` / `15-40 Premium requests per run` figures used the legacy billing unit and do not apply here, and per-invocation AI Credit cost has not been systematically measured across a full Phase A round in this repository — actual consumption scales with the Phase A round count) is intentional: it catches as many bugs as possible in Phase A before Phase B (the GitHub-side Copilot bot) burns a push round-trip. To reduce cost without removing the integration, set `COPILOT_MODEL=` (empty) in the operator shell before invoking the skill — Copilot CLI then falls back to the server-default model (cheaper, less thorough).
 
 ⚠️ **Trust boundary**: this sends the diff to GitHub Copilot servers. uzomuzo-oss is **public**, so committed code is already public — but a working-tree diff can still carry UNPUSHED secrets; if the diff includes `.env`, credentials, or `GITHUB_TOKEN`, `git stash` those files before invoking the skill.
 
@@ -236,8 +245,8 @@ if [ "$SIZE" -gt 204800 ]; then
     TRUNCATED="WARNING: This diff was truncated to ~200KB — you are reviewing only a PARTIAL diff. Do NOT print APPROVE; if you find no issues in the visible portion, print exactly: PARTIAL REVIEW (diff truncated). "
 fi
 
-# Model arg: COPILOT_MODEL unset → gpt-5.5 default; set-but-empty → omit --model (server default).
-MODEL_ARGS=(--model gpt-5.5)
+# Model arg: COPILOT_MODEL unset → gpt-5.6-sol default; set-but-empty → omit --model (server default).
+MODEL_ARGS=(--model gpt-5.6-sol)
 if [ -n "${COPILOT_MODEL+x}" ]; then
   if [ -n "$COPILOT_MODEL" ]; then MODEL_ARGS=(--model "$COPILOT_MODEL"); else MODEL_ARGS=(); fi
 fi
@@ -299,7 +308,7 @@ elif [ "$COPILOT_EXIT" -ne 0 ]; then
 fi
 ```
 
-**Foreground (10-min Bash timeout via `timeout 600`)**: Copilot CLI on a ≤200KB diff with gpt-5.5 typically completes in 2-5 minutes; the 10-min ceiling absorbs slower runs. If `timeout` fires (exit 124), partial stdout up to the kill is still captured — treat as best-effort. Phase A does not abort on Copilot CLI timeout — additive, not blocking.
+**Foreground (10-min Bash timeout via `timeout 600`)**: Copilot CLI on a ≤200KB diff with gpt-5.6-sol typically completes in 2-5 minutes; the 10-min ceiling absorbs slower runs. If `timeout` fires (exit 124), partial stdout up to the kill is still captured — treat as best-effort. Phase A does not abort on Copilot CLI timeout — additive, not blocking.
 
 **Common-context exclusion (intentional)**: the Copilot CLI prompt above is self-contained — it does NOT receive the `copilot-learned-coding.instructions.md` context block that the Task agents see. Copilot CLI is an independent vendor's machine reviewer; injecting our internal rule corpus would create a feedback loop where it just re-asserts what the Task agents are already taught. Treat its findings as independent perspective — especially valuable for catching shapes our 5-6 Task agents share as convergence bias.
 

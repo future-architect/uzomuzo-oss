@@ -1,0 +1,92 @@
+package analysis
+
+import "time"
+
+// PackagePublishStatus describes whether dated package records name an account.
+type PackagePublishStatus string
+
+const (
+	// PackagePublishFound means a dated version names the account as publisher.
+	PackagePublishFound PackagePublishStatus = "found"
+	// PackagePublishNotFound means PublisherHistory.Latest has no entry for the
+	// account: no version present in versions has both a publish time in time
+	// and an _npmUser naming it, or versions was missing or null. Removed or
+	// unattributed versions are not evidence that the account never published.
+	PackagePublishNotFound PackagePublishStatus = "not_found"
+)
+
+// PackagePublish is the latest dated publish by an account in one package.
+type PackagePublish struct {
+	// Status is found when a dated version names the account; otherwise it is not_found.
+	Status PackagePublishStatus
+	// LastPublishedAt is the latest dated publish by the account in this package.
+	// It is zero when Status is not_found.
+	LastPublishedAt time.Time
+	// Version is the lowest string-ordered version published at LastPublishedAt.
+	// It is empty when Status is not_found.
+	Version string
+}
+
+// PackagePublishFor reads only the supplied package's visible publish history.
+// It returns nil for an empty account, which has nothing to look up.
+func PackagePublishFor(account string, h PublisherPackageHistory) *PackagePublish {
+	if account == "" {
+		return nil
+	}
+	result := &PackagePublish{Status: PackagePublishNotFound}
+	if len(h.Latest[account]) == 0 {
+		return result
+	}
+	latest := h.Latest[account]
+	result.Status = PackagePublishFound
+	result.LastPublishedAt = latest[0].PublishedAt
+	result.Version = latest[0].Version
+	for _, publish := range latest[1:] {
+		if publish.Version < result.Version {
+			result.Version = publish.Version
+		}
+	}
+	return result
+}
+
+// VersionPublisherKind describes the analysed version's named publisher.
+type VersionPublisherKind string
+
+const (
+	// VersionPublisherTrustedPublishing is the exact npm GitHub Actions identity.
+	VersionPublisherTrustedPublishing VersionPublisherKind = "trusted_publishing"
+	// VersionPublisherOther is any other named publisher; it does not imply a manual publish.
+	VersionPublisherOther VersionPublisherKind = "other"
+	// VersionPublisherUnknown means the publisher cannot be determined: the
+	// version has no named publisher record, the analysed version is empty, or
+	// no release history was obtained.
+	VersionPublisherUnknown VersionPublisherKind = "unknown"
+)
+
+// trustedPublishingPublisher is npm's GitHub Actions publisher identity.
+const trustedPublishingPublisher = "GitHub Actions"
+
+// ClassifyVersionPublisher classifies one version's raw _npmUser.name. Only the
+// exact name trustedPublishingPublisher is trusted publishing; a name that is
+// empty after StripControlRunes is unknown.
+func ClassifyVersionPublisher(name string) VersionPublisherKind {
+	switch {
+	case StripControlRunes(name) == "":
+		return VersionPublisherUnknown
+	case name == trustedPublishingPublisher:
+		return VersionPublisherTrustedPublishing
+	default:
+		return VersionPublisherOther
+	}
+}
+
+// VersionPublisherKindFor returns the publisher kind of the exact analysed version.
+func VersionPublisherKindFor(h *ReleaseHistory, version string) VersionPublisherKind {
+	if h == nil || version == "" {
+		return VersionPublisherUnknown
+	}
+	if kind, ok := h.PublisherKinds[version]; ok {
+		return kind
+	}
+	return VersionPublisherUnknown
+}

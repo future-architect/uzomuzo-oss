@@ -30,7 +30,6 @@ func registerPythonConfig(a *Analyzer) {
 			return parts[0]
 		},
 	}
-	compileQueries(a.configs[langPython])
 }
 
 // handlePythonImport handles matching Python imports.

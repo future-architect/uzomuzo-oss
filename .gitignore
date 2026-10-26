@@ -28,3 +28,7 @@ docs/plans/
 docs/case-studies/uzomuzo-diet/
 bom.json
 
+
+# Temp file used by the AGENTS.md generator (make sync-instructions). Normally
+# removed by its EXIT trap; this catches the case where the shell is killed.
+AGENTS.md.tmp.*

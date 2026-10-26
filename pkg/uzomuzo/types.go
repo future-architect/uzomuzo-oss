@@ -58,10 +58,110 @@ const (
 	SignalMaxAdvisorySeverity = domain.SignalMaxAdvisorySeverity
 	SignalDaysSinceRelease    = domain.SignalDaysSinceRelease
 	SignalEcosystemDelivery   = domain.SignalEcosystemDelivery
+	SignalAllReleasesYanked   = domain.SignalAllReleasesYanked
+
+	// SignalAdvisoryDBUnmaintained carries the advisory ID that reported the
+	// whole package unmaintained (see AdvisoryDBState).
+	SignalAdvisoryDBUnmaintained = domain.SignalAdvisoryDBUnmaintained
+
+	// SignalDormantReleaseBurst lists the releases published together across
+	// release lines after a long silence; SignalDaysSilentBeforeRelease is that
+	// silence in days; SignalVersionRemoved marks a version the registry no
+	// longer serves (see ADR-0026).
+	SignalDormantReleaseBurst     = domain.SignalDormantReleaseBurst
+	SignalDaysSilentBeforeRelease = domain.SignalDaysSilentBeforeRelease
+	SignalVersionRemoved          = domain.SignalVersionRemoved
 )
 
 // RepoState contains repository activity & archive/disable flags.
 type RepoState = domain.RepoState
+
+// RegistryState contains package-level facts asserted by the package registry,
+// such as "every published release is yanked" (see ADR-0022).
+type RegistryState = domain.RegistryState
+
+// AdvisoryDBState contains package-level maintenance facts asserted by a
+// third-party advisory database, such as RustSec's unmaintained marker for a
+// cargo crate (see ADR-0025). Nil means the lookup did not run or failed, which
+// is a different claim from "ran and found nothing".
+type AdvisoryDBState = domain.AdvisoryDBState
+
+// MaliciousState is the result of checking a package against OSV malicious advisories.
+type MaliciousState = domain.MaliciousState
+
+// MaliciousStatus distinguishes a completed malicious check from a failed lookup.
+type MaliciousStatus = domain.MaliciousStatus
+
+// MaliciousScope identifies whether an advisory covers one version or a whole package.
+type MaliciousScope = domain.MaliciousScope
+
+const (
+	// MaliciousStatusClean means the OSV check found no matching advisory.
+	MaliciousStatusClean = domain.MaliciousStatusClean
+	// MaliciousStatusFlagged means an advisory covers the package or version.
+	MaliciousStatusFlagged = domain.MaliciousStatusFlagged
+	// MaliciousStatusLookupFailed means the OSV check did not complete.
+	MaliciousStatusLookupFailed = domain.MaliciousStatusLookupFailed
+	// MaliciousScopeVersion means the advisory covers the requested version.
+	MaliciousScopeVersion = domain.MaliciousScopeVersion
+	// MaliciousScopePackage means the advisory covers every version.
+	MaliciousScopePackage = domain.MaliciousScopePackage
+)
+
+// ReleaseHistory is the registry's publish time for every version of a
+// package, including removed ones (npm only; see ADR-0026). Nil means the
+// lookup did not run or failed.
+type ReleaseHistory = domain.ReleaseHistory
+
+// DormantBurst describes a release that came out after a long silence, on one
+// release line or several (see ADR-0026 and ADR-0028).
+type DormantBurst = domain.DormantBurst
+
+// DormantRelease marks an analysed version that followed a long silence. It is
+// carried next to the lifecycle label (see ADR-0028).
+type DormantRelease = domain.DormantRelease
+
+// DormantReleaseKind names the rule behind a DormantRelease.
+type DormantReleaseKind = domain.DormantReleaseKind
+
+// DormantRelease kinds.
+const (
+	// DormantReleaseBurstAcrossLines is a burst across release lines (ADR-0026).
+	DormantReleaseBurstAcrossLines = domain.DormantReleaseBurstAcrossLines
+	// DormantReleaseFresh is a recent return from silence on any line (ADR-0028).
+	DormantReleaseFresh = domain.DormantReleaseFresh
+)
+
+// ReleaseAge marks an analysed version published within the young-release
+// window, or one with no trustworthy publish time (see ADR-0031).
+type ReleaseAge = domain.ReleaseAge
+
+// ReleaseAgeStatus names the state of a ReleaseAge.
+type ReleaseAgeStatus = domain.ReleaseAgeStatus
+
+// ReleaseAgeSource names where a young version's publish time came from.
+type ReleaseAgeSource = domain.ReleaseAgeSource
+
+// ReleaseAge statuses and sources.
+const (
+	// ReleaseAgeYoung means the version was published within the window.
+	ReleaseAgeYoung = domain.ReleaseAgeYoung
+	// ReleaseAgeUnknown means no trustworthy publish time was available.
+	ReleaseAgeUnknown = domain.ReleaseAgeUnknown
+	// ReleaseAgeSourceNpm is the npm packument's time[version].
+	ReleaseAgeSourceNpm = domain.ReleaseAgeSourceNpm
+	// ReleaseAgeSourcePyPI is the earliest file upload in a PyPI response.
+	ReleaseAgeSourcePyPI = domain.ReleaseAgeSourcePyPI
+	// ReleaseAgeSourceDepsDev is deps.dev's requested-version release time.
+	ReleaseAgeSourceDepsDev = domain.ReleaseAgeSourceDepsDev
+)
+
+// Registry names recorded in RegistryState.Registry.
+const (
+	RegistryPyPI   = domain.RegistryPyPI
+	RegistryCrates = domain.RegistryCrates
+	RegistryNpm    = domain.RegistryNpm
+)
 
 // ReleaseInfo contains prioritized release channel/version metadata.
 type ReleaseInfo = domain.ReleaseInfo

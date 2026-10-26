@@ -444,7 +444,7 @@ func (c *DepsDevClient) buildFinalResults(purls []string, packageInfoMap map[str
 		packageResp := packageInfoMap[purl]
 		basicResult := c.buildBasicResult(purl, packageResp)
 		if releaseInfo, exists := releaseInfoMap[purl]; exists {
-			if releaseInfo.StableVersion.VersionKey.Version != "" || releaseInfo.PreReleaseVersion.VersionKey.Version != "" {
+			if releaseInfo.HasAnyVersion() {
 				basicResult.ReleaseInfo = releaseInfo
 			}
 		}
@@ -485,13 +485,14 @@ func (c *DepsDevClient) buildFinalResults(purls []string, packageInfoMap map[str
 
 // buildBasicResult creates a BatchResult with basic package information only
 func (c *DepsDevClient) buildBasicResult(purl string, packageResp *PackageResponse) *BatchResult {
-	return &BatchResult{
-		PURL: purl,
-		Package: &Package{
+	result := &BatchResult{PURL: purl}
+	if packageResp != nil {
+		result.Package = &Package{
 			PURL:     packageResp.Version.PURL,
 			Versions: []Version{packageResp.Version},
-		},
+		}
 	}
+	return result
 }
 
 // buildCompleteResult creates a BatchResult with all available information
@@ -505,7 +506,7 @@ func (c *DepsDevClient) buildCompleteResult(purl string, packageResp *PackageRes
 	}
 
 	// Add release information if available
-	if releaseInfo.StableVersion.VersionKey.Version != "" || releaseInfo.PreReleaseVersion.VersionKey.Version != "" {
+	if releaseInfo.HasAnyVersion() {
 		result.ReleaseInfo = releaseInfo
 	}
 

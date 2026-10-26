@@ -44,6 +44,12 @@
             "command": "bash .claude/hooks/readme-walkthrough.sh",
             "timeout": 15,
             "statusMessage": "Checking README walkthroughs for working-directory mismatches..."
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pr-body-review.sh",
+            "timeout": 15,
+            "statusMessage": "Checking PR/issue body for coined jargon..."
           }
         ]
       }
@@ -54,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -q '\\.github/instructions/'; then make -C \"$(git rev-parse --show-toplevel)\" sync-instructions >&2; fi"
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE '[/\"]\\.github/(instructions/|AGENTS\\.base\\.md\")'; then make -C \"$(git rev-parse --show-toplevel)\" sync-instructions >&2; fi"
           }
         ]
       }

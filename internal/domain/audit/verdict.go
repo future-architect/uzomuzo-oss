@@ -26,6 +26,9 @@ func DeriveVerdict(a *analysis.Analysis) Verdict {
 	if a == nil {
 		return VerdictReview
 	}
+	if a.Malicious() {
+		return VerdictReplace
+	}
 	if a.Error != nil {
 		return VerdictReview
 	}

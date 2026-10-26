@@ -11,6 +11,7 @@ import (
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/module"
 )
 
 // Parser implements depparser.DependencyParser for go.mod files.
@@ -19,20 +20,26 @@ type Parser struct{}
 // FormatName returns the parser's display name.
 func (p *Parser) FormatName() string { return "go.mod" }
 
-// Parse reads a go.mod file and returns direct dependencies as PURLs.
-// Indirect dependencies are skipped by default.
+// Parse reads a go.mod file and returns its requirements as PURLs.
+// Requirements marked "// indirect" get RelationTransitive with no ViaParents,
+// since go.mod does not record which direct dependency pulls them in; callers
+// decide whether to keep them.
+// All other requirements get RelationDirect.
 // Replace directives are applied: if a module has a replacement, the
-// replacement path and version are used instead.
+// replacement path and version are used instead. A replace naming a version
+// applies only to that version and wins over one without a version, which
+// applies to all versions.
 func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDependency, error) {
 	f, err := modfile.Parse("go.mod", data, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse go.mod: %w", err)
 	}
 
-	// Build replace map: old module path -> replacement
-	replaces := make(map[string]*modfile.Replace, len(f.Replace))
+	// Build replace map keyed by the old module path and version. A replace
+	// without a version on the left (Old.Version == "") applies to every version.
+	replaces := make(map[module.Version]*modfile.Replace, len(f.Replace))
 	for _, rep := range f.Replace {
-		replaces[rep.Old.Path] = rep
+		replaces[rep.Old] = rep
 	}
 
 	// Build tool set: require module paths that correspond to tool directives
@@ -44,17 +51,23 @@ func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDepend
 
 	var deps []depparser.ParsedDependency
 	for _, req := range f.Require {
+		relation := depparser.RelationDirect
 		if req.Indirect {
-			continue
+			relation = depparser.RelationTransitive
 		}
 
 		modPath := req.Mod.Path
 		version := req.Mod.Version
 
-		// Apply replace directive if present.
+		// Apply replace directive if present: one for this exact version wins
+		// over one for every version, as in the go command.
 		// Skip local-path replacements (empty version or relative path) as they
 		// produce invalid PURLs like "pkg:golang/../foo@".
-		if rep, ok := replaces[modPath]; ok {
+		rep, ok := replaces[req.Mod]
+		if !ok {
+			rep, ok = replaces[module.Version{Path: modPath}]
+		}
+		if ok {
 			if rep.New.Version != "" && !strings.HasPrefix(rep.New.Path, ".") && !strings.HasPrefix(rep.New.Path, "/") {
 				modPath = rep.New.Path
 				version = rep.New.Version
@@ -75,7 +88,7 @@ func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDepend
 			Ecosystem: "golang",
 			Name:      modPath,
 			Version:   version,
-			Relation:  depparser.RelationDirect,
+			Relation:  relation,
 			Scope:     scope,
 		})
 	}

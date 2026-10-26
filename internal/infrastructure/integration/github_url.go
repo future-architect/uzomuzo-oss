@@ -56,7 +56,7 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 		slog.Debug("fetch_version_info_failed", "error", err)
 		// Fallback: proceed with base PURL without version
 		//TODO FetchFrom GrraphQL
-		return s.fetchAndValidateGitHubAnalysis(ctx, basePURL, githubURL)
+		return s.fetchAndValidateGitHubAnalysis(ctx, basePURL, basePURL, githubURL)
 	}
 
 	// Extract stable version from release info
@@ -65,7 +65,7 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 		slog.Debug("no_version_data", "purl", basePURL)
 		// Fallback: proceed with base PURL without version
 		//TODO FetchFrom GrraphQL
-		return s.fetchAndValidateGitHubAnalysis(ctx, basePURL, githubURL)
+		return s.fetchAndValidateGitHubAnalysis(ctx, basePURL, basePURL, githubURL)
 	}
 
 	// Step 3: Create versioned PURL if stable version is available
@@ -82,8 +82,10 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 		versionedPURL = basePURL
 	}
 
-	// Step 4: Perform full analysis with the versioned PURL, then validate
-	return s.fetchAndValidateGitHubAnalysis(ctx, versionedPURL, githubURL)
+	// Step 4: Perform full analysis with the versioned PURL, then validate.
+	// basePURL is the requested coordinate: a GitHub URL never carries a caller
+	// version, so versionedPURL is uzomuzo's own selection.
+	return s.fetchAndValidateGitHubAnalysis(ctx, versionedPURL, basePURL, githubURL)
 }
 
 // fetchAndValidateGitHubAnalysis fetches analysis for a PURL derived from a GitHub URL,
@@ -91,11 +93,18 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 // If the resolved repo URL points to a different repository, the deps.dev resolution is
 // discarded and a GitHub-only analysis is returned to prevent misattribution.
 //
+// The two PURL parameters are not interchangeable: analyzePURL is the coordinate
+// actually analyzed and may carry a version uzomuzo selected, while requestedPURL is
+// the unversioned base the caller's GitHub URL maps to. OriginalPURL is set to
+// requestedPURL on the resolved-package path only; the two GitHub-only paths below
+// (deps.dev has no such package, or the resolved repo does not match) store
+// githubURL instead, because no package coordinate applies. See ADR-0021.
+//
 // See: https://github.com/future-architect/uzomuzo-oss/issues/99
-func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context, purl, githubURL string) (*domain.Analysis, error) {
-	analysis, err := s.FetchAnalysisWithGitHub(ctx, purl)
+func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context, analyzePURL, requestedPURL, githubURL string) (*domain.Analysis, error) {
+	analysis, err := s.FetchAnalysisWithGitHub(ctx, analyzePURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch analysis for PURL %s (from %s): %w", purl, githubURL, err)
+		return nil, fmt.Errorf("failed to fetch analysis for PURL %s (from %s): %w", analyzePURL, githubURL, err)
 	}
 
 	// If the PURL was generated but the package is not found in deps.dev
@@ -108,16 +117,12 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 		depsdevErr.Type == common.ErrorTypeResourceNotFound &&
 		strings.Contains(depsdevErr.Message, "package not found in deps.dev") {
 		slog.Info("deps_dev_package_not_found_falling_back_to_github_only",
-			"purl", purl, "github_url", githubURL)
+			"purl", analyzePURL, "github_url", githubURL)
 		// Reuse the existing analysis if GitHub enrichment already populated RepoState
 		// for the same repository, avoiding a redundant GitHub API call.
 		if analysis.RepoState != nil && analysis.RepoURL != "" && s.validateRepoURLMatch(analysis.RepoURL, githubURL) {
 			analysis.Error = nil
-			analysis.OriginalPURL = githubURL
-			analysis.EffectivePURL = githubURL
-			analysis.Package = nil
-			analysis.ReleaseInfo = nil
-			analysis.EnsureCanonical()
+			detachPackageIdentity(analysis, githubURL)
 			return analysis, nil
 		}
 		return s.buildGitHubOnlyAnalysis(ctx, githubURL)
@@ -126,26 +131,37 @@ func (s *IntegrationService) fetchAndValidateGitHubAnalysis(ctx context.Context,
 	// Round-trip validation: verify the resolved package actually belongs to the input repository.
 	// deps.dev may return an unrelated package that happens to share the repo name
 	// (e.g., "checkout" → pkg:npm/checkout from github.com/bmeck/node-checkout,
-	//  not the intended github.com/actions/checkout).
+	//  not the intended github.com/actions/checkout), or one with no repository link
+	// at all (e.g., "grafana" → pkg:npm/grafana; see #539).
 	if !s.validateRepoURLMatch(analysis.RepoURL, githubURL) {
 		slog.Warn("deps_dev_repo_mismatch_detected",
 			"github_url", githubURL,
-			"resolved_purl", purl,
+			"resolved_purl", analyzePURL,
 			"resolved_repo_url", analysis.RepoURL,
 		)
-		return s.buildGitHubOnlyAnalysis(ctx, githubURL)
+		fallback, err := s.buildGitHubOnlyAnalysis(ctx, githubURL)
+		if err != nil {
+			return nil, err
+		}
+		fallback.UnmatchedPackage = &domain.UnmatchedPackage{PURL: analyzePURL, RepoURL: analysis.RepoURL}
+		return fallback, nil
 	}
 
+	analysis.OriginalPURL = requestedPURL
 	return analysis, nil
 }
 
 // validateRepoURLMatch checks whether the resolved repository URL matches the input GitHub URL.
 // Both URLs are normalized to owner/repo form (case-insensitive) before comparison.
-// Returns true if they match, or if the resolved URL is empty (no data to validate against).
+// An empty resolved URL is a mismatch: a package with no repository link carries no
+// evidence that it belongs to the input repository, and a same-named package
+// (e.g., github.com/grafana/grafana → pkg:npm/grafana, which has no repository link)
+// would otherwise label the repository from an unrelated release history.
+//
+// See: https://github.com/future-architect/uzomuzo-oss/issues/539
 func (s *IntegrationService) validateRepoURLMatch(resolvedRepoURL, inputGitHubURL string) bool {
-	// If deps.dev returned no repo URL, we cannot validate — allow the result.
 	if resolvedRepoURL == "" {
-		return true
+		return false
 	}
 
 	inputOwner, inputRepo, err := common.ExtractGitHubOwnerRepo(inputGitHubURL)
@@ -444,4 +460,22 @@ func (s *IntegrationService) generatePURLForEcosystem(ecosystem, owner, repo str
 			"repo", repo)
 		return ""
 	}
+}
+
+// detachPackageIdentity re-points an analysis at the GitHub URL after the
+// synthesized PURL turned out not to name a published package. Every field that
+// described that package is dropped: keeping one would attribute a fact about a
+// package to a repository the caller asked about instead.
+func detachPackageIdentity(analysis *domain.Analysis, githubURL string) {
+	analysis.OriginalPURL = githubURL
+	analysis.EffectivePURL = githubURL
+	analysis.Package = nil
+	analysis.ReleaseInfo = nil
+	analysis.RegistryState = nil
+	analysis.AdvisoryDBState = nil
+	analysis.MaliciousState = nil
+	analysis.ReleaseHistory = nil
+	analysis.PyPIPublishedAt = time.Time{}
+	analysis.ReleaseAge = nil
+	analysis.EnsureCanonical()
 }

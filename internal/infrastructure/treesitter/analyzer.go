@@ -6,12 +6,15 @@ package treesitter
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"unsafe"
 
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
@@ -33,10 +36,46 @@ var skipDirs = map[string]bool{
 	".git":         true,
 	"testdata":     true,
 	"__pycache__":  true,
-	"build":        true,
-	"dist":         true,
-	"target":       true,
 }
+
+// buildOutputManifests maps each directory name that build tools use for
+// their output to the manifests of the tools that write there. Such a
+// directory is skipped only when its parent holds one of those manifests (see
+// isBuildOutputDir), because the same names are also real package names:
+// Go internal/build, Java com/example/build, Python src/build (#546). A
+// manifest only marks the directories its own tool writes: Cargo and sbt
+// write target/, so a build/ next to Cargo.toml is still read. go.mod is not
+// listed: Go build output (binaries, goreleaser dist/) contains no .go source,
+// so reading it adds no imports, while a build/ directory next to go.mod
+// usually holds hand-written code or scripts.
+var buildOutputManifests = map[string][]string{
+	"build": {
+		"package.json",
+		"build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts",
+		"build.xml",
+		"pyproject.toml", "setup.py", "setup.cfg",
+	},
+	"dist": {
+		"package.json",
+		"build.xml",
+		"pyproject.toml", "setup.py", "setup.cfg",
+	},
+	"target": {
+		"pom.xml",
+		"Cargo.toml",
+		"build.sbt",
+	},
+}
+
+// largeFileBytes is the size above which a file is not fully parsed.
+// largeFilePrefixBytes is how much of such a file is still parsed for imports,
+// so that a large generated file (e.g. a .pb.go) that is the only importer of a
+// dependency does not make that dependency look unused (#546). Imports sit at
+// the top of the file in Go and Java and usually in Python and JS/TS.
+const (
+	largeFileBytes       = 1 << 20
+	largeFilePrefixBytes = 64 << 10
+)
 
 // langID identifies a programming language for parsing.
 type langID int
@@ -67,14 +106,31 @@ const blankImportAlias = "\x00blank"
 const wildcardImportAlias = "\x00wildcard"
 
 // langConfig holds the tree-sitter language and query patterns.
+//
+// Must not be copied: compileOnce carries a sync.Once. Configs are always held
+// and passed as pointers via Analyzer.configs.
 type langConfig struct {
 	language       *sitter.Language
 	importQuery    string
 	callQuery      string
-	compiledImport *sitter.Query // compiled once in NewAnalyzer
-	compiledCall   *sitter.Query // compiled once in NewAnalyzer
+	compileOnce    sync.Once
+	compiledImport *sitter.Query // nil until ensureCompiled runs
+	compiledCall   *sitter.Query // nil until ensureCompiled runs
 	stripQuotes    bool
 	aliasFromPkg   func(importPath string) string
+}
+
+// ensureCompiled compiles this language's queries on first use.
+//
+// Why not compile eagerly in NewAnalyzer: compiling all six languages costs
+// ~190ms, and a repository written in one language needs exactly one of them.
+// The cost is paid per analyzer construction, which uzomuzo-diet does once per
+// invocation before reading any file.
+//
+// Safe under the worker pool: several workers may reach the same language
+// simultaneously, and sync.Once serializes exactly one compilation.
+func (cfg *langConfig) ensureCompiled() {
+	cfg.compileOnce.Do(func() { compileQueries(cfg) })
 }
 
 // Analyzer implements SourceAnalyzer using tree-sitter for multi-language parsing.
@@ -108,8 +164,8 @@ func compileQueries(cfg *langConfig) {
 // tree-sitter Go bindings do not use runtime finalizers due to known CGO
 // interactions, so explicit cleanup is required. Multiple calls are safe.
 //
-// Close is idempotent: a nil compiledImport/compiledCall (compilation failure
-// at NewAnalyzer time) is treated as already-released, and calling Close
+// Close is idempotent: a nil compiledImport/compiledCall (compilation failure,
+// or a language never used) is treated as already-released, and calling Close
 // twice is safe because each compiled query is set to nil after release.
 //
 // Close must NOT be called concurrently with AnalyzeCoupling; the Analyzer
@@ -118,6 +174,12 @@ func compileQueries(cfg *langConfig) {
 // query is nil-guarded by the extractImports/countCallSites entry checks.
 func (a *Analyzer) Close() {
 	for _, cfg := range a.configs {
+		// Retire the compile latch without compiling. Without this, a language
+		// never used before Close would still have an unfired Once, and a later
+		// AnalyzeCoupling would compile fresh queries and return real results —
+		// contradicting the nil-result contract stated above.
+		cfg.compileOnce.Do(func() {})
+
 		if cfg.compiledImport != nil {
 			cfg.compiledImport.Close()
 			cfg.compiledImport = nil
@@ -166,6 +228,18 @@ func extToLang(ext string) (langID, bool) {
 }
 
 // AnalyzeCoupling walks sourceRoot, parses source files, and returns coupling analysis per PURL.
+//
+// The walk only collects paths; parsing runs across a worker pool. Tree-sitter
+// parsing is CGO-bound and independent per file, so a single-threaded walk left
+// every core but one idle. Each worker owns its parser — SetLanguage mutates it —
+// and its own accumulator map, merged once after the pool drains. The compiled
+// queries are shared rather than duplicated per worker because a *sitter.Query is
+// never written after NewQuery; all mutable match state lives in the per-file
+// QueryCursor.
+//
+// Why the result stays deterministic even though completion order is not: every
+// accumulator field is order-independent (two set unions, a counter sum, three
+// OR-ed flags), and buildCouplingResults sorts the slices it emits.
 func (a *Analyzer) AnalyzeCoupling(
 	ctx context.Context,
 	sourceRoot string,
@@ -173,10 +247,8 @@ func (a *Analyzer) AnalyzeCoupling(
 ) (map[string]*domaindiet.CouplingAnalysis, error) {
 	importToPURL := buildImportToPURL(importPaths)
 
-	accum := make(map[string]*accumulator)
-
-	parser := sitter.NewParser()
-	defer parser.Close()
+	type fileJob struct{ path, relPath string }
+	var jobs []fileJob
 
 	err := filepath.WalkDir(sourceRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -185,6 +257,9 @@ func (a *Analyzer) AnalyzeCoupling(
 
 		if d.IsDir() {
 			if skipDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			if path != sourceRoot && isBuildOutputDir(path) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -199,13 +274,54 @@ func (a *Analyzer) AnalyzeCoupling(
 			relPath = path
 		}
 
-		a.analyzeFile(path, relPath, parser, importToPURL, accum)
+		jobs = append(jobs, fileJob{path: path, relPath: relPath})
 
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("walking source tree: %w", err)
 	}
+
+	if len(jobs) == 0 {
+		return nil, nil
+	}
+
+	workers := min(runtime.GOMAXPROCS(0), len(jobs))
+
+	partials := make([]map[string]*accumulator, workers)
+	jobCh := make(chan fileJob)
+	var wg sync.WaitGroup
+
+	for w := range workers {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			parser := sitter.NewParser()
+			defer parser.Close()
+			local := make(map[string]*accumulator)
+			for j := range jobCh {
+				a.analyzeFile(j.path, j.relPath, parser, importToPURL, local)
+			}
+			partials[idx] = local
+		}(w)
+	}
+
+dispatch:
+	for _, j := range jobs {
+		select {
+		case <-ctx.Done():
+			break dispatch
+		case jobCh <- j:
+		}
+	}
+	close(jobCh)
+	wg.Wait()
+
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("analyzing source files: %w", err)
+	}
+
+	accum := mergeAccumulators(partials)
 
 	// No coupling data collected — return nil so callers treat coupling as unavailable
 	// rather than misclassifying every dependency as unused.
@@ -214,6 +330,36 @@ func (a *Analyzer) AnalyzeCoupling(
 	}
 
 	return buildCouplingResults(accum), nil
+}
+
+// mergeAccumulators folds the per-worker accumulator maps into one.
+//
+// Every field is order-independent — set union, counter sum, flag OR — so the
+// merged result does not depend on which worker happened to see which file.
+// The first accumulator for a PURL is adopted by reference and mutated in place;
+// the partial maps are not read after merging.
+func mergeAccumulators(partials []map[string]*accumulator) map[string]*accumulator {
+	merged := make(map[string]*accumulator)
+	for _, part := range partials {
+		for purl, src := range part {
+			dst, ok := merged[purl]
+			if !ok {
+				merged[purl] = src
+				continue
+			}
+			for f := range src.importFiles {
+				dst.importFiles[f] = true
+			}
+			for s := range src.symbols {
+				dst.symbols[s] = true
+			}
+			dst.callSites += src.callSites
+			dst.hasDotImport = dst.hasDotImport || src.hasDotImport
+			dst.hasBlankImport = dst.hasBlankImport || src.hasBlankImport
+			dst.hasWildcardImport = dst.hasWildcardImport || src.hasWildcardImport
+		}
+	}
+	return merged
 }
 
 // buildImportToPURL builds the reverse map from import path to []PURL.
@@ -255,10 +401,7 @@ func (a *Analyzer) analyzeFile(
 	if err != nil {
 		return // skip
 	}
-	if info.Size() > 1<<20 { // 1 MB
-		slog.Debug("skipping large file for coupling analysis", "path", path, "size", info.Size())
-		return
-	}
+	importsOnly := info.Size() > largeFileBytes
 
 	ext := filepath.Ext(path)
 	lid, ok := extToLang(ext)
@@ -270,8 +413,15 @@ func (a *Analyzer) analyzeFile(
 	if !ok {
 		return
 	}
+	cfg.ensureCompiled()
 
-	src, err := os.ReadFile(path)
+	var src []byte
+	if importsOnly {
+		slog.Debug("large_file_imports_only", "path", path, "size", info.Size(), "prefix_bytes", largeFilePrefixBytes)
+		src, err = readPrefix(path, largeFilePrefixBytes)
+	} else {
+		src, err = os.ReadFile(path)
+	}
 	if err != nil {
 		slog.Debug("failed to read file", "path", path, "error", err)
 		return
@@ -285,8 +435,9 @@ func (a *Analyzer) analyzeFile(
 	// failure; we skip the file. The official binding's ParseCtx is
 	// deprecated and will be removed in v0.26 — file-level context
 	// cancellation is already enforced by the ctx.Err() guard at the top
-	// of the WalkDir callback, and per-file parsing is bounded (1 MB cap
-	// above), so dropping mid-parse cancellation here is safe.
+	// of the WalkDir callback, and per-file parsing is bounded (large files
+	// are cut to largeFilePrefixBytes), so dropping mid-parse cancellation
+	// here is safe.
 	tree := parser.Parse(src, nil)
 	if tree == nil {
 		slog.Debug("failed to parse file", "path", path, "lang", lid)
@@ -325,8 +476,11 @@ func (a *Analyzer) analyzeFile(
 		}
 	}
 
-	// Phase 2: Count call sites using alias->PURL mapping.
-	a.countCallSites(cfg, root, src, fileAliases, accum, cursor)
+	// Phase 2: Count call sites using alias->PURL mapping. A large file is cut
+	// at largeFilePrefixBytes, so its calls are not counted.
+	if !importsOnly {
+		a.countCallSites(cfg, root, src, fileAliases, accum, cursor)
+	}
 
 	// Close immediately — defer in WalkDir callback accumulates across all files.
 	cursor.Close()
@@ -587,4 +741,31 @@ type accumulator struct {
 	hasDotImport      bool // true if any file uses dot import for this PURL
 	hasBlankImport    bool // true if any file uses blank import for this PURL
 	hasWildcardImport bool // true if any file uses wildcard import for this PURL
+}
+
+// isBuildOutputDir reports whether dir is a build output directory: its name
+// is in buildOutputManifests and its parent contains a manifest file of a tool
+// that writes there.
+func isBuildOutputDir(dir string) bool {
+	parent := filepath.Dir(dir)
+	for _, m := range buildOutputManifests[filepath.Base(dir)] {
+		if fi, err := os.Stat(filepath.Join(parent, m)); err == nil && fi.Mode().IsRegular() {
+			return true
+		}
+	}
+	return false
+}
+
+// readPrefix reads at most n bytes from the start of the file at path.
+func readPrefix(path string, n int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("read file prefix: %w", err)
+	}
+	defer func() { _ = f.Close() }() // read-only handle; a close error loses no data
+	b, err := io.ReadAll(io.LimitReader(f, n))
+	if err != nil {
+		return nil, fmt.Errorf("read file prefix: %w", err)
+	}
+	return b, nil
 }

@@ -65,6 +65,19 @@ if echo "$DIFF_CONTENT" | grep -E '^\+.*[^a-zA-Z0-9_][2-9][0-9]{2,}([^0-9]|$)' |
   ISSUES+=("Possible magic numbers in new code — consider named constants")
 fi
 
+# 5. Comment jargon density (copilot-learned-coding: comment-jargon-density). Advisory only:
+#    newly-added Go leading // comments should explain the non-obvious WHY in plain English,
+#    not by stacking coined internal jargon. Anchored to ^\+\s*// (a leading line comment) so
+#    string-literal // (URLs) and /* */ blocks do not match; inline `code // note` is out of
+#    scope. `|| true` keeps the fail-open contract. KEEP IN SYNC with pr-body-review.sh's denylist.
+JARGON=$(echo "$DIFF_CONTENT" \
+  | grep -E '^\+[[:space:]]*//' \
+  | grep -oE 'materialize|fail-closed|over-?claim|wire DTO|tiebreaker|leaf helper|skip set|self-driven|adapter-direct' \
+  | sort -u | tr '\n' ' ' || true)
+if [ -n "$JARGON" ]; then
+  ISSUES+=("Comment jargon detected (copilot-learned-coding comment-jargon-density): ${JARGON}— rewrite in plain English (e.g. materialize→builds a row / fail-closed→fails safe / tiebreaker→sort-order comparator)")
+fi
+
 # Output instructions only if issues found
 if [ ${#ISSUES[@]} -gt 0 ]; then
   BULLET_LIST=$(printf '\\n- %s' "${ISSUES[@]}")

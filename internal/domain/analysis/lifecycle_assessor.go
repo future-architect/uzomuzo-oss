@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	cfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
@@ -21,6 +22,8 @@ type LifecycleAssessmentRules struct {
 	VulnerabilityScorePoorMax  float64
 	ResidualAdvisoryThreshold  int
 	HighSeverityCVSSThreshold  float64
+	DormantSilence             time.Duration
+	DormantFlag                time.Duration
 }
 
 // LifecycleAssessorService implements lifecycle/activity assessment logic.
@@ -49,12 +52,40 @@ func NewLifecycleAssessorServiceWithConfig(c cfg.LifecycleAssessmentConfig) *Lif
 		ResidualAdvisoryThreshold:  c.ResidualAdvisoryThreshold,
 		HighSeverityCVSSThreshold:  c.HighSeverityCVSSThreshold,
 	}
+	rules.DormantSilence, rules.DormantFlag = c.DormantWindows()
 	return &LifecycleAssessorService{rules: rules}
 }
 
 // Assess performs lifecycle assessment and returns an AssessmentResult using the lifecycle decision tree logic.
 func (s *LifecycleAssessorService) Assess(ctx context.Context, in AssessmentInput) (*AssessmentResult, error) {
-	return s.assessInternal(ctx, in)
+	if in.Now.IsZero() {
+		in.Now = time.Now()
+	}
+	res, err := s.assessInternal(ctx, in)
+	if err != nil || res == nil {
+		return res, err
+	}
+	return s.applyDormantBurst(in, res), nil
+}
+
+// applyDormantBurst turns an ok outcome (Active or Legacy-Safe) into Review
+// Needed when the analysed version came out in a burst across release lines
+// after the DormantSilence window without a release, and is no older than the
+// DormantFlag window. Every other label is returned unchanged: replacing
+// Stalled or EOL-* would stop a --fail-on gate on those labels from firing.
+// See ADR-0026 and ADR-0028.
+func (s *LifecycleAssessorService) applyDormantBurst(in AssessmentInput, res *AssessmentResult) *AssessmentResult {
+	switch MaintenanceStatus(res.Label) {
+	case LabelActive, LabelLegacySafe:
+	default:
+		return res
+	}
+	b := in.Analysis.DormantBurst(in.Now, s.rules.DormantSilence, s.rules.DormantFlag)
+	if b == nil {
+		return res
+	}
+	trace := append(append([]string(nil), res.Trace...), "dormant_release_burst_review_needed (was "+res.Label+")")
+	return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelReviewNeeded), Reason: dormantBurstReason(b), Trace: trace, Signals: append(dormantBurstSignals(b), res.Signals...)}
 }
 
 // sig creates a Signal with Role=SignalUsed.
@@ -67,6 +98,7 @@ func sigAbsent(name string) Signal { return Signal{Name: name, Role: SignalAbsen
 func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in AssessmentInput) (*AssessmentResult, error) {
 	analysis := in.Analysis
 	scores := in.Scores
+	now := in.Now
 	trace := []string{"start lifecycle assessment"}
 	// 0. Scheduled EOL (advance notice)
 	if in.EOL.IsPlannedEOL() {
@@ -82,20 +114,12 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		trace = append(trace, "planned_eol override")
 		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLScheduled), Reason: reason, Trace: trace, Signals: signals}, nil
 	}
-	// 1. Archive/disable check
-	if analysis != nil && (analysis.IsArchived() || analysis.IsDisabled()) {
-		var signals []Signal
-		if analysis.IsArchived() {
-			signals = append(signals, sig(SignalRepoArchived, "true"))
-		}
-		if analysis.IsDisabled() {
-			signals = append(signals, sig(SignalRepoDisabled, "true"))
-		}
-		trace = append(trace, "repo archived_or_disabled")
-		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLConfirmed), Reason: "Repository archived or disabled", Trace: trace, Signals: signals}, nil
-	}
-
-	// 1.5 Primary-source EOL status override
+	// 1. Primary-source EOL status override.
+	// EOL-Confirmed is driven ONLY by an explicit primary-source signal, for example
+	// npm deprecated, a PyPI classifier or yank, Packagist abandoned, NuGet deprecation
+	// or Maven relocation. Evaluator.ensureRuleChain holds the rules that can set it;
+	// this list is not that chain. Checked before the archive branch so
+	// the EOL verdict and its reason are attributed to that signal, not to the archive flag.
 	if in.EOL.IsEOL() {
 		reason := in.EOL.FinalReason()
 		if reason == "" {
@@ -109,9 +133,81 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLConfirmed), Reason: reason, Trace: trace, Signals: []Signal{sig(SignalEOLSource, signalSource)}}, nil
 	}
 
+	// 1.25 Package-level distribution withdrawal (every published release yanked).
+	// Placed before the archive branch: Stalled's rationale below assumes the package
+	// "remains installable under the same PURL", which this fact falsifies. It is not
+	// EOL either — the project may be alive and distributed elsewhere. See ADR-0022.
+	if analysis != nil && analysis.AllReleasesYanked() {
+		rs := analysis.RegistryState
+		reason := "All releases yanked on " + rs.Registry
+		if rs.Reason != "" {
+			reason += ": " + rs.Reason
+		}
+		signals := []Signal{sig(SignalAllReleasesYanked, rs.Registry)}
+		if analysis.IsArchived() {
+			signals = append(signals, sig(SignalRepoArchived, "true"))
+		}
+		if analysis.IsDisabled() {
+			signals = append(signals, sig(SignalRepoDisabled, "true"))
+		}
+		trace = append(trace, "all_releases_yanked_review_needed")
+		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelReviewNeeded), Reason: reason, Trace: trace, Signals: signals}, nil
+	}
+
+	// 1.4 Advisory-database maintenance warning (RustSec's unmaintained marker).
+	// A single branch owns the outcome so "a flagged package is never reported
+	// Active and never Legacy-Safe" is a property of one place rather than of
+	// every exit below remembering to check. Placed before the archive branch on
+	// purpose: that branch returns Stalled unconditionally and would otherwise
+	// mask the EOL-Effective case. Never EOL-Confirmed — see ADR-0025.
+	if analysis != nil && analysis.AdvisoryDBUnmaintained() {
+		ad := analysis.AdvisoryDBState
+		reason := "Flagged unmaintained by " + ad.AdvisoryID
+		if ad.Summary != "" {
+			reason += ": " + ad.Summary
+		}
+		signals := []Signal{sig(SignalAdvisoryDBUnmaintained, ad.AdvisoryID), commitSignal(analysis)}
+		signals = append(signals, s.collectAdvisorySignals(analysis)...)
+		if analysis.IsArchived() {
+			signals = append(signals, sig(SignalRepoArchived, "true"))
+		}
+		if analysis.IsDisabled() {
+			signals = append(signals, sig(SignalRepoDisabled, "true"))
+		}
+		// AdvisoryID is passed alongside MarkerIDs, which already contains it for
+		// any state ClassifyUnmaintained built: a caller of the library facade can
+		// hand-build a state with only the evidence ID set, and that one must still
+		// be excluded.
+		label, t := s.severityAwareLabel(s.hasHighSeverityAdvisoriesExcluding(analysis, append([]string{ad.AdvisoryID}, ad.MarkerIDs...)),
+			LabelEOLEffective, "advisory_db_unmaintained_unpatched_vulns",
+			LabelStalled, "advisory_db_unmaintained")
+		if label == string(LabelEOLEffective) {
+			reason = "Unmaintained per " + ad.AdvisoryID + ", unpatched vulnerabilities"
+		}
+		trace = append(trace, t)
+		return &AssessmentResult{Axis: LifecycleAxis, Label: label, Reason: reason, Trace: trace, Signals: signals}, nil
+	}
+
+	// 1.5 Archive/disable check (reached only when there is no primary-source EOL).
+	// An archived/disabled repository is a "development ceased" signal, but archive alone is NOT
+	// end-of-life: a monorepo-consolidated package can keep publishing (e.g. google-auth-library,
+	// google-gax, k6deps), and even a long-dormant package remains installable under the same PURL.
+	// So it is Stalled (frozen, but not declared EOL), never EOL-Confirmed on the archive flag alone.
+	if analysis != nil && (analysis.IsArchived() || analysis.IsDisabled()) {
+		var signals []Signal
+		if analysis.IsArchived() {
+			signals = append(signals, sig(SignalRepoArchived, "true"))
+		}
+		if analysis.IsDisabled() {
+			signals = append(signals, sig(SignalRepoDisabled, "true"))
+		}
+		trace = append(trace, "repo_archived_or_disabled_not_eol")
+		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelStalled), Reason: "Repository archived/disabled but not declared end-of-life", Trace: trace, Signals: signals}, nil
+	}
+
 	// 2. Data validity check — residual vulnerability override
 	if len(scores) == 0 {
-		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis) {
+		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis, now) {
 			trace = append(trace, "scorecard_missing residual_vuln_override")
 			signals := []Signal{commitSignal(analysis), sigAbsent(SignalMaintainedScore)}
 			signals = append(signals, s.collectAdvisorySignals(analysis)...)
@@ -124,7 +220,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 	vulnScore := s.getScoreValue(scores, "Vulnerabilities")
 
 	if maintainedScore < 0 || vulnScore < 0 {
-		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis) {
+		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis, now) {
 			trace = append(trace, "scorecard_incomplete residual_vuln_override")
 			signals := []Signal{commitSignal(analysis), maintainedSignal(scores)}
 			signals = append(signals, s.collectAdvisorySignals(analysis)...)
@@ -135,13 +231,13 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 
 	// 3. Activity level determination
 	if analysis != nil {
-		hasRecentStable := analysis.HasRecentStableRelease(s.rules.RecentStableWindowDays)
-		hasRecentPrerelease := analysis.HasRecentPrereleaseRelease(s.rules.RecentPrereleaseWindowDays)
-		hasRecentHumanCommit := analysis.HasRecentHumanCommit(s.rules.MaxHumanCommitGapDays)
+		hasRecentStable := analysis.hasRecentStableReleaseAt(s.rules.RecentStableWindowDays, now)
+		hasRecentPrerelease := analysis.hasRecentPrereleaseReleaseAt(s.rules.RecentPrereleaseWindowDays, now)
+		hasRecentHumanCommit := analysis.hasRecentHumanCommitAt(s.rules.MaxHumanCommitGapDays, now)
 
 		if hasRecentStable || hasRecentPrerelease || hasRecentHumanCommit {
 			trace = append(trace, "active_path")
-			res, _ := s.assessActiveState(analysis, scores)
+			res, _ := s.assessActiveState(analysis, scores, now)
 			if res != nil {
 				res.Trace = append(trace, res.Trace...)
 			}
@@ -157,7 +253,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 
 		// 4. Detailed lifecycle classification of inactive state
 		trace = append(trace, "inactive_path")
-		res, _ := s.assessInactiveState(analysis, scores)
+		res, _ := s.assessInactiveState(analysis, scores, now)
 		if res != nil {
 			res.Trace = append(trace, res.Trace...)
 		}
@@ -176,19 +272,19 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 // - analysis not nil
 // - Days since last human commit > EolDays
 // - advisory count >= ResidualAdvisoryThreshold
-func (s *LifecycleAssessorService) shouldOverrideToEOLDueToResidualVulns(a *Analysis) bool {
+func (s *LifecycleAssessorService) shouldOverrideToEOLDueToResidualVulns(a *Analysis, now time.Time) bool {
 	if a == nil || a.RepoState == nil {
 		return false
 	}
 	// Require actual commit data to prove dormancy. When LatestHumanCommit is nil
-	// (e.g., no GITHUB_TOKEN), GetDaysSinceLastHumanCommit returns 9999 which
+	// (e.g., no GITHUB_TOKEN), daysSinceLastHumanCommitAt returns 9999 which
 	// would falsely satisfy the dormancy threshold — that is absence of evidence,
 	// not evidence of inactivity.
 	if a.RepoState.LatestHumanCommit == nil {
 		return false
 	}
 	// Commit dormancy check
-	if a.GetDaysSinceLastHumanCommit() <= s.rules.EolInactivityDays {
+	if a.daysSinceLastHumanCommitAt(now) <= s.rules.EolInactivityDays {
 		return false
 	}
 	count, _ := s.getStableOrMaxAdvisory(a)
@@ -236,12 +332,24 @@ func (s *LifecycleAssessorService) getStableOrMaxVersionDetail(a *Analysis) *Ver
 // hasHighSeverityAdvisories returns true if the analysis has any advisory with CVSS3 >= threshold,
 // or if any advisory severity is unavailable and advisories exist (conservative fallback).
 func (s *LifecycleAssessorService) hasHighSeverityAdvisories(a *Analysis) bool {
-	vd := s.getStableOrMaxVersionDetail(a)
+	return s.hasHighSeverityAdvisoriesExcluding(a, nil)
+}
+
+// hasHighSeverityAdvisoriesExcluding answers hasHighSeverityAdvisories while
+// ignoring the advisories named in excludeIDs (compared case-insensitively).
+//
+// Why not call hasHighSeverityAdvisories directly from branch 1.4: RustSec files
+// its unmaintained marker as an advisory of its own, and deps.dev lists it on the
+// version with no CVSS score. The conservative "unknown severity counts as
+// potentially high" fallback would then read the branch's own evidence back as a
+// vulnerability, so every flagged crate would reach EOL-Effective and the Stalled
+// outcome would be unreachable. See ADR-0025.
+func (s *LifecycleAssessorService) hasHighSeverityAdvisoriesExcluding(a *Analysis, excludeIDs []string) bool {
+	vd := s.getStableOrMaxVersionDetail(a).ExcludingAdvisories(excludeIDs)
 	if vd == nil || len(vd.Advisories) == 0 {
 		return false
 	}
-	unknownCount := vd.UnknownSeverityAdvisoryCount()
-	if unknownCount > 0 {
+	if vd.UnknownSeverityAdvisoryCount() > 0 {
 		// Any unknown severity triggers conservative fallback (treated as potentially high).
 		return true
 	}
@@ -260,9 +368,9 @@ func (s *LifecycleAssessorService) severityAwareLabel(hasHigh bool,
 }
 
 // assessActiveState handles active repository states using domain models
-func (s *LifecycleAssessorService) assessActiveState(analysis *Analysis, scores map[string]*ScoreEntity) (*AssessmentResult, error) {
-	hasRecentStable := analysis.HasRecentStableRelease(s.rules.RecentStableWindowDays)
-	hasRecentPrerelease := analysis.HasRecentPrereleaseRelease(s.rules.RecentPrereleaseWindowDays)
+func (s *LifecycleAssessorService) assessActiveState(analysis *Analysis, scores map[string]*ScoreEntity, now time.Time) (*AssessmentResult, error) {
+	hasRecentStable := analysis.hasRecentStableReleaseAt(s.rules.RecentStableWindowDays, now)
+	hasRecentPrerelease := analysis.hasRecentPrereleaseReleaseAt(s.rules.RecentPrereleaseWindowDays, now)
 	isMaintenanceOk := analysis.IsMaintenanceOk()
 
 	// A recent stable/prerelease publish is the strongest activity signal.
@@ -290,9 +398,9 @@ func (s *LifecycleAssessorService) assessActiveState(analysis *Analysis, scores 
 
 // assessInactiveState performs detailed lifecycle classification of inactive states using domain models.
 // The function branches on HasCommitData() to prevent sentinel values (9999/999.0) from
-// GetDaysSinceLastHumanCommit/GetLastHumanCommitYears leaking into commit-based comparisons
+// daysSinceLastHumanCommitAt/lastHumanCommitYearsAt leaking into commit-based comparisons
 // when GITHUB_TOKEN is absent.
-func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, scores map[string]*ScoreEntity) (*AssessmentResult, error) {
+func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, scores map[string]*ScoreEntity, now time.Time) (*AssessmentResult, error) {
 	vulnScore := s.getScoreValue(scores, "Vulnerabilities")
 	maintainedScore := s.getScoreValue(scores, "Maintained")
 	hasVulnScore := vulnScore >= 0
@@ -302,8 +410,8 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 
 	// ── Path A: Commit data available (GITHUB_TOKEN set) ──
 	if analysis.HasCommitData() {
-		daysSinceLastHumanCommit := analysis.GetDaysSinceLastHumanCommit()
-		lastHumanCommitYears := analysis.GetLastHumanCommitYears()
+		daysSinceLastHumanCommit := analysis.daysSinceLastHumanCommitAt(now)
+		lastHumanCommitYears := analysis.lastHumanCommitYearsAt(now)
 		cSig := commitSignal(analysis)
 		mSig := maintainedSignal(scores)
 
@@ -345,8 +453,8 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 				Trace:   []string{"inactive_commit_maintenance_ok_partial_scores"},
 				Signals: []Signal{cSig, mSig}}, nil
 		}
-		if analysis.HasPublishData() {
-			daysSincePublish := analysis.GetDaysSinceLatestPublish()
+		if analysis.hasPublishDataAt(now) {
+			daysSincePublish := analysis.daysSinceLatestPublishAt(now)
 			publishSig := sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))
 			if daysSincePublish <= s.rules.EolInactivityDays {
 				return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelStalled),
@@ -361,7 +469,7 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 					Signals: []Signal{cSig, publishSig, mSig}}, nil
 			}
 		}
-		if !analysis.HasPublishData() && !hasMaintainedScore {
+		if !analysis.hasPublishDataAt(now) && !hasMaintainedScore {
 			return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelStalled),
 				Reason:  "No recent activity, no registry data",
 				Trace:   []string{"inactive_github_only_stalled"},
@@ -371,7 +479,7 @@ func (s *LifecycleAssessorService) assessInactiveState(analysis *Analysis, score
 	}
 
 	// ── Path B: No commit data (no GITHUB_TOKEN) ──
-	return s.assessInactiveNoCommitData(analysis, scores, maintainedScore, hasMaintainedScore, isMaintenanceOk)
+	return s.assessInactiveNoCommitData(analysis, scores, maintainedScore, hasMaintainedScore, isMaintenanceOk, now)
 }
 
 // assessInactiveNoCommitData classifies inactive packages when commit data is unavailable.
@@ -381,15 +489,16 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	scores map[string]*ScoreEntity,
 	maintainedScore float64,
 	hasMaintainedScore, isMaintenanceOk bool,
+	now time.Time,
 ) (*AssessmentResult, error) {
-	daysSincePublish := analysis.GetDaysSinceLatestPublish()
+	daysSincePublish := analysis.daysSinceLatestPublishAt(now)
 	advisoryCount, _ := s.getStableOrMaxAdvisory(analysis)
 	hasAdvisories := advisoryCount >= s.rules.ResidualAdvisoryThreshold && advisoryCount > 0
 	hasHighSeverity := s.hasHighSeverityAdvisories(analysis)
 	cSig := sigAbsent(SignalLastHumanCommit) // no commit data in this path
 	mSig := maintainedSignal(scores)
 	dSig := sigAbsent(SignalDaysSinceRelease)
-	if analysis.HasPublishData() {
+	if analysis.hasPublishDataAt(now) {
 		dSig = sig(SignalDaysSinceRelease, fmt.Sprintf("%d", daysSincePublish))
 	}
 
@@ -403,7 +512,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 
 	// C2: Scorecard Maintained < threshold
 	if hasMaintainedScore && !isMaintenanceOk {
-		if hasAdvisories && analysis.HasPublishData() && daysSincePublish > s.rules.EolInactivityDays {
+		if hasAdvisories && analysis.hasPublishDataAt(now) && daysSincePublish > s.rules.EolInactivityDays {
 			label, trace := s.severityAwareLabel(hasHighSeverity,
 				LabelEOLEffective, "inactive_no_commit_C2a_low_maint_advisory_old_publish",
 				LabelStalled, "inactive_no_commit_C2a_low_maint_advisory_low_severity")
@@ -421,7 +530,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 
 	// C3: No scorecard — deps.dev signals only
 	if hasAdvisories {
-		if analysis.HasPublishData() && daysSincePublish > s.rules.EolInactivityDays {
+		if analysis.hasPublishDataAt(now) && daysSincePublish > s.rules.EolInactivityDays {
 			label, trace := s.severityAwareLabel(hasHighSeverity,
 				LabelEOLEffective, "inactive_no_commit_C3a_advisory_old_publish",
 				LabelStalled, "inactive_no_commit_C3a_advisory_low_severity")
@@ -439,7 +548,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	}
 
 	// No advisories path — only use publish-age thresholds when publish data exists
-	if analysis.HasPublishData() {
+	if analysis.hasPublishDataAt(now) {
 		if daysSincePublish <= s.rules.RecentStableWindowDays {
 			return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelActive),
 				Reason:  "Recently published, no known vulnerabilities",
@@ -517,3 +626,37 @@ func eolEvidenceSource(eol EOLStatus) string {
 
 // severitySummary and buildReviewNeededReason removed — Reason text is now
 // concise one-line summaries; detailed data is in Signals.
+
+// dormantBurstReason states the risk (a possible hijacked release), the facts
+// behind it, the harmless reading that looks the same, and what to do: check
+// the publisher, or stay on the earlier release when the version was removed.
+func dormantBurstReason(b *DormantBurst) string {
+	lines := make([]string, len(b.Lines))
+	for i, l := range b.Lines {
+		lines[i] = l + ".x"
+	}
+	reason := fmt.Sprintf("Possible hijacked release. This version came out after %d days with no release, "+
+		"as part of a set published within a day on the %s lines. Takeovers of npm packages that had "+
+		"gone quiet looked like this (node-ipc 2026, rc 2021), but so does a maintainer who returns "+
+		"and ships a last fix to an old line next to a new major.",
+		b.SilentDays, strings.Join(lines, ", "))
+	if b.Removed {
+		// npm drops the manifest of a removed version, _npmUser included, so
+		// the publisher check below is no longer possible.
+		return reason + " npm has since removed this version, so its publisher can no longer be " +
+			"looked up there; stay on the release before the silence unless the maintainer confirms this one."
+	}
+	return reason + " Before using it, check who published it (npm view <package>@<version> _npmUser) " +
+		"and what changed since the previous release."
+}
+
+func dormantBurstSignals(b *DormantBurst) []Signal {
+	signals := []Signal{
+		sig(SignalDormantReleaseBurst, strings.Join(b.Versions, ", ")),
+		sig(SignalDaysSilentBeforeRelease, fmt.Sprintf("%d", b.SilentDays)),
+	}
+	if b.Removed {
+		signals = append(signals, sig(SignalVersionRemoved, "true"))
+	}
+	return signals
+}

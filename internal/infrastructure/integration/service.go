@@ -14,12 +14,15 @@ import (
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/clearlydefined"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/crates"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/govanityresolve"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/links"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/osv"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/pypi"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
@@ -34,6 +37,9 @@ type IntegrationService struct {
 	rubygemsClient  *rubygems.Client
 	packagistClient *packagist.Client
 	pypiClient      *pypi.Client
+	cratesClient    *crates.Client
+	npmClient       *npmjs.Client
+	osvClient       *osv.Client
 	mavenClient     *maven.Client
 	cdClient        *clearlydefined.Client
 	vanityResolver  *govanityresolve.Resolver
@@ -62,6 +68,27 @@ func WithPackagistClient(c *packagist.Client) IntegrationOption {
 // the deps.dev / GitHub-derived value.
 func WithPyPIClient(c *pypi.Client) IntegrationOption {
 	return func(s *IntegrationService) { s.pypiClient = c }
+}
+
+// WithCratesClient injects a crates.io client used to populate
+// Analysis.RegistryState for cargo packages (see ADR-0022). Optional — when
+// unset, cargo analyses carry no registry-level withdrawal fact.
+func WithCratesClient(c *crates.Client) IntegrationOption {
+	return func(s *IntegrationService) { s.cratesClient = c }
+}
+
+// WithNpmClient injects an npm registry client used to populate
+// Analysis.ReleaseHistory for npm packages (see ADR-0026). Optional — when
+// unset, npm analyses carry no release history and no burst is detected.
+func WithNpmClient(c *npmjs.Client) IntegrationOption {
+	return func(s *IntegrationService) { s.npmClient = c }
+}
+
+// WithOSVClient injects an OSV.dev client used to populate
+// Analysis.AdvisoryDBState for cargo packages (see ADR-0025). Optional — when
+// unset, cargo analyses carry no advisory-database maintenance fact.
+func WithOSVClient(c *osv.Client) IntegrationOption {
+	return func(s *IntegrationService) { s.osvClient = c }
 }
 
 // WithMavenClient injects a Maven client used by enrichLicenseFromManifest to

@@ -1,0 +1,70 @@
+package integration
+
+import (
+	"testing"
+	"time"
+
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+)
+
+// TestDetachPackageIdentity pins that no package-scoped fact survives the
+// fallback to a GitHub-only analysis. RegistryState is the one that matters most
+// here: a stale "all releases yanked" would label a repository Review Needed on
+// the strength of a package the caller never asked about.
+func TestDetachPackageIdentity(t *testing.T) {
+	t.Parallel()
+	const githubURL = "https://github.com/owner/repo"
+	a := &domain.Analysis{
+		OriginalPURL:  "pkg:pypi/ghost",
+		EffectivePURL: "pkg:pypi/ghost",
+		Package:       &domain.Package{PURL: "pkg:pypi/ghost", Ecosystem: "pypi"},
+		ReleaseInfo:   &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Version: "1.0.0"}},
+		RegistryState: &domain.RegistryState{
+			AllReleasesYanked: true,
+			Registry:          domain.RegistryPyPI,
+			Reason:            "Unmaintained",
+		},
+		// A synthesized cargo PURL can pick up an advisory-database fact about
+		// an unrelated crate that happens to share the repository's name.
+		AdvisoryDBState: &domain.AdvisoryDBState{Unmaintained: true, AdvisoryID: "RUSTSEC-2020-0163"},
+		MaliciousState:  &domain.MaliciousState{Status: domain.MaliciousStatusFlagged},
+		ReleaseHistory:  &domain.ReleaseHistory{Registry: domain.RegistryNpm},
+		PyPIPublishedAt: time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC),
+		ReleaseAge:      &domain.ReleaseAge{Status: domain.ReleaseAgeYoung},
+		RepoState:       &domain.RepoState{},
+		RepoURL:         githubURL,
+	}
+
+	detachPackageIdentity(a, githubURL)
+
+	if a.Package != nil {
+		t.Errorf("Package = %+v, want nil", a.Package)
+	}
+	if a.ReleaseInfo != nil {
+		t.Errorf("ReleaseInfo = %+v, want nil", a.ReleaseInfo)
+	}
+	if a.RegistryState != nil {
+		t.Errorf("RegistryState = %+v, want nil", a.RegistryState)
+	}
+	if a.AllReleasesYanked() {
+		t.Error("AllReleasesYanked() = true, want false")
+	}
+	if a.AdvisoryDBState != nil {
+		t.Errorf("AdvisoryDBState = %+v, want nil", a.AdvisoryDBState)
+	}
+	if a.MaliciousState != nil {
+		t.Errorf("MaliciousState = %+v, want nil", a.MaliciousState)
+	}
+	if a.ReleaseHistory != nil {
+		t.Errorf("ReleaseHistory = %+v, want nil", a.ReleaseHistory)
+	}
+	if !a.PyPIPublishedAt.IsZero() || a.ReleaseAge != nil {
+		t.Errorf("release age facts retained after identity detach: %v, %+v", a.PyPIPublishedAt, a.ReleaseAge)
+	}
+	if a.OriginalPURL != githubURL || a.EffectivePURL != githubURL {
+		t.Errorf("PURLs = %q / %q, want both %q", a.OriginalPURL, a.EffectivePURL, githubURL)
+	}
+	if a.RepoState == nil {
+		t.Error("RepoState was dropped; the repository facts must survive")
+	}
+}

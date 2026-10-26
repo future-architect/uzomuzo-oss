@@ -332,6 +332,8 @@ func (e *Evaluator) applyMavenRelocation(ctx context.Context, a *domain.Analysis
 // applyPyPIExplicit checks PyPI project metadata for explicit deprecation/EOL phrases.
 // Short-circuits on confirmed EOL. This is a primary-source registry signal.
 // applyPyPIClassifier: terminal rule – only classifier-based explicit inactivity.
+// It also records the requested version's earliest upload time from the project
+// response on the analysis, before the classifier check (ADR-0031).
 func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) (done bool) {
 	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" || e.pypi == nil {
 		return false
@@ -350,10 +352,11 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 	if !found || info == nil {
 		return false
 	}
+	a.ObservePyPIPublishedAt(info.ReleasePublishedAt[a.Package.Version])
 	if hasPyPIInactiveClassifier(info.Classifiers) { // explicit EOL
 		status.State = domain.EOLEndOfLife
 		status.Evidences = append(status.Evidences, domain.EOLEvidence{
-			Source:     "PyPI",
+			Source:     domain.RegistryPyPI,
 			Summary:    "Classifier: Development Status :: 7 - Inactive",
 			Reference:  "https://pypi.org/project/" + info.Name + "/",
 			Confidence: 1.0,
@@ -366,11 +369,19 @@ func (e *Evaluator) applyPyPIClassifier(ctx context.Context, a *domain.Analysis,
 
 // applyRegistryYanked is the shared core for yanked-version rules.
 //
-// It parses the PURL for the given ecosystem, optionally lowercases the name,
-// resolves the version (PURL version preferred, StableVersion as fallback), then
-// calls fetch to determine whether that version is yanked. On confirmation it
+// The coordinate it reads is OriginalPURL — the version the caller actually asked
+// about. It parses that for the given ecosystem, optionally lowercases the name,
+// then calls fetch to determine whether that version is yanked. On confirmation it
 // appends the evidence (using source and confidence) and promotes status to
 // EOLEndOfLife.
+//
+// An OriginalPURL that is unversioned, empty, unparsable, or of another ecosystem
+// is a no-op. See ADR-0021.
+//
+// EffectivePURL and Package.PURL are deliberately NOT read here — on the GitHub URL
+// entry path they carry a version uzomuzo picked, not one the caller pinned.
+// applyNpmPURLDeprecation still reads EffectivePURL and so does not yet honour this
+// distinction; see ADR-0021 "Not addressed here".
 //
 // Parameters:
 //   - eco: PURL ecosystem type to match (e.g. "pypi", "cargo")
@@ -390,11 +401,11 @@ func (e *Evaluator) applyRegistryYanked(
 	confidence float64,
 	logEvent string,
 ) bool {
-	if status.State == domain.EOLEndOfLife || a == nil || a.Package == nil || a.Package.PURL == "" {
+	if status.State == domain.EOLEndOfLife || a == nil || a.OriginalPURL == "" {
 		return false
 	}
 	pp := purl.NewParser()
-	parsed, err := pp.Parse(a.Package.PURL)
+	parsed, err := pp.Parse(a.OriginalPURL)
 	if err != nil || parsed.Ecosystem() != eco {
 		return false
 	}
@@ -403,9 +414,6 @@ func (e *Evaluator) applyRegistryYanked(
 		name = strings.ToLower(name)
 	}
 	version := parsed.Version()
-	if version == "" && a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
-		version = a.ReleaseInfo.StableVersion.Version
-	}
 	if name == "" || version == "" {
 		return false
 	}
@@ -428,23 +436,24 @@ func (e *Evaluator) applyRegistryYanked(
 	return true
 }
 
-// applyPyPIYanked checks if the PyPI version requested by the user (PURL version,
-// falling back to StableVersion when PURL is unversioned) is yanked on PyPI and
-// promotes to EOL on confirmation. PURL version is preferred because yanking is a
-// version-specific signal — checking the latest stable version would silently miss
-// a user's pinned-to-yanked dependency.
+// applyPyPIYanked checks whether the PyPI version the caller requested (the version
+// in OriginalPURL) is yanked on PyPI and promotes to EOL on confirmation. An
+// unversioned OriginalPURL is a no-op. See ADR-0021.
 //
 // Yanked semantics: see pypi.Client.GetVersion (info.yanked OR all urls[].yanked).
+// A fetched version response also records its earliest upload time on the
+// analysis (ADR-0031).
 func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) bool {
 	if e.pypi == nil {
 		return false
 	}
-	return e.applyRegistryYanked(ctx, a, status, "pypi", "PyPI", true,
+	return e.applyRegistryYanked(ctx, a, status, "pypi", domain.RegistryPyPI, true,
 		func(ctx context.Context, name, version string) (bool, string, string, bool, error) {
 			info, found, err := e.pypi.GetVersion(ctx, name, version)
 			if err != nil || !found || info == nil {
 				return false, "", "", found, err
 			}
+			a.ObservePyPIPublishedAt(info.PublishedAt)
 			summary := "Version yanked on PyPI"
 			if info.YankedReason != "" {
 				summary = summary + ": " + info.YankedReason
@@ -455,15 +464,15 @@ func (e *Evaluator) applyPyPIYanked(ctx context.Context, a *domain.Analysis, sta
 		0.95, "eol: pypi version yanked")
 }
 
-// applyCargoYanked checks if the Cargo PURL version (falling back to StableVersion
-// when PURL is unversioned) is yanked on crates.io. Same precedence rationale as
-// applyPyPIYanked. crates.io yanks have no upstream successor, so status.Successor
-// is left untouched.
+// applyCargoYanked checks whether the Cargo version the caller requested (the
+// version in OriginalPURL) is yanked on crates.io. An unversioned OriginalPURL is
+// a no-op, as in applyPyPIYanked. See ADR-0021.
+// crates.io yanks have no upstream successor, so status.Successor is left untouched.
 func (e *Evaluator) applyCargoYanked(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) bool {
 	if e.crates == nil {
 		return false
 	}
-	return e.applyRegistryYanked(ctx, a, status, "cargo", "crates.io", false,
+	return e.applyRegistryYanked(ctx, a, status, "cargo", domain.RegistryCrates, false,
 		func(ctx context.Context, name, version string) (bool, string, string, bool, error) {
 			info, found, err := e.crates.GetVersion(ctx, name, version)
 			if err != nil || !found || info == nil {
@@ -537,6 +546,8 @@ func (e *Evaluator) applyDepsDevDeprecated(_ context.Context, a *domain.Analysis
 }
 
 // EvaluateBatch computes EOL status for the given analyses keyed by input key.
+// PyPI rules also record the publish time they observe on each analysis
+// (Analysis.ObservePyPIPublishedAt).
 func (e *Evaluator) EvaluateBatch(ctx context.Context, analyses map[string]*domain.Analysis) (map[string]domain.EOLStatus, error) {
 	out := make(map[string]domain.EOLStatus, len(analyses))
 	type job struct {

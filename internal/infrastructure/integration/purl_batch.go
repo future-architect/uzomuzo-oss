@@ -96,6 +96,30 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// over the repo-level value, and they should be ecosystem-gated like enrichPyPISummary.
 	s.enrichPyPISummary(ctx, analyses)
 
+	// Registry-level withdrawal facts (best-effort): record whether the registry
+	// reports every published release as yanked. Distinct from RepoState, which
+	// describes the source repository. See ADR-0022.
+	s.enrichRegistryState(ctx, analyses)
+
+	// OSV.dev lookups (best-effort). One batch first asks which packages, in
+	// every OSV-supported ecosystem, have no advisory at all, so the two steps
+	// below query only the rest. See ADR-0027.
+	s.primeOSVNoAdvisories(ctx, analyses)
+
+	// Advisory-database maintenance facts (best-effort): record whether a
+	// third-party advisory curator has flagged the package as unmaintained.
+	// Cargo only, and deliberately never an EOL state. See ADR-0025.
+	s.enrichAdvisoryDBState(ctx, analyses)
+
+	// Malicious-package advisories (best-effort), every OSV-supported
+	// ecosystem. See ADR-0027.
+	s.enrichMaliciousState(ctx, analyses)
+
+	// Registry release history (best-effort): npm's publish time for every
+	// version, removed ones included, read by the lifecycle assessor to detect a
+	// release burst after a long silence. See ADR-0026.
+	s.enrichReleaseHistory(ctx, analyses)
+
 	// Manifest-level license fallback (best-effort): when deps.dev and GitHub
 	// `licenseInfo` left ProjectLicense or RequestedVersionLicenses missing /
 	// non-SPDX, consult the package's own ecosystem manifest. Currently wires

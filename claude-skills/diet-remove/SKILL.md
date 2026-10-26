@@ -13,18 +13,20 @@ Analyze and plan the removal of dependency `$ARGUMENTS`, then take action.
 - **Default (Issue mode)**: Run Phase 1 analysis, then file a GitHub Issue with the findings and proposed migration plan. Appropriate for external OSS contributions and large projects where you don't own the build environment.
 - **`--pr` (PR mode)**: Run the full removal lifecycle locally: analysis → replacement → verification → commit. Use this only when you own the project and can run build/test locally.
 
-Parse `$ARGUMENTS` for flags:
+Parse `$ARGUMENTS` for flags, and set `TARGET` to the dependency itself: drop the flags and their values, and turn a PURL into the name the package manager uses (`pkg:golang/github.com/pkg/errors@v0.9.1` -> `github.com/pkg/errors`, `pkg:npm/%40scope/name@1.0.0` -> `@scope/name`). Every command below uses `$TARGET`, never the raw `$ARGUMENTS`.
+
+Flags:
 - If `--pr` is present → PR mode (direct implementation)
 - If `--repo owner/repo` is present → target that repository for the issue
 - Otherwise → Issue mode (default)
 
-**When to use**: After `/diet-evaluate-removal` confirms the dependency is worth removing, or when `uzomuzo diet` ranks it as trivial/easy.
+**When to use**: After `/diet-evaluate-removal` confirms the dependency is worth removing, or when `uzomuzo diet` reports it unused or easy (a "trivial" label is only meaningful if coupling was measured -- when every dependency shows trivial and none is unused, re-run diet with the right `--source`).
 
 **Safety principle**: Every removal must pass build + vet + test before committing. If any step fails, stop and diagnose — don't force it.
 
 ### Ecosystem detection
 
-Detect the ecosystem from the PURL scheme or module path (`pkg:golang/` → Go, `pkg:npm/` → npm, `pkg:pypi/` → Python, `pkg:maven/` → Maven, `pkg:githubactions/` → GitHub Actions).
+Detect the ecosystem from the PURL scheme or module path (`pkg:golang/` → Go, `pkg:npm/` → npm, `pkg:pypi/` → Python, `pkg:maven/` → Maven, `pkg:cargo/` → Rust, `pkg:githubactions/` → GitHub Actions). Diet measures source coupling for Go, Python, JavaScript/TypeScript, and Java only; for other ecosystems, find the import sites yourself before trusting a "trivial" or "unused" label.
 
 If the ecosystem is **not Go**, display this notice to the user before proceeding:
 
@@ -47,23 +49,39 @@ The rest of the flow (duplicate check, issue template, etc.) proceeds identicall
 
 Before writing any code, run through these checks:
 
+### 0. Is this an incident rather than a cleanup?
+
+Run `uzomuzo scan` on the exact version in the SBOM. Diet JSON does not carry these signals:
+
+```bash
+uzomuzo scan "pkg:npm/example@1.2.3" --format json \
+  | jq '.packages[0] | {lifecycle, reason, stable_version, malicious, malicious_check, dormant_release,
+                       direct_advisory_count, transitive_advisory_count, max_cvss3_score}'
+```
+
+- **`malicious` present**: Stop this flow. Moving off the malicious version comes before any removal plan, and it must not wait for an issue to be triaged. Report the advisory to the user and propose the fix: pin to a version the advisory does not name (or remove the package when `scope` is `"package"`), and run `/diet-assess-risk` to list the secrets to rotate (skip that if it already produced the incident verdict). Make the change only in PR mode and only after the user approves it; rotating credentials is the user's action, not yours. For an external project, do not open a public issue that describes an exploitable situation in detail; draft a private report for the maintainers' security contact (`SECURITY.md`) and send nothing until the user approves it.
+- **`dormant_release` present** (npm, shown for 7 days after publication): The version came out after a year of silence. Prefer staying on, or pinning back to, the release before the silence while you plan the removal.
+- Otherwise continue. (For ecosystems other than npm, PyPI, crates.io, Go, and Maven, uzomuzo does not run the malicious check; note "not checked" in any issue or PR text.)
+
 ### 1. Will it actually disappear?
 
-Check the **STAYS** column in the `uzomuzo diet` output (or `stays_as_indirect` in JSON):
+Check the **REMAINS** column in the `uzomuzo diet` table output (or `stays_as_indirect` in JSON):
 
-- **STAYS = `-`** → Removing this dep fully removes it from the dependency tree. Go ahead.
-- **STAYS = `yes`** → Another direct dep depends on this transitively. It will remain as an indirect dependency after removal. Still worth doing (version management delegation, future removal readiness), but set expectations: it won't leave go.sum / lockfile.
+- **REMAINS = `-`** → Removing this dep fully removes it from the dependency tree. Go ahead.
+- **REMAINS = `yes`** → Another direct dep depends on this transitively. It will remain as an indirect dependency after removal. Still worth doing (version management delegation, future removal readiness), but set expectations: it won't leave go.sum / lockfile.
 
-In detailed output, the `IndirectVia` field shows exactly which direct deps pull it in transitively. These are the upstream targets for Phase 5 (Upstream Diet).
+The **REMOVES** column (`exclusive_transitive` in JSON) is how many transitive deps leave together with it.
+
+In detailed output (`--format detailed`), the line `⚠ Remains indirect:  yes  (via: ...)` (`indirect_via` in JSON) shows exactly which direct deps pull it in transitively. These are the upstream targets for Phase 5 (Upstream Diet).
 
 If diet output is not available, you can verify manually:
 ```bash
 # Go
-go mod why -m $ARGUMENTS
+go mod why -m $TARGET
 # npm
-npm ls $ARGUMENTS
+npm ls $TARGET
 # pip
-pip show $ARGUMENTS | grep "Required-by"
+pip show $TARGET | grep "Required-by"
 ```
 
 ### 2. What's the replacement?
@@ -72,14 +90,15 @@ Determine the replacement strategy. In order of preference:
 
 | Strategy | When to use | Example |
 |----------|-------------|---------|
-| **Delete** | Unused (0 imports) | Remove from go.mod/package.json, run tidy |
+| **Delete** | Unused (0 imports), and the step 4 checks below found no configuration, plugin, or type-only use | Remove from go.mod/package.json, run tidy |
 | **Standard library** | stdlib equivalent exists | `go-homedir` → `os.UserHomeDir()` |
 | **Consolidate** | Another dep already does this | Two JSON libs → keep one |
-| **Self-implement** | Small, non-crypto, well-defined API | `lfshook` → 20-line `logrus.Hook` impl |
+| **Self-implement** | Small, well-defined API; inputs bounded; old and new output can be compared on the same inputs; not credential handling (see NEVER below) | `lfshook` → 20-line `logrus.Hook` impl |
+| **Switch or fork** | The original is archived or end-of-life and there is no stdlib equivalent | Move to a maintained successor; if there is none, fork it and own the fork. Self-implement only under the Self-implement conditions, and compare the caller's results before and after (e.g. an authorization decision that uses the copied data), not only the new function |
 | **Submodule isolate** | Used only in one subcommand/tool | `gosnmp` → `contrib/snmp2cpe/go.mod` |
 | **Framework peel** | Dep comes via a framework you don't fully need | Trivy fanal → direct parser calls |
 
-**NEVER self-implement**: crypto, TLS, protocol negotiation, auth token handling, or anything where subtle bugs create security vulnerabilities.
+**NEVER self-implement**: crypto, TLS, protocol negotiation, anything that sets, sends, or checks credentials (bearer tokens, SASL PLAIN/LOGIN, cookies, signatures), or anything where subtle bugs create security vulnerabilities -- even when the replacement is only a few lines. Length is not the criterion: tests encode the policy you chose and cannot tell you the policy is wrong. If the library providing it is actively maintained, keep it. Two earlier examples in this file broke this rule; see the note under Common patterns.
 
 ### 3. Are there hidden complications?
 
@@ -88,9 +107,13 @@ Check these before starting:
 - **API leakage**: Does this dependency's types appear in exported identifiers?
   If yes, removal is a breaking change — needs major version bump or deprecation period.
   ```bash
-  # Go: search for exported identifiers using the dep's types
-  grep -rn "func.*$ARGUMENTS\|type.*$ARGUMENTS" --include="*.go" | grep -v _test.go | grep "^[A-Z]"
+  # Go: signatures name the dep by its import alias (e.g. `dep.Type`), not by module path.
+  # 1. Find the alias used in each importing file:
+  grep -rn --include="*.go" "\"$TARGET" .
+  # 2. List each package's exported API and look for that alias:
+  for p in $(go list ./...); do go doc -all "$p" 2>/dev/null | grep -q '\b<alias>\.' && echo "$p"; done
   ```
+  No output from a grep is not proof of compatibility; read the exported declarations of each package that imports the dependency.
 
 - **Build tags**: Is the import behind a build tag? (e.g., `//go:build jsoniter`)
   If yes, the dep may not affect default builds — consider just deleting the tagged file.
@@ -102,7 +125,7 @@ Check these before starting:
 
 ### 4. IBNC safety check (imports-but-no-calls patterns)
 
-If the dependency shows 0 call sites but >0 import files, it may still be required. Verify it is not:
+If the dependency shows 0 call sites -- with import files, or with none at all (`is_unused`) -- it may still be required. Verify it is not:
 
 - [ ] Side-effect import (`import _ "pkg"`, `import 'pkg'`, `require('pkg')` without assignment)
 - [ ] Database / driver registration (blank import or conditional `require()`)
@@ -144,7 +167,7 @@ gh search issues "replace deprecated kv" --repo vercel/next.js --limit 10
 
 **Post-filter**: GitHub fuzzy search can return false positives. Verify that each hit is actually about the same dependency removal — not just a mention in passing.
 
-If a matching issue/discussion already exists, **do not file a duplicate**. Instead, add a comment with any new analysis (e.g., impact data from diet) and stop.
+If a matching issue/discussion already exists, **do not file a duplicate**. Instead, draft a comment with any new analysis (e.g., impact data from diet), post it only after the user approves it (see "Confirm before posting"), and stop.
 
 ### Step 1: File the issue or discussion
 
@@ -158,7 +181,7 @@ After completing Phase 1, **stop and file an issue** instead of implementing. Th
 Use `gh issue create` with the following structure:
 
 ```
-Title: dep: replace EOL {dependency} with {replacement}
+Title: dep: replace {lifecycle status, e.g. deprecated / archived / unmaintained} {dependency} with {replacement}
 
 Body:
 ## Problem
@@ -221,12 +244,16 @@ Before filing, check the target repository's issue templates:
    ```
 3. If blank issues are enabled or a "feature request" template exists, use `gh issue create`
 
+### Confirm before posting
+
+Filing an issue, discussion, or comment publishes text under the user's name, and it cannot be fully taken back. Before any command that publishes to GitHub, in any repository including the user's own -- `gh issue create`, `gh issue comment`, `gh pr comment`, the `createDiscussion` mutation, or any other GraphQL mutation -- show the user the target repository, the channel (issue or discussion), the title, and the full body, and wait for their approval. Post only after they approve; apply any edits they ask for first.
+
 ### After filing
 
 Do not proceed to implementation. The issue/discussion is the deliverable.
 
 **Follow-up guidance:**
-- If no maintainer response after **2 weeks**, add a polite ping comment.
+- If no maintainer response after **2 weeks**, draft a polite ping comment and post it only after the user approves it.
 - If the maintainer responds with **"PR welcome"**, you may re-run with `--pr` to implement (but check if you can reproduce CI locally first).
 - If the same dependency is EOL across **multiple projects** (e.g., mitchellh/* packages), cross-reference the issues in each body so maintainers see the ecosystem-wide pattern.
 - If the dependency would benefit from **structural reform** rather than individual removal (e.g., a framework that pulls in many EOL deps), mention this in the Notes section — the insight is valuable even if you can't implement it yourself.
@@ -241,11 +268,13 @@ The following phases apply only in PR mode. Use this when you own the project.
 
 ## Phase 1.5: Test coverage check — before you touch anything
 
+Record the starting point first: `BASE=$(git rev-parse HEAD)`. The A/B comparison below needs this exact commit.
+
 **Before writing any replacement code, check if the code that uses this dependency has tests.**
 
 ```bash
 # Find all files importing the dependency (production code only)
-grep -rn "$ARGUMENTS" --include="*.go" -l | grep -v _test.go
+grep -rn "$TARGET" --include="*.go" -l | grep -v _test.go
 
 # For each file, check if a corresponding test file exists
 # e.g., reporter/email.go → reporter/email_test.go
@@ -276,14 +305,23 @@ Real example: `c-robinson/iplib` handled IPv4 `/31` and `/32` CIDR prefixes diff
 For high-impact removals (framework replacement, parser rewrite), unit tests aren't enough. Build a comparison harness:
 
 ```bash
-# Build before and after binaries
-git stash && go build -o /tmp/before ./cmd/... && git stash pop
-go build -o /tmp/after ./cmd/...
+# Build the "before" binary from a separate checkout of the base commit,
+# so your working tree (and the shared stash stack) are never touched.
+# BASE is the commit you recorded before starting the removal
+# (BASE=$(git rev-parse HEAD) at the start of Phase 1.5). A guess such as
+# the merge base can pick an older commit and mix in unrelated changes.
+set -euo pipefail
+: "${BASE:?set BASE to the commit recorded before the removal started}"
+OUT=$(mktemp -d)
+git worktree add --detach "$OUT/src" "$BASE"
+trap 'git worktree remove --force "$OUT/src"' EXIT   # cleans up even if a build fails
+(cd "$OUT/src" && go build -o "$OUT/before/" ./cmd/...)   # trailing slash: one binary per command
+go build -o "$OUT/after/" ./cmd/...
 
-# Run both against real-world inputs and diff the output
-/tmp/before < input.json > /tmp/out-before.json
-/tmp/after  < input.json > /tmp/out-after.json
-diff /tmp/out-before.json /tmp/out-after.json
+# Run the same command from both builds against real-world inputs and diff the output
+"$OUT/before/<tool>" < input.json > "$OUT/out-before.json"
+"$OUT/after/<tool>"  < input.json > "$OUT/out-after.json"
+diff "$OUT/out-before.json" "$OUT/out-after.json"
 ```
 
 The vuls fanal framework removal used this approach: 17 real OSS lockfiles, 7,198 libraries compared — found 1 legitimate difference (a pnpm bug fix).
@@ -295,7 +333,7 @@ The vuls fanal framework removal used this approach: 17 real OSS lockfiles, 7,19
 Based on the strategy from Phase 1:
 
 **For stdlib replacement:**
-1. Find all import sites: `grep -rn "$ARGUMENTS" --include="*.go" | grep -v _test.go`
+1. Find all import sites: `grep -rn "$TARGET" --include="*.go" | grep -v _test.go`
 2. For each site, replace the API call with the stdlib equivalent
 3. Update imports
 4. If the replacement API has different error handling or return types, adapt the call site
@@ -304,6 +342,7 @@ Based on the strategy from Phase 1:
 1. Write the replacement in the same package that uses it (don't create a shared utility for a single use site)
 2. Keep it minimal — match only the API surface actually used, not the full library
 3. Write tests that cover the same behavior as the original
+4. Compare the old and new output on the same inputs (differential test), not only unit tests of the new code
 
 **For submodule isolation:**
 1. Create `contrib/<tool>/go.mod` with its own module path
@@ -338,7 +377,7 @@ Lessons learned from real dependency removals:
 For Go:
 ```bash
 # Remove the direct dependency
-go mod edit -droprequire $ARGUMENTS
+go mod edit -droprequire $TARGET
 go mod tidy
 ```
 
@@ -371,12 +410,12 @@ For non-Go projects, run the equivalent build + lint + test pipeline.
   ```bash
   wc -l go.sum  # compare with before
   ```
-  If go.sum didn't shrink, the dependency remains as indirect.
+  Line count is a metric, not proof: go.sum can keep hashes for modules no longer built in. To know whether the dependency is still required, run `go mod why -m <module>` (or check `go list -m all`).
 
 - **Check binary size** (for compiled languages):
   ```bash
-  go build -o /tmp/binary-after ./cmd/...
-  ls -la /tmp/binary-after
+  go build -o /tmp/binary-after/ ./cmd/...   # trailing slash: one binary per command
+  ls -la /tmp/binary-after/
   ```
 
 - **For framework peels: A/B comparison**
@@ -399,9 +438,9 @@ Binary: {size before} → {size after} ({reduction}%)
 
 ## Phase 5: Upstream Diet — when the dep stays as indirect
 
-If `uzomuzo diet` showed **STAYS = `yes`** for this dependency (or you see it still in go.sum / lockfile after removal), it remains as an indirect dependency.
+If `uzomuzo diet` showed **REMAINS = `yes`** for this dependency (or `go mod why -m` / `npm ls` still shows a path to it after removal), it remains as an indirect dependency.
 
-The diet detailed output's `IndirectVia` field already tells you exactly which direct deps pull it in. Use this to plan upstream removals.
+The diet detailed output's `Remains indirect: yes (via: ...)` line (`indirect_via` in JSON) already tells you exactly which direct deps pull it in. Use this to plan upstream removals.
 
 ### Is the upstream under your control?
 
@@ -457,26 +496,28 @@ The breakthrough came from **removing the framework itself** — replacing the f
 | go.sum keeps getting longer despite removals | Check for a framework pulling everything back in |
 | Binary size doesn't change after 3+ removals | Look for a shared layer that imports the deps transitively |
 | Multiple deps serve the same framework | Remove the framework, not the individual deps |
-| `diet` shows many deps with 0 ONLY-VIA-THIS | They're all shared through a common layer — peel the layer |
+| `diet` shows many deps with REMOVES = 0 | They're all shared through a common layer — peel the layer |
 
 Structural reform approaches:
 - **Framework peel**: Call specific functions directly instead of going through a plugin/registration layer
 - **Reporter/plugin extraction**: Move optional integrations to submodules with their own `go.mod`
 - **Binary split**: Separate CLI subcommands into separate binaries (git-style delegation — like `uzomuzo-diet` itself)
 
-## Common patterns (from real removals)
+## Common patterns (from removal PRs against Vuls)
 
 | Dependency | Replacement | Effort | Surprise |
 |-----------|-------------|--------|----------|
 | `mitchellh/go-homedir` | `os.UserHomeDir()` | 15 min | None — simplest possible removal |
 | `rifflock/lfshook` | 20-line `logrus.Hook` impl | 30 min | Test was 131 lines (file I/O) |
 | `samber/lo` (UniqBy) | Per-package `uniqBy` helper | 30 min | Better to duplicate than abstract |
-| `golang.org/x/oauth2` | 10-line `bearerTransport` | 30 min | Just a `RoundTripper` wrapper |
 | `golang.org/x/xerrors` | `fmt.Errorf` + `errors` | 2 hr | 10 edge cases in 788 call sites, found existing bug |
 | `gosnmp/gosnmp` | Submodule `contrib/snmp2cpe/` | 1 hr | `version.go` imported root module |
-| `emersion/go-smtp` | `net/smtp` + LOGIN auth | 1.5 hr | TLS connection setup differs |
 | `c-robinson/iplib` | `net/netip` CIDR enumeration | 1 hr | IPv4 network/broadcast edge cases |
 | Trivy fanal framework | Direct parser calls | 2 days | -68% binary size, found pnpm bug |
+
+These rows come from removal PRs opened against [future-architect/vuls](https://github.com/future-architect/vuls) in 2026-03. Only the fanal row ([#2476](https://github.com/future-architect/vuls/pull/2476)) is merged; the others are open, so effort and surprises describe writing the change, not running it in production.
+
+Two rows were removed in 2026-10: `golang.org/x/oauth2` → a 10-line `bearerTransport` ([#2462](https://github.com/future-architect/vuls/pull/2462)) and `emersion/go-smtp` → `net/smtp` with self-written PLAIN/LOGIN auth ([#2467](https://github.com/future-architect/vuls/pull/2467)). Both libraries are actively maintained, and both changes re-implemented credential handling, which the NEVER rule above forbids. `oauth2` also stays in `go.mod` as an indirect dependency, so removing the direct use gained nothing. The SMTP change replaced stdlib `smtp.PlainAuth`, which refuses to send credentials over an unencrypted connection except to localhost, with a copy that sends them whenever the server advertises the mechanism -- and the server advertising PLAIN says nothing about whether the connection is encrypted. Both had passing tests. Do not repeat the pattern.
 
 **Language coverage**: PR mode commands and common patterns are currently Go-centric, built from real removal experience. Issue mode and IBNC checks are language-agnostic. PRs adding equivalent PR-mode guidance for npm, pip, Maven, or other ecosystems (backed by actual removal data) are welcome.
 
@@ -501,6 +542,9 @@ All generated content (commit messages, issues, PRs, discussions) MUST include p
 | `pkg:golang` | `https://pkg.go.dev/<namespace/name>` |
 | `pkg:pypi` | `https://pypi.org/project/<name>` |
 | `pkg:maven` | `https://central.sonatype.com/artifact/<namespace>/<name>` |
+| `pkg:cargo` | `https://crates.io/crates/<name>` |
+| `pkg:nuget` | `https://www.nuget.org/packages/<name>` |
+| `pkg:githubactions` | `https://github.com/<namespace>/<name>` |
 
 ### Example commit message with sources
 
@@ -532,3 +576,5 @@ When filing an issue (default mode) or PR, include:
 - **Measure before AND after.** go.sum line count, binary size, build time. Put the numbers in the commit message.
 - **If it's harder than expected, stop and reassess.** The removal may not be worth the effort — that's a valid conclusion.
 - **Always include primary source links.** Never claim "deprecated" or "archived" without evidence URLs.
+- **Never post to GitHub without the user's approval, in any repository.** Show the draft first (see "Confirm before posting").
+- **Diet's vulnerability counts describe the latest release and include its dependencies' advisories**, not the version you ship. When an issue or commit message cites vulnerabilities, name the version they apply to and whether they are in the package itself.

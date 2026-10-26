@@ -1,52 +1,11 @@
 package scan_test
 
 import (
-	"context"
 	"testing"
 
-	"github.com/future-architect/uzomuzo-oss/internal/application/scan"
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 	domainscan "github.com/future-architect/uzomuzo-oss/internal/domain/scan"
 )
-
-// mockDiscoverer implements scan.ActionsDiscoverer for testing.
-type mockDiscoverer struct {
-	directURLs        []string
-	localActions      map[string]string
-	transitiveActions map[string]string
-	errors            map[string]error
-}
-
-func (m *mockDiscoverer) DiscoverActions(_ context.Context, _ []string, _ bool) ([]string, map[string]string, map[string]string, map[string]error, error) {
-	return m.directURLs, m.localActions, m.transitiveActions, m.errors, nil
-}
-
-func TestActionsConfig_DisabledByDefault(t *testing.T) {
-	var cfg scan.ActionsConfig
-	if cfg.Enabled {
-		t.Error("ActionsConfig should be disabled by default (zero value)")
-	}
-	if cfg.Discoverer != nil {
-		t.Error("ActionsConfig.Discoverer should be nil by default")
-	}
-}
-
-func TestActionsDiscovererInterface(t *testing.T) {
-	// Verify that mockDiscoverer satisfies the interface.
-	var _ scan.ActionsDiscoverer = &mockDiscoverer{}
-}
-
-func TestEntrySource_Constants(t *testing.T) {
-	if domainaudit.SourceDirect != "" {
-		t.Errorf("SourceDirect should be empty string, got %q", domainaudit.SourceDirect)
-	}
-	if domainaudit.SourceActions != "actions" {
-		t.Errorf("SourceActions should be 'actions', got %q", domainaudit.SourceActions)
-	}
-	if domainaudit.SourceActionsLocal != "actions-local" {
-		t.Errorf("SourceActionsLocal should be 'actions-local', got %q", domainaudit.SourceActionsLocal)
-	}
-}
 
 func TestParseFailPolicy_ForActions(t *testing.T) {
 	// Verify that fail policy works for entries regardless of source.

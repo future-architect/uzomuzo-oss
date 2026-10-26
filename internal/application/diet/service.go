@@ -185,6 +185,15 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 	}()
 
 	wg.Wait()
+	failedMaliciousChecks := 0
+	for _, a := range healthResults {
+		if a != nil && a.MaliciousState != nil && a.MaliciousState.Status == domain.MaliciousStatusLookupFailed {
+			failedMaliciousChecks++
+		}
+	}
+	if failedMaliciousChecks > 0 {
+		slog.Warn("malicious check incomplete: OSV lookup failed for dependencies", "count", failedMaliciousChecks)
+	}
 
 	// Phase 4: Scoring and prioritization
 	slog.Info("Phase 4: Computing scores and ranking")
@@ -328,6 +337,9 @@ func computeHealthSignals(a *domain.Analysis) domaindiet.HealthSignals {
 			h.IsStalled = true
 			h.HealthRisk = math.Max(h.HealthRisk, 0.6)
 		}
+	}
+	if a.Malicious() {
+		h.HealthRisk = 1
 	}
 
 	// Vulnerability info from the latest version detail

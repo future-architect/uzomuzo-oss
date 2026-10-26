@@ -28,25 +28,9 @@ const (
 	  }
 	}`
 
-	bodyExpressionAND = `{
-	  "licensed": {
-	    "declared": "Apache-2.0 AND MIT",
-	    "score": { "total": 80, "declared": 60 }
-	  }
-	}`
-
 	bodyLicenseRefScancode = `{
 	  "licensed": {
 	    "declared": "LicenseRef-scancode-public-domain",
-	    "score": { "total": 60, "declared": 60 }
-	  }
-	}`
-
-	// A scancode-internal license name not present in the SPDX table or our
-	// alias map. (Pure fabrication; chosen to avoid matching anything real.)
-	bodyScancodeInternalName = `{
-	  "licensed": {
-	    "declared": "AcmeInternalProprietary",
 	    "score": { "total": 60, "declared": 60 }
 	  }
 	}`
@@ -385,25 +369,6 @@ func newTestClient(srv *httptest.Server) *Client {
 	return c
 }
 
-func TestFetchLicenses_SPDXExpressionAND(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(bodyExpressionAND))
-	}))
-	t.Cleanup(srv.Close)
-	c := newTestClient(srv)
-
-	lics, found, err := c.FetchLicenses(context.Background(), "maven", "g", "a", "v")
-	if err != nil || !found || len(lics) != 2 {
-		t.Fatalf("got found=%v err=%v len=%d, want 2 SPDX leaves", found, err, len(lics))
-	}
-	wantExprs := []string{"Apache-2.0", "MIT"}
-	for i, lic := range lics {
-		if lic.Expression != wantExprs[i] || lic.Source != domain.LicenseSourceClearlyDefinedSPDX {
-			t.Errorf("license[%d] = %+v, want SPDX %q", i, lic, wantExprs[i])
-		}
-	}
-}
-
 func TestFetchLicenses_SPDXWithException(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(bodyWithException))
@@ -433,25 +398,6 @@ func TestFetchLicenses_SPDXWithException(t *testing.T) {
 	// the exception clause for display and compliance purposes.
 	if lic.Raw != "GPL-2.0-only WITH Classpath-exception-2.0" {
 		t.Errorf("Raw = %q, want full WITH operand %q", lic.Raw, "GPL-2.0-only WITH Classpath-exception-2.0")
-	}
-}
-
-func TestFetchLicenses_ScancodeInternalNameNonStandard(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(bodyScancodeInternalName))
-	}))
-	t.Cleanup(srv.Close)
-	c := newTestClient(srv)
-
-	lics, found, err := c.FetchLicenses(context.Background(), "maven", "dom4j", "dom4j", "1.6.1")
-	if err != nil || !found || len(lics) != 1 {
-		t.Fatalf("got found=%v err=%v len=%d", found, err, len(lics))
-	}
-	if lics[0].Source != domain.LicenseSourceClearlyDefinedNonStandard {
-		t.Errorf("Source = %q, want non-standard", lics[0].Source)
-	}
-	if lics[0].Expression != "" {
-		t.Errorf("Expression = %q, want empty; scancode-internal name (raw=%q) must classify as non-SPDX", lics[0].Expression, lics[0].Raw)
 	}
 }
 

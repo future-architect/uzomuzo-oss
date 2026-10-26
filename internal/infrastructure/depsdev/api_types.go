@@ -167,6 +167,7 @@ type Version struct {
 	PublishedAt         time.Time            `json:"publishedAt"`
 	IsDefault           bool                 `json:"isDefault"`
 	IsDeprecated        bool                 `json:"isDeprecated"`
+	DeprecatedReason    string               `json:"deprecatedReason"`
 	Licenses            []string             `json:"licenses"`
 	LicenseDetails      []LicenseDetail      `json:"licenseDetails"`
 	AdvisoryKeys        []AdvisoryKey        `json:"advisoryKeys"`
@@ -197,6 +198,16 @@ type ReleaseInfo struct {
 
 	Endpoint string
 	Error    error
+}
+
+// HasAnyVersion reports whether any of the four version slots is populated.
+// Stable alone is not a sufficient test: the registry bound can leave Stable and
+// PreRelease both empty while MaxSemver and Requested still carry data. See ADR-0023.
+func (r ReleaseInfo) HasAnyVersion() bool {
+	return r.StableVersion.VersionKey.Version != "" ||
+		r.PreReleaseVersion.VersionKey.Version != "" ||
+		r.MaxSemverVersion.VersionKey.Version != "" ||
+		r.RequestedVersion.VersionKey.Version != ""
 }
 
 // BatchResult represents the result of a batch operation

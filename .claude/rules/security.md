@@ -1,4 +1,4 @@
-<!-- Generated from .github/instructions/security.instructions.md — DO NOT EDIT DIRECTLY -->
+<!-- Generated from .github/instructions/base/core/security.instructions.md — DO NOT EDIT DIRECTLY -->
 
 # Security Guidelines
 

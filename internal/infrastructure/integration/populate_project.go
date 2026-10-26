@@ -70,7 +70,7 @@ func (s *IntegrationService) populateProjectScorecard(analysis *domain.Analysis,
 // populateReleaseInfo builds domain.ReleaseInfo & related links.
 func (s *IntegrationService) populateReleaseInfo(analysis *domain.Analysis, batchResult *depsdev.BatchResult) {
 	releaseInfo := batchResult.ReleaseInfo
-	if releaseInfo.StableVersion.VersionKey.Version == "" && releaseInfo.PreReleaseVersion.VersionKey.Version == "" && releaseInfo.MaxSemverVersion.VersionKey.Version == "" && releaseInfo.RequestedVersion.VersionKey.Version == "" {
+	if !releaseInfo.HasAnyVersion() {
 		return
 	}
 	analysis.ReleaseInfo = &domain.ReleaseInfo{}

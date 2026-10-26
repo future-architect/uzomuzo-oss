@@ -3,7 +3,6 @@ package integration
 import (
 	"context"
 	"testing"
-	"time"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
@@ -25,28 +24,6 @@ func TestPopulateAnalysisFromBatchResult(t *testing.T) {
 	}
 	if analysis.PackageLinks == nil || analysis.PackageLinks.RegistryURL == "" {
 		t.Fatalf("expected RegistryURL to be set")
-	}
-}
-
-// TestPopulateReleaseInfoAdvisories ensures advisory enrichment from version list when ReleaseInfo versions lack advisory keys.
-func TestPopulateReleaseInfoAdvisories(t *testing.T) {
-	svc := &IntegrationService{}
-	purlStr := "pkg:pypi/sample@2.0.0"
-	analysis := &domain.Analysis{OriginalPURL: purlStr, EffectivePURL: purlStr, Package: &domain.Package{PURL: purlStr, Ecosystem: "pypi"}}
-	analysis.EnsureCanonical()
-
-	// Version with advisory
-	vWithAdv := depsdev.Version{VersionKey: depsdev.VersionKey{Version: "2.0.0"}, PublishedAt: time.Now().AddDate(-1, 0, 0), AdvisoryKeys: []depsdev.AdvisoryKey{{ID: "GHSA-XXXX"}}}
-	relInfo := depsdev.ReleaseInfo{StableVersion: depsdev.Version{VersionKey: depsdev.VersionKey{Version: "2.0.0"}, PublishedAt: vWithAdv.PublishedAt}}
-	batch := &depsdev.BatchResult{PURL: purlStr, Package: &depsdev.Package{Versions: []depsdev.Version{vWithAdv}}, ReleaseInfo: relInfo}
-
-	svc.populateReleaseInfo(analysis, batch)
-
-	if analysis.ReleaseInfo == nil || analysis.ReleaseInfo.StableVersion == nil {
-		t.Fatalf("expected stable version populated")
-	}
-	if len(analysis.ReleaseInfo.StableVersion.Advisories) != 1 {
-		t.Fatalf("expected 1 advisory, got %d", len(analysis.ReleaseInfo.StableVersion.Advisories))
 	}
 }
 

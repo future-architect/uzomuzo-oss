@@ -8,7 +8,35 @@
 
 It answers: **which dependencies should I remove first, and how hard will it be?**
 
+> **Status: experimental.** Diet's source analysis misses some real uses, so a dependency in use can be reported as `unused` or `trivial`. Treat its output as a list of candidates to check, not a list of things to delete. See [Accuracy](#accuracy) for which values you can rely on.
+
 Diet is the automated stage of the `scan → diet → LLM → remove` pipeline. After diet ranks your dependencies, [Claude Code skills](../claude-skills/) use an LLM to assess risk, plan removal, and execute the change. See [Diet Workflow](#diet-workflow-scan--diet--llm--remove) below for the full pipeline.
+
+## Accuracy
+
+Diet finds dependency usage by parsing source files and matching names; it does not resolve types or scopes. Its numbers are heuristic evidence: it misses real uses, and it occasionally credits a use to the wrong dependency. Missed uses are the more common error, and they are the dangerous one, because they make a dependency in use look removable.
+
+| Output | How far to trust it |
+|---|---|
+| `import_file_count` ≥ 1, `is_unused: false` | Usually right. Exceptions: a local name equal to the import alias, and (Java) artifacts that share a package prefix can be credited with each other's imports. |
+| `is_unused: true`, `difficulty: trivial` | **Check before removing.** Search the code and configuration for the package name first. |
+| `call_site_count`, `api_breadth` | **Approximate, usually low.** Calls are matched by name, so methods called on returned objects (`c := client.New(); c.Get()`) are not counted; a local variable with the same name as the import is counted by mistake. |
+| Every entry has 0 imports and none is `unused` | Coupling was probably not measured (for example `--source` points at the wrong directory; diet then logs `no imports matched any dependency`). Check the log before using the coupling numbers. |
+
+Known causes of a used dependency being reported as unused or trivial:
+
+| Cause | Languages | Issue |
+|---|---|---|
+| A `build`, `dist`, or `target` directory next to the manifest of a tool that writes there (for example `dist` next to `package.json`, `target` next to `pom.xml`) is treated as build output and not read, so source kept there is missed: for example a root `build/gulpfile.js`, or a Go package at `build/` in a module whose root also holds a `package.json` for JS tooling. Of a file over 1 MiB, only the first 64 KiB is parsed, for imports only; its calls are not counted | all | [#546](https://github.com/future-architect/uzomuzo-oss/issues/546) |
+| Maven coordinates whose Java package is not under the groupId and not in diet's override list (Lombok, Hibernate, OkHttp, Reactor, ...) | Java | [#547](https://github.com/future-architect/uzomuzo-oss/issues/547) |
+| The wheel fallback that finds a distribution's import name skips wheels over 5 MiB (scikit-learn, opencv-python) and can miss namespace packages (`google.*`, `azure.*`) | Python | [#548](https://github.com/future-architect/uzomuzo-oss/issues/548) |
+| `.cjs` / `.mts` / `.cts` / `.vue` / `.svelte` files, `import x = require()`, template-literal `require`; `@types/*` and type-only packages | JS/TS | [#549](https://github.com/future-architect/uzomuzo-oss/issues/549) |
+| Dynamic `import()` and inline `require('pkg').f()` are rated `trivial` when no other use is counted, however many files use them; dot-imported calls are not counted | JS/TS, Go | [#550](https://github.com/future-architect/uzomuzo-oss/issues/550) |
+| Package name differs from the import path (`aws/signer/v4`, `k8s.io/api/core/v1`, `json-iterator/go`) | Go | [#551](https://github.com/future-architect/uzomuzo-oss/issues/551) |
+| Uses the per-language queries do not cover, which differ by language: methods on returned objects (all), values passed as arguments (JS/TS, Python), bare imported names used as a base class or in `except` (Python) | all | [#552](https://github.com/future-architect/uzomuzo-oss/issues/552) |
+| Dependencies loaded by configuration, plugins, reflection, or `ServiceLoader` | all | [Understanding "Unused" Dependencies](#understanding-unused-dependencies) |
+
+When you use the [Claude Code skills](../claude-skills/), verify `unused` and `trivial` the same way; the skills are being updated to require it (#542).
 
 ## Architecture
 
@@ -363,7 +391,7 @@ The quality of diet analysis depends heavily on what the SBOM tool includes. Dif
 
 ## Supported Languages
 
-All languages use tree-sitter for AST-based analysis. Files larger than 1 MB are skipped. Test directories (`testdata`, `__pycache__`, `target`) and vendored code (`vendor`, `node_modules`) are excluded.
+All languages use tree-sitter for AST-based analysis. Of a file larger than 1 MiB, only the first 64 KiB is parsed, for imports only; its calls are not counted. Directories named `testdata`, `__pycache__`, `vendor`, `node_modules`, and `.git` are skipped at any depth. Directories named `build`, `dist`, and `target` are skipped only when their parent directory contains the manifest of a tool that writes there: `build` next to `package.json`, `build.gradle(.kts)`, `settings.gradle(.kts)`, `build.xml`, `pyproject.toml`, `setup.py`, or `setup.cfg`; `dist` next to `package.json`, `build.xml`, `pyproject.toml`, `setup.py`, or `setup.cfg`; `target` next to `pom.xml`, `Cargo.toml`, or `build.sbt`. A `--source` directory that is itself named `build`, `dist`, or `target` is always read ([#546](https://github.com/future-architect/uzomuzo-oss/issues/546)). See [Accuracy](#accuracy) for known gaps.
 
 ### Go
 
@@ -375,7 +403,7 @@ All languages use tree-sitter for AST-based analysis. Files larger than 1 MB are
 | Call sites | Selector expressions (`pkg.Func`), qualified types (`pkg.Type`) |
 | Ecosystem features | Go tool directives (`go.mod tool`, Go 1.24+) excluded from unused detection |
 | Import path handling | Strips major version suffixes (`/v2`), `gopkg.in` version suffixes (`.v3`), hyphenated package aliases (`go-loser` -> `loser`, `geoip2-golang` -> `geoip2`) |
-| Limitations | Dot-imported symbols cannot be attributed to a specific dependency |
+| Limitations | Dot-imported symbols cannot be attributed to a specific dependency. Calls are missed when the package name differs from the last path element (`v4`, `v1`, `jsoniter`; [#551](https://github.com/future-architect/uzomuzo-oss/issues/551)). Methods called on returned values are not counted. |
 
 ### Python
 
@@ -387,7 +415,7 @@ All languages use tree-sitter for AST-based analysis. Files larger than 1 MB are
 | Try/except imports | `try: import x except ImportError:` — marked as feature-detection (blank import) |
 | Call sites | `obj.attr`, bare function calls, decorator usage (`@fixture`) |
 | Ecosystem features | **Wheel-based import resolution** (Phase 2.5 fallback): downloads smallest wheel to extract actual import names when heuristic paths match nothing. Strips common prefixes (`python-`, `py-`) from distribution names. |
-| Limitations | Wildcard-imported names cannot be attributed. Type-checking blocks fully ignored. |
+| Limitations | Wildcard-imported names cannot be attributed. Type-checking blocks fully ignored. The wheel fallback skips wheels over 5 MiB and can miss namespace packages ([#548](https://github.com/future-architect/uzomuzo-oss/issues/548)). Targets of `importlib.import_module` / `__import__` are not resolved, and `.ipynb` notebooks are not read. A bare imported name used as a base class or in `except` is not counted (`pkg.Base` is). |
 
 ### JavaScript / TypeScript / TSX
 
@@ -399,7 +427,8 @@ All languages use tree-sitter for AST-based analysis. Files larger than 1 MB are
 | Call sites | Member expressions (`obj.method`), bare calls, constructors (`new Foo`), computed properties, JSX elements (`<Component />`), constant-only patterns |
 | Framework detection | **Angular**: decorator array identifiers (`@NgModule`, `@Component` imports/declarations). **Vue**: `defineComponent({ components: {} })` shorthand properties. |
 | CJS destructuring | `const { X } = require('pkg')` — each destructured name tracked as alias |
-| Limitations | Dynamic import bindings not tracked through `await`/`.then()`. JSX patterns only for `.js`/`.jsx`/`.tsx` (not `.ts`). Bare identifier matching may false-positive on shadowed locals. |
+| CJS member read | `const x = require('pkg').member` (also through `||`, `??`, the right side of `&&`, ternary branches, and `obj.p = ...`) — the receiving variable or object property is tracked as the alias, and the import also counts as used even if it is never called |
+| Limitations | Dynamic import bindings not tracked through `await`/`.then()`. JSX patterns only for `.js`/`.jsx`/`.tsx` (not `.ts`). Bare identifier matching may false-positive on shadowed locals. `require('pkg')['y']`, `await require('pkg').y`, TypeScript `.y!` / `as T`, and `x = require('pkg').y` (plain variable) record the import as used but track no calls. `.cjs`/`.mts`/`.cts`, `.vue`, `.svelte` files are not read ([#549](https://github.com/future-architect/uzomuzo-oss/issues/549)). |
 
 ### Java
 
@@ -410,4 +439,4 @@ All languages use tree-sitter for AST-based analysis. Files larger than 1 MB are
 | Static imports | Last component registered as bare alias (`assertEquals` from `import static org.junit.Assert.assertEquals`) |
 | Call sites | Method invocations, constructors (incl. generics `new Foo<T>()`), annotations, inheritance (`extends`/`implements`), type declarations, `instanceof`/casts, method references (`Foo::bar`), field access |
 | Ecosystem features | **Maven package overrides** (~40 entries): maps groupId/artifactId to actual Java packages where they differ (Guava, Jackson, commons-*, Spring Boot starters). **Runtime whitelist**: JDBC drivers, logging backends, WebJars marked as `ScopeRuntime`. **Spring Boot starter heuristics**: derives package prefix from starter suffix. |
-| Limitations | Reflection (`Class.forName(var)`), ServiceLoader, and Spring Boot autoconfiguration are [fundamentally undetectable](#java-runtime-loaded-dependency-detection) by static analysis. CycloneDX `scope` field not yet used (#303). See [ADR-0015](adr/0015-java-reflection-detection-strategy.md). |
+| Limitations | Reflection (`Class.forName(var)`), ServiceLoader, and Spring Boot autoconfiguration are [fundamentally undetectable](#java-runtime-loaded-dependency-detection) by static analysis. CycloneDX `scope` field not yet used (#303). See [ADR-0015](adr/0015-java-reflection-detection-strategy.md). Coordinates whose package is neither under the groupId nor in the override list match nothing, and artifacts sharing a package prefix can be credited with each other's use ([#547](https://github.com/future-architect/uzomuzo-oss/issues/547)). Instance calls are counted only through the class name or its lowerCamelCase form (`Gson` / `gson`), so `log.info(...)` or `mapper.readValue(...)` is missed. Kotlin is not read. |

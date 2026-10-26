@@ -52,8 +52,47 @@ checksum:
 changelog:
   sort: asc
   filters:
+    # v0.3.0 shipped with 106 of its 111 commits in the changelog. Conventional
+    # Commits puts the scope between the type and the colon, so a pattern
+    # ending in a bare `type:` matches only unscoped subjects and let every
+    # `chore(deps):` and `docs(adr):` through.
+    # Lowercase only, deliberately. Conventional Commits does not require the
+    # type to be lowercase, but no commit here uses another casing, and the two
+    # errors are not equally cheap: a subject a human wrote as prose, such as
+    # "Test: reject invalid PURLs before scanning", would be read as a type and
+    # a user-facing change would vanish from the notes. A stray `DOCS:` left in
+    # is only noise.
     exclude:
-      - "^docs:"
-      - "^chore:"
-      - "^ci:"
-      - "^test:"
+      - '^docs(\([^)]+\))?:'
+      - '^chore(\([^)]+\))?:'
+      - '^ci(\([^)]+\))?:'
+      - '^test(\([^)]+\))?:'
+      # Repo-internal scopes, whatever the type. A change to the agent rules or
+      # the review pipeline is a `feat`/`fix` by Conventional Commits but never
+      # reaches the binary, so type alone cannot separate it from a real change.
+      # `deps` is deliberately absent: a module bump does ship.
+      #
+      # `ci` here means this repository's own pipeline. The scanner also reads
+      # GitHub Actions workflows, and a change to THAT is user-facing: scope it
+      # `scan` or `actions`, never `ci`, or it disappears from the notes.
+      - '^[a-z]+\((ci|claude|instructions|skill|skills)\):'
+      # Merge subjects. GoReleaser runs `git log` without `--no-merges`, and a
+      # merge commit is repository history rather than a change to the binary.
+      # Squash merges are the norm here, so this catches the older shape and
+      # anything merged with a generated message.
+      #
+      # Every generated form carries a structural marker — `#` for GitHub, a
+      # quoted ref for git — and requiring one is what separates them from a
+      # sentence that happens to start with the word Merge.
+      - "^Merge pull request #"
+      - "^Merge (branch|branches|remote-tracking branch|remote-tracking branches|tag|commit) '"
+
+      # None of these patterns allow the breaking-change marker before the
+      # colon, so `chore(deps)!:` and `docs!:` stay in the notes. That is the
+      # point: a commit its author marked as breaking is the one thing a reader
+      # upgrading must not miss, whatever its type says.
+      #
+      # A type filter trusts the type. A commit typed `test:` or `chore:` that
+      # also changes shipped behaviour is mis-typed, and the fix belongs in the
+      # commit message, not here — widening the filter to inspect paths would
+      # make the notes depend on two disagreeing sources.

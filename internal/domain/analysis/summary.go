@@ -6,7 +6,8 @@ import (
 	"unicode/utf8"
 )
 
-// MaxSummaryLen is the maximum rune length of Repository.Summary.
+// MaxSummaryLen is the maximum rune length of the short free-text fields
+// normalized by NormalizeSummary and SanitizeExternalSummary.
 // Exported for consumers that want to validate ingest-side values against the same cap.
 const MaxSummaryLen = 200
 
@@ -47,6 +48,44 @@ func NormalizeSummary(raw string) string {
 		return collapsed
 	}
 	return truncateSummary(collapsed)
+}
+
+// SanitizeExternalSummary normalizes free text that arrived from an external
+// service and is about to be shown in a terminal: it drops control and format
+// runes (which can reposition the cursor or hide characters) before applying
+// NormalizeSummary's whitespace collapsing and rune-count cap. Whitespace is
+// kept so NormalizeSummary can collapse it.
+func SanitizeExternalSummary(raw string) string {
+	stripped := strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return r
+		}
+		return dropControlRune(r)
+	}, raw)
+	// NormalizeSummary caps the length by rune count; capping by byte here as
+	// well would split a multi-byte rune.
+	return NormalizeSummary(stripped)
+}
+
+// StripControlRunes prepares an external identifier for a terminal line: any
+// whitespace rune (tab, newline, line separator) becomes a space, other control
+// and format runes are removed, and surrounding spaces are trimmed. Unlike
+// SanitizeExternalSummary it neither collapses inner spaces nor truncates, so
+// the identifier is otherwise kept as the source wrote it.
+func StripControlRunes(raw string) string {
+	return strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return ' '
+		}
+		return dropControlRune(r)
+	}, raw))
+}
+
+func dropControlRune(r rune) rune {
+	if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+		return -1
+	}
+	return r
 }
 
 // truncateSummary truncates s to MaxSummaryLen runes with an ellipsis by iterating

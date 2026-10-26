@@ -13,7 +13,9 @@ const (
 	RelationUnknown DependencyRelation = iota
 	// RelationDirect means the dependency is directly required by the project.
 	RelationDirect
-	// RelationTransitive means the dependency is pulled in indirectly through another dependency.
+	// RelationTransitive means the parser classified the dependency as indirect:
+	// the input records it below another dependency (an SBOM dependency graph),
+	// or the input format marks it indirect (go.mod "// indirect") without a parent.
 	RelationTransitive
 )
 
@@ -44,7 +46,8 @@ type ParsedDependency struct {
 	// The zero value (RelationUnknown) is used when the parser cannot determine this.
 	Relation DependencyRelation
 	// ViaParents lists the short names of direct dependencies through which
-	// this transitive dependency is pulled in. Empty for direct or unknown deps.
+	// this transitive dependency is pulled in. Empty for direct or unknown deps,
+	// and for transitive deps whose parent is not recorded (go.mod "// indirect").
 	ViaParents []string
 	// Scope indicates the dependency's role in the project.
 	// Empty string means runtime (the default). "tool" means a Go tool directive

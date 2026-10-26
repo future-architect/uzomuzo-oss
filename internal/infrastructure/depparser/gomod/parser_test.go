@@ -4,8 +4,10 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
+	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/gomod"
 )
 
@@ -24,9 +26,27 @@ func TestParser_Parse_Basic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	// 3 direct deps (indirect is skipped)
-	if len(deps) != 3 {
-		t.Fatalf("got %d deps, want 3 (indirect excluded)", len(deps))
+	// 3 direct deps, then the "// indirect" one as transitive.
+	if len(deps) != 4 {
+		t.Fatalf("got %d deps, want 4", len(deps))
+	}
+	wantRelations := []depparser.DependencyRelation{
+		depparser.RelationDirect,
+		depparser.RelationDirect,
+		depparser.RelationDirect,
+		depparser.RelationTransitive,
+	}
+	for i, want := range wantRelations {
+		if deps[i].Relation != want {
+			t.Errorf("deps[%d] (%s).Relation = %v, want %v", i, deps[i].Name, deps[i].Relation, want)
+		}
+	}
+	const wantIndirect = "pkg:golang/github.com/some/indirect@v0.1.0"
+	if deps[3].PURL != wantIndirect {
+		t.Errorf("deps[3].PURL = %q, want %q", deps[3].PURL, wantIndirect)
+	}
+	if len(deps[3].ViaParents) != 0 {
+		t.Errorf("deps[3].ViaParents = %v, want empty (go.mod does not record parents)", deps[3].ViaParents)
 	}
 
 	// Verify gin
@@ -62,6 +82,43 @@ func TestParser_Parse_WithReplace(t *testing.T) {
 	}
 	if deps[0].Version != "v2.0.0" {
 		t.Errorf("replaced dep version = %q, want %q", deps[0].Version, "v2.0.0")
+	}
+}
+
+func TestParser_Parse_IndirectWithReplaceAndTool(t *testing.T) {
+	p := &gomod.Parser{}
+	deps, err := p.Parse(context.Background(), readTestData(t, "indirect_replace_tool.mod"))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	want := []depparser.ParsedDependency{
+		{PURL: "pkg:golang/github.com/direct/dep@v1.0.0", Ecosystem: "golang", Name: "github.com/direct/dep", Version: "v1.0.0", Relation: depparser.RelationDirect},
+		{PURL: "pkg:golang/github.com/new/indirect@v0.2.0", Ecosystem: "golang", Name: "github.com/new/indirect", Version: "v0.2.0", Relation: depparser.RelationTransitive},
+		{PURL: "pkg:golang/golang.org/x/tools@v0.30.0", Ecosystem: "golang", Name: "golang.org/x/tools", Version: "v0.30.0", Relation: depparser.RelationTransitive, Scope: "tool"},
+	}
+	if !reflect.DeepEqual(deps, want) {
+		t.Errorf("Parse() =\n%+v\nwant\n%+v", deps, want)
+	}
+}
+
+func TestParser_Parse_VersionedReplace(t *testing.T) {
+	p := &gomod.Parser{}
+	deps, err := p.Parse(context.Background(), readTestData(t, "versioned_replace.mod"))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	want := []string{
+		"pkg:golang/github.com/exact/fork@v1.0.1",        // replace for this exact version
+		"pkg:golang/github.com/other/version@v1.0.0",     // replace names another version: not applied
+		"pkg:golang/github.com/both/this-version@v1.0.1", // exact version wins over every-version replace
+		"pkg:golang/github.com/local/exact@v1.0.0",       // exact local-path replace wins, and keeps the original
+	}
+	got := make([]string, 0, len(deps))
+	for _, d := range deps {
+		got = append(got, d.PURL)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("PURLs = %v, want %v", got, want)
 	}
 }
 

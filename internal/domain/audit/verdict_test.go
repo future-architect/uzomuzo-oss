@@ -116,3 +116,32 @@ func TestDeriveVerdict_IgnoresBuildIntegrity(t *testing.T) {
 		})
 	}
 }
+
+// TestDeriveVerdict_AllReleasesYanked pins how the package-level withdrawal fact
+// (ADR-0022) reaches the audit verdict: on its own it is Review, but an archived
+// repository still short-circuits to Replace, as it does for every other label.
+func TestDeriveVerdict_AllReleasesYanked(t *testing.T) {
+	withdrawn := func(archived bool) *analysis.Analysis {
+		a := makeAnalysisWithLabel(analysis.LabelReviewNeeded)
+		a.RegistryState = &analysis.RegistryState{AllReleasesYanked: true, Registry: analysis.RegistryPyPI}
+		if archived {
+			a.RepoState = &analysis.RepoState{IsArchived: true}
+		}
+		return a
+	}
+	tests := []struct {
+		name string
+		a    *analysis.Analysis
+		want audit.Verdict
+	}{
+		{name: "all_releases_yanked", a: withdrawn(false), want: audit.VerdictReview},
+		{name: "all_releases_yanked_and_archived", a: withdrawn(true), want: audit.VerdictReplace},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := audit.DeriveVerdict(tt.a); got != tt.want {
+				t.Errorf("DeriveVerdict() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

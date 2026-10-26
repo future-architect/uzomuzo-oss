@@ -75,3 +75,26 @@ func (c *Cache[V]) Set(key string, v V) {
 	}
 	c.entries[key] = entry[V]{value: v, ts: time.Now()}
 }
+
+// SetAt stores v under key as if it had been stored at ts, so the entry
+// expires at ts plus the TTL. Callers use it when a value describes an
+// earlier moment, such as the time a request was sent. It is a no-op when
+// the TTL is <= 0.
+func (c *Cache[V]) SetAt(key string, v V, ts time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.ttl <= 0 {
+		return
+	}
+	if c.entries == nil {
+		c.entries = make(map[string]entry[V])
+	}
+	c.entries[key] = entry[V]{value: v, ts: ts}
+}
+
+// Clear removes every entry.
+func (c *Cache[V]) Clear() {
+	c.mu.Lock()
+	c.entries = nil
+	c.mu.Unlock()
+}

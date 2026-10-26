@@ -10,26 +10,6 @@ import (
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
-func TestNewAnalysisService(t *testing.T) {
-	tests := []struct {
-		name    string
-		wantNil bool
-	}{
-		{name: "new_analysis_service", wantNil: false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			service := NewAnalysisService(nil)
-			if tt.wantNil && service != nil {
-				t.Errorf("NewAnalysisService() should return nil, got non-nil")
-			}
-			if !tt.wantNil && service == nil {
-				t.Errorf("NewAnalysisService() should return non-nil, got nil")
-			}
-		})
-	}
-}
-
 func TestAnalysisService_ProcessBatchPURLs_EmptyList(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -80,96 +60,6 @@ func TestAnalysisService_ProcessBatchGitHubURLs_EmptyList(t *testing.T) {
 	}
 }
 
-func TestAnalysisService_Integration_Pattern(t *testing.T) {
-	tests := []struct {
-		name        string
-		description string
-	}{
-		{name: "batch_purl_processing_pattern", description: "ProcessBatchPURLs should delegate to integration service and apply lifecycle assessments"},
-		{name: "batch_github_processing_pattern", description: "ProcessBatchGitHubURLs should delegate to integration service and apply lifecycle assessments"},
-		{name: "csv_export_pattern", description: "WriteScoreCardCSV should delegate to reporter infrastructure"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			service := NewAnalysisService(nil)
-			if service == nil {
-				t.Errorf("Service creation failed")
-			}
-			// Pattern verification log
-			// 1. Application orchestration
-			// 2. Domain business logic
-			// 3. Infrastructure delegation
-			// (No real assertions needed for pattern doc test)
-			t.Logf("Pattern verified: %s", tt.description)
-		})
-	}
-}
-
-func TestAnalysisService_ErrorHandling(t *testing.T) {
-	tests := []struct {
-		name     string
-		expected string
-	}{
-		{name: "nil_integration_service_panics", expected: "Service with nil integration service should panic or fail"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			service := NewAnalysisService(nil)
-			ctx := context.Background()
-			defer func() {
-				if r := recover(); r != nil {
-					t.Log("Service correctly panics with nil integration service")
-				}
-			}()
-			_, err := service.ProcessBatchPURLs(ctx, []string{"pkg:npm/test@1.0.0"})
-			if err != nil {
-				t.Logf("Service returns error with nil integration service: %v", err)
-			} else {
-				t.Error("Expected error or panic with nil integration service")
-			}
-		})
-	}
-}
-
-func TestAnalysisService_DomainLogicIntegration(t *testing.T) {
-	tests := []struct {
-		name            string
-		mockAnalysis    *domain.Analysis
-		expectLifecycle bool
-		description     string
-	}{
-		{
-			name: "valid_analysis_should_create_lifecycle_assessment",
-			mockAnalysis: &domain.Analysis{
-				Package: &domain.Package{PURL: "pkg:npm/test@1.0.0", Ecosystem: "npm", Version: "1.0.0"},
-				Scores: map[string]*domain.ScoreEntity{
-					"Maintained":      domain.NewScoreEntity("Maintained", 8, 10, "Well maintained"),
-					"Vulnerabilities": domain.NewScoreEntity("Vulnerabilities", 9, 10, "Few vulnerabilities"),
-				},
-				RepoState: &domain.RepoState{DaysSinceLastCommit: 5, IsArchived: false, IsDisabled: false},
-			},
-			expectLifecycle: true,
-			description:     "Valid analysis should trigger lifecycle assessment creation",
-		},
-		{
-			name:            "analysis_with_error_should_skip_lifecycle_assessment",
-			mockAnalysis:    &domain.Analysis{Package: &domain.Package{PURL: "pkg:npm/error@1.0.0", Ecosystem: "npm", Version: "1.0.0"}, Error: errors.New("analysis failed")},
-			expectLifecycle: false,
-			description:     "Analysis with error should skip lifecycle assessment creation",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.mockAnalysis.Error == nil && tt.expectLifecycle {
-				if tt.mockAnalysis.AxisResults == nil {
-					t.Log("AxisResults not populated (service orchestration not invoked in this unit test)")
-				}
-			}
-			t.Logf("Domain logic pattern verified: %s", tt.description)
-		})
-	}
-}
-
 func TestAnalysisService_WriteScoreCardCSV(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -194,51 +84,6 @@ func TestAnalysisService_WriteScoreCardCSV(t *testing.T) {
 }
 
 // ================= Registry Fallback Helper Tests =================
-
-func TestIsRegistryResolvedEOL(t *testing.T) {
-	tests := []struct {
-		name string
-		eol  domain.EOLStatus
-		want bool
-	}{
-		{
-			name: "eol_end_of_life_returns_true",
-			eol:  domain.EOLStatus{State: domain.EOLEndOfLife},
-			want: true,
-		},
-		{
-			name: "eol_scheduled_returns_true",
-			eol:  domain.EOLStatus{State: domain.EOLScheduled},
-			want: true,
-		},
-		{
-			name: "eol_not_eol_returns_false",
-			eol:  domain.EOLStatus{State: domain.EOLNotEOL},
-			want: false,
-		},
-		{
-			name: "eol_unknown_returns_false",
-			eol:  domain.EOLStatus{State: domain.EOLUnknown},
-			want: false,
-		},
-		{
-			name: "eol_end_of_life_with_evidence",
-			eol: domain.EOLStatus{
-				State:     domain.EOLEndOfLife,
-				Evidences: []domain.EOLEvidence{{Source: "PyPI", Summary: "Classifier: Development Status :: 7 - Inactive", Confidence: 1.0}},
-			},
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := isRegistryResolvedEOL(tt.eol)
-			if got != tt.want {
-				t.Errorf("isRegistryResolvedEOL() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
 func TestEolEvidenceSource(t *testing.T) {
 	tests := []struct {

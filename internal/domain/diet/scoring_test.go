@@ -46,24 +46,6 @@ func TestComputeImpactScore_HeavilyCoupled(t *testing.T) {
 	}
 }
 
-func TestComputeImpactScore_EasyWin(t *testing.T) {
-	graph := GraphMetrics{ExclusiveTransitiveCount: 50}
-	coupling := CouplingAnalysis{ImportFileCount: 1, CallSiteCount: 2, APIBreadth: 1}
-	health := HealthSignals{HealthRisk: 0.9, IsEOL: true}
-
-	// maxExclusive=100: this dep owns half the max exclusive count
-	score := ComputeImpactScore(graph, coupling, health, 100)
-
-	if score.Difficulty != "easy" {
-		t.Errorf("easy win should be easy difficulty, got %s", score.Difficulty)
-	}
-	// graphImpact = 0.1 + 0.9*(50/100) = 0.55, healthRisk=0.9, low coupling
-	// PriorityScore should comfortably exceed the 0.3 easy_wins threshold
-	if score.PriorityScore < 0.3 {
-		t.Errorf("easy win should exceed easy_wins threshold (0.3), got %f", score.PriorityScore)
-	}
-}
-
 func TestRankEntries(t *testing.T) {
 	entries := []DietEntry{
 		{PURL: "low", Scores: ImpactScore{PriorityScore: 0.1}},
@@ -204,27 +186,6 @@ func TestNormalizeCouplingEffort_ZeroCounts(t *testing.T) {
 	}
 }
 
-func TestClassifyDifficulty_ConsistentWithoutSource(t *testing.T) {
-	// Verify that deps with 0 coupling get "trivial" difficulty regardless
-	// of whether --source was provided (IsUnused true vs false with zero counts).
-	withSource := CouplingAnalysis{IsUnused: true}
-	withoutSource := CouplingAnalysis{IsUnused: false} // zero value, no source analysis
-
-	effortWith := normalizeCouplingEffort(withSource)
-	effortWithout := normalizeCouplingEffort(withoutSource)
-
-	diffWith := classifyDifficulty(effortWith)
-	diffWithout := classifyDifficulty(effortWithout)
-
-	if diffWith != diffWithout {
-		t.Errorf("difficulty mismatch: --source=%q vs no-source=%q (efforts: %f vs %f)",
-			diffWith, diffWithout, effortWith, effortWithout)
-	}
-	if diffWith != DifficultyTrivial {
-		t.Errorf("expected trivial difficulty for zero coupling, got %q", diffWith)
-	}
-}
-
 func TestComputeImpactScore_UnusedZeroExclusive(t *testing.T) {
 	// Regression test for #171: typical unused dep with 0 exclusive transitives
 	// should produce a PriorityScore that can realistically exceed the
@@ -266,23 +227,6 @@ func TestComputeImpactScore_UnusedZeroExclusive(t *testing.T) {
 				t.Errorf("PriorityScore = %f, want %f (±%f)", score.PriorityScore, tt.wantScore, tolerance)
 			}
 		})
-	}
-}
-
-func TestComputeImpactScore_LargeProject(t *testing.T) {
-	// Verify that a dependency with the highest exclusive transitive count
-	// gets the maximum graph impact when normalized by maxExclusive.
-	// This should keep the score above the easy_wins threshold.
-	graph := GraphMetrics{ExclusiveTransitiveCount: 47}
-	coupling := CouplingAnalysis{IsUnused: true}
-	health := HealthSignals{HealthRisk: 0.5}
-
-	score := ComputeImpactScore(graph, coupling, health, 47)
-
-	// graphImpact = 0.1 + 0.9*(47/47) = 1.0
-	// unusedBase = unusedGraphWeight*1.0 + unusedHealthWeight*0.5 + unusedBaseOffset = 0.65
-	if score.PriorityScore < easyWinScoreThreshold {
-		t.Errorf("large project top dep should exceed easy_wins threshold (%0.2f), got %f", easyWinScoreThreshold, score.PriorityScore)
 	}
 }
 

@@ -31,6 +31,11 @@ func writeBoxIdentity(ctx *boxContext) error {
 			return err
 		}
 	}
+	if a != nil && a.UnmatchedPackage != nil {
+		if err := writeLine(ctx, "Unmatched package: %s", unmatchedPackageText(a.UnmatchedPackage)); err != nil {
+			return err
+		}
+	}
 	if a != nil && a.Repository != nil && a.Repository.Description != "" {
 		if desc := truncateDescription(a.Repository.Description); desc != "" {
 			// Description is free text without a label prefix; use a fixed
@@ -51,6 +56,15 @@ func writeBoxIdentity(ctx *boxContext) error {
 		}
 	}
 	return nil
+}
+
+// unmatchedPackageText explains why a same-named package was not used, so the
+// user can still look it up (e.g., its advisories) when it is in fact theirs.
+func unmatchedPackageText(u *analysispkg.UnmatchedPackage) string {
+	if u.RepoURL == "" {
+		return u.PURL + " (not used: it has no repository link)"
+	}
+	return fmt.Sprintf("%s (not used: it links to %s)", u.PURL, u.RepoURL)
 }
 
 // writeBoxSignals writes the Signals section — data points that directly
@@ -109,6 +123,16 @@ func signalDisplayName(name string) string {
 		return "Days Since Release"
 	case analysispkg.SignalEcosystemDelivery:
 		return "Ecosystem Delivery"
+	case analysispkg.SignalAllReleasesYanked:
+		return "All Releases Yanked"
+	case analysispkg.SignalAdvisoryDBUnmaintained:
+		return "Advisory DB: Unmaintained"
+	case analysispkg.SignalDormantReleaseBurst:
+		return "Published Together After Silence"
+	case analysispkg.SignalDaysSilentBeforeRelease:
+		return "Days Without Release Before"
+	case analysispkg.SignalVersionRemoved:
+		return "Version Removed From Registry"
 	default:
 		return name
 	}
@@ -279,10 +303,53 @@ func writeBoxOrigin(ctx *boxContext) error {
 	return nil
 }
 
+// dormantReleasePrefix starts the line that shows the dormant-release marker
+// (ADR-0028) in the detailed view.
+const dormantReleasePrefix = "⚠ Release after silence:"
+
+// releaseAgePrefix starts the young-release notice. See ADR-0031.
+const releaseAgePrefix = "⚠ Release age:"
+
+// maintainerDomainPrefix starts each line that shows a maintainer e-mail domain
+// notice (ADR-0030) in the detailed view.
+const maintainerDomainPrefix = "⚠ Maintainer domain:"
+
+// writeMaintainerDomainNotices writes one line per flagged maintainer address.
+func writeMaintainerDomainNotices(ctx *boxContext) error {
+	for _, notice := range ctx.analysis.MaintainerDomainNotices() {
+		if err := writeLine(ctx, "%s %s", maintainerDomainPrefix, notice); err != nil {
+			return fmt.Errorf("write maintainer domain notice: %w", err)
+		}
+	}
+	return nil
+}
+
 // writeBoxVerdict writes lifecycle verdict inline (no section bar).
 // Format: "icon Label: reason" on a single line (word-wrapped if long).
 // Displayed immediately after identity, before any section bars.
 func writeBoxVerdict(ctx *boxContext) error {
+	if ctx.analysis != nil && ctx.analysis.Malicious() {
+		label := "Malicious version"
+		if ctx.analysis.MaliciousState.Scope == analysispkg.MaliciousScopePackage {
+			label = "Malicious package"
+		}
+		if err := writeLine(ctx, "☠ %s: %s %s", label, ctx.analysis.MaliciousState.AdvisoryID, ctx.analysis.MaliciousState.Summary); err != nil {
+			return err
+		}
+	}
+	if notice := ctx.analysis.DormantReleaseNotice(); notice != "" {
+		if err := writeLine(ctx, "%s %s", dormantReleasePrefix, notice); err != nil {
+			return err
+		}
+	}
+	if notice := ctx.analysis.ReleaseAgeNotice(); notice != "" {
+		if err := writeLine(ctx, "%s %s", releaseAgePrefix, notice); err != nil {
+			return err
+		}
+	}
+	if err := writeMaintainerDomainNotices(ctx); err != nil {
+		return err
+	}
 	icon := verdictIcon(ctx.entry.Verdict)
 	label := verdictLabel(ctx.entry.Verdict)
 	reason := ""
