@@ -74,11 +74,10 @@ func TestParser_Parse(t *testing.T) {
 			wantRaw:     "",
 		},
 		{
-			// packageurl-go v0.1.5+ accepts this as valid: name="" is parsed
-			// without error. Previous versions (v0.1.3) rejected it.
+			// An npm "@" with no "/" is a bare scope with no name.
 			name:        "malformed_purl_missing_name",
 			purl:        "pkg:npm/@4.17.21",
-			expectError: false,
+			expectError: true,
 			wantRaw:     "pkg:npm/@4.17.21",
 		},
 		{
