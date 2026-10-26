@@ -163,6 +163,8 @@ type MaintainerDomainFinding struct {
 	// PublisherEmailEvidence is the npm publisher e-mail evidence, when collected.
 	PublisherEmailEvidence *PublisherEmailEvidence
 	// PackagePublish describes dated publishes by this account in this package.
+	// It is nil when Account is empty, when the finding warrants no notice, and
+	// for findings not produced by the scan's npm maintainer-domain check.
 	PackagePublish *PackagePublish
 }
 
@@ -258,7 +260,7 @@ func packagePublishNoticeClause(f MaintainerDomainFinding, versionPublisher Vers
 		case PackagePublishFound:
 			clause = " The last publish by this account found in this package's npm records was on " + f.PackagePublish.LastPublishedAt.UTC().Format(time.DateOnly) + "."
 		case PackagePublishNotFound:
-			clause = " The npm records retrieved for this package show no publish by this account."
+			clause = " The npm records retrieved for this package show no dated publish by this account."
 		}
 	}
 	if versionPublisher == VersionPublisherTrustedPublishing {

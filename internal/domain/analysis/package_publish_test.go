@@ -35,7 +35,7 @@ func TestPackagePublishFor(t *testing.T) {
 }
 
 func TestVersionPublisherKindFor(t *testing.T) {
-	h := &ReleaseHistory{Publishers: map[string]string{"1": "GitHub Actions", "2": "alice"}}
+	h := &ReleaseHistory{Publishers: map[string]string{"1": "GitHub Actions", "2": "alice", "4": "GitHub\x00 Actions"}}
 	for _, tc := range []struct {
 		h       *ReleaseHistory
 		version string
@@ -44,6 +44,7 @@ func TestVersionPublisherKindFor(t *testing.T) {
 		{h, "1", VersionPublisherTrustedPublishing},
 		{h, "2", VersionPublisherOther},
 		{h, "3", VersionPublisherUnknown},
+		{h, "4", VersionPublisherOther},
 		{h, "", VersionPublisherUnknown},
 		{nil, "1", VersionPublisherUnknown},
 	} {
@@ -66,9 +67,9 @@ func TestPackagePublishNoticeContext(t *testing.T) {
 		{"found trusted", &PackagePublish{Status: PackagePublishFound, LastPublishedAt: at}, VersionPublisherTrustedPublishing, "The last publish by this account found in this package's npm records was on 2025-03-01.", true},
 		{"found other", &PackagePublish{Status: PackagePublishFound, LastPublishedAt: at}, VersionPublisherOther, "The last publish by this account found in this package's npm records was on 2025-03-01.", false},
 		{"found unknown", &PackagePublish{Status: PackagePublishFound, LastPublishedAt: at}, VersionPublisherUnknown, "The last publish by this account found in this package's npm records was on 2025-03-01.", false},
-		{"not found trusted", &PackagePublish{Status: PackagePublishNotFound}, VersionPublisherTrustedPublishing, "The npm records retrieved for this package show no publish by this account.", true},
-		{"not found other", &PackagePublish{Status: PackagePublishNotFound}, VersionPublisherOther, "The npm records retrieved for this package show no publish by this account.", false},
-		{"not found unknown", &PackagePublish{Status: PackagePublishNotFound}, VersionPublisherUnknown, "The npm records retrieved for this package show no publish by this account.", false},
+		{"not found trusted", &PackagePublish{Status: PackagePublishNotFound}, VersionPublisherTrustedPublishing, "The npm records retrieved for this package show no dated publish by this account.", true},
+		{"not found other", &PackagePublish{Status: PackagePublishNotFound}, VersionPublisherOther, "The npm records retrieved for this package show no dated publish by this account.", false},
+		{"not found unknown", &PackagePublish{Status: PackagePublishNotFound}, VersionPublisherUnknown, "The npm records retrieved for this package show no dated publish by this account.", false},
 		{"nil unknown", nil, VersionPublisherUnknown, "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -85,7 +86,7 @@ func TestPackagePublishNoticeContext(t *testing.T) {
 	}
 	base.Account = ""
 	base.PackagePublish = &PackagePublish{Status: PackagePublishNotFound}
-	if got := maintainerDomainNotice(base, VersionPublisherUnknown); strings.Contains(got, "no publish by this account") {
+	if got := maintainerDomainNotice(base, VersionPublisherUnknown); strings.Contains(got, "no dated publish by this account") {
 		t.Errorf("unnamed account notice=%q", got)
 	}
 }

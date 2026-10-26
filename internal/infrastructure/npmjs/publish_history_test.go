@@ -89,7 +89,7 @@ func TestParsePublishHistoryPublisherNames(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(h.Publishers) != 3 || h.Publishers["1"] != "GitHub Actions" || h.Publishers["2"] != "alice" || h.Publishers["3"] != "GitHub Actions" {
+			if len(h.Publishers) != 3 || h.Publishers["1"] != "GitHub\x00 Actions" || h.Publishers["2"] != "alice" || h.Publishers["3"] != "GitHub Actions" {
 				t.Errorf("publishers=%v", h.Publishers)
 			}
 			if _, ok := h.PublisherHistory.Latest["GitHub Actions"]; !ok {
@@ -186,7 +186,8 @@ func TestGetPublishHistory(t *testing.T) {
 }
 
 // TestParsePublishHistory_Versions pins that a missing or null "versions"
-// leaves Installable nil (unknown), while "{}" is a known-empty set.
+// leaves Installable and Publishers nil (unknown), while "{}" is a
+// known-empty set.
 func TestParsePublishHistory_Versions(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -209,6 +210,9 @@ func TestParsePublishHistory_Versions(t *testing.T) {
 			}
 			if got := h.Installable == nil; got != tt.wantNil {
 				t.Fatalf("Installable nil = %v, want %v", got, tt.wantNil)
+			}
+			if got := h.Publishers == nil; got != tt.wantNil {
+				t.Errorf("Publishers nil = %v, want %v", got, tt.wantNil)
 			}
 			if !tt.wantNil && len(h.Installable) != tt.wantLen {
 				t.Errorf("len(Installable) = %d, want %d", len(h.Installable), tt.wantLen)

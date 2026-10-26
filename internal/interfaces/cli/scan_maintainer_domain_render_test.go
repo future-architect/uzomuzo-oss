@@ -173,14 +173,23 @@ func TestMaintainerDomainPackageContextJSON(t *testing.T) {
 	if !strings.Contains(boxText, "The last publish by this account found in this package's npm records was on 2025-03-01.") || !strings.Contains(boxText, "This version was published from GitHub Actions through npm trusted publishing.") || strings.Contains(boxText, "alice@") {
 		t.Errorf("detailed box=%q", box.String())
 	}
-	finding.Account = ""
 	finding.PackagePublish = &analysis.PackagePublish{Status: analysis.PackagePublishNotFound}
 	a.MaintainerDomain.Findings = []analysis.MaintainerDomainFinding{finding}
 	got = render()
 	if !strings.Contains(got, `"status": "not_found"`) || strings.Contains(got, `"last_published_at"`) {
 		t.Errorf("not_found JSON=%s", got)
 	}
-	if notice := strings.Join(a.MaintainerDomainNotices(), "\n"); strings.Contains(notice, "no publish by this account") {
+	if notice := strings.Join(a.MaintainerDomainNotices(), "\n"); !strings.Contains(notice, "The npm records retrieved for this package show no dated publish by this account.") {
+		t.Errorf("not_found notice=%q", notice)
+	}
+	finding.Account = ""
+	finding.PackagePublish = nil
+	a.MaintainerDomain.Findings = []analysis.MaintainerDomainFinding{finding}
+	got = render()
+	if strings.Contains(got, `"package_publish"`) {
+		t.Errorf("unnamed account JSON=%s", got)
+	}
+	if notice := strings.Join(a.MaintainerDomainNotices(), "\n"); strings.Contains(notice, "publish by this account") {
 		t.Errorf("unnamed account notice=%q", notice)
 	}
 	a.MaintainerDomain.Findings = nil

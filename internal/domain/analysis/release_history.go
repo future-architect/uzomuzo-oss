@@ -40,11 +40,12 @@ type ReleaseHistory struct {
 	Maintainers []MaintainerAddress
 	// PublisherHistory summarizes visible publishers and hidden version times.
 	PublisherHistory PublisherPackageHistory
-	// Publishers maps visible versions to _npmUser.name after StripControlRunes.
-	// The map is nil when history was not obtained or versions is missing or
-	// null. A version is absent when it is not in versions, lacks _npmUser, has
-	// a legacy string _npmUser, or has an empty name. Unlike the raw Person in
-	// npmjs.PublishHistory.VersionPublisher, these names are sanitized.
+	// Publishers maps visible versions to the unsanitized _npmUser.name, so
+	// that VersionPublisherKindFor matches the name exactly. The names are for
+	// comparison only and must not be printed. The map is nil when history was
+	// not obtained or versions is missing or null. A version is absent when it
+	// is not in versions, lacks _npmUser, has a legacy string _npmUser, or has a
+	// name that is empty after StripControlRunes.
 	Publishers map[string]string
 }
 

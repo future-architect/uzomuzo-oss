@@ -52,11 +52,15 @@ const (
 	VersionPublisherTrustedPublishing VersionPublisherKind = "trusted_publishing"
 	// VersionPublisherOther is any other named publisher; it does not imply a manual publish.
 	VersionPublisherOther VersionPublisherKind = "other"
-	// VersionPublisherUnknown means the version has no named publisher record.
+	// VersionPublisherUnknown means the publisher cannot be determined: the
+	// version has no named publisher record, the analysed version is empty, or
+	// no release history was obtained.
 	VersionPublisherUnknown VersionPublisherKind = "unknown"
-	// TrustedPublishingPublisher is npm's GitHub Actions publisher identity.
-	TrustedPublishingPublisher = "GitHub Actions"
 )
+
+// TrustedPublishingPublisher is npm's GitHub Actions publisher identity. It is
+// compared with the unsanitized _npmUser.name.
+const TrustedPublishingPublisher = "GitHub Actions"
 
 // VersionPublisherKindFor classifies the exact analysed version in a release history.
 func VersionPublisherKindFor(h *ReleaseHistory, version string) VersionPublisherKind {

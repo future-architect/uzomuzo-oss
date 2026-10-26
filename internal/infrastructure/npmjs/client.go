@@ -345,7 +345,8 @@ type PublishHistory struct {
 	// VersionPublisher maps version to its "_npmUser". It is nil unless the
 	// history was built by ParsePublishHistoryWithVersions.
 	VersionPublisher map[string]Person
-	// Publishers maps visible versions to sanitized named publisher accounts.
+	// Publishers maps visible versions to the unsanitized _npmUser.name, kept
+	// in both modes; see analysis.ReleaseHistory.Publishers.
 	Publishers map[string]string
 	// PublisherHistory summarizes each publisher account's latest dated
 	// publishes and the publish times of versions whose publisher is not
@@ -479,8 +480,9 @@ func extractNpmSuccessor(msg string) string {
 // "_npmUser" are kept, as raw JSON: a packument with thousands of versions runs
 // to megabytes, and the rest of the manifest is not needed here. Per-version
 // identities are folded into FirstSeen, and each "_npmUser" into
-// PublisherHistory. Only sanitized publisher names are retained per version
-// in scan mode; full identities are not retained.
+// PublisherHistory. Each version's publisher name is kept in Publishers;
+// full identities (VersionPublisher) are kept only by
+// ParsePublishHistoryWithVersions.
 func parsePublishHistory(r io.Reader) (*PublishHistory, error) {
 	return decodePublishHistory(r, false)
 }
@@ -541,7 +543,7 @@ func decodePublishHistory(r io.Reader, retainVersions bool) (*PublishHistory, er
 		publisher := decodePerson(manifest.NPMUser)
 		account := analysis.StripControlRunes(publisher.Name)
 		if account != "" {
-			h.Publishers[v] = account
+			h.Publishers[v] = publisher.Name
 		}
 		if retainVersions {
 			h.VersionPublisher[v] = publisher
