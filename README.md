@@ -121,7 +121,7 @@ uzomuzo scan https://github.com/expressjs/express
 # are resolved by updating the direct dep that pulls them in)
 trivy fs . --format cyclonedx | uzomuzo scan --sbom -
 trivy fs . --format cyclonedx | uzomuzo scan --sbom - --show-transitive  # include transitive
-uzomuzo scan                     # auto-detect go.mod in cwd
+uzomuzo scan                     # auto-detect go.mod in cwd (add --show-transitive for // indirect)
 uzomuzo scan --format json       # JSON output for CI integration
 
 # Optional npm maintainer e-mail domain notice (makes RDAP requests; caches IANA's RDAP server list)

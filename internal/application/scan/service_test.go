@@ -1,8 +1,10 @@
 package scan_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -85,5 +87,34 @@ func TestRunFromParser_EmptyDeps(t *testing.T) {
 	}
 	if len(result.Entries) != 0 {
 		t.Errorf("expected empty entries, got %d", len(result.Entries))
+	}
+}
+
+// TestRunFromParser_TransitiveOnlyWithoutFlag pins that a parser returning only
+// transitive dependencies ends the scan before evaluation when --show-transitive
+// is off: no "evaluating dependencies" log line, as when the parser returns nothing.
+func TestRunFromParser_TransitiveOnlyWithoutFlag(t *testing.T) {
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	svc := minimalService(t)
+	policy, err := domainscan.ParseFailPolicy("")
+	if err != nil {
+		t.Fatalf("ParseFailPolicy: %v", err)
+	}
+	p := &mockParser{deps: []depparser.ParsedDependency{
+		{PURL: "pkg:golang/example.com/indirect@v1.0.0", Relation: depparser.RelationTransitive},
+	}}
+	result, err := svc.RunFromParser(context.Background(), p, nil, policy, scan.ParserConfig{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Entries) != 0 || result.HasFailure {
+		t.Errorf("got %d entries, HasFailure=%v; want 0 entries, no failure", len(result.Entries), result.HasFailure)
+	}
+	if strings.Contains(logs.String(), "evaluating dependencies") {
+		t.Errorf("scan evaluated an empty dependency set; logs:\n%s", logs.String())
 	}
 }

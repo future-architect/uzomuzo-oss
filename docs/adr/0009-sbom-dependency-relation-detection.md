@@ -108,6 +108,15 @@ Following the Configuration & Flags Policy (YAGNI), no new flags are introduced.
 - The `RELATION` column only appears for SBOM inputs with dependency information. Non-SBOM inputs (PURL, go.mod, GitHub URL) are unaffected.
 - ADR-0008's note about `--show-transitive` being "input-mode agnostic" is now realized for SBOM inputs. Future input modes can follow the same pattern.
 
+## Amendments
+
+### 2026-10-27 — go.mod `// indirect` requirements use the same relation
+
+The Neutral note above says non-SBOM inputs, go.mod included, are unaffected. Since #563,
+the go.mod parser returns `// indirect` requirements as `transitive` with no via-parent
+(go.mod does not record which direct dependency pulls them in). They go through the same
+`--show-transitive` filter, so the `RELATION` column can show `transitive` for go.mod input.
+
 ## References
 
 - [CycloneDX Specification — Dependencies](https://cyclonedx.org/docs/latest/json/#dependencies) (spec 1.2+)

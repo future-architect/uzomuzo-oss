@@ -41,8 +41,9 @@ func TestParser_Parse_Basic(t *testing.T) {
 			t.Errorf("deps[%d] (%s).Relation = %v, want %v", i, deps[i].Name, deps[i].Relation, want)
 		}
 	}
-	if deps[3].PURL != "pkg:golang/github.com/some/indirect@v0.1.0" {
-		t.Errorf("deps[3].PURL = %q, want %q", deps[3].PURL, "pkg:golang/github.com/some/indirect@v0.1.0")
+	const wantIndirect = "pkg:golang/github.com/some/indirect@v0.1.0"
+	if deps[3].PURL != wantIndirect {
+		t.Errorf("deps[3].PURL = %q, want %q", deps[3].PURL, wantIndirect)
 	}
 	if len(deps[3].ViaParents) != 0 {
 		t.Errorf("deps[3].ViaParents = %v, want empty (go.mod does not record parents)", deps[3].ViaParents)

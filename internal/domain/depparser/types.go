@@ -13,7 +13,9 @@ const (
 	RelationUnknown DependencyRelation = iota
 	// RelationDirect means the dependency is directly required by the project.
 	RelationDirect
-	// RelationTransitive means the dependency is pulled in indirectly through another dependency.
+	// RelationTransitive means the dependency is not required directly by the project:
+	// it is pulled in through another dependency, or the input format marks it
+	// as indirect (go.mod "// indirect") without recording a parent.
 	RelationTransitive
 )
 

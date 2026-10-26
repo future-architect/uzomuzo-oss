@@ -75,6 +75,9 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 	}
 
 	purls, relations, viaParents := selectDependencies(deps, parserCfg.ShowTransitive)
+	if len(purls) == 0 {
+		return &Result{}, nil
+	}
 
 	slog.Info("scan: evaluating dependencies", "count", len(purls), "parser", parser.FormatName(),
 		"showTransitive", parserCfg.ShowTransitive)
@@ -100,7 +103,8 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 // order. When showTransitive is false, transitive dependencies are skipped to
 // avoid unnecessary API calls — users can only act on direct dependencies.
 // A PURL listed as both transitive and direct (e.g., two go.mod requirements
-// replaced by the same module) is reported as direct.
+// replaced by the same module) is reported as direct; otherwise the first
+// entry's relation and via-parents are kept.
 func selectDependencies(deps []depparser.ParsedDependency, showTransitive bool) (purls []string, relations map[string]depparser.DependencyRelation, viaParents map[string][]string) {
 	relations = make(map[string]depparser.DependencyRelation, len(deps))
 	viaParents = make(map[string][]string, len(deps))
@@ -111,7 +115,7 @@ func selectDependencies(deps []depparser.ParsedDependency, showTransitive bool) 
 		if prev, exists := relations[d.PURL]; exists {
 			if prev == depparser.RelationTransitive && d.Relation == depparser.RelationDirect {
 				relations[d.PURL] = depparser.RelationDirect
-				viaParents[d.PURL] = nil
+				viaParents[d.PURL] = nil // a direct dependency has no parent
 			}
 			continue
 		}
