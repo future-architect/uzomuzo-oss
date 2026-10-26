@@ -8,8 +8,9 @@ type PackagePublishStatus string
 const (
 	// PackagePublishFound means a dated version names the account as publisher.
 	PackagePublishFound PackagePublishStatus = "found"
-	// PackagePublishNotFound means no version present in versions has both a
-	// publish time in time and an _npmUser naming this account. Removed or
+	// PackagePublishNotFound means PublisherHistory.Latest has no entry for the
+	// account: no version present in versions has both a publish time in time
+	// and an _npmUser naming it, or versions was missing or null. Removed or
 	// unattributed versions are not evidence that the account never published.
 	PackagePublishNotFound PackagePublishStatus = "not_found"
 )
@@ -62,17 +63,17 @@ const (
 	VersionPublisherUnknown VersionPublisherKind = "unknown"
 )
 
-// TrustedPublishingPublisher is npm's GitHub Actions publisher identity.
-const TrustedPublishingPublisher = "GitHub Actions"
+// trustedPublishingPublisher is npm's GitHub Actions publisher identity.
+const trustedPublishingPublisher = "GitHub Actions"
 
 // ClassifyVersionPublisher classifies one version's raw _npmUser.name. Only the
-// exact name TrustedPublishingPublisher is trusted publishing; a name that is
+// exact name trustedPublishingPublisher is trusted publishing; a name that is
 // empty after StripControlRunes is unknown.
 func ClassifyVersionPublisher(name string) VersionPublisherKind {
 	switch {
 	case StripControlRunes(name) == "":
 		return VersionPublisherUnknown
-	case name == TrustedPublishingPublisher:
+	case name == trustedPublishingPublisher:
 		return VersionPublisherTrustedPublishing
 	default:
 		return VersionPublisherOther
