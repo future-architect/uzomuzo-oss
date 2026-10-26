@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
@@ -80,6 +81,22 @@ func TestParser_Parse_WithReplace(t *testing.T) {
 	}
 	if deps[0].Version != "v2.0.0" {
 		t.Errorf("replaced dep version = %q, want %q", deps[0].Version, "v2.0.0")
+	}
+}
+
+func TestParser_Parse_IndirectWithReplaceAndTool(t *testing.T) {
+	p := &gomod.Parser{}
+	deps, err := p.Parse(context.Background(), readTestData(t, "indirect_replace_tool.mod"))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	want := []depparser.ParsedDependency{
+		{PURL: "pkg:golang/github.com/direct/dep@v1.0.0", Ecosystem: "golang", Name: "github.com/direct/dep", Version: "v1.0.0", Relation: depparser.RelationDirect},
+		{PURL: "pkg:golang/github.com/new/indirect@v0.2.0", Ecosystem: "golang", Name: "github.com/new/indirect", Version: "v0.2.0", Relation: depparser.RelationTransitive},
+		{PURL: "pkg:golang/golang.org/x/tools@v0.30.0", Ecosystem: "golang", Name: "golang.org/x/tools", Version: "v0.30.0", Relation: depparser.RelationTransitive, Scope: "tool"},
+	}
+	if !reflect.DeepEqual(deps, want) {
+		t.Errorf("Parse() =\n%+v\nwant\n%+v", deps, want)
 	}
 }
 

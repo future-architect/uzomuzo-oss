@@ -22,7 +22,7 @@ func (p *Parser) FormatName() string { return "go.mod" }
 // Parse reads a go.mod file and returns its requirements as PURLs.
 // Requirements marked "// indirect" get RelationTransitive with no ViaParents,
 // since go.mod does not record which direct dependency pulls them in; callers
-// decide whether to keep them (scan drops them unless --show-transitive is set).
+// decide whether to keep them.
 // All other requirements get RelationDirect.
 // Replace directives are applied: if a module has a replacement, the
 // replacement path and version are used instead.

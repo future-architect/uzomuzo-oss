@@ -44,7 +44,8 @@ type ParsedDependency struct {
 	// The zero value (RelationUnknown) is used when the parser cannot determine this.
 	Relation DependencyRelation
 	// ViaParents lists the short names of direct dependencies through which
-	// this transitive dependency is pulled in. Empty for direct or unknown deps.
+	// this transitive dependency is pulled in. Empty for direct or unknown deps,
+	// and for transitive deps whose parent is not recorded (go.mod "// indirect").
 	ViaParents []string
 	// Scope indicates the dependency's role in the project.
 	// Empty string means runtime (the default). "tool" means a Go tool directive

@@ -74,25 +74,7 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 		return &Result{}, nil
 	}
 
-	// Deduplicate while preserving relation info (first-seen wins).
-	// When ShowTransitive is false, skip transitive dependencies to avoid
-	// unnecessary API calls — users can only act on direct dependencies.
-	seen := make(map[string]struct{}, len(deps))
-	relations := make(map[string]depparser.DependencyRelation, len(deps))
-	viaParents := make(map[string][]string, len(deps))
-	var purls []string
-	for _, d := range deps {
-		if _, exists := seen[d.PURL]; exists {
-			continue
-		}
-		if !parserCfg.ShowTransitive && d.Relation == depparser.RelationTransitive {
-			continue
-		}
-		seen[d.PURL] = struct{}{}
-		relations[d.PURL] = d.Relation
-		viaParents[d.PURL] = d.ViaParents
-		purls = append(purls, d.PURL)
-	}
+	purls, relations, viaParents := selectDependencies(deps, parserCfg.ShowTransitive)
 
 	slog.Info("scan: evaluating dependencies", "count", len(purls), "parser", parser.FormatName(),
 		"showTransitive", parserCfg.ShowTransitive)
@@ -112,6 +94,32 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 	warnMaliciousLookupFailures(analyses)
 
 	return &Result{Entries: entries, HasFailure: hasFailure}, nil
+}
+
+// selectDependencies deduplicates parser output by PURL, keeping first-seen
+// order. When showTransitive is false, transitive dependencies are skipped to
+// avoid unnecessary API calls — users can only act on direct dependencies.
+// A PURL listed as both transitive and direct (e.g., two go.mod requirements
+// replaced by the same module) is reported as direct.
+func selectDependencies(deps []depparser.ParsedDependency, showTransitive bool) (purls []string, relations map[string]depparser.DependencyRelation, viaParents map[string][]string) {
+	relations = make(map[string]depparser.DependencyRelation, len(deps))
+	viaParents = make(map[string][]string, len(deps))
+	for _, d := range deps {
+		if !showTransitive && d.Relation == depparser.RelationTransitive {
+			continue
+		}
+		if prev, exists := relations[d.PURL]; exists {
+			if prev == depparser.RelationTransitive && d.Relation == depparser.RelationDirect {
+				relations[d.PURL] = depparser.RelationDirect
+				viaParents[d.PURL] = nil
+			}
+			continue
+		}
+		relations[d.PURL] = d.Relation
+		viaParents[d.PURL] = d.ViaParents
+		purls = append(purls, d.PURL)
+	}
+	return purls, relations, viaParents
 }
 
 // ActionsDiscoverer abstracts the actions discovery infrastructure.
