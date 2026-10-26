@@ -11,6 +11,7 @@ import (
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/module"
 )
 
 // Parser implements depparser.DependencyParser for go.mod files.
@@ -32,10 +33,11 @@ func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDepend
 		return nil, fmt.Errorf("failed to parse go.mod: %w", err)
 	}
 
-	// Build replace map: old module path -> replacement
-	replaces := make(map[string]*modfile.Replace, len(f.Replace))
+	// Build replace map keyed by the old module path and version. A replace
+	// without a version on the left (Old.Version == "") applies to every version.
+	replaces := make(map[module.Version]*modfile.Replace, len(f.Replace))
 	for _, rep := range f.Replace {
-		replaces[rep.Old.Path] = rep
+		replaces[rep.Old] = rep
 	}
 
 	// Build tool set: require module paths that correspond to tool directives
@@ -55,10 +57,15 @@ func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDepend
 		modPath := req.Mod.Path
 		version := req.Mod.Version
 
-		// Apply replace directive if present.
+		// Apply replace directive if present: one for this exact version wins
+		// over one for every version, as in the go command.
 		// Skip local-path replacements (empty version or relative path) as they
 		// produce invalid PURLs like "pkg:golang/../foo@".
-		if rep, ok := replaces[modPath]; ok {
+		rep, ok := replaces[req.Mod]
+		if !ok {
+			rep, ok = replaces[module.Version{Path: modPath}]
+		}
+		if ok {
 			if rep.New.Version != "" && !strings.HasPrefix(rep.New.Path, ".") && !strings.HasPrefix(rep.New.Path, "/") {
 				modPath = rep.New.Path
 				version = rep.New.Version

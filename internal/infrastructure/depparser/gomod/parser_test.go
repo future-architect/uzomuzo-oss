@@ -101,6 +101,26 @@ func TestParser_Parse_IndirectWithReplaceAndTool(t *testing.T) {
 	}
 }
 
+func TestParser_Parse_VersionedReplace(t *testing.T) {
+	p := &gomod.Parser{}
+	deps, err := p.Parse(context.Background(), readTestData(t, "versioned_replace.mod"))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	want := []string{
+		"pkg:golang/github.com/exact/fork@v1.0.1",        // replace for this exact version
+		"pkg:golang/github.com/other/version@v1.0.0",     // replace names another version: not applied
+		"pkg:golang/github.com/both/this-version@v1.0.1", // exact version wins over every-version replace
+	}
+	got := make([]string, 0, len(deps))
+	for _, d := range deps {
+		got = append(got, d.PURL)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("PURLs = %v, want %v", got, want)
+	}
+}
+
 func TestParser_Parse_Empty(t *testing.T) {
 	p := &gomod.Parser{}
 	deps, err := p.Parse(context.Background(), readTestData(t, "empty.mod"))

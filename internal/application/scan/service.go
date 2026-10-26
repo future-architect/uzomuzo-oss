@@ -115,7 +115,7 @@ func selectDependencies(deps []depparser.ParsedDependency, showTransitive bool) 
 		if prev, exists := relations[d.PURL]; exists {
 			if prev == depparser.RelationTransitive && d.Relation == depparser.RelationDirect {
 				relations[d.PURL] = depparser.RelationDirect
-				viaParents[d.PURL] = nil // a direct dependency has no parent
+				viaParents[d.PURL] = nil
 			}
 			continue
 		}

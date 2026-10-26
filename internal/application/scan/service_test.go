@@ -29,7 +29,7 @@ func (m *mockParser) FormatName() string { return "mock" }
 // minimalService constructs a scan.Service backed by an AnalysisService with a
 // nil AnalysisSource. This is sufficient for tests that exercise RunFromParser
 // paths that exit before s.analysisService.ProcessBatchPURLs is called (nil-parser
-// guard, parse-error path, empty-deps path).
+// guard, parse-error path, empty-deps path, every dep filtered out).
 func minimalService(t *testing.T) *scan.Service {
 	t.Helper()
 	svc, err := scan.NewService(application.NewAnalysisService(nil))

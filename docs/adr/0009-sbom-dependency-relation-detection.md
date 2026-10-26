@@ -105,17 +105,20 @@ Following the Configuration & Flags Policy (YAGNI), no new flags are introduced.
 
 ### Neutral
 
-- The `RELATION` column only appears for SBOM inputs with dependency information. Non-SBOM inputs (PURL, go.mod, GitHub URL) are unaffected.
+- The `RELATION` column only appears for SBOM inputs with dependency information. Non-SBOM inputs (PURL, go.mod, GitHub URL) are unaffected. (go.mod: see Amendments, 2026-10-27.)
 - ADR-0008's note about `--show-transitive` being "input-mode agnostic" is now realized for SBOM inputs. Future input modes can follow the same pattern.
 
 ## Amendments
 
-### 2026-10-27 — go.mod `// indirect` requirements use the same relation
+### 2026-10-27 — corrected: go.mod input has relations too (#563, #587)
 
-The Neutral note above says non-SBOM inputs, go.mod included, are unaffected. Since #563,
-the go.mod parser returns `// indirect` requirements as `transitive` with no via-parent
-(go.mod does not record which direct dependency pulls them in). They go through the same
-`--show-transitive` filter, so the `RELATION` column can show `transitive` for go.mod input.
+The Neutral note above says non-SBOM inputs, go.mod included, are unaffected. That was
+already inexact (go.mod output had a `RELATION` column showing `direct`), and since #587
+it is wrong: the go.mod parser returns `// indirect` requirements as `transitive` with no
+via-parent, because go.mod does not record which direct dependency pulls them in. They go
+through the same `--show-transitive` filter as SBOM transitive dependencies. When the same
+PURL appears as both direct and transitive (for example, two requirements replaced by the
+same module), it is reported as direct, for every input format.
 
 ## References
 
