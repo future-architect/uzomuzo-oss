@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 340" width="1600" height="680" role="img" aria-label="Three layers of code run in your job: your workflow file, the Actions its uses: lines reference, and Actions called inside composite Actions. Scorecard, zizmor and actionlint read the first layer. uzomuzo with --include-actions checks the repository behind each referenced Action, such as tibdex/github-app-token, which Grafana's release-build.yml used and which was archived; --show-transitive adds the third layer. You can fix the second layer by editing a uses: line; the third needs the parent Action's maintainer." font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#1f2328">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1f2328"/></marker>
+  </defs>
+  <rect x="0" y="0" width="800" height="340" fill="#ffffff"/>
+
+  <!-- the job boundary -->
+  <rect x="20" y="20" width="760" height="134" rx="6" fill="none" stroke="#8c959f" stroke-dasharray="6 4"/>
+  <text x="34" y="40" fill="#57606a">Runs in your job, with its GITHUB_TOKEN and the secrets passed to it</text>
+
+  <!-- three layers -->
+  <rect x="40" y="62" width="200" height="74" rx="4" fill="none" stroke="#1f2328"/>
+  <text x="140" y="84" text-anchor="middle" font-weight="bold">Your workflow</text>
+  <text x="140" y="104" text-anchor="middle" fill="#57606a" font-size="12">grafana/grafana</text>
+  <text x="140" y="120" text-anchor="middle" fill="#57606a" font-size="12">release-build.yml</text>
+
+  <rect x="300" y="62" width="200" height="74" rx="4" fill="#ffebe9" stroke="#cf222e"/>
+  <text x="400" y="84" text-anchor="middle" font-weight="bold">Referenced Action</text>
+  <text x="400" y="104" text-anchor="middle" font-size="12">tibdex/github-app-token</text>
+  <text x="400" y="120" text-anchor="middle" fill="#cf222e" font-size="12" font-weight="bold">archived, July 2025</text>
+
+  <rect x="560" y="62" width="200" height="74" rx="4" fill="none" stroke="#1f2328"/>
+  <text x="660" y="84" text-anchor="middle" font-weight="bold">Action called inside</text>
+  <text x="660" y="100" text-anchor="middle" font-weight="bold">a composite Action</text>
+  <text x="660" y="120" text-anchor="middle" fill="#57606a" font-size="12">(none in Grafana's scan)</text>
+
+  <line x1="240" y1="99" x2="298" y2="99" stroke="#1f2328" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="269" y="92" text-anchor="middle" font-size="12">uses:</text>
+  <line x1="500" y1="99" x2="558" y2="99" stroke="#1f2328" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="529" y="92" text-anchor="middle" font-size="12">uses:</text>
+
+  <!-- who reads what -->
+  <text x="20" y="182" font-weight="bold">Read by</text>
+  <path d="M40 188 V196 H240 V188" fill="none" stroke="#1f2328"/>
+  <text x="140" y="216" text-anchor="middle">Scorecard, zizmor,</text>
+  <text x="140" y="232" text-anchor="middle">actionlint</text>
+  <path d="M300 188 V196 H500 V188" fill="none" stroke="#1f2328"/>
+  <text x="400" y="216" text-anchor="middle">uzomuzo --include-actions</text>
+  <text x="400" y="232" text-anchor="middle" fill="#57606a" font-size="12">checks the Action's repository</text>
+  <path d="M560 188 V196 H760 V188" fill="none" stroke="#1f2328"/>
+  <text x="660" y="216" text-anchor="middle">+ --show-transitive</text>
+
+  <!-- who can fix -->
+  <text x="20" y="282" font-weight="bold">Fixed by</text>
+  <text x="140" y="282" text-anchor="middle">you</text>
+  <text x="400" y="282" text-anchor="middle">you: change the uses: line</text>
+  <text x="660" y="282" text-anchor="middle">the parent Action's maintainer</text>
+  <line x1="20" y1="252" x2="780" y2="252" stroke="#d0d7de"/>
+  <text x="400" y="318" text-anchor="middle" fill="#57606a" font-size="12">Grafana replaced tibdex/github-app-token and closed the issue on September 15, 2026.</text>
+</svg>
