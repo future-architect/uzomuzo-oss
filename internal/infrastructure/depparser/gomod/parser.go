@@ -26,7 +26,9 @@ func (p *Parser) FormatName() string { return "go.mod" }
 // decide whether to keep them.
 // All other requirements get RelationDirect.
 // Replace directives are applied: if a module has a replacement, the
-// replacement path and version are used instead.
+// replacement path and version are used instead. A replace naming a version
+// applies only to that version and wins over one without a version, which
+// applies to all versions.
 func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDependency, error) {
 	f, err := modfile.Parse("go.mod", data, nil)
 	if err != nil {
