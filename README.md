@@ -650,7 +650,7 @@ STATUS      PURL                                                        RELATION
 ```
 <!-- end:output:gomod-table -->
 
-go.mod input adds a `RELATION` column showing `direct` or `indirect` dependency relationship.
+go.mod input adds a `RELATION` column. Requirements marked `// indirect` are scanned only with `--show-transitive` and appear as `transitive`, with no parent shown, because go.mod does not record which direct dependency pulls them in.
 
 </details>
 

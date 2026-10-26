@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depparser/gomod"
 )
 
@@ -24,9 +25,26 @@ func TestParser_Parse_Basic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	// 3 direct deps (indirect is skipped)
-	if len(deps) != 3 {
-		t.Fatalf("got %d deps, want 3 (indirect excluded)", len(deps))
+	// 3 direct deps, then the "// indirect" one as transitive.
+	if len(deps) != 4 {
+		t.Fatalf("got %d deps, want 4", len(deps))
+	}
+	wantRelations := []depparser.DependencyRelation{
+		depparser.RelationDirect,
+		depparser.RelationDirect,
+		depparser.RelationDirect,
+		depparser.RelationTransitive,
+	}
+	for i, want := range wantRelations {
+		if deps[i].Relation != want {
+			t.Errorf("deps[%d] (%s).Relation = %v, want %v", i, deps[i].Name, deps[i].Relation, want)
+		}
+	}
+	if deps[3].PURL != "pkg:golang/github.com/some/indirect@v0.1.0" {
+		t.Errorf("deps[3].PURL = %q, want %q", deps[3].PURL, "pkg:golang/github.com/some/indirect@v0.1.0")
+	}
+	if len(deps[3].ViaParents) != 0 {
+		t.Errorf("deps[3].ViaParents = %v, want empty (go.mod does not record parents)", deps[3].ViaParents)
 	}
 
 	// Verify gin

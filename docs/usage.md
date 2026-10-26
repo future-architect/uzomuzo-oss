@@ -104,7 +104,7 @@ trivy fs . --format cyclonedx | ./uzomuzo scan --sbom -
 trivy fs . --format cyclonedx | ./uzomuzo scan --sbom - --show-transitive
 ```
 
-When transitive dependencies are included, output shows a `RELATION` column indicating `direct`, `transitive (via-parent)`, or `Unknown` (for SBOMs without a `dependencies` section). SBOMs without dependency graph information gracefully fall back to showing all components as `Unknown`.
+When transitive dependencies are included, output shows a `RELATION` column indicating `direct`, `transitive (via-parent)`, or `Unknown` (for SBOMs without a `dependencies` section). SBOMs without dependency graph information gracefully fall back to showing all components as `Unknown`. For go.mod input, `// indirect` requirements appear as `transitive` without a parent.
 
 ### go.mod Input
 
@@ -131,7 +131,7 @@ STATUS      PURL                                                        RELATION
 ```
 <!-- end:output:usage-gomod-table -->
 
-go.mod input adds a `RELATION` column showing `direct` or `indirect` dependency relationship.
+go.mod input adds a `RELATION` column. Requirements marked `// indirect` are scanned only with `--show-transitive` and appear as `transitive`, with no parent shown, because go.mod does not record which direct dependency pulls them in.
 
 </details>
 

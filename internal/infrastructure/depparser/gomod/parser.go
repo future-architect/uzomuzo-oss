@@ -19,8 +19,11 @@ type Parser struct{}
 // FormatName returns the parser's display name.
 func (p *Parser) FormatName() string { return "go.mod" }
 
-// Parse reads a go.mod file and returns direct dependencies as PURLs.
-// Indirect dependencies are skipped by default.
+// Parse reads a go.mod file and returns its requirements as PURLs.
+// Requirements marked "// indirect" get RelationTransitive with no ViaParents,
+// since go.mod does not record which direct dependency pulls them in; callers
+// decide whether to keep them (scan drops them unless --show-transitive is set).
+// All other requirements get RelationDirect.
 // Replace directives are applied: if a module has a replacement, the
 // replacement path and version are used instead.
 func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDependency, error) {
@@ -44,8 +47,9 @@ func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDepend
 
 	var deps []depparser.ParsedDependency
 	for _, req := range f.Require {
+		relation := depparser.RelationDirect
 		if req.Indirect {
-			continue
+			relation = depparser.RelationTransitive
 		}
 
 		modPath := req.Mod.Path
@@ -75,7 +79,7 @@ func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDepend
 			Ecosystem: "golang",
 			Name:      modPath,
 			Version:   version,
-			Relation:  depparser.RelationDirect,
+			Relation:  relation,
 			Scope:     scope,
 		})
 	}

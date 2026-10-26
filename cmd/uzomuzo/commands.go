@@ -45,7 +45,7 @@ func scanFlags() []urfcli.Flag {
 		&urfcli.BoolFlag{Name: "include-actions", Usage: "Also scan GitHub Actions referenced in target repositories' workflows"},
 
 		// Transitive dependency display
-		&urfcli.BoolFlag{Name: "show-transitive", Usage: "Include transitive dependencies in output (SBOM/go.mod: transitive deps; --include-actions: composite action deps)"},
+		&urfcli.BoolFlag{Name: "show-transitive", Usage: "Include transitive dependencies in output (SBOM: transitive deps; go.mod: // indirect requirements; --include-actions: composite action deps)"},
 		&urfcli.BoolFlag{Name: "maintainer-domain", Usage: "Check whether e-mail domains of npm maintainers lapsed or were re-registered (versioned npm inputs; shown in json and detailed output; makes RDAP requests and caches IANA's RDAP server list under the user cache directory)"},
 
 		// Output filtering
