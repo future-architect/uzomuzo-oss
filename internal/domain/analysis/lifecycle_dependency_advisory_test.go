@@ -80,7 +80,7 @@ func TestLifecycleAssessor_DependencyAdvisories(t *testing.T) {
 			analysis:   &Analysis{RepoState: dormantRepo(), ReleaseInfo: stable(oldPublish, ownLow, depUnknown)},
 			scores:     maintainedOnly(0),
 			wantLabel:  LabelStalled,
-			wantReason: "Unmaintained; HIGH advisories only in dependencies",
+			wantReason: "Unmaintained; dependency advisories of unknown severity",
 			wantTrace:  "scorecard_incomplete residual_vuln_dependency_only",
 		},
 		{
@@ -159,6 +159,22 @@ func TestLifecycleAssessor_DependencyAdvisories(t *testing.T) {
 			analysis:   &Analysis{RepoState: noCommitRepo(), ReleaseInfo: stable(oldPublish, depHigh)},
 			wantLabel:  LabelStalled,
 			wantReason: "No recent releases; HIGH advisories only in dependencies",
+			wantTrace:  "inactive_no_commit_C3a_advisory_no_direct_high_severity",
+		},
+		{
+			// A dependency's RustSec unmaintained marker has no CVSS3 score; the
+			// reason must not call it HIGH.
+			name:       "RustSec marker plus only an unrated dependency advisory: Stalled, not called HIGH",
+			analysis:   &Analysis{RepoState: dormantRepo(), AdvisoryDBState: flagged("RUSTSEC-2025-0091", "`unic-utils` is unmaintained"), ReleaseInfo: stable(oldPublish, depUnknown)},
+			wantLabel:  LabelStalled,
+			wantReason: "Flagged unmaintained by RUSTSEC-2025-0091: `unic-utils` is unmaintained; dependency advisories of unknown severity",
+			wantTrace:  "advisory_db_unmaintained_no_direct_high_severity",
+		},
+		{
+			name:       "no commit data, C3a, only an unrated dependency advisory: Stalled, not called HIGH",
+			analysis:   &Analysis{RepoState: noCommitRepo(), ReleaseInfo: stable(oldPublish, depUnknown)},
+			wantLabel:  LabelStalled,
+			wantReason: "No recent releases; dependency advisories of unknown severity",
 			wantTrace:  "inactive_no_commit_C3a_advisory_no_direct_high_severity",
 		},
 		{

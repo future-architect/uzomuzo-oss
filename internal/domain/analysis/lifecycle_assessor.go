@@ -186,6 +186,9 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		case severityDependencyOnlyHigh:
 			t = "advisory_db_unmaintained_no_direct_high_severity"
 			reason += "; HIGH advisories only in dependencies"
+		case severityDependencyOnlyUnknown:
+			t = "advisory_db_unmaintained_no_direct_high_severity"
+			reason += "; dependency advisories of unknown severity"
 		}
 		trace = append(trace, t)
 		return &AssessmentResult{Axis: LifecycleAxis, Label: label, Reason: reason, Trace: trace, Signals: signals}, nil
@@ -291,12 +294,19 @@ func (s *LifecycleAssessorService) residualVulnResult(a *Analysis, now time.Time
 			Reason: "Unmaintained, unpatched vulnerabilities", Trace: append(trace, prefix+" residual_vuln_override"), Signals: signals}
 	}
 	return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelStalled),
-		Reason: reasonDependencyOnlyHigh, Trace: append(trace, prefix+" residual_vuln_dependency_only"), Signals: signals}
+		Reason: "Unmaintained; " + s.dependencyOnlyFinding(s.getStableOrMaxVersionDetail(a)), Trace: append(trace, prefix+" residual_vuln_dependency_only"), Signals: signals}
 }
 
-// reasonDependencyOnlyHigh is the reason when only dependency advisories would
-// have made a dormant package EOL-Effective.
-const reasonDependencyOnlyHigh = "Unmaintained; HIGH advisories only in dependencies"
+// dependencyOnlyFinding says what made the dependency-only outcome: a HIGH
+// dependency advisory, or only dependency advisories without a CVSS3 score.
+// The second must not be called HIGH: in practice it is often a dependency's
+// unmaintained marker or a CVSS v4-only record.
+func (s *LifecycleAssessorService) dependencyOnlyFinding(vd *VersionDetail) string {
+	if vd != nil && vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) > 0 {
+		return "HIGH advisories only in dependencies"
+	}
+	return "dependency advisories of unknown severity"
+}
 
 // residualVulnOverride reports whether Scorecard-less dormancy plus unresolved
 // advisories on the latest stable version (or MaxSemver fallback) is grounds
@@ -387,6 +397,9 @@ const (
 	severityOwnHigh
 	// severityDependencyOnlyHigh: HIGH advisories exist only in dependencies.
 	severityDependencyOnlyHigh
+	// severityDependencyOnlyUnknown: no HIGH advisory anywhere, but a
+	// dependency advisory has no CVSS3 score.
+	severityDependencyOnlyUnknown
 )
 
 // advisorySeverityExcluding classifies the latest version's advisories,
@@ -405,7 +418,10 @@ func (s *LifecycleAssessorService) advisorySeverityExcluding(a *Analysis, exclud
 		return severityOwnHigh
 	}
 	if s.isPotentiallyHigh(vd) {
-		return severityDependencyOnlyHigh
+		if vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) > 0 {
+			return severityDependencyOnlyHigh
+		}
+		return severityDependencyOnlyUnknown
 	}
 	return severityLowOnly
 }
@@ -432,6 +448,8 @@ func severityOutcome(sev advisorySeverity, tracePrefix, ownHighReason, stalledPr
 		return string(LabelEOLEffective), ownHighReason, tracePrefix + highSuffix
 	case severityDependencyOnlyHigh:
 		return string(LabelStalled), stalledPrefix + "; HIGH advisories only in dependencies", tracePrefix + "_no_direct_high_severity"
+	case severityDependencyOnlyUnknown:
+		return string(LabelStalled), stalledPrefix + "; dependency advisories of unknown severity", tracePrefix + "_no_direct_high_severity"
 	default:
 		return string(LabelStalled), stalledPrefix + "; only lower-severity advisories", tracePrefix + "_low_severity"
 	}
