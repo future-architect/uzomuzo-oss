@@ -530,14 +530,14 @@ var (
 // github.com/<owner>/<repo> (lowercased, ".git" suffix removed).
 //
 // The host must be exactly github.com or www.github.com (case-insensitive, any port)
-// and the scheme, if any, one of repoURLSchemes; any other host or scheme, non-ASCII
-// input, or a path without valid owner and repository segments returns "".
+// and the scheme, if any, one of repoURLSchemes; any other host or scheme, or a path
+// without valid owner and repository segments, returns "".
 // Supported inputs:
 //   - https://github.com/owner/repo, http://, git://, git+https:// (optionally with user@ and :port)
 //   - ssh://git@github.com/owner/repo, git+ssh://git@github.com/owner/repo
 //   - a scheme wrapped around another one, e.g. https://git+ssh://git@github.com/owner/repo
 //   - ssh://git@github.com:owner/repo, git+ssh://git@github.com:owner/repo (scp-style path after a scheme)
-//   - git@github.com:owner/repo, github.com:owner/repo (scp-style, no scheme)
+//   - git@github.com:owner/repo, github.com:owner/repo, with or without www. (scp-style, no scheme)
 //   - github.com/owner/repo, git@github.com/owner/repo, //github.com/owner/repo (no scheme)
 //
 // Query strings, fragments, trailing slashes and path segments below owner/repo are ignored.
@@ -549,12 +549,9 @@ func convertRepoURLToProjectKey(repoURL string) string {
 	if s == "" {
 		return ""
 	}
-	// GitHub URLs are ASCII. Rejecting anything else also keeps strings.ToLower
-	// byte-length preserving, so offsets found in lower are valid in s.
-	if !isASCII(s) {
-		return ""
-	}
-	lower := strings.ToLower(s)
+	// asciiLower keeps byte offsets in lower valid in s, and never folds a
+	// non-ASCII rune (e.g. U+212A KELVIN SIGN) into an ASCII letter.
+	lower := asciiLower(s)
 	// Peel an outer scheme wrapped around another one (https://git+ssh://...);
 	// the inner URL is then parsed and host-checked as a whole.
 	for {
@@ -566,6 +563,8 @@ func convertRepoURLToProjectKey(repoURL string) string {
 		s = s[len(scheme)+len("://"):]
 		lower = rest
 	}
+	// Only known schemes are trusted, so a host disguised as a scheme
+	// (evil.example://github.com/...) or foo://github.com/... yields no key.
 	if scheme, _, ok := strings.Cut(lower, "://"); ok && !repoURLSchemes[scheme] {
 		return ""
 	}
@@ -582,12 +581,10 @@ func convertRepoURLToProjectKey(repoURL string) string {
 	parsed, err := neturl.Parse(s)
 	if err != nil {
 		// ssh://git@github.com:owner/repo is not a valid URL ("owner" is not a port),
-		// but it is a common way to write an scp-style path behind an ssh scheme.
-		for _, scheme := range []string{"ssh://", "git+ssh://"} {
-			if strings.HasPrefix(lower, scheme) {
-				if path, ok := trimGitHubSCPPrefix(s[len(scheme):]); ok {
-					return githubProjectKeyFromPath(path)
-				}
+		// but it is a common way to write an scp-style path behind a scheme.
+		if scheme, _, ok := strings.Cut(lower, "://"); ok {
+			if path, ok := trimGitHubSCPPrefix(s[len(scheme)+len("://"):]); ok {
+				return githubProjectKeyFromPath(path)
 			}
 		}
 		return ""
@@ -598,12 +595,12 @@ func convertRepoURLToProjectKey(repoURL string) string {
 	return githubProjectKeyFromPath(parsed.EscapedPath())
 }
 
-// trimGitHubSCPPrefix strips an scp-style "git@github.com:" or "github.com:" prefix
-// and reports whether one was present. As in git, "host:path" without a scheme is
+// trimGitHubSCPPrefix strips an scp-style "[git@][www.]github.com:" prefix and
+// reports whether one was present. As in git, "host:path" without a scheme is
 // always scp-style, so github.com:123/repo names owner "123", not port 123.
 func trimGitHubSCPPrefix(s string) (string, bool) {
-	lower := strings.ToLower(s)
-	for _, prefix := range []string{"git@github.com:", "github.com:"} {
+	lower := asciiLower(s)
+	for _, prefix := range []string{"git@github.com:", "github.com:", "git@www.github.com:", "www.github.com:"} {
 		if strings.HasPrefix(lower, prefix) {
 			return s[len(prefix):], true
 		}
@@ -611,14 +608,15 @@ func trimGitHubSCPPrefix(s string) (string, bool) {
 	return "", false
 }
 
-// isASCII reports whether s contains only ASCII bytes.
-func isASCII(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] >= 0x80 {
-			return false
+// asciiLower lowercases only the ASCII letters A-Z, leaving every other byte as is.
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + ('a' - 'A')
 		}
 	}
-	return true
+	return string(b)
 }
 
 // isGitHubHost reports whether host (without port) is github.com or www.github.com.
@@ -633,8 +631,8 @@ func githubProjectKeyFromPath(path string) string {
 	if len(parts) < 2 {
 		return ""
 	}
-	owner := strings.ToLower(parts[0])
-	repo := strings.TrimSuffix(strings.ToLower(parts[1]), ".git")
+	owner := asciiLower(parts[0])
+	repo := strings.TrimSuffix(asciiLower(parts[1]), ".git")
 	if !githubOwnerPattern.MatchString(owner) || !githubRepoPattern.MatchString(repo) || repo == "." || repo == ".." {
 		return ""
 	}
@@ -642,9 +640,10 @@ func githubProjectKeyFromPath(path string) string {
 }
 
 // normalizeRepoURLForProject converts any repo URL into canonical form for project lookups:
-// - Uses common.NormalizeRepositoryURL to clean schemes, .git, fragments, etc.
-// - For GitHub URLs, trims to https://github.com/<owner>/<repo>
-// - For non-GitHub URLs, returns the normalized URL unchanged
+//   - Uses common.NormalizeRepositoryURL to clean schemes, .git, fragments, etc.
+//   - When convertRepoURLToProjectKey yields a key, returns https://<key>
+//     (https://github.com/<owner>/<repo>, lowercased, www. dropped)
+//   - Otherwise (non-GitHub host or no valid owner/repo), returns the normalized URL unchanged
 func normalizeRepoURLForProject(raw string) string {
 	if raw == "" {
 		return ""

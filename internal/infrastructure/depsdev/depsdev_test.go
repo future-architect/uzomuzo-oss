@@ -204,9 +204,29 @@ func TestConvertRepoURLToProjectKey(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "non_ascii_input_returns_empty",
-			input:    "a://b://ȺȺȺȺȺȺȺȺȺȺȺȺ",
+			name:     "non_ascii_after_nested_scheme_does_not_panic",
+			input:    "https://git+ssh://ȺȺȺȺȺȺȺȺȺȺȺȺ://x",
 			expected: "",
+		},
+		{
+			name:     "non_ascii_below_owner_repo_is_ignored",
+			input:    "https://github.com/Owner/Repo/tree/main/日本語.md",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "kelvin_sign_not_folded_to_ascii_k_returns_empty",
+			input:    "git@github.com:Owner/Kpo",
+			expected: "",
+		},
+		{
+			name:     "scp_style_www_host",
+			input:    "git@www.github.com:Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "scp_style_after_https_scheme",
+			input:    "https://github.com:Owner/Repo",
+			expected: "github.com/owner/repo",
 		},
 		{
 			name:     "non_ascii_lookalike_host_returns_empty",
