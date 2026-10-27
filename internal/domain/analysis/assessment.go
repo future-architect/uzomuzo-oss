@@ -61,8 +61,11 @@ const (
 	// SignalTransitiveAdvisoryCount is the number of advisories against
 	// dependencies rather than the package itself.
 	SignalTransitiveAdvisoryCount = "transitive_advisory_count"
-	SignalDaysSinceRelease        = "days_since_release"
-	SignalEcosystemDelivery       = "ecosystem_delivery"
+	// SignalAgedDependencyAdvisory names the oldest HIGH dependency advisory
+	// public for longer than EolInactivityDays, with its publication date.
+	SignalAgedDependencyAdvisory = "aged_dependency_advisory"
+	SignalDaysSinceRelease       = "days_since_release"
+	SignalEcosystemDelivery      = "ecosystem_delivery"
 	// SignalAllReleasesYanked carries the registry name asserting that every
 	// published release is yanked (see RegistryState).
 	SignalAllReleasesYanked = "all_releases_yanked"

@@ -312,6 +312,90 @@ func TestLifecycleAssessor_DependencyAdvisoriesThreshold(t *testing.T) {
 	}
 }
 
+// TestLifecycleAssessor_AgedDependencyAdvisory pins option B of #591: a HIGH
+// dependency advisory public for longer than EolInactivityDays makes a dormant
+// package EOL-Effective again. See ADR-0032.
+func TestLifecycleAssessor_AgedDependencyAdvisory(t *testing.T) {
+	t.Parallel()
+	now := time.Now()
+	rules := cfg.GetDefaultLifecycle()
+	dormant := now.AddDate(0, 0, -(rules.EolInactivityDays + 10))
+	agedDate := now.AddDate(0, 0, -(rules.EolInactivityDays + 1))
+	freshDate := now.AddDate(0, 0, -(rules.EolInactivityDays - 1))
+	aged := Advisory{ID: "GHSA-aged", Relation: AdvisoryRelationTransitive, CVSS3Score: 9.8, DependencyName: "hoek@2.16.3", Published: agedDate}
+	fresh := Advisory{ID: "GHSA-fresh", Relation: AdvisoryRelationTransitive, CVSS3Score: 7.5, DependencyName: "uuid@8.3.2", Published: freshDate}
+	agedUnknown := Advisory{ID: "RUSTSEC-aged-marker", Relation: AdvisoryRelationTransitive, Published: agedDate}
+	agedMedium := Advisory{ID: "GHSA-aged-medium", Relation: AdvisoryRelationTransitive, CVSS3Score: 5.3, Published: agedDate}
+	undated := Advisory{ID: "GHSA-undated", Relation: AdvisoryRelationTransitive, CVSS3Score: 9.8}
+	agedReason := "HIGH dependency advisory unfixed since " + agedDate.Format("2006-01-02") + " (GHSA-aged in hoek@2.16.3)"
+
+	dormantRepo := func() *RepoState {
+		return &RepoState{DaysSinceLastCommit: rules.EolInactivityDays + 10, LatestHumanCommit: &dormant, CommitStats: &CommitStats{}}
+	}
+	noCommitRepo := func() *RepoState { return &RepoState{DaysSinceLastCommit: 100} }
+	stable := func(advs ...Advisory) *ReleaseInfo {
+		return &ReleaseInfo{StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: dormant, Advisories: advs}}
+	}
+	maintained0 := map[string]*ScoreEntity{"Maintained": NewScoreEntity("Maintained", 0, 10, "")}
+
+	tests := []struct {
+		name       string
+		analysis   *Analysis
+		scores     map[string]*ScoreEntity
+		wantLabel  MaintenanceStatus
+		wantReason string
+		wantTrace  string
+	}{
+		{"override: aged HIGH dependency advisory is EOL-Effective",
+			&Analysis{RepoState: dormantRepo(), ReleaseInfo: stable(fresh, aged)}, maintained0,
+			LabelEOLEffective, "Unmaintained; " + agedReason, "scorecard_incomplete residual_vuln_dependency_aged"},
+		{"override: one day short of the period stays Stalled (exceljs today)",
+			&Analysis{RepoState: dormantRepo(), ReleaseInfo: stable(fresh)}, maintained0,
+			LabelStalled, "Unmaintained; HIGH advisories only in dependencies", "scorecard_incomplete residual_vuln_dependency_only"},
+		{"override: aged but unknown severity never qualifies",
+			&Analysis{RepoState: dormantRepo(), ReleaseInfo: stable(agedUnknown)}, maintained0,
+			LabelStalled, "Unmaintained; dependency advisories of unknown severity", "scorecard_incomplete residual_vuln_dependency_only"},
+		{"override: aged MEDIUM next to a fresh HIGH stays Stalled",
+			&Analysis{RepoState: dormantRepo(), ReleaseInfo: stable(fresh, agedMedium)}, maintained0,
+			LabelStalled, "Unmaintained; HIGH advisories only in dependencies", "scorecard_incomplete residual_vuln_dependency_only"},
+		{"override: HIGH with no publication date stays Stalled",
+			&Analysis{RepoState: dormantRepo(), ReleaseInfo: stable(undated)}, maintained0,
+			LabelStalled, "Unmaintained; HIGH advisories only in dependencies", "scorecard_incomplete residual_vuln_dependency_only"},
+		{"RustSec marker: aged HIGH dependency advisory is EOL-Effective",
+			&Analysis{RepoState: dormantRepo(), AdvisoryDBState: flagged("RUSTSEC-2020-0095", "difference is unmaintained"), ReleaseInfo: stable(aged)}, nil,
+			LabelEOLEffective, "Unmaintained per RUSTSEC-2020-0095; " + agedReason, "advisory_db_unmaintained_dependency_aged"},
+		{"no commit data, C2a: aged HIGH dependency advisory is EOL-Effective",
+			&Analysis{RepoState: noCommitRepo(), ReleaseInfo: stable(aged)}, maintained0,
+			LabelEOLEffective, "Unmaintained; " + agedReason, "inactive_no_commit_C2a_low_maint_advisory_dependency_aged"},
+		{"no commit data, C3a: aged HIGH dependency advisory is EOL-Effective",
+			&Analysis{RepoState: noCommitRepo(), ReleaseInfo: stable(aged)}, nil,
+			LabelEOLEffective, "No recent releases; " + agedReason, "inactive_no_commit_C3a_advisory_dependency_aged"},
+	}
+	svc := NewLifecycleAssessorService()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			res, err := svc.Assess(context.Background(), AssessmentInput{Analysis: tt.analysis, Scores: tt.scores, EOL: EOLStatus{State: EOLNotEOL}})
+			if err != nil {
+				t.Fatalf("Assess failed: %v", err)
+			}
+			if MaintenanceStatus(res.Label) != tt.wantLabel {
+				t.Fatalf("Label: got %q, want %q (reason %q, trace %v)", res.Label, tt.wantLabel, res.Reason, res.Trace)
+			}
+			if res.Reason != tt.wantReason {
+				t.Errorf("Reason: got %q, want %q", res.Reason, tt.wantReason)
+			}
+			if !containsString(res.Trace, tt.wantTrace) {
+				t.Errorf("Trace: got %v, want it to contain %q", res.Trace, tt.wantTrace)
+			}
+			wantSignal := tt.wantLabel == LabelEOLEffective
+			if got := hasSignal(res.Signals, SignalAgedDependencyAdvisory); got != wantSignal {
+				t.Errorf("SignalAgedDependencyAdvisory present: got %v, want %v", got, wantSignal)
+			}
+		})
+	}
+}
+
 func TestVersionDetail_DirectOnly(t *testing.T) {
 	t.Parallel()
 	var nilVD *VersionDetail

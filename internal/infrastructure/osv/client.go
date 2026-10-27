@@ -65,6 +65,15 @@ type Client struct {
 	// ttlTicket is lastTicket at the last SetCacheTTL. An answer to a request
 	// numbered at or below it is not stored. Guarded by storeMu.
 	ttlTicket uint64
+	// vulnCache holds /v1/vulns/{id} answers keyed by advisory ID: an advisory
+	// record does not depend on which package asked for it.
+	vulnCache sync.Map
+}
+
+// vulnAnswer is one cached /v1/vulns/{id} answer. found is false for a 404.
+type vulnAnswer struct {
+	rec   domain.AdvisoryRecord
+	found bool
 }
 
 // cachedAnswer is one stored OSV answer for a package, numbered by the request
@@ -762,4 +771,55 @@ func isPlainWebURL(u string) bool {
 // Whitespace is exempt so ordinary line breaks survive to be collapsed.
 func sanitizeSummary(raw string) string {
 	return domain.SanitizeExternalSummary(raw)
+}
+
+// GetVuln fetches one advisory record by ID from /v1/vulns/{id}. found is
+// false when OSV.dev has no record for the ID (404); that answer is cached, a
+// transport or decode error is not.
+func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord, bool, error) {
+	id = strings.TrimSpace(id)
+	if !isPlainAdvisoryID(id) {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln: invalid advisory id %q", id)
+	}
+	if v, ok := c.vulnCache.Load(id); ok {
+		ans := v.(vulnAnswer)
+		return ans.rec, ans.found, nil
+	}
+	apiURL := c.resolvedBaseURL() + "/v1/vulns/" + url.PathEscape(id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln request build failed: %w", err)
+	}
+	req.Header.Set("User-Agent", osvUserAgent)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.http.Do(ctx, req)
+	if err != nil {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln http failed: %w", err)
+	}
+	// best-effort cleanup; the body is fully read below.
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		c.vulnCache.Store(id, vulnAnswer{})
+		return domain.AdvisoryRecord{}, false, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln http status %d", resp.StatusCode)
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxJSONResponseSize+1))
+	if err != nil {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln read failed: %w", err)
+	}
+	if len(raw) > maxJSONResponseSize {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln response exceeded %d bytes", maxJSONResponseSize)
+	}
+	var v wireVuln
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln decode failed: %w", err)
+	}
+	rec, ok := toRecord(&v)
+	if !ok || !strings.EqualFold(rec.ID, id) {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln: answer for %q did not name it", id)
+	}
+	c.vulnCache.Store(id, vulnAnswer{rec: rec, found: true})
+	return rec, true, nil
 }

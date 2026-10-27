@@ -183,6 +183,9 @@ type Advisory struct {
 	// DependencyName identifies the transitive dependency this advisory originates from.
 	// Format: "name@version" (e.g., "qs@6.5.5"). Empty for direct advisories.
 	DependencyName string
+	// Published is when the advisory was first published (OSV). Zero when
+	// unknown; it is fetched only for HIGH+ dependency advisories.
+	Published time.Time
 }
 
 // Advisory Relation constants.

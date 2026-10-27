@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"sort"
+	"sync"
+	"time"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
@@ -112,6 +114,7 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 	}
 	slog.Debug("fetching_transitive_advisory_severity", "unique_ids", len(ids))
 	details := s.depsdevClient.FetchAdvisoriesBatch(ctx, ids)
+	published := s.fetchHighAdvisoryPublished(ctx, details)
 
 	// Append enriched transitive advisories to lifecycle-relevant versions.
 	// Only attach to versions whose dependency graph was actually fetched.
@@ -128,6 +131,7 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 				entries[i].CVSS3Score = detail.CVSS3Score
 				entries[i].Severity = domain.SeverityFromCVSS3(detail.CVSS3Score)
 			}
+			entries[i].Published = published[entries[i].ID]
 		}
 		graphVersion := graphSELFVersion(depsGraphResults[p])
 		for _, vd := range []*domain.VersionDetail{
@@ -139,6 +143,62 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 			}
 		}
 	}
+}
+
+// osvPublishedWorkers bounds concurrent /v1/vulns/{id} lookups.
+const osvPublishedWorkers = 8
+
+// fetchHighAdvisoryPublished looks up the OSV publication date of every
+// dependency advisory deps.dev rates HIGH or CRITICAL. Only those can make a
+// dormant package EOL-Effective through a dependency (see ADR-0032), so the
+// lower ones are not fetched. A failed or missing lookup leaves the date zero,
+// which never qualifies. A withdrawn record is also left zero.
+func (s *IntegrationService) fetchHighAdvisoryPublished(ctx context.Context, details map[string]*depsdev.AdvisoryDetail) map[string]time.Time {
+	if s.osvClient == nil || len(details) == 0 {
+		return nil
+	}
+	var ids []string
+	for id, d := range details {
+		if d == nil {
+			continue
+		}
+		if sev := domain.SeverityFromCVSS3(d.CVSS3Score); sev == "HIGH" || sev == "CRITICAL" {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	out := make(map[string]time.Time, len(ids))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, osvPublishedWorkers)
+	failed := 0
+	for _, id := range ids {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			wg.Wait()
+			return out
+		}
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			rec, found, err := s.osvClient.GetVuln(ctx, id)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				failed++
+				slog.Debug("osv_vuln_lookup_failed", "id", id, "error", err)
+				return
+			}
+			if found && !rec.Withdrawn && !rec.Published.IsZero() {
+				out[id] = rec.Published
+			}
+		}(id)
+	}
+	wg.Wait()
+	slog.Debug("osv_dependency_advisory_published", "high_ids", len(ids), "dated", len(out), "failed", failed)
+	return out
 }
 
 // graphSELFVersion extracts the version of the root (SELF) node from a dependency graph.

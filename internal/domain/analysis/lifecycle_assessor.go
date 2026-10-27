@@ -184,6 +184,12 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 			label, t = string(LabelEOLEffective), "advisory_db_unmaintained_unpatched_vulns"
 			reason = "Unmaintained per " + ad.AdvisoryID + ", unpatched vulnerabilities"
 		case severityDependencyOnlyHigh:
+			if aged := s.agedDependencyAdvisory(s.getStableOrMaxVersionDetail(analysis), now); aged != nil {
+				label, t = string(LabelEOLEffective), "advisory_db_unmaintained_dependency_aged"
+				reason = agedDependencyReason("Unmaintained per "+ad.AdvisoryID, aged)
+				signals = append(signals, agedDependencySignal(aged))
+				break
+			}
 			t = "advisory_db_unmaintained_no_direct_high_severity"
 			reason += "; HIGH advisories only in dependencies"
 		case severityDependencyOnlyUnknown:
@@ -293,8 +299,55 @@ func (s *LifecycleAssessorService) residualVulnResult(a *Analysis, now time.Time
 		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLEffective),
 			Reason: "Unmaintained, unpatched vulnerabilities", Trace: append(trace, prefix+" residual_vuln_override"), Signals: signals}
 	}
+	vd := s.getStableOrMaxVersionDetail(a)
+	if aged := s.agedDependencyAdvisory(vd, now); aged != nil {
+		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLEffective),
+			Reason: agedDependencyReason("Unmaintained", aged), Trace: append(trace, prefix+" residual_vuln_dependency_aged"),
+			Signals: append(signals, agedDependencySignal(aged))}
+	}
 	return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelStalled),
-		Reason: "Unmaintained; " + s.dependencyOnlyFinding(s.getStableOrMaxVersionDetail(a)), Trace: append(trace, prefix+" residual_vuln_dependency_only"), Signals: signals}
+		Reason: "Unmaintained; " + s.dependencyOnlyFinding(vd), Trace: append(trace, prefix+" residual_vuln_dependency_only"), Signals: signals}
+}
+
+// agedDependencyAdvisory returns the oldest dependency advisory with a known
+// CVSS3 score at or above HighSeverityCVSSThreshold that was published more
+// than EolInactivityDays before now, or nil. Such an advisory is evidence of
+// non-maintenance: the maintainers had as long as the tool's dormancy period
+// to update the dependency and did not. Unknown severity and an unknown
+// publication date never qualify. See ADR-0032.
+func (s *LifecycleAssessorService) agedDependencyAdvisory(vd *VersionDetail, now time.Time) *Advisory {
+	if vd == nil {
+		return nil
+	}
+	cutoff := now.AddDate(0, 0, -s.rules.EolInactivityDays)
+	var oldest *Advisory
+	for i := range vd.Advisories {
+		adv := &vd.Advisories[i]
+		if adv.Relation != AdvisoryRelationTransitive || adv.CVSS3Score < s.rules.HighSeverityCVSSThreshold {
+			continue
+		}
+		if adv.Published.IsZero() || !adv.Published.Before(cutoff) {
+			continue
+		}
+		if oldest == nil || adv.Published.Before(oldest.Published) {
+			oldest = adv
+		}
+	}
+	return oldest
+}
+
+// agedDependencyReason names the aged advisory so the reader can check it.
+func agedDependencyReason(prefix string, adv *Advisory) string {
+	where := ""
+	if adv.DependencyName != "" {
+		where = " in " + adv.DependencyName
+	}
+	return fmt.Sprintf("%s; HIGH dependency advisory unfixed since %s (%s%s)",
+		prefix, adv.Published.Format("2006-01-02"), adv.ID, where)
+}
+
+func agedDependencySignal(adv *Advisory) Signal {
+	return sig(SignalAgedDependencyAdvisory, fmt.Sprintf("%s (%s)", adv.ID, adv.Published.Format("2006-01-02")))
 }
 
 // dependencyOnlyFinding says what made the dependency-only outcome. With a
@@ -606,6 +659,15 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	// C2: Scorecard Maintained < threshold
 	if hasMaintainedScore && !isMaintenanceOk {
 		if hasAdvisories && analysis.hasPublishDataAt(now) && daysSincePublish > s.rules.EolInactivityDays {
+			if severity == severityDependencyOnlyHigh {
+				if aged := s.agedDependencyAdvisory(s.getStableOrMaxVersionDetail(analysis), now); aged != nil {
+					signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
+					return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLEffective),
+						Reason:  agedDependencyReason("Unmaintained", aged),
+						Trace:   []string{"inactive_no_commit_C2a_low_maint_advisory_dependency_aged"},
+						Signals: append(signals, agedDependencySignal(aged))}, nil
+				}
+			}
 			label, reason, trace := severityOutcome(severity, "inactive_no_commit_C2a_low_maint_advisory",
 				"Unmaintained, unpatched vulnerabilities", "Unmaintained", "_old_publish")
 			signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
@@ -623,6 +685,15 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	// C3: No scorecard — deps.dev signals only
 	if hasAdvisories {
 		if analysis.hasPublishDataAt(now) && daysSincePublish > s.rules.EolInactivityDays {
+			if severity == severityDependencyOnlyHigh {
+				if aged := s.agedDependencyAdvisory(s.getStableOrMaxVersionDetail(analysis), now); aged != nil {
+					signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
+					return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLEffective),
+						Reason:  agedDependencyReason("No recent releases", aged),
+						Trace:   []string{"inactive_no_commit_C3a_advisory_dependency_aged"},
+						Signals: append(signals, agedDependencySignal(aged))}, nil
+				}
+			}
 			label, reason, trace := severityOutcome(severity, "inactive_no_commit_C3a_advisory",
 				"Unpatched vulnerabilities, no recent releases", "No recent releases", "_old_publish")
 			signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
