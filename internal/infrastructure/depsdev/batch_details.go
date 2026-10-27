@@ -514,10 +514,14 @@ func (c *DepsDevClient) buildCompleteResult(purl string, packageResp *PackageRes
 	return result
 }
 
-// githubOwnerPattern and githubRepoPattern accept only the characters GitHub
-// allows in account and repository names, so a URL that merely mentions
-// github.com somewhere cannot turn into a project key.
 var (
+	// repoURLSchemes are the schemes convertRepoURLToProjectKey accepts.
+	repoURLSchemes = map[string]bool{
+		"http": true, "https": true, "git": true, "ssh": true,
+		"git+http": true, "git+https": true, "git+ssh": true,
+	}
+	// githubOwnerPattern and githubRepoPattern accept only the characters GitHub
+	// allows in account and repository names (matched after lowercasing).
 	githubOwnerPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
 	githubRepoPattern  = regexp.MustCompile(`^[a-z0-9._-]+$`)
 )
@@ -525,15 +529,16 @@ var (
 // convertRepoURLToProjectKey converts a repository URL to the deps.dev project key
 // github.com/<owner>/<repo> (lowercased, ".git" suffix removed).
 //
-// The host must be exactly github.com or www.github.com (case-insensitive, any port);
-// any other host, or a path without valid owner and repository segments, returns "".
+// The host must be exactly github.com or www.github.com (case-insensitive, any port)
+// and the scheme, if any, one of repoURLSchemes; any other host or scheme, non-ASCII
+// input, or a path without valid owner and repository segments returns "".
 // Supported inputs:
 //   - https://github.com/owner/repo, http://, git://, git+https:// (optionally with user@ and :port)
 //   - ssh://git@github.com/owner/repo, git+ssh://git@github.com/owner/repo
 //   - a scheme wrapped around another one, e.g. https://git+ssh://git@github.com/owner/repo
 //   - ssh://git@github.com:owner/repo, git+ssh://git@github.com:owner/repo (scp-style path after a scheme)
 //   - git@github.com:owner/repo, github.com:owner/repo (scp-style, no scheme)
-//   - github.com/owner/repo, git@github.com/owner/repo (no scheme)
+//   - github.com/owner/repo, git@github.com/owner/repo, //github.com/owner/repo (no scheme)
 //
 // Query strings, fragments, trailing slashes and path segments below owner/repo are ignored.
 func convertRepoURLToProjectKey(repoURL string) string {
@@ -544,17 +549,25 @@ func convertRepoURLToProjectKey(repoURL string) string {
 	if s == "" {
 		return ""
 	}
+	// GitHub URLs are ASCII. Rejecting anything else also keeps strings.ToLower
+	// byte-length preserving, so offsets found in lower are valid in s.
+	if !isASCII(s) {
+		return ""
+	}
 	lower := strings.ToLower(s)
 	// Peel an outer scheme wrapped around another one (https://git+ssh://...);
 	// the inner URL is then parsed and host-checked as a whole.
 	for {
-		_, rest, ok := strings.Cut(lower, "://")
+		scheme, rest, ok := strings.Cut(lower, "://")
 		inner, _, hasInner := strings.Cut(rest, "://")
-		if !ok || !hasInner || !isURLScheme(inner) {
+		if !ok || !hasInner || !repoURLSchemes[scheme] || !repoURLSchemes[inner] {
 			break
 		}
-		s = s[len(s)-len(rest):]
+		s = s[len(scheme)+len("://"):]
 		lower = rest
+	}
+	if scheme, _, ok := strings.Cut(lower, "://"); ok && !repoURLSchemes[scheme] {
+		return ""
 	}
 
 	if !strings.Contains(lower, "://") {
@@ -586,30 +599,26 @@ func convertRepoURLToProjectKey(repoURL string) string {
 }
 
 // trimGitHubSCPPrefix strips an scp-style "git@github.com:" or "github.com:" prefix
-// and reports whether one was present. "github.com:<digits>/..." is a host with a
-// port, not an scp-style path, so it is not stripped.
+// and reports whether one was present. As in git, "host:path" without a scheme is
+// always scp-style, so github.com:123/repo names owner "123", not port 123.
 func trimGitHubSCPPrefix(s string) (string, bool) {
 	lower := strings.ToLower(s)
-	if strings.HasPrefix(lower, "git@github.com:") {
-		return s[len("git@github.com:"):], true
-	}
-	if strings.HasPrefix(lower, "github.com:") {
-		rest := s[len("github.com:"):]
-		port, _, _ := strings.Cut(rest, "/")
-		if port != "" && strings.Trim(port, "0123456789") == "" {
-			return "", false
+	for _, prefix := range []string{"git@github.com:", "github.com:"} {
+		if strings.HasPrefix(lower, prefix) {
+			return s[len(prefix):], true
 		}
-		return rest, true
 	}
 	return "", false
 }
 
-// isURLScheme reports whether s is a syntactically valid URL scheme (RFC 3986).
-func isURLScheme(s string) bool {
-	if s == "" || s[0] < 'a' || s[0] > 'z' {
-		return false
+// isASCII reports whether s contains only ASCII bytes.
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
+		}
 	}
-	return strings.Trim(s, "abcdefghijklmnopqrstuvwxyz0123456789+.-") == ""
+	return true
 }
 
 // isGitHubHost reports whether host (without port) is github.com or www.github.com.

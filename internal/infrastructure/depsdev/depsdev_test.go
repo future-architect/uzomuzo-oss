@@ -129,9 +129,9 @@ func TestConvertRepoURLToProjectKey(t *testing.T) {
 			expected: "github.com/owner/repo",
 		},
 		{
-			name:     "scheme_less_host_with_port",
-			input:    "github.com:443/Owner/Repo",
-			expected: "github.com/owner/repo",
+			name:     "scp_style_numeric_owner",
+			input:    "github.com:123/Repo/tree/main",
+			expected: "github.com/123/repo",
 		},
 		{
 			name:     "git_https_scheme",
@@ -192,6 +192,36 @@ func TestConvertRepoURLToProjectKey(t *testing.T) {
 			name:     "git_suffix_only_returns_empty",
 			input:    "https://github.com/Owner/.git",
 			expected: "",
+		},
+		{
+			name:     "host_disguised_as_inner_scheme_returns_empty",
+			input:    "https://evil.example://github.com/Owner/Repo",
+			expected: "",
+		},
+		{
+			name:     "unknown_scheme_returns_empty",
+			input:    "foo://github.com/Owner/Repo",
+			expected: "",
+		},
+		{
+			name:     "non_ascii_input_returns_empty",
+			input:    "a://b://ȺȺȺȺȺȺȺȺȺȺȺȺ",
+			expected: "",
+		},
+		{
+			name:     "non_ascii_lookalike_host_returns_empty",
+			input:    "git@gİthub.com:Owner/Repo",
+			expected: "",
+		},
+		{
+			name:     "uppercase_nested_scheme",
+			input:    "HTTPS://GIT+SSH://git@github.com/Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "protocol_relative",
+			input:    "//github.com/Owner/Repo",
+			expected: "github.com/owner/repo",
 		},
 		{
 			name:     "non_github_domain_returns_empty",
