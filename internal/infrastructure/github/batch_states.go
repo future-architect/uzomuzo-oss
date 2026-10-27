@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -77,7 +79,7 @@ func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]
 	for _, analysis := range analyses {
 		if analysis != nil && analysis.RepoURL != "" {
 			// Only process GitHub repositories; skip others to avoid parse errors
-			if _, _, err := common.ExtractGitHubOwnerRepo(analysis.RepoURL); err == nil {
+			if isGitHubRepositoryURL(analysis.RepoURL) {
 				repoURLs = append(repoURLs, analysis.RepoURL)
 			} else {
 				slog.Debug("Skipping non-GitHub repository for GitHub client", "repo_url", analysis.RepoURL)
@@ -165,6 +167,24 @@ func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]
 	}
 
 	return nil
+}
+
+func isGitHubRepositoryURL(raw string) bool {
+	normalized := common.NormalizeRepositoryURL(raw)
+	parsed, err := url.Parse(normalized)
+	if err != nil {
+		return false
+	}
+	if parsed.Host == "" {
+		host, _, ok := strings.Cut(normalized, "/")
+		if !ok || (!strings.EqualFold(host, "github.com") && !strings.EqualFold(host, "www.github.com")) {
+			return false
+		}
+	} else if !common.IsGitHubHost(parsed.Hostname()) {
+		return false
+	}
+	_, _, err = common.ExtractGitHubOwnerRepo(raw)
+	return err == nil
 }
 
 // fetchRepositoryStatesBatch efficiently fetches repository states for multiple URLs.

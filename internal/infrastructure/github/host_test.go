@@ -19,26 +19,42 @@ func (t *countingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("ok")), Request: req, Header: make(http.Header)}, nil
 }
 
-func TestFetchRepositoryStatesFiltersByExtractableHost(t *testing.T) {
-	cfg := &config.Config{GitHub: config.GetDefaultGitHub()}
-	cfg.GitHub.Token = "test-token"
-	transport := &countingTransport{}
-	c := NewClient(cfg)
-	c.httpClient = httpclient.NewClient(&http.Client{Transport: transport}, httpclient.DefaultRetryConfig())
-	analyses := map[string]*domain.Analysis{
-		"decoy": {RepoURL: "https://notgithub.com/o/r"},
-		"scp":   {RepoURL: "git@github.com:o/r.git"},
+func TestFetchRepositoryStatesFiltersByGitHubHost(t *testing.T) {
+	tests := []struct {
+		name      string
+		repoURL   string
+		wantFetch bool
+	}{
+		{"https", "https://github.com/o/r", true},
+		{"git plus https", "git+https://github.com/o/r.git", true},
+		{"scp", "git@github.com:o/r.git", true},
+		{"ssh", "ssh://git@github.com/o/r", true},
+		{"port", "https://github.com:443/o/r", true},
+		{"www", "https://www.github.com/o/r", true},
+		{"scheme-less github", "github.com/o/r", true},
+		{"scheme-less www", "www.github.com/o/r", true},
+		{"scheme-less mixed case", "GitHub.COM/o/r", true},
+		{"gitlab", "gitlab.com/o/r", false},
+		{"golang vanity", "golang.org/x/net", false},
+		{"bare owner repo", "o/r", false},
+		{"https gitlab", "https://gitlab.com/o/r", false},
+		{"decoy prefix", "https://notgithub.com/o/r", false},
+		{"decoy suffix", "https://github.com.evil.example/o/r", false},
 	}
-	_ = c.FetchRepositoryStates(context.Background(), analyses)
-	if transport.calls == 0 {
-		t.Fatal("scp GitHub URL was dropped before fetching")
-	}
-	before := transport.calls
-	_ = c.FetchRepositoryStates(context.Background(), map[string]*domain.Analysis{
-		"decoy": {RepoURL: "https://notgithub.com/o/r"},
-	})
-	if transport.calls != before {
-		t.Fatalf("decoy host triggered %d requests", transport.calls-before)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{GitHub: config.GetDefaultGitHub()}
+			cfg.GitHub.Token = "test-token"
+			transport := &countingTransport{}
+			c := NewClient(cfg)
+			c.httpClient = httpclient.NewClient(&http.Client{Transport: transport}, httpclient.DefaultRetryConfig())
+			_ = c.FetchRepositoryStates(context.Background(), map[string]*domain.Analysis{
+				"repo": {RepoURL: tc.repoURL},
+			})
+			if fetched := transport.calls > 0; fetched != tc.wantFetch {
+				t.Fatalf("FetchRepositoryStates(%q) made %d requests, want fetch %t", tc.repoURL, transport.calls, tc.wantFetch)
+			}
+		})
 	}
 }
 
