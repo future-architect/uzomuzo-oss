@@ -245,6 +245,73 @@ func TestLifecycleAssessor_TransitiveAdvisorySignal(t *testing.T) {
 	}
 }
 
+// TestLifecycleAssessor_DependencyAdvisoriesThreshold covers a
+// ResidualAdvisoryThreshold above 1, where own advisories severe enough for the
+// override can still be too few: the reason must not claim the HIGH one is in
+// a dependency.
+func TestLifecycleAssessor_DependencyAdvisoriesThreshold(t *testing.T) {
+	t.Parallel()
+	now := time.Now()
+	c := cfg.GetDefaultLifecycle()
+	c.ResidualAdvisoryThreshold = 2
+	dormant := now.AddDate(0, 0, -(c.EolInactivityDays + 10))
+	tests := []struct {
+		name       string
+		advs       []Advisory
+		wantLabel  MaintenanceStatus
+		wantReason string
+	}{
+		{
+			name: "one own HIGH and one dependency LOW: Stalled, own HIGH named as too few",
+			advs: []Advisory{
+				{ID: "GHSA-own-high", Relation: AdvisoryRelationDirect, CVSS3Score: 9.8},
+				{ID: "GHSA-dep-low", Relation: AdvisoryRelationTransitive, CVSS3Score: 3.1},
+			},
+			wantLabel:  LabelStalled,
+			wantReason: "Unmaintained; too few own advisories; dependency advisories reach the threshold",
+		},
+		{
+			name: "two own HIGH: EOL-Effective",
+			advs: []Advisory{
+				{ID: "GHSA-own-1", Relation: AdvisoryRelationDirect, CVSS3Score: 9.8},
+				{ID: "GHSA-own-2", Relation: AdvisoryRelationDirect, CVSS3Score: 7.5},
+			},
+			wantLabel:  LabelEOLEffective,
+			wantReason: "Unmaintained, unpatched vulnerabilities",
+		},
+		{
+			name: "two dependency HIGH: Stalled, HIGH only in dependencies",
+			advs: []Advisory{
+				{ID: "GHSA-dep-1", Relation: AdvisoryRelationTransitive, CVSS3Score: 9.8},
+				{ID: "GHSA-dep-2", Relation: AdvisoryRelationTransitive, CVSS3Score: 7.5},
+			},
+			wantLabel:  LabelStalled,
+			wantReason: "Unmaintained; HIGH advisories only in dependencies",
+		},
+	}
+	svc := NewLifecycleAssessorServiceWithConfig(c)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			a := &Analysis{
+				RepoState:   &RepoState{DaysSinceLastCommit: c.EolInactivityDays + 10, LatestHumanCommit: &dormant, CommitStats: &CommitStats{}},
+				ReleaseInfo: &ReleaseInfo{StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: dormant, Advisories: tt.advs}},
+			}
+			scores := map[string]*ScoreEntity{"Maintained": NewScoreEntity("Maintained", 0, 10, "")}
+			res, err := svc.Assess(context.Background(), AssessmentInput{Analysis: a, Scores: scores, EOL: EOLStatus{State: EOLNotEOL}})
+			if err != nil {
+				t.Fatalf("Assess failed: %v", err)
+			}
+			if MaintenanceStatus(res.Label) != tt.wantLabel {
+				t.Fatalf("Label: got %q, want %q (reason %q)", res.Label, tt.wantLabel, res.Reason)
+			}
+			if res.Reason != tt.wantReason {
+				t.Errorf("Reason: got %q, want %q", res.Reason, tt.wantReason)
+			}
+		})
+	}
+}
+
 func TestVersionDetail_DirectOnly(t *testing.T) {
 	t.Parallel()
 	var nilVD *VersionDetail

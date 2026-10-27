@@ -297,11 +297,16 @@ func (s *LifecycleAssessorService) residualVulnResult(a *Analysis, now time.Time
 		Reason: "Unmaintained; " + s.dependencyOnlyFinding(s.getStableOrMaxVersionDetail(a)), Trace: append(trace, prefix+" residual_vuln_dependency_only"), Signals: signals}
 }
 
-// dependencyOnlyFinding says what made the dependency-only outcome: a HIGH
-// dependency advisory, or only dependency advisories without a CVSS3 score.
-// The second must not be called HIGH: in practice it is often a dependency's
-// unmaintained marker or a CVSS v4-only record.
+// dependencyOnlyFinding says what made the dependency-only outcome. With a
+// ResidualAdvisoryThreshold above 1, own advisories that are severe enough can
+// still fall short of the count, so that case is named first; otherwise it
+// separates a HIGH dependency advisory from dependency advisories without a
+// CVSS3 score. The latter must not be called HIGH: in practice it is often a
+// dependency's unmaintained marker or a CVSS v4-only record.
 func (s *LifecycleAssessorService) dependencyOnlyFinding(vd *VersionDetail) string {
+	if s.isPotentiallyHigh(vd.DirectOnly()) {
+		return "too few own advisories; dependency advisories reach the threshold"
+	}
 	if vd != nil && vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) > 0 {
 		return "HIGH advisories only in dependencies"
 	}
