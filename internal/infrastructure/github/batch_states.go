@@ -169,6 +169,7 @@ func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]
 	return nil
 }
 
+// isGitHubRepositoryURL reports whether raw identifies a GitHub repository.
 func isGitHubRepositoryURL(raw string) bool {
 	normalized := common.NormalizeRepositoryURL(raw)
 	parsed, err := url.Parse(normalized)
@@ -177,7 +178,7 @@ func isGitHubRepositoryURL(raw string) bool {
 	}
 	if parsed.Host == "" {
 		host, _, ok := strings.Cut(normalized, "/")
-		if !ok || (!strings.EqualFold(host, "github.com") && !strings.EqualFold(host, "www.github.com")) {
+		if !ok || !common.IsGitHubHost(host) {
 			return false
 		}
 	} else if !common.IsGitHubHost(parsed.Hostname()) {
