@@ -18,7 +18,7 @@ func FuzzConvertRepoURLToProjectKey(f *testing.F) {
 		"https://git+ssh://git@github.com/Owner/Repo",
 		"https://git@github.com:443@evil.example/Owner/Repo",
 		"https://evil.example://github.com/Owner/Repo",
-		"a://b://ȺȺȺȺȺȺȺȺȺȺȺȺ",
+		"a://b://\u023a\u023a\u023a\u023a\u023a\u023a\u023a\u023a\u023a\u023a\u023a\u023a",
 		"",
 	}
 	for _, s := range seeds {

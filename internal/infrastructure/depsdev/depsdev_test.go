@@ -205,17 +205,17 @@ func TestConvertRepoURLToProjectKey(t *testing.T) {
 		},
 		{
 			name:     "non_ascii_after_nested_scheme_does_not_panic",
-			input:    "https://git+ssh://ȺȺȺȺȺȺȺȺȺȺȺȺ://x",
+			input:    "https://git+ssh://\u023a\u023a\u023a\u023a\u023a\u023a\u023a\u023a\u023a\u023a\u023a\u023a://x",
 			expected: "",
 		},
 		{
 			name:     "non_ascii_below_owner_repo_is_ignored",
-			input:    "https://github.com/Owner/Repo/tree/main/日本語.md",
+			input:    "https://github.com/Owner/Repo/tree/main/\u65e5\u672c\u8a9e.md",
 			expected: "github.com/owner/repo",
 		},
 		{
 			name:     "kelvin_sign_not_folded_to_ascii_k_returns_empty",
-			input:    "git@github.com:Owner/Kpo",
+			input:    "git@github.com:Owner/\u212apo",
 			expected: "",
 		},
 		{
@@ -230,7 +230,7 @@ func TestConvertRepoURLToProjectKey(t *testing.T) {
 		},
 		{
 			name:     "non_ascii_lookalike_host_returns_empty",
-			input:    "git@gİthub.com:Owner/Repo",
+			input:    "git@g\u0130thub.com:Owner/Repo",
 			expected: "",
 		},
 		{
@@ -242,6 +242,31 @@ func TestConvertRepoURLToProjectKey(t *testing.T) {
 			name:     "protocol_relative",
 			input:    "//github.com/Owner/Repo",
 			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "scheme_like_text_below_owner_repo_is_ignored",
+			input:    "//github.com/Owner/Repo/tree/main/docs/http://example",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "scheme_like_text_in_scp_path_is_ignored",
+			input:    "git@github.com:Owner/Repo/blob/main/http://example",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "scp_style_non_git_user",
+			input:    "org-1@github.com:Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "trailing_dot_host",
+			input:    "https://github.com./Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "scp_style_user_hiding_real_host_returns_empty",
+			input:    "git@evil.example:github.com:Owner/Repo",
+			expected: "",
 		},
 		{
 			name:     "non_github_domain_returns_empty",
