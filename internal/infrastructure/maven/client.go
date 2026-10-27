@@ -187,7 +187,7 @@ func (c *Client) getRepoURLRecursive(ctx context.Context, groupID, artifactID, v
 			continue
 		}
 		// Skip if already GitHub (would have matched above)
-		if strings.Contains(strings.ToLower(p), "github.com") {
+		if u, err := url.Parse(p); err == nil && common.IsGitHubHost(u.Hostname()) {
 			continue
 		}
 		if gh := c.scrapeFirstGitHubFromHTML(ctx, p); gh != "" {

@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common"
 	"github.com/future-architect/uzomuzo-oss/internal/common/ttlcache"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
@@ -341,35 +342,38 @@ func extractRepoURL(info *ProjectInfo) string {
 
 // isGitHubURL checks if a URL points to github.com.
 func isGitHubURL(u string) bool {
-	u = strings.ToLower(strings.TrimSpace(u))
-	return strings.Contains(u, "github.com/")
+	parsed := parseGitHubURL(u)
+	return parsed != nil && common.IsGitHubHost(parsed.Hostname())
 }
 
 // normalizeGitHub trims a GitHub URL to https://github.com/owner/repo form.
 func normalizeGitHub(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
+	u := parseGitHubURL(raw)
+	if u == nil || !common.IsGitHubHost(u.Hostname()) {
 		return ""
 	}
-	// Strip common prefixes
-	for _, prefix := range []string{"git+", "git://"} {
-		raw = strings.TrimPrefix(raw, prefix)
-	}
-	if !strings.HasPrefix(raw, "http") {
-		raw = "https://" + raw
-	}
-
-	// Extract github.com/owner/repo, dropping deeper paths
-	idx := strings.Index(strings.ToLower(raw), "github.com/")
-	if idx < 0 {
-		return ""
-	}
-	path := raw[idx+len("github.com/"):]
+	path := strings.Trim(u.Path, "/")
 	path = strings.TrimSuffix(path, ".git")
-	path = strings.Trim(path, "/")
 	parts := strings.SplitN(path, "/", 3)
 	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
 		return ""
 	}
 	return "https://github.com/" + parts[0] + "/" + parts[1]
+}
+
+func parseGitHubURL(raw string) *url.URL {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	raw = strings.TrimPrefix(raw, "git+")
+	raw = strings.TrimPrefix(raw, "git://")
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil
+	}
+	return u
 }

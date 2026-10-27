@@ -591,7 +591,7 @@ func convertRepoURLToProjectKey(repoURL string) string {
 		}
 		return ""
 	}
-	if !isGitHubHost(parsed.Hostname()) {
+	if !common.IsGitHubHost(parsed.Hostname()) {
 		return ""
 	}
 	return githubProjectKeyFromPath(parsed.EscapedPath())
@@ -634,13 +634,6 @@ func asciiLower(s string) string {
 		}
 	}
 	return string(b)
-}
-
-// isGitHubHost reports whether host (without port, optionally with a trailing
-// dot) is github.com or www.github.com.
-func isGitHubHost(host string) bool {
-	host = strings.TrimSuffix(host, ".")
-	return strings.EqualFold(host, "github.com") || strings.EqualFold(host, "www.github.com")
 }
 
 // githubProjectKeyFromPath builds github.com/<owner>/<repo> from the first two

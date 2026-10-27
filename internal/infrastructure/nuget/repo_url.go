@@ -176,7 +176,7 @@ func (c *Client) resolveRepoURLHeuristics(ctx context.Context, raw string) strin
 		if final := c.followRedirect(ctx, s); final != "" {
 			fu, _ := url.Parse(final)
 			if fu != nil {
-				if strings.Contains(strings.ToLower(fu.Hostname()), "github.com") {
+				if common.IsGitHubHost(fu.Hostname()) {
 					// Normalize and validate before returning
 					if norm := common.NormalizeRepositoryURL(final); norm != "" && common.IsValidGitHubURL(norm) {
 						return norm

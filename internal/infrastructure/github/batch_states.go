@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
@@ -78,7 +77,7 @@ func (c *Client) FetchRepositoryStates(ctx context.Context, analyses map[string]
 	for _, analysis := range analyses {
 		if analysis != nil && analysis.RepoURL != "" {
 			// Only process GitHub repositories; skip others to avoid parse errors
-			if strings.Contains(strings.ToLower(analysis.RepoURL), "github.com") {
+			if _, _, err := common.ExtractGitHubOwnerRepo(analysis.RepoURL); err == nil {
 				repoURLs = append(repoURLs, analysis.RepoURL)
 			} else {
 				slog.Debug("Skipping non-GitHub repository for GitHub client", "repo_url", analysis.RepoURL)
