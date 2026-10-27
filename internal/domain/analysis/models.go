@@ -304,6 +304,18 @@ func (vd *VersionDetail) ExcludingAdvisories(ids []string) *VersionDetail {
 	return &out
 }
 
+// DirectOnly returns a copy of vd holding only the advisories against the
+// package itself (Relation DIRECT or empty). Returns nil for a nil receiver and
+// never mutates the receiver. See ADR-0032.
+func (vd *VersionDetail) DirectOnly() *VersionDetail {
+	if vd == nil {
+		return nil
+	}
+	out := *vd
+	out.Advisories = vd.DirectAdvisories()
+	return &out
+}
+
 // UnknownSeverityAdvisoryCount returns the count of advisories without severity data (CVSS3Score == 0).
 func (vd *VersionDetail) UnknownSeverityAdvisoryCount() int {
 	count := 0
