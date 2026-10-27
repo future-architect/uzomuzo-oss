@@ -326,6 +326,12 @@ func (s *LifecycleAssessorService) agedDependencyAdvisory(vd *VersionDetail, now
 		if adv.Relation != AdvisoryRelationTransitive || adv.CVSS3Score < s.rules.HighSeverityCVSSThreshold {
 			continue
 		}
+		// A reviewed rating below HIGH wins over the CVSS3 score: CVSS3 cannot
+		// express attack preconditions (GHSA-w5hq is 7.5 in CVSS3 but rated
+		// MODERATE by GitHub because it needs a caller-supplied buffer).
+		if r := adv.ReviewedSeverity; r != "" && r != "HIGH" && r != "CRITICAL" {
+			continue
+		}
 		if adv.Published.IsZero() || !adv.Published.Before(cutoff) {
 			continue
 		}

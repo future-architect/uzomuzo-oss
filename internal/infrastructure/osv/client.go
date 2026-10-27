@@ -476,6 +476,9 @@ type wireVuln struct {
 	Summary          string   `json:"summary"`
 	DatabaseSpecific struct {
 		CWEIDs []string `json:"cwe_ids"`
+		// Severity is the curator's reviewed rating (GitHub: LOW, MODERATE,
+		// HIGH, CRITICAL). Absent for RustSec.
+		Severity string `json:"severity"`
 	} `json:"database_specific"`
 	// Published is RFC3339. An unparseable or absent value leaves the record's
 	// Published zero, which the domain treats as a non-match.
@@ -615,6 +618,7 @@ func toRecord(v *wireVuln) (domain.AdvisoryRecord, bool) {
 		Summary:   sanitizeSummary(v.Summary),
 		Reference: advisoryReference(v.References),
 		Withdrawn: strings.TrimSpace(v.Withdrawn) != "",
+		Severity:  strings.ToUpper(strings.TrimSpace(v.DatabaseSpecific.Severity)),
 	}
 	for _, cwe := range v.DatabaseSpecific.CWEIDs {
 		if cweIDPattern.MatchString(cwe) {

@@ -186,6 +186,10 @@ type Advisory struct {
 	// Published is when the advisory was first published (OSV). Zero when
 	// unknown; it is fetched only for HIGH+ dependency advisories.
 	Published time.Time
+	// ReviewedSeverity is the advisory database's reviewed rating (OSV
+	// database_specific.severity, e.g. GitHub's MODERATE). Empty when unknown;
+	// fetched with Published.
+	ReviewedSeverity string
 }
 
 // Advisory Relation constants.

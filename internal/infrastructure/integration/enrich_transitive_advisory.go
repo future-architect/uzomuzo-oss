@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"sort"
 	"sync"
-	"time"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
@@ -114,7 +113,7 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 	}
 	slog.Debug("fetching_transitive_advisory_severity", "unique_ids", len(ids))
 	details := s.depsdevClient.FetchAdvisoriesBatch(ctx, ids)
-	published := s.fetchHighAdvisoryPublished(ctx, details)
+	osvFacts := s.fetchHighAdvisoryOSVFacts(ctx, details)
 
 	// Append enriched transitive advisories to lifecycle-relevant versions.
 	// Only attach to versions whose dependency graph was actually fetched.
@@ -131,7 +130,10 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 				entries[i].CVSS3Score = detail.CVSS3Score
 				entries[i].Severity = domain.SeverityFromCVSS3(detail.CVSS3Score)
 			}
-			entries[i].Published = published[entries[i].ID]
+			if f, ok := osvFacts[entries[i].ID]; ok {
+				entries[i].Published = f.Published
+				entries[i].ReviewedSeverity = f.Severity
+			}
 		}
 		graphVersion := graphSELFVersion(depsGraphResults[p])
 		for _, vd := range []*domain.VersionDetail{
@@ -148,12 +150,13 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 // osvPublishedWorkers bounds concurrent /v1/vulns/{id} lookups.
 const osvPublishedWorkers = 8
 
-// fetchHighAdvisoryPublished looks up the OSV publication date of every
+// fetchHighAdvisoryOSVFacts looks up the OSV record (publication date and
+// reviewed severity) of every
 // dependency advisory deps.dev rates HIGH or CRITICAL. Only those can make a
 // dormant package EOL-Effective through a dependency (see ADR-0032), so the
 // lower ones are not fetched. A failed or missing lookup leaves the date zero,
 // which never qualifies. A withdrawn record is also left zero.
-func (s *IntegrationService) fetchHighAdvisoryPublished(ctx context.Context, details map[string]*depsdev.AdvisoryDetail) map[string]time.Time {
+func (s *IntegrationService) fetchHighAdvisoryOSVFacts(ctx context.Context, details map[string]*depsdev.AdvisoryDetail) map[string]domain.AdvisoryRecord {
 	if s.osvClient == nil || len(details) == 0 {
 		return nil
 	}
@@ -167,7 +170,7 @@ func (s *IntegrationService) fetchHighAdvisoryPublished(ctx context.Context, det
 		}
 	}
 	sort.Strings(ids)
-	out := make(map[string]time.Time, len(ids))
+	out := make(map[string]domain.AdvisoryRecord, len(ids))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, osvPublishedWorkers)
@@ -192,7 +195,7 @@ func (s *IntegrationService) fetchHighAdvisoryPublished(ctx context.Context, det
 				return
 			}
 			if found && !rec.Withdrawn && !rec.Published.IsZero() {
-				out[id] = rec.Published
+				out[id] = rec
 			}
 		}(id)
 	}

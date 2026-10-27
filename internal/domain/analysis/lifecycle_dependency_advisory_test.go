@@ -327,6 +327,7 @@ func TestLifecycleAssessor_AgedDependencyAdvisory(t *testing.T) {
 	agedUnknown := Advisory{ID: "RUSTSEC-aged-marker", Relation: AdvisoryRelationTransitive, Published: agedDate}
 	agedMedium := Advisory{ID: "GHSA-aged-medium", Relation: AdvisoryRelationTransitive, CVSS3Score: 5.3, Published: agedDate}
 	undated := Advisory{ID: "GHSA-undated", Relation: AdvisoryRelationTransitive, CVSS3Score: 9.8}
+	agedModerate := Advisory{ID: "GHSA-w5hq-like", Relation: AdvisoryRelationTransitive, CVSS3Score: 7.5, ReviewedSeverity: "MODERATE", Published: agedDate}
 	agedReason := "HIGH dependency advisory unfixed since " + agedDate.Format("2006-01-02") + " (GHSA-aged in hoek@2.16.3)"
 
 	dormantRepo := func() *RepoState {
@@ -357,6 +358,9 @@ func TestLifecycleAssessor_AgedDependencyAdvisory(t *testing.T) {
 			LabelStalled, "Unmaintained; dependency advisories of unknown severity", "scorecard_incomplete residual_vuln_dependency_only"},
 		{"override: aged MEDIUM next to a fresh HIGH stays Stalled",
 			&Analysis{RepoState: dormantRepo(), ReleaseInfo: stable(fresh, agedMedium)}, maintained0,
+			LabelStalled, "Unmaintained; HIGH advisories only in dependencies", "scorecard_incomplete residual_vuln_dependency_only"},
+		{"override: CVSS3 HIGH but reviewed MODERATE never qualifies",
+			&Analysis{RepoState: dormantRepo(), ReleaseInfo: stable(agedModerate)}, maintained0,
 			LabelStalled, "Unmaintained; HIGH advisories only in dependencies", "scorecard_incomplete residual_vuln_dependency_only"},
 		{"override: HIGH with no publication date stays Stalled",
 			&Analysis{RepoState: dormantRepo(), ReleaseInfo: stable(undated)}, maintained0,

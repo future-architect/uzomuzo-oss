@@ -16,7 +16,7 @@ func TestClient_GetVuln(t *testing.T) {
 		calls.Add(1)
 		switch r.URL.Path {
 		case "/v1/vulns/GHSA-jp4x-w63m-7wgm":
-			_, _ = w.Write([]byte(`{"id":"GHSA-jp4x-w63m-7wgm","published":"2018-04-26T17:21:53Z","summary":"hoek prototype pollution"}`))
+			_, _ = w.Write([]byte(`{"id":"GHSA-jp4x-w63m-7wgm","published":"2018-04-26T17:21:53Z","summary":"hoek prototype pollution","database_specific":{"severity":"moderate"}}`))
 		case "/v1/vulns/GHSA-hp3w-g68c-fv3c":
 			_, _ = w.Write([]byte(`{"id":"GHSA-hp3w-g68c-fv3c","published":"2026-09-24T00:00:00Z","withdrawn":"2026-10-22T19:21:04Z"}`))
 		case "/v1/vulns/GHSA-other-answer":
@@ -40,6 +40,9 @@ func TestClient_GetVuln(t *testing.T) {
 	}
 	if rec.Withdrawn {
 		t.Errorf("Withdrawn: got true, want false")
+	}
+	if rec.Severity != "MODERATE" {
+		t.Errorf("Severity: got %q, want MODERATE", rec.Severity)
 	}
 
 	rec, found, err = c.GetVuln(ctx, "GHSA-hp3w-g68c-fv3c")

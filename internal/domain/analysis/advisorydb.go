@@ -66,6 +66,9 @@ type AdvisoryRecord struct {
 	Published time.Time
 	// Withdrawn is true when the advisory database has retracted the advisory.
 	Withdrawn bool
+	// Severity is the database's reviewed rating, upper-cased (GitHub: LOW,
+	// MODERATE, HIGH, CRITICAL). Empty when the record carries none.
+	Severity string
 	// Aliases are other identifiers of the same advisory (a GHSA or CVE ID).
 	Aliases  []string
 	Affected []AdvisoryAffected
