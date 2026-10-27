@@ -364,6 +364,9 @@ func TestGitHubURLHostCheck(t *testing.T) {
 		{"git://github.com/o/r/tree/main", "https://github.com/o/r"},
 		{"github.com/o/r", "https://github.com/o/r"},
 		{"//github.com/o/r", "https://github.com/o/r"},
+		{"git+ssh://git@github.com/o/r", "https://github.com/o/r"},
+		{"https://github.com:443/o/r", "https://github.com/o/r"},
+		{"https://github.com/o/r%2Fx", "https://github.com/o/r%2Fx"},
 		{"//notgithub.com/o/r", ""},
 		{"https://github.com", ""},
 	}

@@ -102,7 +102,7 @@ func NormalizeRepositoryURL(rawURL string) string {
 // - github.com/owner/repo
 // - owner/repo (if it looks like a valid GitHub path)
 //
-// A URL with a scheme must have a host that satisfies IsGitHubHost.
+// An http(s) URL must have a host that satisfies IsGitHubHost.
 func IsValidGitHubURL(urlStr string) bool {
 	if urlStr == "" {
 		return false

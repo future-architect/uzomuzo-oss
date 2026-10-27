@@ -45,6 +45,7 @@ func TestIsGitHubPage(t *testing.T) {
 	}{
 		{"https://github.com/org", true},
 		{"github.com/org", true},
+		{"//github.com/org", true},
 		{"git@github.com:o/r.git", true},
 		{"https://www.github.com:443/org", true},
 		{"https://notgithub.com/page", false},
