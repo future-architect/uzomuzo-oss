@@ -6,20 +6,22 @@ import (
 
 func TestIsGitHubHost(t *testing.T) {
 	tests := []struct {
+		name string
 		host string
 		want bool
 	}{
-		{"github.com", true},
-		{"WWW.GitHub.com", true},
-		{"github.com.", true},
-		{"notgithub.com", false},
-		{"github.com.evil.example", false},
-		{"api.github.com", false},
-		{"", false},
-		{"github.com:443", false},
+		{"exact", "github.com", true},
+		{"www_mixed_case", "WWW.GitHub.com", true},
+		{"trailing_dot", "github.com.", true},
+		{"double_trailing_dot", "github.com..", false},
+		{"decoy_prefix", "notgithub.com", false},
+		{"decoy_suffix", "github.com.evil.example", false},
+		{"api_subdomain", "api.github.com", false},
+		{"empty", "", false},
+		{"with_port", "github.com:443", false},
 	}
 	for _, tc := range tests {
-		t.Run(tc.host, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			if got := IsGitHubHost(tc.host); got != tc.want {
 				t.Fatalf("IsGitHubHost(%q) = %v, want %v", tc.host, got, tc.want)
 			}

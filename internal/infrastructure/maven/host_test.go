@@ -37,3 +37,25 @@ func TestGetRepoURLScrapesDecoyHostPage(t *testing.T) {
 		t.Fatalf("GetRepoURL = %q, decoy page requests = %d", got, transport.decoyCalls)
 	}
 }
+
+func TestIsGitHubPage(t *testing.T) {
+	tests := []struct {
+		page string
+		want bool
+	}{
+		{"https://github.com/org", true},
+		{"github.com/org", true},
+		{"git@github.com:o/r.git", true},
+		{"https://www.github.com:443/org", true},
+		{"https://notgithub.com/page", false},
+		{"https://api.github.com/org", false},
+		{"https://example.com/github.com", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.page, func(t *testing.T) {
+			if got := isGitHubPage(tc.page); got != tc.want {
+				t.Errorf("isGitHubPage(%q) = %v, want %v", tc.page, got, tc.want)
+			}
+		})
+	}
+}

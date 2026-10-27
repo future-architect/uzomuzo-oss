@@ -363,16 +363,26 @@ func TestGitHubURLHostCheck(t *testing.T) {
 		{"git+https://www.github.com/o/r.git", "https://github.com/o/r"},
 		{"git://github.com/o/r/tree/main", "https://github.com/o/r"},
 		{"github.com/o/r", "https://github.com/o/r"},
+		{"//github.com/o/r", "https://github.com/o/r"},
+		{"//notgithub.com/o/r", ""},
+		{"https://github.com", ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
-			if got := isGitHubURL(tc.input); got != (tc.want != "") {
-				t.Errorf("isGitHubURL(%q) = %v", tc.input, got)
-			}
 			if got := normalizeGitHub(tc.input); got != tc.want {
 				t.Errorf("normalizeGitHub(%q) = %q, want %q", tc.input, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestExtractRepoURLSkipsHostOnlyGitHubURL(t *testing.T) {
+	info := &ProjectInfo{
+		HomePage:    "https://github.com",
+		ProjectURLs: map[string]string{"Repository": "https://github.com", "Source": "https://github.com/o/r"},
+	}
+	if got := extractRepoURL(info); got != "https://github.com/o/r" {
+		t.Fatalf("extractRepoURL = %q, want %q", got, "https://github.com/o/r")
 	}
 }
 

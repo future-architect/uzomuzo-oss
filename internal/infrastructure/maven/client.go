@@ -187,7 +187,7 @@ func (c *Client) getRepoURLRecursive(ctx context.Context, groupID, artifactID, v
 			continue
 		}
 		// Skip if already GitHub (would have matched above)
-		if u, err := url.Parse(p); err == nil && common.IsGitHubHost(u.Hostname()) {
+		if isGitHubPage(p) {
 			continue
 		}
 		if gh := c.scrapeFirstGitHubFromHTML(ctx, p); gh != "" {
@@ -615,4 +615,14 @@ func (c *Client) SearchByArtifactID(ctx context.Context, artifactID string) (gro
 		"group_id", g,
 	)
 	return g, true, nil
+}
+
+// isGitHubPage reports whether page is on a GitHub host, accepting scheme-less and scp-style forms.
+func isGitHubPage(page string) bool {
+	n := common.NormalizeRepositoryURL(page)
+	if !strings.Contains(n, "://") {
+		n = "https://" + n
+	}
+	u, err := url.Parse(n)
+	return err == nil && common.IsGitHubHost(u.Hostname())
 }

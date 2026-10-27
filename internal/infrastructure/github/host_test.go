@@ -64,10 +64,11 @@ func TestNormalizeRepoURLRequiresGitHubHost(t *testing.T) {
 	tests := []struct {
 		input     string
 		wantCalls int
+		want      string
 	}{
-		{"https://notgithub.com/o/r", 0},
-		{"https://github.com.evil.example/o/r", 0},
-		{"https://github.com/o/r", 1},
+		{"https://notgithub.com/o/r", 0, ""},
+		{"https://github.com.evil.example/o/r", 0, ""},
+		{"https://github.com/o/r", 1, "https://github.com/o/r"},
 	}
 	for _, tc := range tests {
 		before := transport.calls
@@ -75,8 +76,8 @@ func TestNormalizeRepoURLRequiresGitHubHost(t *testing.T) {
 		if calls := transport.calls - before; calls != tc.wantCalls {
 			t.Errorf("normalizeRepoURL(%q) made %d requests, want %d", tc.input, calls, tc.wantCalls)
 		}
-		if tc.wantCalls == 0 && got != "" {
-			t.Errorf("normalizeRepoURL(%q) = %q, want empty", tc.input, got)
+		if got != tc.want {
+			t.Errorf("normalizeRepoURL(%q) = %q, want %q", tc.input, got, tc.want)
 		}
 	}
 }
