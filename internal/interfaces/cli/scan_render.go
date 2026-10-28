@@ -499,12 +499,25 @@ type enrichedJSONEntry struct {
 	MaxTransitiveAdvisorySeverity string  `json:"max_transitive_advisory_severity,omitempty"`
 	MaxTransitiveCVSS3Score       float64 `json:"max_transitive_cvss3_score,omitempty"`
 
-	Reason      string   `json:"reason,omitempty"`
-	Error       string   `json:"error,omitempty"`
-	Source      string   `json:"source,omitempty"`
-	Via         string   `json:"via,omitempty"`
-	Relation    string   `json:"relation,omitempty"`
-	RelationVia []string `json:"relation_via,omitempty"`
+	Reason string `json:"reason,omitempty"`
+	// DependencyAdvisoryAge names the dependency advisory that decided the
+	// lifecycle label of a dormant package (ADR-0032). Status "unknown" means
+	// the OSV lookup failed and the label might have been EOL-Effective.
+	DependencyAdvisoryAge *dependencyAdvisoryAgeJSON `json:"dependency_advisory_age,omitempty"`
+	Error                 string                     `json:"error,omitempty"`
+	Source                string                     `json:"source,omitempty"`
+	Via                   string                     `json:"via,omitempty"`
+	Relation              string                     `json:"relation,omitempty"`
+	RelationVia           []string                   `json:"relation_via,omitempty"`
+}
+
+type dependencyAdvisoryAgeJSON struct {
+	Status           domain.DependencyAdvisoryAgeStatus `json:"status"`
+	AdvisoryID       string                             `json:"advisory_id"`
+	Dependency       string                             `json:"dependency,omitempty"`
+	Published        time.Time                          `json:"published,omitzero"`
+	EligibleOn       time.Time                          `json:"eligible_on,omitzero"`
+	ReviewedSeverity string                             `json:"reviewed_severity,omitempty"`
 }
 
 type maliciousJSON struct {
@@ -676,6 +689,10 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 		je.Malicious = &maliciousJSON{AdvisoryID: a.MaliciousState.AdvisoryID, Summary: a.MaliciousState.Summary, Reference: a.MaliciousState.Reference, Scope: a.MaliciousState.Scope}
 	} else if a.MaliciousState != nil && a.MaliciousState.Status == domain.MaliciousStatusLookupFailed {
 		je.MaliciousCheck = "unknown"
+	}
+	if d := a.DependencyAdvisoryAge(); d != nil {
+		je.DependencyAdvisoryAge = &dependencyAdvisoryAgeJSON{Status: d.Status, AdvisoryID: d.AdvisoryID, Dependency: d.Dependency,
+			Published: d.Published, EligibleOn: d.EligibleOn, ReviewedSeverity: d.ReviewedSeverity}
 	}
 	if a.HasDormantRelease() {
 		d := a.DormantRelease

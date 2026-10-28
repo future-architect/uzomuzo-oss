@@ -5,8 +5,10 @@ import (
 	"log/slog"
 	"sort"
 	"sync"
+	"time"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 )
 
@@ -113,7 +115,7 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 	}
 	slog.Debug("fetching_transitive_advisory_severity", "unique_ids", len(ids))
 	details := s.depsdevClient.FetchAdvisoriesBatch(ctx, ids)
-	osvFacts := s.fetchHighAdvisoryOSVFacts(ctx, details)
+	osvFacts := s.fetchDependencyAdvisoryOSVFacts(ctx, details)
 
 	// Append enriched transitive advisories to lifecycle-relevant versions.
 	// Only attach to versions whose dependency graph was actually fetched.
@@ -131,8 +133,11 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 				entries[i].Severity = domain.SeverityFromCVSS3(detail.CVSS3Score)
 			}
 			if f, ok := osvFacts[entries[i].ID]; ok {
-				entries[i].Published = f.Published
-				entries[i].ReviewedSeverity = f.Severity
+				entries[i].RecordLookup = f.lookup
+				if f.lookup == domain.AdvisoryRecordFound {
+					entries[i].Published = f.rec.Published
+					entries[i].ReviewedSeverity = f.rec.Severity
+				}
 			}
 		}
 		graphVersion := graphSELFVersion(depsGraphResults[p])
@@ -147,61 +152,97 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 	}
 }
 
-// osvPublishedWorkers bounds concurrent /v1/vulns/{id} lookups.
-const osvPublishedWorkers = 8
+// osvFactWorkers bounds concurrent /v1/vulns/{id} lookups.
+const osvFactWorkers = 8
 
-// fetchHighAdvisoryOSVFacts looks up the OSV record (publication date and
-// reviewed severity) of every
-// dependency advisory deps.dev rates HIGH or CRITICAL. Only those can make a
-// dormant package EOL-Effective through a dependency (see ADR-0032), so the
-// lower ones are not fetched. A failed or missing lookup leaves the date zero,
-// which never qualifies. A withdrawn record is also left zero.
-func (s *IntegrationService) fetchHighAdvisoryOSVFacts(ctx context.Context, details map[string]*depsdev.AdvisoryDetail) map[string]domain.AdvisoryRecord {
+// osvFactsBudget bounds all /v1/vulns/{id} lookups of one enrichment. Each
+// lookup retries on its own, so with OSV down a scan would otherwise grow by
+// minutes; IDs not answered in time are recorded as failed lookups.
+const osvFactsBudget = 30 * time.Second
+
+// osvFact is what the OSV lookup of one advisory ID found.
+type osvFact struct {
+	rec    domain.AdvisoryRecord
+	lookup domain.AdvisoryRecordLookup
+}
+
+// fetchDependencyAdvisoryOSVFacts looks up the OSV record (publication date,
+// reviewed severity, withdrawal) of every dependency advisory whose CVSS3
+// score reaches the HIGH threshold. Only those can make a dormant package
+// EOL-Effective through a dependency (see ADR-0032). Every selected ID gets an
+// outcome, including the ones the time budget or a cancellation cut off.
+func (s *IntegrationService) fetchDependencyAdvisoryOSVFacts(ctx context.Context, details map[string]*depsdev.AdvisoryDetail) map[string]osvFact {
 	if s.osvClient == nil || len(details) == 0 {
 		return nil
 	}
+	threshold := assessorHighSeverityThreshold()
 	var ids []string
 	for id, d := range details {
-		if d == nil {
-			continue
-		}
-		if sev := domain.SeverityFromCVSS3(d.CVSS3Score); sev == "HIGH" || sev == "CRITICAL" {
+		if d != nil && domain.IsKnownHighCVSS3(d.CVSS3Score, threshold) {
 			ids = append(ids, id)
 		}
 	}
+	if len(ids) == 0 {
+		return nil
+	}
 	sort.Strings(ids)
-	out := make(map[string]domain.AdvisoryRecord, len(ids))
+	ctx, cancel := context.WithTimeout(ctx, osvFactsBudget)
+	defer cancel()
+	out := make(map[string]osvFact, len(ids))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, osvPublishedWorkers)
-	failed := 0
-	for _, id := range ids {
+	sem := make(chan struct{}, osvFactWorkers)
+dispatch:
+	for i, id := range ids {
 		select {
 		case sem <- struct{}{}:
 		case <-ctx.Done():
-			wg.Wait()
-			return out
+			mu.Lock()
+			for _, rest := range ids[i:] {
+				out[rest] = osvFact{lookup: domain.AdvisoryRecordLookupFailed}
+			}
+			mu.Unlock()
+			break dispatch
 		}
 		wg.Add(1)
 		go func(id string) {
 			defer wg.Done()
 			defer func() { <-sem }()
 			rec, found, err := s.osvClient.GetVuln(ctx, id)
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil {
-				failed++
+			f := osvFact{rec: rec, lookup: domain.AdvisoryRecordFound}
+			switch {
+			case err != nil:
 				slog.Debug("osv_vuln_lookup_failed", "id", id, "error", err)
-				return
+				f = osvFact{lookup: domain.AdvisoryRecordLookupFailed}
+			case !found:
+				f.lookup = domain.AdvisoryRecordNotFound
+			case rec.Withdrawn:
+				f.lookup = domain.AdvisoryRecordWithdrawn
 			}
-			if found && !rec.Withdrawn && !rec.Published.IsZero() {
-				out[id] = rec
-			}
+			mu.Lock()
+			out[id] = f
+			mu.Unlock()
 		}(id)
 	}
 	wg.Wait()
-	slog.Debug("osv_dependency_advisory_published", "high_ids", len(ids), "dated", len(out), "failed", failed)
+	failed := 0
+	for _, f := range out {
+		if f.lookup == domain.AdvisoryRecordLookupFailed {
+			failed++
+		}
+	}
+	slog.Debug("osv_dependency_advisory_facts", "ids", len(ids), "failed", failed)
 	return out
+}
+
+// assessorHighSeverityThreshold is the HIGH threshold the lifecycle assessor
+// applies. The assessor reads the default lifecycle config, not the loaded
+// one, so this does too: a lookup threshold that differed would leave an
+// advisory the assessor counts without a publication date.
+func assessorHighSeverityThreshold() float64 {
+	c := config.GetDefaultLifecycle()
+	config.NormalizeLifecycleConfig(&c)
+	return c.HighSeverityCVSSThreshold
 }
 
 // graphSELFVersion extracts the version of the root (SELF) node from a dependency graph.

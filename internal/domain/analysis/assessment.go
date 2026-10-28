@@ -92,6 +92,10 @@ type AssessmentResult struct {
 	Trace   []string          // debug-only explanatory steps (not printed in normal CLI)
 	Meta    map[string]string // future extensibility (key/value lightweight diagnostics)
 	Signals []Signal          // data points evaluated for this verdict
+	// DependencyAdvisoryAge names the dependency advisory that decided a
+	// dormant package whose HIGH advisories are all in dependencies. Nil on
+	// every other path. See ADR-0032.
+	DependencyAdvisoryAge *DependencyAdvisoryAge
 }
 
 // AssessmentService defines contract for assessment services.

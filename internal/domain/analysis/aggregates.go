@@ -416,6 +416,23 @@ func (a *Analysis) GetLifecycleResult() *AssessmentResult {
 	return a.AxisResults[LifecycleAxis]
 }
 
+// DependencyAdvisoryAge returns the dependency advisory that decided the
+// lifecycle label, or nil when the package's own data decided it. See ADR-0032.
+func (a *Analysis) DependencyAdvisoryAge() *DependencyAdvisoryAge {
+	if r := a.GetLifecycleResult(); r != nil {
+		return r.DependencyAdvisoryAge
+	}
+	return nil
+}
+
+// DependencyAdvisoryAgeUnknown reports whether the lifecycle label rests on a
+// dependency advisory whose OSV lookup failed, so the label might have been
+// EOL-Effective.
+func (a *Analysis) DependencyAdvisoryAgeUnknown() bool {
+	d := a.DependencyAdvisoryAge()
+	return d != nil && d.Status == DependencyAdvisoryUnknown
+}
+
 // ============================================================================
 // External API convenience methods (for Go package users)
 // ============================================================================
