@@ -304,7 +304,7 @@ func (r *DependenciesResponse) CountByRelation() (direct, transitive int) {
 
 // DependentsResponse represents the response from the GetDependents API.
 // Endpoint: GET /v3alpha/systems/{system}/packages/{name}:dependents
-// Supported systems: npm, maven, pypi, cargo, go.
+// Supported systems: npm, maven, pypi, cargo.
 type DependentsResponse struct {
 	DependentCount int `json:"dependentCount"`
 	// DirectDependentCount and DependentCount are retained separately. See ADR-0032.

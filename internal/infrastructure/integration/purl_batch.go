@@ -252,14 +252,14 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 		if a == nil {
 			continue
 		}
+		if a.DependentCount > 0 {
+			continue // already populated by deps.dev
+		}
 		if a.Package != nil {
 			switch strings.ToLower(strings.TrimSpace(a.Package.Ecosystem)) {
 			case "gem", "rubygems", "packagist", "composer":
 				a.Dependents = nil
 			}
-		}
-		if a.DependentCount > 0 {
-			continue // already populated by deps.dev
 		}
 		if a.Package == nil {
 			continue

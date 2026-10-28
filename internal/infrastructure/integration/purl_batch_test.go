@@ -408,10 +408,17 @@ func TestEnrichDependentCounts_RegistryNotFoundDoesNotRetainDepsDevZero(t *testi
 }
 
 func TestEnrichDependentCounts_Phase2_SkipsWhenDepsDevPopulated(t *testing.T) {
-	// When Phase 1 already populated DependentCount, Phase 2 should skip.
+	var registryCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		registryCalls++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	rg := rubygems.NewClient()
+	rg.SetBaseURL(srv.URL)
 	svc := &IntegrationService{
-		depsdevClient:  &stubDepsDevClient{dependentResults: map[string]*depsdev.DependentsResponse{"pkg:gem/rails@7.0.4": {DependentCount: 999}}},
-		rubygemsClient: rubygems.NewClient(), // should not be called
+		depsdevClient:  &stubDepsDevClient{dependentResults: map[string]*depsdev.DependentsResponse{"pkg:gem/rails@7.0.4": {DependentCount: 999, DirectDependentCount: 123}}},
+		rubygemsClient: rg,
 	}
 	purls := []string{"pkg:gem/rails@7.0.4"}
 	analyses := map[string]*domain.Analysis{
@@ -425,6 +432,15 @@ func TestEnrichDependentCounts_Phase2_SkipsWhenDepsDevPopulated(t *testing.T) {
 	a := analyses["pkg:gem/rails@7.0.4"]
 	if a.DependentCount != 999 {
 		t.Errorf("DependentCount = %d, want 999 (from Phase 1)", a.DependentCount)
+	}
+	if a.Dependents == nil {
+		t.Fatal("deps.dev observation was discarded")
+	}
+	if a.Dependents.Source != domain.DependentsSourceDepsDev || a.Dependents.Version != "7.0.4" || a.Dependents.Direct == nil || *a.Dependents.Direct != 123 || a.Dependents.Total == nil || *a.Dependents.Total != 999 {
+		t.Errorf("deps.dev observation = %+v", a.Dependents)
+	}
+	if registryCalls != 0 {
+		t.Errorf("RubyGems calls = %d, want 0", registryCalls)
 	}
 }
 

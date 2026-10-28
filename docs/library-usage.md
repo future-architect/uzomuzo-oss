@@ -12,11 +12,11 @@ go get github.com/future-architect/uzomuzo-oss
 
 The library is built around a single high-level `Evaluator` that performs the following in one call:
 
-`Analysis.Dependents` is nil when no dependents measurement was obtained. When present, it reports `Source`, `Version` (empty for registry-wide counts), and optional `Direct` and `Total` pointers. A non-nil pointer to zero is a measured zero. `Analysis.DependentCount` remains available for one release but is deprecated because it cannot distinguish unknown from zero or describe the queried scope. The observation types and source constants are available from `pkg/uzomuzo`.
-
 1. Data collection (deps.dev, GitHub, registry metadata)
 2. Lifecycle heuristics (activity / release freshness)
 3. Primary source EOL integration (registry deprecation signals / successor detection)
+
+`Analysis.Dependents` is nil when no dependents measurement was obtained. When present, it reports `Source`, `Version` (empty for registry-wide counts), and optional `Direct` and `Total` pointers. A non-nil pointer to zero is a measured zero. `Analysis.DependentCount` remains available for one release but is deprecated because it cannot distinguish unknown from zero or describe the queried scope. The observation types and source constants are available from `pkg/uzomuzo`.
 
 ```go
 package main
