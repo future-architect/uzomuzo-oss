@@ -51,6 +51,8 @@ func TestIsGitHubPage(t *testing.T) {
 		{"https://notgithub.com/page", false},
 		{"https://api.github.com/org", false},
 		{"https://example.com/github.com", false},
+		{"github.com/org?next=https://example.com", true},
+		{"notgithub.com/org?next=https://github.com", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.page, func(t *testing.T) {

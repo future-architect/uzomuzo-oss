@@ -369,6 +369,8 @@ func TestGitHubURLHostCheck(t *testing.T) {
 		{"https://github.com/o/r%2Fx", "https://github.com/o/r%2Fx"},
 		{"//notgithub.com/o/r", ""},
 		{"https://github.com", ""},
+		{"github.com/o/r/tree/main?next=https://example.com", "https://github.com/o/r"},
+		{"github.com/o/r#https://example.com", "https://github.com/o/r"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {

@@ -29,6 +29,30 @@ func TestIsGitHubHost(t *testing.T) {
 	}
 }
 
+func TestEnsureURLScheme(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"has_scheme", "https://github.com/o/r", "https://github.com/o/r"},
+		{"no_scheme", "github.com/o/r", "https://github.com/o/r"},
+		{"protocol_relative", "//github.com/o/r", "https://github.com/o/r"},
+		{"url_in_query", "github.com/o/r?next=https://example.com", "https://github.com/o/r?next=https://example.com"},
+		{"url_in_path", "github.com/o/r/https://example.com", "https://github.com/o/r/https://example.com"},
+		{"url_in_fragment", "github.com/o/r#https://example.com", "https://github.com/o/r#https://example.com"},
+		{"leading_separator", "://github.com/o/r", "https://://github.com/o/r"},
+		{"empty", "", "https://"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := EnsureURLScheme(tc.in); got != tc.want {
+				t.Fatalf("EnsureURLScheme(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeRepositoryURL(t *testing.T) {
 	tests := []struct {
 		name     string

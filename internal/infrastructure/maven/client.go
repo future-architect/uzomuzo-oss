@@ -619,13 +619,6 @@ func (c *Client) SearchByArtifactID(ctx context.Context, artifactID string) (gro
 
 // isGitHubPage reports whether page is on a GitHub host, accepting scheme-less and scp-style forms.
 func isGitHubPage(page string) bool {
-	n := common.NormalizeRepositoryURL(page)
-	switch {
-	case strings.HasPrefix(n, "//"):
-		n = "https:" + n
-	case !strings.Contains(n, "://"):
-		n = "https://" + n
-	}
-	u, err := url.Parse(n)
+	u, err := url.Parse(common.EnsureURLScheme(common.NormalizeRepositoryURL(page)))
 	return err == nil && common.IsGitHubHost(u.Hostname())
 }

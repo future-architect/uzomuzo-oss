@@ -364,13 +364,7 @@ func parseGitHubURL(raw string) *url.URL {
 	}
 	raw = strings.TrimPrefix(raw, "git+")
 	raw = strings.TrimPrefix(raw, "git://")
-	switch {
-	case strings.HasPrefix(raw, "//"):
-		raw = "https:" + raw
-	case !strings.Contains(raw, "://"):
-		raw = "https://" + raw
-	}
-	u, err := url.Parse(raw)
+	u, err := url.Parse(common.EnsureURLScheme(raw))
 	if err != nil {
 		return nil
 	}

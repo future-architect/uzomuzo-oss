@@ -14,6 +14,20 @@ func IsGitHubHost(host string) bool {
 	return strings.EqualFold(host, "github.com") || strings.EqualFold(host, "www.github.com")
 }
 
+// EnsureURLScheme returns s with an https scheme added when it has none. A
+// protocol-relative "//host/..." gets "https:". A "://" counts as the scheme
+// separator only before the first '/', '?' or '#', so a URL embedded in the path,
+// query or fragment is not mistaken for the scheme.
+func EnsureURLScheme(s string) string {
+	if strings.HasPrefix(s, "//") {
+		return "https:" + s
+	}
+	if i := strings.Index(s, "://"); i > 0 && !strings.ContainsAny(s[:i], "/?#") {
+		return s
+	}
+	return "https://" + s
+}
+
 // NormalizeRepositoryURL normalizes repository URLs from various formats to HTTPS.
 // Handles cases like:
 // - git+https://github.com/owner/repo.git -> https://github.com/owner/repo
