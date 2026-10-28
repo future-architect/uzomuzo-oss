@@ -29,6 +29,7 @@ func TestClient_GetVuln(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	c := newTestClient(t, srv.URL)
+	c.SetCacheTTL(time.Minute)
 	ctx := context.Background()
 
 	rec, found, err := c.GetVuln(ctx, "GHSA-jp4x-w63m-7wgm")
@@ -63,6 +64,23 @@ func TestClient_GetVuln(t *testing.T) {
 	_, _, _ = c.GetVuln(ctx, "GHSA-xxxx-xxxx-xxxx")
 	if got := calls.Load(); got != before {
 		t.Errorf("cached lookups sent %d requests, want 0", got-before)
+	}
+	// SetCacheTTL drops the cached answers, so a later withdrawal or a record
+	// published after a 404 is seen.
+	c.SetCacheTTL(time.Minute)
+	before = calls.Load()
+	_, _, _ = c.GetVuln(ctx, "GHSA-jp4x-w63m-7wgm")
+	_, _, _ = c.GetVuln(ctx, "GHSA-xxxx-xxxx-xxxx")
+	if got := calls.Load() - before; got != 2 {
+		t.Errorf("after SetCacheTTL: %d requests, want 2", got)
+	}
+	// A disabled cache asks every time.
+	c.SetCacheTTL(0)
+	before = calls.Load()
+	_, _, _ = c.GetVuln(ctx, "GHSA-jp4x-w63m-7wgm")
+	_, _, _ = c.GetVuln(ctx, "GHSA-jp4x-w63m-7wgm")
+	if got := calls.Load() - before; got != 2 {
+		t.Errorf("with caching off: %d requests, want 2", got)
 	}
 	// Not cached: an error is retried on the next call.
 	_, _, err = c.GetVuln(ctx, "GHSA-server-error")

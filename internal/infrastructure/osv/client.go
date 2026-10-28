@@ -66,11 +66,14 @@ type Client struct {
 	// numbered at or below it is not stored. Guarded by storeMu.
 	ttlTicket uint64
 	// vulnCache holds /v1/vulns/{id} answers keyed by advisory ID: an advisory
-	// record does not depend on which package asked for it.
-	vulnCache sync.Map
+	// record does not depend on which package asked for it. It follows the
+	// same TTL as cache, so a long-lived client sees a later withdrawal or a
+	// record OSV publishes after a 404.
+	vulnCache ttlcache.Cache[vulnAnswer]
 }
 
-// vulnAnswer is one cached /v1/vulns/{id} answer. found is false for a 404.
+// vulnAnswer is one cached /v1/vulns/{id} answer, reduced to the fields
+// GetVuln callers read. found is false for a 404.
 type vulnAnswer struct {
 	rec   domain.AdvisoryRecord
 	found bool
@@ -129,6 +132,8 @@ func (c *Client) SetCacheTTL(d time.Duration) {
 	// clean answer must not come back when caching is turned on again.
 	c.cache.Clear()
 	c.cache.SetTTL(d)
+	c.vulnCache.Clear()
+	c.vulnCache.SetTTL(d)
 	c.ttlTicket = c.lastTicket
 }
 
@@ -777,16 +782,17 @@ func sanitizeSummary(raw string) string {
 	return domain.SanitizeExternalSummary(raw)
 }
 
-// GetVuln fetches one advisory record by ID from /v1/vulns/{id}. found is
-// false when OSV.dev has no record for the ID (404); that answer is cached, a
-// transport or decode error is not.
+// GetVuln fetches one advisory record by ID from /v1/vulns/{id}: its ID,
+// publication date, withdrawal and reviewed severity (other fields are left
+// empty). found is false when OSV.dev has no record for the ID (404); that
+// answer is cached for the client's cache TTL, a transport or decode error is
+// not.
 func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord, bool, error) {
 	id = strings.TrimSpace(id)
 	if !isPlainAdvisoryID(id) {
 		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln: invalid advisory id %q", id)
 	}
-	if v, ok := c.vulnCache.Load(id); ok {
-		ans := v.(vulnAnswer)
+	if ans, ok := c.vulnCache.Get(id); ok {
 		return ans.rec, ans.found, nil
 	}
 	apiURL := c.resolvedBaseURL() + "/v1/vulns/" + url.PathEscape(id)
@@ -803,7 +809,7 @@ func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord,
 	// best-effort cleanup; the body is fully read below.
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
-		c.vulnCache.Store(id, vulnAnswer{})
+		c.vulnCache.Set(id, vulnAnswer{})
 		return domain.AdvisoryRecord{}, false, nil
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -824,6 +830,8 @@ func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord,
 	if !ok || !strings.EqualFold(rec.ID, id) {
 		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln: answer for %q did not name it", id)
 	}
-	c.vulnCache.Store(id, vulnAnswer{rec: rec, found: true})
+	// Keep only what callers read; affected ranges can be large.
+	rec = domain.AdvisoryRecord{ID: rec.ID, Published: rec.Published, Withdrawn: rec.Withdrawn, Severity: rec.Severity}
+	c.vulnCache.Set(id, vulnAnswer{rec: rec, found: true})
 	return rec, true, nil
 }

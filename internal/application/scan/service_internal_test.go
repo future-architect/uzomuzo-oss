@@ -1,9 +1,13 @@
 package scan
 
 import (
+	"bytes"
+	"log/slog"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 )
 
@@ -84,5 +88,37 @@ func TestSelectDependencies(t *testing.T) {
 				t.Errorf("viaParents = %v, want %v", via, tt.wantVia)
 			}
 		})
+	}
+}
+
+// TestWarnDependencyAdvisoryLookupFailures counts only packages whose label
+// rests on a dependency advisory with a failed OSV lookup (ADR-0032).
+func TestWarnDependencyAdvisoryLookupFailures(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	withAge := func(s analysis.DependencyAdvisoryAgeStatus) *analysis.Analysis {
+		return &analysis.Analysis{AxisResults: map[analysis.AssessmentAxis]*analysis.AssessmentResult{
+			analysis.LifecycleAxis: {Label: string(analysis.LabelStalled), DependencyAdvisoryAge: &analysis.DependencyAdvisoryAge{Status: s}},
+		}}
+	}
+	warnDependencyAdvisoryLookupFailures(map[string]*analysis.Analysis{
+		"a": withAge(analysis.DependencyAdvisoryUnknown),
+		"b": withAge(analysis.DependencyAdvisoryUnknown),
+		"c": withAge(analysis.DependencyAdvisoryNotAged),
+		"d": {},
+		"e": nil,
+	})
+	out := buf.String()
+	if strings.Count(out, "dependency advisory age check incomplete") != 1 || !strings.Contains(out, "count=2") {
+		t.Errorf("WARN output: got %q, want one line with count=2", out)
+	}
+
+	buf.Reset()
+	warnDependencyAdvisoryLookupFailures(map[string]*analysis.Analysis{"c": withAge(analysis.DependencyAdvisoryAged)})
+	if buf.Len() != 0 {
+		t.Errorf("no failed lookup: got %q, want no output", buf.String())
 	}
 }
