@@ -84,6 +84,7 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 	headers := []string{"purl", "repoURL", "scorecard", "api", "release", "star", "Canary", "Latest", "Lastcommit", "archived", "disabled", "Fork", "ForkSource", "overallScore", "dependents", "directDeps", "transitiveDeps"}
 	headers = append(headers, checkNames...)
 	headers = append(headers, "Result", "Reason", "RepoState")
+	headers = append(headers, "dependents_source", "dependents_version", "dependents_direct", "dependents_total")
 
 	if err := writer.Write(headers); err != nil {
 		return common.NewIOError("failed to write CSV headers", err).
@@ -160,7 +161,7 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 			forked,
 			forkSource,
 			fmt.Sprintf("%.2f", analysis.OverallScore),
-			fmt.Sprintf("%d", analysis.DependentCount),      // 0 = unknown; CLI omits zero but CSV always emits for machine-readability
+			fmt.Sprintf("%d", analysis.DependentCount),      // Deprecated legacy column. See ADR-0032.
 			fmt.Sprintf("%d", analysis.DirectDepsCount),     // 0 = unknown or unsupported ecosystem
 			fmt.Sprintf("%d", analysis.TransitiveDepsCount), // 0 = unknown or unsupported ecosystem
 		}
@@ -177,6 +178,17 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 		// Add lifecycle assessment result
 		label, reason := getLifecycleAssessmentResult(analysis)
 		record = append(record, label, reason, repoStateStr)
+		cells := []string{"", "", "", ""}
+		if d := analysis.Dependents; d != nil {
+			cells[0], cells[1] = string(d.Source), d.Version
+			if d.Direct != nil {
+				cells[2] = fmt.Sprintf("%d", *d.Direct)
+			}
+			if d.Total != nil {
+				cells[3] = fmt.Sprintf("%d", *d.Total)
+			}
+		}
+		record = append(record, cells...)
 
 		if err := writer.Write(record); err != nil {
 			return common.NewIOError("failed to write CSV record", err).

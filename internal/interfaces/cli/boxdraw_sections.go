@@ -475,9 +475,17 @@ func writeBoxHealth(ctx *boxContext) error {
 		lines = append(lines, fmt.Sprintf("%d stars", a.Repository.StarsCount))
 	}
 
-	// Dependent count
-	if a.DependentCount > 0 {
-		lines = append(lines, fmt.Sprintf("Used by: %d packages", a.DependentCount))
+	if d := a.Dependents; d != nil {
+		switch d.Source {
+		case analysispkg.DependentsSourceDepsDev:
+			if d.Direct != nil && d.Total != nil {
+				lines = append(lines, fmt.Sprintf("Dependents: %d direct, %d total (deps.dev, packages resolving to %s)", *d.Direct, *d.Total, d.Version))
+			}
+		case analysispkg.DependentsSourceRubyGems, analysispkg.DependentsSourcePackagist:
+			if d.Direct != nil {
+				lines = append(lines, fmt.Sprintf("Dependents: %d direct (%s, packages depending on any version)", *d.Direct, d.Source))
+			}
+		}
 	}
 	if a.DirectDepsCount > 0 || a.TransitiveDepsCount > 0 {
 		lines = append(lines, fmt.Sprintf("Depends on: %d direct, %d transitive", a.DirectDepsCount, a.TransitiveDepsCount))

@@ -79,7 +79,7 @@ type packageResponse struct {
 		// Dependents is the number of packages that depend on this package.
 		// Returned by Packagist API: GET /packages/{vendor}/{name}.json
 		// Example: https://packagist.org/packages/monolog/monolog.json -> "dependents": 24851
-		Dependents int `json:"dependents"`
+		Dependents *int `json:"dependents"`
 	} `json:"package"`
 }
 
@@ -178,23 +178,23 @@ func (c *Client) GetRepoURL(ctx context.Context, vendor, name, version string) (
 
 // GetDependentCount returns the number of packages that depend on this package.
 // Uses the same Packagist API as GetRepoURL/GetAbandoned (cached via fetchPackage).
-// Returns 0, nil when the package is not found (404).
+// Returns nil, nil when the package is not found (404), the field is absent, or the name is empty.
 //
 // DDD Layer: Infrastructure
 // Endpoint: GET /packages/{vendor}/{name}.json -> package.dependents
 // Docs: https://packagist.org/apidoc#package
-func (c *Client) GetDependentCount(ctx context.Context, vendor, name string) (int, error) {
+func (c *Client) GetDependentCount(ctx context.Context, vendor, name string) (*int, error) {
 	vendor = strings.TrimSpace(vendor)
 	name = strings.TrimSpace(name)
 	if vendor == "" || name == "" {
-		return 0, nil
+		return nil, nil
 	}
 	resp, status, err := c.fetchPackage(ctx, vendor, name)
 	if err != nil {
-		return 0, fmt.Errorf("packagist dependents lookup failed for %s/%s: %w", vendor, name, err)
+		return nil, fmt.Errorf("packagist dependents lookup failed for %s/%s: %w", vendor, name, err)
 	}
 	if status == http.StatusNotFound || resp == nil {
-		return 0, nil
+		return nil, nil
 	}
 	return resp.Package.Dependents, nil
 }

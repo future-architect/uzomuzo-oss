@@ -1,11 +1,44 @@
 package cli
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 )
+
+func TestEnrichedJSONDependents(t *testing.T) {
+	zero := 0
+	for _, tt := range []struct {
+		name        string
+		observation *analysis.DependentsObservation
+		want        string
+	}{
+		{"measured zero", &analysis.DependentsObservation{Source: analysis.DependentsSourceDepsDev, Version: "1.0.0", Direct: &zero, Total: &zero}, `"dependents":{"source":"deps.dev","version":"1.0.0","direct":0,"total":0}`},
+		{"unknown", nil, ""},
+		{"registry", &analysis.DependentsObservation{Source: analysis.DependentsSourceRubyGems, Direct: &zero}, `"dependents":{"source":"RubyGems","direct":0}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := &domainaudit.AuditEntry{Analysis: &analysis.Analysis{DependentCount: 9, Dependents: tt.observation}}
+			b, err := json.Marshal(newEnrichedJSONEntry(entry))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(b), `"dependent_count":9`) {
+				t.Fatalf("legacy count changed: %s", b)
+			}
+			if tt.want == "" {
+				if strings.Contains(string(b), `"dependents"`) {
+					t.Fatalf("unknown emitted: %s", b)
+				}
+			} else if !strings.Contains(string(b), tt.want) {
+				t.Fatalf("want %s in %s", tt.want, b)
+			}
+		})
+	}
+}
 
 func TestNewEnrichedJSONEntry_NilAnalysis(t *testing.T) {
 	e := &domainaudit.AuditEntry{

@@ -25,8 +25,8 @@ func TestGetReverseDependencyCount_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if count != 5 {
-		t.Errorf("count = %d, want 5", count)
+	if count == nil || *count != 5 {
+		t.Errorf("count = %v, want 5", count)
 	}
 }
 
@@ -43,8 +43,8 @@ func TestGetReverseDependencyCount_NotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on 404: %v", err)
 	}
-	if count != 0 {
-		t.Errorf("expected 0 for not found gem, got %d", count)
+	if count != nil {
+		t.Errorf("expected nil for not found gem, got %v", count)
 	}
 }
 
@@ -54,7 +54,18 @@ func TestGetReverseDependencyCount_EmptyName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if count != 0 {
-		t.Errorf("expected 0 for empty name, got %d", count)
+	if count != nil {
+		t.Errorf("expected nil for empty name, got %v", count)
+	}
+}
+
+func TestGetReverseDependencyCount_MeasuredZero(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`[]`)) }))
+	defer srv.Close()
+	client := NewClient()
+	client.baseURL = srv.URL
+	count, err := client.GetReverseDependencyCount(context.Background(), "tiny")
+	if err != nil || count == nil || *count != 0 {
+		t.Fatalf("measured zero: count=%v error=%v", count, err)
 	}
 }

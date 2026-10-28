@@ -57,18 +57,18 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 - Types: `ProjectBatchRequest` (`internal/infrastructure/depsdev/api_types.go`)
 - Docs: <https://docs.deps.dev/api/v3alpha/#getprojectbatch>
 
-#### deps.dev — GetDependents (GET /v3alpha/systems/{system}/packages/{name}:dependents)
+#### deps.dev — GetDependents (GET /v3alpha/systems/{system}/packages/{name}/versions/{version}:dependents)
 
 - Returned fields: `dependentCount`, `directDependentCount`, `indirectDependentCount`
-- Supported ecosystems: npm, Maven, PyPI, Cargo (Go, NuGet, RubyGems not supported)
-- Purpose: Retrieve package dependent count (UsedBy)
-- Code: `DepsDevClient.FetchDependentCount`, `FetchDependentCountBatch` (`internal/infrastructure/depsdev/depsdev.go`)
+- Supported observations: npm, Maven, PyPI, Cargo. Go is skipped; a 404 or failed request is unknown, not measured zero.
+- Purpose: Record direct and total counts of public packages whose computed resolution includes the queried version. The version is the caller's pinned version, or the resolved version for versionless input. See ADR-0032.
+- Code: `DepsDevClient.FetchDependentCount`, `FetchDependentCountBatch` (`internal/infrastructure/depsdev/dependents.go`)
 - Types: `DependentsResponse` (`internal/infrastructure/depsdev/api_types.go`)
 - Docs: <https://docs.deps.dev/api/v3alpha/>
 
 #### RubyGems — Reverse Dependencies (GET /api/v1/gems/{name}/reverse_dependencies.json)
 
-- Returns: Array of gem names that depend on the target
+- Returns: Array of gem names whose latest version directly depends on the target, including runtime and development dependencies by default
 - Purpose: Retrieve dependent count for `pkg:gem/*` (deps.dev does not support RubyGems)
 - Code: `Client.GetReverseDependencyCount` (`internal/infrastructure/rubygems/client.go`)
 - Docs: <https://guides.rubygems.org/rubygems-org-api/>

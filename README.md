@@ -49,7 +49,7 @@ STATUS     PURL                 LIFECYCLE      BUILD
 │ Max Advisory Severity: HIGH 7.5
 ├─ Health ──────────────────────────────────────────────────
 │ 188 stars
-│ Used by: 1271 packages
+│ Dependents: 51 direct, 1270 total (deps.dev, packages resolving to 0.3.1)
 │ Depends on: 1 direct, 0 transitive
 │ Scorecard Overall: 2.8/10  Maintained: 0.0/10
 │ Last Commit: 2023-07-15
@@ -307,7 +307,7 @@ STATUS     PURL                    LIFECYCLE  BUILD
 │ Maintained Score: 10/10
 ├─ Health ──────────────────────────────────────────────────
 │ 68888 stars
-│ Used by: 2211 packages
+│ Dependents: 861 direct, 2185 total (deps.dev, packages resolving to 4.18.2)
 │ Depends on: 31 direct, 39 transitive
 │ Scorecard Overall: 8.4/10  Maintained: 10.0/10
 │ Last Commit: 2026-03-31
@@ -354,7 +354,7 @@ STATUS     PURL                   LIFECYCLE    BUILD
 │ Advisories: 0
 ├─ Health ──────────────────────────────────────────────────
 │ 48016 stars
-│ Used by: 2452 packages
+│ Dependents: 933 direct, 2483 total (deps.dev, packages resolving to 2.29.4)
 │ Scorecard Overall: 3.1/10  Maintained: 0.0/10
 │ Last Commit: 2024-02-18
 ├─ Releases ────────────────────────────────────────────────
@@ -448,7 +448,7 @@ STATUS     PURL                 LIFECYCLE      BUILD
 │ Max Advisory Severity: HIGH 7.5
 ├─ Health ──────────────────────────────────────────────────
 │ 188 stars
-│ Used by: 1271 packages
+│ Dependents: 51 direct, 1270 total (deps.dev, packages resolving to 0.3.1)
 │ Depends on: 1 direct, 0 transitive
 │ Scorecard Overall: 2.8/10  Maintained: 0.0/10
 │ Last Commit: 2023-07-15
@@ -492,7 +492,7 @@ STATUS     PURL                 LIFECYCLE      BUILD
 │ Max Advisory Severity: HIGH 7.8
 ├─ Health ──────────────────────────────────────────────────
 │ 36278 stars
-│ Used by: 5145 packages
+│ Dependents: 4048 direct, 5730 total (deps.dev, packages resolving to 0.18.5)
 │ Depends on: 7 direct, 1 transitive
 │ Scorecard Overall: 2.3/10  Maintained: 0.0/10
 │ Last Commit: 2024-02-01
@@ -582,7 +582,7 @@ STATUS     PURL                    LIFECYCLE      BUILD
 │     ↳ https://registry.npmjs.org/request
 ├─ Health ──────────────────────────────────────────────────
 │ 25577 stars
-│ Used by: 186349 packages
+│ Dependents: 51145 direct, 185814 total (deps.dev, packages resolving to 2.88.2)
 │ Depends on: 20 direct, 26 transitive
 │ Scorecard Overall: 3.6/10  Maintained: 0.0/10
 │ Last Commit: 2020-02-11

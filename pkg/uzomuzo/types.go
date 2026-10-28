@@ -142,6 +142,19 @@ type ReleaseAgeStatus = domain.ReleaseAgeStatus
 // ReleaseAgeSource names where a young version's publish time came from.
 type ReleaseAgeSource = domain.ReleaseAgeSource
 
+// DependentsObservation records a measured dependents count and its scope (ADR-0032).
+type DependentsObservation = domain.DependentsObservation
+
+// DependentsSource identifies the provider of a dependents observation.
+type DependentsSource = domain.DependentsSource
+
+// Dependents observation providers.
+const (
+	DependentsSourceDepsDev   = domain.DependentsSourceDepsDev
+	DependentsSourceRubyGems  = domain.DependentsSourceRubyGems
+	DependentsSourcePackagist = domain.DependentsSourcePackagist
+)
+
 // ReleaseAge statuses and sources.
 const (
 	// ReleaseAgeYoung means the version was published within the window.

@@ -25,8 +25,8 @@ func TestGetDependentCount_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if count != 24851 {
-		t.Errorf("count = %d, want 24851", count)
+	if count == nil || *count != 24851 {
+		t.Errorf("count = %v, want 24851", count)
 	}
 }
 
@@ -43,8 +43,8 @@ func TestGetDependentCount_NotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on 404: %v", err)
 	}
-	if count != 0 {
-		t.Errorf("expected 0 for not found, got %d", count)
+	if count != nil {
+		t.Errorf("expected nil for not found, got %v", count)
 	}
 }
 
@@ -54,8 +54,8 @@ func TestGetDependentCount_EmptyVendor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if count != 0 {
-		t.Errorf("expected 0 for empty vendor, got %d", count)
+	if count != nil {
+		t.Errorf("expected nil for empty vendor, got %v", count)
 	}
 }
 
@@ -65,8 +65,8 @@ func TestGetDependentCount_EmptyName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if count != 0 {
-		t.Errorf("expected 0 for empty name, got %d", count)
+	if count != nil {
+		t.Errorf("expected nil for empty name, got %v", count)
 	}
 }
 
@@ -85,8 +85,21 @@ func TestGetDependentCount_ZeroDependents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if count != 0 {
-		t.Errorf("expected 0, got %d", count)
+	if count == nil || *count != 0 {
+		t.Errorf("expected 0, got %v", count)
+	}
+}
+
+func TestGetDependentCount_MissingField(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"package":{"name":"tiny/pkg"}}`))
+	}))
+	defer srv.Close()
+	client := NewClient()
+	client.baseURL = srv.URL
+	count, err := client.GetDependentCount(context.Background(), "tiny", "pkg")
+	if err != nil || count != nil {
+		t.Fatalf("missing field: count=%v error=%v", count, err)
 	}
 }
 
@@ -108,8 +121,8 @@ func TestGetDependentCount_CacheHit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first call unexpected error: %v", err)
 	}
-	if count1 != 42 {
-		t.Errorf("first call count = %d, want 42", count1)
+	if count1 == nil || *count1 != 42 {
+		t.Errorf("first call count = %v, want 42", count1)
 	}
 
 	// Second call should use cache
@@ -117,8 +130,8 @@ func TestGetDependentCount_CacheHit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second call unexpected error: %v", err)
 	}
-	if count2 != 42 {
-		t.Errorf("second call count = %d, want 42", count2)
+	if count2 == nil || *count2 != 42 {
+		t.Errorf("second call count = %v, want 42", count2)
 	}
 
 	if calls != 1 {
@@ -154,7 +167,7 @@ func TestGetAbandoned_WithDependents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if count != 5432 {
-		t.Errorf("count = %d, want 5432", count)
+	if count == nil || *count != 5432 {
+		t.Errorf("count = %v, want 5432", count)
 	}
 }

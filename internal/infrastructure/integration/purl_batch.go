@@ -191,10 +191,13 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 	// Use EffectivePURL (versioned) when available, because FetchDependentCount
 	// skips versionless PURLs. Build a mapping from effective PURL back to original key.
 	effectivePURLs := make([]string, 0, len(purls))
-	effectiveToOriginal := make(map[string]string, len(purls))
+	effectiveToOriginal := make(map[string][]string, len(purls))
 	for _, p := range purls {
 		a := analyses[p]
 		if a == nil {
+			continue
+		}
+		if a.Package != nil && strings.EqualFold(a.Package.Ecosystem, "golang") {
 			continue
 		}
 		ep := a.EffectivePURL
@@ -212,24 +215,30 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 				}
 			}
 		}
-		effectivePURLs = append(effectivePURLs, ep)
-		effectiveToOriginal[ep] = p
+		if _, seen := effectiveToOriginal[ep]; !seen {
+			effectivePURLs = append(effectivePURLs, ep)
+		}
+		effectiveToOriginal[ep] = append(effectiveToOriginal[ep], p)
 	}
-	// FetchDependentCountBatch returns results keyed by CanonicalKey (versionless,
-	// qualifiers preserved). We iterate effectiveToOriginal and canonicalize each ep
-	// to match those keys, then map back to the original PURL in the analyses map.
+	// Results retain the exact versioned PURL, including qualifiers and subpaths.
 	depsdevResults := s.depsdevClient.FetchDependentCountBatch(ctx, effectivePURLs)
-	for ep, originalKey := range effectiveToOriginal {
-		a := analyses[originalKey]
-		if a == nil {
+	for ep, originalKeys := range effectiveToOriginal {
+		resp := depsdevResults[ep]
+		if resp == nil {
 			continue
 		}
-		key := purl.CanonicalKey(ep)
-		if key == "" {
-			key = ep
+		parsed, err := purl.NewParser().Parse(ep)
+		if err != nil {
+			continue
 		}
-		if resp, ok := depsdevResults[key]; ok && resp != nil {
+		for _, originalKey := range originalKeys {
+			a := analyses[originalKey]
+			if a == nil {
+				continue
+			}
 			a.DependentCount = resp.DependentCount
+			direct, total := resp.DirectDependentCount, resp.DependentCount
+			a.Dependents = &domain.DependentsObservation{Source: domain.DependentsSourceDepsDev, Version: parsed.Version(), Direct: &direct, Total: &total}
 		}
 	}
 
@@ -240,7 +249,16 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 	var wg sync.WaitGroup
 	for _, p := range purls {
 		a := analyses[p]
-		if a == nil || a.DependentCount > 0 {
+		if a == nil {
+			continue
+		}
+		if a.Package != nil {
+			switch strings.ToLower(strings.TrimSpace(a.Package.Ecosystem)) {
+			case "gem", "rubygems", "packagist", "composer":
+				a.Dependents = nil
+			}
+		}
+		if a.DependentCount > 0 {
 			continue // already populated by deps.dev
 		}
 		if a.Package == nil {
@@ -265,7 +283,10 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 					slog.Warn("rubygems_dependent_count_failed", "name", name, "error", err)
 					return
 				}
-				analysis.DependentCount = count
+				if count != nil {
+					analysis.DependentCount = *count
+					analysis.Dependents = &domain.DependentsObservation{Source: domain.DependentsSourceRubyGems, Direct: count}
+				}
 			}(a, parsed.PackageName())
 
 		case "packagist", "composer":
@@ -289,7 +310,10 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 					slog.Warn("packagist_dependent_count_failed", "vendor", v, "name", n, "error", err)
 					return
 				}
-				analysis.DependentCount = count
+				if count != nil {
+					analysis.DependentCount = *count
+					analysis.Dependents = &domain.DependentsObservation{Source: domain.DependentsSourcePackagist, Direct: count}
+				}
 			}(a, vendor, name)
 		}
 	}

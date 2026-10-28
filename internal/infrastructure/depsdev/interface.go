@@ -28,7 +28,7 @@ type Client interface {
 	// It returns a normalized, deduplicated, sorted slice of uppercase identifiers when available.
 	GetPackageVersionLicenses(ctx context.Context, versionedPURL string) ([]string, error)
 	// FetchDependentCountBatch fetches dependent counts for multiple PURLs in parallel.
-	// Returns a map of canonical (versionless) PURL -> DependentsResponse.
+	// Returns a map of exact queried PURL -> DependentsResponse.
 	FetchDependentCountBatch(ctx context.Context, purls []string) map[string]*DependentsResponse
 	// FetchDependenciesBatch fetches dependency graphs for multiple PURLs in parallel.
 	// Returns a map of canonical (versionless) PURL -> DependenciesResponse.

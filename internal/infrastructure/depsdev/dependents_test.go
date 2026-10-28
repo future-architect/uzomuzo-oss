@@ -64,6 +64,16 @@ func TestFetchDependentCount_NotFound(t *testing.T) {
 	}
 }
 
+func TestFetchDependentCount_HTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) }))
+	defer srv.Close()
+	client := NewDepsDevClient(&config.DepsDevConfig{BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0})
+	resp, err := client.FetchDependentCount(context.Background(), "pkg:npm/express@4.18.2")
+	if resp != nil || err == nil {
+		t.Fatalf("response=%v error=%v, want nil and error", resp, err)
+	}
+}
+
 func TestFetchDependentCountBatch(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -85,10 +95,28 @@ func TestFetchDependentCountBatch(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
-	for key, resp := range results {
+	for _, key := range purls {
+		resp := results[key]
+		if resp == nil {
+			t.Fatalf("missing result for exact PURL %s", key)
+		}
 		if resp.DependentCount != 42 {
 			t.Errorf("key=%s: DependentCount = %d, want 42", key, resp.DependentCount)
 		}
+	}
+}
+
+func TestFetchDependentCount_GoSkipsRequest(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+	client := NewDepsDevClient(&config.DepsDevConfig{BaseURL: srv.URL, Timeout: 5e9})
+	resp, err := client.FetchDependentCount(context.Background(), "pkg:golang/github.com/pkg/errors@v0.9.1")
+	if err != nil || resp != nil || calls != 0 {
+		t.Fatalf("Go dependents: response=%v error=%v calls=%d, want nil, nil, zero", resp, err, calls)
 	}
 }
 
