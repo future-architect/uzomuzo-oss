@@ -351,6 +351,46 @@ func TestExtractRepoURL(t *testing.T) {
 	}
 }
 
+func TestGitHubURLHostCheck(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"https://notgithub.com/o/r", ""},
+		{"https://github.com.evil.example/o/r", ""},
+		{"https://evilgithub.com/o/r", ""},
+		{"https://github.com/o/r", "https://github.com/o/r"},
+		{"git+https://www.github.com/o/r.git", "https://github.com/o/r"},
+		{"git://github.com/o/r/tree/main", "https://github.com/o/r"},
+		{"github.com/o/r", "https://github.com/o/r"},
+		{"//github.com/o/r", "https://github.com/o/r"},
+		{"git+ssh://git@github.com/o/r", "https://github.com/o/r"},
+		{"https://github.com:443/o/r", "https://github.com/o/r"},
+		{"https://github.com/o/r%2Fx", "https://github.com/o/r%2Fx"},
+		{"//notgithub.com/o/r", ""},
+		{"https://github.com", ""},
+		{"github.com/o/r/tree/main?next=https://example.com", "https://github.com/o/r"},
+		{"github.com/o/r#https://example.com", "https://github.com/o/r"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			if got := normalizeGitHub(tc.input); got != tc.want {
+				t.Errorf("normalizeGitHub(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExtractRepoURLSkipsHostOnlyGitHubURL(t *testing.T) {
+	info := &ProjectInfo{
+		HomePage:    "https://github.com",
+		ProjectURLs: map[string]string{"Repository": "https://github.com", "Source": "https://github.com/o/r"},
+	}
+	if got := extractRepoURL(info); got != "https://github.com/o/r" {
+		t.Fatalf("extractRepoURL = %q, want %q", got, "https://github.com/o/r")
+	}
+}
+
 func TestGetVersion_InfoYanked(t *testing.T) {
 	t.Parallel()
 	var capturedPath atomic.Value

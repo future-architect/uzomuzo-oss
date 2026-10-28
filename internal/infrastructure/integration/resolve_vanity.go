@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
@@ -122,11 +123,7 @@ func isVanityCandidate(a *domain.Analysis) bool {
 	if host == "" {
 		return false
 	}
-	// Exact-match host comparison is deliberate: common.IsValidGitHubURL
-	// uses `strings.Contains(host, "github.com")` which would also match
-	// decoy hosts like `not-github.com` and silently skip them as
-	// "already GitHub", robbing them of vanity resolution.
-	return !strings.EqualFold(host, "github.com")
+	return !common.IsGitHubHost(host)
 }
 
 // vanityDedupKey returns a canonical form of raw that collapses case-variant

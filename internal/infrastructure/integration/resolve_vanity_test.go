@@ -243,6 +243,9 @@ func TestIsVanityCandidate(t *testing.T) {
 			},
 			want: false,
 		},
+		{name: "www.github.com host", a: &domain.Analysis{Package: &domain.Package{Ecosystem: "golang"}, RepoURL: "https://www.github.com/a/b"}, want: false},
+		{name: "github.com trailing dot", a: &domain.Analysis{Package: &domain.Package{Ecosystem: "golang"}, RepoURL: "https://github.com./a/b"}, want: false},
+		{name: "decoy host", a: &domain.Analysis{Package: &domain.Package{Ecosystem: "golang"}, RepoURL: "https://notgithub.com/a/b"}, want: true},
 		{
 			name: "gopkg.in vanity host",
 			a: &domain.Analysis{

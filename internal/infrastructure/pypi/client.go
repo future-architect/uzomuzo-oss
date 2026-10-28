@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common"
 	"github.com/future-architect/uzomuzo-oss/internal/common/ttlcache"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
@@ -318,58 +319,54 @@ func extractRepoURL(info *ProjectInfo) string {
 	}
 	for _, key := range repoKeys {
 		for k, v := range info.ProjectURLs {
-			if strings.EqualFold(k, key) && isGitHubURL(v) {
-				return normalizeGitHub(v)
+			if !strings.EqualFold(k, key) {
+				continue
+			}
+			if u := normalizeGitHub(v); u != "" {
+				return u
 			}
 		}
 	}
 
-	// Priority 2: any project_url that points to GitHub
+	// Priority 2: any project_url that points to a GitHub repository
 	for _, v := range info.ProjectURLs {
-		if isGitHubURL(v) {
-			return normalizeGitHub(v)
+		if u := normalizeGitHub(v); u != "" {
+			return u
 		}
 	}
 
 	// Priority 3: home_page field
-	if isGitHubURL(info.HomePage) {
-		return normalizeGitHub(info.HomePage)
-	}
-
-	return ""
+	return normalizeGitHub(info.HomePage)
 }
 
-// isGitHubURL checks if a URL points to github.com.
-func isGitHubURL(u string) bool {
-	u = strings.ToLower(strings.TrimSpace(u))
-	return strings.Contains(u, "github.com/")
-}
-
-// normalizeGitHub trims a GitHub URL to https://github.com/owner/repo form.
+// normalizeGitHub trims a GitHub repository URL to https://github.com/owner/repo form.
+// It returns "" unless the host satisfies common.IsGitHubHost and the path names an owner and a repository.
 func normalizeGitHub(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
+	u := parseGitHubURL(raw)
+	if u == nil || !common.IsGitHubHost(u.Hostname()) {
 		return ""
 	}
-	// Strip common prefixes
-	for _, prefix := range []string{"git+", "git://"} {
-		raw = strings.TrimPrefix(raw, prefix)
-	}
-	if !strings.HasPrefix(raw, "http") {
-		raw = "https://" + raw
-	}
-
-	// Extract github.com/owner/repo, dropping deeper paths
-	idx := strings.Index(strings.ToLower(raw), "github.com/")
-	if idx < 0 {
-		return ""
-	}
-	path := raw[idx+len("github.com/"):]
+	path := strings.Trim(u.EscapedPath(), "/")
 	path = strings.TrimSuffix(path, ".git")
-	path = strings.Trim(path, "/")
 	parts := strings.SplitN(path, "/", 3)
 	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
 		return ""
 	}
 	return "https://github.com/" + parts[0] + "/" + parts[1]
+}
+
+// parseGitHubURL parses a PyPI project URL after dropping a git+ or git:// prefix
+// and defaulting a missing scheme to https. It returns nil for empty or unparsable input.
+func parseGitHubURL(raw string) *url.URL {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	raw = strings.TrimPrefix(raw, "git+")
+	raw = strings.TrimPrefix(raw, "git://")
+	u, err := url.Parse(common.EnsureURLScheme(raw))
+	if err != nil {
+		return nil
+	}
+	return u
 }

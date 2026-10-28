@@ -4,6 +4,55 @@ import (
 	"testing"
 )
 
+func TestIsGitHubHost(t *testing.T) {
+	tests := []struct {
+		name string
+		host string
+		want bool
+	}{
+		{"exact", "github.com", true},
+		{"www_mixed_case", "WWW.GitHub.com", true},
+		{"trailing_dot", "github.com.", true},
+		{"double_trailing_dot", "github.com..", false},
+		{"decoy_prefix", "notgithub.com", false},
+		{"decoy_suffix", "github.com.evil.example", false},
+		{"api_subdomain", "api.github.com", false},
+		{"empty", "", false},
+		{"with_port", "github.com:443", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsGitHubHost(tc.host); got != tc.want {
+				t.Fatalf("IsGitHubHost(%q) = %v, want %v", tc.host, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEnsureURLScheme(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"has_scheme", "https://github.com/o/r", "https://github.com/o/r"},
+		{"no_scheme", "github.com/o/r", "https://github.com/o/r"},
+		{"protocol_relative", "//github.com/o/r", "https://github.com/o/r"},
+		{"url_in_query", "github.com/o/r?next=https://example.com", "https://github.com/o/r?next=https://example.com"},
+		{"url_in_path", "github.com/o/r/https://example.com", "https://github.com/o/r/https://example.com"},
+		{"url_in_fragment", "github.com/o/r#https://example.com", "https://github.com/o/r#https://example.com"},
+		{"leading_separator", "://github.com/o/r", "https://://github.com/o/r"},
+		{"empty", "", "https://"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := EnsureURLScheme(tc.in); got != tc.want {
+				t.Fatalf("EnsureURLScheme(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeRepositoryURL(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -103,6 +152,16 @@ func TestIsValidGitHubURL(t *testing.T) {
 		urlStr   string
 		expected bool
 	}{
+		{name: "decoy_prefix", urlStr: "https://notgithub.com/owner/repo", expected: false},
+		{name: "decoy_suffix", urlStr: "https://github.com.evil.example/owner/repo", expected: false},
+		{name: "decoy_other", urlStr: "https://evilgithub.com/owner/repo", expected: false},
+		{name: "api_subdomain", urlStr: "https://api.github.com/owner/repo", expected: false},
+		{name: "gist_subdomain", urlStr: "https://gist.github.com/owner/repo", expected: false},
+		{name: "userinfo_decoy", urlStr: "https://git@github.com:443@evil.example/owner/repo", expected: false},
+		{name: "port", urlStr: "https://github.com:443/owner/repo", expected: true},
+		{name: "www", urlStr: "https://www.github.com/owner/repo", expected: true},
+		{name: "trailing_dot", urlStr: "https://github.com./owner/repo", expected: true},
+		{name: "mixed_case", urlStr: "https://GitHub.COM/owner/repo", expected: true},
 		{
 			name:     "valid_https_github_url",
 			urlStr:   "https://github.com/owner/repo",
@@ -206,7 +265,7 @@ func TestIsValidGitHubURL(t *testing.T) {
 		{
 			name:     "github_subdomain",
 			urlStr:   "https://api.github.com/owner/repo",
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "case_insensitive_github",
@@ -287,6 +346,10 @@ func TestExtractGitHubOwnerRepo_Accepts(t *testing.T) {
 		wantOwner string
 		wantRepo  string
 	}{
+		{"https://github.com:443/owner/repo", "owner", "repo"},
+		{"https://www.github.com/owner/repo", "owner", "repo"},
+		{"https://github.com./owner/repo", "owner", "repo"},
+		{"https://GitHub.COM/owner/repo", "owner", "repo"},
 		{"https://github.com/owner/repo", "owner", "repo"},
 		{"http://github.com/owner/repo", "owner", "repo"},
 		{"github.com/owner/repo", "owner", "repo"},
@@ -312,6 +375,12 @@ func TestExtractGitHubOwnerRepo_Accepts(t *testing.T) {
 
 func TestExtractGitHubOwnerRepo_Rejects(t *testing.T) {
 	tests := []string{
+		"https://notgithub.com/owner/repo",
+		"https://github.com.evil.example/owner/repo",
+		"https://evilgithub.com/owner/repo",
+		"https://api.github.com/owner/repo",
+		"https://gist.github.com/owner/repo",
+		"https://git@github.com:443@evil.example/owner/repo",
 		"",
 		"https://gitlab.com/owner/repo",
 		"https://github.com/owner",

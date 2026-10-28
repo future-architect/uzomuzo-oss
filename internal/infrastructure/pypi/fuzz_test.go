@@ -1,6 +1,7 @@
 package pypi
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -41,6 +42,46 @@ func FuzzEarlierUpload(f *testing.F) {
 			if !got.Equal(current) {
 				t.Fatalf("earlierUpload(%v, %q) = %v, want current", current, raw, got)
 			}
+		}
+	})
+}
+
+// FuzzNormalizeGitHub fuzzes PyPI GitHub URL normalization: it must not panic,
+// and a nonempty result must be https://github.com/<owner>/<repo>.
+func FuzzNormalizeGitHub(f *testing.F) {
+	seeds := []string{
+		"https://github.com/o/r",
+		"git+https://www.github.com/o/r.git",
+		"git://github.com/o/r/tree/main",
+		"github.com/o/r",
+		"//github.com/o/r",
+		"https://github.com:443/o/r",
+		"https://github.com/o/r%2Fx",
+		"https://github.com/o/r%zz",
+		"https://notgithub.com/o/r",
+		"https://github.com.evil.example/o/r",
+		"//notgithub.com/o/r",
+		"github.com/o/r?next=https://example.com",
+		"notgithub.com/o/r?next=https://github.com/o/r",
+		"https://github.com",
+		"",
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+
+	f.Fuzz(func(t *testing.T, input string) {
+		got := normalizeGitHub(input)
+		if got == "" {
+			return
+		}
+		rest, ok := strings.CutPrefix(got, "https://github.com/")
+		if !ok {
+			t.Fatalf("normalizeGitHub(%q) = %q, want https://github.com/ prefix", input, got)
+		}
+		parts := strings.Split(rest, "/")
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			t.Fatalf("normalizeGitHub(%q) = %q, want exactly owner/repo", input, got)
 		}
 	})
 }

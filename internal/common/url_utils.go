@@ -6,6 +6,28 @@ import (
 	"strings"
 )
 
+// IsGitHubHost reports whether host is github.com or www.github.com,
+// case-insensitively and with one optional trailing dot. Other subdomains such as
+// api.github.com are not matched. host must not include a port; pass url.URL.Hostname().
+func IsGitHubHost(host string) bool {
+	host = strings.TrimSuffix(host, ".")
+	return strings.EqualFold(host, "github.com") || strings.EqualFold(host, "www.github.com")
+}
+
+// EnsureURLScheme returns s with an https scheme added when it has none. A
+// protocol-relative "//host/..." gets "https:". A "://" counts as the scheme
+// separator only before the first '/', '?' or '#', so a URL embedded in the path,
+// query or fragment is not mistaken for the scheme.
+func EnsureURLScheme(s string) string {
+	if strings.HasPrefix(s, "//") {
+		return "https:" + s
+	}
+	if i := strings.Index(s, "://"); i > 0 && !strings.ContainsAny(s[:i], "/?#") {
+		return s
+	}
+	return "https://" + s
+}
+
 // NormalizeRepositoryURL normalizes repository URLs from various formats to HTTPS.
 // Handles cases like:
 // - git+https://github.com/owner/repo.git -> https://github.com/owner/repo
@@ -93,6 +115,8 @@ func NormalizeRepositoryURL(rawURL string) string {
 // - http://github.com/owner/repo
 // - github.com/owner/repo
 // - owner/repo (if it looks like a valid GitHub path)
+//
+// An http(s) URL must have a host that satisfies IsGitHubHost.
 func IsValidGitHubURL(urlStr string) bool {
 	if urlStr == "" {
 		return false
@@ -109,7 +133,7 @@ func IsValidGitHubURL(urlStr string) bool {
 		}
 
 		// Must be GitHub domain
-		if !strings.Contains(strings.ToLower(parsed.Host), "github.com") {
+		if !IsGitHubHost(parsed.Hostname()) {
 			return false
 		}
 
@@ -161,6 +185,7 @@ func IsValidGitHubURL(urlStr string) bool {
 // Notes:
 //   - It first normalizes with NormalizeRepositoryURL, then extracts the first two
 //     non-empty segments as owner/repo and strips a trailing ".git".
+//   - A URL with a host must satisfy IsGitHubHost; other hosts are rejected.
 //   - Returns an error if the input cannot be interpreted as a GitHub repo.
 func ExtractGitHubOwnerRepo(raw string) (string, string, error) {
 	if strings.TrimSpace(raw) == "" {
@@ -190,7 +215,7 @@ func ExtractGitHubOwnerRepo(raw string) (string, string, error) {
 		if err != nil || u.Host == "" {
 			return "", "", fmt.Errorf("invalid GitHub URL: %s", raw)
 		}
-		host = strings.ToLower(u.Host)
+		host = u.Hostname()
 		path = strings.Trim(u.Path, "/")
 	} else if strings.HasPrefix(norm, "github.com/") {
 		host = "github.com"
@@ -202,7 +227,7 @@ func ExtractGitHubOwnerRepo(raw string) (string, string, error) {
 		path = strings.Trim(norm, "/")
 	}
 
-	if !strings.Contains(host, "github.com") {
+	if !IsGitHubHost(host) {
 		return "", "", fmt.Errorf("non-github host: %s", host)
 	}
 

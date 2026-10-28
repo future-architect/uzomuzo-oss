@@ -1,6 +1,10 @@
 package common
 
-import "testing"
+import (
+	"net/url"
+	"strings"
+	"testing"
+)
 
 // FuzzNormalizeRepositoryURL fuzzes repository URL normalization for panics.
 func FuzzNormalizeRepositoryURL(f *testing.F) {
@@ -32,6 +36,9 @@ func FuzzNormalizeRepositoryURL(f *testing.F) {
 // FuzzExtractGitHubOwnerRepo fuzzes GitHub URL owner/repo extraction.
 func FuzzExtractGitHubOwnerRepo(f *testing.F) {
 	seeds := []string{
+		"https://notgithub.com/owner/repo",
+		"https://github.com.evil.example/owner/repo",
+		"https://evilgithub.com/owner/repo",
 		"https://github.com/owner/repo",
 		"http://github.com/owner/repo",
 		"github.com/owner/repo",
@@ -57,6 +64,9 @@ func FuzzExtractGitHubOwnerRepo(f *testing.F) {
 // FuzzIsValidGitHubURL fuzzes GitHub URL validation.
 func FuzzIsValidGitHubURL(f *testing.F) {
 	seeds := []string{
+		"https://notgithub.com/owner/repo",
+		"https://github.com.evil.example/owner/repo",
+		"https://evilgithub.com/owner/repo",
 		"https://github.com/owner/repo",
 		"http://github.com/owner/repo",
 		"github.com/owner/repo",
@@ -70,7 +80,17 @@ func FuzzIsValidGitHubURL(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, input string) {
-		_ = IsValidGitHubURL(input)
+		if !IsValidGitHubURL(input) {
+			return
+		}
+		trimmed := strings.TrimSpace(input)
+		if !strings.HasPrefix(trimmed, "http://") && !strings.HasPrefix(trimmed, "https://") {
+			return
+		}
+		u, err := url.Parse(trimmed)
+		if err != nil || !IsGitHubHost(u.Hostname()) {
+			t.Fatalf("accepted non-GitHub URL %q", input)
+		}
 	})
 }
 

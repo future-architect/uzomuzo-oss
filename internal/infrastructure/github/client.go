@@ -26,6 +26,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -406,13 +407,17 @@ func forkSourceFromRepoInfo(info *RepositoryInfo) string {
 // normalizeRepoURL follows GitHub redirects for a repository HTML URL and returns the final URL.
 // Best-effort; returns empty string on failure.
 func (c *Client) normalizeRepoURL(ctx context.Context, raw string) string {
-	if raw == "" || !strings.Contains(strings.ToLower(raw), "github.com") {
+	if raw == "" {
 		return ""
 	}
 	// Ensure scheme
 	urlStr := raw
 	if !strings.HasPrefix(urlStr, "http://") && !strings.HasPrefix(urlStr, "https://") {
 		urlStr = "https://" + urlStr
+	}
+	u, err := url.Parse(urlStr)
+	if err != nil || !common.IsGitHubHost(u.Hostname()) {
+		return ""
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
