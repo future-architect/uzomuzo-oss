@@ -43,6 +43,9 @@ type IntegrationService struct {
 	mavenClient     *maven.Client
 	cdClient        *clearlydefined.Client
 	vanityResolver  *govanityresolve.Resolver
+	// osvFactsBudget overrides the default budget of the dependency advisory
+	// lookups when positive (tests).
+	osvFactsBudget time.Duration
 }
 
 // IntegrationOption configures an IntegrationService.

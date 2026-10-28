@@ -108,6 +108,41 @@ const (
 	MaliciousScopePackage = domain.MaliciousScopePackage
 )
 
+// DependencyAdvisoryAge names the dependency advisory that decided a dormant
+// package whose HIGH advisories are all in dependencies (ADR-0032); see
+// AssessmentResult.DependencyAdvisoryAge.
+type DependencyAdvisoryAge = domain.DependencyAdvisoryAge
+
+// DependencyAdvisoryAgeStatus says why that advisory does or does not make the
+// package EOL-Effective.
+type DependencyAdvisoryAgeStatus = domain.DependencyAdvisoryAgeStatus
+
+// AdvisoryRecordLookup is the outcome of looking an advisory up in OSV
+// (Advisory.RecordLookup).
+type AdvisoryRecordLookup = domain.AdvisoryRecordLookup
+
+const (
+	DependencyAdvisoryAged               = domain.DependencyAdvisoryAged
+	DependencyAdvisoryUnknown            = domain.DependencyAdvisoryUnknown
+	DependencyAdvisoryNotAged            = domain.DependencyAdvisoryNotAged
+	DependencyAdvisoryRatedBelowHigh     = domain.DependencyAdvisoryRatedBelowHigh
+	DependencyAdvisoryRatingUnrecognized = domain.DependencyAdvisoryRatingUnrecognized
+	DependencyAdvisoryUndated            = domain.DependencyAdvisoryUndated
+	DependencyAdvisoryWithdrawn          = domain.DependencyAdvisoryWithdrawn
+	DependencyAdvisoryNotChecked         = domain.DependencyAdvisoryNotChecked
+
+	AdvisoryRecordNotLookedUp  = domain.AdvisoryRecordNotLookedUp
+	AdvisoryRecordFound        = domain.AdvisoryRecordFound
+	AdvisoryRecordNotFound     = domain.AdvisoryRecordNotFound
+	AdvisoryRecordWithdrawn    = domain.AdvisoryRecordWithdrawn
+	AdvisoryRecordLookupFailed = domain.AdvisoryRecordLookupFailed
+
+	// SignalTransitiveAdvisoryCount is the number of dependency advisories;
+	// SignalAgedDependencyAdvisory names the aged one that decided (ADR-0032).
+	SignalTransitiveAdvisoryCount = domain.SignalTransitiveAdvisoryCount
+	SignalAgedDependencyAdvisory  = domain.SignalAgedDependencyAdvisory
+)
+
 // ReleaseHistory is the registry's publish time for every version of a
 // package, including removed ones (npm only; see ADR-0026). Nil means the
 // lookup did not run or failed.

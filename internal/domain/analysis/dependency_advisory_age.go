@@ -45,13 +45,14 @@ type DependencyAdvisoryAge struct {
 	AdvisoryID string
 	// Dependency is "name@version" of the dependency the advisory is against.
 	Dependency string
-	// Published is the OSV publication date. Zero when unknown.
+	// Published is the OSV publication date, whenever the record has one.
 	Published time.Time
 	// EligibleOn is the first UTC day the advisory counts as aged. Set only
 	// for DependencyAdvisoryNotAged.
 	EligibleOn time.Time
-	// ReviewedSeverity is the database's rating, set for
-	// DependencyAdvisoryRatedBelowHigh.
+	// ReviewedSeverity is the database's rating as fetched, empty when the
+	// record has none. It tells "rated HIGH" from "not rated" for an aged
+	// advisory.
 	ReviewedSeverity string
 }
 
@@ -95,8 +96,12 @@ func ClassifyDependencyAdvisoryAge(vd *VersionDetail, threshold float64, eolDays
 		if statusRank[a.Status] != statusRank[b.Status] {
 			return statusRank[a.Status] < statusRank[b.Status]
 		}
-		if (a.Status == DependencyAdvisoryAged || a.Status == DependencyAdvisoryNotAged) && !a.Published.Equal(b.Published) {
-			return a.Published.Before(b.Published)
+		// Whole UTC days, like the age itself: two advisories published on
+		// the same day age on the same day, and the ID decides.
+		if a.Status == DependencyAdvisoryAged || a.Status == DependencyAdvisoryNotAged {
+			if da, db := utcDay(a.Published), utcDay(b.Published); !da.Equal(db) {
+				return da.Before(db)
+			}
 		}
 		return a.AdvisoryID < b.AdvisoryID
 	})
@@ -106,9 +111,12 @@ func ClassifyDependencyAdvisoryAge(vd *VersionDetail, threshold float64, eolDays
 // classifyOne gives one advisory its status. The lookup outcome is read
 // before the date, so a withdrawn record never ages.
 func classifyOne(adv Advisory, eolDays int, today time.Time) DependencyAdvisoryAge {
-	out := DependencyAdvisoryAge{AdvisoryID: adv.ID, Dependency: adv.DependencyName}
+	out := DependencyAdvisoryAge{AdvisoryID: adv.ID, Dependency: adv.DependencyName,
+		Published: adv.Published, ReviewedSeverity: adv.ReviewedSeverity}
 	switch adv.RecordLookup {
 	case AdvisoryRecordNotLookedUp:
+		// A date without a lookup (hand-built input) is not a fetched fact.
+		out.Published, out.ReviewedSeverity = time.Time{}, ""
 		out.Status = DependencyAdvisoryNotChecked
 		return out
 	case AdvisoryRecordLookupFailed:
@@ -129,7 +137,6 @@ func classifyOne(adv Advisory, eolDays int, today time.Time) DependencyAdvisoryA
 	case "", "HIGH", "CRITICAL":
 	case "LOW", "MODERATE", "MEDIUM":
 		out.Status = DependencyAdvisoryRatedBelowHigh
-		out.ReviewedSeverity = adv.ReviewedSeverity
 		return out
 	default:
 		out.Status = DependencyAdvisoryRatingUnrecognized
@@ -139,7 +146,6 @@ func classifyOne(adv Advisory, eolDays int, today time.Time) DependencyAdvisoryA
 		out.Status = DependencyAdvisoryUndated
 		return out
 	}
-	out.Published = adv.Published
 	eligible := utcDay(adv.Published).AddDate(0, 0, eolDays+1)
 	if !today.Before(eligible) {
 		out.Status = DependencyAdvisoryAged
@@ -183,3 +189,15 @@ func utcDay(t time.Time) time.Time {
 }
 
 func day(t time.Time) string { return t.UTC().Format("2006-01-02") }
+
+// CountDependencyAdvisoryAgeUnknown counts the analyses whose lifecycle label
+// rests on a dependency advisory with a failed OSV lookup.
+func CountDependencyAdvisoryAgeUnknown(analyses map[string]*Analysis) int {
+	n := 0
+	for _, a := range analyses {
+		if a.DependencyAdvisoryAgeUnknown() {
+			n++
+		}
+	}
+	return n
+}

@@ -70,6 +70,10 @@ type Client struct {
 	// same TTL as cache, so a long-lived client sees a later withdrawal or a
 	// record OSV publishes after a 404.
 	vulnCache ttlcache.Cache[vulnAnswer]
+	// vulnGen counts SetCacheTTL calls. GetVuln stores an answer only if no
+	// call happened while it was in flight, so a reset is never undone by a
+	// request sent before it. Guarded by storeMu.
+	vulnGen uint64
 }
 
 // vulnAnswer is one cached /v1/vulns/{id} answer, reduced to the fields
@@ -134,6 +138,7 @@ func (c *Client) SetCacheTTL(d time.Duration) {
 	c.cache.SetTTL(d)
 	c.vulnCache.Clear()
 	c.vulnCache.SetTTL(d)
+	c.vulnGen++
 	c.ttlTicket = c.lastTicket
 }
 
@@ -795,6 +800,9 @@ func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord,
 	if ans, ok := c.vulnCache.Get(id); ok {
 		return ans.rec, ans.found, nil
 	}
+	c.storeMu.Lock()
+	gen := c.vulnGen
+	c.storeMu.Unlock()
 	apiURL := c.resolvedBaseURL() + "/v1/vulns/" + url.PathEscape(id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
@@ -809,7 +817,7 @@ func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord,
 	// best-effort cleanup; the body is fully read below.
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
-		c.vulnCache.Set(id, vulnAnswer{})
+		c.storeVuln(gen, id, vulnAnswer{})
 		return domain.AdvisoryRecord{}, false, nil
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -832,6 +840,16 @@ func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord,
 	}
 	// Keep only what callers read; affected ranges can be large.
 	rec = domain.AdvisoryRecord{ID: rec.ID, Published: rec.Published, Withdrawn: rec.Withdrawn, Severity: rec.Severity}
-	c.vulnCache.Set(id, vulnAnswer{rec: rec, found: true})
+	c.storeVuln(gen, id, vulnAnswer{rec: rec, found: true})
 	return rec, true, nil
+}
+
+// storeVuln caches ans unless SetCacheTTL ran after the request was started.
+func (c *Client) storeVuln(gen uint64, id string, ans vulnAnswer) {
+	c.storeMu.Lock()
+	defer c.storeMu.Unlock()
+	if gen != c.vulnGen {
+		return
+	}
+	c.vulnCache.Set(id, ans)
 }

@@ -134,10 +134,8 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 			}
 			if f, ok := osvFacts[entries[i].ID]; ok {
 				entries[i].RecordLookup = f.lookup
-				if f.lookup == domain.AdvisoryRecordFound {
-					entries[i].Published = f.rec.Published
-					entries[i].ReviewedSeverity = f.rec.Severity
-				}
+				entries[i].Published = f.rec.Published
+				entries[i].ReviewedSeverity = f.rec.Severity
 			}
 		}
 		graphVersion := graphSELFVersion(depsGraphResults[p])
@@ -186,7 +184,11 @@ func (s *IntegrationService) fetchDependencyAdvisoryOSVFacts(ctx context.Context
 		return nil
 	}
 	sort.Strings(ids)
-	ctx, cancel := context.WithTimeout(ctx, osvFactsBudget)
+	budget := osvFactsBudget
+	if s.osvFactsBudget > 0 {
+		budget = s.osvFactsBudget
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	out := make(map[string]osvFact, len(ids))
 	var mu sync.Mutex

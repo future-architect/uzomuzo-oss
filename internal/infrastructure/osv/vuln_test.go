@@ -93,3 +93,50 @@ func TestClient_GetVuln(t *testing.T) {
 		t.Errorf("an error answer must not be cached")
 	}
 }
+
+// TestClient_GetVuln_ResetDuringRequest checks that an answer to a request
+// sent before SetCacheTTL is not stored after it: the reset must not be undone
+// by a slow response, for a found record and for a 404 alike.
+func TestClient_GetVuln_ResetDuringRequest(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ name, id, body string }{
+		{"found", "GHSA-slow-found", `{"id":"GHSA-slow-found","published":"2018-04-26T17:21:53Z"}`},
+		{"not found", "GHSA-slow-missing", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			arrived := make(chan struct{}, 4)
+			release := make(chan struct{})
+			var calls atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if calls.Add(1) == 1 {
+					arrived <- struct{}{}
+					<-release
+				}
+				if tc.body == "" {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			t.Cleanup(srv.Close)
+			c := newTestClient(t, srv.URL)
+			c.SetCacheTTL(time.Minute)
+
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				_, _, _ = c.GetVuln(context.Background(), tc.id)
+			}()
+			<-arrived
+			c.SetCacheTTL(time.Minute)
+			close(release)
+			<-done
+
+			_, _, _ = c.GetVuln(context.Background(), tc.id)
+			if got := calls.Load(); got != 2 {
+				t.Errorf("requests: got %d, want 2 (the answer to the request sent before the reset must not be cached)", got)
+			}
+		})
+	}
+}

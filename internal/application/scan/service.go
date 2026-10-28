@@ -268,13 +268,7 @@ func warnMaliciousLookupFailures(analyses map[string]*analysis.Analysis) {
 // Stalled because the age of a HIGH dependency advisory could not be checked:
 // with OSV answering they might be EOL-Effective. See ADR-0032.
 func warnDependencyAdvisoryLookupFailures(analyses map[string]*analysis.Analysis) {
-	unknown := 0
-	for _, a := range analyses {
-		if a.DependencyAdvisoryAgeUnknown() {
-			unknown++
-		}
-	}
-	if unknown > 0 {
+	if unknown := analysis.CountDependencyAdvisoryAgeUnknown(analyses); unknown > 0 {
 		slog.Warn("dependency advisory age check incomplete: OSV lookup failed; these packages may be EOL-Effective", "count", unknown)
 	}
 }

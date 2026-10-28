@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -195,4 +196,55 @@ func (g graphAwareDepsDev) FetchTransitiveAdvisoryKeys(_ context.Context, deps *
 		}
 	}
 	return out, nil
+}
+
+// TestFetchDependencyAdvisoryOSVFacts_Budget runs more IDs than workers
+// against an OSV that never answers: no more than osvFactWorkers requests are
+// open at once, the budget ends the wait, and every ID, sent or not, is a
+// failed lookup.
+func TestFetchDependencyAdvisoryOSVFacts_Budget(t *testing.T) {
+	t.Parallel()
+	var mu sync.Mutex
+	open, maxOpen := 0, 0
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		open++
+		if open > maxOpen {
+			maxOpen = open
+		}
+		mu.Unlock()
+		<-r.Context().Done()
+		mu.Lock()
+		open--
+		mu.Unlock()
+	}))
+	t.Cleanup(srv.Close)
+	osvClient := osv.NewClient()
+	osvClient.SetBaseURL(srv.URL)
+	svc := &IntegrationService{osvClient: osvClient, osvFactsBudget: 300 * time.Millisecond}
+	details := map[string]*depsdev.AdvisoryDetail{}
+	for i := range 20 {
+		details[fmt.Sprintf("GHSA-%02d", i)] = &depsdev.AdvisoryDetail{CVSS3Score: 9.8}
+	}
+
+	start := time.Now()
+	facts := svc.fetchDependencyAdvisoryOSVFacts(context.Background(), details)
+	elapsed := time.Since(start)
+
+	if elapsed > 3*time.Second {
+		t.Errorf("elapsed %v: the budget did not stop the lookups", elapsed)
+	}
+	if len(facts) != len(details) {
+		t.Fatalf("facts: got %d, want %d", len(facts), len(details))
+	}
+	for id, f := range facts {
+		if f.lookup != domain.AdvisoryRecordLookupFailed {
+			t.Errorf("%s: got %q, want lookup_failed", id, f.lookup)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if maxOpen > osvFactWorkers || maxOpen == 0 {
+		t.Errorf("concurrent requests: got %d, want 1..%d", maxOpen, osvFactWorkers)
+	}
 }

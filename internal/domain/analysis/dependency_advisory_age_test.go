@@ -70,3 +70,56 @@ func TestClassifyDependencyAdvisoryAge_Selection(t *testing.T) {
 		t.Errorf("nil VersionDetail: got %+v, want nil", got)
 	}
 }
+
+// TestClassifyDependencyAdvisoryAge_SameDayAndFacts pins that two advisories
+// published on the same UTC day are ordered by ID, whatever their times, and
+// that the fetched date and rating stay on the result for every status.
+func TestClassifyDependencyAdvisoryAge_SameDayAndFacts(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC)
+	recent := time.Date(2026, 1, 10, 1, 0, 0, 0, time.UTC)
+	z := Advisory{ID: "GHSA-z", Relation: AdvisoryRelationTransitive, CVSS3Score: 7.5, RecordLookup: AdvisoryRecordFound, Published: recent}
+	a := Advisory{ID: "GHSA-a", Relation: AdvisoryRelationTransitive, CVSS3Score: 7.5, RecordLookup: AdvisoryRecordFound, Published: recent.Add(22 * time.Hour)}
+	for _, order := range [][]Advisory{{z, a}, {a, z}} {
+		got := ClassifyDependencyAdvisoryAge(&VersionDetail{Advisories: order}, 7.0, 730, now)
+		if got == nil || got.AdvisoryID != "GHSA-a" || got.Status != DependencyAdvisoryNotAged {
+			t.Errorf("order %s,%s: got %+v, want GHSA-a not_aged", order[0].ID, order[1].ID, got)
+		}
+	}
+
+	old := now.AddDate(-4, 0, 0)
+	for _, tc := range []struct {
+		lookup AdvisoryRecordLookup
+		rating string
+		want   DependencyAdvisoryAgeStatus
+	}{
+		{AdvisoryRecordFound, "HIGH", DependencyAdvisoryAged},
+		{AdvisoryRecordFound, "MODERATE", DependencyAdvisoryRatedBelowHigh},
+		{AdvisoryRecordFound, "IMPORTANT", DependencyAdvisoryRatingUnrecognized},
+		{AdvisoryRecordWithdrawn, "HIGH", DependencyAdvisoryWithdrawn},
+	} {
+		adv := Advisory{ID: "GHSA-x", Relation: AdvisoryRelationTransitive, CVSS3Score: 7.5, RecordLookup: tc.lookup, Published: old, ReviewedSeverity: tc.rating}
+		got := ClassifyDependencyAdvisoryAge(&VersionDetail{Advisories: []Advisory{adv}}, 7.0, 730, now)
+		if got == nil || got.Status != tc.want || !got.Published.Equal(old) || got.ReviewedSeverity != tc.rating {
+			t.Errorf("%s %s: got %+v, want %s with the fetched date and rating", tc.lookup, tc.rating, got, tc.want)
+		}
+	}
+	notLooked := Advisory{ID: "GHSA-x", Relation: AdvisoryRelationTransitive, CVSS3Score: 7.5, Published: old, ReviewedSeverity: "HIGH"}
+	if got := ClassifyDependencyAdvisoryAge(&VersionDetail{Advisories: []Advisory{notLooked}}, 7.0, 730, now); got == nil || !got.Published.IsZero() || got.ReviewedSeverity != "" {
+		t.Errorf("not looked up: got %+v, want no date or rating (not a fetched fact)", got)
+	}
+}
+
+// TestCountDependencyAdvisoryAgeUnknown counts only failed lookups that decided.
+func TestCountDependencyAdvisoryAgeUnknown(t *testing.T) {
+	t.Parallel()
+	with := func(s DependencyAdvisoryAgeStatus) *Analysis {
+		return &Analysis{AxisResults: map[AssessmentAxis]*AssessmentResult{LifecycleAxis: {DependencyAdvisoryAge: &DependencyAdvisoryAge{Status: s}}}}
+	}
+	got := CountDependencyAdvisoryAgeUnknown(map[string]*Analysis{
+		"a": with(DependencyAdvisoryUnknown), "b": with(DependencyAdvisoryAged), "c": {}, "d": nil,
+	})
+	if got != 1 {
+		t.Errorf("got %d, want 1", got)
+	}
+}
