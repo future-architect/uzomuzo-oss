@@ -183,6 +183,36 @@ type Advisory struct {
 	// DependencyName identifies the transitive dependency this advisory originates from.
 	// Format: "name@version" (e.g., "qs@6.5.5"). Empty for direct advisories.
 	DependencyName string
+	// Published is when the advisory was first published (OSV). Zero when
+	// unknown. Only dependency advisories whose CVSS3 score reaches the HIGH
+	// threshold are looked up; RecordLookup says how that lookup went.
+	Published time.Time
+	// ReviewedSeverity is the advisory database's reviewed rating (OSV
+	// database_specific.severity, e.g. GitHub's MODERATE), upper-cased. Empty
+	// when the record carries none or was not looked up.
+	ReviewedSeverity string
+	// RecordLookup is what the OSV lookup of this advisory found. Zero when it
+	// was not looked up.
+	RecordLookup AdvisoryRecordLookup
+}
+
+// AdvisoryRecordLookup is the outcome of looking an advisory up by ID in OSV.
+type AdvisoryRecordLookup string
+
+// AdvisoryRecordLookup values. The zero value means not looked up.
+const (
+	AdvisoryRecordNotLookedUp  AdvisoryRecordLookup = ""
+	AdvisoryRecordFound        AdvisoryRecordLookup = "found"
+	AdvisoryRecordNotFound     AdvisoryRecordLookup = "not_found"
+	AdvisoryRecordWithdrawn    AdvisoryRecordLookup = "withdrawn"
+	AdvisoryRecordLookupFailed AdvisoryRecordLookup = "lookup_failed"
+)
+
+// IsKnownHighCVSS3 reports whether a CVSS3 score is known (non-zero) and at or
+// above threshold. The OSV lookup and the lifecycle decision both use it, so
+// an advisory the decision would count is always looked up.
+func IsKnownHighCVSS3(score, threshold float64) bool {
+	return score > 0 && score >= threshold
 }
 
 // Advisory Relation constants.
@@ -301,6 +331,18 @@ func (vd *VersionDetail) ExcludingAdvisories(ids []string) *VersionDetail {
 	}
 	out := *vd
 	out.Advisories = kept
+	return &out
+}
+
+// DirectOnly returns a copy of vd holding only the advisories against the
+// package itself (Relation DIRECT or empty). Returns nil for a nil receiver and
+// never mutates the receiver. See ADR-0032.
+func (vd *VersionDetail) DirectOnly() *VersionDetail {
+	if vd == nil {
+		return nil
+	}
+	out := *vd
+	out.Advisories = vd.DirectAdvisories()
 	return &out
 }
 

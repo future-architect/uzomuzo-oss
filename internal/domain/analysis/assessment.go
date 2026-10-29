@@ -58,8 +58,14 @@ const (
 	SignalRecentPreRelease    = "recent_pre_release"
 	SignalAdvisoryCount       = "advisory_count"
 	SignalMaxAdvisorySeverity = "max_advisory_severity"
-	SignalDaysSinceRelease    = "days_since_release"
-	SignalEcosystemDelivery   = "ecosystem_delivery"
+	// SignalTransitiveAdvisoryCount is the number of advisories against
+	// dependencies rather than the package itself.
+	SignalTransitiveAdvisoryCount = "transitive_advisory_count"
+	// SignalAgedDependencyAdvisory names the oldest HIGH dependency advisory
+	// public for longer than EolInactivityDays, with its publication date.
+	SignalAgedDependencyAdvisory = "aged_dependency_advisory"
+	SignalDaysSinceRelease       = "days_since_release"
+	SignalEcosystemDelivery      = "ecosystem_delivery"
 	// SignalAllReleasesYanked carries the registry name asserting that every
 	// published release is yanked (see RegistryState).
 	SignalAllReleasesYanked = "all_releases_yanked"
@@ -86,6 +92,10 @@ type AssessmentResult struct {
 	Trace   []string          // debug-only explanatory steps (not printed in normal CLI)
 	Meta    map[string]string // future extensibility (key/value lightweight diagnostics)
 	Signals []Signal          // data points evaluated for this verdict
+	// DependencyAdvisoryAge names the dependency advisory that decided a
+	// dormant package whose HIGH advisories are all in dependencies. Nil on
+	// every other path. See ADR-0032.
+	DependencyAdvisoryAge *DependencyAdvisoryAge
 }
 
 // AssessmentService defines contract for assessment services.

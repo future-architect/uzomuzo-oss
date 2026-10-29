@@ -96,6 +96,7 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 	}
 	hasFailure := policy.Evaluate(entries)
 	warnMaliciousLookupFailures(analyses)
+	warnDependencyAdvisoryLookupFailures(analyses)
 
 	return &Result{Entries: entries, HasFailure: hasFailure}, nil
 }
@@ -246,6 +247,7 @@ func (s *Service) RunFromPURLsWithActions(ctx context.Context, purls, githubURLs
 	}
 
 	warnMaliciousLookupFailures(allAnalyses)
+	warnDependencyAdvisoryLookupFailures(allAnalyses)
 	hasFailure := policy.Evaluate(entries)
 	return &Result{Entries: entries, HasFailure: hasFailure}, nil
 }
@@ -259,6 +261,15 @@ func warnMaliciousLookupFailures(analyses map[string]*analysis.Analysis) {
 	}
 	if failed > 0 {
 		slog.Warn("malicious check incomplete: OSV lookup failed for dependencies", "count", failed)
+	}
+}
+
+// warnDependencyAdvisoryLookupFailures says how many packages were left
+// Stalled because the age of a HIGH dependency advisory could not be checked:
+// with OSV answering they might be EOL-Effective. See ADR-0032.
+func warnDependencyAdvisoryLookupFailures(analyses map[string]*analysis.Analysis) {
+	if unknown := analysis.CountDependencyAdvisoryAgeUnknown(analyses); unknown > 0 {
+		slog.Warn("dependency advisory age check incomplete: OSV lookup failed; these packages may be EOL-Effective", "count", unknown)
 	}
 }
 

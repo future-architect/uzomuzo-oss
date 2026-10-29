@@ -107,7 +107,7 @@ func TestLifecycleAssessor_AdvisoryDBUnmaintained(t *testing.T) {
 			wantSignal: true,
 		},
 		{
-			// The other half of severityAwareLabel, matching what every other
+			// The other half of severityOutcome, matching what every other
 			// ecosystem already does with an unmaintained package.
 			name: "flagged plus an unpatched HIGH advisory is EOL-Effective",
 			analysis: &Analysis{
@@ -125,7 +125,7 @@ func TestLifecycleAssessor_AdvisoryDBUnmaintained(t *testing.T) {
 		},
 		{
 			// An advisory of unknown severity is treated as potentially high by
-			// hasHighSeverityAdvisories; the branch must inherit that, not
+			// advisorySeverityExcluding; the branch must inherit that, not
 			// re-decide it.
 			name: "flagged plus an unknown-severity advisory is EOL-Effective",
 			analysis: &Analysis{

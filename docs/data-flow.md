@@ -189,11 +189,13 @@ The lifecycle assessor is severity-aware: only HIGH or CRITICAL advisories trigg
 
 - **Data source**: deps.dev advisory API (`GET /v3alpha/advisories/{id}`) provides CVSS3 scores for each advisory.
 - **Scope**: Only Stable and MaxSemver versions are enriched with severity data (per ADR-0010). Development/pre-release versions skip severity enrichment to reduce API calls.
-- **Severity thresholds**: CVSS3 >= 7.0 is classified as HIGH; CVSS3 >= 9.0 is classified as CRITICAL. The threshold is configurable via `HighSeverityCVSSThreshold` (default 7.0).
-- **Fallback behavior**: When the advisory API is unavailable or returns no CVSS3 score, the advisory is conservatively treated as HIGH severity (same behavior as before the severity-aware change). This ensures no regression in detection coverage.
+- **Severity thresholds**: CVSS3 >= 7.0 is classified as HIGH; CVSS3 >= 9.0 is classified as CRITICAL (`HighSeverityCVSSThreshold`, default 7.0).
+- **Fallback behavior**: When the advisory API is unavailable or returns no CVSS3 score, an advisory against the package itself is conservatively treated as HIGH severity (same behavior as before the severity-aware change). A dependency advisory without a known HIGH CVSS3 score does not make a package EOL-Effective in the four decision points below; a package with only such dependency advisories is Stalled there.
 - **Classification impact**:
-  - HIGH/CRITICAL advisory + dormant (2+ yrs without human commits) → **EOL-Effective**
+  - HIGH/CRITICAL advisory against the package itself + dormant (2+ yrs without human commits) → **EOL-Effective**
   - LOW/MEDIUM-only advisories + dormant → **Stalled** (not escalated to EOL-Effective)
+  - HIGH advisories only in dependencies (`Relation = TRANSITIVE`) + dormant, in four decision points (Scorecard data missing or incomplete; RustSec marks the package unmaintained; no commit history and an old release with a low (C2a) or missing (C3a) Scorecard) → **Stalled**, unless one of them is aged: published more than `EolInactivityDays` (730) whole UTC days ago, not withdrawn, and rated HIGH, CRITICAL or not rated by its database. Then **EOL-Effective**. The Scorecard `Vulnerabilities` score branches are unchanged. See [ADR-0032](adr/0032-dependency-advisories-and-dormant-packages.md)
+- **Dependency advisory facts**: for each dependency advisory whose known CVSS3 score reaches the threshold, `GET https://api.osv.dev/v1/vulns/{id}` gives `published`, `withdrawn` and `database_specific.severity`; the outcome is kept on the advisory as `RecordLookup` (`found` / `not_found` / `withdrawn` / `lookup_failed`). Eight lookups run at a time within a 30-second budget per enrichment; unanswered IDs are `lookup_failed`. Answers, including 404, follow the OSV client's cache TTL. Code: `IntegrationService.fetchDependencyAdvisoryOSVFacts` (`internal/infrastructure/integration/enrich_transitive_advisory.go`), `osv.Client.GetVuln`, `analysis.ClassifyDependencyAdvisoryAge`
 
 ### Transitive Advisory Scanning
 

@@ -65,6 +65,22 @@ type Client struct {
 	// ttlTicket is lastTicket at the last SetCacheTTL. An answer to a request
 	// numbered at or below it is not stored. Guarded by storeMu.
 	ttlTicket uint64
+	// vulnCache holds /v1/vulns/{id} answers keyed by advisory ID: an advisory
+	// record does not depend on which package asked for it. It follows the
+	// same TTL as cache, so a long-lived client sees a later withdrawal or a
+	// record OSV publishes after a 404.
+	vulnCache ttlcache.Cache[vulnAnswer]
+	// vulnGen counts SetCacheTTL calls. GetVuln stores an answer only if no
+	// call happened while it was in flight, so a reset is never undone by a
+	// request sent before it. Guarded by storeMu.
+	vulnGen uint64
+}
+
+// vulnAnswer is one cached /v1/vulns/{id} answer, reduced to the fields
+// GetVuln callers read. found is false for a 404.
+type vulnAnswer struct {
+	rec   domain.AdvisoryRecord
+	found bool
 }
 
 // cachedAnswer is one stored OSV answer for a package, numbered by the request
@@ -120,6 +136,9 @@ func (c *Client) SetCacheTTL(d time.Duration) {
 	// clean answer must not come back when caching is turned on again.
 	c.cache.Clear()
 	c.cache.SetTTL(d)
+	c.vulnCache.Clear()
+	c.vulnCache.SetTTL(d)
+	c.vulnGen++
 	c.ttlTicket = c.lastTicket
 }
 
@@ -467,6 +486,11 @@ type wireVuln struct {
 	Summary          string   `json:"summary"`
 	DatabaseSpecific struct {
 		CWEIDs []string `json:"cwe_ids"`
+		// Severity is the curator's reviewed rating (GitHub: LOW, MODERATE,
+		// HIGH, CRITICAL). Absent for RustSec. ratingString, because this
+		// struct also decodes the query and querybatch answers: a database
+		// putting an object here must not fail the malicious check.
+		Severity ratingString `json:"severity"`
 	} `json:"database_specific"`
 	// Published is RFC3339. An unparseable or absent value leaves the record's
 	// Published zero, which the domain treats as a non-match.
@@ -475,6 +499,24 @@ type wireVuln struct {
 	Withdrawn  string          `json:"withdrawn"`
 	References []wireReference `json:"references"`
 	Affected   []wireAffected  `json:"affected"`
+}
+
+// ratingString decodes a JSON string as is. Any other JSON value, null
+// included, becomes unrecognizedRating rather than empty: empty means "no
+// rating", which lets an old dependency advisory count (ADR-0032). An omitted
+// field never reaches UnmarshalJSON and stays empty.
+type ratingString string
+
+const unrecognizedRating = "UNRECOGNIZED"
+
+func (s *ratingString) UnmarshalJSON(b []byte) error {
+	var v string
+	if bytes.Equal(bytes.TrimSpace(b), []byte("null")) || json.Unmarshal(b, &v) != nil {
+		*s = unrecognizedRating
+		return nil
+	}
+	*s = ratingString(v)
+	return nil
 }
 
 type wireReference struct {
@@ -606,6 +648,7 @@ func toRecord(v *wireVuln) (domain.AdvisoryRecord, bool) {
 		Summary:   sanitizeSummary(v.Summary),
 		Reference: advisoryReference(v.References),
 		Withdrawn: strings.TrimSpace(v.Withdrawn) != "",
+		Severity:  strings.ToUpper(strings.TrimSpace(string(v.DatabaseSpecific.Severity))),
 	}
 	for _, cwe := range v.DatabaseSpecific.CWEIDs {
 		if cweIDPattern.MatchString(cwe) {
@@ -762,4 +805,71 @@ func isPlainWebURL(u string) bool {
 // Whitespace is exempt so ordinary line breaks survive to be collapsed.
 func sanitizeSummary(raw string) string {
 	return domain.SanitizeExternalSummary(raw)
+}
+
+// GetVuln fetches one advisory record by ID from /v1/vulns/{id}: its ID,
+// publication date, withdrawal and reviewed severity (other fields are left
+// empty). found is false when OSV.dev has no record for the ID (404); that
+// answer is cached for the client's cache TTL, a transport or decode error is
+// not.
+func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord, bool, error) {
+	id = strings.TrimSpace(id)
+	if !isPlainAdvisoryID(id) {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln: invalid advisory id %q", id)
+	}
+	if ans, ok := c.vulnCache.Get(id); ok {
+		return ans.rec, ans.found, nil
+	}
+	c.storeMu.Lock()
+	gen := c.vulnGen
+	c.storeMu.Unlock()
+	apiURL := c.resolvedBaseURL() + "/v1/vulns/" + url.PathEscape(id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln request build failed: %w", err)
+	}
+	req.Header.Set("User-Agent", osvUserAgent)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.http.Do(ctx, req)
+	if err != nil {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln http failed: %w", err)
+	}
+	// best-effort cleanup; the body is fully read below.
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		c.storeVuln(gen, id, vulnAnswer{})
+		return domain.AdvisoryRecord{}, false, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln http status %d", resp.StatusCode)
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxJSONResponseSize+1))
+	if err != nil {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln read failed: %w", err)
+	}
+	if len(raw) > maxJSONResponseSize {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln response exceeded %d bytes", maxJSONResponseSize)
+	}
+	var v wireVuln
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln decode failed: %w", err)
+	}
+	rec, ok := toRecord(&v)
+	if !ok || !strings.EqualFold(rec.ID, id) {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln: answer for %q did not name it", id)
+	}
+	// Keep only what callers read; affected ranges can be large.
+	rec = domain.AdvisoryRecord{ID: rec.ID, Published: rec.Published, Withdrawn: rec.Withdrawn, Severity: rec.Severity}
+	c.storeVuln(gen, id, vulnAnswer{rec: rec, found: true})
+	return rec, true, nil
+}
+
+// storeVuln caches ans unless SetCacheTTL ran after the request was started.
+func (c *Client) storeVuln(gen uint64, id string, ans vulnAnswer) {
+	c.storeMu.Lock()
+	defer c.storeMu.Unlock()
+	if gen != c.vulnGen {
+		return
+	}
+	c.vulnCache.Set(id, ans)
 }
