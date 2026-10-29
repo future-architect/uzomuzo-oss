@@ -615,7 +615,7 @@ PHASE_C_OK=0                     # fail-safe default; Step 11.5 verification fli
 |---|---|
 | `B_CLEAN_VERIFIED` | `review_is_clean` returned clean for Copilot's review of the current HEAD — no inline comment, no body-only finding (`Previously missed` / `Comments suppressed`), and no non-zero count or objection in the body (either via Step 8.2's clean path on a fix-cycle round, or via Step 8.4.5's forced re-review after a WONT_FIX-only round). |
 | `B_CLEAN_OPERATOR` | All threads are WONT_FIX/ALREADY_FIXED so the operator considers the PR clean, but Copilot's forced re-review (Step 8.4.5) re-emitted the same set of threads (cross-round consensus = false-positive confirmed). Operator-judged clean only. |
-| `B_ABORTED` | Phase B did not converge (max rounds, unrecoverable build/test/lint failure, rebase or push failure in the fix cycle, Step 8.4.5 surfaced new findings that exhausted the round budget, Copilot review timeout — 10 min in Step 8.3, 5 min in Step 8.4.5 —, a GitHub API failure, or 3d: a re-review whose remaining finding or objection exists only in the review body, which is printed). |
+| `B_ABORTED` | Phase B did not converge (max rounds, unrecoverable build/test/lint failure, rebase or push failure in the fix cycle, Step 8.4.5 surfaced new findings that exhausted the round budget, Copilot review timeout (Step 8.3 / 8.4.5), a GitHub API failure, or 3d: a re-review whose remaining finding or objection exists only in the review body, which is printed). |
 
 `PHASE_C_OK` is a separate fail-safe flag from `PHASE_B_EXIT_REASON` because Phase B can converge clean (`B_CLEAN_VERIFIED` / `B_CLEAN_OPERATOR`) yet Phase C can still fail mid-way (rate-limited reply, permission error, network partition during the resolve mutation). It is reported in Step 11.9 so the operator knows whether all FIX / ALREADY_FIXED threads were actually replied to and resolved; `PHASE_C_OK=0` on an otherwise-clean exit means some threads are still open and the skill should be re-run.
 
@@ -668,6 +668,9 @@ Why a helper and not a phrase: the clean check used to be `review_body =~ /gener
 # of the diff, so a PR about this check gets described there in the same
 # words the check looks for, without backquotes.
 #
+# Order: fences, then inline `...` spans, then the "What changed" block
+# (inline spans go first so a quoted <summary> is not taken for the block).
+#
 # An unclosed fence (or an unclosed "What changed" block) makes this
 # return non-zero; the caller then falls back to the raw body. Trusting
 # an open fence would erase everything after it, including real findings
@@ -700,17 +703,30 @@ strip_quoted_code() {   # stdin = body / stdout = body without quotes
             # Drop inline code first, so a quoted "<summary>What changed in
             # this PR</summary>" is not taken for the real block below.
             gsub(/`[^`]*`/, "", line)
-            # The bot summary of the diff, not its verdict. Only the
-            # collapsed <summary> form; a plain heading with the same words
-            # would otherwise swallow up to an unrelated </details>. Text
-            # after the closing </details> on the same line is kept.
-            if (index(line, "<summary") > 0 &&
-                index(line, "What changed in this PR") > 0)
-                summary = 1
+            # The bot summary of the diff, not its verdict: skip from a
+            # <summary> naming "What changed in this PR" to the first
+            # </details>. The skip is kept as narrow as possible, because
+            # whatever it drops is never counted: text before <summary> and
+            # after </details> on the same line is kept, and a new <details>
+            # or <summary> ends the skip early (none of the 27 real summary
+            # blocks nests one; a block that did would only read dirty).
+            if (!summary) {
+                k = index(line, "<summary")
+                if (k > 0 && index(substr(line, k), "What changed in this PR") > 0) {
+                    if (k > 1) print substr(line, 1, k - 1)
+                    summary = 1
+                    line = substr(line, k + length("<summary"))
+                }
+            }
             if (summary) {
-                if (index(line, "</details>") == 0) next
-                summary = 0
-                sub(/.*<\/details>/, "", line)
+                k = index(line, "</details>")
+                j = index(line, "<details"); m = index(line, "<summary")
+                if (m > 0 && (j == 0 || m < j)) j = m
+                if (j > 0 && (k == 0 || j < k)) {
+                    summary = 0; line = substr(line, j)
+                } else if (k > 0) {
+                    summary = 0; line = substr(line, k + length("</details>"))
+                } else next
             }
             print line
         }
@@ -1282,10 +1298,9 @@ else
     # 5xx / rate limit / network failure does not abort the whole
     # procedure under `set -euo pipefail`. CRITICAL: a fetch failure
     # (`threads_new_fetch_ok=0`) is NOT the same as "Copilot returned
-    # no threads" — falling through to `threads_new=""` would
-    # incorrectly flip to 3b `B_CLEAN_OPERATOR` and suppress further
-    # rounds, when the right behaviour is to exit `B_ABORTED` so a
-    # re-run retries the pipeline. The flag below distinguishes the two
+    # no threads" — falling through to `threads_new=""` would end in 3d
+    # and print the review body as if Copilot objected only in prose,
+    # when the right message is "the fetch failed, re-run to retry". The flag below distinguishes the two
     # outcomes for the classification block at the bottom of step 4.
     threads_new_fetch_ok=1
     threads_new=$(gh api graphql --paginate \
