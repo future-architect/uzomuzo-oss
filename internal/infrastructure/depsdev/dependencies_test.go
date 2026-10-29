@@ -367,7 +367,7 @@ func TestFetchDependenciesBatch_VersionFallback_PrefersClosestSemver(t *testing.
 
 // TestFetchDependenciesBatch_NoFallbackForLeafWithGraph ensures the fallback
 // does NOT run when the primary call returns a valid (but SELF-only) response.
-// The zero-node response must be preserved per PR #315's HasDependencyGraph
+// The SELF-only response must be preserved per PR #315's HasDependencyGraph
 // contract: "leaf package, graph was collected".
 func TestFetchDependenciesBatch_NoFallbackForLeafWithGraph(t *testing.T) {
 	var listCalls int64
@@ -411,6 +411,9 @@ func TestFetchDependenciesBatch_UnresolvedGraph(t *testing.T) {
 		case "/v3alpha/systems/cargo/packages/clap/versions/4.6.7:dependencies":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = fmt.Fprint(w, `{"nodes":[],"edges":[],"error":"trycmd/^1.2.0: no candidates found"}`)
+		case "/v3alpha/systems/cargo/packages/clap/versions/4.6.8:dependencies":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(w, `{"nodes":[{"relation":"SELF"},{"relation":"DIRECT"}],"edges":[],"error":"x/^1: no candidates found"}`)
 		case "/v3alpha/systems/cargo/packages/clap":
 			atomic.AddInt64(&listCalls, 1)
 			w.WriteHeader(http.StatusNotFound)
@@ -431,6 +434,11 @@ func TestFetchDependenciesBatch_UnresolvedGraph(t *testing.T) {
 	}
 	if resp != nil {
 		t.Fatalf("FetchDependencies resp = %+v, want nil", resp)
+	}
+
+	partial, err := client.FetchDependencies(context.Background(), "pkg:cargo/clap@4.6.8")
+	if err == nil || partial != nil {
+		t.Fatalf("partial body: FetchDependencies = (%+v, %v), want (nil, error)", partial, err)
 	}
 
 	results := client.FetchDependenciesBatch(context.Background(), []string{"pkg:cargo/clap@4.6.7"})

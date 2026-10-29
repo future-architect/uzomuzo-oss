@@ -1294,6 +1294,7 @@ func TestWriteBoxHealth_DependsOn(t *testing.T) {
 		{"graph with direct only", &analysis.Analysis{HasDependencyGraph: true, DirectDepsCount: 4}, "Depends on: 4 direct, 0 transitive"},
 		{"graph with no deps", &analysis.Analysis{HasDependencyGraph: true}, "Depends on: none (0 direct, 0 transitive)"},
 		{"no graph", &analysis.Analysis{}, ""},
+		{"counts without graph", &analysis.Analysis{DirectDepsCount: 3}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

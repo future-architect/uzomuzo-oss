@@ -162,8 +162,8 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 			forkSource,
 			fmt.Sprintf("%.2f", analysis.OverallScore),
 			fmt.Sprintf("%d", analysis.DependentCount),      // Deprecated legacy column. See ADR-0033.
-			fmt.Sprintf("%d", analysis.DirectDepsCount),     // 0 = unknown or unsupported ecosystem
-			fmt.Sprintf("%d", analysis.TransitiveDepsCount), // 0 = unknown or unsupported ecosystem
+			fmt.Sprintf("%d", analysis.DirectDepsCount),     // 0 = none, unknown, or unsupported ecosystem
+			fmt.Sprintf("%d", analysis.TransitiveDepsCount), // 0 = none, unknown, or unsupported ecosystem
 		}
 
 		// Add check scores

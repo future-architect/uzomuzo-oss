@@ -133,8 +133,9 @@ type Analysis struct {
 	// When HasDependencyGraph is true, zero means the resolved version genuinely
 	// has no direct dependencies (e.g., react@19 declares none). When
 	// HasDependencyGraph is false, zero is uninformative — the graph was not
-	// reached (unsupported ecosystem, no resolvable release, 404, or transport
-	// error). Always consult HasDependencyGraph before interpreting zero.
+	// reached (unsupported ecosystem, no resolvable release, 404, a graph
+	// deps.dev reported as unresolved, or transport error). Always consult
+	// HasDependencyGraph before interpreting zero.
 	DirectDepsCount int
 
 	// TransitiveDepsCount is the number of transitive (indirect) dependencies for the
@@ -153,8 +154,9 @@ type Analysis struct {
 	// TransitiveDepsCount reflect the graph contents (zero means the resolved
 	// version genuinely has no dependencies in that relation class). When false,
 	// the graph was unavailable — typical reasons are an unsupported ecosystem,
-	// a versionless analysis with no resolvable release, a 404 from deps.dev, or
-	// a transport error — so the counts carry no positive information.
+	// a versionless analysis with no resolvable release, a 404 from deps.dev, a
+	// 200 response whose top-level "error" says the graph could not be resolved,
+	// or a transport error — so the counts carry no positive information.
 	HasDependencyGraph bool
 
 	// Canonical package links (homepage, registry, docs, changelog)

@@ -497,11 +497,12 @@ func writeBoxHealth(ctx *boxContext) error {
 	}
 	// Zero counts mean "no dependencies" only when the graph was retrieved;
 	// without it they are unknown and the line is omitted.
-	switch {
-	case a.HasDependencyGraph && a.DirectDepsCount == 0 && a.TransitiveDepsCount == 0:
-		lines = append(lines, "Depends on: none (0 direct, 0 transitive)")
-	case a.HasDependencyGraph || a.DirectDepsCount > 0 || a.TransitiveDepsCount > 0:
-		lines = append(lines, fmt.Sprintf("Depends on: %d direct, %d transitive", a.DirectDepsCount, a.TransitiveDepsCount))
+	if a.HasDependencyGraph {
+		if a.DirectDepsCount == 0 && a.TransitiveDepsCount == 0 {
+			lines = append(lines, "Depends on: none (0 direct, 0 transitive)")
+		} else {
+			lines = append(lines, fmt.Sprintf("Depends on: %d direct, %d transitive", a.DirectDepsCount, a.TransitiveDepsCount))
+		}
 	}
 
 	// Scores
