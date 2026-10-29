@@ -83,7 +83,13 @@ func (p *Parser) Parse(_ context.Context, data []byte) ([]depparser.ParsedDepend
 			scope = "tool"
 		}
 
+		var locations []depparser.SourceLocation
+		if req.Syntax != nil {
+			locations = []depparser.SourceLocation{{Line: req.Syntax.Start.Line}}
+		}
+
 		deps = append(deps, depparser.ParsedDependency{
+			Locations: locations,
 			PURL:      fmt.Sprintf("pkg:golang/%s@%s", modPath, version),
 			Ecosystem: "golang",
 			Name:      modPath,

@@ -143,7 +143,7 @@ func TestRenderScanCSV(t *testing.T) {
 
 func TestRenderScanOutput_UnsupportedFormat(t *testing.T) {
 	var buf bytes.Buffer
-	err := renderScanOutput(&buf, nil, nil, "yaml", false, nil)
+	err := renderScanOutput(&buf, nil, nil, "yaml", false, nil, scanRenderOptions{})
 	if err == nil {
 		t.Error("expected error for unsupported format, got nil")
 	}

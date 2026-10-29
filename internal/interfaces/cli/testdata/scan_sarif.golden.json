@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "uzomuzo",
+          "version": "1.2.3",
+          "rules": [
+            {
+              "id": "uzomuzo/analysis-incomplete",
+              "name": "AnalysisIncomplete",
+              "shortDescription": {
+                "text": "Dependency analysis is incomplete"
+              },
+              "helpUri": "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats",
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "uzomuzo/malicious",
+              "name": "Malicious",
+              "shortDescription": {
+                "text": "Dependency has a malicious-package advisory"
+              },
+              "helpUri": "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats",
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "uzomuzo/eol-confirmed",
+              "name": "EOLConfirmed",
+              "shortDescription": {
+                "text": "Dependency has confirmed end of life"
+              },
+              "helpUri": "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats",
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "uzomuzo/eol-effective",
+              "name": "EOLEffective",
+              "shortDescription": {
+                "text": "Dependency is effectively end of life"
+              },
+              "helpUri": "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats",
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "uzomuzo/eol-scheduled",
+              "name": "EOLScheduled",
+              "shortDescription": {
+                "text": "Dependency has scheduled end of life"
+              },
+              "helpUri": "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats",
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "uzomuzo/archived",
+              "name": "Archived",
+              "shortDescription": {
+                "text": "Dependency repository is archived"
+              },
+              "helpUri": "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats",
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "uzomuzo/disabled",
+              "name": "Disabled",
+              "shortDescription": {
+                "text": "Dependency repository is disabled"
+              },
+              "helpUri": "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats",
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "uzomuzo/stalled",
+              "name": "Stalled",
+              "shortDescription": {
+                "text": "Dependency maintenance has stalled"
+              },
+              "helpUri": "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats",
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "uzomuzo/legacy-safe",
+              "name": "LegacySafe",
+              "shortDescription": {
+                "text": "Dependency is legacy-safe"
+              },
+              "helpUri": "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats",
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "uzomuzo/review-needed",
+              "name": "ReviewNeeded",
+              "shortDescription": {
+                "text": "Dependency needs manual review"
+              },
+              "helpUri": "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats",
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "uzomuzo/dormant-release",
+              "name": "DormantRelease",
+              "shortDescription": {
+                "text": "Dependency has a dormant-release marker"
+              },
+              "helpUri": "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats",
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "uzomuzo/active",
+              "name": "Active",
+              "shortDescription": {
+                "text": "Dependency is active"
+              },
+              "helpUri": "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats",
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "uzomuzo/analysis-incomplete",
+          "ruleIndex": 0,
+          "level": "note",
+          "message": {
+            "text": "pkg:npm/missing@1: Review Needed — lookup failed"
+          },
+          "partialFingerprints": {
+            "uzomuzoFinding/v1": "701682af767e4890032a7e3b04ddb0e5532fa1c21b037033de07cbd28223a9c0"
+          }
+        },
+        {
+          "ruleId": "uzomuzo/archived",
+          "ruleIndex": 5,
+          "level": "warning",
+          "message": {
+            "text": "pkg:npm/archived@1: Stalled — Fixture evidence; Successor: pkg:npm/successor"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "go.mod"
+                },
+                "region": {
+                  "startLine": 3
+                }
+              }
+            },
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "go.mod"
+                },
+                "region": {
+                  "startLine": 8
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "uzomuzoFinding/v1": "2895c5e59f8731843ec18f919c882eff8aa8c4399e44ac80c3a53e24230f505a"
+          }
+        },
+        {
+          "ruleId": "uzomuzo/stalled",
+          "ruleIndex": 7,
+          "level": "note",
+          "message": {
+            "text": "pkg:npm/stalled@1: Stalled — Fixture evidence"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "go.mod"
+                },
+                "region": {
+                  "startLine": 5
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "uzomuzoFinding/v1": "80383af365ee5c1cc9584ea6cb15402e66b933b14a03463d28254a80a96caae5"
+          }
+        },
+        {
+          "ruleId": "uzomuzo/legacy-safe",
+          "ruleIndex": 8,
+          "level": "error",
+          "message": {
+            "text": "pkg:npm/legacy@1: Legacy-Safe — Fixture evidence"
+          },
+          "partialFingerprints": {
+            "uzomuzoFinding/v1": "9f0d63ade7f28906b3c92e459087a30e2ebaf79e9f83417d0a03d1b04af58bbf"
+          }
+        },
+        {
+          "ruleId": "uzomuzo/disabled",
+          "ruleIndex": 6,
+          "level": "error",
+          "message": {
+            "text": "pkg:npm/disabled@1: Active — Fixture evidence"
+          },
+          "partialFingerprints": {
+            "uzomuzoFinding/v1": "371bc418db4787a405cc4901c77c283ac2541dc5d06af1f49c67974387740f8e"
+          }
+        }
+      ]
+    }
+  ]
+}

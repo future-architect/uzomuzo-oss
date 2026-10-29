@@ -23,6 +23,8 @@ const (
 
 // AuditEntry pairs a dependency's PURL with its analysis result and derived verdict.
 type AuditEntry struct {
+	// Locations contains known declaration lines in the scanned input.
+	Locations []depparser.SourceLocation
 	// PURL is the Package URL used for evaluation.
 	PURL string
 	// Analysis is the full evaluation result (nil if evaluation failed entirely).

@@ -302,9 +302,23 @@ Rules:
 ./uzomuzo scan --sbom bom.json --format table              # verdict summary table
 ./uzomuzo scan --sbom bom.json --format json               # enriched JSON with full analysis
 ./uzomuzo scan --sbom bom.json --format csv                # CSV for spreadsheet/pipeline
+uzomuzo scan --file go.mod --format sarif > uzomuzo.sarif  # SARIF for code scanning
 ```
 
 **Smart default:** `detailed` for ≤3 inputs, `table` for bulk.
+
+`--format sarif` writes a SARIF 2.1.0 report. It includes non-ok findings and any
+entries selected by `--fail-on`, with `--show-only` applied to the results.
+Policy matches have level `error`; other `replace` findings have level `warning`,
+and `caution` or `review` findings have level `note`. Output is written before
+the policy exit code is returned.
+
+Locations point to dependency declarations in go.mod, workflow YAML, and PURL
+list files. Repeated references have multiple locations. SBOM files have
+file-level locations; stdin, direct arguments, and remotely discovered Actions
+have none. The artifact URI is the input path as given, with forward slashes
+and a leading `./` removed. For GitHub code scanning, run from the repository
+root and supply a repository-relative path.
 
 <details>
 <summary><strong>Example: <code>--format table</code></strong></summary>
@@ -508,7 +522,7 @@ STATUS     PURL                    LIFECYCLE      BUILD
 ```
 <!-- end:output:usage-failon-multi -->
 
-`--fail-on` works with all output formats (`table`, `json`, `csv`). Output is produced normally before the exit code is set.
+`--fail-on` works with all output formats (`detailed`, `table`, `json`, `csv`, `sarif`). Output is produced normally before the exit code is set.
 
 </details>
 

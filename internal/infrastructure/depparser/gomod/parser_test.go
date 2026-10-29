@@ -92,9 +92,9 @@ func TestParser_Parse_IndirectWithReplaceAndTool(t *testing.T) {
 		t.Fatalf("Parse() error = %v", err)
 	}
 	want := []depparser.ParsedDependency{
-		{PURL: "pkg:golang/github.com/direct/dep@v1.0.0", Ecosystem: "golang", Name: "github.com/direct/dep", Version: "v1.0.0", Relation: depparser.RelationDirect},
-		{PURL: "pkg:golang/github.com/new/indirect@v0.2.0", Ecosystem: "golang", Name: "github.com/new/indirect", Version: "v0.2.0", Relation: depparser.RelationTransitive},
-		{PURL: "pkg:golang/golang.org/x/tools@v0.30.0", Ecosystem: "golang", Name: "golang.org/x/tools", Version: "v0.30.0", Relation: depparser.RelationTransitive, Scope: "tool"},
+		{Locations: []depparser.SourceLocation{{Line: 5}}, PURL: "pkg:golang/github.com/direct/dep@v1.0.0", Ecosystem: "golang", Name: "github.com/direct/dep", Version: "v1.0.0", Relation: depparser.RelationDirect},
+		{Locations: []depparser.SourceLocation{{Line: 8}}, PURL: "pkg:golang/github.com/new/indirect@v0.2.0", Ecosystem: "golang", Name: "github.com/new/indirect", Version: "v0.2.0", Relation: depparser.RelationTransitive},
+		{Locations: []depparser.SourceLocation{{Line: 9}}, PURL: "pkg:golang/golang.org/x/tools@v0.30.0", Ecosystem: "golang", Name: "golang.org/x/tools", Version: "v0.30.0", Relation: depparser.RelationTransitive, Scope: "tool"},
 	}
 	if !reflect.DeepEqual(deps, want) {
 		t.Errorf("Parse() =\n%+v\nwant\n%+v", deps, want)

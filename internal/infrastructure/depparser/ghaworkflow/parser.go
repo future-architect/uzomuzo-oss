@@ -38,6 +38,10 @@ func ParseGitHubURLs(data []byte) ([]string, error) {
 		return nil, fmt.Errorf("failed to parse GitHub Actions workflow YAML: %w", err)
 	}
 
+	return workflowURLs(wf), nil
+}
+
+func workflowURLs(wf workflowFile) []string {
 	// Sort job keys for deterministic output ordering.
 	jobNames := make([]string, 0, len(wf.Jobs))
 	for name := range wf.Jobs {
@@ -67,7 +71,7 @@ func ParseGitHubURLs(data []byte) ([]string, error) {
 		}
 	}
 
-	return urls, nil
+	return urls
 }
 
 // ParseWorkflowAll reads a GitHub Actions workflow YAML file and returns both

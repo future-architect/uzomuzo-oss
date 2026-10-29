@@ -32,7 +32,7 @@ func scanFlags() []urfcli.Flag {
 		&urfcli.StringFlag{Name: "file", Usage: "Path to input file (PURL list, go.mod, CycloneDX SBOM, or GitHub Actions workflow YAML)"},
 
 		// Output format
-		&urfcli.StringFlag{Name: "format", Aliases: []string{"f"}, Usage: "Output format: detailed, table, json, csv (default: auto)"},
+		&urfcli.StringFlag{Name: "format", Aliases: []string{"f"}, Usage: "Output format: detailed, table, json, csv, sarif (default: auto)"},
 
 		// CI gate
 		&urfcli.StringFlag{Name: "fail-on", Usage: "Comma-separated lifecycle labels or facts (malicious, dormant-release, archived, disabled) that trigger exit 1; any selection also fails on malicious versions, the other facts only when named (" + strings.Join(domainscan.ValidFailLabels(), ",") + ")"},
@@ -197,7 +197,7 @@ func scanAction(ctx context.Context, cfg *domaincfg.Config, cmd *urfcli.Command)
 		return actionscan.NewDiscoveryService(githubClient, cfg.GitHub.MaxConcurrency)
 	}
 
-	return cli.RunScan(ctx, cfg, args, opts, parsers, infradepparser.DetectFileParser, detectWorkflowFile, ghaworkflow.ParseGitHubURLs, actionsFactory)
+	return cli.RunScan(ctx, cfg, args, opts, parsers, infradepparser.DetectFileParser, detectWorkflowFile, ghaworkflow.ParseGitHubURLsWithLocations, actionsFactory)
 }
 
 // detectWorkflowFile checks whether filePath is a GitHub Actions workflow YAML.
@@ -249,6 +249,7 @@ func buildScanOptions(cmd *urfcli.Command) (cli.ScanOptions, error) {
 			SampleSize: int(cmd.Int("sample")),
 			Filename:   cmd.String("file"),
 		},
+		ToolVersion:      cmd.Root().Version,
 		Format:           cmd.String("format"),
 		FailOnRaw:        cmd.String("fail-on"),
 		ShowOnlyRaw:      cmd.String("show-only"),

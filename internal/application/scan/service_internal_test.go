@@ -77,7 +77,7 @@ func TestSelectDependencies(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			purls, relations, via := selectDependencies(deps, tt.showTransitive)
+			purls, relations, via, _ := selectDependencies(deps, tt.showTransitive)
 			if !reflect.DeepEqual(purls, tt.wantPURLs) {
 				t.Errorf("purls = %v, want %v", purls, tt.wantPURLs)
 			}

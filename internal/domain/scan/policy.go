@@ -11,6 +11,32 @@ import (
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 )
 
+// Trigger identifies a matched fail-on policy condition.
+type Trigger string
+
+const (
+	// FailEOLConfirmed selects the eol-confirmed condition.
+	FailEOLConfirmed Trigger = "eol-confirmed"
+	// FailEOLEffective selects the eol-effective condition.
+	FailEOLEffective Trigger = "eol-effective"
+	// FailEOLScheduled selects the eol-scheduled condition.
+	FailEOLScheduled Trigger = "eol-scheduled"
+	// FailStalled selects the stalled condition.
+	FailStalled Trigger = "stalled"
+	// FailLegacySafe selects the legacy-safe condition.
+	FailLegacySafe Trigger = "legacy-safe"
+	// FailReviewNeeded selects the review-needed condition.
+	FailReviewNeeded Trigger = "review-needed"
+	// FailMalicious selects the malicious condition.
+	FailMalicious Trigger = "malicious"
+	// FailDormantRelease selects the dormant-release condition.
+	FailDormantRelease Trigger = "dormant-release"
+	// FailArchived selects the archived condition.
+	FailArchived Trigger = "archived"
+	// FailDisabled selects the disabled condition.
+	FailDisabled Trigger = "disabled"
+)
+
 // failLabels is the single source of the --fail-on vocabulary: which CLI label
 // strings exist, which MaintenanceStatus each names, and the order they appear
 // in. The order is deliberate, not sorted — it feeds user-visible help and error
@@ -24,12 +50,12 @@ var failLabels = []struct {
 	label  string
 	status analysis.MaintenanceStatus
 }{
-	{"eol-confirmed", analysis.LabelEOLConfirmed},
-	{"eol-effective", analysis.LabelEOLEffective},
-	{"eol-scheduled", analysis.LabelEOLScheduled},
-	{"stalled", analysis.LabelStalled},
-	{"legacy-safe", analysis.LabelLegacySafe},
-	{"review-needed", analysis.LabelReviewNeeded},
+	{string(FailEOLConfirmed), analysis.LabelEOLConfirmed},
+	{string(FailEOLEffective), analysis.LabelEOLEffective},
+	{string(FailEOLScheduled), analysis.LabelEOLScheduled},
+	{string(FailStalled), analysis.LabelStalled},
+	{string(FailLegacySafe), analysis.LabelLegacySafe},
+	{string(FailReviewNeeded), analysis.LabelReviewNeeded},
 }
 
 // labelMap indexes failLabels for lookup while parsing.
@@ -41,17 +67,8 @@ var labelMap = func() map[string]analysis.MaintenanceStatus {
 	return m
 }()
 
-// failMalicious, failDormantRelease, failArchived and failDisabled are --fail-on
-// values that name a fact carried next to the lifecycle label instead of a label.
-const (
-	failMalicious      = "malicious"
-	failDormantRelease = "dormant-release"
-	failArchived       = "archived"
-	failDisabled       = "disabled"
-)
-
 // failFacts lists the fact values in display order, after the labels.
-var failFacts = []string{failMalicious, failDormantRelease, failArchived, failDisabled}
+var failFacts = []string{string(FailMalicious), string(FailDormantRelease), string(FailArchived), string(FailDisabled)}
 
 // ValidFailLabels returns the valid --fail-on label strings in display order.
 func ValidFailLabels() []string {
@@ -97,19 +114,19 @@ func ParseFailPolicy(raw string) (FailPolicy, error) {
 		if label == "" {
 			continue
 		}
-		if label == failMalicious {
+		if label == string(FailMalicious) {
 			malicious = true
 			continue
 		}
-		if label == failDormantRelease {
+		if label == string(FailDormantRelease) {
 			dormant = true
 			continue
 		}
-		if label == failArchived {
+		if label == string(FailArchived) {
 			archived = true
 			continue
 		}
-		if label == failDisabled {
+		if label == string(FailDisabled) {
 			disabled = true
 			continue
 		}
@@ -153,33 +170,39 @@ func (p FailPolicy) IsTriggered(label analysis.MaintenanceStatus) bool {
 // Evaluate checks whether any audit entry matches the fail policy.
 // Returns true if at least one entry matches: its lifecycle label is in the trigger set, or it carries a fact the policy selects.
 func (p FailPolicy) Evaluate(entries []domainaudit.AuditEntry) bool {
-	if p.IsEmpty() {
-		return false
-	}
 	for i := range entries {
-		e := &entries[i]
-		if e.Analysis == nil {
-			continue
-		}
-		if p.malicious && e.Analysis.Malicious() {
-			return true
-		}
-		if p.dormant && e.Analysis.HasDormantRelease() {
-			return true
-		}
-		if p.archived && e.Analysis.IsArchived() {
-			return true
-		}
-		if p.disabled && e.Analysis.IsDisabled() {
-			return true
-		}
-		lr := e.Analysis.GetLifecycleResult()
-		if lr == nil {
-			continue
-		}
-		if p.IsTriggered(analysis.MaintenanceStatus(lr.Label)) {
+		if len(p.Matches(&entries[i])) > 0 {
 			return true
 		}
 	}
 	return false
+}
+
+// Matches returns every selected condition matched by an entry, in fact then label order.
+func (p FailPolicy) Matches(e *domainaudit.AuditEntry) []Trigger {
+	if p.IsEmpty() || e == nil || e.Analysis == nil {
+		return nil
+	}
+	var matches []Trigger
+	if p.malicious && e.Analysis.Malicious() {
+		matches = append(matches, FailMalicious)
+	}
+	if p.dormant && e.Analysis.HasDormantRelease() {
+		matches = append(matches, FailDormantRelease)
+	}
+	if p.archived && e.Analysis.IsArchived() {
+		matches = append(matches, FailArchived)
+	}
+	if p.disabled && e.Analysis.IsDisabled() {
+		matches = append(matches, FailDisabled)
+	}
+	if lr := e.Analysis.GetLifecycleResult(); lr != nil && p.IsTriggered(analysis.MaintenanceStatus(lr.Label)) {
+		for _, label := range failLabels {
+			if label.status == analysis.MaintenanceStatus(lr.Label) {
+				matches = append(matches, Trigger(label.label))
+				break
+			}
+		}
+	}
+	return matches
 }
