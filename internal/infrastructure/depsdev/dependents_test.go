@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
@@ -106,17 +108,48 @@ func TestFetchDependentCountBatch(t *testing.T) {
 	}
 }
 
+func TestFetchDependentCountBatch_DistinctVersions(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/versions/4.18.2:dependents"):
+			_, _ = w.Write([]byte(`{"dependentCount":10,"directDependentCount":6,"indirectDependentCount":4}`))
+		case strings.Contains(r.URL.Path, "/versions/5.0.0:dependents"):
+			_, _ = w.Write([]byte(`{"dependentCount":20,"directDependentCount":12,"indirectDependentCount":8}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	client := NewDepsDevClient(&config.DepsDevConfig{BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0, BatchSize: 100})
+
+	results := client.FetchDependentCountBatch(context.Background(), []string{"pkg:npm/express@4.18.2", "pkg:npm/express@5.0.0"})
+	want := map[string]int{"pkg:npm/express@4.18.2": 10, "pkg:npm/express@5.0.0": 20}
+	if len(results) != len(want) {
+		t.Fatalf("got %d results, want %d", len(results), len(want))
+	}
+	for key, count := range want {
+		resp := results[key]
+		if resp == nil {
+			t.Fatalf("missing result for %s", key)
+		}
+		if resp.DependentCount != count {
+			t.Errorf("key=%s: DependentCount = %d, want %d", key, resp.DependentCount, count)
+		}
+	}
+}
+
 func TestFetchDependentCount_GoSkipsRequest(t *testing.T) {
-	calls := 0
+	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls++
+		calls.Add(1)
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer srv.Close()
 	client := NewDepsDevClient(&config.DepsDevConfig{BaseURL: srv.URL, Timeout: 5e9})
 	resp, err := client.FetchDependentCount(context.Background(), "pkg:golang/github.com/pkg/errors@v0.9.1")
-	if err != nil || resp != nil || calls != 0 {
-		t.Fatalf("Go dependents: response=%v error=%v calls=%d, want nil, nil, zero", resp, err, calls)
+	if err != nil || resp != nil || calls.Load() != 0 {
+		t.Fatalf("Go dependents: response=%v error=%v calls=%d, want nil, nil, zero", resp, err, calls.Load())
 	}
 }
 

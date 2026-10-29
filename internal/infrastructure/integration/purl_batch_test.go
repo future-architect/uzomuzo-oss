@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
@@ -408,9 +409,9 @@ func TestEnrichDependentCounts_RegistryNotFoundDoesNotRetainDepsDevZero(t *testi
 }
 
 func TestEnrichDependentCounts_Phase2_SkipsWhenDepsDevPopulated(t *testing.T) {
-	var registryCalls int
+	var registryCalls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		registryCalls++
+		registryCalls.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -439,8 +440,8 @@ func TestEnrichDependentCounts_Phase2_SkipsWhenDepsDevPopulated(t *testing.T) {
 	if a.Dependents.Source != domain.DependentsSourceDepsDev || a.Dependents.Version != "7.0.4" || a.Dependents.Direct == nil || *a.Dependents.Direct != 123 || a.Dependents.Total == nil || *a.Dependents.Total != 999 {
 		t.Errorf("deps.dev observation = %+v", a.Dependents)
 	}
-	if registryCalls != 0 {
-		t.Errorf("RubyGems calls = %d, want 0", registryCalls)
+	if registryCalls.Load() != 0 {
+		t.Errorf("RubyGems calls = %d, want 0", registryCalls.Load())
 	}
 }
 

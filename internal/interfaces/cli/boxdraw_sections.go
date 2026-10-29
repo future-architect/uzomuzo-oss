@@ -478,12 +478,16 @@ func writeBoxHealth(ctx *boxContext) error {
 	if d := a.Dependents; d != nil {
 		switch d.Source {
 		case analysispkg.DependentsSourceDepsDev:
-			if d.Direct != nil && d.Total != nil {
-				lines = append(lines, fmt.Sprintf("Dependents: %d direct, %d total (deps.dev, packages resolving to %s)", *d.Direct, *d.Total, d.Version))
+			if counts := dependentsCounts(d); counts != "" {
+				lines = append(lines, fmt.Sprintf("Dependents: %s (deps.dev, packages resolving to %s)", counts, d.Version))
 			}
 		case analysispkg.DependentsSourceRubyGems, analysispkg.DependentsSourcePackagist:
 			if d.Direct != nil {
 				lines = append(lines, fmt.Sprintf("Dependents: %d direct (%s, packages depending on any version)", *d.Direct, d.Source))
+			}
+		default:
+			if counts := dependentsCounts(d); counts != "" {
+				lines = append(lines, fmt.Sprintf("Dependents: %s (%s)", counts, d.Source))
 			}
 		}
 	}
@@ -736,4 +740,17 @@ func packageEcoName(a *analysispkg.Analysis) (ecosystem, name string) {
 		name = ns + sep + name
 	}
 	return eco, name
+}
+
+// dependentsCounts renders the non-nil counts of a dependents observation
+// (e.g. "5 direct, 7 total"). It returns "" when neither count is reported.
+func dependentsCounts(d *analysispkg.DependentsObservation) string {
+	var parts []string
+	if d.Direct != nil {
+		parts = append(parts, fmt.Sprintf("%d direct", *d.Direct))
+	}
+	if d.Total != nil {
+		parts = append(parts, fmt.Sprintf("%d total", *d.Total))
+	}
+	return strings.Join(parts, ", ")
 }

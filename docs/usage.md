@@ -392,6 +392,8 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
 ```
 <!-- end:output:usage-request-json -->
 
+`dependent_count` (and the CSV `dependents` column) are deprecated for one release in favour of `dependents` (see ADR-0032).
+
 The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, scores, license info), making it suitable for CI pipelines and downstream tooling without needing a separate detailed run.
 
 </details>

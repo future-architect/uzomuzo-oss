@@ -18,7 +18,8 @@ import (
 // FetchDependentCount fetches the dependent count for a single versioned PURL from the deps.dev GetDependents API.
 // The PURL must include a version (e.g., pkg:npm/lodash@4.17.21). Versionless PURLs return nil.
 // Supported systems: npm, maven, pypi, cargo. Go is skipped because this REST endpoint returns 404.
-// Returns nil when the endpoint returns 404 (unsupported or unknown package version).
+// Returns (nil, nil) when the endpoint returns 404 (unsupported or unknown package version).
+// Non-404 HTTP failures and response decode failures return (nil, err).
 // See: https://docs.deps.dev/api/v3alpha/#getdependents
 //
 // DDD Layer: Infrastructure

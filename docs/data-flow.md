@@ -68,8 +68,8 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 
 #### RubyGems — Reverse Dependencies (GET /api/v1/gems/{name}/reverse_dependencies.json)
 
-- Returns: Array of gem names whose latest version directly depends on the target, including runtime and development dependencies by default
-- Purpose: Retrieve dependent count for `pkg:gem/*` (deps.dev does not support RubyGems)
+- Returns: Array of gem names whose latest published version declares a dependency (on any version of the target), including runtime and development dependencies by default
+- Purpose: Record a registry-wide direct dependents count for `pkg:gem/*` (deps.dev answers 404 for RubyGems)
 - Code: `Client.GetReverseDependencyCount` (`internal/infrastructure/rubygems/client.go`)
 - Docs: <https://guides.rubygems.org/rubygems-org-api/>
 
@@ -78,6 +78,7 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 - Returned fields: `package.dependents`, `package.suggesters`, `package.favers`
 - Purpose: Retrieve dependent count for `pkg:composer/*` (deps.dev does not support Composer)
 - Code: `Client.GetDependentCount` (`internal/infrastructure/packagist/client.go`)
+- Note: `package.dependents` counts packages requiring the target, including `require-dev` (Packagist's default `requires=all`), across all versions of the target
 - Note: Reuses existing `fetchPackage` cache (shared with `GetAbandoned` / `GetRepoURL`)
 - Docs: <https://packagist.org/apidoc>
 

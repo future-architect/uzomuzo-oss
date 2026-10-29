@@ -1257,6 +1257,11 @@ func TestWriteBoxHealth_DependentsScope(t *testing.T) {
 		{"deps.dev", &analysis.DependentsObservation{Source: analysis.DependentsSourceDepsDev, Version: "4.18.2", Direct: &direct, Total: &total}, "Dependents: 5 direct, 7 total (deps.dev, packages resolving to 4.18.2)"},
 		{"zero", &analysis.DependentsObservation{Source: analysis.DependentsSourceDepsDev, Version: "5.0.0", Direct: &zero, Total: &zero}, "Dependents: 0 direct, 0 total (deps.dev, packages resolving to 5.0.0)"},
 		{"registry", &analysis.DependentsObservation{Source: analysis.DependentsSourceRubyGems, Direct: &direct}, "Dependents: 5 direct (RubyGems, packages depending on any version)"},
+		{"deps.dev direct only", &analysis.DependentsObservation{Source: analysis.DependentsSourceDepsDev, Version: "1.0.0", Direct: &direct}, "Dependents: 5 direct (deps.dev, packages resolving to 1.0.0)"},
+		{"deps.dev total only", &analysis.DependentsObservation{Source: analysis.DependentsSourceDepsDev, Version: "1.0.0", Total: &total}, "Dependents: 7 total (deps.dev, packages resolving to 1.0.0)"},
+		{"unrecognized source", &analysis.DependentsObservation{Source: "OtherRegistry", Direct: &direct, Total: &total}, "Dependents: 5 direct, 7 total (OtherRegistry)"},
+		{"unrecognized source direct only", &analysis.DependentsObservation{Source: "OtherRegistry", Direct: &direct}, "Dependents: 5 direct (OtherRegistry)"},
+		{"unrecognized source no counts", &analysis.DependentsObservation{Source: "OtherRegistry"}, ""},
 		{"unknown", nil, ""},
 	}
 	for _, tt := range tests {
@@ -1267,7 +1272,7 @@ func TestWriteBoxHealth_DependentsScope(t *testing.T) {
 				t.Fatal(err)
 			}
 			if tt.want == "" {
-				if strings.Contains(buf.String(), "Dependents:") || strings.Contains(buf.String(), "Used"+" by:") {
+				if strings.Contains(buf.String(), "Dependents:") || strings.Contains(buf.String(), "Used by:") {
 					t.Fatalf("unknown rendered: %s", buf.String())
 				}
 			} else if !strings.Contains(buf.String(), tt.want) {

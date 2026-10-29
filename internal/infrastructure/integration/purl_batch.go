@@ -183,7 +183,8 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 }
 
 // enrichDependentCounts fetches dependent counts from deps.dev (npm/Maven/PyPI/Cargo),
-// RubyGems, and Packagist, then populates Analysis.DependentCount for each PURL.
+// RubyGems, and Packagist, then populates Analysis.Dependents (and the deprecated
+// Analysis.DependentCount) for each PURL. Go is not queried. See ADR-0032.
 //
 // DDD Layer: Infrastructure (parallel processing, best-effort enrichment)
 func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []string, analyses map[string]*domain.Analysis) {
@@ -192,12 +193,14 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 	// skips versionless PURLs. Build a mapping from effective PURL back to original key.
 	effectivePURLs := make([]string, 0, len(purls))
 	effectiveToOriginal := make(map[string][]string, len(purls))
+	parser := purl.NewParser()
 	for _, p := range purls {
 		a := analyses[p]
 		if a == nil {
 			continue
 		}
-		if a.Package != nil && strings.EqualFold(a.Package.Ecosystem, "golang") {
+		// FetchDependentCount also skips Go; skipping here avoids building a request for it.
+		if a.Package != nil && strings.ToLower(strings.TrimSpace(a.Package.Ecosystem)) == "golang" {
 			continue
 		}
 		ep := a.EffectivePURL
@@ -227,8 +230,9 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 		if resp == nil {
 			continue
 		}
-		parsed, err := purl.NewParser().Parse(ep)
+		parsed, err := parser.Parse(ep)
 		if err != nil {
+			slog.Debug("dependents_purl_parse_failed", "purl", ep, "error", err)
 			continue
 		}
 		for _, originalKey := range originalKeys {
@@ -244,8 +248,7 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 
 	// Phase 2: RubyGems and Packagist (not covered by deps.dev)
 	// Each goroutine writes to a distinct *Analysis pointer (one per PURL key),
-	// so no mutex is needed for DependentCount writes.
-	parser := purl.NewParser()
+	// so no mutex is needed for DependentCount and Dependents writes.
 	var wg sync.WaitGroup
 	for _, p := range purls {
 		a := analyses[p]
@@ -255,12 +258,6 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 		if a.DependentCount > 0 {
 			continue // already populated by deps.dev
 		}
-		if a.Package != nil {
-			switch strings.ToLower(strings.TrimSpace(a.Package.Ecosystem)) {
-			case "gem", "rubygems", "packagist", "composer":
-				a.Dependents = nil
-			}
-		}
 		if a.Package == nil {
 			continue
 		}
@@ -268,6 +265,7 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 
 		switch eco {
 		case "gem", "rubygems":
+			a.Dependents = nil // deps.dev answers 404 for this ecosystem; only the registry count is reported (ADR-0032)
 			if s.rubygemsClient == nil {
 				continue
 			}
@@ -284,12 +282,12 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 					return
 				}
 				if count != nil {
-					analysis.DependentCount = *count
-					analysis.Dependents = &domain.DependentsObservation{Source: domain.DependentsSourceRubyGems, Direct: count}
+					setRegistryDependents(analysis, domain.DependentsSourceRubyGems, count)
 				}
 			}(a, parsed.PackageName())
 
 		case "packagist", "composer":
+			a.Dependents = nil // deps.dev answers 404 for this ecosystem; only the registry count is reported (ADR-0032)
 			if s.packagistClient == nil {
 				continue
 			}
@@ -311,13 +309,19 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 					return
 				}
 				if count != nil {
-					analysis.DependentCount = *count
-					analysis.Dependents = &domain.DependentsObservation{Source: domain.DependentsSourcePackagist, Direct: count}
+					setRegistryDependents(analysis, domain.DependentsSourcePackagist, count)
 				}
 			}(a, vendor, name)
 		}
 	}
 	wg.Wait()
+}
+
+// setRegistryDependents records a registry-wide direct dependents count
+// (no version scope, no total) on both Dependents and the deprecated DependentCount.
+func setRegistryDependents(a *domain.Analysis, src domain.DependentsSource, count *int) {
+	a.DependentCount = *count
+	a.Dependents = &domain.DependentsObservation{Source: src, Direct: count}
 }
 
 // dependenciesSupportedEcosystem reports whether the deps.dev GetDependencies endpoint
@@ -339,7 +343,7 @@ func dependenciesSupportedEcosystem(eco string) bool {
 // Version selection: delegated to latestReleaseVersion (StableVersion >
 // MaxSemverVersion > PreReleaseVersion). This intentionally differs from
 // enrichDependentCounts / resolvedVersion (which prefers Package.Version) —
-// DependentCount asks "who depends on this exact version" while DirectDepsCount
+// Dependents asks "who depends on this exact version" while DirectDepsCount
 // asks "what does the current release of this package depend on". Keep the two
 // helpers distinct; do not unify them.
 // Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
