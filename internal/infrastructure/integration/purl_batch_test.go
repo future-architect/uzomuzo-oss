@@ -732,3 +732,19 @@ func TestEnrichDependencyCounts(t *testing.T) {
 		})
 	}
 }
+
+func TestSetRegistryDependents_CopiesCount(t *testing.T) {
+	count := 42
+	a := &domain.Analysis{}
+	setRegistryDependents(a, domain.DependentsSourcePackagist, &count)
+	count = 1
+	if a.Dependents == nil || a.Dependents.Direct == nil {
+		t.Fatal("Dependents.Direct is nil")
+	}
+	if *a.Dependents.Direct != 42 {
+		t.Errorf("Direct = %d, want 42 (must not alias the caller's value)", *a.Dependents.Direct)
+	}
+	if a.DependentCount != 42 {
+		t.Errorf("DependentCount = %d, want 42", a.DependentCount)
+	}
+}

@@ -320,8 +320,9 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 // setRegistryDependents records a registry-wide direct dependents count
 // (no version scope, no total) on both Dependents and the deprecated DependentCount.
 func setRegistryDependents(a *domain.Analysis, src domain.DependentsSource, count *int) {
-	a.DependentCount = *count
-	a.Dependents = &domain.DependentsObservation{Source: src, Direct: count}
+	direct := *count // copy so analyses never share the client's value
+	a.DependentCount = direct
+	a.Dependents = &domain.DependentsObservation{Source: src, Direct: &direct}
 }
 
 // dependenciesSupportedEcosystem reports whether the deps.dev GetDependencies endpoint
