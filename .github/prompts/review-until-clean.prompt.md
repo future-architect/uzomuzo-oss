@@ -704,15 +704,23 @@ strip_quoted_code() {   # stdin = body / stdout = body without quotes
             # this PR</summary>" is not taken for the real block below.
             gsub(/`[^`]*`/, "", line)
             # The bot summary of the diff, not its verdict: skip from a
-            # <summary> naming "What changed in this PR" to the first
-            # </details>. The skip is kept as narrow as possible, because
+            # <summary>...</summary> heading that itself names "What changed
+            # in this PR" (closed on the same line, as in every real body) to
+            # the first </details>. The skip is kept as narrow as possible, because
             # whatever it drops is never counted: text before <summary> and
             # after </details> on the same line is kept, and a new <details>
             # or <summary> ends the skip early (none of the 27 real summary
             # blocks nests one; a block that did would only read dirty).
             if (!summary) {
-                k = index(line, "<summary")
-                if (k > 0 && index(substr(line, k), "What changed in this PR") > 0) {
+                k = 0; off = 0; r = line
+                while ((m = index(r, "<summary")) > 0) {
+                    e = index(substr(r, m), "</summary>")
+                    if (e > 0 && index(substr(r, m, e), "What changed in this PR") > 0) {
+                        k = off + m; break
+                    }
+                    off += m + 7; r = substr(r, m + 8)
+                }
+                if (k > 0) {
                     if (k > 1) print substr(line, 1, k - 1)
                     summary = 1
                     line = substr(line, k + length("<summary"))
