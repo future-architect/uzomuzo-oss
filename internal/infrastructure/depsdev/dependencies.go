@@ -130,11 +130,11 @@ func (c *DepsDevClient) FetchDependenciesBatch(ctx context.Context, purls []stri
 			return "", nil, false
 		}
 		// Only the 404 / versionless path returns (nil, nil); transport, decode,
-		// and unresolved-graph errors take the err branch above. Guard on (resp == nil &&
-		// err == nil) per the "Gate Fallback Logic on Error, Not Result Nilness"
-		// rule — a SELF-only response (leaf) has resp != nil and should NOT
-		// trigger the retry. Skip the fallback entirely for versionless PURLs
-		// to avoid redundant parsing in the helper.
+		// and unresolved-graph errors take the err branch above. Guard on
+		// (resp == nil && err == nil) per the "Gate Fallback Logic on Error, Not
+		// Result Nilness" rule — a SELF-only response (leaf) has resp != nil and
+		// should NOT trigger the retry. Skip the fallback entirely for
+		// versionless PURLs to avoid redundant parsing in the helper.
 		if resp == nil {
 			if !commonpurl.HasVersion(purl) {
 				return "", nil, false
