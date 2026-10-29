@@ -26,7 +26,20 @@ func TestGetDependentCount_Success(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if count == nil || *count != 24851 {
-		t.Errorf("count = %v, want 24851", count)
+		t.Fatalf("count = %v, want 24851", count)
+	}
+
+	// Mutating the returned value must not change the cached response.
+	*count = 1
+	again, err := client.GetDependentCount(context.Background(), "monolog", "monolog")
+	if err != nil {
+		t.Fatalf("unexpected error on cache hit: %v", err)
+	}
+	if again == nil {
+		t.Fatal("cache hit returned nil")
+	}
+	if *again != 24851 {
+		t.Errorf("cache hit count = %d, want 24851", *again)
 	}
 }
 

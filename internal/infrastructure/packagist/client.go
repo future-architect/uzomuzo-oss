@@ -198,7 +198,12 @@ func (c *Client) GetDependentCount(ctx context.Context, vendor, name string) (*i
 	if status == http.StatusNotFound || resp == nil {
 		return nil, nil
 	}
-	return resp.Package.Dependents, nil
+	if resp.Package.Dependents == nil {
+		return nil, nil
+	}
+	// Return a copy so callers cannot mutate the cached response.
+	count := *resp.Package.Dependents
+	return &count, nil
 }
 
 // GetAbandoned returns whether a composer package is marked abandoned and optional successor.
