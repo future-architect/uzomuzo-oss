@@ -17,8 +17,10 @@ import (
 
 // FetchDependentCount fetches the dependent count for a single versioned PURL from the deps.dev GetDependents API.
 // The PURL must include a version (e.g., pkg:npm/lodash@4.17.21). Versionless PURLs return nil.
-// Supported systems: npm, maven, pypi, cargo (Go, NuGet, RubyGems are NOT supported by this endpoint).
-// Returns nil when the endpoint returns 404 (unsupported or unknown package version).
+// Supported systems: npm, maven, pypi, cargo. Go is skipped because this REST endpoint returns 404.
+// Returns (nil, nil) without a request for versionless PURLs, Go, and unsupported ecosystems,
+// and when the endpoint returns 404 for an unknown package version.
+// Non-404 HTTP failures and response decode failures return (nil, err).
 // See: https://docs.deps.dev/api/v3alpha/#getdependents
 //
 // DDD Layer: Infrastructure
@@ -35,11 +37,8 @@ func (c *DepsDevClient) FetchDependentCount(ctx context.Context, purlStr string)
 		slog.Debug("dependents: skipping versionless PURL", "purl", purlStr)
 		return nil, nil
 	}
-	// Go modules may have "+incompatible" suffix that deps.dev doesn't recognize in the version path.
 	if strings.ToLower(parsed.Ecosystem()) == "golang" {
-		if idx := strings.Index(version, "+"); idx >= 0 {
-			version = version[:idx]
-		}
+		return nil, nil
 	}
 
 	system, name, err := toDepsDevSystemAndName(parsed)
@@ -83,7 +82,7 @@ func (c *DepsDevClient) FetchDependentCount(ctx context.Context, purlStr string)
 }
 
 // FetchDependentCountBatch fetches dependent counts for multiple PURLs in parallel.
-// Returns a map of canonical (versionless) PURL -> DependentsResponse.
+// Returns a map of exact queried PURL -> DependentsResponse.
 // PURLs that fail or return 404 are silently omitted from the result.
 //
 // DDD Layer: Infrastructure (parallel processing)
@@ -102,12 +101,7 @@ func (c *DepsDevClient) FetchDependentCountBatch(ctx context.Context, purls []st
 		if resp == nil {
 			return "", nil, false
 		}
-		// Normalize to versionless canonical key for map consistency
-		key := commonpurl.CanonicalKey(purl)
-		if key == "" {
-			key = purl
-		}
-		return key, resp, true
+		return purl, resp, true
 	})
 
 	slog.Debug("Dependent count batch completed", "requested", len(purls), "successful", len(results))

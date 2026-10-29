@@ -172,41 +172,44 @@ func pickGitRepo(source, homepage, project string) string {
 }
 
 // GetReverseDependencyCount fetches the number of reverse dependencies for a gem.
-// It calls the RubyGems reverse_dependencies API and returns the count.
+// It calls the RubyGems reverse_dependencies API and returns the count of gems whose
+// latest published version declares a dependency on any version of this gem, including
+// development dependencies (the API default).
 //
 // DDD Layer: Infrastructure
 // Endpoint: GET /api/v1/gems/{name}/reverse_dependencies.json
 // Docs: https://guides.rubygems.org/rubygems-org-api/#gem-methods
 //
-// Returns 0, nil when the gem is not found (404).
-func (c *Client) GetReverseDependencyCount(ctx context.Context, name string) (int, error) {
+// Returns nil, nil when the gem is not found (404) or the name is empty.
+func (c *Client) GetReverseDependencyCount(ctx context.Context, name string) (*int, error) {
 	if name == "" {
-		return 0, nil
+		return nil, nil
 	}
 	endpoint := fmt.Sprintf("%s/api/v1/gems/%s/reverse_dependencies.json", c.baseURL, name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create reverse_dependencies request: %w", err)
+		return nil, fmt.Errorf("failed to create reverse_dependencies request: %w", err)
 	}
 	req.Header.Set("User-Agent", "uzomuzo-rubygems-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
-		return 0, fmt.Errorf("reverse_dependencies HTTP request failed: %w", err)
+		return nil, fmt.Errorf("reverse_dependencies HTTP request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return 0, nil
+		return nil, nil
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return 0, fmt.Errorf("reverse_dependencies HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("reverse_dependencies HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var deps []string
 	if err := json.NewDecoder(resp.Body).Decode(&deps); err != nil {
-		return 0, fmt.Errorf("reverse_dependencies JSON decode failed: %w", err)
+		return nil, fmt.Errorf("reverse_dependencies JSON decode failed: %w", err)
 	}
-	return len(deps), nil
+	count := len(deps)
+	return &count, nil
 }

@@ -303,13 +303,12 @@ func (r *DependenciesResponse) CountByRelation() (direct, transitive int) {
 // ============================================================================
 
 // DependentsResponse represents the response from the GetDependents API.
-// Endpoint: GET /v3alpha/systems/{system}/packages/{name}:dependents
-// Supported systems: npm, maven, pypi, cargo, go.
+// Endpoint: GET /v3alpha/systems/{system}/packages/{name}/versions/{version}:dependents
+// Supported systems: npm, maven, pypi, cargo.
 type DependentsResponse struct {
 	DependentCount int `json:"dependentCount"`
-	// DirectDependentCount and IndirectDependentCount are captured from API but only
-	// the total (DependentCount) is used for cross-ecosystem consistency
-	// (RubyGems/Packagist lack this breakdown).
+	// Counts are scoped to the queried version. DirectDependentCount and
+	// DependentCount are kept separately, not summed. See ADR-0033.
 	DirectDependentCount   int `json:"directDependentCount"`
 	IndirectDependentCount int `json:"indirectDependentCount"`
 }

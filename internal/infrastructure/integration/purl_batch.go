@@ -183,7 +183,8 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 }
 
 // enrichDependentCounts fetches dependent counts from deps.dev (npm/Maven/PyPI/Cargo),
-// RubyGems, and Packagist, then populates Analysis.DependentCount for each PURL.
+// RubyGems, and Packagist, then populates Analysis.Dependents (and the deprecated
+// Analysis.DependentCount) for each PURL. Go is not queried. See ADR-0033.
 //
 // DDD Layer: Infrastructure (parallel processing, best-effort enrichment)
 func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []string, analyses map[string]*domain.Analysis) {
@@ -191,10 +192,15 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 	// Use EffectivePURL (versioned) when available, because FetchDependentCount
 	// skips versionless PURLs. Build a mapping from effective PURL back to original key.
 	effectivePURLs := make([]string, 0, len(purls))
-	effectiveToOriginal := make(map[string]string, len(purls))
+	effectiveToOriginal := make(map[string][]string, len(purls))
+	parser := purl.NewParser()
 	for _, p := range purls {
 		a := analyses[p]
 		if a == nil {
+			continue
+		}
+		// FetchDependentCount also skips Go; skipping here avoids building a request for it.
+		if a.Package != nil && strings.ToLower(strings.TrimSpace(a.Package.Ecosystem)) == "golang" {
 			continue
 		}
 		ep := a.EffectivePURL
@@ -212,35 +218,49 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 				}
 			}
 		}
-		effectivePURLs = append(effectivePURLs, ep)
-		effectiveToOriginal[ep] = p
+		if _, seen := effectiveToOriginal[ep]; !seen {
+			effectivePURLs = append(effectivePURLs, ep)
+		}
+		effectiveToOriginal[ep] = append(effectiveToOriginal[ep], p)
 	}
-	// FetchDependentCountBatch returns results keyed by CanonicalKey (versionless,
-	// qualifiers preserved). We iterate effectiveToOriginal and canonicalize each ep
-	// to match those keys, then map back to the original PURL in the analyses map.
+	// Results retain the exact versioned PURL, including qualifiers and subpaths.
 	depsdevResults := s.depsdevClient.FetchDependentCountBatch(ctx, effectivePURLs)
-	for ep, originalKey := range effectiveToOriginal {
-		a := analyses[originalKey]
-		if a == nil {
+	for ep, originalKeys := range effectiveToOriginal {
+		resp := depsdevResults[ep]
+		if resp == nil {
 			continue
 		}
-		key := purl.CanonicalKey(ep)
-		if key == "" {
-			key = ep
+		parsed, err := parser.Parse(ep)
+		if err != nil {
+			slog.Debug("dependents_purl_parse_failed", "purl", ep, "error", err)
+			continue
 		}
-		if resp, ok := depsdevResults[key]; ok && resp != nil {
+		for _, originalKey := range originalKeys {
+			a := analyses[originalKey]
+			if a == nil {
+				continue
+			}
 			a.DependentCount = resp.DependentCount
+			direct, total := resp.DirectDependentCount, resp.DependentCount
+			a.Dependents = &domain.DependentsObservation{Source: domain.DependentsSourceDepsDev, Version: parsed.Version(), Direct: &direct, Total: &total}
 		}
 	}
 
 	// Phase 2: RubyGems and Packagist (not covered by deps.dev)
-	// Each goroutine writes to a distinct *Analysis pointer (one per PURL key),
-	// so no mutex is needed for DependentCount writes.
-	parser := purl.NewParser()
+	// Duplicate PURLs are skipped, so each goroutine writes to a distinct
+	// *Analysis pointer and no mutex is needed for DependentCount and Dependents writes.
 	var wg sync.WaitGroup
+	seen := make(map[string]struct{}, len(purls))
 	for _, p := range purls {
+		if _, dup := seen[p]; dup {
+			continue
+		}
+		seen[p] = struct{}{}
 		a := analyses[p]
-		if a == nil || a.DependentCount > 0 {
+		if a == nil {
+			continue
+		}
+		if a.DependentCount > 0 {
 			continue // already populated by deps.dev
 		}
 		if a.Package == nil {
@@ -250,6 +270,7 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 
 		switch eco {
 		case "gem", "rubygems":
+			a.Dependents = nil // deps.dev answers 404 for this ecosystem; only the registry count is reported (ADR-0033)
 			if s.rubygemsClient == nil {
 				continue
 			}
@@ -265,10 +286,13 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 					slog.Warn("rubygems_dependent_count_failed", "name", name, "error", err)
 					return
 				}
-				analysis.DependentCount = count
+				if count != nil {
+					setRegistryDependents(analysis, domain.DependentsSourceRubyGems, count)
+				}
 			}(a, parsed.PackageName())
 
 		case "packagist", "composer":
+			a.Dependents = nil // deps.dev answers 404 for this ecosystem; only the registry count is reported (ADR-0033)
 			if s.packagistClient == nil {
 				continue
 			}
@@ -289,11 +313,21 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 					slog.Warn("packagist_dependent_count_failed", "vendor", v, "name", n, "error", err)
 					return
 				}
-				analysis.DependentCount = count
+				if count != nil {
+					setRegistryDependents(analysis, domain.DependentsSourcePackagist, count)
+				}
 			}(a, vendor, name)
 		}
 	}
 	wg.Wait()
+}
+
+// setRegistryDependents records a registry-wide direct dependents count
+// (no version scope, no total) on both Dependents and the deprecated DependentCount.
+func setRegistryDependents(a *domain.Analysis, src domain.DependentsSource, count *int) {
+	direct := *count // copy so analyses never share the client's value
+	a.DependentCount = direct
+	a.Dependents = &domain.DependentsObservation{Source: src, Direct: &direct}
 }
 
 // dependenciesSupportedEcosystem reports whether the deps.dev GetDependencies endpoint
@@ -315,7 +349,7 @@ func dependenciesSupportedEcosystem(eco string) bool {
 // Version selection: delegated to latestReleaseVersion (StableVersion >
 // MaxSemverVersion > PreReleaseVersion). This intentionally differs from
 // enrichDependentCounts / resolvedVersion (which prefers Package.Version) —
-// DependentCount asks "who depends on this exact version" while DirectDepsCount
+// Dependents asks "who depends on this exact version" while DirectDepsCount
 // asks "what does the current release of this package depend on". Keep the two
 // helpers distinct; do not unify them.
 // Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).

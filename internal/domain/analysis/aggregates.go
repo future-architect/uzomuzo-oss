@@ -117,8 +117,12 @@ type Analysis struct {
 	// Zero value of EOL means not evaluated or no evidence of EOL.
 	EOL EOLStatus
 
-	// DependentCount is the number of packages that depend on this package.
-	// Zero means unknown or unsupported ecosystem.
+	// Dependents records a measured observation. Nil means unavailable. See ADR-0033.
+	Dependents *DependentsObservation
+
+	// DependentCount retains the historical count, with zero also representing unknown.
+	//
+	// Deprecated: use Dependents for the source, scope, and measured counts. See ADR-0033.
 	DependentCount int
 
 	// DirectDepsCount is the number of direct dependencies for the package version

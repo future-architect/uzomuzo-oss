@@ -1247,6 +1247,43 @@ func TestWriteBoxHealth_NormalState(t *testing.T) {
 	}
 }
 
+func TestWriteBoxHealth_DependentsScope(t *testing.T) {
+	zero, direct, total := 0, 5, 7
+	tests := []struct {
+		name string
+		obs  *analysis.DependentsObservation
+		want string
+	}{
+		{"deps.dev", &analysis.DependentsObservation{Source: analysis.DependentsSourceDepsDev, Version: "4.18.2", Direct: &direct, Total: &total}, "Dependents: 5 direct, 7 total (deps.dev, packages resolving to 4.18.2)"},
+		{"zero", &analysis.DependentsObservation{Source: analysis.DependentsSourceDepsDev, Version: "5.0.0", Direct: &zero, Total: &zero}, "Dependents: 0 direct, 0 total (deps.dev, packages resolving to 5.0.0)"},
+		{"registry", &analysis.DependentsObservation{Source: analysis.DependentsSourceRubyGems, Direct: &direct}, "Dependents: 5 direct (RubyGems, packages depending on any version)"},
+		{"deps.dev direct only", &analysis.DependentsObservation{Source: analysis.DependentsSourceDepsDev, Version: "1.0.0", Direct: &direct}, "Dependents: 5 direct (deps.dev, packages resolving to 1.0.0)"},
+		{"deps.dev total only", &analysis.DependentsObservation{Source: analysis.DependentsSourceDepsDev, Version: "1.0.0", Total: &total}, "Dependents: 7 total (deps.dev, packages resolving to 1.0.0)"},
+		{"unrecognized source", &analysis.DependentsObservation{Source: "OtherRegistry", Direct: &direct, Total: &total}, "Dependents: 5 direct, 7 total (OtherRegistry)"},
+		{"unrecognized source direct only", &analysis.DependentsObservation{Source: "OtherRegistry", Direct: &direct}, "Dependents: 5 direct (OtherRegistry)"},
+		{"unrecognized source no counts", &analysis.DependentsObservation{Source: "OtherRegistry"}, ""},
+		{"deps.dev no version", &analysis.DependentsObservation{Source: analysis.DependentsSourceDepsDev, Direct: &direct, Total: &total}, "Dependents: 5 direct, 7 total (deps.dev)\n"},
+		{"registry no count", &analysis.DependentsObservation{Source: analysis.DependentsSourcePackagist}, ""},
+		{"unknown", nil, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			entry := &domainaudit.AuditEntry{Analysis: &analysis.Analysis{DependentCount: 7, Dependents: tt.obs}}
+			if err := writeBoxHealth(newBoxContext(&buf, entry, 100)); err != nil {
+				t.Fatal(err)
+			}
+			if tt.want == "" {
+				if strings.Contains(buf.String(), "Dependents:") || strings.Contains(buf.String(), "Used by:") {
+					t.Fatalf("unknown rendered: %s", buf.String())
+				}
+			} else if !strings.Contains(buf.String(), tt.want) {
+				t.Fatalf("want %q in %s", tt.want, buf.String())
+			}
+		})
+	}
+}
+
 // TestWriteBoxOrigin_DirectPURL pins the zero-value relation (RelationUnknown)
 // half of writeBoxOrigin's documented contract: no Origin section for direct
 // entries whose relation is unknown.

@@ -478,14 +478,15 @@ type enrichedJSONEntry struct {
 	BuildIntegrityScore *float64              `json:"build_integrity_score,omitempty"`
 	Successor           string                `json:"successor,omitempty"`
 
-	RepoURL        string  `json:"repo_url,omitempty"`
-	Archived       bool    `json:"archived"`
-	Disabled       bool    `json:"disabled"`
-	OverallScore   float64 `json:"overall_score"`
-	DependentCount int     `json:"dependent_count,omitempty"`
-	StableVersion  string  `json:"stable_version,omitempty"`
-	ProjectLicense string  `json:"project_license,omitempty"`
-	VersionLicense string  `json:"version_license,omitempty"`
+	RepoURL        string          `json:"repo_url,omitempty"`
+	Archived       bool            `json:"archived"`
+	Disabled       bool            `json:"disabled"`
+	OverallScore   float64         `json:"overall_score"`
+	DependentCount int             `json:"dependent_count,omitempty"`
+	Dependents     *dependentsJSON `json:"dependents,omitempty"`
+	StableVersion  string          `json:"stable_version,omitempty"`
+	ProjectLicense string          `json:"project_license,omitempty"`
+	VersionLicense string          `json:"version_license,omitempty"`
 
 	// AdvisoryCount is the total number of advisories (direct + transitive).
 	AdvisoryCount       int     `json:"advisory_count,omitempty"`
@@ -518,6 +519,13 @@ type dependencyAdvisoryAgeJSON struct {
 	Published        time.Time                          `json:"published,omitzero"`
 	EligibleOn       time.Time                          `json:"eligible_on,omitzero"`
 	ReviewedSeverity string                             `json:"reviewed_severity,omitempty"`
+}
+
+type dependentsJSON struct {
+	Source  domain.DependentsSource `json:"source"`
+	Version string                  `json:"version,omitempty"`
+	Direct  *int                    `json:"direct,omitempty"`
+	Total   *int                    `json:"total,omitempty"`
 }
 
 type maliciousJSON struct {
@@ -682,6 +690,9 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	je.RepoURL = a.RepoURL
 	je.OverallScore = a.OverallScore
 	je.DependentCount = a.DependentCount
+	if d := a.Dependents; d != nil {
+		je.Dependents = &dependentsJSON{Source: d.Source, Version: d.Version, Direct: d.Direct, Total: d.Total}
+	}
 	je.Successor = a.EOL.Successor
 	je.Archived = a.IsArchived()
 	je.Disabled = a.IsDisabled()

@@ -475,9 +475,25 @@ func writeBoxHealth(ctx *boxContext) error {
 		lines = append(lines, fmt.Sprintf("%d stars", a.Repository.StarsCount))
 	}
 
-	// Dependent count
-	if a.DependentCount > 0 {
-		lines = append(lines, fmt.Sprintf("Used by: %d packages", a.DependentCount))
+	if d := a.Dependents; d != nil {
+		switch d.Source {
+		case analysispkg.DependentsSourceDepsDev:
+			if counts := dependentsCounts(d); counts != "" {
+				if d.Version != "" {
+					lines = append(lines, fmt.Sprintf("Dependents: %s (deps.dev, packages resolving to %s)", counts, d.Version))
+				} else {
+					lines = append(lines, fmt.Sprintf("Dependents: %s (deps.dev)", counts))
+				}
+			}
+		case analysispkg.DependentsSourceRubyGems, analysispkg.DependentsSourcePackagist:
+			if d.Direct != nil {
+				lines = append(lines, fmt.Sprintf("Dependents: %d direct (%s, packages depending on any version)", *d.Direct, d.Source))
+			}
+		default:
+			if counts := dependentsCounts(d); counts != "" {
+				lines = append(lines, fmt.Sprintf("Dependents: %s (%s)", counts, d.Source))
+			}
+		}
 	}
 	if a.DirectDepsCount > 0 || a.TransitiveDepsCount > 0 {
 		lines = append(lines, fmt.Sprintf("Depends on: %d direct, %d transitive", a.DirectDepsCount, a.TransitiveDepsCount))
@@ -728,4 +744,17 @@ func packageEcoName(a *analysispkg.Analysis) (ecosystem, name string) {
 		name = ns + sep + name
 	}
 	return eco, name
+}
+
+// dependentsCounts renders the non-nil counts of a dependents observation
+// (e.g. "5 direct, 7 total"). It returns "" when neither count is reported.
+func dependentsCounts(d *analysispkg.DependentsObservation) string {
+	var parts []string
+	if d.Direct != nil {
+		parts = append(parts, fmt.Sprintf("%d direct", *d.Direct))
+	}
+	if d.Total != nil {
+		parts = append(parts, fmt.Sprintf("%d total", *d.Total))
+	}
+	return strings.Join(parts, ", ")
 }

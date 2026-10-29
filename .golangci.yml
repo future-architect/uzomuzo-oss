@@ -48,6 +48,11 @@ linters:
       - path: _test\.go$
         linters:
           - errcheck
+      # Analysis.DependentCount stays populated for one release while deprecated
+      # (ADR-0033). Remove this rule together with the field.
+      - linters:
+          - staticcheck
+        text: 'SA1019: .*\bDependentCount is deprecated: use Dependents for the source, scope, and measured counts'
       # Generated files: never lint.
       - path: _generated\.go$
         linters:

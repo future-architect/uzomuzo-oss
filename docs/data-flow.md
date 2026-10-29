@@ -57,19 +57,19 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 - Types: `ProjectBatchRequest` (`internal/infrastructure/depsdev/api_types.go`)
 - Docs: <https://docs.deps.dev/api/v3alpha/#getprojectbatch>
 
-#### deps.dev — GetDependents (GET /v3alpha/systems/{system}/packages/{name}:dependents)
+#### deps.dev — GetDependents (GET /v3alpha/systems/{system}/packages/{name}/versions/{version}:dependents)
 
 - Returned fields: `dependentCount`, `directDependentCount`, `indirectDependentCount`
-- Supported ecosystems: npm, Maven, PyPI, Cargo (Go, NuGet, RubyGems not supported)
-- Purpose: Retrieve package dependent count (UsedBy)
-- Code: `DepsDevClient.FetchDependentCount`, `FetchDependentCountBatch` (`internal/infrastructure/depsdev/depsdev.go`)
+- Supported observations: npm, Maven, PyPI, Cargo. Go is skipped; a 404 or failed request is unknown, not measured zero.
+- Purpose: Record direct and total counts of public packages whose computed resolution includes the queried version. The version is the caller's pinned version, or the resolved version for versionless input. See ADR-0033.
+- Code: `DepsDevClient.FetchDependentCount`, `FetchDependentCountBatch` (`internal/infrastructure/depsdev/dependents.go`)
 - Types: `DependentsResponse` (`internal/infrastructure/depsdev/api_types.go`)
 - Docs: <https://docs.deps.dev/api/v3alpha/>
 
 #### RubyGems — Reverse Dependencies (GET /api/v1/gems/{name}/reverse_dependencies.json)
 
-- Returns: Array of gem names that depend on the target
-- Purpose: Retrieve dependent count for `pkg:gem/*` (deps.dev does not support RubyGems)
+- Returns: Array of gem names whose latest published version declares a dependency (on any version of the target), including runtime and development dependencies by default
+- Purpose: Record a registry-wide direct dependents count for `pkg:gem/*` (deps.dev answers 404 for RubyGems)
 - Code: `Client.GetReverseDependencyCount` (`internal/infrastructure/rubygems/client.go`)
 - Docs: <https://guides.rubygems.org/rubygems-org-api/>
 
@@ -78,6 +78,7 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 - Returned fields: `package.dependents`, `package.suggesters`, `package.favers`
 - Purpose: Retrieve dependent count for `pkg:composer/*` (deps.dev does not support Composer)
 - Code: `Client.GetDependentCount` (`internal/infrastructure/packagist/client.go`)
+- Note: `package.dependents` counts packages requiring the target, including `require-dev` (Packagist's default `requires=all`), across all versions of the target
 - Note: Reuses existing `fetchPackage` cache (shared with `GetAbandoned` / `GetRepoURL`)
 - Docs: <https://packagist.org/apidoc>
 

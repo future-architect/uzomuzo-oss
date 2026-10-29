@@ -53,7 +53,7 @@ STATUS     PURL                    LIFECYCLE  BUILD
 │ Maintained Score: 10/10
 ├─ Health ──────────────────────────────────────────────────
 │ 68888 stars
-│ Used by: 2211 packages
+│ Dependents: 861 direct, 2185 total (deps.dev, packages resolving to 4.18.2)
 │ Depends on: 31 direct, 39 transitive
 │ Scorecard Overall: 8.4/10  Maintained: 10.0/10
 │ Last Commit: 2026-03-31
@@ -372,7 +372,8 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
       "build_integrity": "Ungraded",
       "repo_url": "https://github.com/request/request",
       "overall_score": 3.6,
-      "dependent_count": 186349,
+      "dependent_count": 185814,
+      "dependents": {"source": "deps.dev", "version": "2.88.2", "direct": 51145, "total": 185814},
       "stable_version": "2.88.2",
       "project_license": "Apache-2.0",
       "version_license": "Apache-2.0",
@@ -390,6 +391,8 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
 }
 ```
 <!-- end:output:usage-request-json -->
+
+`dependent_count` (and the CSV `dependents` column) are deprecated for one release in favour of `dependents` (see ADR-0033).
 
 The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, scores, license info), making it suitable for CI pipelines and downstream tooling without needing a separate detailed run.
 
