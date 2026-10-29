@@ -1,0 +1,4 @@
+# Repeated declarations retain their physical lines.
+
+pkg:npm/request@2.88.2
+pkg:npm/request@2.88.2

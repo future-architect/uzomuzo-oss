@@ -31,9 +31,14 @@ func (r DependencyRelation) String() string {
 	}
 }
 
+// SourceLocation is a 1-based line in the scanned input file.
+type SourceLocation struct{ Line int }
+
 // ParsedDependency represents a single dependency extracted from an SBOM or lockfile.
 // This is a Value Object — immutable after creation, defined by its attributes.
 type ParsedDependency struct {
+	// Locations contains known declaration lines in the input, or is empty.
+	Locations []SourceLocation
 	// PURL is the Package URL identifier (e.g., "pkg:npm/express@4.18.2").
 	PURL string
 	// Ecosystem is the package ecosystem (e.g., "npm", "golang", "maven").

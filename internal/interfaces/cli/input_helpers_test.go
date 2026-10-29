@@ -139,7 +139,7 @@ func TestCategorizeFileLines_UnrecognizedThreshold(t *testing.T) {
 				t.Fatalf("failed to write temp file: %v", err)
 			}
 
-			_, _, err := categorizeFileLines(tmpFile, ProcessingOptions{})
+			_, _, _, err := categorizeFileLines(tmpFile, ProcessingOptions{})
 			if tt.wantErr && err == nil {
 				t.Error("expected error for mostly unrecognized lines, got nil")
 			}

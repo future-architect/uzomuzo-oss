@@ -129,6 +129,7 @@ const (
 	FormatTable    = "table"
 	FormatJSON     = "json"
 	FormatCSV      = "csv"
+	FormatSARIF    = "sarif"
 )
 
 // smartDefaultThreshold is the input count threshold for auto-selecting detailed vs table.
@@ -141,10 +142,10 @@ func ResolveFormat(explicit string, inputCount int) (string, error) {
 	if explicit != "" {
 		normalized := strings.TrimSpace(strings.ToLower(explicit))
 		switch normalized {
-		case FormatDetailed, FormatTable, FormatJSON, FormatCSV:
+		case FormatDetailed, FormatTable, FormatJSON, FormatCSV, FormatSARIF:
 			return normalized, nil
 		default:
-			return "", fmt.Errorf("unsupported format %q (use detailed, table, json, or csv)", explicit)
+			return "", fmt.Errorf("unsupported format %q (use detailed, table, json, csv, or sarif)", explicit)
 		}
 	}
 	if inputCount <= smartDefaultThreshold {
@@ -158,8 +159,14 @@ func ResolveFormat(explicit string, inputCount int) (string, error) {
 // filterActive indicates whether --show-only was explicitly provided (even if all entries match).
 // bootstrap is the RDAP service list used by --maintainer-domain, nil when the check did not run;
 // only JSON reports it.
-func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, format string, filterActive bool, bootstrap *domain.RDAPBootstrapInfo) error {
+func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, format string, filterActive bool, bootstrap *domain.RDAPBootstrapInfo, options ...scanRenderOptions) error {
 	switch format {
+	case FormatSARIF:
+		var opts scanRenderOptions
+		if len(options) > 0 {
+			opts = options[0]
+		}
+		return renderScanSARIF(w, displayEntries, opts)
 	case FormatDetailed:
 		return renderScanDetailed(w, allEntries, displayEntries, filterActive)
 	case FormatTable:
