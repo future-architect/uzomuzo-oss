@@ -54,8 +54,10 @@ SARIF 2.1.0 output from `uzomuzo scan`. No new flag; new value of `--format`.
     line numbers. Emit the result against the input file without a region and
     document that GitHub will not annotate it in PRs (verify display behavior
     during implementation).
-- **Fingerprint**: emit `partialFingerprints` keyed on rule + versionless PURL +
-  file, so an alert survives line shifts and version bumps of the same package.
+- **Fingerprint**: GitHub computes its own `primaryLocationLineHash` from the
+  source; a custom `partialFingerprints` key (rule + versionless PURL + file)
+  may only help non-GitHub SARIF consumers. Verify which keys GitHub honors
+  before relying on it (open question 3).
 - ADR-0021 records the format decisions (level mapping, location policy).
 
 ### P2 — "new dependencies only": `--baseline <path>`
@@ -165,6 +167,9 @@ for, GitLab users use the exit code from P2 or reviewdog `-f=sarif` with the
    outside the PR diff? (Docs: such alerts are not *shown*; failure behavior
    not stated.)
 2. How GitHub handles SARIF results without a `region` (SBOM-derived).
+3. Which `partialFingerprints` keys GitHub honors for third-party SARIF.
+4. Valid `match-type` values for `gomodguard_v2` (only the settings struct
+   was checked; confirm in P4 against the v2 linter source).
 
 ## Review record
 
