@@ -10,7 +10,7 @@ require github.com/Masterminds/semver/v3 v3.5.0
 
 require golang.org/x/mod v0.41.0
 
-require golang.org/x/net v0.59.0
+require golang.org/x/net v0.60.0
 
 require github.com/urfave/cli/v3 v3.14.0
 
