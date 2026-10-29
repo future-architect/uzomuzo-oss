@@ -1,4 +1,4 @@
-# ADR-0032: Report the scope of dependents observations
+# ADR-0033: Report the scope of dependents observations
 
 Date: 2026-10-29
 Status: Accepted

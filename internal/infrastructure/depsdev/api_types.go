@@ -308,7 +308,7 @@ func (r *DependenciesResponse) CountByRelation() (direct, transitive int) {
 type DependentsResponse struct {
 	DependentCount int `json:"dependentCount"`
 	// Counts are scoped to the queried version. DirectDependentCount and
-	// DependentCount are kept separately, not summed. See ADR-0032.
+	// DependentCount are kept separately, not summed. See ADR-0033.
 	DirectDependentCount   int `json:"directDependentCount"`
 	IndirectDependentCount int `json:"indirectDependentCount"`
 }

@@ -4,6 +4,7 @@ package analysis
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -178,11 +179,18 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		// any state ClassifyUnmaintained built: a caller of the library facade can
 		// hand-build a state with only the evidence ID set, and that one must still
 		// be excluded.
-		label, t := s.severityAwareLabel(s.hasHighSeverityAdvisoriesExcluding(analysis, append([]string{ad.AdvisoryID}, ad.MarkerIDs...)),
-			LabelEOLEffective, "advisory_db_unmaintained_unpatched_vulns",
-			LabelStalled, "advisory_db_unmaintained")
-		if label == string(LabelEOLEffective) {
+		label, t := string(LabelStalled), "advisory_db_unmaintained"
+		switch s.advisorySeverityExcluding(analysis, append([]string{ad.AdvisoryID}, ad.MarkerIDs...)) {
+		case severityOwnHigh:
+			label, t = string(LabelEOLEffective), "advisory_db_unmaintained_unpatched_vulns"
 			reason = "Unmaintained per " + ad.AdvisoryID + ", unpatched vulnerabilities"
+		case severityDependencyOnlyHigh:
+			res := s.dependencyHighOutcome(s.getStableOrMaxVersionDetail(analysis), now, reason, "advisory_db_unmaintained", signals)
+			res.Trace = slices.Concat(trace, res.Trace)
+			return res, nil
+		case severityDependencyOnlyUnknown:
+			t = "advisory_db_unmaintained_no_direct_high_severity"
+			reason += "; dependency advisories of unknown severity"
 		}
 		trace = append(trace, t)
 		return &AssessmentResult{Axis: LifecycleAxis, Label: label, Reason: reason, Trace: trace, Signals: signals}, nil
@@ -206,26 +214,18 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 	}
 
 	// 2. Data validity check — residual vulnerability override
-	if len(scores) == 0 {
-		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis, now) {
-			trace = append(trace, "scorecard_missing residual_vuln_override")
-			signals := []Signal{commitSignal(analysis), sigAbsent(SignalMaintainedScore)}
-			signals = append(signals, s.collectAdvisorySignals(analysis)...)
-			return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLEffective),
-				Reason: "Unmaintained, unpatched vulnerabilities", Trace: trace, Signals: signals}, nil
+	if len(scores) == 0 && analysis != nil {
+		if res := s.residualVulnResult(analysis, now, "scorecard_missing", sigAbsent(SignalMaintainedScore), trace); res != nil {
+			return res, nil
 		}
 	}
 
 	maintainedScore := s.getScoreValue(scores, "Maintained")
 	vulnScore := s.getScoreValue(scores, "Vulnerabilities")
 
-	if maintainedScore < 0 || vulnScore < 0 {
-		if analysis != nil && s.shouldOverrideToEOLDueToResidualVulns(analysis, now) {
-			trace = append(trace, "scorecard_incomplete residual_vuln_override")
-			signals := []Signal{commitSignal(analysis), maintainedSignal(scores)}
-			signals = append(signals, s.collectAdvisorySignals(analysis)...)
-			return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLEffective),
-				Reason: "Unmaintained, unpatched vulnerabilities", Trace: trace, Signals: signals}, nil
+	if (maintainedScore < 0 || vulnScore < 0) && analysis != nil {
+		if res := s.residualVulnResult(analysis, now, "scorecard_incomplete", maintainedSignal(scores), trace); res != nil {
+			return res, nil
 		}
 	}
 
@@ -239,7 +239,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 			trace = append(trace, "active_path")
 			res, _ := s.assessActiveState(analysis, scores, now)
 			if res != nil {
-				res.Trace = append(trace, res.Trace...)
+				res.Trace = slices.Concat(trace, res.Trace)
 			}
 			return res, nil
 		}
@@ -255,7 +255,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		trace = append(trace, "inactive_path")
 		res, _ := s.assessInactiveState(analysis, scores, now)
 		if res != nil {
-			res.Trace = append(trace, res.Trace...)
+			res.Trace = slices.Concat(trace, res.Trace)
 		}
 		return res, nil
 	}
@@ -265,37 +265,123 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 	return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelReviewNeeded), Reason: "Insufficient data for assessment", Trace: trace, Signals: []Signal{sigAbsent(SignalLastHumanCommit), sigAbsent(SignalMaintainedScore)}}, nil
 }
 
-// shouldOverrideToEOLDueToResidualVulns returns true when Scorecard data is missing/incomplete
-// AND we have evidence of long-term dormancy plus unresolved advisories on the
-// latest stable version (or MaxSemver fallback when stable is absent).
-// Conditions:
-// - analysis not nil
-// - Days since last human commit > EolDays
-// - advisory count >= ResidualAdvisoryThreshold
-func (s *LifecycleAssessorService) shouldOverrideToEOLDueToResidualVulns(a *Analysis, now time.Time) bool {
+// residualVulnOutcome is what the residual-vulnerability override found.
+type residualVulnOutcome int
+
+const (
+	residualVulnNone residualVulnOutcome = iota
+	// residualVulnOwn: the package's own advisories meet the condition.
+	residualVulnOwn
+	// residualVulnDependencyOnly: the condition is met only when dependency
+	// advisories are counted too.
+	residualVulnDependencyOnly
+)
+
+// residualVulnResult returns the assessment for the residual-vulnerability
+// override, or nil when the override does not apply. prefix names the
+// Scorecard state ("scorecard_missing" / "scorecard_incomplete").
+//
+// The dependency-only case returns Stalled here instead of falling through:
+// a recent release would otherwise reach active_stable and turn the package
+// ok. See ADR-0032.
+func (s *LifecycleAssessorService) residualVulnResult(a *Analysis, now time.Time, prefix string, mSig Signal, trace []string) *AssessmentResult {
+	outcome := s.residualVulnOverride(a, now)
+	if outcome == residualVulnNone {
+		return nil
+	}
+	signals := []Signal{commitSignal(a), mSig}
+	signals = append(signals, s.collectAdvisorySignals(a)...)
+	if outcome == residualVulnOwn {
+		return &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelEOLEffective),
+			Reason: "Unmaintained, unpatched vulnerabilities", Trace: append(trace, prefix+" residual_vuln_override"), Signals: signals}
+	}
+	vd := s.getStableOrMaxVersionDetail(a)
+	tracePrefix := prefix + " residual_vuln"
+	var res *AssessmentResult
+	if vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) == 0 {
+		res = &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelStalled),
+			Reason: "Unmaintained; dependency advisories of unknown severity", Trace: []string{tracePrefix + "_dependency_only"}, Signals: signals}
+	} else {
+		res = s.dependencyHighOutcome(vd, now, "Unmaintained", tracePrefix, signals)
+	}
+	// With a ResidualAdvisoryThreshold above 1, own advisories severe enough
+	// can still fall short of the count; say so instead of blaming the
+	// dependencies.
+	if res.Label == string(LabelStalled) && s.isPotentiallyHigh(vd.DirectOnly()) {
+		res.Reason = "Unmaintained; too few own advisories; dependency advisories reach the threshold"
+	}
+	res.Trace = slices.Concat(trace, res.Trace)
+	return res
+}
+
+// dependencyHighOutcome decides a dormant package whose HIGH advisories are
+// all in dependencies: EOL-Effective when one of them has aged, Stalled
+// otherwise. prefix starts the reason and tracePrefix the trace name; the
+// result carries the deciding advisory. See ADR-0032.
+func (s *LifecycleAssessorService) dependencyHighOutcome(vd *VersionDetail, now time.Time, prefix, tracePrefix string, signals []Signal) *AssessmentResult {
+	res := &AssessmentResult{Axis: LifecycleAxis, Label: string(LabelStalled), Signals: signals}
+	age := ClassifyDependencyAdvisoryAge(vd, s.rules.HighSeverityCVSSThreshold, s.rules.EolInactivityDays, now)
+	if age == nil {
+		res.Reason = prefix + "; HIGH advisories only in dependencies"
+		res.Trace = []string{tracePrefix + "_dependency_only"}
+		return res
+	}
+	res.DependencyAdvisoryAge = age
+	res.Reason = prefix + "; " + age.Reason(s.rules.EolInactivityDays)
+	res.Trace = []string{tracePrefix + "_dependency_" + string(age.Status)}
+	if age.Status == DependencyAdvisoryAged {
+		res.Label = string(LabelEOLEffective)
+		res.Signals = append(res.Signals, sig(SignalAgedDependencyAdvisory, fmt.Sprintf("%s (%s)", age.AdvisoryID, isoDate(age.Published))))
+	}
+	return res
+}
+
+// residualVulnOverride reports whether Scorecard-less dormancy plus unresolved
+// advisories on the latest stable version (or MaxSemver fallback) is grounds
+// for EOL-Effective. Conditions:
+//   - commit data present and the last human commit older than EolInactivityDays
+//   - advisory count >= ResidualAdvisoryThreshold, and HIGH severity (or any
+//     advisory of unknown severity)
+//
+// Only the package's own advisories make it residualVulnOwn.
+func (s *LifecycleAssessorService) residualVulnOverride(a *Analysis, now time.Time) residualVulnOutcome {
 	if a == nil || a.RepoState == nil {
-		return false
+		return residualVulnNone
 	}
 	// Require actual commit data to prove dormancy. When LatestHumanCommit is nil
 	// (e.g., no GITHUB_TOKEN), daysSinceLastHumanCommitAt returns 9999 which
 	// would falsely satisfy the dormancy threshold — that is absence of evidence,
 	// not evidence of inactivity.
 	if a.RepoState.LatestHumanCommit == nil {
-		return false
+		return residualVulnNone
 	}
-	// Commit dormancy check
 	if a.daysSinceLastHumanCommitAt(now) <= s.rules.EolInactivityDays {
+		return residualVulnNone
+	}
+	vd := s.getStableOrMaxVersionDetail(a)
+	if s.residualVulnsMeetThreshold(vd.DirectOnly()) {
+		return residualVulnOwn
+	}
+	if s.residualVulnsMeetThreshold(vd) {
+		return residualVulnDependencyOnly
+	}
+	return residualVulnNone
+}
+
+// residualVulnsMeetThreshold applies the count and severity conditions of the
+// residual-vulnerability override to vd's advisories.
+func (s *LifecycleAssessorService) residualVulnsMeetThreshold(vd *VersionDetail) bool {
+	if vd == nil {
 		return false
 	}
-	count, _ := s.getStableOrMaxAdvisory(a)
+	count := len(vd.Advisories)
 	if count < s.rules.ResidualAdvisoryThreshold || count == 0 {
 		return false
 	}
 	// Only use severity-based override logic when all advisories have known severity.
-	// If any advisory severity is unknown, fall back to the existing count-based logic
+	// If any advisory severity is unknown, fall back to the count-based logic
 	// because unknown advisories may still be HIGH/CRITICAL.
-	vd := s.getStableOrMaxVersionDetail(a)
-	if vd != nil && vd.UnknownSeverityAdvisoryCount() == 0 {
+	if vd.UnknownSeverityAdvisoryCount() == 0 {
 		return vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) > 0
 	}
 	return true
@@ -329,42 +415,70 @@ func (s *LifecycleAssessorService) getStableOrMaxVersionDetail(a *Analysis) *Ver
 	return a.ReleaseInfo.MaxSemverVersion
 }
 
-// hasHighSeverityAdvisories returns true if the analysis has any advisory with CVSS3 >= threshold,
-// or if any advisory severity is unavailable and advisories exist (conservative fallback).
-func (s *LifecycleAssessorService) hasHighSeverityAdvisories(a *Analysis) bool {
-	return s.hasHighSeverityAdvisoriesExcluding(a, nil)
+// advisorySeverity is what the HIGH-severity check found.
+type advisorySeverity int
+
+const (
+	// severityLowOnly: no HIGH advisory, own or in dependencies.
+	severityLowOnly advisorySeverity = iota
+	// severityOwnHigh: the package's own advisories include a HIGH one.
+	severityOwnHigh
+	// severityDependencyOnlyHigh: HIGH advisories exist only in dependencies.
+	severityDependencyOnlyHigh
+	// severityDependencyOnlyUnknown: no HIGH advisory anywhere, but a
+	// dependency advisory has no CVSS3 score.
+	severityDependencyOnlyUnknown
+)
+
+// advisorySeverityExcluding classifies the latest version's advisories,
+// ignoring the advisories named in excludeIDs (compared case-insensitively).
+// An advisory of unknown severity counts as potentially HIGH.
+//
+// Why excludeIDs exists for branch 1.4: RustSec files its unmaintained marker
+// as an advisory of its own, and deps.dev lists it on the version with no CVSS
+// score. The conservative "unknown severity counts as potentially high"
+// fallback would then read the branch's own evidence back as a vulnerability,
+// so every flagged crate would reach EOL-Effective and the Stalled outcome
+// would be unreachable. See ADR-0025.
+func (s *LifecycleAssessorService) advisorySeverityExcluding(a *Analysis, excludeIDs []string) advisorySeverity {
+	vd := s.getStableOrMaxVersionDetail(a).ExcludingAdvisories(excludeIDs)
+	if s.isPotentiallyHigh(vd.DirectOnly()) {
+		return severityOwnHigh
+	}
+	if s.isPotentiallyHigh(vd) {
+		if vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) > 0 {
+			return severityDependencyOnlyHigh
+		}
+		return severityDependencyOnlyUnknown
+	}
+	return severityLowOnly
 }
 
-// hasHighSeverityAdvisoriesExcluding answers hasHighSeverityAdvisories while
-// ignoring the advisories named in excludeIDs (compared case-insensitively).
-//
-// Why not call hasHighSeverityAdvisories directly from branch 1.4: RustSec files
-// its unmaintained marker as an advisory of its own, and deps.dev lists it on the
-// version with no CVSS score. The conservative "unknown severity counts as
-// potentially high" fallback would then read the branch's own evidence back as a
-// vulnerability, so every flagged crate would reach EOL-Effective and the Stalled
-// outcome would be unreachable. See ADR-0025.
-func (s *LifecycleAssessorService) hasHighSeverityAdvisoriesExcluding(a *Analysis, excludeIDs []string) bool {
-	vd := s.getStableOrMaxVersionDetail(a).ExcludingAdvisories(excludeIDs)
+// isPotentiallyHigh reports whether vd has an advisory with CVSS3 >= threshold,
+// or an advisory of unknown severity (conservative fallback).
+func (s *LifecycleAssessorService) isPotentiallyHigh(vd *VersionDetail) bool {
 	if vd == nil || len(vd.Advisories) == 0 {
 		return false
 	}
 	if vd.UnknownSeverityAdvisoryCount() > 0 {
-		// Any unknown severity triggers conservative fallback (treated as potentially high).
 		return true
 	}
 	return vd.HighSeverityAdvisoryCount(s.rules.HighSeverityCVSSThreshold) > 0
 }
 
-// severityAwareLabel returns the appropriate label and trace based on whether HIGH+ advisories exist.
-// When severity data shows only LOW/MEDIUM, the lowLabel is used instead of highLabel.
-func (s *LifecycleAssessorService) severityAwareLabel(hasHigh bool,
-	highLabel MaintenanceStatus, highTrace string, lowLabel MaintenanceStatus, lowTrace string,
-) (string, string) {
-	if hasHigh {
-		return string(highLabel), highTrace
+// severityOutcome picks the label, reason and trace for the C2a / C3a
+// branches. ownHighReason is used when the package's own advisories are HIGH;
+// otherwise the label is Stalled and the reason starts with stalledPrefix and
+// says what was found. highSuffix completes the EOL-Effective trace name.
+func severityOutcome(sev advisorySeverity, tracePrefix, ownHighReason, stalledPrefix, highSuffix string) (string, string, string) {
+	switch sev {
+	case severityOwnHigh:
+		return string(LabelEOLEffective), ownHighReason, tracePrefix + highSuffix
+	case severityDependencyOnlyUnknown:
+		return string(LabelStalled), stalledPrefix + "; dependency advisories of unknown severity", tracePrefix + "_no_direct_high_severity"
+	default:
+		return string(LabelStalled), stalledPrefix + "; only lower-severity advisories", tracePrefix + "_low_severity"
 	}
-	return string(lowLabel), lowTrace
 }
 
 // assessActiveState handles active repository states using domain models
@@ -494,7 +608,7 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	daysSincePublish := analysis.daysSinceLatestPublishAt(now)
 	advisoryCount, _ := s.getStableOrMaxAdvisory(analysis)
 	hasAdvisories := advisoryCount >= s.rules.ResidualAdvisoryThreshold && advisoryCount > 0
-	hasHighSeverity := s.hasHighSeverityAdvisories(analysis)
+	severity := s.advisorySeverityExcluding(analysis, nil)
 	cSig := sigAbsent(SignalLastHumanCommit) // no commit data in this path
 	mSig := maintainedSignal(scores)
 	dSig := sigAbsent(SignalDaysSinceRelease)
@@ -513,12 +627,15 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	// C2: Scorecard Maintained < threshold
 	if hasMaintainedScore && !isMaintenanceOk {
 		if hasAdvisories && analysis.hasPublishDataAt(now) && daysSincePublish > s.rules.EolInactivityDays {
-			label, trace := s.severityAwareLabel(hasHighSeverity,
-				LabelEOLEffective, "inactive_no_commit_C2a_low_maint_advisory_old_publish",
-				LabelStalled, "inactive_no_commit_C2a_low_maint_advisory_low_severity")
+			if severity == severityDependencyOnlyHigh {
+				signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
+				return s.dependencyHighOutcome(s.getStableOrMaxVersionDetail(analysis), now, "Unmaintained", "inactive_no_commit_C2a_low_maint_advisory", signals), nil
+			}
+			label, reason, trace := severityOutcome(severity, "inactive_no_commit_C2a_low_maint_advisory",
+				"Unmaintained, unpatched vulnerabilities", "Unmaintained", "_old_publish")
 			signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
 			return &AssessmentResult{Axis: LifecycleAxis, Label: label,
-				Reason:  "Unmaintained, unpatched vulnerabilities",
+				Reason:  reason,
 				Trace:   []string{trace},
 				Signals: signals}, nil
 		}
@@ -531,12 +648,15 @@ func (s *LifecycleAssessorService) assessInactiveNoCommitData(
 	// C3: No scorecard — deps.dev signals only
 	if hasAdvisories {
 		if analysis.hasPublishDataAt(now) && daysSincePublish > s.rules.EolInactivityDays {
-			label, trace := s.severityAwareLabel(hasHighSeverity,
-				LabelEOLEffective, "inactive_no_commit_C3a_advisory_old_publish",
-				LabelStalled, "inactive_no_commit_C3a_advisory_low_severity")
+			if severity == severityDependencyOnlyHigh {
+				signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
+				return s.dependencyHighOutcome(s.getStableOrMaxVersionDetail(analysis), now, "No recent releases", "inactive_no_commit_C3a_advisory", signals), nil
+			}
+			label, reason, trace := severityOutcome(severity, "inactive_no_commit_C3a_advisory",
+				"Unpatched vulnerabilities, no recent releases", "No recent releases", "_old_publish")
 			signals := append([]Signal{cSig, mSig, dSig}, s.collectAdvisorySignals(analysis)...)
 			return &AssessmentResult{Axis: LifecycleAxis, Label: label,
-				Reason:  "Unpatched vulnerabilities, no recent releases",
+				Reason:  reason,
 				Trace:   []string{trace},
 				Signals: signals}, nil
 		}
@@ -579,6 +699,9 @@ func (s *LifecycleAssessorService) collectAdvisorySignals(a *Analysis) []Signal 
 	signals := []Signal{sig(SignalAdvisoryCount, fmt.Sprintf("%d", count))}
 	vd := s.getStableOrMaxVersionDetail(a)
 	if vd != nil {
+		if n := vd.TransitiveAdvisoryCount(); n > 0 {
+			signals = append(signals, sig(SignalTransitiveAdvisoryCount, fmt.Sprintf("%d", n)))
+		}
 		maxScore := vd.MaxCVSS3()
 		if maxScore > 0 {
 			signals = append(signals, sig(SignalMaxAdvisorySeverity, fmt.Sprintf("%s %.1f", SeverityFromCVSS3(maxScore), maxScore)))

@@ -184,7 +184,7 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 
 // enrichDependentCounts fetches dependent counts from deps.dev (npm/Maven/PyPI/Cargo),
 // RubyGems, and Packagist, then populates Analysis.Dependents (and the deprecated
-// Analysis.DependentCount) for each PURL. Go is not queried. See ADR-0032.
+// Analysis.DependentCount) for each PURL. Go is not queried. See ADR-0033.
 //
 // DDD Layer: Infrastructure (parallel processing, best-effort enrichment)
 func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []string, analyses map[string]*domain.Analysis) {
@@ -270,7 +270,7 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 
 		switch eco {
 		case "gem", "rubygems":
-			a.Dependents = nil // deps.dev answers 404 for this ecosystem; only the registry count is reported (ADR-0032)
+			a.Dependents = nil // deps.dev answers 404 for this ecosystem; only the registry count is reported (ADR-0033)
 			if s.rubygemsClient == nil {
 				continue
 			}
@@ -292,7 +292,7 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 			}(a, parsed.PackageName())
 
 		case "packagist", "composer":
-			a.Dependents = nil // deps.dev answers 404 for this ecosystem; only the registry count is reported (ADR-0032)
+			a.Dependents = nil // deps.dev answers 404 for this ecosystem; only the registry count is reported (ADR-0033)
 			if s.packagistClient == nil {
 				continue
 			}

@@ -117,12 +117,12 @@ type Analysis struct {
 	// Zero value of EOL means not evaluated or no evidence of EOL.
 	EOL EOLStatus
 
-	// Dependents records a measured observation. Nil means unavailable. See ADR-0032.
+	// Dependents records a measured observation. Nil means unavailable. See ADR-0033.
 	Dependents *DependentsObservation
 
 	// DependentCount retains the historical count, with zero also representing unknown.
 	//
-	// Deprecated: use Dependents for the source, scope, and measured counts. See ADR-0032.
+	// Deprecated: use Dependents for the source, scope, and measured counts. See ADR-0033.
 	DependentCount int
 
 	// DirectDepsCount is the number of direct dependencies for the package version
@@ -418,6 +418,23 @@ func (a *Analysis) GetLifecycleResult() *AssessmentResult {
 		return nil
 	}
 	return a.AxisResults[LifecycleAxis]
+}
+
+// DependencyAdvisoryAge returns the dependency advisory that decided the
+// lifecycle label, or nil when the package's own data decided it. See ADR-0032.
+func (a *Analysis) DependencyAdvisoryAge() *DependencyAdvisoryAge {
+	if r := a.GetLifecycleResult(); r != nil {
+		return r.DependencyAdvisoryAge
+	}
+	return nil
+}
+
+// DependencyAdvisoryAgeUnknown reports whether the lifecycle label rests on a
+// dependency advisory whose OSV lookup failed, so the label might have been
+// EOL-Effective.
+func (a *Analysis) DependencyAdvisoryAgeUnknown() bool {
+	d := a.DependencyAdvisoryAge()
+	return d != nil && d.Status == DependencyAdvisoryUnknown
 }
 
 // ============================================================================

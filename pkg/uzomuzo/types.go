@@ -108,6 +108,54 @@ const (
 	MaliciousScopePackage = domain.MaliciousScopePackage
 )
 
+// DependencyAdvisoryAge names the dependency advisory that decided a dormant
+// package whose HIGH advisories are all in dependencies (ADR-0032); see
+// AssessmentResult.DependencyAdvisoryAge.
+type DependencyAdvisoryAge = domain.DependencyAdvisoryAge
+
+// DependencyAdvisoryAgeStatus says why that advisory does or does not make the
+// package EOL-Effective.
+type DependencyAdvisoryAgeStatus = domain.DependencyAdvisoryAgeStatus
+
+// AdvisoryRecordLookup is the outcome of looking an advisory up in OSV
+// (Advisory.RecordLookup).
+type AdvisoryRecordLookup = domain.AdvisoryRecordLookup
+
+const (
+	// DependencyAdvisoryAged means an aged advisory made the package EOL-Effective.
+	DependencyAdvisoryAged = domain.DependencyAdvisoryAged
+	// DependencyAdvisoryUnknown means the OSV lookup failed; the package might have been EOL-Effective.
+	DependencyAdvisoryUnknown = domain.DependencyAdvisoryUnknown
+	// DependencyAdvisoryNotAged means the advisory is too recent; EligibleOn is the day it counts.
+	DependencyAdvisoryNotAged = domain.DependencyAdvisoryNotAged
+	// DependencyAdvisoryRatedBelowHigh means HIGH by CVSS3 but rated lower by the advisory database.
+	DependencyAdvisoryRatedBelowHigh = domain.DependencyAdvisoryRatedBelowHigh
+	// DependencyAdvisoryRatingUnrecognized means the advisory database gives a rating this tool does not know.
+	DependencyAdvisoryRatingUnrecognized = domain.DependencyAdvisoryRatingUnrecognized
+	// DependencyAdvisoryUndated means OSV has no record or no publication date.
+	DependencyAdvisoryUndated = domain.DependencyAdvisoryUndated
+	// DependencyAdvisoryWithdrawn means the advisory database withdrew the advisory.
+	DependencyAdvisoryWithdrawn = domain.DependencyAdvisoryWithdrawn
+	// DependencyAdvisoryNotChecked means no OSV lookup was made.
+	DependencyAdvisoryNotChecked = domain.DependencyAdvisoryNotChecked
+
+	// AdvisoryRecordNotLookedUp (the zero value) means no OSV lookup was made.
+	AdvisoryRecordNotLookedUp = domain.AdvisoryRecordNotLookedUp
+	// AdvisoryRecordFound means OSV returned the record.
+	AdvisoryRecordFound = domain.AdvisoryRecordFound
+	// AdvisoryRecordNotFound means OSV has no record for the ID.
+	AdvisoryRecordNotFound = domain.AdvisoryRecordNotFound
+	// AdvisoryRecordWithdrawn means OSV returned the record marked withdrawn.
+	AdvisoryRecordWithdrawn = domain.AdvisoryRecordWithdrawn
+	// AdvisoryRecordLookupFailed means the lookup failed or ran out of time.
+	AdvisoryRecordLookupFailed = domain.AdvisoryRecordLookupFailed
+
+	// SignalTransitiveAdvisoryCount is the number of dependency advisories;
+	// SignalAgedDependencyAdvisory names the aged one that decided (ADR-0032).
+	SignalTransitiveAdvisoryCount = domain.SignalTransitiveAdvisoryCount
+	SignalAgedDependencyAdvisory  = domain.SignalAgedDependencyAdvisory
+)
+
 // ReleaseHistory is the registry's publish time for every version of a
 // package, including removed ones (npm only; see ADR-0026). Nil means the
 // lookup did not run or failed.
@@ -142,7 +190,7 @@ type ReleaseAgeStatus = domain.ReleaseAgeStatus
 // ReleaseAgeSource names where a young version's publish time came from.
 type ReleaseAgeSource = domain.ReleaseAgeSource
 
-// DependentsObservation records a measured dependents count and its scope (ADR-0032).
+// DependentsObservation records a measured dependents count and its scope (ADR-0033).
 type DependentsObservation = domain.DependentsObservation
 
 // DependentsSource identifies the provider of a dependents observation.

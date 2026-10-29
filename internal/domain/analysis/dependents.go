@@ -14,7 +14,7 @@ const (
 )
 
 // DependentsObservation records the scope and counts returned by one provider.
-// A nil count means the provider did not report that measure. See ADR-0032.
+// A nil count means the provider did not report that measure. See ADR-0033.
 type DependentsObservation struct {
 	// Source is the provider that reported the counts.
 	Source DependentsSource

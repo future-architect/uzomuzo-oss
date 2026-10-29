@@ -194,6 +194,9 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 	if failedMaliciousChecks > 0 {
 		slog.Warn("malicious check incomplete: OSV lookup failed for dependencies", "count", failedMaliciousChecks)
 	}
+	if unknown := domain.CountDependencyAdvisoryAgeUnknown(healthResults); unknown > 0 {
+		slog.Warn("dependency advisory age check incomplete: OSV lookup failed; these packages may be EOL-Effective", "count", unknown)
+	}
 
 	// Phase 4: Scoring and prioritization
 	slog.Info("Phase 4: Computing scores and ranking")
