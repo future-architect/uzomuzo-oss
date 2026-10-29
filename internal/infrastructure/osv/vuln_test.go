@@ -23,6 +23,8 @@ func TestClient_GetVuln(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"GHSA-not-what-was-asked","published":"2020-01-01T00:00:00Z"}`))
 		case "/v1/vulns/GHSA-odd-severity":
 			_, _ = w.Write([]byte(`{"id":"GHSA-odd-severity","published":"2020-01-01T00:00:00Z","database_specific":{"severity":{"level":"high"}}}`))
+		case "/v1/vulns/GHSA-null-severity":
+			_, _ = w.Write([]byte(`{"id":"GHSA-null-severity","published":"2020-01-01T00:00:00Z","database_specific":{"severity":null}}`))
 		case "/v1/vulns/GHSA-server-error":
 			w.WriteHeader(http.StatusInternalServerError)
 		default:
@@ -60,6 +62,13 @@ func TestClient_GetVuln(t *testing.T) {
 	// lookup, and not "no rating" either.
 	if rec, found, err = c.GetVuln(ctx, "GHSA-odd-severity"); err != nil || !found || rec.Severity != unrecognizedRating {
 		t.Fatalf("non-string severity: found=%v severity=%q err=%v, want found, %s, no error", found, rec.Severity, err, unrecognizedRating)
+	}
+	if rec, found, err = c.GetVuln(ctx, "GHSA-null-severity"); err != nil || !found || rec.Severity != unrecognizedRating {
+		t.Fatalf("null severity: found=%v severity=%q err=%v, want found, %s, no error", found, rec.Severity, err, unrecognizedRating)
+	}
+	// An omitted severity is no rating (hp3w above has no database_specific).
+	if rec, _, _ = c.GetVuln(ctx, "GHSA-hp3w-g68c-fv3c"); rec.Severity != "" {
+		t.Errorf("omitted severity: got %q, want empty", rec.Severity)
 	}
 	if _, _, err = c.GetVuln(ctx, "GHSA-other-answer"); err == nil {
 		t.Errorf("an answer naming another ID must be an error")

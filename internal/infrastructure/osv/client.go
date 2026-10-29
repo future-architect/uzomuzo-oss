@@ -501,23 +501,21 @@ type wireVuln struct {
 	Affected   []wireAffected  `json:"affected"`
 }
 
-// ratingString decodes a JSON string as is and null as empty. Any other JSON
-// value becomes unrecognizedRating rather than empty: empty means "no rating",
-// which lets an old dependency advisory count (ADR-0032).
+// ratingString decodes a JSON string as is. Any other JSON value, null
+// included, becomes unrecognizedRating rather than empty: empty means "no
+// rating", which lets an old dependency advisory count (ADR-0032). An omitted
+// field never reaches UnmarshalJSON and stays empty.
 type ratingString string
 
 const unrecognizedRating = "UNRECOGNIZED"
 
 func (s *ratingString) UnmarshalJSON(b []byte) error {
-	var v *string
-	if err := json.Unmarshal(b, &v); err != nil {
+	var v string
+	if bytes.Equal(bytes.TrimSpace(b), []byte("null")) || json.Unmarshal(b, &v) != nil {
 		*s = unrecognizedRating
 		return nil
 	}
-	*s = ""
-	if v != nil {
-		*s = ratingString(*v)
-	}
+	*s = ratingString(v)
 	return nil
 }
 
