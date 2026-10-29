@@ -247,10 +247,15 @@ func (s *IntegrationService) enrichDependentCounts(ctx context.Context, purls []
 	}
 
 	// Phase 2: RubyGems and Packagist (not covered by deps.dev)
-	// Each goroutine writes to a distinct *Analysis pointer (one per PURL key),
-	// so no mutex is needed for DependentCount and Dependents writes.
+	// Duplicate PURLs are skipped, so each goroutine writes to a distinct
+	// *Analysis pointer and no mutex is needed for DependentCount and Dependents writes.
 	var wg sync.WaitGroup
+	seen := make(map[string]struct{}, len(purls))
 	for _, p := range purls {
+		if _, dup := seen[p]; dup {
+			continue
+		}
+		seen[p] = struct{}{}
 		a := analyses[p]
 		if a == nil {
 			continue

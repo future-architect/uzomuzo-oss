@@ -748,3 +748,33 @@ func TestSetRegistryDependents_CopiesCount(t *testing.T) {
 		t.Errorf("DependentCount = %d, want 42", a.DependentCount)
 	}
 }
+
+func TestEnrichDependentCounts_Phase2_DuplicatePURLQueriedOnce(t *testing.T) {
+	var registryCalls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		registryCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"package":{"name":"monolog/monolog","dependents":8529}}`))
+	}))
+	defer srv.Close()
+	pk := packagist.NewClient()
+	pk.SetBaseURL(srv.URL)
+	svc := &IntegrationService{depsdevClient: &stubDepsDevClient{}, packagistClient: pk}
+	const p = "pkg:composer/monolog/monolog@3.0.0"
+	purls := []string{p, p}
+	analyses := map[string]*domain.Analysis{
+		p: {EffectivePURL: p, Package: &domain.Package{Ecosystem: "composer", Version: "3.0.0"}},
+	}
+	svc.enrichDependentCounts(context.Background(), purls, analyses)
+
+	if got := registryCalls.Load(); got != 1 {
+		t.Errorf("registry calls = %d, want 1", got)
+	}
+	a := analyses[p]
+	if a.Dependents == nil || a.Dependents.Direct == nil {
+		t.Fatal("Packagist observation missing")
+	}
+	if *a.Dependents.Direct != 8529 || a.DependentCount != 8529 {
+		t.Errorf("Direct=%d DependentCount=%d, want 8529", *a.Dependents.Direct, a.DependentCount)
+	}
+}
