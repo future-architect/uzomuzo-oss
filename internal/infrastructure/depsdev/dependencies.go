@@ -42,7 +42,11 @@ func stripGoIncompatibleSuffix(ecosystem, version string) string {
 const maxDependencyFallbackVersions = 2
 
 // FetchDependencies fetches the dependency graph for a single versioned PURL.
-// Returns nil, nil for unsupported ecosystems or 404 responses.
+// Returns nil, nil for unsupported ecosystems or 404 responses. Returns an
+// error when deps.dev answers 200 but reports that it could not resolve the
+// graph (non-empty top-level "error", e.g. "trycmd/^1.2.0: no candidates
+// found"); such a body carries no nodes and must not be read as a package
+// with zero dependencies.
 //
 // DDD Layer: Infrastructure (external API call)
 func (c *DepsDevClient) FetchDependencies(ctx context.Context, purlStr string) (*DependenciesResponse, error) {
@@ -99,6 +103,9 @@ func (c *DepsDevClient) FetchDependencies(ctx context.Context, purlStr string) (
 	var result DependenciesResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("dependencies JSON decode failed (url=%s): %w", endpoint, err)
+	}
+	if msg := strings.TrimSpace(result.Error); msg != "" {
+		return nil, fmt.Errorf("dependencies graph unresolved by deps.dev (url=%s): %s", endpoint, msg)
 	}
 	return &result, nil
 }

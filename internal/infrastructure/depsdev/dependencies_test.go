@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -396,6 +397,48 @@ func TestFetchDependenciesBatch_NoFallbackForLeafWithGraph(t *testing.T) {
 	}
 	if got := atomic.LoadInt64(&listCalls); got != 0 {
 		t.Errorf("expected 0 package-versions calls for successful primary, got %d", got)
+	}
+}
+
+// TestFetchDependenciesBatch_UnresolvedGraph pins the deps.dev shape seen for
+// pkg:cargo/clap@4.6.7: HTTP 200, no nodes, and a top-level "error". The entry
+// must be omitted (graph unknown), not kept as a zero-dependency leaf, and no
+// other version may be substituted.
+func TestFetchDependenciesBatch_UnresolvedGraph(t *testing.T) {
+	var listCalls int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v3alpha/systems/cargo/packages/clap/versions/4.6.7:dependencies":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(w, `{"nodes":[],"edges":[],"error":"trycmd/^1.2.0: no candidates found"}`)
+		case "/v3alpha/systems/cargo/packages/clap":
+			atomic.AddInt64(&listCalls, 1)
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	client := NewDepsDevClient(&config.DepsDevConfig{
+		BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0, BatchSize: 10,
+	})
+
+	resp, err := client.FetchDependencies(context.Background(), "pkg:cargo/clap@4.6.7")
+	if err == nil || !strings.Contains(err.Error(), "no candidates found") {
+		t.Fatalf("FetchDependencies error = %v, want deps.dev message", err)
+	}
+	if resp != nil {
+		t.Fatalf("FetchDependencies resp = %+v, want nil", resp)
+	}
+
+	results := client.FetchDependenciesBatch(context.Background(), []string{"pkg:cargo/clap@4.6.7"})
+	if len(results) != 0 {
+		t.Fatalf("expected unresolved graph to be omitted, got %+v", results)
+	}
+	if got := atomic.LoadInt64(&listCalls); got != 0 {
+		t.Errorf("expected no version fallback for an unresolved graph, got %d package-versions calls", got)
 	}
 }
 
