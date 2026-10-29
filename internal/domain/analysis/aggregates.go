@@ -121,6 +121,7 @@ type Analysis struct {
 	Dependents *DependentsObservation
 
 	// DependentCount retains the historical count, with zero also representing unknown.
+	//
 	// Deprecated: use Dependents for the source, scope, and measured counts. See ADR-0032.
 	DependentCount int
 

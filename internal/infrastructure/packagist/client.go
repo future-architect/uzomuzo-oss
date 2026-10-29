@@ -76,7 +76,8 @@ type packageResponse struct {
 		//       https://packagist.org/packages/monolog/monolog.json
 		//       (no "abandoned" key or false)
 		Abandoned any `json:"abandoned"`
-		// Dependents is the number of packages that depend on this package.
+		// Dependents is the number of packages that require this package (any version),
+		// including require-dev. Nil when the field is absent.
 		// Returned by Packagist API: GET /packages/{vendor}/{name}.json
 		// Example: https://packagist.org/packages/monolog/monolog.json -> "dependents": 24851
 		Dependents *int `json:"dependents"`
@@ -176,7 +177,8 @@ func (c *Client) GetRepoURL(ctx context.Context, vendor, name, version string) (
 	return norm, nil
 }
 
-// GetDependentCount returns the number of packages that depend on this package.
+// GetDependentCount returns the number of packages that require this package (any version),
+// including require-dev.
 // Uses the same Packagist API as GetRepoURL/GetAbandoned (cached via fetchPackage).
 // Returns nil, nil when the package is not found (404), the field is absent, or the name is empty.
 //

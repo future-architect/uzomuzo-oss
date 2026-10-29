@@ -1262,6 +1262,8 @@ func TestWriteBoxHealth_DependentsScope(t *testing.T) {
 		{"unrecognized source", &analysis.DependentsObservation{Source: "OtherRegistry", Direct: &direct, Total: &total}, "Dependents: 5 direct, 7 total (OtherRegistry)"},
 		{"unrecognized source direct only", &analysis.DependentsObservation{Source: "OtherRegistry", Direct: &direct}, "Dependents: 5 direct (OtherRegistry)"},
 		{"unrecognized source no counts", &analysis.DependentsObservation{Source: "OtherRegistry"}, ""},
+		{"deps.dev no version", &analysis.DependentsObservation{Source: analysis.DependentsSourceDepsDev, Direct: &direct, Total: &total}, "Dependents: 5 direct, 7 total (deps.dev)\n"},
+		{"registry no count", &analysis.DependentsObservation{Source: analysis.DependentsSourcePackagist}, ""},
 		{"unknown", nil, ""},
 	}
 	for _, tt := range tests {

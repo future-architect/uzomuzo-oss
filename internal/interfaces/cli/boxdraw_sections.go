@@ -479,7 +479,11 @@ func writeBoxHealth(ctx *boxContext) error {
 		switch d.Source {
 		case analysispkg.DependentsSourceDepsDev:
 			if counts := dependentsCounts(d); counts != "" {
-				lines = append(lines, fmt.Sprintf("Dependents: %s (deps.dev, packages resolving to %s)", counts, d.Version))
+				if d.Version != "" {
+					lines = append(lines, fmt.Sprintf("Dependents: %s (deps.dev, packages resolving to %s)", counts, d.Version))
+				} else {
+					lines = append(lines, fmt.Sprintf("Dependents: %s (deps.dev)", counts))
+				}
 			}
 		case analysispkg.DependentsSourceRubyGems, analysispkg.DependentsSourcePackagist:
 			if d.Direct != nil {

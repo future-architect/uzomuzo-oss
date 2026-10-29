@@ -172,7 +172,9 @@ func pickGitRepo(source, homepage, project string) string {
 }
 
 // GetReverseDependencyCount fetches the number of reverse dependencies for a gem.
-// It calls the RubyGems reverse_dependencies API and returns the count.
+// It calls the RubyGems reverse_dependencies API and returns the count of gems whose
+// latest published version declares a dependency on any version of this gem, including
+// development dependencies (the API default).
 //
 // DDD Layer: Infrastructure
 // Endpoint: GET /api/v1/gems/{name}/reverse_dependencies.json
