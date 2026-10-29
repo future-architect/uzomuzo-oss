@@ -89,8 +89,9 @@ func TestSARIFInputRouting(t *testing.T) {
 			}, nil, nil, scanapp.ActionsConfig{})
 		}, file, []int{7}},
 		{"SBOM via file", func() error {
-			return runScanFile(context.Background(), svc, opts, nil, policy, func(string, map[string]depparser.DependencyParser) (depparser.DependencyParser, []byte, error) {
-				return sarifInputParser{"CycloneDX SBOM"}, nil, nil
+			parser := &sarifInputParser{"renamed SBOM display name"}
+			return runScanFile(context.Background(), svc, opts, map[string]depparser.DependencyParser{"sbom": parser}, policy, func(string, map[string]depparser.DependencyParser) (depparser.DependencyParser, []byte, error) {
+				return parser, nil, nil
 			}, nil, nil, scanapp.ActionsConfig{})
 		}, file, []int{0}},
 		{"SBOM", func() error {

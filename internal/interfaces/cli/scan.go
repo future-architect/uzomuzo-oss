@@ -37,10 +37,10 @@ var ErrScanFailPolicy = errors.New("scan: one or more dependencies matched --fai
 
 // ScanOptions contains all scan-specific options parsed from CLI flags.
 type ScanOptions struct {
-	// ToolVersion is the running binary version reported in SARIF.
-	ToolVersion   string
-	renderOptions scanRenderOptions
 	ProcessingOptions
+
+	// ToolVersion is the running binary version reported in SARIF.
+	ToolVersion string
 
 	Format              string // "detailed", "table", "json", "csv", "sarif" (empty = smart default)
 	FailOnRaw           string // raw --fail-on CSV string
@@ -50,6 +50,9 @@ type ScanOptions struct {
 	IncludeActions      bool   // --include-actions: scan GitHub Actions referenced by input repos
 	ShowTransitive      bool   // --show-transitive: include transitive dependencies in output
 	MaintainerDomain    bool   // --maintainer-domain: check npm maintainer e-mail domains
+
+	// renderOptions is filled by RunScan and the runScan* helpers, not by callers.
+	renderOptions scanRenderOptions
 }
 
 // ActionsDiscovererFactory creates an ActionsDiscoverer from the scan service's analysis service.
@@ -165,7 +168,7 @@ func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 		return fmt.Errorf("failed to detect file format for '%s': %w", filePath, err)
 	}
 	if parser != nil {
-		opts.renderOptions.SBOM = parser.FormatName() == "CycloneDX SBOM"
+		opts.renderOptions.SBOM = parser == parsers["sbom"]
 		// --sample, --line-range, and --include-actions are only meaningful for
 		// PURL/URL list files; reject them for structured formats (go.mod / CycloneDX).
 		if opts.SampleSize > 0 {

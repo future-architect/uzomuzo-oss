@@ -15,6 +15,21 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/domain/scan"
 )
 
+const (
+	sarifRuleAnalysisIncomplete = "uzomuzo/analysis-incomplete"
+	sarifRuleMalicious          = "uzomuzo/malicious"
+	sarifRuleEOLConfirmed       = "uzomuzo/eol-confirmed"
+	sarifRuleEOLEffective       = "uzomuzo/eol-effective"
+	sarifRuleEOLScheduled       = "uzomuzo/eol-scheduled"
+	sarifRuleArchived           = "uzomuzo/archived"
+	sarifRuleDisabled           = "uzomuzo/disabled"
+	sarifRuleStalled            = "uzomuzo/stalled"
+	sarifRuleLegacySafe         = "uzomuzo/legacy-safe"
+	sarifRuleReviewNeeded       = "uzomuzo/review-needed"
+	sarifRuleDormantRelease     = "uzomuzo/dormant-release"
+	sarifRuleActive             = "uzomuzo/active"
+)
+
 // See ADR-0034.
 type scanRenderOptions struct {
 	Policy      scan.FailPolicy
@@ -132,22 +147,22 @@ func renderScanSARIF(w io.Writer, entries []audit.AuditEntry, opts scanRenderOpt
 
 func sarifRules() []sarifRule {
 	definitions := []struct{ id, name, description string }{
-		{"analysis-incomplete", "AnalysisIncomplete", "Dependency analysis is incomplete"},
-		{string(scan.FailMalicious), "Malicious", "Dependency has a malicious-package advisory"},
-		{string(scan.FailEOLConfirmed), "EOLConfirmed", "Dependency has confirmed end of life"},
-		{string(scan.FailEOLEffective), "EOLEffective", "Dependency is effectively end of life"},
-		{string(scan.FailEOLScheduled), "EOLScheduled", "Dependency has scheduled end of life"},
-		{string(scan.FailArchived), "Archived", "Dependency repository is archived"},
-		{string(scan.FailDisabled), "Disabled", "Dependency repository is disabled"},
-		{string(scan.FailStalled), "Stalled", "Dependency maintenance has stalled"},
-		{string(scan.FailLegacySafe), "LegacySafe", "Dependency is legacy-safe"},
-		{string(scan.FailReviewNeeded), "ReviewNeeded", "Dependency needs manual review"},
-		{string(scan.FailDormantRelease), "DormantRelease", "Dependency has a dormant-release marker"},
-		{"active", "Active", "Dependency is active"},
+		{sarifRuleAnalysisIncomplete, "AnalysisIncomplete", "Dependency analysis is incomplete"},
+		{sarifRuleMalicious, "Malicious", "Dependency has a malicious-package advisory"},
+		{sarifRuleEOLConfirmed, "EOLConfirmed", "Dependency has confirmed end of life"},
+		{sarifRuleEOLEffective, "EOLEffective", "Dependency is effectively end of life"},
+		{sarifRuleEOLScheduled, "EOLScheduled", "Dependency has scheduled end of life"},
+		{sarifRuleArchived, "Archived", "Dependency repository is archived"},
+		{sarifRuleDisabled, "Disabled", "Dependency repository is disabled"},
+		{sarifRuleStalled, "Stalled", "Dependency maintenance has stalled"},
+		{sarifRuleLegacySafe, "LegacySafe", "Dependency is legacy-safe"},
+		{sarifRuleReviewNeeded, "ReviewNeeded", "Dependency needs manual review"},
+		{sarifRuleDormantRelease, "DormantRelease", "Dependency has a dormant-release marker"},
+		{sarifRuleActive, "Active", "Dependency is active"},
 	}
 	rules := make([]sarifRule, 0, len(definitions))
 	for _, d := range definitions {
-		rules = append(rules, sarifRule{ID: "uzomuzo/" + d.id, Name: d.name, ShortDescription: sarifText{Text: d.description}, HelpURI: "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats", DefaultConfiguration: sarifConfiguration{Level: "warning"}})
+		rules = append(rules, sarifRule{ID: d.id, Name: d.name, ShortDescription: sarifText{Text: d.description}, HelpURI: "https://github.com/future-architect/uzomuzo-oss/blob/main/docs/usage.md#output-formats", DefaultConfiguration: sarifConfiguration{Level: "warning"}})
 	}
 	return rules
 }
@@ -155,38 +170,38 @@ func sarifRules() []sarifRule {
 func sarifRuleID(e *audit.AuditEntry) string {
 	a := e.Analysis
 	if a == nil || a.Error != nil {
-		return "uzomuzo/analysis-incomplete"
+		return sarifRuleAnalysisIncomplete
 	}
 	if a.Malicious() {
-		return "uzomuzo/" + string(scan.FailMalicious)
+		return sarifRuleMalicious
 	}
 	status := a.FinalMaintenanceStatus()
 	switch status {
 	case analysis.LabelEOLConfirmed:
-		return "uzomuzo/" + string(scan.FailEOLConfirmed)
+		return sarifRuleEOLConfirmed
 	case analysis.LabelEOLEffective:
-		return "uzomuzo/" + string(scan.FailEOLEffective)
+		return sarifRuleEOLEffective
 	case analysis.LabelEOLScheduled:
-		return "uzomuzo/" + string(scan.FailEOLScheduled)
+		return sarifRuleEOLScheduled
 	}
 	if a.IsArchived() {
-		return "uzomuzo/" + string(scan.FailArchived)
+		return sarifRuleArchived
 	}
 	if a.IsDisabled() {
-		return "uzomuzo/" + string(scan.FailDisabled)
+		return sarifRuleDisabled
 	}
 	switch status {
 	case analysis.LabelStalled:
-		return "uzomuzo/" + string(scan.FailStalled)
+		return sarifRuleStalled
 	case analysis.LabelLegacySafe:
-		return "uzomuzo/" + string(scan.FailLegacySafe)
+		return sarifRuleLegacySafe
 	case analysis.LabelReviewNeeded:
-		return "uzomuzo/" + string(scan.FailReviewNeeded)
+		return sarifRuleReviewNeeded
 	}
 	if a.HasDormantRelease() {
-		return "uzomuzo/" + string(scan.FailDormantRelease)
+		return sarifRuleDormantRelease
 	}
-	return "uzomuzo/active"
+	return sarifRuleActive
 }
 
 func sarifMessage(e *audit.AuditEntry) string {

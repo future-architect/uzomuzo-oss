@@ -49,7 +49,7 @@ func BenchmarkRenderScanOutput(b *testing.B) {
 	for _, format := range []string{"table", "json", "csv"} {
 		b.Run(format, func(b *testing.B) {
 			cw := &countingWriter{}
-			if err := renderScanOutput(cw, entries, entries, format, false, nil); err != nil {
+			if err := renderScanOutput(cw, entries, entries, format, false, nil, scanRenderOptions{}); err != nil {
 				b.Fatalf("renderScanOutput(%s) failed during setup: %v", format, err)
 			}
 			if cw.n < 1000 {
@@ -58,7 +58,7 @@ func BenchmarkRenderScanOutput(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				if err := renderScanOutput(io.Discard, entries, entries, format, false, nil); err != nil {
+				if err := renderScanOutput(io.Discard, entries, entries, format, false, nil, scanRenderOptions{}); err != nil {
 					b.Fatal(err)
 				}
 			}

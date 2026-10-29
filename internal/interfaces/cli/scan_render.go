@@ -159,13 +159,9 @@ func ResolveFormat(explicit string, inputCount int) (string, error) {
 // filterActive indicates whether --show-only was explicitly provided (even if all entries match).
 // bootstrap is the RDAP service list used by --maintainer-domain, nil when the check did not run;
 // only JSON reports it.
-func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, format string, filterActive bool, bootstrap *domain.RDAPBootstrapInfo, options ...scanRenderOptions) error {
+func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, format string, filterActive bool, bootstrap *domain.RDAPBootstrapInfo, opts scanRenderOptions) error {
 	switch format {
 	case FormatSARIF:
-		var opts scanRenderOptions
-		if len(options) > 0 {
-			opts = options[0]
-		}
 		return renderScanSARIF(w, displayEntries, opts)
 	case FormatDetailed:
 		return renderScanDetailed(w, allEntries, displayEntries, filterActive)
