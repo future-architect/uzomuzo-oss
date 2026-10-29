@@ -410,9 +410,10 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 
 	// Map results back to original PURLs and populate counts.
 	// Also build a per-original-PURL map for downstream transitive advisory enrichment.
-	// HasDependencyGraph is set whenever deps.dev returned a response, even when the
-	// counts are zero — this lets callers distinguish "genuine leaf package" (e.g.,
-	// react@19) from "graph not collected" (unsupported ecosystem, 404, etc.).
+	// HasDependencyGraph is set whenever deps.dev returned a resolved graph, even
+	// when the counts are zero — this lets callers distinguish "genuine leaf
+	// package" (e.g., react@19) from "graph not collected" (unsupported ecosystem,
+	// 404, a graph deps.dev reported as unresolved, etc.).
 	perPURL := make(map[string]*depsdev.DependenciesResponse, len(purls))
 	for ep, originalKeys := range effectiveToOriginals {
 		key := purl.CanonicalKey(ep)

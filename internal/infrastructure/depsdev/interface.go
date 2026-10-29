@@ -32,7 +32,8 @@ type Client interface {
 	FetchDependentCountBatch(ctx context.Context, purls []string) map[string]*DependentsResponse
 	// FetchDependenciesBatch fetches dependency graphs for multiple PURLs in parallel.
 	// Returns a map of canonical (versionless) PURL -> DependenciesResponse.
-	// Supported ecosystems: npm, cargo, maven, pypi.
+	// Supported ecosystems: npm, cargo, maven, pypi. PURLs that fail, return 404,
+	// or whose graph deps.dev reports as unresolved are omitted.
 	FetchDependenciesBatch(ctx context.Context, purls []string) map[string]*DependenciesResponse
 	// FetchAdvisoriesBatch fetches advisory details (CVSS3 score, title) for multiple advisory IDs in parallel.
 	// Returns a map of advisory ID -> AdvisoryDetail. Unknown/failed IDs are silently omitted.

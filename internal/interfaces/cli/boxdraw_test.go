@@ -1284,6 +1284,36 @@ func TestWriteBoxHealth_DependentsScope(t *testing.T) {
 	}
 }
 
+func TestWriteBoxHealth_DependsOn(t *testing.T) {
+	tests := []struct {
+		name string
+		a    *analysis.Analysis
+		want string
+	}{
+		{"graph with deps", &analysis.Analysis{HasDependencyGraph: true, DirectDepsCount: 28, TransitiveDepsCount: 39}, "Depends on: 28 direct, 39 transitive"},
+		{"graph with direct only", &analysis.Analysis{HasDependencyGraph: true, DirectDepsCount: 4}, "Depends on: 4 direct, 0 transitive"},
+		{"graph with no deps", &analysis.Analysis{HasDependencyGraph: true}, "Depends on: none (0 direct, 0 transitive)"},
+		{"no graph", &analysis.Analysis{}, ""},
+		{"counts without graph", &analysis.Analysis{DirectDepsCount: 3}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			entry := &domainaudit.AuditEntry{Analysis: tt.a}
+			if err := writeBoxHealth(newBoxContext(&buf, entry, 100)); err != nil {
+				t.Fatal(err)
+			}
+			if tt.want == "" {
+				if strings.Contains(buf.String(), "Depends on:") {
+					t.Fatalf("unknown graph rendered: %s", buf.String())
+				}
+			} else if !strings.Contains(buf.String(), tt.want) {
+				t.Fatalf("want %q in %s", tt.want, buf.String())
+			}
+		})
+	}
+}
+
 // TestWriteBoxOrigin_DirectPURL pins the zero-value relation (RelationUnknown)
 // half of writeBoxOrigin's documented contract: no Origin section for direct
 // entries whose relation is unknown.

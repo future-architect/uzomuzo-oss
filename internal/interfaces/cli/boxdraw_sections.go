@@ -495,8 +495,14 @@ func writeBoxHealth(ctx *boxContext) error {
 			}
 		}
 	}
-	if a.DirectDepsCount > 0 || a.TransitiveDepsCount > 0 {
-		lines = append(lines, fmt.Sprintf("Depends on: %d direct, %d transitive", a.DirectDepsCount, a.TransitiveDepsCount))
+	// Zero counts mean "no dependencies" only when the graph was retrieved;
+	// without it they are unknown and the line is omitted.
+	if a.HasDependencyGraph {
+		if a.DirectDepsCount == 0 && a.TransitiveDepsCount == 0 {
+			lines = append(lines, "Depends on: none (0 direct, 0 transitive)")
+		} else {
+			lines = append(lines, fmt.Sprintf("Depends on: %d direct, %d transitive", a.DirectDepsCount, a.TransitiveDepsCount))
+		}
 	}
 
 	// Scores

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -366,7 +367,7 @@ func TestFetchDependenciesBatch_VersionFallback_PrefersClosestSemver(t *testing.
 
 // TestFetchDependenciesBatch_NoFallbackForLeafWithGraph ensures the fallback
 // does NOT run when the primary call returns a valid (but SELF-only) response.
-// The zero-node response must be preserved per PR #315's HasDependencyGraph
+// The SELF-only response must be preserved per PR #315's HasDependencyGraph
 // contract: "leaf package, graph was collected".
 func TestFetchDependenciesBatch_NoFallbackForLeafWithGraph(t *testing.T) {
 	var listCalls int64
@@ -396,6 +397,85 @@ func TestFetchDependenciesBatch_NoFallbackForLeafWithGraph(t *testing.T) {
 	}
 	if got := atomic.LoadInt64(&listCalls); got != 0 {
 		t.Errorf("expected 0 package-versions calls for successful primary, got %d", got)
+	}
+}
+
+// TestFetchDependencies_GraphError pins how a top-level deps.dev "error" is
+// read. The "no nodes" case is the shape seen for pkg:cargo/clap@4.6.7. Any
+// non-empty error discards the body, even when nodes are present; an empty or
+// whitespace-only error means the graph was resolved.
+func TestFetchDependencies_GraphError(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		wantErr string // empty: resolved, response must be returned
+	}{
+		{"error with no nodes", `{"nodes":[],"edges":[],"error":"trycmd/^1.2.0: no candidates found"}`, "trycmd/^1.2.0: no candidates found"},
+		{"error with nodes", `{"nodes":[{"relation":"SELF"},{"relation":"DIRECT"}],"edges":[],"error":"x/^1: no candidates found"}`, "x/^1: no candidates found"},
+		{"empty error", `{"nodes":[{"relation":"SELF"}],"edges":[],"error":""}`, ""},
+		{"whitespace-only error", `{"nodes":[{"relation":"SELF"}],"edges":[],"error":"  "}`, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = fmt.Fprint(w, tt.body)
+			}))
+			defer srv.Close()
+			client := NewDepsDevClient(&config.DepsDevConfig{
+				BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0, BatchSize: 10,
+			})
+
+			resp, err := client.FetchDependencies(context.Background(), "pkg:cargo/clap@4.6.7")
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if resp == nil {
+					t.Fatal("expected resolved response, got nil")
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want it to contain %q", err, tt.wantErr)
+			}
+			if resp != nil {
+				t.Fatalf("resp = %+v, want nil", resp)
+			}
+		})
+	}
+}
+
+// TestFetchDependenciesBatch_UnresolvedGraph ensures an unresolved graph is
+// omitted from the batch (graph unknown, not a zero-dependency leaf) and that
+// no other version is substituted.
+func TestFetchDependenciesBatch_UnresolvedGraph(t *testing.T) {
+	var listCalls int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v3alpha/systems/cargo/packages/clap/versions/4.6.7:dependencies":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(w, `{"nodes":[],"edges":[],"error":"trycmd/^1.2.0: no candidates found"}`)
+		case "/v3alpha/systems/cargo/packages/clap":
+			atomic.AddInt64(&listCalls, 1)
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	client := NewDepsDevClient(&config.DepsDevConfig{
+		BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0, BatchSize: 10,
+	})
+
+	results := client.FetchDependenciesBatch(context.Background(), []string{"pkg:cargo/clap@4.6.7"})
+	if len(results) != 0 {
+		t.Fatalf("expected unresolved graph to be omitted, got %+v", results)
+	}
+	if got := atomic.LoadInt64(&listCalls); got != 0 {
+		t.Errorf("expected no version fallback for an unresolved graph, got %d package-versions calls", got)
 	}
 }
 

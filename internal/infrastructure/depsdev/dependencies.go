@@ -42,7 +42,12 @@ func stripGoIncompatibleSuffix(ecosystem, version string) string {
 const maxDependencyFallbackVersions = 2
 
 // FetchDependencies fetches the dependency graph for a single versioned PURL.
-// Returns nil, nil for unsupported ecosystems or 404 responses.
+// Returns nil, nil for unsupported ecosystems or 404 responses. Returns an
+// error when deps.dev answers 200 but reports that it could not resolve the
+// graph (non-empty top-level "error", e.g. "trycmd/^1.2.0: no candidates
+// found"); such a body carries no nodes and must not be read as a package
+// with zero dependencies. Any non-empty "error" discards the body, even if
+// nodes are present.
 //
 // DDD Layer: Infrastructure (external API call)
 func (c *DepsDevClient) FetchDependencies(ctx context.Context, purlStr string) (*DependenciesResponse, error) {
@@ -100,12 +105,16 @@ func (c *DepsDevClient) FetchDependencies(ctx context.Context, purlStr string) (
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("dependencies JSON decode failed (url=%s): %w", endpoint, err)
 	}
+	if msg := strings.TrimSpace(result.Error); msg != "" {
+		return nil, fmt.Errorf("dependencies graph unresolved by deps.dev (url=%s): %s", endpoint, msg)
+	}
 	return &result, nil
 }
 
 // FetchDependenciesBatch fetches dependency graphs for multiple PURLs in parallel.
 // Returns a map of canonical (versionless) PURL -> DependenciesResponse.
-// PURLs that fail or return 404 are silently omitted from the result.
+// PURLs that fail, return 404, or whose graph deps.dev reports as unresolved
+// are silently omitted from the result.
 //
 // DDD Layer: Infrastructure (parallel processing)
 func (c *DepsDevClient) FetchDependenciesBatch(ctx context.Context, purls []string) map[string]*DependenciesResponse {
@@ -120,12 +129,12 @@ func (c *DepsDevClient) FetchDependenciesBatch(ctx context.Context, purls []stri
 			slog.Debug("Failed to fetch dependencies", "purl", purl, "error", err)
 			return "", nil, false
 		}
-		// Only the 404 / versionless path returns (nil, nil); genuine transport
-		// or decode errors take the err branch above. Guard on (resp == nil &&
-		// err == nil) per the "Gate Fallback Logic on Error, Not Result Nilness"
-		// rule — a zero-node response (leaf) has resp != nil and should NOT
-		// trigger the retry. Skip the fallback entirely for versionless PURLs
-		// to avoid redundant parsing in the helper.
+		// Only the 404 / versionless path returns (nil, nil); transport, decode,
+		// and unresolved-graph errors take the err branch above. Guard on
+		// (resp == nil && err == nil) per the "Gate Fallback Logic on Error, Not
+		// Result Nilness" rule — a SELF-only response (leaf) has resp != nil and
+		// should NOT trigger the retry. Skip the fallback entirely for
+		// versionless PURLs to avoid redundant parsing in the helper.
 		if resp == nil {
 			if !commonpurl.HasVersion(purl) {
 				return "", nil, false

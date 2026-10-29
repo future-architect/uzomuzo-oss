@@ -261,6 +261,9 @@ type Attestation struct {
 type DependenciesResponse struct {
 	Nodes []DependencyNode `json:"nodes"`
 	Edges []DependencyEdge `json:"edges"`
+	// Error is deps.dev's message when it could not resolve the graph. It is
+	// returned with HTTP 200 and an empty node list; empty means resolved.
+	Error string `json:"error"`
 }
 
 // DependencyNode represents a single node in the dependency graph.
