@@ -487,8 +487,10 @@ type wireVuln struct {
 	DatabaseSpecific struct {
 		CWEIDs []string `json:"cwe_ids"`
 		// Severity is the curator's reviewed rating (GitHub: LOW, MODERATE,
-		// HIGH, CRITICAL). Absent for RustSec.
-		Severity string `json:"severity"`
+		// HIGH, CRITICAL). Absent for RustSec. lenientString, because this
+		// struct also decodes the query and querybatch answers: a database
+		// putting an object here must not fail the malicious check.
+		Severity lenientString `json:"severity"`
 	} `json:"database_specific"`
 	// Published is RFC3339. An unparseable or absent value leaves the record's
 	// Published zero, which the domain treats as a non-match.
@@ -497,6 +499,19 @@ type wireVuln struct {
 	Withdrawn  string          `json:"withdrawn"`
 	References []wireReference `json:"references"`
 	Affected   []wireAffected  `json:"affected"`
+}
+
+// lenientString decodes a JSON string and leaves any other JSON value empty.
+type lenientString string
+
+func (s *lenientString) UnmarshalJSON(b []byte) error {
+	var v string
+	if json.Unmarshal(b, &v) == nil {
+		*s = lenientString(v)
+	} else {
+		*s = ""
+	}
+	return nil
 }
 
 type wireReference struct {
@@ -628,7 +643,7 @@ func toRecord(v *wireVuln) (domain.AdvisoryRecord, bool) {
 		Summary:   sanitizeSummary(v.Summary),
 		Reference: advisoryReference(v.References),
 		Withdrawn: strings.TrimSpace(v.Withdrawn) != "",
-		Severity:  strings.ToUpper(strings.TrimSpace(v.DatabaseSpecific.Severity)),
+		Severity:  strings.ToUpper(strings.TrimSpace(string(v.DatabaseSpecific.Severity))),
 	}
 	for _, cwe := range v.DatabaseSpecific.CWEIDs {
 		if cweIDPattern.MatchString(cwe) {

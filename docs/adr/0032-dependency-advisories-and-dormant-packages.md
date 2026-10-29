@@ -15,7 +15,7 @@ But some such packages should stay `replace`. `spincycle@2.1.22` has 47 dependen
 
 ## Decision
 
-The package's own advisories are decided as before. In the four decision points below, a dormant package whose HIGH advisories are all in dependencies is `EOL-Effective` only when one of them is **aged**:
+The package's own advisories are decided as before, except that with `ResidualAdvisoryThreshold` above 1 only own advisories count toward it in the residual-vulnerability override (the reason then says "too few own advisories"). In the four decision points below, a dormant package whose HIGH advisories are all in dependencies is `EOL-Effective` only when one of them is **aged**:
 
 - its CVSS3 score is known and at or above `HighSeverityCVSSThreshold` (7.0);
 - the advisory database's reviewed rating (OSV `database_specific.severity`) is HIGH, CRITICAL, or absent. RustSec records carry none. LOW, MODERATE, MEDIUM and any unrecognized value do not qualify;
@@ -24,7 +24,7 @@ The package's own advisories are decided as before. In the four decision points 
 
 Otherwise the decision point returns `Stalled` itself; it does not fall through, because a recent release would then reach the `Active` branches and turn `replace` into `ok`. The verdict is `caution`, or `replace` when the repository is archived.
 
-The four decision points are the residual-vulnerability override (Scorecard missing or incomplete), the RustSec unmaintained branch (this supersedes, for dependency advisories, ADR-0025's statement that a HIGH advisory with the marker yields `EOL-Effective`), and the two branches used without human-commit data, C2a and C3a. ADR-0001's `Legacy-Safe` rule for `advisoryCount == 0` still counts every advisory, so a package with only dependency advisories never becomes `Legacy-Safe` through it. The Scorecard `Vulnerabilities` score branches do not change; Scorecard from deps.dev had no `Vulnerabilities` check for any measured package (#124).
+The four decision points are the residual-vulnerability override (Scorecard missing or incomplete), the RustSec unmaintained branch (this supersedes, for dependency advisories, ADR-0025's statement that a HIGH advisory with the marker yields `EOL-Effective`), and the two branches used without human-commit data, C2a and C3a. ADR-0001's `Legacy-Safe` rule for `advisoryCount == 0` was written before dependency advisories existed; this ADR decides that it counts them too, so a package with only dependency advisories never becomes `Legacy-Safe` through it. The Scorecard `Vulnerabilities` score branches do not change; none of the 184 measured packages with Scorecard data in deps.dev had a `Vulnerabilities` check (#124).
 
 Why this line: a dependency advisory says nothing about whether the package reaches the vulnerable code. An old one suggests the dependency was not updated during the dormancy period, which is a statement about maintenance, what uzomuzo measures (ADR-0011). It is an inference: uzomuzo does not know when the dependency was added or whether a usable fix existed. The reviewed rating matters because CVSS3 cannot express preconditions; GHSA-w5hq is HIGH by CVSS3 and MODERATE in GitHub's review, so exceljs does not return to `replace` when that advisory ages in 2028. No threshold, flag or configuration is added.
 
@@ -74,4 +74,5 @@ The one aged advisory that is not a GHSA ID, RUSTSEC-2020-0027, is CRITICAL in i
 - A new advisory about an old bug waits 730 days; an old advisory whose fix shipped recently counts at once (fix dates are unknown).
 - Labels change without a release as advisories age; `eligible_on` and the reason say when.
 - RustSec records carry no rating, so for crates the rating check never stops escalation. The one aged RustSec advisory measured is CRITICAL in its GHSA alias; following aliases is a follow-up if that stops holding.
+- A dependency advisory without a known CVSS3 score (for example when the deps.dev advisory lookup failed) is not looked up; a package whose only dependency advisories are such is `Stalled` with "dependency advisories of unknown severity", without the WARN line. Advisories against the package itself keep the conservative treatment of an unknown score as HIGH.
 - An OSV outage leaves the affected packages `Stalled`, with a WARN line and `unknown` in JSON, and they pass `--fail-on eol-effective` for that scan.

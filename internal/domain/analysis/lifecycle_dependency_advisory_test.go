@@ -9,8 +9,9 @@ import (
 )
 
 // TestLifecycleAssessor_DependencyAdvisories is the decision table for
-// advisories against dependencies (Relation TRANSITIVE): they never make a
-// package EOL-Effective, and never move it to Active or Legacy-Safe either.
+// advisories against dependencies (Relation TRANSITIVE) that were not looked
+// up in OSV: they never make a package EOL-Effective, and never move it to
+// Active or Legacy-Safe either.
 // See ADR-0032.
 func TestLifecycleAssessor_DependencyAdvisories(t *testing.T) {
 	t.Parallel()
@@ -312,7 +313,7 @@ func TestLifecycleAssessor_DependencyAdvisoriesThreshold(t *testing.T) {
 	}
 }
 
-// TestLifecycleAssessor_AgedDependencyAdvisory pins option B2 of #591: a HIGH
+// TestLifecycleAssessor_AgedDependencyAdvisory pins the aged-advisory rule: a HIGH
 // dependency advisory public for longer than EolInactivityDays makes a dormant
 // package EOL-Effective again, unless the database rates it below HIGH or
 // withdrew it. Every other outcome is Stalled with its own reason, and the

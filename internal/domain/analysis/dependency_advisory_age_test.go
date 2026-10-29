@@ -41,6 +41,22 @@ func TestClassifyDependencyAdvisoryAge_DayBoundary(t *testing.T) {
 	}
 }
 
+// TestClassifyDependencyAdvisoryAge_LeapYear pins that the dormancy period is
+// counted in days, not calendar years: across 2028-02-29, 730 days after
+// 2027-03-01 is 2029-02-28, so the advisory counts from 2029-03-01.
+func TestClassifyDependencyAdvisoryAge_LeapYear(t *testing.T) {
+	t.Parallel()
+	vd := &VersionDetail{Advisories: []Advisory{{ID: "GHSA-a", Relation: AdvisoryRelationTransitive, CVSS3Score: 7.5,
+		RecordLookup: AdvisoryRecordFound, Published: time.Date(2027, 3, 1, 12, 0, 0, 0, time.UTC)}}}
+	got := ClassifyDependencyAdvisoryAge(vd, 7.0, 730, time.Date(2029, 2, 28, 23, 0, 0, 0, time.UTC))
+	if got == nil || got.Status != DependencyAdvisoryNotAged || !got.EligibleOn.Equal(time.Date(2029, 3, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("on 2029-02-28: got %+v, want not_aged, eligible 2029-03-01", got)
+	}
+	if got := ClassifyDependencyAdvisoryAge(vd, 7.0, 730, time.Date(2029, 3, 1, 0, 0, 0, 0, time.UTC)); got == nil || got.Status != DependencyAdvisoryAged {
+		t.Fatalf("on 2029-03-01: got %+v, want aged", got)
+	}
+}
+
 // TestClassifyDependencyAdvisoryAge_Selection pins which advisories are
 // considered (dependency, known score at or above the threshold) and that the
 // pick does not depend on slice order.

@@ -108,6 +108,45 @@ func ClassifyDependencyAdvisoryAge(vd *VersionDetail, threshold float64, eolDays
 	return &found[0]
 }
 
+// Reason is the reason text for the outcome: what was found, the dates, and
+// the advisory, so the reader can check it.
+func (d *DependencyAdvisoryAge) Reason(eolDays int) string {
+	where := d.AdvisoryID
+	if d.Dependency != "" {
+		where += " in " + d.Dependency
+	}
+	switch d.Status {
+	case DependencyAdvisoryAged:
+		return fmt.Sprintf("HIGH dependency advisory published %s, over %d days ago (%s)", isoDate(d.Published), eolDays, where)
+	case DependencyAdvisoryUnknown:
+		return fmt.Sprintf("HIGH advisories only in dependencies; age not verified, OSV lookup failed (%s)", where)
+	case DependencyAdvisoryNotAged:
+		return fmt.Sprintf("HIGH advisories only in dependencies; oldest published %s, counts from %s (%s)", isoDate(d.Published), isoDate(d.EligibleOn), where)
+	case DependencyAdvisoryRatedBelowHigh:
+		return fmt.Sprintf("dependency advisories HIGH by CVSS3 only, rated %s by the advisory database (%s)", d.ReviewedSeverity, where)
+	case DependencyAdvisoryRatingUnrecognized:
+		return fmt.Sprintf("HIGH advisories only in dependencies; unrecognized advisory database rating (%s)", where)
+	case DependencyAdvisoryUndated:
+		return fmt.Sprintf("HIGH advisories only in dependencies; no publication date in OSV (%s)", where)
+	case DependencyAdvisoryWithdrawn:
+		return fmt.Sprintf("dependency advisory withdrawn by its database (%s)", where)
+	default:
+		return "HIGH advisories only in dependencies"
+	}
+}
+
+// CountDependencyAdvisoryAgeUnknown counts the analyses whose lifecycle label
+// rests on a dependency advisory with a failed OSV lookup.
+func CountDependencyAdvisoryAgeUnknown(analyses map[string]*Analysis) int {
+	n := 0
+	for _, a := range analyses {
+		if a.DependencyAdvisoryAgeUnknown() {
+			n++
+		}
+	}
+	return n
+}
+
 // classifyOne gives one advisory its status. The lookup outcome is read
 // before the date, so a withdrawn record never ages.
 func classifyOne(adv Advisory, eolDays int, today time.Time) DependencyAdvisoryAge {
@@ -156,48 +195,9 @@ func classifyOne(adv Advisory, eolDays int, today time.Time) DependencyAdvisoryA
 	return out
 }
 
-// Reason is the reason text for the outcome: what was found, the dates, and
-// the advisory, so the reader can check it.
-func (d *DependencyAdvisoryAge) Reason(eolDays int) string {
-	where := d.AdvisoryID
-	if d.Dependency != "" {
-		where += " in " + d.Dependency
-	}
-	switch d.Status {
-	case DependencyAdvisoryAged:
-		return fmt.Sprintf("HIGH dependency advisory published %s, over %d days ago (%s)", day(d.Published), eolDays, where)
-	case DependencyAdvisoryUnknown:
-		return fmt.Sprintf("HIGH advisories only in dependencies; age not verified, OSV lookup failed (%s)", where)
-	case DependencyAdvisoryNotAged:
-		return fmt.Sprintf("HIGH advisories only in dependencies; oldest published %s, counts from %s (%s)", day(d.Published), day(d.EligibleOn), where)
-	case DependencyAdvisoryRatedBelowHigh:
-		return fmt.Sprintf("dependency advisories HIGH by CVSS3 only, rated %s by the advisory database (%s)", d.ReviewedSeverity, where)
-	case DependencyAdvisoryRatingUnrecognized:
-		return fmt.Sprintf("HIGH advisories only in dependencies; unrecognized advisory database rating (%s)", where)
-	case DependencyAdvisoryUndated:
-		return fmt.Sprintf("HIGH advisories only in dependencies; no publication date in OSV (%s)", where)
-	case DependencyAdvisoryWithdrawn:
-		return fmt.Sprintf("dependency advisory withdrawn by its database (%s)", where)
-	default:
-		return "HIGH advisories only in dependencies"
-	}
-}
-
 func utcDay(t time.Time) time.Time {
 	y, m, d := t.UTC().Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
-func day(t time.Time) string { return t.UTC().Format("2006-01-02") }
-
-// CountDependencyAdvisoryAgeUnknown counts the analyses whose lifecycle label
-// rests on a dependency advisory with a failed OSV lookup.
-func CountDependencyAdvisoryAgeUnknown(analyses map[string]*Analysis) int {
-	n := 0
-	for _, a := range analyses {
-		if a.DependencyAdvisoryAgeUnknown() {
-			n++
-		}
-	}
-	return n
-}
+func isoDate(t time.Time) string { return t.UTC().Format("2006-01-02") }

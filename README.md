@@ -237,7 +237,7 @@ uzomuzo classifies each package into one of seven lifecycle states using a multi
 | Label | Meaning | Action |
 | --- | --- | --- |
 | **Active** | Recent human commits + releases + healthy maintenance score | No action needed |
-| **Legacy-Safe** | No recent activity, but no recorded advisories against the package or its dependencies (or a high Scorecard `Vulnerabilities` score) — frozen and stable | Accept risk or pin version |
+| **Legacy-Safe** | No recent activity, but no recorded advisories against the package or, where dependency data exists, its dependencies (or a high Scorecard `Vulnerabilities` score) — frozen and stable | Accept risk or pin version |
 | **Stalled** | Maintenance declining: low score or commits stopped; repository archived/disabled without an explicit end-of-life signal; or an advisory database reports the whole package unmaintained | Monitor; plan migration |
 | **EOL-Confirmed** | Registry explicitly declares end-of-life (deprecated / yanked / abandoned / relocation) | Migrate immediately |
 | **EOL-Effective** | No official EOL, but HIGH/CRITICAL unpatched vulns together with either 2+ yrs without human commits or an advisory database reporting the package unmaintained (without commit data: a last release over 2 years old and a low or missing maintenance score). Where the package's only HIGH advisories are its dependencies', one counts only when it was published over 2 years ago, is not withdrawn, and its database rates it HIGH or CRITICAL or gives no rating; the Scorecard `Vulnerabilities` score branches are separate ([ADR-0032](docs/adr/0032-dependency-advisories-and-dormant-packages.md)) | Migrate; treat as EOL |

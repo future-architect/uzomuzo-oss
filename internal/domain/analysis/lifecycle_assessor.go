@@ -4,6 +4,7 @@ package analysis
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -185,7 +186,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 			reason = "Unmaintained per " + ad.AdvisoryID + ", unpatched vulnerabilities"
 		case severityDependencyOnlyHigh:
 			res := s.dependencyHighOutcome(s.getStableOrMaxVersionDetail(analysis), now, reason, "advisory_db_unmaintained", signals)
-			res.Trace = append(trace, res.Trace...)
+			res.Trace = slices.Concat(trace, res.Trace)
 			return res, nil
 		case severityDependencyOnlyUnknown:
 			t = "advisory_db_unmaintained_no_direct_high_severity"
@@ -238,7 +239,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 			trace = append(trace, "active_path")
 			res, _ := s.assessActiveState(analysis, scores, now)
 			if res != nil {
-				res.Trace = append(trace, res.Trace...)
+				res.Trace = slices.Concat(trace, res.Trace)
 			}
 			return res, nil
 		}
@@ -254,7 +255,7 @@ func (s *LifecycleAssessorService) assessInternal(ctx context.Context, in Assess
 		trace = append(trace, "inactive_path")
 		res, _ := s.assessInactiveState(analysis, scores, now)
 		if res != nil {
-			res.Trace = append(trace, res.Trace...)
+			res.Trace = slices.Concat(trace, res.Trace)
 		}
 		return res, nil
 	}
@@ -309,7 +310,7 @@ func (s *LifecycleAssessorService) residualVulnResult(a *Analysis, now time.Time
 	if res.Label == string(LabelStalled) && s.isPotentiallyHigh(vd.DirectOnly()) {
 		res.Reason = "Unmaintained; too few own advisories; dependency advisories reach the threshold"
 	}
-	res.Trace = append(trace, res.Trace...)
+	res.Trace = slices.Concat(trace, res.Trace)
 	return res
 }
 
@@ -330,7 +331,7 @@ func (s *LifecycleAssessorService) dependencyHighOutcome(vd *VersionDetail, now 
 	res.Trace = []string{tracePrefix + "_dependency_" + string(age.Status)}
 	if age.Status == DependencyAdvisoryAged {
 		res.Label = string(LabelEOLEffective)
-		res.Signals = append(res.Signals, sig(SignalAgedDependencyAdvisory, fmt.Sprintf("%s (%s)", age.AdvisoryID, day(age.Published))))
+		res.Signals = append(res.Signals, sig(SignalAgedDependencyAdvisory, fmt.Sprintf("%s (%s)", age.AdvisoryID, isoDate(age.Published))))
 	}
 	return res
 }

@@ -21,6 +21,8 @@ func TestClient_GetVuln(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"GHSA-hp3w-g68c-fv3c","published":"2026-09-24T00:00:00Z","withdrawn":"2026-10-22T19:21:04Z"}`))
 		case "/v1/vulns/GHSA-other-answer":
 			_, _ = w.Write([]byte(`{"id":"GHSA-not-what-was-asked","published":"2020-01-01T00:00:00Z"}`))
+		case "/v1/vulns/GHSA-odd-severity":
+			_, _ = w.Write([]byte(`{"id":"GHSA-odd-severity","published":"2020-01-01T00:00:00Z","database_specific":{"severity":{"level":"high"}}}`))
 		case "/v1/vulns/GHSA-server-error":
 			w.WriteHeader(http.StatusInternalServerError)
 		default:
@@ -54,6 +56,10 @@ func TestClient_GetVuln(t *testing.T) {
 	if _, found, err = c.GetVuln(ctx, "GHSA-xxxx-xxxx-xxxx"); err != nil || found {
 		t.Fatalf("404: found=%v err=%v, want not found and no error", found, err)
 	}
+	// A severity that is not a string reads as no rating, not as a failed lookup.
+	if rec, found, err = c.GetVuln(ctx, "GHSA-odd-severity"); err != nil || !found || rec.Severity != "" {
+		t.Fatalf("non-string severity: found=%v severity=%q err=%v, want found, empty, no error", found, rec.Severity, err)
+	}
 	if _, _, err = c.GetVuln(ctx, "GHSA-other-answer"); err == nil {
 		t.Errorf("an answer naming another ID must be an error")
 	}
@@ -82,7 +88,8 @@ func TestClient_GetVuln(t *testing.T) {
 	if got := calls.Load() - before; got != 2 {
 		t.Errorf("with caching off: %d requests, want 2", got)
 	}
-	// Not cached: an error is retried on the next call.
+	// Not cached, even with caching on: an error is retried on the next call.
+	c.SetCacheTTL(time.Minute)
 	_, _, err = c.GetVuln(ctx, "GHSA-server-error")
 	if err == nil {
 		t.Fatalf("500: want error")

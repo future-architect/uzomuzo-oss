@@ -194,16 +194,24 @@ func (s *IntegrationService) fetchDependencyAdvisoryOSVFacts(ctx context.Context
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, osvFactWorkers)
+	failRest := func(rest []string) {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, id := range rest {
+			out[id] = osvFact{lookup: domain.AdvisoryRecordLookupFailed}
+		}
+	}
 dispatch:
 	for i, id := range ids {
+		// Checked first: when a slot is also free, select picks at random.
+		if ctx.Err() != nil {
+			failRest(ids[i:])
+			break
+		}
 		select {
 		case sem <- struct{}{}:
 		case <-ctx.Done():
-			mu.Lock()
-			for _, rest := range ids[i:] {
-				out[rest] = osvFact{lookup: domain.AdvisoryRecordLookupFailed}
-			}
-			mu.Unlock()
+			failRest(ids[i:])
 			break dispatch
 		}
 		wg.Add(1)
