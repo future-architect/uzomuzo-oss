@@ -200,4 +200,4 @@ func utcDay(t time.Time) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
-func isoDate(t time.Time) string { return t.UTC().Format("2006-01-02") }
+func isoDate(t time.Time) string { return t.UTC().Format(time.DateOnly) }

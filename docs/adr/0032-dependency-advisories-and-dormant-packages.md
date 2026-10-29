@@ -15,7 +15,7 @@ But some such packages should stay `replace`. `spincycle@2.1.22` has 47 dependen
 
 ## Decision
 
-The package's own advisories are decided as before, except that with `ResidualAdvisoryThreshold` above 1 only own advisories count toward it in the residual-vulnerability override (the reason then says "too few own advisories"). In the four decision points below, a dormant package whose HIGH advisories are all in dependencies is `EOL-Effective` only when one of them is **aged**:
+The package's own advisories are decided as before, except that with `ResidualAdvisoryThreshold` above 1 the residual-vulnerability override needs the package's own advisories alone to reach the threshold for `EOL-Effective`; when only own and dependency advisories together reach it, the dependency rule below decides (the reason then says "too few own advisories"). In the four decision points below, a dormant package whose HIGH advisories are all in dependencies is `EOL-Effective` only when one of them is **aged**:
 
 - its CVSS3 score is known and at or above `HighSeverityCVSSThreshold` (7.0);
 - the advisory database's reviewed rating (OSV `database_specific.severity`) is HIGH, CRITICAL, or absent. RustSec records carry none. LOW, MODERATE, MEDIUM and any unrecognized value do not qualify;

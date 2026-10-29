@@ -56,9 +56,10 @@ func TestClient_GetVuln(t *testing.T) {
 	if _, found, err = c.GetVuln(ctx, "GHSA-xxxx-xxxx-xxxx"); err != nil || found {
 		t.Fatalf("404: found=%v err=%v, want not found and no error", found, err)
 	}
-	// A severity that is not a string reads as no rating, not as a failed lookup.
-	if rec, found, err = c.GetVuln(ctx, "GHSA-odd-severity"); err != nil || !found || rec.Severity != "" {
-		t.Fatalf("non-string severity: found=%v severity=%q err=%v, want found, empty, no error", found, rec.Severity, err)
+	// A severity that is not a string is an unrecognized rating: not a failed
+	// lookup, and not "no rating" either.
+	if rec, found, err = c.GetVuln(ctx, "GHSA-odd-severity"); err != nil || !found || rec.Severity != unrecognizedRating {
+		t.Fatalf("non-string severity: found=%v severity=%q err=%v, want found, %s, no error", found, rec.Severity, err, unrecognizedRating)
 	}
 	if _, _, err = c.GetVuln(ctx, "GHSA-other-answer"); err == nil {
 		t.Errorf("an answer naming another ID must be an error")

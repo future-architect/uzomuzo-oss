@@ -487,10 +487,10 @@ type wireVuln struct {
 	DatabaseSpecific struct {
 		CWEIDs []string `json:"cwe_ids"`
 		// Severity is the curator's reviewed rating (GitHub: LOW, MODERATE,
-		// HIGH, CRITICAL). Absent for RustSec. lenientString, because this
+		// HIGH, CRITICAL). Absent for RustSec. ratingString, because this
 		// struct also decodes the query and querybatch answers: a database
 		// putting an object here must not fail the malicious check.
-		Severity lenientString `json:"severity"`
+		Severity ratingString `json:"severity"`
 	} `json:"database_specific"`
 	// Published is RFC3339. An unparseable or absent value leaves the record's
 	// Published zero, which the domain treats as a non-match.
@@ -501,15 +501,22 @@ type wireVuln struct {
 	Affected   []wireAffected  `json:"affected"`
 }
 
-// lenientString decodes a JSON string and leaves any other JSON value empty.
-type lenientString string
+// ratingString decodes a JSON string as is and null as empty. Any other JSON
+// value becomes unrecognizedRating rather than empty: empty means "no rating",
+// which lets an old dependency advisory count (ADR-0032).
+type ratingString string
 
-func (s *lenientString) UnmarshalJSON(b []byte) error {
-	var v string
-	if json.Unmarshal(b, &v) == nil {
-		*s = lenientString(v)
-	} else {
-		*s = ""
+const unrecognizedRating = "UNRECOGNIZED"
+
+func (s *ratingString) UnmarshalJSON(b []byte) error {
+	var v *string
+	if err := json.Unmarshal(b, &v); err != nil {
+		*s = unrecognizedRating
+		return nil
+	}
+	*s = ""
+	if v != nil {
+		*s = ratingString(*v)
 	}
 	return nil
 }
