@@ -717,13 +717,16 @@ strip_quoted_code() {   # stdin = body / stdout = body without quotes
             # Tags are matched case-insensitively and with blanks before
             # ">" (</DETAILS>, </details >): a closer missed here would
             # extend the skip to a later </details> and drop what lies
-            # between.
+            # between. Only the visible text of <summary> is read: a
+            # title="What changed in this PR" attribute does not count.
+            # A closer split over lines (</details, then >) cannot be
+            # placed, so the whole body is judged raw instead (exit 3).
             if (!summary) {
                 k = 0; off = 0; r = tolower(line)
                 while (match(r, /<summary([[:space:]>]|$)/)) {
-                    m = RSTART; s = substr(r, m)
-                    if (match(s, /<\/summary[[:space:]]*>/) &&
-                        index(substr(s, 1, RSTART - 1), "what changed in this pr") > 0) {
+                    m = RSTART; s = substr(r, m); g = index(s, ">")
+                    if (match(s, /<\/summary[[:space:]]*>/) && g > 0 && g < RSTART &&
+                        index(substr(s, g + 1, RSTART - g - 1), "what changed in this pr") > 0) {
                         k = off + m; break
                     }
                     off += m + 7; r = substr(r, m + 8)
@@ -737,6 +740,7 @@ strip_quoted_code() {   # stdin = body / stdout = body without quotes
             if (summary) {
                 lc = tolower(line); k = 0; j = 0
                 if (match(lc, /<\/details[[:space:]]*>/)) { k = RSTART; kl = RLENGTH }
+                else if (index(lc, "</details") > 0) { broken = 1; exit }
                 if (match(lc, /<details([[:space:]>]|$)/)) j = RSTART
                 if (match(lc, /<summary([[:space:]>]|$)/) && (j == 0 || RSTART < j)) j = RSTART
                 if (j > 0 && (k == 0 || j < k)) {
@@ -747,7 +751,7 @@ strip_quoted_code() {   # stdin = body / stdout = body without quotes
             }
             print line
         }
-        END { if (opener != "" || summary) exit 3 }
+        END { if (broken || opener != "" || summary) exit 3 }
     '
 }
 
@@ -756,31 +760,26 @@ strip_quoted_code() {   # stdin = body / stdout = body without quotes
 #   "<heading> (N)"   `Comments suppressed due to low confidence (1)`,
 #                     `Previously missed (1)`
 #   "N <heading>"     `1 previously missed issue` (v2, seen from PR #597)
-# Prints the sum (0 when the heading is absent). Exits 1 when any line
-# names the heading more often than it carries a readable count — the
-# count is then unknown and the caller must treat the review as dirty.
-# The check is per line, so a readable "Previously missed (0)" does not
-# cover an unreadable "Previously missed: 1" further down. That fallback
-# is what caught the "1 previously missed issue" rewording on real data.
-#   $1 = heading text (letters and spaces only; it is used inside a regex)
+# Prints the sum (0 when the heading is absent). Exits 1 when any one
+# occurrence of the heading has no count right after it ("(N)") or right
+# before it ("N ") — the count is then unknown and the caller must treat
+# the review as dirty. Each occurrence takes one count, so a readable
+# "Previously missed (0)" does not cover an unreadable "Previously
+# missed: 1" next to it. That fallback is what caught the "1 previously
+# missed issue" rewording on real data.
+#   $1 = heading text (matched as a plain string)
 #   stdin = output of review_prose
 body_only_finding_count() {
     awk -v h="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" '
         {
-            lc = tolower($0); r = lc; n = 0; c = 0
-            while ((i = index(r, h)) > 0) { n++; r = substr(r, i + length(h)) }
-            if (!n) next
-            r = lc
-            while (match(r, h " \\([0-9]+\\)")) {
-                s += substr(r, RSTART + length(h) + 2, RLENGTH - length(h) - 3); c++
-                r = substr(r, RSTART + RLENGTH)
+            lc = tolower($0); p = 0
+            while ((i = index(substr(lc, p + 1), h)) > 0) {
+                i += p; p = i + length(h) - 1
+                after = substr(lc, i + length(h)); before = substr(lc, 1, i - 1)
+                if (match(after, /^ \([0-9]+\)/)) s += substr(after, 3, RLENGTH - 3)
+                else if (match(before, /[0-9]+ $/)) s += substr(before, RSTART, RLENGTH - 1)
+                else unknown = 1
             }
-            r = lc
-            while (match(r, "[0-9]+ " h)) {
-                s += substr(r, RSTART, RLENGTH - length(h) - 1); c++
-                r = substr(r, RSTART + RLENGTH)
-            }
-            if (c < n) unknown = 1
         }
         END { if (unknown) exit 1; print s + 0 }
     '
@@ -788,7 +787,9 @@ body_only_finding_count() {
 
 # The body text the checks read: quotes removed (the raw body when a
 # fence is left open, see strip_quoted_code), then emphasis marks and
-# HTML tags dropped and blank runs squeezed. Copilot already varies its
+# HTML tags turned into blanks and blank runs squeezed (a blank, not
+# nothing, so "1<br>open finding" does not become "1open finding").
+# Copilot already varies its
 # markup for the same count (`**0 open findings**`, `<strong>7 open
 # issues</strong>`), so `**1** open finding`, `<b>1</b> open finding` and
 # `Previously  missed (1)` must read like the plain wording.
@@ -796,7 +797,7 @@ review_prose() {   # $1 = review body
     local text
     text=$(strip_quoted_code <<<"$1") || text="$1"
     awk '{
-        sub(/\r$/, ""); gsub(/<\/?[A-Za-z][^<>]*>/, ""); gsub(/\*/, "")
+        sub(/\r$/, ""); gsub(/<\/?[A-Za-z][^<>]*>/, " "); gsub(/\*/, " ")
         gsub(/[[:space:]]+/, " "); sub(/^ /, ""); print
     }' <<<"$text"
 }
@@ -833,9 +834,8 @@ review_prose() {   # $1 = review body
 #   4. a non-zero count or an objection stated in the body:
 #      "N open finding(s)" / "N open issue(s)" (v2), "generated N
 #      comments" / "**Comments generated:** N" (older formats),
-#      "Changes recommended" / "Not ready to approve" as the headline
-#      (headline only: "No changes recommended." in prose is not an
-#      objection).
+#      "Changes recommended" / "Not ready to approve" anywhere in the
+#      prose ("No changes recommended." is not an objection).
 #      "N open ..." also lists threads opened by earlier reviews that
 #      Copilot still considers unaddressed, so it is not covered by 1.
 # "Needs a closer look" is **not** a veto. With zero findings it means
@@ -873,12 +873,19 @@ review_is_clean() {   # $1 = review REST id / $2 = review body
     #    match, `printf` then dies of SIGPIPE (141), and under `pipefail` the
     #    pipeline is non-zero although it matched — the veto is skipped and a
     #    dirty review reads clean. A here-string has no pipe.
-    #    An objection counts when it starts its line after any "#", emoji or
-    #    spaces (a "###" heading or a line that was **bold**), so prose such
-    #    as "No changes recommended." is not one.
     if grep -qiE \
-        '[1-9][0-9]* open (finding|issue)s?|^[^[:alnum:]]*(changes recommended|not ready to approve)|generated [1-9][0-9]* (new )?comments?|Comments generated:[[:space:]]*[1-9]' \
+        '[1-9][0-9]* open (finding|issue)s?|generated [1-9][0-9]* (new )?comments?|Comments generated:[[:space:]]*[1-9]' \
         <<<"$verdict"; then
+        return 1
+    fi
+    #    An objection counts wherever it stands (a "###" heading, a **bold**
+    #    line, any emoji before it); only the prose "No changes
+    #    recommended." is taken out first. Telling a headline from prose by
+    #    what precedes it failed on emoji that a UTF-8 locale counts as
+    #    alphanumeric (🅰️), so it is not attempted.
+    if awk '{ l = tolower($0); gsub(/no changes recommended/, "", l) }
+            l ~ /changes recommended|not ready to approve/ { f = 1; exit }
+            END { exit !f }' <<<"$verdict"; then
         return 1
     fi
     return 0
