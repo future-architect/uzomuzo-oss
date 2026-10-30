@@ -1,4 +1,4 @@
-# ADR-0034: Report dependency counts with their queried version
+# ADR-0034: Report dependency counts with the version they describe
 
 Date: 2026-10-30
 Status: Accepted
@@ -13,7 +13,7 @@ The version that produced the graph was discarded after enrichment, and the scor
 
 ## Decision
 
-Store the queried version on `Analysis.DependencyGraphVersion` and gate every rendering of the counts on `Analysis.HasRuntimeDependencyCounts()`. It is true only when a resolved graph was returned, the queried version is known, and the ecosystem is not cargo.
+Store the version the graph describes (its SELF node) on `Analysis.DependencyGraphVersion` and gate every rendering of the counts on `Analysis.HasRuntimeDependencyCounts()`. It is true only when a resolved graph was returned, that version is known, and the ecosystem is not cargo. The SELF version is used rather than the requested one because the 404 version fallback can count a different release. Batch results are keyed by the exact queried PURL so that two versions of one package keep separate graphs.
 
 - JSON adds `dependencies: {source, version, direct, transitive}`, shaped like `dependents` (ADR-0033). It is present only when the predicate holds; a measured zero is printed as `0`. No flat count field is added, so absence always means "not reported".
 - The detailed `Depends on:` line uses the same predicate, so cargo no longer prints it.

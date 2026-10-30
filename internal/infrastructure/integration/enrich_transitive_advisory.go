@@ -138,7 +138,7 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 				entries[i].ReviewedSeverity = f.rec.Severity
 			}
 		}
-		graphVersion := graphSELFVersion(depsGraphResults[p])
+		graphVersion := depsGraphResults[p].SelfVersion()
 		for _, vd := range []*domain.VersionDetail{
 			a.ReleaseInfo.StableVersion,
 			a.ReleaseInfo.MaxSemverVersion,
@@ -253,20 +253,6 @@ func assessorHighSeverityThreshold() float64 {
 	c := config.GetDefaultLifecycle()
 	config.NormalizeLifecycleConfig(&c)
 	return c.HighSeverityCVSSThreshold
-}
-
-// graphSELFVersion extracts the version of the root (SELF) node from a dependency graph.
-// Returns "" if the graph is nil or has no SELF node.
-func graphSELFVersion(deps *depsdev.DependenciesResponse) string {
-	if deps == nil {
-		return ""
-	}
-	for _, n := range deps.Nodes {
-		if n.Relation == "SELF" {
-			return n.VersionKey.Version
-		}
-	}
-	return ""
 }
 
 // markDirectAdvisories sets Relation to DIRECT on all existing advisories in a VersionDetail.

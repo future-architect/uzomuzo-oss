@@ -612,3 +612,23 @@ func TestDependenciesResponse_CountByRelation(t *testing.T) {
 		})
 	}
 }
+
+func TestDependenciesResponse_SelfVersion(t *testing.T) {
+	tests := []struct {
+		name string
+		r    *DependenciesResponse
+		want string
+	}{
+		{"self node", &DependenciesResponse{Nodes: []DependencyNode{{Relation: "DIRECT", VersionKey: DependencyVersionKey{Version: "9.9.9"}}, {Relation: "SELF", VersionKey: DependencyVersionKey{Version: "1.2.3"}}}}, "1.2.3"},
+		{"no self node", &DependenciesResponse{Nodes: []DependencyNode{{Relation: "DIRECT", VersionKey: DependencyVersionKey{Version: "9.9.9"}}}}, ""},
+		{"self without version", &DependenciesResponse{Nodes: []DependencyNode{{Relation: "SELF"}}}, ""},
+		{"nil response", nil, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.r.SelfVersion(); got != tt.want {
+				t.Errorf("SelfVersion() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

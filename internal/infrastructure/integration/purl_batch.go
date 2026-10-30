@@ -359,9 +359,8 @@ func dependenciesSupportedEcosystem(eco string) bool {
 // DDD Layer: Infrastructure (best-effort enrichment)
 func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls []string, analyses map[string]*domain.Analysis) map[string]*depsdev.DependenciesResponse {
 	effectivePURLs := make([]string, 0, len(purls))
-	// Multiple original PURLs may resolve to the same effective PURL (e.g., case
-	// variants like pkg:npm/React and pkg:npm/react). Use a slice of original keys
-	// so all analyses get populated, not just the last one.
+	// Multiple original PURLs may resolve to the same effective PURL. Use a slice
+	// of original keys so all analyses get populated, not just the last one.
 	effectiveToOriginals := make(map[string][]string, len(purls))
 	seen := make(map[string]bool, len(purls))
 	for _, p := range purls {

@@ -163,9 +163,10 @@ type Analysis struct {
 	// or a transport error — so the counts carry no positive information.
 	HasDependencyGraph bool
 
-	// DependencyGraphVersion is the exact version whose dependency graph
-	// produced DirectDepsCount and TransitiveDepsCount. Empty when
-	// HasDependencyGraph is false.
+	// DependencyGraphVersion is the version the dependency graph describes (its
+	// SELF node). It can differ from the requested version when deps.dev had no
+	// graph for that version and a fallback version was counted. Empty when
+	// HasDependencyGraph is false or the graph names no SELF version.
 	DependencyGraphVersion string
 
 	// Canonical package links (homepage, registry, docs, changelog)
@@ -272,7 +273,7 @@ const DependencyGraphSourceDepsDev = "deps.dev"
 
 // HasRuntimeDependencyCounts reports whether DirectDepsCount and
 // TransitiveDepsCount may be reported as the dependencies the package needs.
-// It is false when no graph was retrieved, when the queried version is
+// It is false when no graph was retrieved, when the graph's version is
 // unknown, and for cargo, whose deps.dev graph also contains dev and optional
 // dependencies. See ADR-0034.
 func (a *Analysis) HasRuntimeDependencyCounts() bool {

@@ -395,7 +395,7 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
 
 `dependent_count` (and the CSV `dependents` column) are deprecated for one release in favour of `dependents` (see ADR-0033).
 
-`dependencies` reports what the queried `version` depends on, from the deps.dev dependency graph. It is present only when that graph was retrieved, and `0` is a measured zero. It is omitted for cargo, whose deps.dev graph also includes dev and optional dependencies (see ADR-0034).
+`dependencies` reports what `version` depends on, from the deps.dev dependency graph. `version` is the version the graph describes; it can differ from the requested version when deps.dev had no graph for it and a nearby release was counted instead. It is present only when that graph was retrieved, and `0` is a measured zero. It is omitted for cargo, whose deps.dev graph also includes dev and optional dependencies (see ADR-0034).
 
 The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, scores, license info), making it suitable for CI pipelines and downstream tooling without needing a separate detailed run.
 

@@ -722,6 +722,20 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantGraphVersion:       map[string]string{"pkg:npm/react@19.2.5": "19.1.0"},
 		},
 		{
+			name:  "graph without a SELF version keeps the counts but no version",
+			purls: []string{"pkg:npm/noself@1.0.0"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:npm/noself@1.0.0": {EffectivePURL: "pkg:npm/noself@1.0.0", Package: &domain.Package{Ecosystem: "npm", Version: "1.0.0"}},
+			},
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:npm/noself@1.0.0": {Nodes: []depsdev.DependencyNode{{Relation: "DIRECT"}}},
+			},
+			wantDirect:             map[string]int{"pkg:npm/noself@1.0.0": 1},
+			wantTransitive:         map[string]int{"pkg:npm/noself@1.0.0": 0},
+			wantHasDependencyGraph: map[string]bool{"pkg:npm/noself@1.0.0": true},
+			wantGraphVersion:       map[string]string{"pkg:npm/noself@1.0.0": ""},
+		},
+		{
 			name:  "two versions of one package keep their own graphs",
 			purls: []string{"pkg:npm/example@1.0.0", "pkg:npm/example@2.0.0"},
 			analyses: map[string]*domain.Analysis{

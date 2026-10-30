@@ -529,7 +529,7 @@ type dependentsJSON struct {
 	Total   *int                    `json:"total,omitempty"`
 }
 
-// dependenciesJSON reports what the queried version depends on. See ADR-0034.
+// dependenciesJSON reports what the graph's version depends on. See ADR-0034.
 type dependenciesJSON struct {
 	Source     string `json:"source"`
 	Version    string `json:"version"`
