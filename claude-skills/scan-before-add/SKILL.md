@@ -52,10 +52,10 @@ For each entry in `packages`:
 - **`review` means uzomuzo could not decide.** It is not `ok`. A misspelled or nonexistent package name also comes back as `review` / `Review Needed` with exit code 0 -- check that the package exists in its registry (the Registry link in `--format detailed`) before reading anything else. If it does not exist, fix the PURL and rerun.
 - **`stable_version` is the latest stable release, which may not be the version you pin.** The advisory fields (`advisory_count`, `max_advisory_severity`, and so on) describe the release uzomuzo picks as latest -- stable, else the highest version, else a pre-release, else the requested version -- not necessarily yours. Unless you check the pinned version separately, write "advisories not checked for the pinned version".
 - **A `caution` candidate may be `caution` because of its dependencies' advisories, not its own.** For each `caution` candidate also copy `transitive_advisory_count`, `max_transitive_advisory_severity`, and, when present, `dependency_advisory_age` (`status` and `advisory_id`). `status: "unknown"` means the OSV lookup failed and the verdict might have been `replace`; record it under "Not obtained".
-- **Copy `dependencies` for every candidate** (`version`, `direct`, `transitive`), or "not printed" when it is absent. It describes the dependency graph of that `version`, which may not be the version you pin. An absent field means uzomuzo did not report the counts (for example, cargo crates); do not fill it in from memory.
+- **Copy `dependencies` for every candidate** (`version`, `direct`, `transitive`), or "not printed" when it is absent. It describes the dependency graph of that `version`, which may not be the version you pin. An absent field means uzomuzo did not report the counts (for example, cargo crates, ecosystems deps.dev has no graph for, or a graph deps.dev could not resolve); do not fill it in from memory.
 - **`version_license` is looked up for the requested version**, falling back to the project license when the version's license cannot be resolved. Copy it as printed.
 - **Detailed output is evidence, not a second verdict.** Scorecard scores, stars, and the other numbers in `--format detailed` may be copied, but do not rank candidates by them and do not let them override `verdict` or `lifecycle`. uzomuzo can return `Active` because of a recent release while also printing `Maintained Score: 0/10`; these are different indicators. Copy both as printed and write "The relationship between these indicators was not investigated." A JSON `overall_score` of `0` together with `(unavailable)` in the detailed report means the score was not measured; copy "(unavailable)".
-- **Missing field vs. failed lookup**: many JSON fields are omitted when their value is zero or empty (for example, `advisory_count` is omitted when it is 0). An omitted field is "not printed", not a failure. Record "not obtained" only when there is explicit evidence: an `error` field, a warning on stderr, a failed command, or no token for token-only signals.
+- **Missing field vs. failed lookup**: many JSON fields are omitted when their value is zero or empty (for example, `advisory_count` is omitted when it is 0; `dependencies` is the exception and prints a measured `0`). An omitted field is "not printed", not a failure. Record "not obtained" only when there is explicit evidence: an `error` field, a warning on stderr, a failed command, or no token for token-only signals.
 
 ## Step 4: Choose, or stop and ask
 
@@ -92,7 +92,7 @@ Candidates compared with `--format detailed` (required when two or more candidat
 
 (If not run, write instead: "detailed not run: fewer than two candidates were ok or caution".)
 
-- Dependencies of each candidate: (per candidate: `dependencies` version, direct, transitive, or "not printed")
+- Dependencies of each candidate, from the JSON scan: (per candidate: `dependencies` version, direct, transitive, or "not printed")
 - Dependency advisories of `caution` candidates: (per candidate: transitive_advisory_count, max_transitive_advisory_severity, dependency_advisory_age status and advisory_id, or "not printed")
 - Indicator notes:
 - Not obtained:

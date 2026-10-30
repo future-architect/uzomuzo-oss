@@ -18,7 +18,7 @@ The library is built around a single high-level `Evaluator` that performs the fo
 
 `Analysis.Dependents` is nil when no dependents measurement was obtained. When present, it reports `Source`, `Version` (empty for registry-wide counts), and optional `Direct` and `Total` pointers. A non-nil pointer to zero is a measured zero. `Analysis.DependentCount` remains available for one release but is deprecated because it cannot distinguish unknown from zero or describe the queried scope. The observation types and source constants are available from `pkg/uzomuzo`.
 
-`Analysis.DirectDepsCount` and `Analysis.TransitiveDepsCount` describe the deps.dev dependency graph of `Analysis.DependencyGraphVersion`. Use `Analysis.HasRuntimeDependencyCounts()` before reporting them: it is false when no graph was retrieved, the queried version is unknown, or the package is a cargo crate, whose graph also includes dev and optional dependencies. In `ExportCSV` output, `directDeps` and `transitiveDeps` are blank in those cases and `dependencies_version` names the queried version (see ADR-0034).
+`Analysis.DirectDepsCount` and `Analysis.TransitiveDepsCount` describe the deps.dev dependency graph of `Analysis.DependencyGraphVersion`. Use `Analysis.HasRuntimeDependencyCounts()` before reporting them: it is false when no graph was retrieved, the queried version is unknown, or the package is a cargo crate, whose graph also includes dev and optional dependencies. In `ExportCSV` output, `directDeps` and `transitiveDeps` are blank (previously `0`) in those cases and `dependencies_version` names the queried version (see ADR-0034).
 
 ```go
 package main

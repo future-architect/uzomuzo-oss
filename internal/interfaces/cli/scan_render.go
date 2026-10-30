@@ -703,7 +703,7 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 		je.Dependents = &dependentsJSON{Source: d.Source, Version: d.Version, Direct: d.Direct, Total: d.Total}
 	}
 	if a.HasRuntimeDependencyCounts() {
-		je.Dependencies = &dependenciesJSON{Source: string(domain.DependentsSourceDepsDev), Version: a.DependencyGraphVersion, Direct: a.DirectDepsCount, Transitive: a.TransitiveDepsCount}
+		je.Dependencies = &dependenciesJSON{Source: domain.DependencyGraphSourceDepsDev, Version: a.DependencyGraphVersion, Direct: a.DirectDepsCount, Transitive: a.TransitiveDepsCount}
 	}
 	je.Successor = a.EOL.Successor
 	je.Archived = a.IsArchived()

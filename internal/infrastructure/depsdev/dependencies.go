@@ -112,8 +112,10 @@ func (c *DepsDevClient) FetchDependencies(ctx context.Context, purlStr string) (
 }
 
 // FetchDependenciesBatch fetches dependency graphs for multiple PURLs in parallel.
-// Returns a map of canonical (versionless) PURL -> DependenciesResponse.
-// PURLs that fail, return 404, or whose graph deps.dev reports as unresolved
+// Returns a map of exact queried PURL -> DependenciesResponse, so two versions
+// of one package keep separate graphs. A graph recovered by the version
+// fallback is stored under the requested PURL; use SelfVersion for the version
+// it describes. PURLs that fail, return 404, or whose graph deps.dev reports as unresolved
 // are silently omitted from the result.
 //
 // DDD Layer: Infrastructure (parallel processing)
@@ -144,12 +146,7 @@ func (c *DepsDevClient) FetchDependenciesBatch(ctx context.Context, purls []stri
 				return "", nil, false
 			}
 		}
-		// Normalize to versionless canonical key for map consistency
-		key := commonpurl.CanonicalKey(purl)
-		if key == "" {
-			key = purl
-		}
-		return key, resp, true
+		return purl, resp, true
 	})
 
 	slog.Debug("Dependencies batch completed", "requested", len(purls), "successful", len(results))

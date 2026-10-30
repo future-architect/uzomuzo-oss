@@ -416,19 +416,14 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 	// 404, a graph deps.dev reported as unresolved, etc.).
 	perPURL := make(map[string]*depsdev.DependenciesResponse, len(purls))
 	for ep, originalKeys := range effectiveToOriginals {
-		key := purl.CanonicalKey(ep)
-		if key == "" {
-			key = ep
-		}
-		resp, ok := depsResults[key]
+		resp, ok := depsResults[ep]
 		if !ok || resp == nil {
 			continue
 		}
 		direct, transitive := resp.CountByRelation()
-		var graphVersion string
-		if parsed, err := purl.NewParser().Parse(ep); err == nil {
-			graphVersion = parsed.Version()
-		}
+		// The SELF node names the version the graph describes, which differs
+		// from ep after a version fallback.
+		graphVersion := resp.SelfVersion()
 		for _, originalKey := range originalKeys {
 			a := analyses[originalKey]
 			if a == nil {

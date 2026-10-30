@@ -111,7 +111,6 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 		scorecardURL := fmt.Sprintf("https://scorecard.dev/viewer/?uri=%s", url.QueryEscape(analysis.Repository.URL))
 		apiURL := fmt.Sprintf("https://api.scorecard.dev/projects/%s", analysis.Repository.URL)
 
-		// Get release endpoints - handle missing release data
 		// Unknown dependency counts stay blank so they are not read as zero. See ADR-0034.
 		directDeps, transitiveDeps, depsVersion := "", "", ""
 		if analysis.HasRuntimeDependencyCounts() {
@@ -120,6 +119,7 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 			depsVersion = analysis.DependencyGraphVersion
 		}
 
+		// Get release endpoints - handle missing release data
 		releaseEndpoint := ""
 		canaryDays := "0"
 		latestDays := "0"

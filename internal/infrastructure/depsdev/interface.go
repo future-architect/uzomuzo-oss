@@ -31,7 +31,7 @@ type Client interface {
 	// Returns a map of exact queried PURL -> DependentsResponse.
 	FetchDependentCountBatch(ctx context.Context, purls []string) map[string]*DependentsResponse
 	// FetchDependenciesBatch fetches dependency graphs for multiple PURLs in parallel.
-	// Returns a map of canonical (versionless) PURL -> DependenciesResponse.
+	// Returns a map of exact queried PURL -> DependenciesResponse.
 	// Supported ecosystems: npm, cargo, maven, pypi. PURLs that fail, return 404,
 	// or whose graph deps.dev reports as unresolved are omitted.
 	FetchDependenciesBatch(ctx context.Context, purls []string) map[string]*DependenciesResponse

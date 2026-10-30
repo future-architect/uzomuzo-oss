@@ -524,9 +524,9 @@ func TestEnrichDependencyCounts(t *testing.T) {
 				},
 			},
 			stubResults: map[string]*depsdev.DependenciesResponse{
-				"pkg:npm/express": {
+				"pkg:npm/express@4.21.2": {
 					Nodes: []depsdev.DependencyNode{
-						{Relation: "SELF"},
+						{Relation: "SELF", VersionKey: depsdev.DependencyVersionKey{Version: "4.21.2"}},
 						{Relation: "DIRECT"},
 						{Relation: "DIRECT"},
 						{Relation: "INDIRECT"},
@@ -551,9 +551,9 @@ func TestEnrichDependencyCounts(t *testing.T) {
 				},
 			},
 			stubResults: map[string]*depsdev.DependenciesResponse{
-				"pkg:cargo/serde": {
+				"pkg:cargo/serde@1.0.200": {
 					Nodes: []depsdev.DependencyNode{
-						{Relation: "SELF"},
+						{Relation: "SELF", VersionKey: depsdev.DependencyVersionKey{Version: "1.0.200"}},
 						{Relation: "DIRECT"},
 					},
 				},
@@ -574,9 +574,9 @@ func TestEnrichDependencyCounts(t *testing.T) {
 				},
 			},
 			stubResults: map[string]*depsdev.DependenciesResponse{
-				"pkg:npm/beta-only": {
+				"pkg:npm/beta-only@0.1.0-beta.1": {
 					Nodes: []depsdev.DependencyNode{
-						{Relation: "SELF"},
+						{Relation: "SELF", VersionKey: depsdev.DependencyVersionKey{Version: "0.1.0-beta.1"}},
 						{Relation: "DIRECT"},
 						{Relation: "INDIRECT"},
 					},
@@ -600,9 +600,9 @@ func TestEnrichDependencyCounts(t *testing.T) {
 				},
 			},
 			stubResults: map[string]*depsdev.DependenciesResponse{
-				"pkg:pypi/django": {
+				"pkg:pypi/django@5.1.0": {
 					Nodes: []depsdev.DependencyNode{
-						{Relation: "SELF"},
+						{Relation: "SELF", VersionKey: depsdev.DependencyVersionKey{Version: "5.1.0"}},
 						{Relation: "DIRECT"},
 						{Relation: "DIRECT"},
 					},
@@ -624,7 +624,7 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			},
 			// Explicit nil entry exercises the resp == nil branch distinct from "key missing".
 			stubResults: map[string]*depsdev.DependenciesResponse{
-				"pkg:cargo/serde": nil,
+				"pkg:cargo/serde@1.0.210": nil,
 			},
 			wantDirect:             map[string]int{"pkg:cargo/serde@1.0.210": 0},
 			wantTransitive:         map[string]int{"pkg:cargo/serde@1.0.210": 0},
@@ -642,7 +642,7 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			},
 			stubResults: map[string]*depsdev.DependenciesResponse{
 				// Genuine leaf: deps.dev returned a response, but only the SELF node.
-				"pkg:npm/react": {Nodes: []depsdev.DependencyNode{{Relation: "SELF"}}},
+				"pkg:npm/react@19.1.0": {Nodes: []depsdev.DependencyNode{{Relation: "SELF", VersionKey: depsdev.DependencyVersionKey{Version: "19.1.0"}}}},
 			},
 			wantDirect:             map[string]int{"pkg:npm/react@19.1.0": 0},
 			wantTransitive:         map[string]int{"pkg:npm/react@19.1.0": 0},
@@ -703,6 +703,39 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantTransitive:         map[string]int{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": 0},
 			wantHasDependencyGraph: map[string]bool{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": false},
 			wantGraphVersion:       map[string]string{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": ""},
+		},
+		{
+			name:  "fallback graph is labelled with the version it describes",
+			purls: []string{"pkg:npm/react@19.2.5"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:npm/react@19.2.5": {
+					EffectivePURL: "pkg:npm/react@19.2.5",
+					Package:       &domain.Package{Ecosystem: "npm", Version: "19.2.5"},
+				},
+			},
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:npm/react@19.2.5": {Nodes: []depsdev.DependencyNode{{Relation: "SELF", VersionKey: depsdev.DependencyVersionKey{Version: "19.1.0"}}}},
+			},
+			wantDirect:             map[string]int{"pkg:npm/react@19.2.5": 0},
+			wantTransitive:         map[string]int{"pkg:npm/react@19.2.5": 0},
+			wantHasDependencyGraph: map[string]bool{"pkg:npm/react@19.2.5": true},
+			wantGraphVersion:       map[string]string{"pkg:npm/react@19.2.5": "19.1.0"},
+		},
+		{
+			name:  "two versions of one package keep their own graphs",
+			purls: []string{"pkg:npm/example@1.0.0", "pkg:npm/example@2.0.0"},
+			analyses: map[string]*domain.Analysis{
+				"pkg:npm/example@1.0.0": {EffectivePURL: "pkg:npm/example@1.0.0", Package: &domain.Package{Ecosystem: "npm", Version: "1.0.0"}},
+				"pkg:npm/example@2.0.0": {EffectivePURL: "pkg:npm/example@2.0.0", Package: &domain.Package{Ecosystem: "npm", Version: "2.0.0"}},
+			},
+			stubResults: map[string]*depsdev.DependenciesResponse{
+				"pkg:npm/example@1.0.0": {Nodes: []depsdev.DependencyNode{{Relation: "SELF", VersionKey: depsdev.DependencyVersionKey{Version: "1.0.0"}}, {Relation: "DIRECT"}}},
+				"pkg:npm/example@2.0.0": {Nodes: []depsdev.DependencyNode{{Relation: "SELF", VersionKey: depsdev.DependencyVersionKey{Version: "2.0.0"}}, {Relation: "DIRECT"}, {Relation: "DIRECT"}, {Relation: "INDIRECT"}}},
+			},
+			wantDirect:             map[string]int{"pkg:npm/example@1.0.0": 1, "pkg:npm/example@2.0.0": 2},
+			wantTransitive:         map[string]int{"pkg:npm/example@1.0.0": 0, "pkg:npm/example@2.0.0": 1},
+			wantHasDependencyGraph: map[string]bool{"pkg:npm/example@1.0.0": true, "pkg:npm/example@2.0.0": true},
+			wantGraphVersion:       map[string]string{"pkg:npm/example@1.0.0": "1.0.0", "pkg:npm/example@2.0.0": "2.0.0"},
 		},
 	}
 
