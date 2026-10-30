@@ -41,6 +41,35 @@ func TestEnrichedJSONDependents(t *testing.T) {
 	}
 }
 
+func TestEnrichedJSONDependencies(t *testing.T) {
+	npm := &analysis.Package{Ecosystem: "npm"}
+	for _, tt := range []struct {
+		name string
+		a    *analysis.Analysis
+		want string
+	}{
+		{"counts", &analysis.Analysis{Package: npm, HasDependencyGraph: true, DependencyGraphVersion: "5.1.0", DirectDepsCount: 28, TransitiveDepsCount: 39}, `"dependencies":{"source":"deps.dev","version":"5.1.0","direct":28,"transitive":39}`},
+		{"measured zero", &analysis.Analysis{Package: npm, HasDependencyGraph: true, DependencyGraphVersion: "1.0.0"}, `"dependencies":{"source":"deps.dev","version":"1.0.0","direct":0,"transitive":0}`},
+		{"no graph", &analysis.Analysis{Package: npm, DirectDepsCount: 3}, ""},
+		{"graph without version", &analysis.Analysis{Package: npm, HasDependencyGraph: true, DirectDepsCount: 3}, ""},
+		{"cargo", &analysis.Analysis{Package: &analysis.Package{Ecosystem: "cargo"}, HasDependencyGraph: true, DependencyGraphVersion: "1.0.140", DirectDepsCount: 13}, ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			b, err := json.Marshal(newEnrichedJSONEntry(&domainaudit.AuditEntry{Analysis: tt.a}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.want == "" {
+				if strings.Contains(string(b), `"dependencies"`) {
+					t.Fatalf("unreported counts emitted: %s", b)
+				}
+			} else if !strings.Contains(string(b), tt.want) {
+				t.Fatalf("want %s in %s", tt.want, b)
+			}
+		})
+	}
+}
+
 func TestNewEnrichedJSONEntry_NilAnalysis(t *testing.T) {
 	e := &domainaudit.AuditEntry{
 		PURL:     "pkg:npm/unknown@1.0.0",

@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
@@ -129,9 +128,49 @@ func TestFetchDependenciesBatch(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
+	for _, p := range purls {
+		if results[p] == nil {
+			t.Errorf("missing result under exact queried PURL %s: %v", p, results)
+		}
+	}
 	for key, resp := range results {
 		if len(resp.Nodes) != 2 {
 			t.Errorf("key=%s: Nodes count = %d, want 2", key, len(resp.Nodes))
+		}
+	}
+}
+
+// TestFetchDependenciesBatch_TwoVersionsKeepSeparateGraphs ensures two versions
+// of one package do not overwrite each other in the result map.
+func TestFetchDependenciesBatch_TwoVersionsKeepSeparateGraphs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v3alpha/systems/npm/packages/example/versions/1.0.0:dependencies":
+			_, _ = w.Write([]byte(`{"nodes":[{"versionKey":{"version":"1.0.0"},"relation":"SELF"},{"relation":"DIRECT"}]}`))
+		case "/v3alpha/systems/npm/packages/example/versions/2.0.0:dependencies":
+			_, _ = w.Write([]byte(`{"nodes":[{"versionKey":{"version":"2.0.0"},"relation":"SELF"},{"relation":"DIRECT"},{"relation":"DIRECT"}]}`))
+		default:
+			t.Errorf("unexpected request path: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	client := NewDepsDevClient(&config.DepsDevConfig{BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0, BatchSize: 10})
+	results := client.FetchDependenciesBatch(context.Background(), []string{"pkg:npm/example@1.0.0", "pkg:npm/example@2.0.0"})
+
+	for purl, want := range map[string]struct {
+		version string
+		direct  int
+	}{"pkg:npm/example@1.0.0": {"1.0.0", 1}, "pkg:npm/example@2.0.0": {"2.0.0", 2}} {
+		resp := results[purl]
+		if resp == nil {
+			t.Fatalf("missing result for %s: %v", purl, results)
+		}
+		direct, _ := resp.CountByRelation()
+		if resp.SelfVersion() != want.version || direct != want.direct {
+			t.Errorf("%s: version=%q direct=%d, want %q and %d", purl, resp.SelfVersion(), direct, want.version, want.direct)
 		}
 	}
 }
@@ -193,10 +232,12 @@ func TestFetchDependenciesBatch_VersionFallback_Recovers(t *testing.T) {
 
 	results := client.FetchDependenciesBatch(context.Background(), []string{"pkg:npm/react@19.2.5"})
 
-	key := commonpurl.CanonicalKey("pkg:npm/react@19.2.5")
-	resp, ok := results[key]
+	resp, ok := results["pkg:npm/react@19.2.5"]
 	if !ok || resp == nil {
-		t.Fatalf("expected recovered response under %q, got %+v", key, results)
+		t.Fatalf("expected recovered response under the requested PURL, got %+v", results)
+	}
+	if got := resp.SelfVersion(); got != "19.1.0" {
+		t.Errorf("SelfVersion() = %q, want the fallback version 19.1.0", got)
 	}
 	direct, transitive := resp.CountByRelation()
 	if direct != 0 || transitive != 0 {
@@ -295,7 +336,7 @@ func TestFetchDependenciesBatch_VersionFallback_PrefersStableOverPrerelease(t *t
 	results := client.FetchDependenciesBatch(context.Background(), []string{"pkg:npm/react@19.2.5"})
 	close(calls)
 
-	if results[commonpurl.CanonicalKey("pkg:npm/react@19.2.5")] == nil {
+	if results["pkg:npm/react@19.2.5"] == nil {
 		t.Fatalf("expected recovered response, got %+v", results)
 	}
 	var got []string
@@ -391,8 +432,7 @@ func TestFetchDependenciesBatch_NoFallbackForLeafWithGraph(t *testing.T) {
 	})
 
 	results := client.FetchDependenciesBatch(context.Background(), []string{"pkg:npm/react@19.1.0"})
-	key := commonpurl.CanonicalKey("pkg:npm/react@19.1.0")
-	if results[key] == nil {
+	if results["pkg:npm/react@19.1.0"] == nil {
 		t.Fatalf("expected leaf response to be preserved, got %+v", results)
 	}
 	if got := atomic.LoadInt64(&listCalls); got != 0 {
@@ -568,6 +608,26 @@ func TestDependenciesResponse_CountByRelation(t *testing.T) {
 			}
 			if transitive != tt.wantTransitive {
 				t.Errorf("transitive = %d, want %d", transitive, tt.wantTransitive)
+			}
+		})
+	}
+}
+
+func TestDependenciesResponse_SelfVersion(t *testing.T) {
+	tests := []struct {
+		name string
+		r    *DependenciesResponse
+		want string
+	}{
+		{"self node", &DependenciesResponse{Nodes: []DependencyNode{{Relation: "DIRECT", VersionKey: DependencyVersionKey{Version: "9.9.9"}}, {Relation: "SELF", VersionKey: DependencyVersionKey{Version: "1.2.3"}}}}, "1.2.3"},
+		{"no self node", &DependenciesResponse{Nodes: []DependencyNode{{Relation: "DIRECT", VersionKey: DependencyVersionKey{Version: "9.9.9"}}}}, ""},
+		{"self without version", &DependenciesResponse{Nodes: []DependencyNode{{Relation: "SELF"}}}, ""},
+		{"nil response", nil, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.r.SelfVersion(); got != tt.want {
+				t.Errorf("SelfVersion() = %q, want %q", got, tt.want)
 			}
 		})
 	}
