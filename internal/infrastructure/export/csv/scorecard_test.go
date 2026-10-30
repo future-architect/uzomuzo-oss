@@ -31,7 +31,7 @@ func TestExportScorecard_DependentsColumns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(rows[0][len(rows[0])-4:], []string{"dependents_source", "dependents_version", "dependents_direct", "dependents_total"}) {
+	if !slices.Equal(rows[0][len(rows[0])-5:len(rows[0])-1], []string{"dependents_source", "dependents_version", "dependents_direct", "dependents_total"}) {
 		t.Fatalf("header tail: %v", rows[0])
 	}
 	want := map[string][]string{
@@ -41,11 +41,55 @@ func TestExportScorecard_DependentsColumns(t *testing.T) {
 		"pkg:golang/d@v1.0.0": {"", "", "", ""},
 	}
 	for _, row := range rows[1:] {
-		if !slices.Equal(row[len(row)-4:], want[row[0]]) {
-			t.Errorf("%s: tail=%v, want %v", row[0], row[len(row)-4:], want[row[0]])
+		if got := row[len(row)-5 : len(row)-1]; !slices.Equal(got, want[row[0]]) {
+			t.Errorf("%s: dependents=%v, want %v", row[0], got, want[row[0]])
 		}
 		if row[0] == "pkg:npm/a@1.0.0" && row[14] != "7" {
 			t.Errorf("legacy count moved or changed: %v", row)
 		}
+	}
+}
+
+func TestExportScorecard_DependencyColumns(t *testing.T) {
+	npm, cargo := &domain.Package{Ecosystem: "npm"}, &domain.Package{Ecosystem: "cargo"}
+	analyses := map[string]*domain.Analysis{
+		"pkg:npm/a@1.0.0":     {Repository: &domain.Repository{}, Package: npm, HasDependencyGraph: true, DependencyGraphVersion: "1.0.0", DirectDepsCount: 2, TransitiveDepsCount: 3},
+		"pkg:npm/b@2.0.0":     {Repository: &domain.Repository{}, Package: npm, HasDependencyGraph: true, DependencyGraphVersion: "2.0.0"},
+		"pkg:npm/c@3.0.0":     {Repository: &domain.Repository{}, Package: npm},
+		"pkg:cargo/d@1.0.0":   {Repository: &domain.Repository{}, Package: cargo, HasDependencyGraph: true, DependencyGraphVersion: "1.0.0", DirectDepsCount: 13, TransitiveDepsCount: 47},
+		"pkg:golang/e@v1.0.0": {Repository: &domain.Repository{}},
+	}
+	path := filepath.Join(t.TempDir(), "scorecard.csv")
+	if err := ExportScorecard(analyses, path); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	rows, err := csv.NewReader(f).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	header := rows[0]
+	if header[15] != "directDeps" || header[16] != "transitiveDeps" || header[len(header)-1] != "dependencies_version" {
+		t.Fatalf("header: %v", header)
+	}
+	want := map[string][]string{
+		"pkg:npm/a@1.0.0":     {"2", "3", "1.0.0"},
+		"pkg:npm/b@2.0.0":     {"0", "0", "2.0.0"},
+		"pkg:npm/c@3.0.0":     {"", "", ""},
+		"pkg:cargo/d@1.0.0":   {"", "", ""},
+		"pkg:golang/e@v1.0.0": {"", "", ""},
+	}
+	for _, row := range rows[1:] {
+		got := []string{row[15], row[16], row[len(row)-1]}
+		if !slices.Equal(got, want[row[0]]) {
+			t.Errorf("%s: dependency cells=%v, want %v", row[0], got, want[row[0]])
+		}
+	}
+	if len(rows)-1 != len(want) {
+		t.Fatalf("rows = %d, want %d", len(rows)-1, len(want))
 	}
 }

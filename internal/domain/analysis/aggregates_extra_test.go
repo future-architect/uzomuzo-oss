@@ -298,3 +298,26 @@ func TestAnalysis_IsVCSDirectDelivery(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalysis_HasRuntimeDependencyCounts(t *testing.T) {
+	tests := []struct {
+		name string
+		a    *Analysis
+		want bool
+	}{
+		{name: "npm graph", a: &Analysis{Package: &Package{Ecosystem: "npm"}, HasDependencyGraph: true, DependencyGraphVersion: "1.0.0"}, want: true},
+		{name: "maven graph", a: &Analysis{Package: &Package{Ecosystem: "maven"}, HasDependencyGraph: true, DependencyGraphVersion: "2.20.0"}, want: true},
+		{name: "pypi graph", a: &Analysis{Package: &Package{Ecosystem: "pypi"}, HasDependencyGraph: true, DependencyGraphVersion: "0.116.1"}, want: true},
+		{name: "cargo graph", a: &Analysis{Package: &Package{Ecosystem: "cargo"}, HasDependencyGraph: true, DependencyGraphVersion: "1.0.140"}, want: false},
+		{name: "no graph", a: &Analysis{Package: &Package{Ecosystem: "npm"}, DependencyGraphVersion: "1.0.0"}, want: false},
+		{name: "no version", a: &Analysis{Package: &Package{Ecosystem: "npm"}, HasDependencyGraph: true}, want: false},
+		{name: "nil package", a: &Analysis{HasDependencyGraph: true, DependencyGraphVersion: "1.0.0"}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.a.HasRuntimeDependencyCounts(); got != tt.want {
+				t.Errorf("HasRuntimeDependencyCounts() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

@@ -144,9 +144,9 @@ type Analysis struct {
 	//   - Otherwise, the latest release is used (stable > maxSemver > prerelease).
 	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
 	// When HasDependencyGraph is true, zero means the resolved version genuinely
-	// has no transitive dependencies in the graph (e.g., pypi responses typically
-	// include only direct deps). When HasDependencyGraph is false, zero is
-	// uninformative. Always consult HasDependencyGraph before interpreting zero.
+	// has no transitive dependencies in the graph. When HasDependencyGraph is
+	// false, zero is uninformative. Always consult HasDependencyGraph before
+	// interpreting zero.
 	TransitiveDepsCount int
 
 	// HasDependencyGraph reports whether a deps.dev dependency-graph response was
@@ -158,6 +158,11 @@ type Analysis struct {
 	// 200 response whose top-level "error" says the graph could not be resolved,
 	// or a transport error — so the counts carry no positive information.
 	HasDependencyGraph bool
+
+	// DependencyGraphVersion is the exact version whose dependency graph
+	// produced DirectDepsCount and TransitiveDepsCount. Empty when
+	// HasDependencyGraph is false.
+	DependencyGraphVersion string
 
 	// Canonical package links (homepage, registry, docs, changelog)
 	PackageLinks *PackageLinks
@@ -255,6 +260,18 @@ func (a *Analysis) IsVCSDirectDelivery() bool {
 	default:
 		return false
 	}
+}
+
+// HasRuntimeDependencyCounts reports whether DirectDepsCount and
+// TransitiveDepsCount may be reported as the dependencies the package needs.
+// It is false when no graph was retrieved, when the queried version is
+// unknown, and for cargo, whose deps.dev graph also contains dev and optional
+// dependencies. See ADR-0034.
+func (a *Analysis) HasRuntimeDependencyCounts() bool {
+	if !a.HasDependencyGraph || a.DependencyGraphVersion == "" || a.Package == nil {
+		return false
+	}
+	return a.Package.Ecosystem != "cargo"
 }
 
 // HasRecentCommit checks if there's a recent commit within the given days

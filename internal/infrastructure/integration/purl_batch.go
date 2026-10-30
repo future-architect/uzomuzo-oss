@@ -342,8 +342,8 @@ func dependenciesSupportedEcosystem(eco string) bool {
 }
 
 // enrichDependencyCounts fetches dependency counts (direct + transitive) from deps.dev
-// and populates Analysis.DirectDepsCount, Analysis.TransitiveDepsCount, and
-// Analysis.HasDependencyGraph.
+// and populates Analysis.DirectDepsCount, Analysis.TransitiveDepsCount,
+// Analysis.HasDependencyGraph, and Analysis.DependencyGraphVersion.
 // Returns the raw DependenciesResponse map for downstream use (e.g., transitive advisory enrichment).
 //
 // Version selection: delegated to latestReleaseVersion (StableVersion >
@@ -425,6 +425,10 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 			continue
 		}
 		direct, transitive := resp.CountByRelation()
+		var graphVersion string
+		if parsed, err := purl.NewParser().Parse(ep); err == nil {
+			graphVersion = parsed.Version()
+		}
 		for _, originalKey := range originalKeys {
 			a := analyses[originalKey]
 			if a == nil {
@@ -432,6 +436,7 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 			}
 			a.DirectDepsCount, a.TransitiveDepsCount = direct, transitive
 			a.HasDependencyGraph = true
+			a.DependencyGraphVersion = graphVersion
 			perPURL[originalKey] = resp
 		}
 	}

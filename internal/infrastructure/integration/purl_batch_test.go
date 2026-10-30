@@ -512,6 +512,7 @@ func TestEnrichDependencyCounts(t *testing.T) {
 		wantDirect             map[string]int
 		wantTransitive         map[string]int
 		wantHasDependencyGraph map[string]bool
+		wantGraphVersion       map[string]string
 	}{
 		{
 			name:  "versioned PURL populates counts",
@@ -537,6 +538,7 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantDirect:             map[string]int{"pkg:npm/express@4.21.2": 2},
 			wantTransitive:         map[string]int{"pkg:npm/express@4.21.2": 3},
 			wantHasDependencyGraph: map[string]bool{"pkg:npm/express@4.21.2": true},
+			wantGraphVersion:       map[string]string{"pkg:npm/express@4.21.2": "4.21.2"},
 		},
 		{
 			name:  "versionless PURL resolved via stable release",
@@ -559,6 +561,7 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantDirect:             map[string]int{"pkg:cargo/serde": 1},
 			wantTransitive:         map[string]int{"pkg:cargo/serde": 0},
 			wantHasDependencyGraph: map[string]bool{"pkg:cargo/serde": true},
+			wantGraphVersion:       map[string]string{"pkg:cargo/serde": "1.0.200"},
 		},
 		{
 			name:  "versionless PURL falls back to prerelease",
@@ -582,6 +585,7 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantDirect:             map[string]int{"pkg:npm/beta-only": 1},
 			wantTransitive:         map[string]int{"pkg:npm/beta-only": 1},
 			wantHasDependencyGraph: map[string]bool{"pkg:npm/beta-only": true},
+			wantGraphVersion:       map[string]string{"pkg:npm/beta-only": "0.1.0-beta.1"},
 		},
 		{
 			name:  "versionless PURL falls back to max semver when stable missing",
@@ -607,6 +611,7 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantDirect:             map[string]int{"pkg:pypi/django": 2},
 			wantTransitive:         map[string]int{"pkg:pypi/django": 0},
 			wantHasDependencyGraph: map[string]bool{"pkg:pypi/django": true},
+			wantGraphVersion:       map[string]string{"pkg:pypi/django": "5.1.0"},
 		},
 		{
 			name:  "nil response from deps.dev marks graph absent",
@@ -624,6 +629,7 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantDirect:             map[string]int{"pkg:cargo/serde@1.0.210": 0},
 			wantTransitive:         map[string]int{"pkg:cargo/serde@1.0.210": 0},
 			wantHasDependencyGraph: map[string]bool{"pkg:cargo/serde@1.0.210": false},
+			wantGraphVersion:       map[string]string{"pkg:cargo/serde@1.0.210": ""},
 		},
 		{
 			name:  "leaf package with zero deps still marks graph as present",
@@ -641,6 +647,7 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantDirect:             map[string]int{"pkg:npm/react@19.1.0": 0},
 			wantTransitive:         map[string]int{"pkg:npm/react@19.1.0": 0},
 			wantHasDependencyGraph: map[string]bool{"pkg:npm/react@19.1.0": true},
+			wantGraphVersion:       map[string]string{"pkg:npm/react@19.1.0": "19.1.0"},
 		},
 		{
 			name:  "no match leaves counts at zero and graph absent",
@@ -655,6 +662,7 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantDirect:             map[string]int{"pkg:pypi/unknown@1.0.0": 0},
 			wantTransitive:         map[string]int{"pkg:pypi/unknown@1.0.0": 0},
 			wantHasDependencyGraph: map[string]bool{"pkg:pypi/unknown@1.0.0": false},
+			wantGraphVersion:       map[string]string{"pkg:pypi/unknown@1.0.0": ""},
 		},
 		{
 			name:  "versionless with no resolvable release marks graph absent",
@@ -674,6 +682,7 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantDirect:             map[string]int{"pkg:pypi/unknown": 0},
 			wantTransitive:         map[string]int{"pkg:pypi/unknown": 0},
 			wantHasDependencyGraph: map[string]bool{"pkg:pypi/unknown": false},
+			wantGraphVersion:       map[string]string{"pkg:pypi/unknown": ""},
 		},
 		{
 			name:  "unsupported ecosystem skipped without API call",
@@ -693,6 +702,7 @@ func TestEnrichDependencyCounts(t *testing.T) {
 			wantDirect:             map[string]int{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": 0},
 			wantTransitive:         map[string]int{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": 0},
 			wantHasDependencyGraph: map[string]bool{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": false},
+			wantGraphVersion:       map[string]string{"pkg:golang/github.com/gin-gonic/gin@v1.10.0": ""},
 		},
 	}
 
@@ -727,6 +737,15 @@ func TestEnrichDependencyCounts(t *testing.T) {
 				}
 				if a.HasDependencyGraph != wantHas {
 					t.Errorf("HasDependencyGraph for %s = %v, want %v", purl, a.HasDependencyGraph, wantHas)
+				}
+			}
+			for purl, wantVersion := range tt.wantGraphVersion {
+				a := tt.analyses[purl]
+				if a == nil {
+					t.Fatalf("analysis not found for %s", purl)
+				}
+				if a.DependencyGraphVersion != wantVersion {
+					t.Errorf("DependencyGraphVersion for %s = %q, want %q", purl, a.DependencyGraphVersion, wantVersion)
 				}
 			}
 		})
