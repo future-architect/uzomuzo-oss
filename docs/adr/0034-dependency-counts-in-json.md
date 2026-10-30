@@ -24,4 +24,4 @@ cargo is hidden rather than labelled because a larger number next to an explanat
 
 ## Limits
 
-Counts describe the queried version's graph as resolved by deps.dev, not the consumer's lockfile. They are evidence for a reader and do not change any verdict or lifecycle rule. Reporting cargo requires a graph restricted to normal dependencies (for example via the `:requirements` endpoint's dependency kinds), which is a separate change; when it lands, a `scope` field can be added alongside cargo.
+Counts describe the graph of `DependencyGraphVersion` as resolved by deps.dev, not the consumer's lockfile. They are evidence for a reader and do not change any verdict or lifecycle rule. Reporting cargo requires a graph restricted to normal dependencies (for example via the `:requirements` endpoint's dependency kinds), which is a separate change; when it lands, a `scope` field can be added alongside cargo.
