@@ -478,15 +478,16 @@ type enrichedJSONEntry struct {
 	BuildIntegrityScore *float64              `json:"build_integrity_score,omitempty"`
 	Successor           string                `json:"successor,omitempty"`
 
-	RepoURL        string          `json:"repo_url,omitempty"`
-	Archived       bool            `json:"archived"`
-	Disabled       bool            `json:"disabled"`
-	OverallScore   float64         `json:"overall_score"`
-	DependentCount int             `json:"dependent_count,omitempty"`
-	Dependents     *dependentsJSON `json:"dependents,omitempty"`
-	StableVersion  string          `json:"stable_version,omitempty"`
-	ProjectLicense string          `json:"project_license,omitempty"`
-	VersionLicense string          `json:"version_license,omitempty"`
+	RepoURL        string            `json:"repo_url,omitempty"`
+	Archived       bool              `json:"archived"`
+	Disabled       bool              `json:"disabled"`
+	OverallScore   float64           `json:"overall_score"`
+	DependentCount int               `json:"dependent_count,omitempty"`
+	Dependents     *dependentsJSON   `json:"dependents,omitempty"`
+	Dependencies   *dependenciesJSON `json:"dependencies,omitempty"`
+	StableVersion  string            `json:"stable_version,omitempty"`
+	ProjectLicense string            `json:"project_license,omitempty"`
+	VersionLicense string            `json:"version_license,omitempty"`
 
 	// AdvisoryCount is the total number of advisories (direct + transitive).
 	AdvisoryCount       int     `json:"advisory_count,omitempty"`
@@ -526,6 +527,14 @@ type dependentsJSON struct {
 	Version string                  `json:"version,omitempty"`
 	Direct  *int                    `json:"direct,omitempty"`
 	Total   *int                    `json:"total,omitempty"`
+}
+
+// dependenciesJSON reports what the graph's version depends on. See ADR-0034.
+type dependenciesJSON struct {
+	Source     string `json:"source"`
+	Version    string `json:"version"`
+	Direct     int    `json:"direct"`
+	Transitive int    `json:"transitive"`
 }
 
 type maliciousJSON struct {
@@ -692,6 +701,9 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 	je.DependentCount = a.DependentCount
 	if d := a.Dependents; d != nil {
 		je.Dependents = &dependentsJSON{Source: d.Source, Version: d.Version, Direct: d.Direct, Total: d.Total}
+	}
+	if a.HasRuntimeDependencyCounts() {
+		je.Dependencies = &dependenciesJSON{Source: domain.DependencyGraphSourceDepsDev, Version: a.DependencyGraphVersion, Direct: a.DirectDepsCount, Transitive: a.TransitiveDepsCount}
 	}
 	je.Successor = a.EOL.Successor
 	je.Archived = a.IsArchived()

@@ -2,6 +2,7 @@
 package analysis
 
 import (
+	"strings"
 	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
@@ -135,7 +136,9 @@ type Analysis struct {
 	// HasDependencyGraph is false, zero is uninformative — the graph was not
 	// reached (unsupported ecosystem, no resolvable release, 404, a graph
 	// deps.dev reported as unresolved, or transport error). Always consult
-	// HasDependencyGraph before interpreting zero.
+	// HasDependencyGraph before interpreting zero. Cargo graphs also contain dev
+	// and optional dependencies; use HasRuntimeDependencyCounts to decide whether
+	// to report the count (ADR-0034).
 	DirectDepsCount int
 
 	// TransitiveDepsCount is the number of transitive (indirect) dependencies for the
@@ -144,9 +147,10 @@ type Analysis struct {
 	//   - Otherwise, the latest release is used (stable > maxSemver > prerelease).
 	// Supported ecosystems: npm, cargo, maven, pypi (deps.dev limitation).
 	// When HasDependencyGraph is true, zero means the resolved version genuinely
-	// has no transitive dependencies in the graph (e.g., pypi responses typically
-	// include only direct deps). When HasDependencyGraph is false, zero is
-	// uninformative. Always consult HasDependencyGraph before interpreting zero.
+	// has no transitive dependencies in the graph. When HasDependencyGraph is
+	// false, zero is uninformative. Always consult HasDependencyGraph before
+	// interpreting zero. Use HasRuntimeDependencyCounts to decide whether to
+	// report the count (ADR-0034).
 	TransitiveDepsCount int
 
 	// HasDependencyGraph reports whether a deps.dev dependency-graph response was
@@ -158,6 +162,12 @@ type Analysis struct {
 	// 200 response whose top-level "error" says the graph could not be resolved,
 	// or a transport error — so the counts carry no positive information.
 	HasDependencyGraph bool
+
+	// DependencyGraphVersion is the version the dependency graph describes (its
+	// SELF node). It can differ from the requested version when deps.dev had no
+	// graph for that version and a fallback version was counted. Empty when
+	// HasDependencyGraph is false or the graph names no SELF version.
+	DependencyGraphVersion string
 
 	// Canonical package links (homepage, registry, docs, changelog)
 	PackageLinks *PackageLinks
@@ -255,6 +265,22 @@ func (a *Analysis) IsVCSDirectDelivery() bool {
 	default:
 		return false
 	}
+}
+
+// DependencyGraphSourceDepsDev names the provider of DirectDepsCount and
+// TransitiveDepsCount: the deps.dev GetDependencies API.
+const DependencyGraphSourceDepsDev = "deps.dev"
+
+// HasRuntimeDependencyCounts reports whether DirectDepsCount and
+// TransitiveDepsCount may be reported as the dependencies the package needs.
+// It is false when no graph was retrieved, when the graph's version is
+// unknown, and for cargo, whose deps.dev graph also contains dev and optional
+// dependencies. See ADR-0034.
+func (a *Analysis) HasRuntimeDependencyCounts() bool {
+	if !a.HasDependencyGraph || a.DependencyGraphVersion == "" || a.Package == nil {
+		return false
+	}
+	return !strings.EqualFold(strings.TrimSpace(a.Package.Ecosystem), "cargo")
 }
 
 // HasRecentCommit checks if there's a recent commit within the given days

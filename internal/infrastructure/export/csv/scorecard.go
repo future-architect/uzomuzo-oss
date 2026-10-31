@@ -84,7 +84,7 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 	headers := []string{"purl", "repoURL", "scorecard", "api", "release", "star", "Canary", "Latest", "Lastcommit", "archived", "disabled", "Fork", "ForkSource", "overallScore", "dependents", "directDeps", "transitiveDeps"}
 	headers = append(headers, checkNames...)
 	headers = append(headers, "Result", "Reason", "RepoState")
-	headers = append(headers, "dependents_source", "dependents_version", "dependents_direct", "dependents_total")
+	headers = append(headers, "dependents_source", "dependents_version", "dependents_direct", "dependents_total", "dependencies_version")
 
 	if err := writer.Write(headers); err != nil {
 		return common.NewIOError("failed to write CSV headers", err).
@@ -110,6 +110,14 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 
 		scorecardURL := fmt.Sprintf("https://scorecard.dev/viewer/?uri=%s", url.QueryEscape(analysis.Repository.URL))
 		apiURL := fmt.Sprintf("https://api.scorecard.dev/projects/%s", analysis.Repository.URL)
+
+		// Unknown dependency counts stay blank so they are not read as zero. See ADR-0034.
+		directDeps, transitiveDeps, depsVersion := "", "", ""
+		if analysis.HasRuntimeDependencyCounts() {
+			directDeps = fmt.Sprintf("%d", analysis.DirectDepsCount)
+			transitiveDeps = fmt.Sprintf("%d", analysis.TransitiveDepsCount)
+			depsVersion = analysis.DependencyGraphVersion
+		}
 
 		// Get release endpoints - handle missing release data
 		releaseEndpoint := ""
@@ -161,9 +169,9 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 			forked,
 			forkSource,
 			fmt.Sprintf("%.2f", analysis.OverallScore),
-			fmt.Sprintf("%d", analysis.DependentCount),      // Deprecated legacy column. See ADR-0033.
-			fmt.Sprintf("%d", analysis.DirectDepsCount),     // 0 = none, unknown, or unsupported ecosystem
-			fmt.Sprintf("%d", analysis.TransitiveDepsCount), // 0 = none, unknown, or unsupported ecosystem
+			fmt.Sprintf("%d", analysis.DependentCount), // Deprecated legacy column. See ADR-0033.
+			directDeps,
+			transitiveDeps,
 		}
 
 		// Add check scores
@@ -189,6 +197,7 @@ func ExportScorecard(analyses map[string]*domain.Analysis, filename string) (err
 			}
 		}
 		record = append(record, cells...)
+		record = append(record, depsVersion)
 
 		if err := writer.Write(record); err != nil {
 			return common.NewIOError("failed to write CSV record", err).
