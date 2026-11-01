@@ -7,7 +7,7 @@ gpt-6-astra; the document itself checked by Codex gpt-6-astra — see "Review re
 ## Goal
 
 Let teams see uzomuzo's dependency health verdicts where they already look for
-problems — PR annotations, their existing linter, their pre-commit hooks — and
+problems — PR annotations and their pre-commit hooks — and
 let them gate PRs on **dependencies the PR introduces**, without making every
 PR fail on pre-existing debt.
 
@@ -34,7 +34,63 @@ the same code. Therefore:
 Revisit only if a deterministic offline data source exists (e.g. a dated,
 signed catalog bundle shipped with the binary).
 
+## Order (revised 2026-11-02)
+
+An adoption review (see "Review record") found that the next problem is not a
+missing format. The results and the setup path have to work first, so the order
+is now:
+
+1. **P0** — results people can trust, and CI instructions that work.
+2. **P1** — `--format sarif` (PR #605), with its upload recipe.
+3. **Measure** — scan 20 well-maintained Go and npm projects with the P0 binary
+   and count the `Stalled` labels a maintainer would dispute.
+4. **P3a** — a GitHub Action that reports and never fails the job.
+5. **P2** — `--baseline`.
+6. **P3b** — the Action's gate on added dependencies, and the pre-commit hook.
+
+P4 and P5 are deferred: see "Deferred — linter snapshots".
+
+If under 10% of the `Stalled` labels in step 3 are disputed, trust is not the
+blocker, and the remaining steps should be re-ordered around the setup path and
+non-Go input.
+
 ## Phases
+
+### P0 — Trustworthy results and working setup
+
+Measured on uzomuzo's own `go.mod` (14 direct dependencies) on 2026-11-01 and
+2026-11-02:
+
+| Dependency | Label without a token | What is actually true | Cause |
+|---|---|---|---|
+| `github.com/Masterminds/semver/v3` | Stalled, "Maintained but no commit data" | v3.5.0 was published on 2026-04-30 | Go path case, below |
+| `gopkg.in/yaml.v3` | Stalled, "No vulnerabilities but no recent releases" | The repository is archived | Only a token run can read the repository state (ADR-0029) |
+
+**Go module path case.** `packageurl-go` lowercases `pkg:golang` paths, and
+deps.dev treats Go module names as case-sensitive:
+
+- `github.com/masterminds/semver/v3` returns 404, so uzomuzo sees no releases.
+- `github.com/burntsushi/toml` returns an old record with 111 versions, against
+  323 for `github.com/BurntSushi/toml`, so uzomuzo reports v0.3.1 as the stable
+  version when the latest is v1.6.0.
+
+SBOMs can already hold the lowercase path (`testdata/diet/test-sbom.json`), so
+keeping the input spelling is not enough. The Go proxy serves a lowercase path
+and its `.mod` file states the real spelling (`module github.com/BurntSushi/toml`).
+
+**Work in P0:**
+
+- Look up Go modules on deps.dev by their real spelling.
+- Warn on stderr when a scan runs without a token. `ConfigService.Validate`
+  says a banner exists; it does not.
+- Stop advising people to start without a token (`docs/usage.md`, `README.md`).
+- Make the copy instruction in `docs/integration-examples.md` work. The workflow
+  it points to runs `go build ./cmd/uzomuzo`, which fails in any other repository.
+
+**Not in P0:** changing the labels of the "no commit data" branches in
+`assessInactiveNoCommitData`. The only measured wrong label there was semver, and
+the first item above is expected to remove it. Decide after the measurement,
+using a binary that has the fix.
 
 ### P1 — `--format sarif`
 
@@ -111,6 +167,11 @@ deterioration of dependencies nobody touched.
 
 ### P3 — Distribution: reusable GitHub Action + pre-commit hook
 
+P3 ships in two parts. **P3a** comes before P2: the Action with pinned install,
+token setup and SARIF upload, with `fail-on` empty and no baseline. It reports
+and never fails the job on existing dependencies, so it does not need P2. **P3b**
+comes after P2: the baseline inputs below and the pre-commit hook.
+
 **Action** (`action.yml` at repo root, composite):
 
 - Caller prerequisites to document: `actions/checkout` with enough history to
@@ -144,36 +205,19 @@ explicit baseline argument.
 **Docs**: `docs/integration-examples.md` gains a "Lint / PR integration"
 section with one copy-paste snippet per team type (table below).
 
-### P4 — Snapshot for golangci-lint: `--format gomodguard-v2`
+### Deferred — linter snapshots (golangci-lint, ESLint)
 
-Emits a `linters.settings.gomodguard_v2.blocked` list (requires golangci-lint
-≥ 2.12.2: `gomodguard` is deprecated since v2.12.0 in favor of
-`gomodguard_v2`, and 2.12.2 fixes blocked-list handling). `match-type`
-accepts `exact`, `prefix`, `regex`; we emit `exact`.
+Two generated formats were planned as P4 and P5:
 
-```yaml
-# BEGIN uzomuzo generated 2026-10-30 (uzomuzo scan --fail-on eol-confirmed,eol-effective)
-- module: github.com/pkg/errors
-  match-type: exact
-  recommendations: [errors]
-  reason: "uzomuzo EOL-Confirmed: <evidence summary> (as of 2026-10-30)"
-# END uzomuzo generated
-```
+- `--format gomodguard-v2`: a `linters.settings.gomodguard_v2.blocked` list
+  (golangci-lint 2.12.2 or later), regenerated between markers in `.golangci.yml`.
+- `--format eslint`: `no-restricted-imports` entries with an exact path and a
+  subpath pattern per package.
 
-golangci-lint has no config include, so the block is regenerated between
-markers in the user's `.golangci.yml`. A scheduled workflow example
-regenerates it and opens a PR, so verdict changes are reviewable diffs.
-Limits to document: direct modules only; snapshot staleness between runs.
-
-### P5 — ESLint snapshot: `--format eslint`
-
-`no-restricted-imports` with, per package, an exact `paths[]` entry for the
-package root **and** a `patterns[]` entry for its subpaths (`pkg/*`;
-`@scope/pkg/*`), each with a `message`. Same BEGIN/END marker with
-generation date and command as P4, and the same scheduled-regeneration
-example. Source of npm packages is a CycloneDX SBOM (uzomuzo has no
-package.json parser). Limits to document: dynamic `import()` and `require()`
-are not checked by that rule.
+Both were dropped from the near-term plan. Nobody has asked for them, and a
+generated blocklist copies any wrong label into every lint run. Reopen when an
+adopter asks for offline enforcement and the step 3 measurement shows that the
+labels are good enough to block on.
 
 ### Deferred — Ruff `banned-api`
 
@@ -192,13 +236,11 @@ for, GitLab users use the exit code from P2 or reviewdog `-f=sarif` with the
 
 | Team | What they add | Gate | Phase |
 |---|---|---|---|
-| Any repo on GitHub (public, or private with Code Security) | `uses: future-architect/uzomuzo-oss@<sha>` in a PR workflow | PR annotations; uzomuzo fails only on added deps in `fail-on` | P1–P3 |
-| Private GitHub repo without Code Security | Same Action with `upload-sarif: false` | Job exit code via `--baseline` | P2–P3 |
-| Go team on golangci-lint | Generated `gomodguard_v2` block + scheduled regeneration workflow | Offline, in editor and CI | P4 |
-| JS/TS team on ESLint | Generated `no-restricted-imports` entries + scheduled regeneration | Offline, static imports only | P5 |
+| Any repo on GitHub (public, or private with Code Security) | `uses: future-architect/uzomuzo-oss@<sha>` in a PR workflow | PR annotations first (P3a); uzomuzo fails only on added deps in `fail-on` (P3b) | P1–P3b |
+| Private GitHub repo without Code Security | Same Action with `upload-sarif: false` | Job exit code via `--baseline` | P2–P3b |
 | GitLab / Bitbucket | CLI in CI job; optionally reviewdog with SARIF | Exit code; MR comments via reviewdog | P1–P2 |
-| pre-commit users / no CI | `.pre-commit-config.yaml` entry + `pre-commit install --hook-type pre-push` | Local, needs network | P3 |
-| Monorepo | One Action step per manifest, distinct `category` each | Per manifest | P3 |
+| pre-commit users / no CI | `.pre-commit-config.yaml` entry + `pre-commit install --hook-type pre-push` | Local, needs network | P3b |
+| Monorepo | One Action step per manifest, distinct `category` each | Per manifest | P3a |
 
 ## Risks and controls
 
@@ -208,14 +250,13 @@ for, GitLab users use the exit code from P2 or reviewdog `-f=sarif` with the
 - **Heuristic labels blocking PRs**: default `fail-on` is empty; docs
   recommend `eol-confirmed,eol-effective` at most for gating, and point out
   the separate repository-level check threshold.
-- **Snapshot staleness** (P4/P5): scheduled regeneration as a PR; date stamped
-  in the marker line.
 - **SARIF limits**: 25,000 results per run, 5,000 displayed; fine for single
   manifests, document for monorepos.
 
 ## What would change this plan
 
-- Most adopters want offline Go enforcement first → move P4 before P1.
+- Most adopters want offline Go enforcement first → reopen the deferred
+  golangci-lint snapshot.
 - Most adopters have no SARIF consumer (private repos without Code Security,
   non-GitHub) → ship P2 before P1.
 - uzomuzo gains a package.json parser → npm results get line locations in P1.
@@ -269,3 +310,12 @@ change `go.mod`.
   public or licensed GitHub repositories and accepts no gating for SBOM and
   transitive inputs; P2 would then be postponed and P3 redesigned without the
   hook.
+- Adoption review on 2026-11-01 (Claude Fable and Codex gpt-6-astra, same brief).
+  Both predicted narrow adoption as it stands, ranked trust and a working setup
+  path first, and advised dropping P4 and P5. They differed on P2's position, and
+  this plan settles that by splitting P3. The maintainer picked this order on
+  2026-11-02.
+- P0 label check on 2026-11-02 (Claude Fable, author's preference withheld):
+  recommended changing the one branch that produced semver's label. Not adopted
+  for now: semver's label came from the Go path case bug, which Fable listed as a
+  condition that would change its view.
