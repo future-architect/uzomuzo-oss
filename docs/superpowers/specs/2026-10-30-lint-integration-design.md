@@ -63,11 +63,12 @@ SARIF 2.1.0 output from `uzomuzo scan`. No new flag; new value of `--format`.
     (`internal/interfaces/cli/input_helpers.go`); keep the line of each PURL.
   - CycloneDX SBOM: the SBOM is not where the dependency is declared, so no
     source location. Do **not** invent line numbers; emit the result against
-    the SBOM file without a region (GitHub display behavior: open question 2).
+    the SBOM file without a region. GitHub shows such a result at line 1 of
+    the SBOM file (measured, see "Measured GitHub behavior").
 - **Fingerprint**: `github/codeql-action/upload-sarif` fills
   `partialFingerprints` from source when missing, but direct REST uploads do
-  not. Emit a key (rule + versionless PURL + file) ourselves; whether GitHub
-  uses it for alert matching is open question 3.
+  not. Emit a key (rule + versionless PURL + file) ourselves; GitHub uses it
+  for alert matching (measured, see "Measured GitHub behavior").
 - A new ADR (next free number after ADR-0033) records the rule set, level
   derivation, and location policy.
 
@@ -87,13 +88,20 @@ kind (e.g. the base branch's `go.mod` or SBOM).
   the replacement target); baseline file missing (new manifest → everything
   is added) vs unreadable (error, never silently "no baseline").
 
-Why a flag and not GitHub's diff filtering: GitHub hides alerts on lines
-outside the PR diff, but (a) code scanning on private repositories needs a
-paid GitHub Code Security license, (b) GitLab / Bitbucket / pre-commit users
-get nothing, (c) SBOM-derived results have no line to be "in the diff", and
-(d) GitHub docs do not state that off-diff alerts are excluded from the
-check's pass/fail. Flag rationale per project-conventions: recurring
-operational need that cannot be inferred.
+Why a flag and not GitHub's diff filtering: an `error` on a line the PR did not
+change does not fail GitHub's check (measured, see "Measured GitHub behavior"),
+but (a) uzomuzo's own exit code is not filtered by GitHub, so a job using
+`--fail-on` still fails on existing dependencies, (b) code scanning on private
+repositories needs a paid GitHub Code Security license, (c) GitLab / Bitbucket /
+pre-commit users get nothing, and (d) SBOM-derived results sit at line 1 of the
+SBOM file, so they count as changed only when a PR changes that line. Flag
+rationale per project-conventions: recurring operational need that cannot be
+inferred.
+
+The ADR must state one expected difference between the two gates. When a PR
+bumps the version of a dependency that is already flagged, GitHub is expected
+to treat the changed line as code the PR touched (not measured), while
+`--baseline` caps that dependency at `warning`.
 
 The baseline is a file, not a git ref, so uzomuzo does not shell out to git;
 wrappers supply it (`git show <base-sha>:go.mod > base.go.mod`).
@@ -122,7 +130,9 @@ deterioration of dependencies nobody touched.
 
 Note: an empty `fail-on` keeps **uzomuzo's** exit code 0, but repository
 code-scanning settings can still make `warning`/`note` alerts fail the
-"Code scanning results" check. Document both levers separately.
+"Code scanning results" check. That check did not fail for an alert on a line
+the PR did not change (measured); whether it fails on a changed line is open
+question 1. Document both levers separately.
 
 **pre-commit** (`.pre-commit-hooks.yaml`): hook `uzomuzo-new-deps`, matching
 `go.mod`, default `stages: [manual, pre-push]` (stage names need
@@ -210,13 +220,31 @@ for, GitLab users use the exit code from P2 or reviewdog `-f=sarif` with the
   non-GitHub) → ship P2 before P1.
 - uzomuzo gains a package.json parser → npm results get line locations in P1.
 
+## Measured GitHub behavior
+
+Measured on 2026-10-30 by uploading SARIF from the P1 branch through the REST
+API to this repository (`main` and PR #605), then deleting every uploaded
+analysis. `main` received a `go.mod` result set without `gopkg.in/yaml.v3`; the
+PR received the same set with yaml.v3 as `error` on `go.mod:17`. The PR does not
+change `go.mod`.
+
+- An `error` that is new against `main`, on a line the PR did not change, does
+  not fail the check. The check passed with "No new alerts in code changed by
+  this pull request".
+- A result without a `region` (SBOM-derived) is accepted and shown at line 1 of
+  the SBOM file.
+- GitHub uses our `partialFingerprints` key. After the yaml.v3 result was moved
+  to line 18 and uploaded again, the same alert number moved to line 18; no
+  alert was opened or closed.
+
 ## Open questions to verify during implementation
 
-1. Does GitHub's "Code scanning results" check fail on `error` alerts that lie
-   outside the PR diff? (Docs: such alerts are not *shown*; failure behavior
-   not stated.)
-2. How GitHub displays SARIF results without a `region` (SBOM-derived).
-3. Whether GitHub uses our own `partialFingerprints` key for alert matching.
+1. Does GitHub's check fail on an `error` alert on a line the PR changed? If it
+   does not, `--baseline` is the only gate.
+2. What does GitHub do with a PR that bumps the version on the line of an
+   already-flagged dependency, or that changes an SBOM file?
+3. How does GitHub display results with no `locations` (transitive
+   dependencies)?
 
 ## Review record
 
@@ -234,3 +262,10 @@ for, GitLab users use the exit code from P2 or reviewdog `-f=sarif` with the
   permissions / categories, repository check thresholds, fingerprint
   fallback scope, gomodguard_v2 `match-type` and minimum version, ESLint
   subpaths, pre-commit install, Ruff prerequisite, plugin distribution.
+- P2 re-check after the measurements above (Claude Fable, given the evidence and
+  both positions, with the author's preference withheld): keep P2 and build it
+  before P3. P3's baseline step and pre-commit hook depend on it, and the exit
+  code is not filtered by GitHub. This would flip if the owner limits gating to
+  public or licensed GitHub repositories and accepts no gating for SBOM and
+  transitive inputs; P2 would then be postponed and P3 redesigned without the
+  hook.
