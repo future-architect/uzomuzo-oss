@@ -107,7 +107,7 @@ CGO_ENABLED=1 go build -o uzomuzo-diet ./cmd/uzomuzo-diet  # requires C compiler
 ## Quick Start
 
 ```bash
-export GITHUB_TOKEN=ghp_...  # optional; adds commit history analysis and fork detection
+export GITHUB_TOKEN=ghp_...  # recommended; adds commit history, archive detection and fork detection
 ```
 
 ```bash
@@ -279,7 +279,7 @@ An archived or disabled repository keeps its lifecycle label (usually Stalled; s
 | **7-state lifecycle model** | Binary "EOL or not" is insufficient. Each state maps to a concrete remediation action. |
 | **Ecosystem-aware delivery model** | Go modules deliver via VCS-direct; npm via registry publish. The same "commits without publish" signal means different things per ecosystem. |
 | **Evidence trails** | Every label includes a reason string and decision trace, so security teams can audit *why* a package was flagged. |
-| **Graduated precision** | Works without GitHub token (deps.dev only); adding a token unlocks commit history and Scorecard for high-precision assessment. |
+| **Graduated precision** | Runs without a GitHub token (deps.dev only) and warns that results are less precise; a token adds commit history and repository state, including archive detection. |
 | **GitHub Actions supply chain scanning** | CI/CD workflows depend on third-party Actions that are themselves OSS. uzomuzo extracts `uses:` directives, recursively resolves composite actions (including local `./` references), and evaluates each Action's lifecycle. |
 
 <details>

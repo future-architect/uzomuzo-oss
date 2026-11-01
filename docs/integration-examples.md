@@ -145,7 +145,7 @@ head purls.txt     # inspect format
 
 ## GitHub Actions Scheduled Scanning
 
-uzomuzo includes a ready-to-use GitHub Actions workflow (`.github/workflows/dependency-scan.yml`) that runs a monthly dependency scan and creates a GitHub Issue with the results.
+uzomuzo includes a ready-to-use GitHub Actions workflow ([`.github/workflows/dependency-scan.yml`](../.github/workflows/dependency-scan.yml)) that runs a monthly dependency scan and creates a GitHub Issue with the results. It installs a pinned uzomuzo release, so the same file works in any repository.
 
 ### What It Does
 
@@ -199,9 +199,11 @@ This sends a Slack notification whenever a scan report issue is created, with no
 
 ### Setup for Your Repository
 
-1. Copy `.github/workflows/dependency-scan.yml` to your repository
+1. Copy `.github/workflows/dependency-scan.yml` to your repository. Change nothing else to start: the workflow's own `GITHUB_TOKEN` gives uzomuzo commit history and repository state.
 2. Ensure the `dependencies` label exists (the workflow uses it for issues)
-3. Optionally configure Slack notifications via `/github subscribe` (see above)
+3. Run it once to check the setup: `gh workflow run dependency-scan.yml --field create-issue=false`
+4. To move to a newer uzomuzo, change `UZOMUZO_VERSION` at the top of the file
+5. Optionally configure Slack notifications via `/github subscribe` (see above)
 
 ---
 
