@@ -152,6 +152,8 @@ The scratch projects had four files, so the agent saw the skill file while looki
 - First wording of the skill, candidates passed by hand: Go, npm, and RubyGems verdicts copied as printed; a nonexistent npm name came back as `review` and the skill asked for a corrected PURL.
 - The wording before the recommend/add split, with the user's own settings loaded: a named package that came back `replace` (`github.com/mitchellh/go-homedir`) was added with the verdict first in the reply and `os.UserHomeDir()` suggested; PyPI candidates were scanned without a version while exploring, then the pinned version was scanned.
 
+**Dependency footprint rule (2026-11-01, four runs of the current wording and two of the previous one, Sonnet, recommend only).** With `pkg:npm/axios` (4 direct, 25 transitive) and `pkg:npm/ky` (0 direct, 0 transitive), both `ok` / `Active`, both current-wording runs recommended `ky` and wrote the difference as a smaller count, not as proof of safety. With `pkg:npm/axios` and `pkg:npm/node-fetch` (`caution` / `Stalled`, 3 direct, 2 transitive), both recommended `axios` and said the smaller count did not outweigh the verdict and lifecycle. The two previous-wording runs on axios and ky also recommended `ky` and cited its footprint, so these runs show the rule being followed, not that the new wording changes the pick.
+
 Separately, `uzomuzo scan` itself returned a verdict, without an error, for one PURL in each of its eight ecosystems. The skill has not been run on Maven, Cargo, NuGet, or Packagist candidates, with models other than Sonnet, or with agents other than Claude Code. None of this measures whether the verdicts are correct or whether the record improves a selection.
 
 ## How it fits together
