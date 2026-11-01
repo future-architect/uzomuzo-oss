@@ -318,7 +318,8 @@ list files. Repeated references have multiple locations. SBOM files have
 file-level locations; stdin, direct arguments, and remotely discovered Actions
 have none. The artifact URI is the input path as given, with forward slashes
 and a leading `./` removed. For GitHub code scanning, run from the repository
-root and supply a repository-relative path.
+root and supply a repository-relative path. For a complete workflow, see
+[Pull Request Annotations](integration-examples.md#pull-request-annotations-github-code-scanning).
 
 <details>
 <summary><strong>Example: <code>--format table</code></strong></summary>

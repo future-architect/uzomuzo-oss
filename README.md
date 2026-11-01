@@ -123,6 +123,7 @@ trivy fs . --format cyclonedx | uzomuzo scan --sbom -
 trivy fs . --format cyclonedx | uzomuzo scan --sbom - --show-transitive  # include transitive
 uzomuzo scan                     # auto-detect go.mod in cwd (add --show-transitive for // indirect)
 uzomuzo scan --format json       # JSON output for CI integration
+uzomuzo scan --file go.mod --format sarif  # PR annotations, see docs/integration-examples.md
 
 # Optional npm maintainer e-mail domain notice (makes RDAP requests; caches IANA's RDAP server list)
 uzomuzo scan --maintainer-domain pkg:npm/express@4.18.2

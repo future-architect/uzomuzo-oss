@@ -143,6 +143,68 @@ head purls.txt     # inspect format
 ./uzomuzo scan --file purls.txt --sample 500
 ```
 
+## Pull Request Annotations (GitHub Code Scanning)
+
+This workflow shows uzomuzo's findings on the `go.mod` lines they belong to, in the pull request and in the repository's Security tab. It never fails the job on a finding, so it is safe to add to a repository that already has flagged dependencies.
+
+```yaml
+# .github/workflows/dependency-health.yml
+name: Dependency Health
+
+on:
+  pull_request:
+    paths: [go.mod]
+  push:
+    branches: [main]
+    paths: [go.mod]
+
+permissions:
+  contents: read
+  security-events: write # needed to upload the results
+
+env:
+  UZOMUZO_VERSION: vX.Y.Z # a release that has --format sarif (after v0.12.1)
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install uzomuzo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd "$RUNNER_TEMP"
+          asset="uzomuzo-oss_${UZOMUZO_VERSION#v}_linux_amd64.tar.gz"
+          gh release download "$UZOMUZO_VERSION" --repo future-architect/uzomuzo-oss \
+            --pattern "$asset" --pattern checksums.txt
+          sha256sum --check --ignore-missing checksums.txt
+          tar -xzf "$asset" uzomuzo
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Scan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: uzomuzo scan --file go.mod --format sarif > uzomuzo.sarif
+
+      - name: Upload to code scanning
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: uzomuzo.sarif
+          category: uzomuzo
+```
+
+Run the `push` trigger at least once: GitHub compares a pull request's results with the base branch's.
+
+What to expect:
+
+- **Finding on a line the PR did not change:** shown in the Security tab, and GitHub's check still passes.
+- **Failing the job:** add `--fail-on eol-confirmed,eol-effective` to the scan. uzomuzo then exits 1 on any matching dependency, including ones the PR did not touch, and the upload step needs `if: always()` to still run.
+- **Private repositories:** code scanning needs a GitHub Code Security license. Without one the upload fails; use the [CI pipeline example](#ci-pipeline-example) instead.
+- **Pull requests from forks:** their `GITHUB_TOKEN` is read-only, so the upload fails.
+- **Other ecosystems:** generate an SBOM first and scan it with `--sbom sbom.json`. Results attach to the SBOM file at line 1, not to a dependency's line, because an SBOM does not say where a dependency is declared.
+
 ## GitHub Actions Scheduled Scanning
 
 uzomuzo includes a ready-to-use GitHub Actions workflow (`.github/workflows/dependency-scan.yml`) that runs a monthly dependency scan and creates a GitHub Issue with the results.
