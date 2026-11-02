@@ -287,6 +287,22 @@ type DependencyEdge struct {
 	Requirement string `json:"requirement"`
 }
 
+// SelfVersion returns the version of the SELF node, which is the version the
+// graph actually describes. It can differ from the requested version when the
+// graph came from a version fallback. Empty when r is nil or no SELF node
+// carries one.
+func (r *DependenciesResponse) SelfVersion() string {
+	if r == nil {
+		return ""
+	}
+	for _, n := range r.Nodes {
+		if n.Relation == "SELF" {
+			return n.VersionKey.Version
+		}
+	}
+	return ""
+}
+
 // CountByRelation counts nodes by relation type (DIRECT, INDIRECT), excluding SELF.
 func (r *DependenciesResponse) CountByRelation() (direct, transitive int) {
 	for _, n := range r.Nodes {

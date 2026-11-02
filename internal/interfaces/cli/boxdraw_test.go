@@ -1285,16 +1285,19 @@ func TestWriteBoxHealth_DependentsScope(t *testing.T) {
 }
 
 func TestWriteBoxHealth_DependsOn(t *testing.T) {
+	npm := &analysis.Package{Ecosystem: "npm"}
 	tests := []struct {
 		name string
 		a    *analysis.Analysis
 		want string
 	}{
-		{"graph with deps", &analysis.Analysis{HasDependencyGraph: true, DirectDepsCount: 28, TransitiveDepsCount: 39}, "Depends on: 28 direct, 39 transitive"},
-		{"graph with direct only", &analysis.Analysis{HasDependencyGraph: true, DirectDepsCount: 4}, "Depends on: 4 direct, 0 transitive"},
-		{"graph with no deps", &analysis.Analysis{HasDependencyGraph: true}, "Depends on: none (0 direct, 0 transitive)"},
-		{"no graph", &analysis.Analysis{}, ""},
-		{"counts without graph", &analysis.Analysis{DirectDepsCount: 3}, ""},
+		{"graph with deps", &analysis.Analysis{Package: npm, HasDependencyGraph: true, DependencyGraphVersion: "5.1.0", DirectDepsCount: 28, TransitiveDepsCount: 39}, "Depends on: 28 direct, 39 transitive"},
+		{"graph with direct only", &analysis.Analysis{Package: npm, HasDependencyGraph: true, DependencyGraphVersion: "1.0.0", DirectDepsCount: 4}, "Depends on: 4 direct, 0 transitive"},
+		{"graph with no deps", &analysis.Analysis{Package: npm, HasDependencyGraph: true, DependencyGraphVersion: "1.0.0"}, "Depends on: none (0 direct, 0 transitive)"},
+		{"no graph", &analysis.Analysis{Package: npm}, ""},
+		{"counts without graph", &analysis.Analysis{Package: npm, DirectDepsCount: 3}, ""},
+		{"graph without version", &analysis.Analysis{Package: npm, HasDependencyGraph: true, DirectDepsCount: 3}, ""},
+		{"cargo graph", &analysis.Analysis{Package: &analysis.Package{Ecosystem: "cargo"}, HasDependencyGraph: true, DependencyGraphVersion: "1.0.140", DirectDepsCount: 13, TransitiveDepsCount: 47}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -3,10 +3,13 @@ package golangresolve
 import (
 	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"golang.org/x/mod/modfile"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
@@ -54,7 +57,8 @@ func NormalizePURLToModuleRoot(ctx context.Context, gp *goproxy.Client, pr *purl
 		rawFull = un
 	}
 	// 1) Authoritative via Go proxy
-	if mod, _, okp := NormalizePathToModuleRoot(ctx, gp, rawFull); okp && mod != "" {
+	if mod, latest, okp := NormalizePathToModuleRoot(ctx, gp, rawFull); okp && mod != "" {
+		mod = realModuleSpelling(ctx, gp, mod, latest)
 		return mod, url.PathEscape(mod), true
 	}
 	// 2) GitHub Raw fallback: read go.mod module directive when path is a GitHub repo/subpath
@@ -65,6 +69,26 @@ func NormalizePURLToModuleRoot(ctx context.Context, gp *goproxy.Client, pr *purl
 	}
 	// 3) Not normalized; return original escaped with ok=false so callers can apply coarse fallback
 	return rawFull, url.PathEscape(rawFull), false
+}
+
+// realModuleSpelling returns the module path as its go.mod spells it.
+//
+// PURL parsing lowercases pkg:golang paths and SBOMs can already hold the lowercase
+// form, but deps.dev treats Go module names as case-sensitive: github.com/masterminds/semver/v3
+// is a 404 and github.com/burntsushi/toml is an old record. The Go proxy serves the
+// lowercase path, and its go.mod states the real spelling. A go.mod that names a
+// different module is not a spelling of this one, so it is ignored, as is any failure:
+// the lookup then behaves as it did without this step.
+func realModuleSpelling(ctx context.Context, gp *goproxy.Client, module, version string) string {
+	mod, _, err := gp.GoMod(ctx, module, version)
+	if err != nil {
+		slog.Debug("go module spelling lookup failed", "module", module, "version", version, "error", err)
+		return module
+	}
+	if declared := modfile.ModulePath(mod); strings.EqualFold(declared, module) {
+		return declared
+	}
+	return module
 }
 
 // inferModuleFromGitHubRaw tries to fetch go.mod from GitHub default branches and parse module directive.

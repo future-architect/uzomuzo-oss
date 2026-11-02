@@ -24,6 +24,41 @@ func TestConvertRepoURLToProjectKey(t *testing.T) {
 			expected: "github.com/owner/repo",
 		},
 		{
+			name:     "maven_scm_git_https",
+			input:    "scm:git:https://github.com/Owner/Repo.git",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "maven_scm_git_scp",
+			input:    "scm:git:git@github.com:springfox/springfox.git",
+			expected: "github.com/springfox/springfox",
+		},
+		{
+			name:     "maven_scm_without_provider_scp",
+			input:    "scm:git@github.com:LMAX-Exchange/disruptor",
+			expected: "github.com/lmax-exchange/disruptor",
+		},
+		{
+			name:     "maven_scm_git_ssh_scheme",
+			input:    "scm:git:ssh://git@github.com/Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "maven_scm_uppercase_prefix",
+			input:    "SCM:GIT:https://github.com/Owner/Repo",
+			expected: "github.com/owner/repo",
+		},
+		{
+			name:     "maven_scm_decoy_host",
+			input:    "scm:git:https://notgithub.com/Owner/Repo",
+			expected: "",
+		},
+		{
+			name:     "maven_scm_decoy_scp_host",
+			input:    "scm:git:git@evil.example:github.com/Owner/Repo",
+			expected: "",
+		},
+		{
 			name:     "ssh_scheme_with_user_at",
 			input:    "ssh://git@github.com/Owner/Repo",
 			expected: "github.com/owner/repo",

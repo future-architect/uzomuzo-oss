@@ -95,6 +95,107 @@ func TestNormalizePURLToModuleRoot(t *testing.T) {
 	}
 }
 
+func TestNormalizePURLToModuleRoot_RealSpelling(t *testing.T) {
+	const lowerRoot = "github.com/burntsushi/toml"
+	const lowerEsc = "github.com%2Fburntsushi%2Ftoml"
+	const realRoot = "github.com/BurntSushi/toml"
+	const realEsc = "github.com%2FBurntSushi%2Ftoml"
+	tests := []struct {
+		name       string
+		purl       string
+		modStatus  int
+		modBody    string
+		wantModule string
+		wantEsc    string
+	}{
+		{
+			name:       "lowercase PURL takes the spelling from go.mod",
+			purl:       "pkg:golang/github.com/burntsushi/toml@v1.5.0",
+			modStatus:  http.StatusOK,
+			modBody:    "module github.com/BurntSushi/toml\n\ngo 1.18\n",
+			wantModule: realRoot,
+			wantEsc:    realEsc,
+		},
+		{
+			name:       "mixed-case PURL takes the spelling from go.mod",
+			purl:       "pkg:golang/github.com/BurntSushi/toml@v1.5.0",
+			modStatus:  http.StatusOK,
+			modBody:    "module github.com/BurntSushi/toml\n",
+			wantModule: realRoot,
+			wantEsc:    realEsc,
+		},
+		{
+			name:       "quoted module directive with a comment",
+			purl:       "pkg:golang/github.com/burntsushi/toml@v1.5.0",
+			modStatus:  http.StatusOK,
+			modBody:    "module \"github.com/BurntSushi/toml\" // TOML\n",
+			wantModule: realRoot,
+			wantEsc:    realEsc,
+		},
+		{
+			name:       "go.mod naming another module keeps the resolved root",
+			purl:       "pkg:golang/github.com/burntsushi/toml@v1.5.0",
+			modStatus:  http.StatusOK,
+			modBody:    "module github.com/someone/else\n",
+			wantModule: lowerRoot,
+			wantEsc:    lowerEsc,
+		},
+		{
+			name:       "go.mod request failure keeps the resolved root",
+			purl:       "pkg:golang/github.com/burntsushi/toml@v1.5.0",
+			modStatus:  http.StatusInternalServerError,
+			wantModule: lowerRoot,
+			wantEsc:    lowerEsc,
+		},
+		{
+			name:       "unparseable go.mod keeps the resolved root",
+			purl:       "pkg:golang/github.com/burntsushi/toml@v1.5.0",
+			modStatus:  http.StatusOK,
+			modBody:    "not a go.mod\n",
+			wantModule: lowerRoot,
+			wantEsc:    lowerEsc,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var modRequests []string
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.URL.Path == "/"+lowerRoot+"/@latest":
+					_, _ = w.Write([]byte(`{"Version":"v1.6.0"}`)) // test helper
+				case strings.HasSuffix(r.URL.Path, ".mod"):
+					modRequests = append(modRequests, r.URL.Path)
+					w.WriteHeader(tt.modStatus)
+					_, _ = w.Write([]byte(tt.modBody)) // test helper
+				default:
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer ts.Close()
+			gp := goproxy.NewClientWith(ts.Client(), ts.URL)
+
+			p, err := purl.NewParser().Parse(tt.purl)
+			if err != nil {
+				t.Fatalf("parse purl: %v", err)
+			}
+			mod, esc, ok := NormalizePURLToModuleRoot(context.Background(), gp, p, "")
+			if !ok {
+				t.Fatalf("ok = false, want true")
+			}
+			if mod != tt.wantModule {
+				t.Errorf("module = %q, want %q", mod, tt.wantModule)
+			}
+			if esc != tt.wantEsc {
+				t.Errorf("escaped = %q, want %q", esc, tt.wantEsc)
+			}
+			wantMod := "/" + lowerRoot + "/@v/v1.6.0.mod"
+			if len(modRequests) != 1 || modRequests[0] != wantMod {
+				t.Errorf("go.mod requests = %v, want [%s]", modRequests, wantMod)
+			}
+		})
+	}
+}
+
 func TestNormalizePURLToModuleRoot_GitHubFallback(t *testing.T) {
 	// Override githubRawBase to point to a local server simulating go.mod contents
 	old := githubRawBase

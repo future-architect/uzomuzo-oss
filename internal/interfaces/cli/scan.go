@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -78,6 +79,7 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 	if policy.NeedsRepositoryState() && cfg.GitHub.Token == "" {
 		return fmt.Errorf("--fail-on archived and disabled require GITHUB_TOKEN to read the repository state")
 	}
+	warnIfNoToken(os.Stderr, cfg.GitHub.Token)
 
 	opts.renderOptions = scanRenderOptions{Policy: policy, ToolVersion: opts.ToolVersion}
 	var serviceOptions []application.Option
@@ -394,4 +396,15 @@ func attachInputLocations(result *scanapp.Result, locations map[string][]deppars
 			result.Entries[i].Locations = locations[result.Entries[i].PURL]
 		}
 	}
+}
+
+// warnIfNoToken tells the user when a scan runs without GITHUB_TOKEN. It writes to
+// stderr so that --format json, csv and sarif output on stdout stays parseable.
+func warnIfNoToken(w io.Writer, token string) {
+	if token != "" {
+		return
+	}
+	_, _ = fmt.Fprintln(w, "warning: GITHUB_TOKEN is not set, so commit history and repository state are not checked. "+
+		"An archived repository can go undetected and some labels are less precise. "+
+		"Set it with: export GITHUB_TOKEN=$(gh auth token)") // best effort: a failed warning must not stop the scan
 }

@@ -3,6 +3,15 @@
   "extends": ["config:recommended"],
   "minimumReleaseAge": "21 days",
   "ignorePaths": ["**/testdata/**"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/dependency-scan\\.yml$/"],
+      "matchStrings": ["UZOMUZO_VERSION: (?<currentValue>v\\S+)"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "future-architect/uzomuzo-oss"
+    }
+  ],
   "packageRules": [
     {
       "matchManagers": ["gomod"],

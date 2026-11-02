@@ -540,6 +540,7 @@ var (
 //   - ssh://git@github.com:owner/repo, https://github.com:owner/repo (scp-style path after an allowed scheme)
 //   - git@github.com:owner/repo, github.com:owner/repo, with any user@ and with or without www. (scp-style, no scheme)
 //   - github.com/owner/repo, git@github.com/owner/repo, //github.com/owner/repo (no scheme)
+//   - any of the above behind a Maven SCM prefix: scm:git:..., scm:hg:..., scm:svn:... or a bare scm:
 //
 // Query strings, fragments, trailing slashes and path segments below owner/repo are ignored.
 func convertRepoURLToProjectKey(repoURL string) string {
@@ -547,6 +548,7 @@ func convertRepoURLToProjectKey(repoURL string) string {
 	if i := strings.IndexAny(s, "?#"); i >= 0 {
 		s = s[:i]
 	}
+	s = trimMavenSCMPrefix(s)
 	if s == "" {
 		return ""
 	}
@@ -595,6 +597,23 @@ func convertRepoURLToProjectKey(repoURL string) string {
 		return ""
 	}
 	return githubProjectKeyFromPath(parsed.EscapedPath())
+}
+
+// trimMavenSCMPrefix strips a Maven SCM prefix, "scm:<provider>:" or a bare "scm:"
+// (scm:git@github.com:o/r is common in POMs), so the URL behind it is checked
+// like any other.
+func trimMavenSCMPrefix(s string) string {
+	lower := asciiLower(s)
+	if !strings.HasPrefix(lower, "scm:") {
+		return s
+	}
+	s, lower = s[len("scm:"):], lower[len("scm:"):]
+	for _, provider := range []string{"git:", "hg:", "svn:"} {
+		if strings.HasPrefix(lower, provider) && !strings.HasPrefix(lower[len(provider)-1:], "://") {
+			return s[len(provider):]
+		}
+	}
+	return s
 }
 
 // trimGitHubSCPPrefix strips an scp-style "[user@][www.]github.com:" prefix and

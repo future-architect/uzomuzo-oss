@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
@@ -71,7 +70,7 @@ func TestIssue313Reproduction(t *testing.T) {
 	fmt.Fprintln(&b, "| PURL | direct | transitive | HasDependencyGraph |")
 	fmt.Fprintln(&b, "|---|---|---|---|")
 	for _, tc := range testCases {
-		key := commonpurl.CanonicalKey(tc.purl)
+		key := tc.purl
 		resp, ok := results[key]
 		if !ok {
 			fmt.Fprintf(&b, "| `%s` | - | - | false (missing response entry) |\n", tc.purl)

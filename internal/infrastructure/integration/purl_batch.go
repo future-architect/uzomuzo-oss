@@ -342,8 +342,8 @@ func dependenciesSupportedEcosystem(eco string) bool {
 }
 
 // enrichDependencyCounts fetches dependency counts (direct + transitive) from deps.dev
-// and populates Analysis.DirectDepsCount, Analysis.TransitiveDepsCount, and
-// Analysis.HasDependencyGraph.
+// and populates Analysis.DirectDepsCount, Analysis.TransitiveDepsCount,
+// Analysis.HasDependencyGraph, and Analysis.DependencyGraphVersion.
 // Returns the raw DependenciesResponse map for downstream use (e.g., transitive advisory enrichment).
 //
 // Version selection: delegated to latestReleaseVersion (StableVersion >
@@ -359,9 +359,8 @@ func dependenciesSupportedEcosystem(eco string) bool {
 // DDD Layer: Infrastructure (best-effort enrichment)
 func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls []string, analyses map[string]*domain.Analysis) map[string]*depsdev.DependenciesResponse {
 	effectivePURLs := make([]string, 0, len(purls))
-	// Multiple original PURLs may resolve to the same effective PURL (e.g., case
-	// variants like pkg:npm/React and pkg:npm/react). Use a slice of original keys
-	// so all analyses get populated, not just the last one.
+	// Multiple original PURLs may resolve to the same effective PURL. Use a slice
+	// of original keys so all analyses get populated, not just the last one.
 	effectiveToOriginals := make(map[string][]string, len(purls))
 	seen := make(map[string]bool, len(purls))
 	for _, p := range purls {
@@ -416,15 +415,14 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 	// 404, a graph deps.dev reported as unresolved, etc.).
 	perPURL := make(map[string]*depsdev.DependenciesResponse, len(purls))
 	for ep, originalKeys := range effectiveToOriginals {
-		key := purl.CanonicalKey(ep)
-		if key == "" {
-			key = ep
-		}
-		resp, ok := depsResults[key]
+		resp, ok := depsResults[ep]
 		if !ok || resp == nil {
 			continue
 		}
 		direct, transitive := resp.CountByRelation()
+		// The SELF node names the version the graph describes, which differs
+		// from ep after a version fallback.
+		graphVersion := resp.SelfVersion()
 		for _, originalKey := range originalKeys {
 			a := analyses[originalKey]
 			if a == nil {
@@ -432,6 +430,7 @@ func (s *IntegrationService) enrichDependencyCounts(ctx context.Context, purls [
 			}
 			a.DirectDepsCount, a.TransitiveDepsCount = direct, transitive
 			a.HasDependencyGraph = true
+			a.DependencyGraphVersion = graphVersion
 			perPURL[originalKey] = resp
 		}
 	}
