@@ -23,6 +23,9 @@ on:
 permissions:
   contents: read
 
+env:
+  UZOMUZO_VERSION: v0.12.1
+
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -33,12 +36,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version-file: go.mod
-
-      - name: Build uzomuzo
-        run: go build -o uzomuzo ./cmd/uzomuzo
+      # Installs a release instead of building from source so this file also works
+      # when copied to another repository (see docs/integration-examples.md).
+      - name: Install uzomuzo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd "$RUNNER_TEMP"
+          asset="uzomuzo-oss_${UZOMUZO_VERSION#v}_linux_amd64.tar.gz"
+          gh release download "$UZOMUZO_VERSION" --repo future-architect/uzomuzo-oss \
+            --pattern "$asset" --pattern checksums.txt
+          sha256sum --check --ignore-missing checksums.txt
+          tar -xzf "$asset" uzomuzo
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       - name: Generate SBOM
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -74,7 +84,7 @@ jobs:
 
           # Single scan run; detailed format includes summary table + detailed report
           set +e
-          ./uzomuzo scan --sbom sbom.json --format detailed "${ARGS[@]}" 2>&1 | tee scan-report.txt
+          uzomuzo scan --sbom sbom.json --format detailed "${ARGS[@]}" 2>&1 | tee scan-report.txt
           EXIT_CODE=${PIPESTATUS[0]}
           set -e
 

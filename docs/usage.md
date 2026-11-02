@@ -562,20 +562,20 @@ Use `uzomuzo --help` for the full list, or `uzomuzo scan --help` for scan-specif
 
 ## Analysis Precision and `GITHUB_TOKEN`
 
-uzomuzo works well without `GITHUB_TOKEN`. Most lifecycle signals — package versions, publish dates, Scorecard metrics (including archive detection), advisories, and license info — come from **deps.dev**, which requires no token.
+uzomuzo runs without `GITHUB_TOKEN`, but use one whenever you can, and always in CI. Package versions, publish dates, Scorecard metrics, advisories, and license info come from **deps.dev**, which requires no token. Commit history and repository state come from GitHub, and without them the results differ. `gopkg.in/yaml.v3` is an example: its repository is archived, and only a token run reports that. A scan without a token prints a warning on stderr.
 
-Setting `GITHUB_TOKEN` adds commit-level signals for edge cases where deps.dev data alone is ambiguous:
+Setting `GITHUB_TOKEN` adds:
 
 | Signal | Without Token | With Token |
 |--------|--------------|------------|
-| Archive detection | Via Scorecard "Maintained" check | Via Scorecard + GitHub API |
+| Archive detection | Only when a Scorecard result reports it | Via Scorecard + GitHub API |
 | Human vs. bot commit ratio | Not available | Available — detects Dependabot-only maintenance |
 | Last human commit date | Not available | Available — improves Stalled/Active boundary |
 | Fork detection | Not available | Available |
 
-### When to add a token
+### Setting a token
 
-Start without a token. If you see packages classified as **Stalled** that you suspect are actually healthy (e.g., Go/Composer packages that commit but rarely publish to a registry), adding a token will resolve these edge cases.
+Without commit history, a package that commits but rarely publishes to a registry can be classified as **Stalled**, and an archived repository can go unnoticed. `--fail-on archived` and `--fail-on disabled` refuse to run without a token.
 
 The token requires no special scopes for public repositories — a default `GITHUB_TOKEN` from GitHub Actions or `gh auth login` is sufficient.
 
