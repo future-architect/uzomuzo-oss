@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -96,7 +97,7 @@ func renderScanSARIF(w io.Writer, entries []audit.AuditEntry, opts scanRenderOpt
 	for i, r := range rules {
 		indexes[r.ID] = i
 	}
-	uri := strings.TrimPrefix(filepath.ToSlash(opts.ArtifactURI), "./")
+	uri := sarifArtifactURI(opts.ArtifactURI)
 	results := make([]sarifResult, 0, len(entries))
 	for i := range entries {
 		e := &entries[i]
@@ -143,6 +144,25 @@ func renderScanSARIF(w io.Writer, entries []audit.AuditEntry, opts scanRenderOpt
 		return fmt.Errorf("failed to encode SARIF output: %w", err)
 	}
 	return nil
+}
+
+// sarifArtifactURI turns an input path into a relative URI reference. Without escaping,
+// "deps#old.txt" reads as file "deps" with a fragment and "a%20b.txt" as "a b.txt".
+func sarifArtifactURI(path string) string {
+	slashed := strings.TrimPrefix(filepath.ToSlash(path), "./")
+	if isWindowsAbsolute(slashed) {
+		// As a plain reference, "C:/repo/go.mod" would be escaped into the relative "./C:/repo/go.mod".
+		return (&url.URL{Scheme: "file", Path: "/" + slashed}).String()
+	}
+	return (&url.URL{Path: slashed}).String()
+}
+
+func isWindowsAbsolute(slashed string) bool {
+	if len(slashed) < 3 || slashed[1] != ':' || slashed[2] != '/' {
+		return false
+	}
+	c := slashed[0] | 0x20 // lowercase an ASCII letter
+	return 'a' <= c && c <= 'z'
 }
 
 func sarifRules() []sarifRule {
