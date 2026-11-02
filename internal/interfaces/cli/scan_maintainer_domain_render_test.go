@@ -209,7 +209,7 @@ func TestMaintainerDomainPackageContextJSON(t *testing.T) {
 func TestScanJSONRDAPBootstrap(t *testing.T) {
 	var buf bytes.Buffer
 	info := &analysis.RDAPBootstrapInfo{Source: analysis.RDAPBootstrapCache, Publication: "2026-09-30T23:00:03Z"}
-	if err := renderScanOutput(&buf, nil, nil, FormatJSON, false, info); err != nil {
+	if err := renderScanOutput(&buf, nil, nil, FormatJSON, false, info, scanRenderOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	var out struct {
@@ -225,7 +225,7 @@ func TestScanJSONRDAPBootstrap(t *testing.T) {
 		t.Errorf("output=%s", buf.String())
 	}
 	buf.Reset()
-	if err := renderScanOutput(&buf, nil, nil, FormatJSON, false, nil); err != nil {
+	if err := renderScanOutput(&buf, nil, nil, FormatJSON, false, nil, scanRenderOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(buf.String(), "rdap_bootstrap") {

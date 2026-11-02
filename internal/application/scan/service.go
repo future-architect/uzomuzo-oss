@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 
 	"github.com/future-architect/uzomuzo-oss/internal/application"
@@ -75,7 +76,7 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 		return &Result{}, nil
 	}
 
-	purls, relations, viaParents := selectDependencies(deps, parserCfg.ShowTransitive)
+	purls, relations, viaParents, locations := selectDependencies(deps, parserCfg.ShowTransitive)
 	if len(purls) == 0 {
 		return &Result{}, nil
 	}
@@ -93,6 +94,7 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 	for i := range entries {
 		entries[i].Relation = relations[entries[i].PURL]
 		entries[i].ViaParents = viaParents[entries[i].PURL]
+		entries[i].Locations = locations[entries[i].PURL]
 	}
 	hasFailure := policy.Evaluate(entries)
 	warnMaliciousLookupFailures(analyses)
@@ -107,12 +109,18 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 // A PURL listed as both transitive and direct (e.g., two go.mod requirements
 // replaced by the same module) is reported as direct; otherwise the first
 // entry's relation and via-parents are kept.
-func selectDependencies(deps []depparser.ParsedDependency, showTransitive bool) (purls []string, relations map[string]depparser.DependencyRelation, viaParents map[string][]string) {
+func selectDependencies(deps []depparser.ParsedDependency, showTransitive bool) (purls []string, relations map[string]depparser.DependencyRelation, viaParents map[string][]string, locations map[string][]depparser.SourceLocation) {
 	relations = make(map[string]depparser.DependencyRelation, len(deps))
 	viaParents = make(map[string][]string, len(deps))
+	locations = make(map[string][]depparser.SourceLocation, len(deps))
 	for _, d := range deps {
 		if !showTransitive && d.Relation == depparser.RelationTransitive {
 			continue
+		}
+		for _, loc := range d.Locations {
+			if !slices.Contains(locations[d.PURL], loc) {
+				locations[d.PURL] = append(locations[d.PURL], loc)
+			}
 		}
 		if prev, exists := relations[d.PURL]; exists {
 			if prev == depparser.RelationTransitive && d.Relation == depparser.RelationDirect {
@@ -125,7 +133,7 @@ func selectDependencies(deps []depparser.ParsedDependency, showTransitive bool) 
 		viaParents[d.PURL] = d.ViaParents
 		purls = append(purls, d.PURL)
 	}
-	return purls, relations, viaParents
+	return purls, relations, viaParents, locations
 }
 
 // ActionsDiscoverer abstracts the actions discovery infrastructure.

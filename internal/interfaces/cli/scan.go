@@ -14,6 +14,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/application"
 	scanapp "github.com/future-architect/uzomuzo-oss/internal/application/scan"
 	analysispkg "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
+	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 	domaincfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	domainscan "github.com/future-architect/uzomuzo-oss/internal/domain/scan"
@@ -29,7 +30,7 @@ type FileDetector func(filePath string, parsers map[string]depparser.DependencyP
 type WorkflowDetector func(filePath string) (data []byte, ok bool, err error)
 
 // WorkflowParser extracts GitHub repository URLs from workflow YAML data.
-type WorkflowParser func(data []byte) ([]string, error)
+type WorkflowParser func(data []byte) ([]string, map[string][]depparser.SourceLocation, error)
 
 // ErrScanFailPolicy is returned by RunScan when at least one dependency
 // matches the --fail-on policy, signaling the caller to exit with code 1.
@@ -39,7 +40,10 @@ var ErrScanFailPolicy = errors.New("scan: one or more dependencies matched --fai
 type ScanOptions struct {
 	ProcessingOptions
 
-	Format              string // "detailed", "table", "json", "csv" (empty = smart default)
+	// ToolVersion is the running binary version reported in SARIF.
+	ToolVersion string
+
+	Format              string // "detailed", "table", "json", "csv", "sarif" (empty = smart default)
 	FailOnRaw           string // raw --fail-on CSV string
 	ShowOnlyRaw         string // raw --show-only CSV string (ok,caution,replace,review)
 	SBOMPath            string // --sbom flag
@@ -47,6 +51,9 @@ type ScanOptions struct {
 	IncludeActions      bool   // --include-actions: scan GitHub Actions referenced by input repos
 	ShowTransitive      bool   // --show-transitive: include transitive dependencies in output
 	MaintainerDomain    bool   // --maintainer-domain: check npm maintainer e-mail domains
+
+	// renderOptions is filled by RunScan and the runScan* helpers, not by callers.
+	renderOptions scanRenderOptions
 }
 
 // ActionsDiscovererFactory creates an ActionsDiscoverer from the scan service's analysis service.
@@ -74,6 +81,7 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 	}
 	warnIfNoToken(os.Stderr, cfg.GitHub.Token)
 
+	opts.renderOptions = scanRenderOptions{Policy: policy, ToolVersion: opts.ToolVersion}
 	var serviceOptions []application.Option
 	if opts.MaintainerDomain {
 		serviceOptions = append(serviceOptions, application.WithMaintainerDomain())
@@ -129,6 +137,10 @@ func RunScan(ctx context.Context, cfg *domaincfg.Config, args []string, opts Sca
 
 // runScanSBOM handles --sbom input.
 func runScanSBOM(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy) error {
+	opts.renderOptions.SBOM = true
+	if opts.SBOMPath != "-" {
+		opts.renderOptions.ArtifactURI = opts.SBOMPath
+	}
 	data, err := readSBOMData(opts.SBOMPath)
 	if err != nil {
 		return err
@@ -150,6 +162,7 @@ func runScanSBOM(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 // runScanFile handles --file input (go.mod, SBOM, GitHub Actions workflow YAML, or PURL/URL list).
 func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy, detectFile FileDetector, detectWorkflow WorkflowDetector, parseWorkflow WorkflowParser, actionsCfg scanapp.ActionsConfig) error {
 	filePath := opts.Filename
+	opts.renderOptions.ArtifactURI = filePath
 
 	// Try structured format (go.mod / CycloneDX SBOM) first
 	parser, data, err := detectFile(filePath, parsers)
@@ -157,6 +170,7 @@ func runScanFile(ctx context.Context, svc *scanapp.Service, opts ScanOptions, pa
 		return fmt.Errorf("failed to detect file format for '%s': %w", filePath, err)
 	}
 	if parser != nil {
+		opts.renderOptions.SBOM = parser == parsers["sbom"]
 		// --sample, --line-range, and --include-actions are only meaningful for
 		// PURL/URL list files; reject them for structured formats (go.mod / CycloneDX).
 		if opts.SampleSize > 0 {
@@ -206,7 +220,7 @@ func runScanPURLList(ctx context.Context, svc *scanapp.Service, opts ScanOptions
 	if err := validateLineRange(&opts.ProcessingOptions); err != nil {
 		return fmt.Errorf("invalid line range: %w", err)
 	}
-	purls, githubURLs, err := categorizeFileLines(filePath, opts.ProcessingOptions)
+	purls, githubURLs, locations, err := categorizeFileLines(filePath, opts.ProcessingOptions)
 	if err != nil {
 		return fmt.Errorf("failed to read file '%s': %w", filePath, err)
 	}
@@ -230,6 +244,7 @@ func runScanPURLList(ctx context.Context, svc *scanapp.Service, opts ScanOptions
 		return fmt.Errorf("scan failed: %w", err)
 	}
 
+	attachInputLocations(result, locations)
 	return finalizeScanOutput(svc, result, opts, len(purls)+len(githubURLs))
 }
 
@@ -282,6 +297,7 @@ func runScanStdin(ctx context.Context, svc *scanapp.Service, opts ScanOptions, p
 
 // runScanAutoDetect auto-detects go.mod in the current directory.
 func runScanAutoDetect(ctx context.Context, svc *scanapp.Service, opts ScanOptions, parsers map[string]depparser.DependencyParser, policy domainscan.FailPolicy) error {
+	opts.renderOptions.ArtifactURI = "go.mod"
 	data, err := os.ReadFile("go.mod")
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -322,7 +338,7 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 	if as := svc.AnalysisService(); as != nil {
 		bootstrap = as.RDAPBootstrap()
 	}
-	if err := renderScanOutput(os.Stdout, result.Entries, displayEntries, format, filterActive, bootstrap); err != nil {
+	if err := renderScanOutput(os.Stdout, result.Entries, displayEntries, format, filterActive, bootstrap, opts.renderOptions); err != nil {
 		return fmt.Errorf("failed to render output: %w", err)
 	}
 
@@ -346,7 +362,7 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 
 // runScanWorkflow parses a GitHub Actions workflow YAML and evaluates referenced Actions.
 func runScanWorkflow(ctx context.Context, svc *scanapp.Service, data []byte, opts ScanOptions, policy domainscan.FailPolicy, parseWorkflow WorkflowParser) error {
-	githubURLs, err := parseWorkflow(data)
+	githubURLs, locations, err := parseWorkflow(data)
 	if err != nil {
 		return fmt.Errorf("failed to parse workflow: %w", err)
 	}
@@ -361,6 +377,7 @@ func runScanWorkflow(ctx context.Context, svc *scanapp.Service, data []byte, opt
 	if err != nil {
 		return fmt.Errorf("scan failed: %w", err)
 	}
+	attachInputLocations(result, locations)
 	return finalizeScanOutput(svc, result, opts, len(githubURLs))
 }
 
@@ -371,6 +388,14 @@ func isStdinTerminal() bool {
 		return true
 	}
 	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+func attachInputLocations(result *scanapp.Result, locations map[string][]depparser.SourceLocation) {
+	for i := range result.Entries {
+		if result.Entries[i].Source == domainaudit.SourceDirect {
+			result.Entries[i].Locations = locations[result.Entries[i].PURL]
+		}
+	}
 }
 
 // warnIfNoToken tells the user when a scan runs without GITHUB_TOKEN. It writes to

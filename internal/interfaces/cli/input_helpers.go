@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 )
 
 // maxDescriptionLen limits the length of repository/project descriptions in CLI output.
@@ -87,10 +88,10 @@ func categorizeInputs(inputs []string) (purls []string, githubURLs []string) {
 const unrecognizedLineThreshold = 0.5
 
 // categorizeFileLines reads file and categorizes each line (unified function).
-func categorizeFileLines(filename string, opts ProcessingOptions) (purls []string, githubURLs []string, err error) {
+func categorizeFileLines(filename string, opts ProcessingOptions) (purls []string, githubURLs []string, locations map[string][]depparser.SourceLocation, err error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to open file '%s': %w", filename, err)
+		return nil, nil, nil, fmt.Errorf("failed to open file '%s': %w", filename, err)
 	}
 	defer func() {
 		if cerr := file.Close(); cerr != nil && err == nil {
@@ -98,6 +99,7 @@ func categorizeFileLines(filename string, opts ProcessingOptions) (purls []strin
 		}
 	}()
 
+	locations = make(map[string][]depparser.SourceLocation)
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
 	unrecognized := 0
@@ -122,8 +124,10 @@ func categorizeFileLines(filename string, opts ProcessingOptions) (purls []strin
 		contentLines++
 		if strings.HasPrefix(line, "pkg:") {
 			purls = append(purls, line)
+			locations[line] = append(locations[line], depparser.SourceLocation{Line: lineNum})
 		} else if common.IsValidGitHubURL(line) {
 			githubURLs = append(githubURLs, line)
+			locations[line] = append(locations[line], depparser.SourceLocation{Line: lineNum})
 		} else {
 			unrecognized++
 			slog.Warn("Unsupported line format",
@@ -135,19 +139,19 @@ func categorizeFileLines(filename string, opts ProcessingOptions) (purls []strin
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, nil, fmt.Errorf("error reading file '%s': %w", filename, err)
+		return nil, nil, nil, fmt.Errorf("error reading file '%s': %w", filename, err)
 	}
 
 	// Failsafe: if the majority of content lines are unrecognized, the file is likely
 	// a structured format (go.mod, requirements.txt, etc.) that was not detected.
 	if contentLines > 0 && float64(unrecognized)/float64(contentLines) > unrecognizedLineThreshold {
-		return nil, nil, fmt.Errorf(
+		return nil, nil, nil, fmt.Errorf(
 			"file '%s' does not appear to be a PURL/URL list: %d/%d lines unrecognized. "+
 				"If this is a go.mod or other dependency file, ensure the format is detected correctly or convert to CycloneDX SBOM first",
 			filename, unrecognized, contentLines)
 	}
 
-	return purls, githubURLs, nil
+	return purls, githubURLs, locations, nil
 }
 
 // ProcessingOptions govern how scan input processing behaves for both direct
