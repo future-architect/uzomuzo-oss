@@ -146,22 +146,29 @@ func renderScanSARIF(w io.Writer, entries []audit.AuditEntry, opts scanRenderOpt
 	return nil
 }
 
-// sarifArtifactURI turns an input path into a relative URI reference. Without escaping,
-// "deps#old.txt" reads as file "deps" with a fragment and "a%20b.txt" as "a b.txt".
+// sarifArtifactURI turns an input path into a percent-encoded URI reference. Without
+// escaping, "deps#old.txt" reads as file "deps" with a fragment and "a%20b.txt" as "a b.txt".
 func sarifArtifactURI(path string) string {
-	slashed := strings.TrimPrefix(filepath.ToSlash(path), "./")
-	if isWindowsAbsolute(slashed) {
+	return artifactURI(filepath.ToSlash(path), filepath.IsAbs(path))
+}
+
+// artifactURI builds the URI from a forward-slash path. isAbs must come from the
+// running OS: "C:/deps.txt" is a drive path on Windows but a directory named "C:" on Unix.
+func artifactURI(slashed string, isAbs bool) string {
+	slashed = strings.TrimPrefix(slashed, "./")
+	if isAbs && hasDriveLetter(slashed) {
 		// As a plain reference, "C:/repo/go.mod" would be escaped into the relative "./C:/repo/go.mod".
 		return (&url.URL{Scheme: "file", Path: "/" + slashed}).String()
 	}
 	return (&url.URL{Path: slashed}).String()
 }
 
-func isWindowsAbsolute(slashed string) bool {
+// hasDriveLetter reports whether slashed starts with an "X:/" drive prefix.
+func hasDriveLetter(slashed string) bool {
 	if len(slashed) < 3 || slashed[1] != ':' || slashed[2] != '/' {
 		return false
 	}
-	c := slashed[0] | 0x20 // lowercase an ASCII letter
+	c := slashed[0] | 0x20
 	return 'a' <= c && c <= 'z'
 }
 

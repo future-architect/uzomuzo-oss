@@ -317,7 +317,8 @@ Locations point to dependency declarations in go.mod, workflow YAML, and PURL
 list files. Repeated references have multiple locations. SBOM files have
 file-level locations; stdin, direct arguments, and remotely discovered Actions
 have none. The artifact URI is the input path with forward slashes, a leading
-`./` removed, and special characters percent-encoded. For GitHub code scanning, run from the repository
+`./` removed, and special characters percent-encoded. On Windows, an absolute
+drive path becomes a `file:///C:/...` URI. For GitHub code scanning, run from the repository
 root and supply a repository-relative path. For a complete workflow, see
 [Pull Request Annotations](integration-examples.md#pull-request-annotations-github-code-scanning).
 

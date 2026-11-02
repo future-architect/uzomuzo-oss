@@ -190,8 +190,7 @@ func TestSARIFArtifactURI(t *testing.T) {
 		{name: "literal percent stays literal", path: "a%20b.txt", want: "a%2520b.txt", wantPath: "a%20b.txt"},
 		{name: "space", path: "my deps.txt", want: "my%20deps.txt", wantPath: "my deps.txt"},
 		{name: "colon is not a scheme", path: "a:b.txt", want: "./a:b.txt", wantPath: "./a:b.txt"},
-		{name: "windows absolute path", path: "C:/my repo/go.mod", want: "file:///C:/my%20repo/go.mod", wantPath: "/C:/my repo/go.mod", wantScheme: "file"},
-		{name: "unix absolute path", path: "/repo/go.mod", want: "/repo/go.mod", wantPath: "/repo/go.mod"},
+		{name: "explicitly relative drive-like directory", path: "./C:/deps.txt", want: "./C:/deps.txt", wantPath: "./C:/deps.txt"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -220,6 +219,32 @@ func TestSARIFArtifactURI(t *testing.T) {
 			}
 			if parsed.Path != tt.wantPath || parsed.Fragment != "" || parsed.RawQuery != "" || parsed.Scheme != tt.wantScheme {
 				t.Errorf("uri %q reads as %+v, want path %q, scheme %q", got, parsed, tt.wantPath, tt.wantScheme)
+			}
+		})
+	}
+}
+
+// Test_artifactURI passes isAbs directly so that both operating systems' answers
+// are covered wherever the test runs.
+func Test_artifactURI(t *testing.T) {
+	tests := []struct {
+		name    string
+		slashed string
+		isAbs   bool
+		want    string
+	}{
+		{name: "windows absolute path", slashed: "C:/my repo/go.mod", isAbs: true, want: "file:///C:/my%20repo/go.mod"},
+		{name: "windows absolute path, lowercase drive", slashed: "c:/go.mod", isAbs: true, want: "file:///c:/go.mod"},
+		{name: "unix directory named C:", slashed: "C:/deps.txt", isAbs: false, want: "./C:/deps.txt"},
+		{name: "unix absolute path", slashed: "/repo/go.mod", isAbs: true, want: "/repo/go.mod"},
+		{name: "relative path", slashed: "sub/go.mod", isAbs: false, want: "sub/go.mod"},
+		{name: "two-letter first segment is not a drive", slashed: "ab:/go.mod", isAbs: true, want: "./ab:/go.mod"},
+		{name: "digit is not a drive", slashed: "1:/go.mod", isAbs: true, want: "./1:/go.mod"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := artifactURI(tt.slashed, tt.isAbs); got != tt.want {
+				t.Errorf("artifactURI(%q, %v) = %q, want %q", tt.slashed, tt.isAbs, got, tt.want)
 			}
 		})
 	}
