@@ -202,7 +202,7 @@ What to expect:
 - **Finding on a line the PR did not change:** shown in the Security tab, and GitHub's check still passes.
 - **Failing the job:** add `--fail-on eol-confirmed,eol-effective` to the scan. uzomuzo then exits 1 on any matching dependency, including ones the PR did not touch, and the upload step needs `if: always()` to still run.
 - **Private repositories:** code scanning needs a GitHub Code Security license. Without one the upload fails; use the [CI pipeline example](#ci-pipeline-example) instead.
-- **Pull requests from forks:** their `GITHUB_TOKEN` is read-only, so the upload fails.
+- **Pull requests from forks:** their `GITHUB_TOKEN` is read-only, but [GitHub allows code scanning uploads from `pull_request` runs](https://docs.github.com/en/code-security/reference/code-scanning/troubleshoot-analysis-errors/resource-not-accessible).
 - **Other ecosystems:** generate an SBOM first and scan it with `--sbom sbom.json`. Results attach to the SBOM file at line 1, not to a dependency's line, because an SBOM does not say where a dependency is declared.
 
 ## GitHub Actions Scheduled Scanning

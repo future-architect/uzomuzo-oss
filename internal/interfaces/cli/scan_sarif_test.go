@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"os"
 	"reflect"
 	"testing"
@@ -175,6 +176,52 @@ func TestSARIFShowOnlyAndEmpty(t *testing.T) {
 	}
 	if !reflect.DeepEqual(log.Runs[0].Results, []sarifResult{}) {
 		t.Fatalf("results=%+v", log.Runs[0].Results)
+	}
+}
+
+func TestSARIFArtifactURI(t *testing.T) {
+	tests := []struct {
+		name, path, want, wantPath, wantScheme string
+	}{
+		{name: "plain path", path: "go.mod", want: "go.mod", wantPath: "go.mod"},
+		{name: "leading dot slash removed", path: "./sub/go.mod", want: "sub/go.mod", wantPath: "sub/go.mod"},
+		{name: "hash is not a fragment", path: "deps#old.txt", want: "deps%23old.txt", wantPath: "deps#old.txt"},
+		{name: "question mark is not a query", path: "deps?old.txt", want: "deps%3Fold.txt", wantPath: "deps?old.txt"},
+		{name: "literal percent stays literal", path: "a%20b.txt", want: "a%2520b.txt", wantPath: "a%20b.txt"},
+		{name: "space", path: "my deps.txt", want: "my%20deps.txt", wantPath: "my deps.txt"},
+		{name: "colon is not a scheme", path: "a:b.txt", want: "./a:b.txt", wantPath: "./a:b.txt"},
+		{name: "windows absolute path", path: "C:/my repo/go.mod", want: "file:///C:/my%20repo/go.mod", wantPath: "/C:/my repo/go.mod", wantScheme: "file"},
+		{name: "unix absolute path", path: "/repo/go.mod", want: "/repo/go.mod", wantPath: "/repo/go.mod"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			e := sarifTestEntry("pkg:npm/a@1", analysis.LabelStalled, audit.VerdictCaution)
+			e.Source = audit.SourceDirect
+			e.Locations = []depparser.SourceLocation{{Line: 3}}
+			if err := renderScanSARIF(&buf, []audit.AuditEntry{e}, scanRenderOptions{ArtifactURI: tt.path}); err != nil {
+				t.Fatal(err)
+			}
+			var log sarifLog
+			if err := json.Unmarshal(buf.Bytes(), &log); err != nil {
+				t.Fatal(err)
+			}
+			locations := log.Runs[0].Results[0].Locations
+			if len(locations) != 1 {
+				t.Fatalf("locations = %+v, want one", locations)
+			}
+			got := locations[0].PhysicalLocation.ArtifactLocation.URI
+			if got != tt.want {
+				t.Errorf("uri = %q, want %q", got, tt.want)
+			}
+			parsed, err := url.Parse(got)
+			if err != nil {
+				t.Fatalf("parse %q: %v", got, err)
+			}
+			if parsed.Path != tt.wantPath || parsed.Fragment != "" || parsed.RawQuery != "" || parsed.Scheme != tt.wantScheme {
+				t.Errorf("uri %q reads as %+v, want path %q, scheme %q", got, parsed, tt.wantPath, tt.wantScheme)
+			}
+		})
 	}
 }
 

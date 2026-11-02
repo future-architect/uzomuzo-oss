@@ -133,10 +133,16 @@ SARIF 2.1.0 output from `uzomuzo scan`. No new flag; new value of `--format`.
 Compares the scanned inventory with a baseline inventory of the same input
 kind (e.g. the base branch's `go.mod` or SBOM).
 
-- **Identity**: canonical versionless package key (`CanonicalKey`, see
-  `docs/purl-identity-model.md`).
-- **Gating set** (can fail the run / be `error`): packages whose key is absent
-  from the baseline.
+- **Identity**: versionless PURL, compared under each ecosystem's case rules. Do
+  not use `CanonicalKey`: it lowercases everything, while Go and Maven names are
+  case-sensitive (`docs/purl-identity-model.md`). With a baseline holding
+  `pkg:golang/example.com/Lib`, adding the different module
+  `pkg:golang/example.com/lib` would look like an existing dependency and escape
+  the gate. Make this case an acceptance test. Known limit: SBOM input cannot
+  tell them apart, because `normalizePURL` in the CycloneDX parser rebuilds
+  `pkg:golang` PURLs in lowercase.
+- **Gating set** (can fail the run / be `error`): packages whose identity is
+  absent from the baseline.
 - **Reporting-only set** (at most `warning`): packages present in both,
   including version changes.
 - **Edge cases to specify in the ADR**: a package becoming direct after being
@@ -198,9 +204,21 @@ question 1. Document both levers separately.
 **pre-commit** (`.pre-commit-hooks.yaml`): hook `uzomuzo-new-deps`, matching
 `go.mod`, default `stages: [manual, pre-push]` (stage names need
 pre-commit ≥ 3.2). Document `pre-commit install --hook-type pre-push` — the
-stage setting alone does not install the git hook. The hook takes the
-baseline from the upstream branch (`@{upstream}`); manual runs accept an
-explicit baseline argument.
+stage setting alone does not install the git hook.
+
+The hook reads the baseline from `PRE_COMMIT_FROM_REF`, not `@{upstream}`, which
+does not exist yet on `git push -u origin feature`. On pre-push, pre-commit sets
+it to the remote branch's old commit or, for a new branch, to the parent of the
+first commit the remote does not have (`pre_commit/commands/hook_impl.py`). So a
+first push compares against the point where the branch left shared history.
+
+| Situation | Baseline |
+|---|---|
+| Pre-push with `PRE_COMMIT_FROM_REF` set, `go.mod` present at that commit | `go.mod` at that commit |
+| `go.mod` absent at that commit | Empty: every dependency counts as added |
+| Push includes the root commit, so pre-commit sets no ref | Empty: every dependency counts as added |
+| Any other git failure | Error that blocks the push, never a silent "no baseline" |
+| Manual run | The explicit baseline argument, else `@{upstream}`, else an error naming the argument |
 
 **Docs**: `docs/integration-examples.md` gains a "Lint / PR integration"
 section with one copy-paste snippet per team type (table below).
