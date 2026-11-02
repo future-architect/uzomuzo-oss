@@ -316,8 +316,8 @@ the policy exit code is returned.
 Locations point to dependency declarations in go.mod, workflow YAML, and PURL
 list files. Repeated references have multiple locations. SBOM files have
 file-level locations; stdin, direct arguments, and remotely discovered Actions
-have none. The artifact URI is the input path as given, with forward slashes
-and a leading `./` removed. For GitHub code scanning, run from the repository
+have none. The artifact URI is the input path with forward slashes, a leading
+`./` removed, and special characters percent-encoded. For GitHub code scanning, run from the repository
 root and supply a repository-relative path. For a complete workflow, see
 [Pull Request Annotations](integration-examples.md#pull-request-annotations-github-code-scanning).
 

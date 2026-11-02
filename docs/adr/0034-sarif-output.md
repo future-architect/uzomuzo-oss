@@ -41,8 +41,9 @@ Locations come from the scanned input, with no invented line numbers:
 - CycloneDX SBOM files: the input artifact without a line region.
 - Stdin, direct arguments, and remotely discovered Actions: no location.
 
-Artifact URIs preserve the given path with forward slashes and a leading `./`
-removed. Users should scan from the repository root with a relative input path
+Artifact URIs are the given path with forward slashes and a leading `./`
+removed, percent-encoded as a relative URI reference (`deps#old.txt` becomes
+`deps%23old.txt`). Users should scan from the repository root with a relative input path
 for code-scanning consumers.
 
 The partial fingerprint key is `uzomuzoFinding/v1`. Its value is the hexadecimal
