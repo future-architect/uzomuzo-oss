@@ -146,8 +146,8 @@ func renderScanSARIF(w io.Writer, entries []audit.AuditEntry, opts scanRenderOpt
 	return nil
 }
 
-// sarifArtifactURI turns an input path into a relative URI reference. Without escaping,
-// "deps#old.txt" reads as file "deps" with a fragment and "a%20b.txt" as "a b.txt".
+// sarifArtifactURI turns an input path into a percent-encoded URI reference. Without
+// escaping, "deps#old.txt" reads as file "deps" with a fragment and "a%20b.txt" as "a b.txt".
 func sarifArtifactURI(path string) string {
 	return artifactURI(filepath.ToSlash(path), filepath.IsAbs(path))
 }
@@ -163,11 +163,12 @@ func artifactURI(slashed string, isAbs bool) string {
 	return (&url.URL{Path: slashed}).String()
 }
 
+// hasDriveLetter reports whether slashed starts with an "X:/" drive prefix.
 func hasDriveLetter(slashed string) bool {
 	if len(slashed) < 3 || slashed[1] != ':' || slashed[2] != '/' {
 		return false
 	}
-	c := slashed[0] | 0x20 // lowercase an ASCII letter
+	c := slashed[0] | 0x20
 	return 'a' <= c && c <= 'z'
 }
 
