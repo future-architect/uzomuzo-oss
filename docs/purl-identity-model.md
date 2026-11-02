@@ -20,7 +20,7 @@ A 3-layer structure to balance stable internal matching with complete preservati
 
 ## Rationale for Separation
 
-1. **Case preservation**: Prevents corruption in case-sensitive ecosystems (Maven paths / Go import paths)
+1. **Case preservation**: Prevents corruption in case-sensitive ecosystems (Maven paths / Go import paths). This covers the stored `OriginalPURL` string only: `ParsedPURL` lowercases `pkg:golang` paths, and SBOMs can already hold the lowercase form. Lookups that need the real spelling get it from the module's go.mod (`golangresolve.NormalizePURLToModuleRoot`)
 2. **User input preservation**: Maintains original input for audit and reproducible reruns
 3. **Non-destructive rewrites**: Version resolution and path expansion do not modify the original request
 4. **Centralized matching**: Consolidates internal maps / EOL matching to a single deterministic transform (`CanonicalKey`)
