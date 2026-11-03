@@ -94,6 +94,114 @@ Two rules the hooks would otherwise enforce, which you must honor manually:
   from code by ID (`// See ADR-NNNN.`) — never restate its rationale in a
   comment.
 
+## Devflow pilot
+
+This machine-readable opt-in contract is read by the maintainers' dual-vendor
+pilot helper. In this flow, one vendor's coding agent writes requirements,
+design, plan, and implementation; an agent from another vendor reviews every
+required phase. Contributors without the helper can ignore this section. All
+other rules in this file still apply to everyone.
+
+```json
+{
+  "schema_version": 1,
+  "team": "uzomuzo-oss",
+  "artifact_directory": "docs/plans",
+  "policy_files": [
+    "AGENTS.md",
+    ".github/AGENTS.base.md",
+    ".github/instructions/agent-orchestration.instructions.md",
+    ".github/instructions/base/core/git-workflow.instructions.md",
+    ".github/instructions/copilot-learned-coding.instructions.md",
+    ".github/prompts/review-until-clean.prompt.md"
+  ],
+  "snapshot_exclude": [
+    "docs/plans/"
+  ],
+  "checks": [
+    {
+      "id": "build",
+      "argv": ["env", "-u", "GIT_DIR", "-u", "GIT_WORK_TREE", "-u", "GIT_INDEX_FILE", "-u", "GIT_COMMON_DIR", "GOFLAGS=-buildvcs=false", "go", "build", "./..."],
+      "timeout_seconds": 900,
+      "skip_parser": "none",
+      "tools": [["go", "version"]]
+    },
+    {
+      "id": "go-test-json",
+      "argv": ["env", "-u", "GIT_DIR", "-u", "GIT_WORK_TREE", "-u", "GIT_INDEX_FILE", "-u", "GIT_COMMON_DIR", "go", "test", "-race", "-vet=off", "-count=1", "-json", "./..."],
+      "timeout_seconds": 1800,
+      "skip_parser": "go-test-json",
+      "allowed_skips": [
+        {"package": "github.com/future-architect/uzomuzo-oss/internal/common/links", "test": "TestBuildDepsDevURL_LiveProbe", "reason": "Opt-in live network probe (UZOMUZO_LIVE_PROBE=1); no local or CI check runs it"},
+        {"package": "github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs", "test": "TestGetPublishHistory_LiveProbe", "reason": "Opt-in live network probe (UZOMUZO_LIVE_PROBE=1); no local or CI check runs it"}
+      ],
+      "tools": [["go", "version"]]
+    },
+    {
+      "id": "golangci-lint",
+      "argv": ["env", "GOTOOLCHAIN=go1.26.1", "golangci-lint", "run"],
+      "timeout_seconds": 1200,
+      "skip_parser": "none",
+      "tools": [["env", "GOTOOLCHAIN=go1.26.1", "golangci-lint", "--version"]]
+    },
+    {
+      "id": "instruction-sync-fresh",
+      "argv": ["bash", "-c", "set -euo pipefail; make sync-instructions >/dev/null; drift=$(git status --porcelain --untracked-files=all -- AGENTS.md .claude/rules/); if [ -n \"$drift\" ]; then printf '%s\\n' \"$drift\"; echo 'generated files are stale: run make sync-instructions and commit the result' >&2; exit 1; fi; echo 'generated files are fresh'"],
+      "timeout_seconds": 120,
+      "skip_parser": "none",
+      "paths": ["AGENTS.md", ".github/AGENTS.base.md", ".github/instructions/**", ".claude/rules/**", "Makefile"],
+      "tools": [["bash", "--version"], ["make", "--version"], ["git", "--version"]]
+    }
+  ],
+  "local_review_limit": 120,
+  "bot": {
+    "limit": 5,
+    "policy_ref": ".github/prompts/review-until-clean.prompt.md#step-8-copilot-review-iteration-loop-max-5-rounds"
+  },
+  "publication_default": "local",
+  "publication_steps": [],
+  "knowledge": {
+    "pending_directory": ".github/instructions",
+    "required_fields": ["category", "summary", "pr", "file", "date"],
+    "sync_argv": ["make", "sync-instructions"]
+  }
+}
+```
+
+Maintainers with the helper use this flow by default for implementation, fixes,
+refactoring, tests, related configuration, and publication preparation.
+Explanations, status checks, and read-only reviews do not start it. Use the
+existing plan-mode and `/review-until-clean` flow only when a maintainer asks
+for it explicitly or the helper is unavailable.
+
+Codex leads and Claude Code reviews by default. Choose the lead when the task
+starts and keep that lead throughout; the reviewer must be from another vendor.
+Even when Codex leads, hand commit, push, and pull request creation to a Claude
+Code session, where this repository's guardrail hooks run (see above). Merge
+and release each need separate explicit maintainer approval.
+
+Keep the pilot's requirements, design, and plan files in git-ignored
+`docs/plans/`; never commit them in this public repository. The helper keeps
+task state outside the repository.
+
+The checks mirror CI: `go build`, `go test -race` with structured skip checks,
+`golangci-lint` with `GOTOOLCHAIN=go1.26.1`, and generated-instruction freshness
+when instruction sources change. Only the two opt-in live network probes enabled
+by `UZOMUZO_LIVE_PROBE=1` may be skipped; any other skip blocks the task. Add a
+new skip to `allowed_skips` with its reason in the same pull request. The linter
+is pinned to the team's Go version because a golangci-lint release can lag a
+newer local Go and fail to read its export data. The build check sets
+`-buildvcs=false` because, inside the Codex sandbox, Go's VCS stamping fails
+on the helper's snapshot tree.
+
+After the helper's publication check passes and a pull request exists, run
+`/review-until-clean` Phase B and Phase C for the Copilot bot. Do not repeat
+Phase A: opposite-vendor reviews cover it. Keep `bot.limit` equal to the round
+cap in that prompt's Step 8 heading; change both together. Record reusable
+lessons as `pending_patterns` in
+`.github/instructions/copilot-learned-coding.instructions.md`, then run
+`make sync-instructions`.
+
 ## Instruction Sync
 
 `.github/` is canonical. Two targets are **generated** from it:
