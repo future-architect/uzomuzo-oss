@@ -88,8 +88,10 @@ enumerated by the instruction-index loop that reads that directory.
 
 `.github/instructions/` totals well over 100 KB (`copilot-learned-coding` alone
 is ~68 KB). Inlining it would load the whole corpus into every Codex session.
-`AGENTS.md` stays a few KB and points at the canonical files, so an agent reads
-the rules that apply to what it is changing.
+`AGENTS.md` stays small and points at the canonical files, so an agent reads
+the rules that apply to what it is changing. The `## Devflow pilot` section is a
+deliberate exception: its JSON contract must live in `AGENTS.md` because the
+pilot helper reads it from there.
 
 ### The preamble intentionally repeats a little of CLAUDE.md
 

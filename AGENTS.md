@@ -160,7 +160,7 @@ other rules in this file still apply to everyone.
     },
     {
       "id": "instruction-sync-fresh",
-      "argv": ["bash", "-c", "set -euo pipefail; make sync-instructions >/dev/null; drift=$(git status --porcelain --untracked-files=all -- AGENTS.md .claude/rules/); if [ -n \"$drift\" ]; then printf '%s\\n' \"$drift\"; echo 'generated files are stale: run make sync-instructions and commit the result' >&2; exit 1; fi; echo 'generated files are fresh'"],
+      "argv": ["bash", "-c", "set -euo pipefail; make sync-instructions >/dev/null; orphans=\"\"; for dest in .claude/rules/*.md; do base=$(basename \"$dest\" .md); if [ \"$base\" = instruction-sync ]; then continue; fi; if [ \"$base\" = agents ]; then base=agent-orchestration; fi; if [ -z \"$(find .github/instructions -type f -name \"$base.instructions.md\" -print -quit)\" ]; then orphans=\"$orphans $dest\"; fi; done; if [ -n \"$orphans\" ]; then echo \"generated rule files with no instruction source:$orphans\" >&2; exit 1; fi; drift=$(git status --porcelain --untracked-files=all -- AGENTS.md .claude/rules/); if [ -n \"$drift\" ]; then printf '%s\\n' \"$drift\"; echo 'generated files are stale: run make sync-instructions and commit the result' >&2; exit 1; fi; echo 'generated files are fresh'"],
       "timeout_seconds": 120,
       "skip_parser": "none",
       "paths": ["AGENTS.md", ".github/AGENTS.base.md", ".github/instructions/**", ".claude/rules/**", "Makefile"],
@@ -186,27 +186,32 @@ Maintainers with the helper use this flow by default for implementation, fixes,
 refactoring, tests, related configuration, and publication preparation.
 Explanations, status checks, and read-only reviews do not start it. Use the
 existing plan-mode and `/review-until-clean` flow only when a maintainer asks
-for it explicitly or the helper is unavailable.
+for it explicitly or the helper is unavailable. A request to review existing
+code still runs the full `/review-until-clean`.
 
 Codex leads and Claude Code reviews by default. Choose the lead when the task
 starts and keep that lead throughout; the reviewer must be from another vendor.
-Even when Codex leads, hand commit, push, and pull request creation to a Claude
-Code session, where this repository's guardrail hooks run (see above). Merge
+Even when Codex leads, Codex does not commit in this flow: a Claude Code
+session started in this repository commits, pushes, and opens the pull request,
+so the guardrail hooks described above run. Merge
 and release each need separate explicit maintainer approval.
 
 Keep the pilot's requirements, design, and plan files in git-ignored
 `docs/plans/`; never commit them in this public repository. The helper keeps
 task state outside the repository.
 
-The checks mirror CI: `go build`, `go test -race` with structured skip checks,
-`golangci-lint` with `GOTOOLCHAIN=go1.26.1`, and generated-instruction freshness
-when instruction sources change. Only the two opt-in live network probes enabled
-by `UZOMUZO_LIVE_PROBE=1` may be skipped; any other skip blocks the task. Add a
-new skip to `allowed_skips` with its reason in the same pull request. The linter
-is pinned to the team's Go version because a golangci-lint release can lag a
-newer local Go and fail to read its export data. The build check sets
-`-buildvcs=false` because, inside the Codex sandbox, Go's VCS stamping fails
-on the helper's snapshot tree.
+The checks cover what CI checks: `go build`, `go test -race`, `golangci-lint`,
+and, when instruction sources change, the generated-file freshness and orphan
+checks. They differ from CI in four ways. Tests emit `-json` so the helper can
+reject skipped tests: only the two opt-in live network probes enabled by
+`UZOMUZO_LIVE_PROBE=1` may skip, and a new skip needs an `allowed_skips` entry
+with its reason in the same pull request. The linter runs with
+`GOTOOLCHAIN=go1.26.1`, the team's Go version, because a golangci-lint release
+can lag a newer local Go and fail to read its export data. Build and test unset
+the helper's `GIT_*` variables so Go never inspects the helper's temporary
+repository. The build sets `-buildvcs=false` because, inside the Codex sandbox,
+Go's VCS stamping fails on the helper's snapshot tree. Update these checks when
+CI changes.
 
 After the helper's publication check passes and a pull request exists, run
 `/review-until-clean` Phase B and Phase C for the Copilot bot. Do not repeat

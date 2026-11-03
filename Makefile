@@ -52,7 +52,7 @@ clean:
 # else in CI can see that happen: the file would still match its source, so the
 # freshness gate stays green while agents receive a truncated document.
 # Half the cap leaves room for the user's own ~/.codex/AGENTS.md and for any
-# nested AGENTS.md added later. Currently ~6 KB.
+# nested AGENTS.md added later. Currently ~12 KB.
 AGENTS_MD_MAX_BYTES := 16384
 
 # INSTRUCTION_SOURCES: the canonical rule files, from two places.

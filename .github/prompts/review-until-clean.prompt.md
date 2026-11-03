@@ -2,6 +2,8 @@
 
 Running `/review-until-clean` once drives the following sequence to bring a PR to merge-ready state:
 
+> In the Devflow pilot flow (`## Devflow pilot` in `.github/AGENTS.base.md`), opposite-vendor reviews replace Phase A; run only Phase B and Phase C.
+
 | Phase | What | Exit condition |
 |---|---|---|
 | **A**: Local agent review | 5 or 6 agents (code-reviewer + architect + Code Reuse + Code Quality + PR Hygiene; +consistency-auditor when the diff touches any **claim-bearing file** — markdown / advisory / manifest content for narrative drift, OR `_test.go` / `testdata/**` / `internal/testdata/**` golden fixtures for identifier-literal claims) in parallel, iterate until subjective only. Optional Step 1.5 generates a fact map for claim-bearing PRs. Step 2 has the pre-filter that selects the Task-agent count. The local Copilot CLI (gpt-5.6-sol, a separate-vendor LLM) is **always** spawned as a 7th reviewer every round — a Bash subprocess, not a Task agent. | max 5 rounds / no mechanical findings left AND Copilot CLI APPROVE (or unavailable) |
