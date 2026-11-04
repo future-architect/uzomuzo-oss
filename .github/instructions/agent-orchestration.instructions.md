@@ -60,7 +60,7 @@ A `PreToolUse` hook (`.claude/hooks/plan-mode-architect-check.sh`) detects missi
 
 ## Code Review Policy
 
-Development work by a maintainer with the dual-vendor pilot helper follows the `## Devflow pilot` contract in `AGENTS.md` (source: `.github/AGENTS.base.md`). Opposite-vendor reviews replace Phase A, so only the Copilot phases (B and C) of `/review-until-clean` run in that flow. The full `/review-until-clean` pipeline described below applies otherwise.
+Development work by a maintainer with the dual-vendor pilot helper follows the `## Devflow pilot` contract in `AGENTS.md` (source: `.github/AGENTS.base.md`). Opposite-vendor reviews replace Phase A, and each Copilot review goes through the helper as the "Devflow pilot flow" section of `.github/prompts/review-until-clean.prompt.md` describes, because Phase B's own commit and push would publish a tree the helper never approved. The full `/review-until-clean` pipeline described below applies otherwise.
 
 When the user requests a code review (e.g., "レビューして", "review this"), use the `/review-until-clean` skill. The skill is a single 1-shot pipeline:
 

@@ -231,11 +231,14 @@ for actionlint to find. `actionlint` needs `actionlint` and `shellcheck`
 installed; without them the check fails instead of passing silently, and it
 runs only when workflows change. Update these checks when CI changes.
 
-After the helper's publication check passes and a pull request exists, run
-`/review-until-clean` Phase B and Phase C for the Copilot bot. Do not repeat
-Phase A: opposite-vendor reviews cover it. Keep `bot.limit` equal to the round
-cap in that prompt's Step 8 heading; change both together. Record reusable
-lessons as `pending_patterns` in
+After the helper's publication check passes, a Claude Code session pushes and
+opens the pull request. Then handle every Copilot review through the helper, as
+the "Devflow pilot flow" section of
+`.github/prompts/review-until-clean.prompt.md` describes. Do not run
+`/review-until-clean` as written: Phase B would commit and push a tree the
+helper never approved. Keep `bot.limit` equal to the round cap in that prompt's
+Step 8 heading; change both together. Record reusable lessons as
+`pending_patterns` in
 `.github/instructions/copilot-learned-coding.instructions.md`, then run
 `make sync-instructions`.
 
