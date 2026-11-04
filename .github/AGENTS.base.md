@@ -151,6 +151,14 @@ other rules in this file still apply to everyone.
       "skip_parser": "none",
       "paths": ["AGENTS.md", ".github/AGENTS.base.md", ".github/instructions/**", ".claude/rules/**", "Makefile"],
       "tools": [["bash", "--version"], ["make", "--version"], ["git", "--version"]]
+    },
+    {
+      "id": "actionlint",
+      "argv": ["bash", "-c", "set -euo pipefail; shopt -s nullglob; export SHELLCHECK_OPTS=\"-S warning\"; files=(.github/workflows/*.yml .github/workflows/*.yaml); config=(); if [ -f .github/actionlint.yaml ]; then config=(-config-file .github/actionlint.yaml); fi; exec actionlint \"${config[@]}\" \"${files[@]}\""],
+      "timeout_seconds": 120,
+      "skip_parser": "none",
+      "paths": [".github/workflows/**", ".github/actionlint.yaml"],
+      "tools": [["bash", "--version"], ["actionlint", "--version"], ["shellcheck", "--version"]]
     }
   ],
   "local_review_limit": 120,
@@ -186,9 +194,13 @@ Keep the pilot's requirements, design, and plan files in git-ignored
 `docs/plans/`; never commit them in this public repository. The helper keeps
 task state outside the repository.
 
-The checks cover what CI checks: `go build`, `go test -race`, `golangci-lint`,
-and, when instruction sources change, the generated-file freshness and orphan
-checks. They differ from CI in four ways. Tests emit `-json` so the helper can
+The checks cover the pull request CI jobs that can run locally: `go build`,
+`go test -race`, and `golangci-lint`; when instruction sources change, the
+generated-file freshness and orphan checks; and when workflows change,
+`actionlint`. CodeQL also runs on pull requests but remains CI-only. CI's
+doc-examples job and the dependency-scan, scorecard, and release workflows do
+not run on ordinary pull requests, so they are not mirrored. CI's `go vet` step is
+non-blocking, so it has no separate check. Tests emit `-json` so the helper can
 reject skipped tests: only the two opt-in live network probes enabled by
 `UZOMUZO_LIVE_PROBE=1` may skip, and a new skip needs an `allowed_skips` entry
 with its reason in the same pull request. The linter runs with
@@ -196,8 +208,14 @@ with its reason in the same pull request. The linter runs with
 can lag a newer local Go and fail to read its export data. Build and test unset
 the helper's `GIT_*` variables so Go never inspects the helper's temporary
 repository. The build sets `-buildvcs=false` because, inside the Codex sandbox,
-Go's VCS stamping fails on the helper's snapshot tree. Update these checks when
-CI changes.
+Go's VCS stamping fails on the helper's snapshot tree. `actionlint` lints every
+workflow, while CI reports only findings in changed files, so the local check
+hides shellcheck's info and style findings (`dependency-scan.yml` already has
+two); CI still reports those when that file changes. It names the workflow
+files explicitly because the helper's snapshot tree has no `.git` directory
+for actionlint to find. `actionlint` needs `actionlint` and `shellcheck`
+installed; without them the check fails instead of passing silently, and it
+runs only when workflows change. Update these checks when CI changes.
 
 After the helper's publication check passes and a pull request exists, run
 `/review-until-clean` Phase B and Phase C for the Copilot bot. Do not repeat
