@@ -43,4 +43,5 @@ Team uses **Go 1.26.1**. The `go 1.25.0` line in `go.mod` is the module's minimu
 - Coding: `.claude/rules/coding-standards.md`, `.claude/rules/copilot-learned-coding.md`, `.claude/rules/project-conventions.md`
 - Language: English only (source + docs). See `.claude/rules/language-policy.md`
 - Other agents: root `AGENTS.md` (generated from `.github/AGENTS.base.md`) is the Codex CLI entry point — see `.claude/rules/instruction-sync.md`
+- Dev flow: maintainers with the dual-vendor pilot helper follow the `## Devflow pilot` contract in `AGENTS.md` (machine-readable; edit `.github/AGENTS.base.md`)
 - Docs: `docs/data-flow.md`, `docs/development.md`, `docs/library-usage.md`, `docs/purl-identity-model.md`, `docs/license-resolution.md`

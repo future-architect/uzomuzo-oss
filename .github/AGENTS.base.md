@@ -94,6 +94,140 @@ Two rules the hooks would otherwise enforce, which you must honor manually:
   from code by ID (`// See ADR-NNNN.`) — never restate its rationale in a
   comment.
 
+## Devflow pilot
+
+This machine-readable opt-in contract is read by the maintainers' dual-vendor
+pilot helper. In this flow, one vendor's coding agent writes requirements,
+design, plan, and implementation; an agent from another vendor reviews every
+required phase. Contributors without the helper can ignore this section. All
+other rules in this file still apply to everyone.
+
+```json
+{
+  "schema_version": 1,
+  "team": "uzomuzo-oss",
+  "artifact_directory": "docs/plans",
+  "policy_files": [
+    "AGENTS.md",
+    ".github/AGENTS.base.md",
+    ".github/instructions/agent-orchestration.instructions.md",
+    ".github/instructions/base/core/git-workflow.instructions.md",
+    ".github/instructions/copilot-learned-coding.instructions.md",
+    ".github/prompts/review-until-clean.prompt.md"
+  ],
+  "snapshot_exclude": [
+    "docs/plans/"
+  ],
+  "checks": [
+    {
+      "id": "build",
+      "argv": ["env", "-u", "GIT_DIR", "-u", "GIT_WORK_TREE", "-u", "GIT_INDEX_FILE", "-u", "GIT_COMMON_DIR", "GOFLAGS=-buildvcs=false", "go", "build", "./..."],
+      "timeout_seconds": 900,
+      "skip_parser": "none",
+      "tools": [["go", "version"]]
+    },
+    {
+      "id": "go-test-json",
+      "argv": ["env", "-u", "GIT_DIR", "-u", "GIT_WORK_TREE", "-u", "GIT_INDEX_FILE", "-u", "GIT_COMMON_DIR", "go", "test", "-race", "-vet=off", "-count=1", "-json", "./..."],
+      "timeout_seconds": 1800,
+      "skip_parser": "go-test-json",
+      "allowed_skips": [
+        {"package": "github.com/future-architect/uzomuzo-oss/internal/common/links", "test": "TestBuildDepsDevURL_LiveProbe", "reason": "Opt-in live network probe (UZOMUZO_LIVE_PROBE=1); no local or CI check runs it"},
+        {"package": "github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs", "test": "TestGetPublishHistory_LiveProbe", "reason": "Opt-in live network probe (UZOMUZO_LIVE_PROBE=1); no local or CI check runs it"}
+      ],
+      "tools": [["go", "version"]]
+    },
+    {
+      "id": "golangci-lint",
+      "argv": ["env", "GOTOOLCHAIN=go1.26.1", "golangci-lint", "run"],
+      "timeout_seconds": 1200,
+      "skip_parser": "none",
+      "tools": [["env", "GOTOOLCHAIN=go1.26.1", "golangci-lint", "--version"]]
+    },
+    {
+      "id": "instruction-sync-fresh",
+      "argv": ["bash", "-c", "set -euo pipefail; make sync-instructions >/dev/null; orphans=\"\"; for dest in .claude/rules/*.md; do base=$(basename \"$dest\" .md); if [ \"$base\" = instruction-sync ]; then continue; fi; if [ \"$base\" = agents ]; then base=agent-orchestration; fi; if [ -z \"$(find .github/instructions -type f -name \"$base.instructions.md\" -print -quit)\" ]; then orphans=\"$orphans $dest\"; fi; done; if [ -n \"$orphans\" ]; then echo \"generated rule files with no instruction source:$orphans\" >&2; exit 1; fi; drift=$(git status --porcelain --untracked-files=all -- AGENTS.md .claude/rules/); if [ -n \"$drift\" ]; then printf '%s\\n' \"$drift\"; echo 'generated files are stale: run make sync-instructions and commit the result' >&2; exit 1; fi; echo 'generated files are fresh'"],
+      "timeout_seconds": 120,
+      "skip_parser": "none",
+      "paths": ["AGENTS.md", ".github/AGENTS.base.md", ".github/instructions/**", ".claude/rules/**", "Makefile"],
+      "tools": [["bash", "--version"], ["make", "--version"], ["git", "--version"]]
+    },
+    {
+      "id": "actionlint",
+      "argv": ["bash", "-c", "set -euo pipefail; shopt -s nullglob; export SHELLCHECK_OPTS=\"-S warning\"; files=(.github/workflows/*.yml .github/workflows/*.yaml); config=(); if [ -f .github/actionlint.yaml ]; then config=(-config-file .github/actionlint.yaml); fi; exec actionlint \"${config[@]}\" \"${files[@]}\""],
+      "timeout_seconds": 120,
+      "skip_parser": "none",
+      "paths": [".github/workflows/**", ".github/actionlint.yaml"],
+      "tools": [["bash", "--version"], ["actionlint", "--version"], ["shellcheck", "--version"]]
+    }
+  ],
+  "local_review_limit": 120,
+  "bot": {
+    "limit": 5,
+    "policy_ref": ".github/prompts/review-until-clean.prompt.md#step-8-copilot-review-iteration-loop-max-5-rounds"
+  },
+  "publication_default": "local",
+  "publication_steps": [],
+  "knowledge": {
+    "pending_directory": ".github/instructions",
+    "required_fields": ["category", "summary", "pr", "file", "date"],
+    "sync_argv": ["make", "sync-instructions"]
+  }
+}
+```
+
+Maintainers with the helper use this flow by default for implementation, fixes,
+refactoring, tests, related configuration, and publication preparation.
+Explanations, status checks, and read-only reviews do not start it. Use the
+existing plan-mode and `/review-until-clean` flow only when a maintainer asks
+for it explicitly or the helper is unavailable. A request to review existing
+code still runs the full `/review-until-clean`.
+
+Codex leads and Claude Code reviews by default. Choose the lead when the task
+starts and keep that lead throughout; the reviewer must be from another vendor.
+Even when Codex leads, Codex does not commit in this flow: a Claude Code
+session started in this repository commits, pushes, and opens the pull request,
+so the guardrail hooks described above run. Merge
+and release each need separate explicit maintainer approval.
+
+Keep the pilot's requirements, design, and plan files in git-ignored
+`docs/plans/`; never commit them in this public repository. The helper keeps
+task state outside the repository.
+
+The checks cover the pull request CI jobs that can run locally: `go build`,
+`go test -race`, and `golangci-lint`; when instruction sources change, the
+generated-file freshness and orphan checks; and when workflows change,
+`actionlint`. CodeQL also runs on pull requests but remains CI-only. CI's
+doc-examples job and the dependency-scan, scorecard, and release workflows do
+not run on ordinary pull requests, so they are not mirrored. CI's `go vet` step is
+non-blocking, so it has no separate check. Tests emit `-json` so the helper can
+reject skipped tests: only the two opt-in live network probes enabled by
+`UZOMUZO_LIVE_PROBE=1` may skip, and a new skip needs an `allowed_skips` entry
+with its reason in the same pull request. The linter runs with
+`GOTOOLCHAIN=go1.26.1`, the team's Go version, because a golangci-lint release
+can lag a newer local Go and fail to read its export data. Build and test unset
+the helper's `GIT_*` variables so Go never inspects the helper's temporary
+repository. The build sets `-buildvcs=false` because, inside the Codex sandbox,
+Go's VCS stamping fails on the helper's snapshot tree. `actionlint` lints every
+workflow, while CI reports only findings in changed files, so the local check
+hides shellcheck's info and style findings (`dependency-scan.yml` already has
+two); CI still reports those when that file changes. It names the workflow
+files explicitly because the helper's snapshot tree has no `.git` directory
+for actionlint to find. `actionlint` needs `actionlint` and `shellcheck`
+installed; without them the check fails instead of passing silently, and it
+runs only when workflows change. Update these checks when CI changes.
+
+After the helper's publication check passes, a Claude Code session pushes and
+opens the pull request. Then handle every Copilot review through the helper, as
+the "Devflow pilot flow" section of
+`.github/prompts/review-until-clean.prompt.md` describes. Do not run
+`/review-until-clean` as written: Phase B would commit and push a tree the
+helper never approved. Keep `bot.limit` equal to the round cap in that prompt's
+Step 8 heading; change both together. Record reusable lessons as
+`pending_patterns` in
+`.github/instructions/copilot-learned-coding.instructions.md`, then run
+`make sync-instructions`.
+
 ## Instruction Sync
 
 `.github/` is canonical. Two targets are **generated** from it:

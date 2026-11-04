@@ -2,6 +2,8 @@
 
 Running `/review-until-clean` once drives the following sequence to bring a PR to merge-ready state:
 
+> In the Devflow pilot flow, do not run this pipeline as written. Follow [Devflow pilot flow](#devflow-pilot-flow) below instead.
+
 | Phase | What | Exit condition |
 |---|---|---|
 | **A**: Local agent review | 5 or 6 agents (code-reviewer + architect + Code Reuse + Code Quality + PR Hygiene; +consistency-auditor when the diff touches any **claim-bearing file** — markdown / advisory / manifest content for narrative drift, OR `_test.go` / `testdata/**` / `internal/testdata/**` golden fixtures for identifier-literal claims) in parallel, iterate until subjective only. Optional Step 1.5 generates a fact map for claim-bearing PRs. Step 2 has the pre-filter that selects the Task-agent count. The local Copilot CLI (gpt-5.6-sol, a separate-vendor LLM) is **always** spawned as a 7th reviewer every round — a Bash subprocess, not a Task agent. | max 5 rounds / no mechanical findings left AND Copilot CLI APPROVE (or unavailable) |
@@ -11,6 +13,22 @@ Running `/review-until-clean` once drives the following sequence to bring a PR t
 Branches without a PR skip Phase B/C (Phase A → push only). Draft PRs also skip Phase B/C (Copilot does not review drafts).
 
 This command exists to catch issues **before** Copilot sees them, then handle the Copilot pass that's still required, all in one shot. Calibrate Phase A to Copilot's threshold: anything with a single right answer (doc-code drift, redundant calls, missing error checks, naming that contradicts the value) gets fixed locally even if severity is MEDIUM/LOW — otherwise Copilot will catch it and force a follow-up round-trip in Phase B.
+
+## Devflow pilot flow
+
+This section applies when a task runs under the `## Devflow pilot` contract in `.github/AGENTS.base.md`. Phase B as written commits and pushes fixes on its own, so it would publish a tree the helper never approved, and its timeouts send review requests the helper never reserved. Opposite-vendor reviews replace Phase A.
+
+**Use only** the Step 8.0 helpers, the requests named below, and Phase C Steps 9 to 11.5 for replies. **Do not run** Step 7, the marker functions, Step 8.1 to 8.2, Step 8.4, Step 8.4.5, or Step 11.9. The helper's single pending bot request takes the place of the marker lock. Set `OWNER`, `REPO`, `PR` and `HEAD_SHA` (the SHA the helper has bound) directly, because Step 7 no longer sets them. A Claude Code session does the pushing and every GitHub call, and it first runs Step 7's identity check on its own, because Phase C's reply check depends on that account.
+
+For each Copilot review:
+
+1. Save the IDs of all Copilot reviews on the pull request, including any Copilot posted on its own. Run `reserve-bot --pr URL --history FILE` with that list before asking for a review. A refusal for spent budget ends the task as incomplete.
+2. Send exactly one request with the `requestReviews` mutation from Step 8.3. If `HEAD_SHA` already has a Copilot review, use Step 8.3's remove-and-re-add as that one request, because a plain request may not wake it. Do not re-request after that. If no new review arrives within 20 minutes, stop the task as incomplete and report the pending request to a maintainer.
+3. Wait for a review whose ID was not in step 1's list and whose commit is `HEAD_SHA`. An older review on the same SHA does not count. Judge it with `review_is_clean`, then run `record-bot --pr URL --result FILE` with `clean` or `changes`.
+4. On `clean`, set `PHASE_C_OK=0`, then run Phase C Steps 9 to 11.5 to reply to and resolve threads only. If a thread turns out to need a code change, treat it as step 5. Report the pull request as ready only after `PHASE_C_OK=1` and `gate --stage complete --pr URL` passes; ignore Phase C's merge-ready wording before that.
+5. On `changes`, decide each finding and apply accepted fixes to the working tree. Then, even if every finding was rejected and no file changed, run `snapshot`, every `run-check`, all six implementation-lens reviews and a fresh final review. Commit any change, run `bind-publication --sha SHA` and `gate --stage publish`, push, confirm the pull request's head is that SHA, set `HEAD_SHA` to it, and return to step 1.
+
+One round with findings costs seven local review calls. The helper counts every Copilot review against `bot.limit`, including a re-review of an unchanged SHA.
 
 ## Local-only execution
 

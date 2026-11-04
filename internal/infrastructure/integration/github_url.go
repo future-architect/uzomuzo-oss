@@ -55,7 +55,7 @@ func (s *IntegrationService) AnalyzeFromGitHubURL(ctx context.Context, githubURL
 	if err != nil {
 		slog.Debug("fetch_version_info_failed", "error", err)
 		// Fallback: proceed with base PURL without version
-		//TODO FetchFrom GrraphQL
+		//TODO FetchFrom GraphQL
 		return s.fetchAndValidateGitHubAnalysis(ctx, basePURL, basePURL, githubURL)
 	}
 
