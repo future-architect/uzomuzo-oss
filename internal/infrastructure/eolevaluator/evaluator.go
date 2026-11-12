@@ -12,6 +12,7 @@ import (
 	purl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/crates"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/hex"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/nuget"
@@ -43,6 +44,7 @@ type Evaluator struct {
 	npm    npmDeprecationClient
 	pypi   *pypi.Client
 	crates *crates.Client
+	hex    *hex.Client
 	// rule chain (rebuilt each EvaluateBatch)
 	rules      []eolRuleFunc
 	maxWorkers int
@@ -63,6 +65,7 @@ func NewEvaluator(pg *packagist.Client) *Evaluator {
 		npm:        npmjs.NewClient(),
 		pypi:       pypi.NewClient(),
 		crates:     crates.NewClient(),
+		hex:        hex.NewClient(),
 		maxWorkers: 12,
 	}
 }
@@ -84,6 +87,9 @@ func (e *Evaluator) SetPyPIClient(pc *pypi.Client) { e.pypi = pc }
 
 // SetCratesClient overrides the default crates.io client (useful for tests).
 func (e *Evaluator) SetCratesClient(cc *crates.Client) { e.crates = cc }
+
+// SetHexClient overrides the default hex.pm client (shares the integration-phase cache; useful for tests).
+func (e *Evaluator) SetHexClient(hc *hex.Client) { e.hex = hc }
 
 // (Removed) suppressions support eliminated; heuristic-based evidence gathering removed.
 
@@ -112,6 +118,9 @@ func (e *Evaluator) ensureRuleChain() {
 		},
 		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool { // Cargo version yanked
 			return e.applyCargoYanked(ctx, a, st)
+		},
+		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool { // Hex release retired
+			return e.applyHexRetired(ctx, a, st)
 		},
 		func(ctx context.Context, key string, a *domain.Analysis, st *domain.EOLStatus) bool {
 			return e.applyMavenRelocation(ctx, a, st)
@@ -484,6 +493,29 @@ func (e *Evaluator) applyCargoYanked(ctx context.Context, a *domain.Analysis, st
 		1.0, "eol: cargo version yanked")
 }
 
+// applyHexRetired checks whether the Hex release the caller requested (the version
+// in OriginalPURL) is retired on hex.pm (reasons: deprecated, security, renamed,
+// invalid, other). Retirement is per release, so an unversioned OriginalPURL is a
+// no-op, as in applyCargoYanked. See ADR-0021.
+func (e *Evaluator) applyHexRetired(ctx context.Context, a *domain.Analysis, status *domain.EOLStatus) bool {
+	if e.hex == nil {
+		return false
+	}
+	return e.applyRegistryYanked(ctx, a, status, "hex", domain.RegistryHex, true,
+		func(ctx context.Context, name, version string) (bool, string, string, bool, error) {
+			r, err := e.hex.GetRetirement(ctx, name, version)
+			if err != nil || r == nil {
+				return false, "", "", err == nil, err
+			}
+			summary := "Release retired on hex.pm (" + r.Reason + ")"
+			if m := strings.TrimSpace(r.Message); m != "" {
+				summary += ": " + m
+			}
+			return true, summary, "https://hex.pm/packages/" + url.PathEscape(name) + "/" + url.PathEscape(version), true, nil
+		},
+		1.0, "eol: hex release retired")
+}
+
 // ecosystemsWithAuthoritativeRules enumerates PURL ecosystems for which an
 // ecosystem-specific terminal rule already runs earlier in the rule chain.
 // applyDepsDevDeprecated skips these ecosystems so deps.dev's aggregated signal
@@ -499,6 +531,7 @@ var ecosystemsWithAuthoritativeRules = map[string]struct{}{
 	"maven":     {}, // applyMavenRelocation
 	"pypi":      {}, // applyPyPIClassifier / applyPyPIYanked
 	"cargo":     {}, // applyCargoYanked
+	"hex":       {}, // applyHexRetired
 }
 
 // applyDepsDevDeprecated is a fallback rule that promotes to EOL when deps.dev

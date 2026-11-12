@@ -160,6 +160,10 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 	// Runs after populateReleaseInfo (via populateAnalysisFromBatchResult) so advisory IDs are available.
 	s.enrichAdvisorySeverity(ctx, analyses)
 
+	// Hex advisories from hex.pm (best-effort). After enrichAdvisorySeverity so
+	// deps.dev's zero CVSS3 for Hex GHSA records cannot overwrite hex.pm scores.
+	s.enrichHexAdvisories(ctx, analyses)
+
 	// Transitive advisory enrichment (best-effort).
 	// Reuses dependency graph data from enrichDependencyCounts to avoid redundant API calls.
 	// Runs after enrichAdvisorySeverity so direct advisories are already enriched.

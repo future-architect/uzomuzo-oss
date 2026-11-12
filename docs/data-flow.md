@@ -82,6 +82,15 @@ Returns Project info for each projectKey (e.g., github.com/owner/repo):
 - Note: Reuses existing `fetchPackage` cache (shared with `GetAbandoned` / `GetRepoURL`)
 - Docs: <https://packagist.org/apidoc>
 
+#### hex.pm — Package Info (GET /api/packages/{name})
+
+- Returned fields used: `meta.links`, `retirements`, `latest_stable_version`, `security_advisories`
+- Purpose: Resolve the GitHub repository URL for `pkg:hex/*`, detect retired releases, and supply the advisories of the latest stable release (deps.dev does not index Hex). See ADR-0035.
+- Code: `Client.GetRepoURL`, `Client.GetRetirement`, `Client.GetStableAdvisories` (`internal/infrastructure/hex/client.go`), `IntegrationService.enrichHexAdvisories`; one cached response per package is shared by the depsdev resolver, the EOL evaluator and the advisory enrichment
+- Advisories: one per vulnerability (the GHSA ID wins over its EEF-CVE alias), withdrawn ones dropped, matched against the `affected` ranges. `cvss_score` is CVSS v4.0 and is stored as `CVSS3Score`; the severity bands are the same, the numbers are not.
+- Note: `downloads` is not used as a dependents count (ADR-0033)
+- Docs: <https://github.com/hexpm/specifications/blob/main/apiary.apib>
+
 #### deps.dev — Releases (GET /v3alpha/systems/{ecosystem}/packages/{name})
 
 - Returns: Versions list (`versionKey.version`, `publishedAt`, `isDefault`, `isDeprecated`, `deprecatedReason`) — no yank data except cargo, which reports yanks as `isDeprecated` with `deprecatedReason` `"yanked"`; see [ADR-0024](adr/0024-cargo-yank-from-depsdev.md) and [ADR-0023](adr/0023-stable-version-source.md)
@@ -223,6 +232,7 @@ Automatic detection from external registry APIs (built-in):
 - PyPI classifiers (`Development Status :: 7 - Inactive`)
 - npm deprecated flag
 - Packagist abandoned flag
+- Hex retired release (only the version requested in the PURL; ADR-0035)
 - NuGet deprecated flag
 - Maven relocated artifact
 

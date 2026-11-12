@@ -19,6 +19,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/eolevaluator"
 	exportcsv "github.com/future-architect/uzomuzo-oss/internal/infrastructure/export/csv"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/hex"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/integration"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
@@ -118,6 +119,9 @@ type AnalysisService struct {
 	// ProcessBatch* methods pass it to eolevaluator.NewEvaluator to share
 	// the same instance (and its 5-min TTL cache) across calls.
 	packagistClient *packagist.Client
+	// hexClient is shared with the depsdev repo resolver and the EOL evaluator so
+	// both reuse one cached hex.pm response per package.
+	hexClient *hex.Client
 	// pypiClient is shared across IntegrationService (Summary enrichment) and
 	// the per-batch eolevaluator instance so both consumers reuse the same
 	// 10-min in-memory cache and avoid duplicate PyPI fetches per package.
@@ -193,6 +197,7 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 	githubClient := github.NewClient(cfg)
 	rgClient := rubygems.NewClient()
 	pkgClient := packagist.NewClient()
+	hxClient := hex.NewClient()
 	pyClient := pypi.NewClient()
 	mvClient := maven.NewClient()
 	if u := strings.TrimSpace(cfg.Maven.BaseURL); u != "" {
@@ -210,6 +215,7 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 		WithMaven(mvClient).
 		WithRubyGems(rgClient).
 		WithPackagist(pkgClient).
+		WithHex(hxClient).
 		WithPyPI(pyClient)
 	integrationService := integration.NewIntegrationService(githubClient, depsdevClient,
 		integration.WithConfig(cfg),
@@ -221,12 +227,14 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 		integration.WithNpmClient(npmjs.NewPackumentClient()),
 		integration.WithMavenClient(mvClient),
 		integration.WithClearlyDefinedClient(cdClient),
+		integration.WithHexClient(hxClient),
 	)
 
 	s := &AnalysisService{
 		integrationService: integrationService,
 		cfg:                cfg,
 		packagistClient:    pkgClient,
+		hexClient:          hxClient,
 		pypiClient:         pyClient,
 	}
 	for _, o := range opts {
@@ -240,6 +248,9 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 			// Reuse the integration-phase PyPI client so the cache populated by
 			// enrichPyPISummary is reused here, eliminating duplicate fetches per package.
 			ev.SetPyPIClient(s.pypiClient)
+		}
+		if s.hexClient != nil {
+			ev.SetHexClient(s.hexClient)
 		}
 		if s.cfg != nil { // mirror alignment
 			if u := s.cfg.Maven.BaseURL; strings.TrimSpace(u) != "" {

@@ -19,6 +19,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/govanityresolve"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/hex"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/links"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
@@ -42,6 +43,7 @@ type IntegrationService struct {
 	osvClient       *osv.Client
 	mavenClient     *maven.Client
 	cdClient        *clearlydefined.Client
+	hexClient       *hex.Client
 	vanityResolver  *govanityresolve.Resolver
 	// osvFactsBudget overrides the default budget of the dependency advisory
 	// lookups when positive (tests).
@@ -59,6 +61,11 @@ func WithConfig(cfg *config.Config) IntegrationOption {
 // WithRubyGemsClient injects a RubyGems client for dependent count lookups.
 func WithRubyGemsClient(c *rubygems.Client) IntegrationOption {
 	return func(s *IntegrationService) { s.rubygemsClient = c }
+}
+
+// WithHexClient injects a hex.pm client used to populate Hex security advisories.
+func WithHexClient(c *hex.Client) IntegrationOption {
+	return func(s *IntegrationService) { s.hexClient = c }
 }
 
 // WithPackagistClient injects a Packagist client for dependent count lookups.

@@ -29,6 +29,8 @@ func BuildPackageRegistryURL(ecosystem, name string) string {
 		}
 	case "cargo":
 		return fmt.Sprintf("https://crates.io/crates/%s", name)
+	case "hex":
+		return fmt.Sprintf("https://hex.pm/packages/%s", name)
 	case "nuget":
 		return fmt.Sprintf("https://www.nuget.org/packages/%s", name)
 	}

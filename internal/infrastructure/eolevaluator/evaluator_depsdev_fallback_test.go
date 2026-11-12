@@ -93,7 +93,7 @@ func TestEvaluator_DepsDevFallback_DoesNotFire_NotDeprecated(t *testing.T) {
 func TestEvaluator_DepsDevFallback_DoesNotFire_AuthoritativeEcosystem(t *testing.T) {
 	// Ecosystems with ecosystem-specific authoritative rules must not be touched
 	// by the fallback even when deps.dev reports IsDeprecated=true.
-	for _, eco := range []string{"npm", "pypi", "maven", "nuget", "composer", "packagist", "cargo"} {
+	for _, eco := range []string{"npm", "pypi", "maven", "nuget", "composer", "packagist", "cargo", "hex"} {
 		t.Run(eco, func(t *testing.T) {
 			purlStr := "pkg:" + eco + "/foo@1.0.0"
 			if eco == "maven" {
@@ -107,6 +107,7 @@ func TestEvaluator_DepsDevFallback_DoesNotFire_AuthoritativeEcosystem(t *testing
 			// blocks the rule for these ecosystems.
 			ev.SetPyPIClient(nil)
 			ev.SetCratesClient(nil)
+			ev.SetHexClient(nil)
 			analysis := &domain.Analysis{
 				Package: &domain.Package{PURL: purlStr, Ecosystem: eco},
 				ReleaseInfo: &domain.ReleaseInfo{

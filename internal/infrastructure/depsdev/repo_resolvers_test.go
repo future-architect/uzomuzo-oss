@@ -39,6 +39,7 @@ func TestHasRegistryResolver(t *testing.T) {
 		{"composer", true},
 		{"packagist", true},
 		{"pypi", true},
+		{"hex", true},
 		{"cargo", false},
 		{"golang", false},
 		{"", false},
