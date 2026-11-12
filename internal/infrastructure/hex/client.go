@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -39,16 +40,24 @@ type cacheEntry struct {
 // Client queries https://hex.pm/api/packages/:name. Responses are cached for 5 minutes.
 type Client struct {
 	baseURL string
+	apiKey  string
 	http    *httpclient.Client
 	mu      sync.Mutex
 	cache   map[string]cacheEntry
 }
 
-// NewClient creates a Hex client with a 3 second timeout.
+// NewClient creates a Hex client with a 3 second per-attempt timeout.
+// HEX_API_KEY (optional) is sent as the Authorization header for a higher rate limit.
+// 429 responses wait for Retry-After (up to 60s) before retrying; hex.pm limits per minute,
+// so the shared 2s registry cap would exhaust retries.
 func NewClient() *Client {
+	rc := httpclient.RegistryRetryConfig()
+	rc.MaxRetries = 3
+	rc.MaxBackoff = 60 * time.Second
 	return &Client{
 		baseURL: "https://hex.pm",
-		http:    httpclient.NewClient(&http.Client{Timeout: 3 * time.Second}, httpclient.RegistryRetryConfig()),
+		apiKey:  strings.TrimSpace(os.Getenv("HEX_API_KEY")),
+		http:    httpclient.NewClient(&http.Client{Timeout: 3 * time.Second}, rc),
 		cache:   make(map[string]cacheEntry),
 	}
 }
@@ -73,6 +82,9 @@ func (c *Client) fetch(ctx context.Context, name string) (*packageResponse, erro
 		return nil, fmt.Errorf("failed to build request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.apiKey)
+	}
 	req.Header.Set("User-Agent", "uzomuzo-hex-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
 	resp, err := c.http.Do(ctx, req)
 	if err != nil {
