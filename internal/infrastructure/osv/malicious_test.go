@@ -21,6 +21,8 @@ func TestOSVPackageFor(t *testing.T) {
 		{"pkg:cargo/atty@0.2.14", "crates.io", "atty", true},
 		{"pkg:gem/rails@7.0", "RubyGems", "rails", true},
 		{"pkg:composer/acme/widget@1.0", "Packagist", "acme/widget", true},
+		{"pkg:hex/cowlib@2.21.0", "Hex", "cowlib", true},
+		{"pkg:hex/acme/private_lib@1.0.0", "", "", false},
 		{"pkg:github/acme/widget", "", "", false},
 	} {
 		t.Run(tt.purl, func(t *testing.T) {

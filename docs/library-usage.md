@@ -171,7 +171,7 @@ Currently only the lifecycle assessment axis is provided. Additional axes (e.g.,
 
 ## Custom EOL Catalog via AnalysisEnricher
 
-uzomuzo provides built-in EOL detection from registry signals (PyPI classifiers, npm deprecated, Packagist abandoned, NuGet deprecated, Maven relocated). For **comprehensive EOL coverage**, you can inject your own EOL catalog enricher using the `WithEnricher` hook.
+uzomuzo provides built-in EOL detection from registry signals (PyPI classifiers, npm deprecated, Packagist abandoned, NuGet deprecated, Maven relocated, Hex retired releases). For **comprehensive EOL coverage**, you can inject your own EOL catalog enricher using the `WithEnricher` hook.
 
 ### Architecture
 
