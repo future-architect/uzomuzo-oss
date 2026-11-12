@@ -1,4 +1,4 @@
-// Package hex is a minimal hex.pm API client (repository URL and release retirement).
+// Package hex is a minimal hex.pm API client (repository URL, release retirement, security advisories).
 package hex
 
 import (
@@ -9,10 +9,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Masterminds/semver/v3"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
@@ -24,12 +27,26 @@ type Retirement struct {
 	Message string `json:"message"`
 }
 
+// SecurityAdvisory is one entry of hex.pm's security_advisories, which hex.pm
+// mirrors from OSV. CVSSScore is a CVSS v4.0 base score; zero means none.
+type SecurityAdvisory struct {
+	ID          string   `json:"id"`
+	Aliases     []string `json:"aliases"`
+	Summary     string   `json:"summary"`
+	CVSSScore   float64  `json:"cvss_score"`
+	WithdrawnAt *string  `json:"withdrawn_at"`
+	// Affected lists OR'd version ranges such as "< 1.2.0" or ">= 1.0.0 and < 1.2.0".
+	Affected []string `json:"affected"`
+}
+
 // packageResponse is the subset of GET /api/packages/:name we use.
 type packageResponse struct {
 	Meta struct {
 		Links map[string]string `json:"links"`
 	} `json:"meta"`
-	Retirements map[string]Retirement `json:"retirements"`
+	Retirements         map[string]Retirement `json:"retirements"`
+	LatestStableVersion string                `json:"latest_stable_version"`
+	SecurityAdvisories  []SecurityAdvisory    `json:"security_advisories"`
 }
 
 type cacheEntry struct {
@@ -144,4 +161,52 @@ func (c *Client) GetRetirement(ctx context.Context, name, version string) (*Reti
 		return nil, nil
 	}
 	return &r, nil
+}
+
+// GetStableAdvisories returns the latest stable release and the advisories that
+// affect it, one per vulnerability. version is "" when the package is unknown or
+// has no stable release.
+//
+// hex.pm lists one vulnerability under several IDs that alias each other (a
+// GHSA and an EEF-CVE record). The GHSA entry is kept, because deps.dev reports
+// GHSA IDs for the other ecosystems. Withdrawn advisories are dropped.
+func (c *Client) GetStableAdvisories(ctx context.Context, name string) (version string, advisories []SecurityAdvisory, err error) {
+	data, err := c.fetch(ctx, name)
+	if err != nil || data == nil || data.LatestStableVersion == "" {
+		return "", nil, err
+	}
+	v, _ := semver.NewVersion(data.LatestStableVersion)
+	seen := map[string]bool{}
+	for _, ghsaPass := range []bool{true, false} {
+		for _, a := range data.SecurityAdvisories {
+			if strings.HasPrefix(a.ID, "GHSA-") != ghsaPass || a.WithdrawnAt != nil || !affects(a.Affected, v) {
+				continue
+			}
+			if seen[a.ID] || slices.ContainsFunc(a.Aliases, func(id string) bool { return seen[id] }) {
+				continue
+			}
+			seen[a.ID] = true
+			for _, id := range a.Aliases {
+				seen[id] = true
+			}
+			advisories = append(advisories, a)
+		}
+	}
+	return data.LatestStableVersion, advisories, nil
+}
+
+// affects reports whether v falls in any of the affected ranges.
+// ponytail: an unparseable version or range, or no ranges, counts as affected, so a
+// format change over-reports instead of hiding advisories; parse Elixir requirements fully if it misfires.
+func affects(ranges []string, v *semver.Version) bool {
+	if v == nil || len(ranges) == 0 {
+		return true
+	}
+	for _, r := range ranges {
+		c, err := semver.NewConstraint(strings.ReplaceAll(r, " and ", ", "))
+		if err != nil || c.Check(v) {
+			return true
+		}
+	}
+	return false
 }

@@ -227,6 +227,7 @@ func NewAnalysisServiceFromConfig(cfg *config.Config, opts ...Option) *AnalysisS
 		integration.WithNpmClient(npmjs.NewPackumentClient()),
 		integration.WithMavenClient(mvClient),
 		integration.WithClearlyDefinedClient(cdClient),
+		integration.WithHexClient(hxClient),
 	)
 
 	s := &AnalysisService{
