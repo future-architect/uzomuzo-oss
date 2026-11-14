@@ -100,12 +100,12 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 		slog.Info("PURLsWithoutRepoURL", "count", len(purlsWithoutRepo))
 	}
 
-	// Step 4.1: Fallback repo resolution for ecosystems unsupported by deps.dev package API
-	// or when package info is completely missing for a PURL. Reuse existing resolvers
-	// where applicable and add a Go-specific module-root-to-GitHub synthesis.
+	// Step 4.1: Fallback repo resolution only for PURLs absent from packageInfoMap.
+	// Present entries, including nil values, are handled by Step 4. See ADR-0035.
+	// Reuse existing resolvers and add a Go-specific module-root-to-GitHub synthesis.
 	for _, orig := range purls {
 		if _, ok := packageInfoMap[orig]; ok {
-			continue // already processed via deps.dev package info
+			continue // handled by Step 4, including a nil package entry
 		}
 		parser := commonpurl.NewParser()
 		parsed, err := parser.Parse(orig)
