@@ -84,12 +84,14 @@ func (p *ParsedPURL) Version() string {
 	return p.packageURL.Version
 }
 
-// IsStableVersion determines whether a version is stable
+// IsStableVersion reports whether a version lacks known prerelease qualifiers.
+// Build metadata after '+' is ignored. See ADR-0035.
 func IsStableVersion(version string) bool {
 	if version == "" {
 		return false
 	}
 
+	version, _, _ = strings.Cut(version, "+")
 	version = strings.ToLower(version)
 	unstableKeywords := []string{"alpha", "beta", "rc", "dev", "snapshot", "pre", "preview"}
 
@@ -98,7 +100,41 @@ func IsStableVersion(version string) bool {
 			return false
 		}
 	}
+	for len(version) > 0 {
+		end := strings.IndexAny(version, ".-_")
+		if end < 0 {
+			end = len(version)
+		}
+		if isUnstableQualifier(version[:end]) {
+			return false
+		}
+		if end == len(version) {
+			break
+		}
+		version = version[end+1:]
+	}
 
+	return true
+}
+
+func isUnstableQualifier(token string) bool {
+	if strings.HasPrefix(token, "ea") {
+		return allASCIIDigits(token[2:])
+	}
+	for _, prefix := range []string{"am", "cr", "m"} {
+		if strings.HasPrefix(token, prefix) && len(token) > len(prefix) && allASCIIDigits(token[len(prefix):]) {
+			return true
+		}
+	}
+	return false
+}
+
+func allASCIIDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
 	return true
 }
 

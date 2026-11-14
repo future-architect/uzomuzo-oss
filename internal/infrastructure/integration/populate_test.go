@@ -47,6 +47,36 @@ func TestPopulateHomepagePriority(t *testing.T) {
 	}
 }
 
+func TestPopulateReleaseInfo_SharedStabilityClassifier(t *testing.T) {
+	for _, tc := range []struct {
+		name, version string
+		prerelease    bool
+	}{
+		{"maven milestone", "2.0.0.AM27", true},
+		{"build metadata", "0.11.0+wasi-snapshot-preview1", false},
+		{"go hash collision", "v0.0.0-20260327151000-ea1234567890", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			analysis := &domain.Analysis{}
+			version := depsdev.Version{VersionKey: depsdev.VersionKey{Version: tc.version}}
+			batch := &depsdev.BatchResult{ReleaseInfo: depsdev.ReleaseInfo{
+				MaxSemverVersion: version,
+				RequestedVersion: version,
+			}}
+			(&IntegrationService{}).populateReleaseInfo(analysis, batch)
+			if analysis.ReleaseInfo == nil || analysis.ReleaseInfo.MaxSemverVersion == nil || analysis.ReleaseInfo.RequestedVersion == nil {
+				t.Fatal("missing populated release details")
+			}
+			if got := analysis.ReleaseInfo.MaxSemverVersion.IsPrerelease; got != tc.prerelease {
+				t.Errorf("MaxSemverVersion.IsPrerelease = %v, want %v", got, tc.prerelease)
+			}
+			if got := analysis.ReleaseInfo.RequestedVersion.IsPrerelease; got != tc.prerelease {
+				t.Errorf("RequestedVersion.IsPrerelease = %v, want %v", got, tc.prerelease)
+			}
+		})
+	}
+}
+
 // TestPopulateLicensesDirect ensures version SPDX licenses are captured without fallback.
 func TestPopulateLicensesDirect(t *testing.T) {
 	svc := &IntegrationService{}

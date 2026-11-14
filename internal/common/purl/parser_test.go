@@ -358,6 +358,20 @@ func TestIsStableVersion(t *testing.T) {
 			version:  "v1.8.0",
 			expected: true,
 		},
+		{name: "milestone", version: "2.1.0-M1", expected: false},
+		{name: "alpha_milestone", version: "2.0.0.AM27", expected: false},
+		{name: "candidate", version: "3.0.0-CR1", expected: false},
+		{name: "early_access_build", version: "28-ea+12", expected: false},
+		{name: "early_access_digits_build", version: "17-ea8+8", expected: false},
+		{name: "milestone_build", version: "2.1.0-M1+build", expected: false},
+		{name: "uppercase_tokens", version: "2.0.0_AM2", expected: false},
+		{name: "missing_digits", version: "1.0.0-M", expected: true},
+		{name: "embedded_letters", version: "1.0.0-featureAM2", expected: true},
+		{name: "unfinished_token", version: "1.0.0-M1Final", expected: true},
+		{name: "name_like_segment", version: "1.0.0-team1", expected: true},
+		{name: "maven_final", version: "3.20.0.Final", expected: true},
+		{name: "build_metadata_keyword", version: "0.11.0+wasi-snapshot-preview1", expected: true},
+		{name: "go_hex_hash_collision", version: "v0.0.0-20260327151000-ea1234567890", expected: false},
 	}
 
 	for _, tt := range tests {
