@@ -175,7 +175,13 @@ type Advisory struct {
 	Title string
 	// CVSS3Score is the CVSS v3 base score (0.0–10.0). Zero means unknown/not fetched.
 	CVSS3Score float64
-	// Severity is derived from CVSS3Score: NONE/LOW/MEDIUM/HIGH/CRITICAL. Empty means unknown.
+	// CVSS4Score is the published CVSS v4 score used when CVSS3Score is absent. See ADR-0037.
+	CVSS4Score float64
+	// CVSS4Known distinguishes a valid v4 zero (NONE) from an absent score.
+	CVSS4Known bool
+	// CVSS4LookupFailed records a failed or over-budget OSV v4 lookup.
+	CVSS4LookupFailed bool
+	// Severity is the effective CVSS band: NONE/LOW/MEDIUM/HIGH/CRITICAL. Empty means unknown.
 	Severity string
 	// Relation indicates whether this advisory affects the package directly or via a transitive dependency.
 	// Values: "DIRECT", "TRANSITIVE", or "" (unknown/legacy — treated as direct).
@@ -184,7 +190,7 @@ type Advisory struct {
 	// Format: "name@version" (e.g., "qs@6.5.5"). Empty for direct advisories.
 	DependencyName string
 	// Published is the OSV publication date recorded for a dependency advisory
-	// with successful deps.dev detail and a known HIGH CVSS3 score. Zero means
+	// with successful deps.dev detail and a known HIGH effective score. Zero means
 	// no publication-date fact was recorded; a retained deps.dev-404 advisory
 	// may have been checked for withdrawal. See ADR-0036.
 	Published time.Time
@@ -194,7 +200,7 @@ type Advisory struct {
 	// check of a retained deps.dev-404 advisory. See ADR-0036.
 	ReviewedSeverity string
 	// RecordLookup records the OSV age-fact lookup outcome for a dependency
-	// advisory with successful deps.dev detail and a known HIGH CVSS3 score.
+	// advisory with successful deps.dev detail and a known HIGH effective score.
 	// Zero means no publication-date or reviewed-severity lookup result was
 	// recorded; a retained deps.dev-404 advisory may still have been checked
 	// for withdrawal. See ADR-0036.
@@ -215,11 +221,18 @@ const (
 	AdvisoryRecordLookupFailed AdvisoryRecordLookup = "lookup_failed"
 )
 
-// IsKnownHighCVSS3 reports whether a CVSS3 score is known (non-zero) and at or
-// above threshold. The OSV lookup and the lifecycle decision both use it, so
-// an advisory the decision would count is always looked up.
-func IsKnownHighCVSS3(score, threshold float64) bool {
-	return score > 0 && score >= threshold
+// EffectiveSeverityScore selects the v3 score when present, otherwise v4.
+func (a Advisory) EffectiveSeverityScore() (float64, bool) {
+	if a.CVSS3Score > 0 {
+		return a.CVSS3Score, true
+	}
+	return a.CVSS4Score, a.CVSS4Known
+}
+
+// IsKnownHighSeverity reports whether the effective score reaches threshold.
+func (a Advisory) IsKnownHighSeverity(threshold float64) bool {
+	score, known := a.EffectiveSeverityScore()
+	return known && score >= threshold
 }
 
 // Advisory Relation constants.
@@ -300,6 +313,17 @@ func SeverityFromCVSS3(score float64) string {
 	}
 }
 
+// SeverityFromScore maps a known v3 or v4 score to its shared numeric band.
+func SeverityFromScore(score float64, known bool) string {
+	if !known {
+		return ""
+	}
+	if score == 0 {
+		return "NONE"
+	}
+	return SeverityFromCVSS3(score)
+}
+
 // MaxCVSS3 returns the highest CVSS3 score among advisories, or 0 if none have severity data.
 func (vd *VersionDetail) MaxCVSS3() float64 {
 	var max float64
@@ -311,11 +335,62 @@ func (vd *VersionDetail) MaxCVSS3() float64 {
 	return max
 }
 
-// HighSeverityAdvisoryCount returns the count of advisories with CVSS3 >= threshold.
+// MaxCVSS4 returns the maximum v4 fallback score, including a known zero.
+func (vd *VersionDetail) MaxCVSS4() (float64, bool) {
+	var max float64
+	known := false
+	for _, a := range vd.Advisories {
+		if a.CVSS3Score <= 0 && a.CVSS4Known && (!known || a.CVSS4Score > max) {
+			max, known = a.CVSS4Score, true
+		}
+	}
+	return max, known
+}
+
+// MaxEffectiveSeverityScore returns the highest effective score and its presence.
+func (vd *VersionDetail) MaxEffectiveSeverityScore() (float64, bool) {
+	var max float64
+	known := false
+	for _, a := range vd.Advisories {
+		if score, ok := a.EffectiveSeverityScore(); ok && (!known || score > max) {
+			max, known = score, true
+		}
+	}
+	return max, known
+}
+
+// MaxTransitiveEffectiveSeverityScore returns the highest dependency score.
+func (vd *VersionDetail) MaxTransitiveEffectiveSeverityScore() (float64, bool) {
+	var max float64
+	known := false
+	for _, a := range vd.Advisories {
+		if a.Relation != AdvisoryRelationTransitive {
+			continue
+		}
+		if score, ok := a.EffectiveSeverityScore(); ok && (!known || score > max) {
+			max, known = score, true
+		}
+	}
+	return max, known
+}
+
+// MaxTransitiveCVSS4 returns the maximum v4 fallback score in dependencies.
+func (vd *VersionDetail) MaxTransitiveCVSS4() (float64, bool) {
+	var max float64
+	known := false
+	for _, a := range vd.Advisories {
+		if a.Relation == AdvisoryRelationTransitive && a.CVSS3Score <= 0 && a.CVSS4Known && (!known || a.CVSS4Score > max) {
+			max, known = a.CVSS4Score, true
+		}
+	}
+	return max, known
+}
+
+// HighSeverityAdvisoryCount returns the count with an effective score at or above threshold.
 func (vd *VersionDetail) HighSeverityAdvisoryCount(threshold float64) int {
 	count := 0
 	for _, a := range vd.Advisories {
-		if a.CVSS3Score >= threshold {
+		if a.IsKnownHighSeverity(threshold) {
 			count++
 		}
 	}
@@ -353,11 +428,38 @@ func (vd *VersionDetail) DirectOnly() *VersionDetail {
 	return &out
 }
 
-// UnknownSeverityAdvisoryCount returns the count of advisories without severity data (CVSS3Score == 0).
+// UnknownSeverityAdvisoryCount returns the count with no known v3 or v4 score.
 func (vd *VersionDetail) UnknownSeverityAdvisoryCount() int {
 	count := 0
 	for _, a := range vd.Advisories {
-		if a.CVSS3Score <= 0 {
+		if _, known := a.EffectiveSeverityScore(); !known {
+			count++
+		}
+	}
+	return count
+}
+
+// CountCVSS4LookupFailures counts analyses with a failed v4 fallback lookup.
+// See ADR-0037.
+func CountCVSS4LookupFailures(analyses map[string]*Analysis) int {
+	count := 0
+	for _, a := range analyses {
+		if a == nil || a.ReleaseInfo == nil {
+			continue
+		}
+		failed := false
+		for _, vd := range []*VersionDetail{a.ReleaseInfo.StableVersion, a.ReleaseInfo.MaxSemverVersion} {
+			if vd == nil {
+				continue
+			}
+			for _, adv := range vd.Advisories {
+				if adv.CVSS4LookupFailed {
+					failed = true
+					break
+				}
+			}
+		}
+		if failed {
 			count++
 		}
 	}

@@ -8,13 +8,15 @@ import (
 	analysispkg "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
-// sortedAdvisoryBlock sorts advisories by CVSS3 descending, truncates to maxDisplayAdvisories,
+// sortedAdvisoryBlock sorts advisories by effective score descending, truncates to maxDisplayAdvisories,
 // and formats each entry as an indented severity+ID line. indent is the leading whitespace per line.
 func sortedAdvisoryBlock(advisories []analysispkg.Advisory, indent string) (lines []string, sorted []analysispkg.Advisory) {
 	sorted = make([]analysispkg.Advisory, len(advisories))
 	copy(sorted, advisories)
 	sort.SliceStable(sorted, func(i, j int) bool {
-		return sorted[i].CVSS3Score > sorted[j].CVSS3Score
+		left, _ := sorted[i].EffectiveSeverityScore()
+		right, _ := sorted[j].EffectiveSeverityScore()
+		return left > right
 	})
 
 	limit := len(sorted)
@@ -26,8 +28,8 @@ func sortedAdvisoryBlock(advisories []analysispkg.Advisory, indent string) (line
 	const severityColWidth = 14
 	for _, adv := range sorted[:limit] {
 		var sevCol string
-		if adv.CVSS3Score > 0 && adv.Severity != "" {
-			sevCol = fmt.Sprintf("%-8s (%.1f)", adv.Severity, adv.CVSS3Score)
+		if score, known := adv.EffectiveSeverityScore(); known {
+			sevCol = fmt.Sprintf("%-8s (%.1f)", analysispkg.SeverityFromScore(score, known), score)
 		}
 		sevCol = fmt.Sprintf("%-*s", severityColWidth, sevCol)
 		lines = append(lines, fmt.Sprintf("%s%s  %s", indent, sevCol, adv.ID))

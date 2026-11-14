@@ -358,6 +358,9 @@ func warnDependencyAdvisoryLookupFailures(analyses map[string]*analysis.Analysis
 	if unknown := analysis.CountDependencyAdvisoryAgeUnknown(analyses); unknown > 0 {
 		slog.Warn("dependency advisory age check incomplete: OSV lookup failed; these packages may be EOL-Effective", "count", unknown)
 	}
+	if failed := analysis.CountCVSS4LookupFailures(analyses); failed > 0 {
+		slog.Warn("CVSS v4 severity check incomplete: OSV lookup failed; these packages may be EOL-Effective", "count", failed)
+	}
 }
 
 // evaluateActionURLs filters, evaluates, and tags action URLs with the given source.

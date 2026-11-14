@@ -69,6 +69,9 @@ type AdvisoryRecord struct {
 	// Severity is the database's reviewed rating, upper-cased (GitHub: LOW,
 	// MODERATE, HIGH, CRITICAL). Empty when the record carries none.
 	Severity string
+	// CVSS4Score is the published CVSS v4 score when a usable vector was present.
+	CVSS4Score float64
+	CVSS4Known bool
 	// Aliases are other identifiers of the same advisory (a GHSA or CVE ID).
 	Aliases  []string
 	Affected []AdvisoryAffected

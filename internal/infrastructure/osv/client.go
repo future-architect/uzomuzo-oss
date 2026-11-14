@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -31,6 +32,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/common/ttlcache"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
+	gocvss40 "github.com/pandatix/go-cvss/40"
 )
 
 // osvUserAgent identifies uzomuzo to OSV.dev.
@@ -531,9 +533,11 @@ type batchRequest struct {
 }
 
 type wireVuln struct {
-	ID               string   `json:"id"`
-	Aliases          []string `json:"aliases"`
-	Summary          string   `json:"summary"`
+	ID string `json:"id"`
+	// RawMessage keeps malformed severity data from breaking package queries.
+	Severity         json.RawMessage `json:"severity"`
+	Aliases          []string        `json:"aliases"`
+	Summary          string          `json:"summary"`
 	DatabaseSpecific struct {
 		CWEIDs []string `json:"cwe_ids"`
 		// Severity is the curator's reviewed rating (GitHub: LOW, MODERATE,
@@ -549,6 +553,39 @@ type wireVuln struct {
 	Withdrawn  string          `json:"withdrawn"`
 	References []wireReference `json:"references"`
 	Affected   []wireAffected  `json:"affected"`
+}
+
+// scoreCVSS4 reads the published vector without changing threat metrics. See ADR-0037.
+func scoreCVSS4(raw json.RawMessage) (float64, bool) {
+	var entries []struct {
+		Type  string `json:"type"`
+		Score string `json:"score"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &entries) != nil {
+		return 0, false
+	}
+	var vector string
+	for _, entry := range entries {
+		if entry.Type != "CVSS_V4" {
+			continue
+		}
+		if vector != "" || entry.Score == "" {
+			return 0, false
+		}
+		vector = entry.Score
+	}
+	if vector == "" {
+		return 0, false
+	}
+	parsed, err := gocvss40.ParseVector(vector)
+	if err != nil {
+		return 0, false
+	}
+	score := parsed.Score()
+	if math.IsNaN(score) || math.IsInf(score, 0) || score < 0 || score > 10 {
+		return 0, false
+	}
+	return score, true
 }
 
 // ratingString decodes a JSON string as is. Any other JSON value, null
@@ -858,7 +895,7 @@ func sanitizeSummary(raw string) string {
 }
 
 // GetVuln fetches one advisory record by ID from /v1/vulns/{id}: its ID,
-// publication date, withdrawal and reviewed severity (other fields are left
+// publication date, withdrawal, reviewed severity, and v4 score (other fields are left
 // empty). found is false when OSV.dev has no record for the ID (404); that
 // answer is cached for the client's cache TTL, a transport or decode error is
 // not.
@@ -911,8 +948,11 @@ func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord,
 	if !ok || !strings.EqualFold(rec.ID, id) {
 		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln: answer for %q did not name it", id)
 	}
+	if !rec.Withdrawn {
+		rec.CVSS4Score, rec.CVSS4Known = scoreCVSS4(v.Severity)
+	}
 	// Keep only what callers read; affected ranges can be large.
-	rec = domain.AdvisoryRecord{ID: rec.ID, Published: rec.Published, Withdrawn: rec.Withdrawn, Severity: rec.Severity}
+	rec = domain.AdvisoryRecord{ID: rec.ID, Published: rec.Published, Withdrawn: rec.Withdrawn, Severity: rec.Severity, CVSS4Score: rec.CVSS4Score, CVSS4Known: rec.CVSS4Known}
 	c.storeVuln(gen, id, vulnAnswer{rec: rec, found: true})
 	return rec, true, nil
 }

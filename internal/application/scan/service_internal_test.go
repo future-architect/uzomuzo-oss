@@ -122,3 +122,17 @@ func TestWarnDependencyAdvisoryLookupFailures(t *testing.T) {
 		t.Errorf("no failed lookup: got %q, want no output", buf.String())
 	}
 }
+
+func TestWarnCVSS4LookupFailures(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	warnDependencyAdvisoryLookupFailures(map[string]*analysis.Analysis{
+		"failed": {ReleaseInfo: &analysis.ReleaseInfo{StableVersion: &analysis.VersionDetail{Advisories: []analysis.Advisory{{CVSS4LookupFailed: true}}}}},
+		"known":  {ReleaseInfo: &analysis.ReleaseInfo{StableVersion: &analysis.VersionDetail{Advisories: []analysis.Advisory{{CVSS4Known: true}}}}},
+	})
+	if got := buf.String(); strings.Count(got, "CVSS v4 severity check incomplete") != 1 || !strings.Contains(got, "count=1") {
+		t.Fatalf("WARN=%q", got)
+	}
+}

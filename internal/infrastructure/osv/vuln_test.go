@@ -2,6 +2,7 @@ package osv
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,11 +10,65 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
 
 type byIDRoundTripper func(*http.Request) (*http.Response, error)
 
 func (f byIDRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestGetVulnCVSS4(t *testing.T) {
+	const full = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:H/SI:H/SA:H/E:U"
+	const none = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:N/SC:N/SI:N/SA:N"
+	const vcc3 = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N/E:U/S:N/AU:Y/R:U/V:D/RE:M/U:Amber"
+	const ph9p = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N/E:P"
+	for _, tc := range []struct {
+		name, id, severity, reviewed, band string
+		score                              float64
+		known                              bool
+	}{
+		{"GHSA-vcc3 published OSV", "GHSA-vcc3-ghjq-m6fr", `[{"type":"CVSS_V4","score":"` + vcc3 + `"}]`, "MODERATE", "MEDIUM", 6.6, true},
+		{"GHSA-ph9p published OSV", "GHSA-ph9p-34f9-6g65", `[{"type":"CVSS_V4","score":"` + ph9p + `"}]`, "HIGH", "HIGH", 7.7, true},
+		{"published threat", "GHSA-cvss4-test", `[{"type":"CVSS_V4","score":"` + full + `"}]`, "", "CRITICAL", 9.1, true},
+		{"none", "GHSA-cvss4-test", `[{"type":"CVSS_V4","score":"` + none + `"}]`, "", "NONE", 0, true},
+		{"malformed top level", "GHSA-cvss4-test", `{"score":"bad"}`, "", "", 0, false},
+		{"invalid vector", "GHSA-cvss4-test", `[{"type":"CVSS_V4","score":"CVSS:4.0/INVALID"}]`, "", "", 0, false},
+		{"duplicate v4 vectors", "GHSA-cvss4-test", `[{"type":"CVSS_V4","score":"` + full + `"},{"type":"CVSS_V4","score":"` + none + `"}]`, "", "", 0, false},
+		{"duplicate metric", "GHSA-cvss4-test", `[{"type":"CVSS_V4","score":"` + none + `/AV:N"}]`, "", "", 0, false},
+		{"v3 only", "GHSA-cvss4-test", `[{"type":"CVSS_V3","score":"CVSS:3.1/AV:N"}]`, "", "", 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := NewClient()
+			c.SetHTTPClient(&http.Client{Transport: byIDRoundTripper(func(r *http.Request) (*http.Response, error) {
+				body := `{"id":"` + tc.id + `","database_specific":{"severity":"` + tc.reviewed + `"},"severity":` + tc.severity + `}`
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
+			})})
+			rec, found, err := c.GetVuln(context.Background(), tc.id)
+			if err != nil || !found || rec.CVSS4Known != tc.known || rec.CVSS4Score != tc.score || rec.Severity != tc.reviewed || domain.SeverityFromScore(rec.CVSS4Score, rec.CVSS4Known) != tc.band {
+				t.Fatalf("GetVuln: rec=%+v found=%v err=%v; want score=%v known=%v band=%s reviewed=%s", rec, found, err, tc.score, tc.known, tc.band, tc.reviewed)
+			}
+		})
+	}
+}
+
+func TestMalformedTopLevelSeverityDoesNotBreakPackageResponses(t *testing.T) {
+	const malicious = `{"id":"MAL-2026-0001","summary":"Malicious package","severity":{"unexpected":"shape"},"affected":[{"package":{"name":"evil","ecosystem":"npm"},"versions":["1.0.0"]}]}`
+	var query queryResponse
+	if err := json.Unmarshal([]byte(`{"vulns":[`+malicious+`]}`), &query); err != nil {
+		t.Fatal(err)
+	}
+	if len(query.Vulns) != 1 {
+		t.Fatalf("query records=%d", len(query.Vulns))
+	}
+	if rec, ok := toRecord(&query.Vulns[0]); !ok || rec.ID != "MAL-2026-0001" {
+		t.Fatalf("query record=%+v ok=%v", rec, ok)
+	}
+	batch, err := decodeBatchResults([]byte(`{"results":[{"vulns":[` + malicious + `]}]}`))
+	if err != nil || len(batch) != 1 || batch[0].clean {
+		t.Fatalf("batch=%v err=%v", batch, err)
+	}
+}
 
 func TestClient_GetVulnRejectsInvalidWithdrawalEvidence(t *testing.T) {
 	const id = "GHSA-invalid-evidence"
