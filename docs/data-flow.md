@@ -204,7 +204,7 @@ In addition to direct advisories (reported by the deps.dev PURL API), uzomuzo fe
 
 1. **Reuse dependency graph** — the `GetDependencies` response (already fetched for dependency counts) provides the full resolved dependency tree.
 2. **Fetch transitive advisory keys** — each dependency node is queried via the PURL endpoint in parallel (10 goroutines max) to collect `advisoryKeys`.
-3. **Enrich with severity and verify missing details** — `FetchAdvisoriesBatchWithStatus` adds CVSS3 scores and severity labels while reporting detail 404 IDs for OSV withdrawal checks.
+3. **Enrich with severity and verify missing details** — `FetchAdvisoriesBatchWithStatus` adds CVSS3 scores and severity labels while reporting detail 404 IDs for OSV withdrawal checks. A withdrawal confirmed here also removes the same ID from existing selected version lists before assessment and output.
 4. **Deduplicate** — if a transitive advisory ID matches a direct one, `DIRECT` wins.
 
 Transitive advisories are distinguished from direct advisories via `Advisory.Relation` (`DIRECT`/`TRANSITIVE`) and `Advisory.DependencyName` (e.g., `qs@6.5.5`). All output formats (detailed box, JSON, CSV) display them separately.

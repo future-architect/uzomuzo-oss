@@ -58,14 +58,23 @@ func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyse
 		enrichVersionAdvisories(a.ReleaseInfo.StableVersion, details)
 		enrichVersionAdvisories(a.ReleaseInfo.MaxSemverVersion, details)
 		if verifyWithdrawal {
-			filterWithdrawnAdvisories(a.ReleaseInfo.StableVersion, withdrawn)
-			filterWithdrawnAdvisories(a.ReleaseInfo.MaxSemverVersion, withdrawn)
-			if a.ReleaseInfo.StableVersion == nil && a.ReleaseInfo.MaxSemverVersion == nil {
-				filterWithdrawnAdvisories(a.ReleaseInfo.LatestVersionDetail(), withdrawn)
-			}
+			filterSelectedWithdrawnAdvisories(a.ReleaseInfo, withdrawn)
 		}
 	}
 	return withdrawn
+}
+
+// filterSelectedWithdrawnAdvisories applies the same version scope to either
+// pass's confirmed IDs. See ADR-0036.
+func filterSelectedWithdrawnAdvisories(ri *domain.ReleaseInfo, withdrawn map[string]struct{}) {
+	if ri == nil || len(withdrawn) == 0 {
+		return
+	}
+	filterWithdrawnAdvisories(ri.StableVersion, withdrawn)
+	filterWithdrawnAdvisories(ri.MaxSemverVersion, withdrawn)
+	if ri.StableVersion == nil && ri.MaxSemverVersion == nil {
+		filterWithdrawnAdvisories(ri.LatestVersionDetail(), withdrawn)
+	}
 }
 
 func filterWithdrawnAdvisories(vd *domain.VersionDetail, withdrawn map[string]struct{}) {
@@ -75,7 +84,11 @@ func filterWithdrawnAdvisories(vd *domain.VersionDetail, withdrawn map[string]st
 	kept := make([]domain.Advisory, 0, len(vd.Advisories))
 	for _, adv := range vd.Advisories {
 		if _, drop := withdrawn[adv.ID]; drop {
-			slog.Debug("withdrawn_advisory_removed", "id", adv.ID, "relation", domain.AdvisoryRelationDirect)
+			relation := adv.Relation
+			if relation == "" {
+				relation = domain.AdvisoryRelationDirect
+			}
+			slog.Debug("withdrawn_advisory_removed", "id", adv.ID, "relation", relation)
 			continue
 		}
 		kept = append(kept, adv)

@@ -123,6 +123,19 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 	details, missing := s.depsdevClient.FetchAdvisoriesBatchWithStatus(ctx, ids)
 	threshold := assessorHighSeverityThreshold()
 	osvFacts := s.fetchDependencyAdvisoryOSVFacts(ctx, details, missing)
+	confirmedDependency := make(map[string]struct{})
+	for id := range missing {
+		if osvFacts[id].lookup == domain.AdvisoryRecordWithdrawn {
+			confirmedDependency[id] = struct{}{}
+		}
+	}
+	if len(confirmedDependency) > 0 {
+		for _, a := range analyses {
+			if a != nil {
+				filterSelectedWithdrawnAdvisories(a.ReleaseInfo, confirmedDependency)
+			}
+		}
+	}
 
 	// Append enriched transitive advisories to lifecycle-relevant versions.
 	// Only attach to versions whose dependency graph was actually fetched.
@@ -135,7 +148,7 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 		}
 		kept := entries[:0]
 		for i := range entries {
-			if _, isMissing := missing[entries[i].ID]; isMissing && osvFacts[entries[i].ID].lookup == domain.AdvisoryRecordWithdrawn {
+			if _, removed := confirmedDependency[entries[i].ID]; removed {
 				slog.Debug("withdrawn_advisory_removed", "id", entries[i].ID, "relation", domain.AdvisoryRelationTransitive)
 				continue
 			}

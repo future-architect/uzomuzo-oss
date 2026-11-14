@@ -130,6 +130,70 @@ func TestWithdrawnAdvisorySharedDirectAndDependency(t *testing.T) {
 	}
 }
 
+func TestWithdrawnAdvisoryDependencyConfirmationFiltersExisting(t *testing.T) {
+	const id = "GHSA-second-pass"
+	for _, tc := range []struct {
+		name     string
+		fallback bool
+	}{
+		{"stable and max", false},
+		{"selected fallback", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			oc := osv.NewClient()
+			oc.SetCacheTTL(0)
+			oc.SetHTTPClient(&http.Client{Transport: withdrawnRoundTrip(func(r *http.Request) (*http.Response, error) {
+				call := calls.Add(1)
+				if call == 1 {
+					return &http.Response{StatusCode: http.StatusBadRequest, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header), Request: r}, nil
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"id":"GHSA-second-pass","withdrawn":"2026-10-22T00:00:00Z"}`)), Header: make(http.Header), Request: r}, nil
+			})})
+			old := time.Now().AddDate(-4, 0, 0)
+			stable := &domain.VersionDetail{Version: "1.0.0", PublishedAt: old, Advisories: []domain.Advisory{{ID: id}}}
+			max := &domain.VersionDetail{Version: "1.0.0", PublishedAt: old, Advisories: []domain.Advisory{{ID: id}}}
+			fallback := &domain.VersionDetail{Version: "1.0.0", PublishedAt: old, Advisories: []domain.Advisory{{ID: id}}}
+			ri := &domain.ReleaseInfo{StableVersion: stable, MaxSemverVersion: max}
+			if tc.fallback {
+				ri = &domain.ReleaseInfo{PreReleaseVersion: fallback, RequestedVersion: &domain.VersionDetail{Advisories: []domain.Advisory{{ID: "GHSA-unused"}}}}
+			}
+			a := &domain.Analysis{RepoState: &domain.RepoState{DaysSinceLastCommit: 1500, LatestHumanCommit: &old, CommitStats: &domain.CommitStats{}}, ReleaseInfo: ri}
+			dd := &stubDepsDevClient{advisoryMissing: map[string]struct{}{id: {}}, transitiveAdvisoryResults: map[string][]depsdev.AdvisoryKey{"dep@1.0.0": {{ID: id}}}}
+			svc := &IntegrationService{depsdevClient: dd, osvClient: oc}
+			analyses := map[string]*domain.Analysis{"p": a}
+			confirmed := svc.enrichAdvisorySeverity(context.Background(), analyses, true)
+			if len(confirmed) != 0 {
+				t.Fatalf("direct pass unexpectedly confirmed withdrawal: %v", confirmed)
+			}
+			graph := &depsdev.DependenciesResponse{Nodes: []depsdev.DependencyNode{{VersionKey: depsdev.DependencyVersionKey{Name: "self", Version: "1.0.0"}, Relation: "SELF"}}}
+			svc.enrichTransitiveAdvisories(context.Background(), []string{"p"}, analyses, map[string]*depsdev.DependenciesResponse{"p": graph}, confirmed)
+			if got := calls.Load(); got != 2 {
+				t.Errorf("OSV calls = %d, want failed direct lookup then confirmed dependency lookup", got)
+			}
+			if count, _ := ri.LatestAdvisories(); count != 0 {
+				t.Errorf("LatestAdvisories count = %d, want 0", count)
+			}
+			if tc.fallback {
+				if len(fallback.Advisories) != 0 || len(ri.RequestedVersion.Advisories) != 1 {
+					t.Errorf("fallback=%v requested=%v", fallback.Advisories, ri.RequestedVersion.Advisories)
+				}
+				return
+			}
+			if len(stable.Advisories) != 0 || len(max.Advisories) != 0 {
+				t.Errorf("stable=%v max=%v", stable.Advisories, max.Advisories)
+			}
+			res, err := domain.NewLifecycleAssessorService().Assess(context.Background(), domain.AssessmentInput{Analysis: a, Scores: map[string]*domain.ScoreEntity{"Maintained": domain.NewScoreEntity("Maintained", 0, 10, ""), "Vulnerabilities": domain.NewScoreEntity("Vulnerabilities", 5, 10, "")}, EOL: domain.EOLStatus{State: domain.EOLNotEOL}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Label != string(domain.LabelLegacySafe) {
+				t.Errorf("lifecycle label = %q, want Legacy-Safe", res.Label)
+			}
+		})
+	}
+}
+
 func TestWithdrawnAdvisorySelectedFallback(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
