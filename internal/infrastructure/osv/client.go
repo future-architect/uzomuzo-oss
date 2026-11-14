@@ -435,6 +435,53 @@ func checkUnambiguousKeys(raw []byte) error {
 	}
 }
 
+// checkUnambiguousByIDKeys checks only the top-level identity and withdrawal
+// fields used to confirm a by-ID retraction. Package queries keep their
+// existing broader key checks. See ADR-0036.
+func checkUnambiguousByIDKeys(raw []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return fmt.Errorf("by-ID response is not a JSON object")
+	}
+	seen := make(map[string]bool, 2)
+	watched := map[string]string{foldKey("id"): "id", foldKey("withdrawn"): "withdrawn"}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return fmt.Errorf("read by-ID key: %w", err)
+		}
+		key, ok := tok.(string)
+		if !ok {
+			return fmt.Errorf("by-ID object has a non-string key")
+		}
+		folded := foldKey(key)
+		expected, watchedKey := watched[folded]
+		if watchedKey {
+			if key != expected {
+				return fmt.Errorf("object key %q is a variant spelling of %q", key, expected)
+			}
+			if seen[folded] {
+				return fmt.Errorf("object key %q is repeated", key)
+			}
+			seen[folded] = true
+		}
+		var value json.RawMessage
+		if err := dec.Decode(&value); err != nil {
+			return fmt.Errorf("read by-ID value: %w", err)
+		}
+		if expected == "withdrawn" {
+			var timestamp *string
+			if err := json.Unmarshal(value, &timestamp); err != nil || timestamp == nil {
+				return errors.New("invalid withdrawn timestamp")
+			}
+			if _, err := time.Parse(time.RFC3339, *timestamp); err != nil {
+				return fmt.Errorf("invalid withdrawn timestamp: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
 // foldKey maps s to one representative of its case-folding class, so two keys
 // share a result exactly when strings.EqualFold reports them equal.
 func foldKey(s string) string {
@@ -849,6 +896,9 @@ func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord,
 	}
 	if len(raw) > maxJSONResponseSize {
 		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln response exceeded %d bytes", maxJSONResponseSize)
+	}
+	if err := checkUnambiguousByIDKeys(raw); err != nil {
+		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln decode failed: %w", err)
 	}
 	var v wireVuln
 	if err := json.Unmarshal(raw, &v); err != nil {

@@ -2,12 +2,54 @@ package osv
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+type byIDRoundTripper func(*http.Request) (*http.Response, error)
+
+func (f byIDRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestClient_GetVulnRejectsInvalidWithdrawalEvidence(t *testing.T) {
+	const id = "GHSA-invalid-evidence"
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"invalid timestamp", `{"id":"GHSA-invalid-evidence","withdrawn":"not-a-timestamp"}`},
+		{"null timestamp", `{"id":"GHSA-invalid-evidence","withdrawn":null}`},
+		{"empty timestamp", `{"id":"GHSA-invalid-evidence","withdrawn":""}`},
+		{"duplicate withdrawn", `{"id":"GHSA-invalid-evidence","withdrawn":"2026-10-22T19:21:04Z","withdrawn":"2026-10-23T00:00:00Z"}`},
+		{"case variant withdrawn", `{"id":"GHSA-invalid-evidence","Withdrawn":"2026-10-22T19:21:04Z"}`},
+		{"duplicate id", `{"id":"GHSA-other","id":"GHSA-invalid-evidence","withdrawn":"2026-10-22T19:21:04Z"}`},
+		{"case variant id", `{"ID":"GHSA-invalid-evidence","withdrawn":"2026-10-22T19:21:04Z"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			c := NewClient()
+			c.SetHTTPClient(&http.Client{Transport: byIDRoundTripper(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Path != "/v1/vulns/"+id {
+					t.Errorf("path=%q", r.URL.Path)
+				}
+				calls.Add(1)
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(tc.body)), Header: make(http.Header), Request: r}, nil
+			})})
+			for range 2 {
+				if rec, found, err := c.GetVuln(context.Background(), id); err == nil || found || rec.Withdrawn {
+					t.Errorf("GetVuln: rec=%+v found=%v err=%v, want uncached failure", rec, found, err)
+				}
+			}
+			if got := calls.Load(); got != 2 {
+				t.Errorf("calls=%d, want 2 because failures are not cached", got)
+			}
+		})
+	}
+}
 
 func TestClient_GetVuln(t *testing.T) {
 	t.Parallel()

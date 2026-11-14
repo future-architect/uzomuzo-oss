@@ -9,24 +9,11 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 )
 
-// enrichAdvisorySeverity fetches CVSS3 scores for advisories on lifecycle-relevant
-// versions (Stable, MaxSemver) across analyses and populates Title, CVSS3Score,
-// and Severity on each Advisory.
-// Advisories are sorted by CVSS3 score descending (highest severity first) after enrichment.
-//
-// Scope: Only StableVersion and MaxSemverVersion are enriched because:
-//   - The lifecycle assessor (getStableOrMaxVersionDetail) only inspects these two.
-//   - CLI output (JSON/CSV) uses LatestVersionDetail(), which prefers Stable > MaxSemver
-//     and usually selects one of those when present.
-//   - PreRelease and RequestedVersion are not used for lifecycle classification. They may
-//     still be selected as a LatestVersionDetail() fallback when Stable and MaxSemver are nil,
-//     and in that case their advisories intentionally remain unenriched by design.
-//   - Skipping them reduces API calls proportionally (see ADR-0010).
-//
-// This is best-effort: fetch failures leave Advisory fields at zero values,
-// and the lifecycle assessor falls back to count-based logic for unknown-severity advisories.
-func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyses map[string]*domain.Analysis) {
-	// Collect unique advisory IDs from lifecycle-relevant versions only.
+// enrichAdvisorySeverity enriches Stable and MaxSemver severity. When
+// verifyWithdrawal is true, it also removes advisories whose deps.dev detail is
+// missing and whose OSV record confirms withdrawal, including on the selected
+// fallback version. See ADR-0010 and ADR-0036.
+func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyses map[string]*domain.Analysis, verifyWithdrawal bool) map[string]struct{} {
 	idSet := make(map[string]struct{})
 	for _, a := range analyses {
 		if a == nil || a.ReleaseInfo == nil {
@@ -34,10 +21,13 @@ func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyse
 		}
 		collectAdvisoryIDs(a.ReleaseInfo.StableVersion, idSet)
 		collectAdvisoryIDs(a.ReleaseInfo.MaxSemverVersion, idSet)
+		if verifyWithdrawal && a.ReleaseInfo.StableVersion == nil && a.ReleaseInfo.MaxSemverVersion == nil {
+			collectAdvisoryIDs(a.ReleaseInfo.LatestVersionDetail(), idSet)
+		}
 	}
 
 	if len(idSet) == 0 {
-		return
+		return nil
 	}
 
 	ids := make([]string, 0, len(idSet))
@@ -46,7 +36,19 @@ func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyse
 	}
 
 	slog.Debug("fetching_advisory_severity", "unique_ids", len(ids))
-	details := s.depsdevClient.FetchAdvisoriesBatch(ctx, ids)
+	details, missing := s.depsdevClient.FetchAdvisoriesBatchWithStatus(ctx, ids)
+	var withdrawn map[string]struct{}
+	if verifyWithdrawal && len(missing) > 0 {
+		facts := s.fetchAdvisoryOSVFacts(ctx, sortedIDs(missing))
+		for id := range missing {
+			if facts[id].lookup == domain.AdvisoryRecordWithdrawn {
+				if withdrawn == nil {
+					withdrawn = make(map[string]struct{})
+				}
+				withdrawn[id] = struct{}{}
+			}
+		}
+	}
 
 	// Enrich lifecycle-relevant versions only.
 	for _, a := range analyses {
@@ -55,7 +57,43 @@ func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyse
 		}
 		enrichVersionAdvisories(a.ReleaseInfo.StableVersion, details)
 		enrichVersionAdvisories(a.ReleaseInfo.MaxSemverVersion, details)
+		if verifyWithdrawal {
+			filterSelectedWithdrawnAdvisories(a.ReleaseInfo, withdrawn)
+		}
 	}
+	return withdrawn
+}
+
+// filterSelectedWithdrawnAdvisories applies the same version scope to either
+// pass's confirmed IDs. See ADR-0036.
+func filterSelectedWithdrawnAdvisories(ri *domain.ReleaseInfo, withdrawn map[string]struct{}) {
+	if ri == nil || len(withdrawn) == 0 {
+		return
+	}
+	filterWithdrawnAdvisories(ri.StableVersion, withdrawn)
+	filterWithdrawnAdvisories(ri.MaxSemverVersion, withdrawn)
+	if ri.StableVersion == nil && ri.MaxSemverVersion == nil {
+		filterWithdrawnAdvisories(ri.LatestVersionDetail(), withdrawn)
+	}
+}
+
+func filterWithdrawnAdvisories(vd *domain.VersionDetail, withdrawn map[string]struct{}) {
+	if vd == nil || len(withdrawn) == 0 {
+		return
+	}
+	kept := make([]domain.Advisory, 0, len(vd.Advisories))
+	for _, adv := range vd.Advisories {
+		if _, drop := withdrawn[adv.ID]; drop {
+			relation := adv.Relation
+			if relation == "" {
+				relation = domain.AdvisoryRelationDirect
+			}
+			slog.Debug("withdrawn_advisory_removed", "id", adv.ID, "relation", relation)
+			continue
+		}
+		kept = append(kept, adv)
+	}
+	vd.Advisories = kept
 }
 
 // collectAdvisoryIDs adds advisory IDs from a VersionDetail to the set.

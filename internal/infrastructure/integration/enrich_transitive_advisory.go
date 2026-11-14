@@ -22,12 +22,15 @@ import (
 // Advisory deduplication: if a transitive advisory ID already exists as a direct advisory
 // on the same VersionDetail, the transitive entry is skipped (DIRECT takes precedence).
 //
+// A missing deps.dev detail removes an advisory only when OSV confirms its
+// withdrawal. See ADR-0036.
 // DDD Layer: Infrastructure (best-effort enrichment)
 func (s *IntegrationService) enrichTransitiveAdvisories(
 	ctx context.Context,
 	purls []string,
 	analyses map[string]*domain.Analysis,
 	depsGraphResults map[string]*depsdev.DependenciesResponse,
+	confirmedDirect map[string]struct{},
 ) {
 	if len(depsGraphResults) == 0 {
 		return
@@ -88,6 +91,9 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 				return advisoryKeys[i].ID < advisoryKeys[j].ID
 			})
 			for _, ak := range advisoryKeys {
+				if _, removed := confirmedDirect[ak.ID]; removed {
+					continue
+				}
 				srcName, url := classifyAdvisory(ak.ID)
 				entries = append(entries, domain.Advisory{
 					ID:             ak.ID,
@@ -114,8 +120,22 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 		ids = append(ids, id)
 	}
 	slog.Debug("fetching_transitive_advisory_severity", "unique_ids", len(ids))
-	details := s.depsdevClient.FetchAdvisoriesBatch(ctx, ids)
-	osvFacts := s.fetchDependencyAdvisoryOSVFacts(ctx, details)
+	details, missing := s.depsdevClient.FetchAdvisoriesBatchWithStatus(ctx, ids)
+	threshold := assessorHighSeverityThreshold()
+	osvFacts := s.fetchDependencyAdvisoryOSVFacts(ctx, details, missing)
+	confirmedDependency := make(map[string]struct{})
+	for id := range missing {
+		if osvFacts[id].lookup == domain.AdvisoryRecordWithdrawn {
+			confirmedDependency[id] = struct{}{}
+		}
+	}
+	if len(confirmedDependency) > 0 {
+		for _, a := range analyses {
+			if a != nil {
+				filterSelectedWithdrawnAdvisories(a.ReleaseInfo, confirmedDependency)
+			}
+		}
+	}
 
 	// Append enriched transitive advisories to lifecycle-relevant versions.
 	// Only attach to versions whose dependency graph was actually fetched.
@@ -126,17 +146,23 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 		if a == nil || a.ReleaseInfo == nil {
 			continue
 		}
+		kept := entries[:0]
 		for i := range entries {
+			if _, removed := confirmedDependency[entries[i].ID]; removed {
+				slog.Debug("withdrawn_advisory_removed", "id", entries[i].ID, "relation", domain.AdvisoryRelationTransitive)
+				continue
+			}
 			if detail, ok := details[entries[i].ID]; ok {
 				entries[i].Title = detail.Title
 				entries[i].CVSS3Score = detail.CVSS3Score
 				entries[i].Severity = domain.SeverityFromCVSS3(detail.CVSS3Score)
+				if f, ok := osvFacts[entries[i].ID]; ok && domain.IsKnownHighCVSS3(detail.CVSS3Score, threshold) {
+					entries[i].RecordLookup = f.lookup
+					entries[i].Published = f.rec.Published
+					entries[i].ReviewedSeverity = f.rec.Severity
+				}
 			}
-			if f, ok := osvFacts[entries[i].ID]; ok {
-				entries[i].RecordLookup = f.lookup
-				entries[i].Published = f.rec.Published
-				entries[i].ReviewedSeverity = f.rec.Severity
-			}
+			kept = append(kept, entries[i])
 		}
 		graphVersion := depsGraphResults[p].SelfVersion()
 		for _, vd := range []*domain.VersionDetail{
@@ -144,7 +170,7 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 			a.ReleaseInfo.MaxSemverVersion,
 		} {
 			if vd != nil && (graphVersion == "" || vd.Version == graphVersion) {
-				appendTransitiveAdvisories(vd, entries)
+				appendTransitiveAdvisories(vd, kept)
 			}
 		}
 	}
@@ -164,26 +190,46 @@ type osvFact struct {
 	lookup domain.AdvisoryRecordLookup
 }
 
-// fetchDependencyAdvisoryOSVFacts looks up the OSV record (publication date,
-// reviewed severity, withdrawal) of every dependency advisory whose CVSS3
-// score reaches the HIGH threshold. Only those can make a dormant package
-// EOL-Effective through a dependency (see ADR-0032). Every selected ID gets an
-// outcome, including the ones the time budget or a cancellation cut off.
-func (s *IntegrationService) fetchDependencyAdvisoryOSVFacts(ctx context.Context, details map[string]*depsdev.AdvisoryDetail) map[string]osvFact {
-	if s.osvClient == nil || len(details) == 0 {
-		return nil
-	}
+// fetchDependencyAdvisoryOSVFacts selects known-HIGH dependency IDs for age
+// facts and unions optional deps.dev 404 IDs for withdrawal checks. It makes
+// one bounded OSV request per unique ID. See ADR-0032 and ADR-0036.
+func (s *IntegrationService) fetchDependencyAdvisoryOSVFacts(ctx context.Context, details map[string]*depsdev.AdvisoryDetail, missingIDs ...map[string]struct{}) map[string]osvFact {
 	threshold := assessorHighSeverityThreshold()
-	var ids []string
+	lookupIDs := make(map[string]struct{})
 	for id, d := range details {
 		if d != nil && domain.IsKnownHighCVSS3(d.CVSS3Score, threshold) {
-			ids = append(ids, id)
+			lookupIDs[id] = struct{}{}
 		}
 	}
-	if len(ids) == 0 {
+	for _, missing := range missingIDs {
+		for id := range missing {
+			lookupIDs[id] = struct{}{}
+		}
+	}
+	return s.fetchAdvisoryOSVFacts(ctx, sortedIDs(lookupIDs))
+}
+
+func sortedIDs(ids map[string]struct{}) []string {
+	out := make([]string, 0, len(ids))
+	for id := range ids {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// fetchAdvisoryOSVFacts uses the bounded OSV by-ID worker for selected IDs.
+// Callers must require a deps.dev 404 before treating withdrawal as removal.
+// See ADR-0036.
+func (s *IntegrationService) fetchAdvisoryOSVFacts(ctx context.Context, ids []string) map[string]osvFact {
+	if s.osvClient == nil || len(ids) == 0 {
 		return nil
 	}
-	sort.Strings(ids)
+	unique := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		unique[id] = struct{}{}
+	}
+	ids = sortedIDs(unique)
 	budget := osvFactsBudget
 	if s.osvFactsBudget > 0 {
 		budget = s.osvFactsBudget
@@ -241,7 +287,7 @@ dispatch:
 			failed++
 		}
 	}
-	slog.Debug("osv_dependency_advisory_facts", "ids", len(ids), "failed", failed)
+	slog.Debug("osv_advisory_facts", "ids", len(ids), "failed", failed)
 	return out
 }
 

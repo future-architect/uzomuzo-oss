@@ -183,23 +183,30 @@ type Advisory struct {
 	// DependencyName identifies the transitive dependency this advisory originates from.
 	// Format: "name@version" (e.g., "qs@6.5.5"). Empty for direct advisories.
 	DependencyName string
-	// Published is when the advisory was first published (OSV). Zero when
-	// unknown. Only dependency advisories whose CVSS3 score reaches the HIGH
-	// threshold are looked up; RecordLookup says how that lookup went.
+	// Published is the OSV publication date recorded for a dependency advisory
+	// with successful deps.dev detail and a known HIGH CVSS3 score. Zero means
+	// no publication-date fact was recorded; a retained deps.dev-404 advisory
+	// may have been checked for withdrawal. See ADR-0036.
 	Published time.Time
 	// ReviewedSeverity is the advisory database's reviewed rating (OSV
 	// database_specific.severity, e.g. GitHub's MODERATE), upper-cased. Empty
-	// when the record carries none or was not looked up.
+	// when no reviewed rating was recorded, including after a withdrawal-only
+	// check of a retained deps.dev-404 advisory. See ADR-0036.
 	ReviewedSeverity string
-	// RecordLookup is what the OSV lookup of this advisory found. Zero when it
-	// was not looked up.
+	// RecordLookup records the OSV age-fact lookup outcome for a dependency
+	// advisory with successful deps.dev detail and a known HIGH CVSS3 score.
+	// Zero means no publication-date or reviewed-severity lookup result was
+	// recorded; a retained deps.dev-404 advisory may still have been checked
+	// for withdrawal. See ADR-0036.
 	RecordLookup AdvisoryRecordLookup
 }
 
 // AdvisoryRecordLookup is the outcome of looking an advisory up by ID in OSV.
 type AdvisoryRecordLookup string
 
-// AdvisoryRecordLookup values. The zero value means not looked up.
+// AdvisoryRecordLookup values. The zero value means no publication-date or
+// reviewed-severity lookup result was recorded, including after a check of a
+// retained deps.dev-404 advisory. See ADR-0036.
 const (
 	AdvisoryRecordNotLookedUp  AdvisoryRecordLookup = ""
 	AdvisoryRecordFound        AdvisoryRecordLookup = "found"
