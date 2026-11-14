@@ -286,6 +286,7 @@ func TestIsStableVersion(t *testing.T) {
 	tests := []struct {
 		name     string
 		version  string
+		purlType string
 		expected bool
 	}{
 		{
@@ -358,11 +359,37 @@ func TestIsStableVersion(t *testing.T) {
 			version:  "v1.8.0",
 			expected: true,
 		},
+		{name: "milestone", purlType: "maven", version: "2.1.0-M1", expected: false},
+		{name: "alpha_milestone", purlType: "maven", version: "2.0.0.AM27", expected: false},
+		{name: "candidate", purlType: "maven", version: "3.0.0-CR1", expected: false},
+		{name: "early_access_build", purlType: "maven", version: "28-ea+12", expected: false},
+		{name: "early_access_digits_build", purlType: "maven", version: "17-ea8+8", expected: false},
+		{name: "early_access_exact_build", purlType: "maven", version: "17-ea+8", expected: false},
+		{name: "milestone_build", purlType: "maven", version: "2.1.0-M1+build", expected: false},
+		{name: "candidate_before_hyphen", purlType: "maven", version: "2.0.0.CR1-redhat-00001", expected: false},
+		{name: "milestone_before_hyphen", purlType: "maven", version: "2.0.0-M1-jre", expected: false},
+		{name: "milestone_before_dot", purlType: "maven", version: "2.0.0-M1.Final", expected: false},
+		{name: "milestone_before_underscore", purlType: "maven", version: "2.0.0-M1_jre", expected: false},
+		{name: "token_at_start", purlType: "maven", version: "M1-jre", expected: false},
+		{name: "uppercase_tokens", purlType: "maven", version: "2.0.0_AM2", expected: false},
+		{name: "missing_digits", purlType: "maven", version: "1.0.0-M", expected: true},
+		{name: "embedded_letters", purlType: "maven", version: "1.0.0-featureAM2", expected: true},
+		{name: "unfinished_token", purlType: "maven", version: "1.0.0-M1Final", expected: true},
+		{name: "name_like_segment", purlType: "maven", version: "1.0.0-team1", expected: true},
+		{name: "maven_final", purlType: "maven", version: "3.20.0.Final", expected: true},
+		{name: "build_metadata_keyword", version: "0.11.0+wasi-snapshot-preview1", expected: true},
+		{name: "untyped_maven_token", version: "2.0.0-M1", expected: true},
+		{name: "npm_milestone_like_tag", purlType: "npm", version: "2.0.0-M1", expected: true},
+		{name: "mixed_case_maven_type", purlType: "Maven", version: "2.0.0-M1", expected: false},
+		{name: "go_hex_hash_collision", purlType: "golang", version: "v0.0.0-20260327151000-ea1234567890", expected: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := IsStableVersion(tt.version)
+			if tt.purlType != "" {
+				result = IsStableVersionFor(tt.purlType, tt.version)
+			}
 			if result != tt.expected {
 				t.Errorf("IsStableVersion(%q) = %v, want %v", tt.version, result, tt.expected)
 			}

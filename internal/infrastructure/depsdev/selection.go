@@ -27,19 +27,32 @@ const depsDevYankedReason = "yanked"
 //	 2. preferredStable set and PEP 440 parseable -> greatest version
 //	    <= preferredStable, ties broken by latest PublishedAt then version string.
 //	    No such version leaves Stable empty; the bound is never exceeded.
-//	 3. preferredStable empty or not PEP 440 parseable -> latest IsDefault=true by
-//	    PublishedAt, else latest purl.IsStableVersion by PublishedAt
+//	 3. preferredStable empty or not PEP 440 parseable -> latest deps.dev
+//	    default by PublishedAt. In supported PURL types, an unstable default
+//	    yields the highest eligible GA, skipping deps.dev-deprecated GA only
+//	    for this override and keeping the default if none remains (ADR-0035).
+//	    With no default, Maven, npm, cargo, and PyPI choose the highest eligible
+//	    GA without that deprecation filter; otherwise the latest
+//	    heuristic-stable version by PublishedAt wins.
 //
 // Dev:
-//   - Latest among non-stable by PublishedAt
+//   - Latest version called unstable by purl.IsStableVersionFor, by PublishedAt.
+//     After an unstable-default override, use the replaced default if that
+//     Dev is empty or older.
+//     See ADR-0035.
 //
 // Max:
 //   - Highest SemVer using Masterminds semver; if none are valid SemVer, fallback to latest by PublishedAt
 //
-// See ADR-0023 and ADR-0024.
+// See ADR-0023, ADR-0024, and ADR-0035.
 func pickStableDevAndMax(versions []Version, preferredStable string) (stable Version, dev Version, max Version) {
+	stable, dev, max, _ = pickStableDevAndMaxWithReplaced(versions, preferredStable)
+	return stable, dev, max
+}
+
+func pickStableDevAndMaxWithReplaced(versions []Version, preferredStable string) (stable Version, dev Version, max Version, replacedDefault Version) {
 	if len(versions) == 0 {
-		return Version{}, Version{}, Version{}
+		return Version{}, Version{}, Version{}, Version{}
 	}
 
 	var defaults, stables, nonStables []Version
@@ -47,7 +60,7 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 	stableEligible := make([]Version, 0, len(versions))
 
 	for _, v := range versions {
-		isStable := purl.IsStableVersion(v.VersionKey.Version)
+		isStable := purl.IsStableVersionFor(v.VersionKey.System, v.VersionKey.Version)
 		if !withdrawnFromStable(v) {
 			stableEligible = append(stableEligible, v)
 			if v.IsDefault {
@@ -72,13 +85,22 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 		stable = picked
 	} else if len(defaults) > 0 {
 		stable = latestByPublishedAt(defaults)
+		if system := stable.VersionKey.System; supportedGASystem(system) != "" && !eligibleGA(stable) {
+			if picked := highestEligibleGA(stableEligible, system, true); picked.VersionKey.Version != "" {
+				replacedDefault = stable
+				stable = picked
+			}
+		}
 	} else if len(stables) > 0 {
-		stable = latestByPublishedAt(stables)
+		stable = pickWithoutDefault(stableEligible, stables)
 	}
 
 	// Dev selection
 	if len(nonStables) > 0 {
 		dev = latestByPublishedAt(nonStables)
+	}
+	if replacedDefault.VersionKey.Version != "" && (dev.VersionKey.Version == "" || replacedDefault.PublishedAt.After(dev.PublishedAt)) {
+		dev = replacedDefault
 	}
 
 	// Max SemVer selection
@@ -88,7 +110,197 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 		max = latestByPublishedAt(versions)
 	}
 
-	return stable, dev, max
+	return stable, dev, max, replacedDefault
+}
+
+func supportedGASystem(system string) string {
+	system = strings.ToLower(system)
+	switch system {
+	case "maven", "npm", "cargo", "pypi", "golang":
+		return system
+	default:
+		return ""
+	}
+}
+
+func eligibleGA(v Version) bool {
+	if !purl.IsStableVersionFor(v.VersionKey.System, v.VersionKey.Version) {
+		return false
+	}
+	switch supportedGASystem(v.VersionKey.System) {
+	case "npm", "cargo":
+		parsed, err := semver.NewVersion(v.VersionKey.Version)
+		return err != nil || parsed.Prerelease() == ""
+	case "pypi":
+		parsed, err := pep440.Parse(v.VersionKey.Version)
+		return err != nil || !parsed.IsPreRelease()
+	default:
+		return true
+	}
+}
+
+func pickWithoutDefault(eligible, heuristicStable []Version) Version {
+	if len(eligible) > 0 {
+		system := supportedGASystem(eligible[0].VersionKey.System)
+		switch system {
+		case "maven", "npm", "cargo", "pypi":
+			if picked := highestEligibleGA(eligible, system, false); picked.VersionKey.Version != "" {
+				return picked
+			}
+		}
+	}
+	return latestByPublishedAt(heuristicStable)
+}
+
+func highestEligibleGA(versions []Version, system string, override bool) Version {
+	candidates := make([]Version, 0, len(versions))
+	for _, v := range versions {
+		if !eligibleGA(v) || (override && v.IsDeprecated) {
+			continue
+		}
+		if override && supportedGASystem(system) == "golang" {
+			parsed, err := semver.NewVersion(v.VersionKey.Version)
+			if err != nil || parsed.Prerelease() != "" {
+				continue
+			}
+		}
+		candidates = append(candidates, v)
+	}
+	return highestByVersionOrder(candidates, system)
+}
+
+func highestByVersionOrder(versions []Version, system string) Version {
+	if len(versions) == 0 {
+		return Version{}
+	}
+	system = supportedGASystem(system)
+	semvers := make([]*semver.Version, len(versions))
+	pepvers := make([]pep440.Version, len(versions))
+	allParsed := system != "" && system != "maven"
+	for i, v := range versions {
+		switch system {
+		case "npm", "cargo", "golang":
+			parsed, err := semver.NewVersion(v.VersionKey.Version)
+			if err != nil {
+				allParsed = false
+			} else {
+				semvers[i] = parsed
+			}
+		case "pypi":
+			parsed, err := pep440.Parse(v.VersionKey.Version)
+			if err != nil {
+				allParsed = false
+			} else {
+				pepvers[i] = parsed
+			}
+		}
+	}
+	best := 0
+	for i := 1; i < len(versions); i++ {
+		cmp := 0
+		if allParsed {
+			if system == "pypi" {
+				cmp = pepvers[i].Compare(pepvers[best])
+			} else {
+				cmp = semvers[i].Compare(semvers[best])
+			}
+		} else {
+			cmp = compareNumericCore(versions[i].VersionKey.Version, versions[best].VersionKey.Version)
+		}
+		if cmp > 0 || (cmp == 0 && laterCandidate(versions[i], versions[best])) {
+			best = i
+		}
+	}
+	return versions[best]
+}
+
+func laterCandidate(a, b Version) bool {
+	if !a.PublishedAt.Equal(b.PublishedAt) {
+		return a.PublishedAt.After(b.PublishedAt)
+	}
+	return a.VersionKey.Version > b.VersionKey.Version
+}
+
+func compareNumericCore(a, b string) int {
+	aParts, aOK := numericCore(a)
+	bParts, bOK := numericCore(b)
+	if aOK != bOK {
+		if aOK {
+			return 1
+		}
+		return -1
+	}
+	if aOK && bOK {
+		aDate, bDate := hasDateFormNumericCore(a), hasDateFormNumericCore(b)
+		if aDate != bDate {
+			if aDate {
+				return -1
+			}
+			return 1
+		}
+	}
+	for i := 0; i < len(aParts) || i < len(bParts); i++ {
+		aPart, bPart := "0", "0"
+		if i < len(aParts) {
+			aPart = aParts[i]
+		}
+		if i < len(bParts) {
+			bPart = bParts[i]
+		}
+		if len(aPart) != len(bPart) {
+			if len(aPart) > len(bPart) {
+				return 1
+			}
+			return -1
+		}
+		if aPart != bPart {
+			if aPart > bPart {
+				return 1
+			}
+			return -1
+		}
+	}
+	return 0
+}
+
+func hasDateFormNumericCore(version string) bool {
+	if len(version) > 0 && (version[0] == 'v' || version[0] == 'V') {
+		version = version[1:]
+	}
+	i := 0
+	for i < len(version) && version[i] >= '0' && version[i] <= '9' {
+		i++
+	}
+	return i >= 8
+}
+
+func numericCore(version string) ([]string, bool) {
+	if len(version) > 0 && (version[0] == 'v' || version[0] == 'V') {
+		version = version[1:]
+	}
+	if len(version) == 0 || version[0] < '0' || version[0] > '9' {
+		return nil, false
+	}
+	var parts []string
+	for len(version) > 0 {
+		i := 0
+		for i < len(version) && version[i] >= '0' && version[i] <= '9' {
+			i++
+		}
+		if i == 0 {
+			break
+		}
+		part := strings.TrimLeft(version[:i], "0")
+		if part == "" {
+			part = "0"
+		}
+		parts = append(parts, part)
+		if i == len(version) || version[i] != '.' {
+			break
+		}
+		version = version[i+1:]
+	}
+	return parts, true
 }
 
 // pickByRegistryStable applies the bound. governs=false means the bound does not
@@ -174,10 +386,7 @@ func (c stableCandidate) outranks(other stableCandidate) bool {
 	if cmp := c.parsed.Compare(other.parsed); cmp != 0 {
 		return cmp > 0
 	}
-	if !c.raw.PublishedAt.Equal(other.raw.PublishedAt) {
-		return c.raw.PublishedAt.After(other.raw.PublishedAt)
-	}
-	return c.raw.VersionKey.Version > other.raw.VersionKey.Version
+	return laterCandidate(c.raw, other.raw)
 }
 
 func latestByPublishedAt(vs []Version) Version {

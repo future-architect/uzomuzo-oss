@@ -148,9 +148,9 @@ func TestWithdrawnFromStable(t *testing.T) {
 	}
 }
 
-// TestPickStableDevAndMax_NonCargoDeprecatedUnaffected guards the pypi path added
-// in ADR-0023: deps.dev does not report pypi yanks through isDeprecated, so a
-// deprecated pypi release must still be selectable as Stable.
+// TestPickStableDevAndMax_NonCargoDeprecatedUnaffected guards the PyPI default
+// path from ADR-0023: a deprecated default remains selectable as Stable. The
+// PyPI no-default path also preserves deprecated GA candidates; see ADR-0035.
 func TestPickStableDevAndMax_NonCargoDeprecatedUnaffected(t *testing.T) {
 	published, err := time.Parse(time.RFC3339, "2026-01-01T00:00:00Z")
 	if err != nil {
@@ -168,5 +168,21 @@ func TestPickStableDevAndMax_NonCargoDeprecatedUnaffected(t *testing.T) {
 
 	if got, want := stable.VersionKey.Version, "1.0.0"; got != want {
 		t.Errorf("Stable = %q, want %q (non-cargo must be unaffected)", got, want)
+	}
+}
+
+func TestPickStableDevAndMax_PyPINoDefaultKeepsDeprecatedGA(t *testing.T) {
+	versions := []Version{
+		{VersionKey: VersionKey{System: "pypi", Version: "1.0.0"}, PublishedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{VersionKey: VersionKey{System: "pypi", Version: "2.0.0"}, PublishedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), IsDeprecated: true},
+	}
+	for _, order := range []string{"forward", "reverse"} {
+		t.Run(order, func(t *testing.T) {
+			stable, _, _ := pickStableDevAndMax(versions, "")
+			if got := stable.VersionKey.Version; got != "2.0.0" {
+				t.Errorf("Stable = %q, want 2.0.0", got)
+			}
+			versions[0], versions[1] = versions[1], versions[0]
+		})
 	}
 }

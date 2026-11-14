@@ -84,6 +84,10 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 			packageInfoMap[orig] = pkg
 		} else {
 			missingPkgCount++
+			if releaseInfoMap[orig].replacedDefault.PURL != "" {
+				// See ADR-0035.
+				packageInfoMap[orig] = nil
+			}
 		}
 	}
 	if missingPkgCount > 0 && float64(missingPkgCount) >= 0.05*float64(len(purls)) {
@@ -91,17 +95,17 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 	}
 
 	// Step 4: Extract repository URLs and group by unique repos (keyed by original PURLs)
-	repoURLMap, purlsWithoutRepo := c.resolveRepoURLsBatch(ctx, packageInfoMap)
+	repoURLMap, purlsWithoutRepo := c.resolveRepoURLsBatch(ctx, packageInfoMap, releaseInfoMap)
 	if len(purlsWithoutRepo) > 0 {
 		slog.Info("PURLsWithoutRepoURL", "count", len(purlsWithoutRepo))
 	}
 
-	// Step 4.1: Fallback repo resolution for ecosystems unsupported by deps.dev package API
-	// or when package info is completely missing for a PURL. Reuse existing resolvers
-	// where applicable and add a Go-specific module-root-to-GitHub synthesis.
+	// Step 4.1: Fallback repo resolution only for PURLs absent from packageInfoMap.
+	// Present entries, including nil values, are handled by Step 4. See ADR-0035.
+	// Reuse existing resolvers and add a Go-specific module-root-to-GitHub synthesis.
 	for _, orig := range purls {
 		if _, ok := packageInfoMap[orig]; ok {
-			continue // already processed via deps.dev package info
+			continue // handled by Step 4, including a nil package entry
 		}
 		parser := commonpurl.NewParser()
 		parsed, err := parser.Parse(orig)
@@ -174,7 +178,7 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 // Notes:
 // - Bounded concurrency to avoid overwhelming registries (Maven Central, etc.)
 // - Reuses existing resolver chain (which may perform network I/O) safely across goroutines
-func (c *DepsDevClient) resolveRepoURLsBatch(ctx context.Context, packageInfoMap map[string]*PackageResponse) (map[string][]string, []string) {
+func (c *DepsDevClient) resolveRepoURLsBatch(ctx context.Context, packageInfoMap map[string]*PackageResponse, releaseInfoMap map[string]ReleaseInfo) (map[string][]string, []string) {
 	if len(packageInfoMap) == 0 {
 		return make(map[string][]string), nil
 	}
@@ -201,6 +205,16 @@ func (c *DepsDevClient) resolveRepoURLsBatch(ctx context.Context, packageInfoMap
 		for p := range jobs {
 			pkg := packageInfoMap[p]
 			url := c.resolveRepoURL(ctx, pkg, p)
+			if replaced := releaseInfoMap[p].replacedDefault; replaced.PURL != "" && convertRepoURLToProjectKey(url) == "" {
+				// See ADR-0035.
+				defaultPkg := &PackageResponse{Version: replaced}
+				if fetched, err := c.fetchPackageInfo(ctx, replaced.PURL); err == nil && fetched != nil {
+					defaultPkg = fetched
+				}
+				if candidate := c.resolveRepoURL(ctx, defaultPkg, replaced.PURL); candidate != "" && (url == "" || convertRepoURLToProjectKey(candidate) != "") {
+					url = candidate
+				}
+			}
 			if url != "" {
 				url = normalizeRepoURLForProject(url)
 			}

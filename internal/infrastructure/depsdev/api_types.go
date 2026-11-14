@@ -195,6 +195,7 @@ type ReleaseInfo struct {
 	PreReleaseVersion Version
 	MaxSemverVersion  Version
 	RequestedVersion  Version
+	replacedDefault   Version
 
 	Endpoint string
 	Error    error

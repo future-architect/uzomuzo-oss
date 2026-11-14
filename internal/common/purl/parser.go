@@ -84,22 +84,18 @@ func (p *ParsedPURL) Version() string {
 	return p.packageURL.Version
 }
 
-// IsStableVersion determines whether a version is stable
+// IsStableVersion reports whether a non-empty version lacks the shared
+// prerelease keywords. An empty version is not stable. Build metadata after
+// '+' is ignored. See ADR-0035.
 func IsStableVersion(version string) bool {
-	if version == "" {
-		return false
-	}
+	return isStableVersionFor("", version)
+}
 
-	version = strings.ToLower(version)
-	unstableKeywords := []string{"alpha", "beta", "rc", "dev", "snapshot", "pre", "preview"}
-
-	for _, keyword := range unstableKeywords {
-		if strings.Contains(version, keyword) {
-			return false
-		}
-	}
-
-	return true
+// IsStableVersionFor reports stability using the PURL type. Maven adds bounded
+// qualifier tokens to the shared keyword rule; empty versions are unstable and
+// build metadata is ignored for every type. See ADR-0035.
+func IsStableVersionFor(purlType, version string) bool {
+	return isStableVersionFor(purlType, version)
 }
 
 // ParseError represents a PURL parsing error
@@ -119,4 +115,55 @@ func NewParseError(message, purl string) *ParseError {
 // Error implements the error interface
 func (e *ParseError) Error() string {
 	return e.Message + ": " + e.PURL
+}
+
+func isStableVersionFor(purlType, version string) bool {
+	if version == "" {
+		return false
+	}
+	version, _, _ = strings.Cut(version, "+")
+	version = strings.ToLower(version)
+	for _, keyword := range []string{"alpha", "beta", "rc", "dev", "snapshot", "pre", "preview"} {
+		if strings.Contains(version, keyword) {
+			return false
+		}
+	}
+	if !strings.EqualFold(purlType, "maven") {
+		return true
+	}
+	for len(version) > 0 {
+		end := strings.IndexAny(version, ".-_")
+		if end < 0 {
+			end = len(version)
+		}
+		if isUnstableQualifier(version[:end]) {
+			return false
+		}
+		if end == len(version) {
+			break
+		}
+		version = version[end+1:]
+	}
+	return true
+}
+
+func isUnstableQualifier(token string) bool {
+	if strings.HasPrefix(token, "ea") {
+		return allASCIIDigits(token[2:])
+	}
+	for _, prefix := range []string{"am", "cr", "m"} {
+		if strings.HasPrefix(token, prefix) && len(token) > len(prefix) && allASCIIDigits(token[len(prefix):]) {
+			return true
+		}
+	}
+	return false
+}
+
+func allASCIIDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
