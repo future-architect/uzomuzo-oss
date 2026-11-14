@@ -60,35 +60,6 @@ func TestBuildFinalResults_StableAndDevEmpty_MaxPopulated_ReleaseInfoAttached(t 
 	}
 }
 
-func TestBuildFinalResults_NoOverrideFlag(t *testing.T) {
-	c := NewDepsDevClient(&config.DepsDevConfig{BaseURL: "http://localhost"})
-	const withoutRepo = "pkg:npm/no-repo"
-	const withRepo = "pkg:npm/with-repo"
-	release := ReleaseInfo{StableVersion: Version{VersionKey: VersionKey{Version: "1.2.0"}}}
-	results := c.buildFinalResults(
-		[]string{withoutRepo, withRepo},
-		map[string]*PackageResponse{withoutRepo: nil, withRepo: nil},
-		[]string{withoutRepo},
-		map[string][]string{"https://gitlab.example/org/with-repo": {withRepo}},
-		map[string]*Project{},
-		map[string]ReleaseInfo{withoutRepo: release, withRepo: release},
-	)
-	for _, purl := range []string{withoutRepo, withRepo} {
-		t.Run(purl, func(t *testing.T) {
-			result := results[purl]
-			if result == nil {
-				t.Fatal("missing batch result")
-			}
-			if result.StableDefaultOverridden {
-				t.Error("StableDefaultOverridden = true, want false without an override")
-			}
-			if got := result.ReleaseInfo.StableVersion.VersionKey.Version; got != "1.2.0" {
-				t.Errorf("Stable = %q, want 1.2.0", got)
-			}
-		})
-	}
-}
-
 // TestBuildCompleteResult_StableAndDevEmpty_MaxPopulated_ReleaseInfoAttached
 // is buildCompleteResult's counterpart to the buildFinalResults regression
 // guard above, covering the repository-info-present code path.

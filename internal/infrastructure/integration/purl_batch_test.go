@@ -89,13 +89,13 @@ type stubDepsDevClient struct {
 
 type missingPackageDepsDevClient struct {
 	stubDepsDevClient
-	withRelease, overridden bool
+	withRelease bool
 }
 
 func (c *missingPackageDepsDevClient) GetDetailsForPURLs(_ context.Context, purls []string) (map[string]*depsdev.BatchResult, error) {
 	result := make(map[string]*depsdev.BatchResult, len(purls))
 	for _, p := range purls {
-		result[p] = &depsdev.BatchResult{PURL: p, StableDefaultOverridden: c.overridden}
+		result[p] = &depsdev.BatchResult{PURL: p}
 		if c.withRelease {
 			result[p].ReleaseInfo = depsdev.ReleaseInfo{StableVersion: depsdev.Version{
 				VersionKey: depsdev.VersionKey{Version: "1.5.7"}, PURL: p + "@1.5.7",
@@ -105,18 +105,18 @@ func (c *missingPackageDepsDevClient) GetDetailsForPURLs(_ context.Context, purl
 	return result, nil
 }
 
-func TestAnalyzeFromPURLs_MissingPackageMetadataErrorScope(t *testing.T) {
+func TestAnalyzeFromPURLs_MissingPackageMetadataStaysNotFound(t *testing.T) {
 	const p = "pkg:maven/org.apache.directory.server/apacheds-core"
 	for _, tc := range []struct {
-		name, purl                           string
-		withRelease, overridden, wantNoError bool
+		name, purl  string
+		withRelease bool
 	}{
-		{"GA override with release", p, true, true, true},
-		{"ordinary failed metadata with release", "pkg:npm/example", true, false, false},
-		{"no package or release", "pkg:npm/empty", false, false, false},
+		{"selected GA release survives", p, true},
+		{"ordinary release survives", "pkg:npm/example", true},
+		{"no package or release", "pkg:npm/empty", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := NewIntegrationService(github.NewClient(&config.Config{}), &missingPackageDepsDevClient{withRelease: tc.withRelease, overridden: tc.overridden})
+			svc := NewIntegrationService(github.NewClient(&config.Config{}), &missingPackageDepsDevClient{withRelease: tc.withRelease})
 			analyses, err := svc.AnalyzeFromPURLs(context.Background(), []string{tc.purl})
 			if err != nil {
 				t.Fatalf("AnalyzeFromPURLs: %v", err)
@@ -125,8 +125,8 @@ func TestAnalyzeFromPURLs_MissingPackageMetadataErrorScope(t *testing.T) {
 			if a == nil {
 				t.Fatal("missing analysis")
 			}
-			if got := common.IsResourceNotFoundError(a.Error); got != !tc.wantNoError {
-				t.Errorf("resource-not-found = %v, want %v (error: %v)", got, !tc.wantNoError, a.Error)
+			if !common.IsResourceNotFoundError(a.Error) {
+				t.Errorf("Error = %v, want resource-not-found", a.Error)
 			}
 			if tc.withRelease && (a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || a.ReleaseInfo.StableVersion.Version != "1.5.7") {
 				t.Errorf("ReleaseInfo = %+v, want Stable 1.5.7", a.ReleaseInfo)

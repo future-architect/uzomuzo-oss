@@ -461,7 +461,6 @@ func (c *DepsDevClient) buildFinalResults(purls []string, packageInfoMap map[str
 		packageResp := packageInfoMap[purl]
 		basicResult := c.buildBasicResult(purl, packageResp)
 		if releaseInfo, exists := releaseInfoMap[purl]; exists {
-			basicResult.StableDefaultOverridden = releaseInfo.replacedDefault.PURL != ""
 			if releaseInfo.HasAnyVersion() {
 				basicResult.ReleaseInfo = releaseInfo
 			}
@@ -478,7 +477,6 @@ func (c *DepsDevClient) buildFinalResults(purls []string, packageInfoMap map[str
 			releaseInfo := releaseInfoMap[purl] // May be empty if fetch failed
 
 			result := c.buildCompleteResult(purl, packageResp, projectInfo, releaseInfo)
-			result.StableDefaultOverridden = releaseInfo.replacedDefault.PURL != ""
 			// Persist the resolved repository URL so upper layers can use it directly
 			result.RepoURL = repoURL
 			results[purl] = result

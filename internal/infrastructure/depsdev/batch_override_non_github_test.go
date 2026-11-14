@@ -95,9 +95,6 @@ func TestFetchBatchPURLs_MissingGAKeepsNonGitHubDefaultRepo(t *testing.T) {
 			if result == nil {
 				t.Fatal("missing batch result")
 			}
-			if !result.StableDefaultOverridden {
-				t.Error("StableDefaultOverridden = false, want true")
-			}
 			if got := result.ReleaseInfo.StableVersion.PURL; got != tc.stablePURL {
 				t.Errorf("Stable PURL = %q, want %q", got, tc.stablePURL)
 			}
@@ -160,9 +157,6 @@ func TestFetchBatchPURLs_NoOverrideFailedPackageLookup(t *testing.T) {
 	result := results[original]
 	if result == nil {
 		t.Fatal("missing batch result")
-	}
-	if result.StableDefaultOverridden {
-		t.Error("StableDefaultOverridden = true, want false for stable default")
 	}
 	if result.Package != nil {
 		t.Errorf("Package = %+v, want nil after selected package lookup fails", result.Package)

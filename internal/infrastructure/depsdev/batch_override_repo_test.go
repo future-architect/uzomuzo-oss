@@ -102,9 +102,6 @@ func TestFetchBatchPURLs_OverrideKeepsDefaultGitHubRepo(t *testing.T) {
 			if result == nil {
 				t.Fatal("missing batch result")
 			}
-			if !result.StableDefaultOverridden {
-				t.Error("StableDefaultOverridden = false, want true")
-			}
 			if got := result.ReleaseInfo.StableVersion.VersionKey.Version; got != "1.5.7" {
 				t.Errorf("Stable = %q, want 1.5.7", got)
 			}
