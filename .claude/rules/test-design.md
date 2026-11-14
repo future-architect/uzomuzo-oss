@@ -155,6 +155,7 @@ Zero new dependency. Required for any code path that parses external content
   - `internal/common/purl/fuzz_test.go`
   - `internal/infrastructure/depparser/cyclonedx/fuzz_test.go`
   - `internal/infrastructure/depparser/gomod/fuzz_test.go`
+  - `internal/infrastructure/depsdev/fuzz_test.go`
   - `internal/infrastructure/eolevaluator/fuzz_test.go`
   - `internal/infrastructure/eoltext/fuzz_test.go`
   - `internal/infrastructure/golangresolve/fuzz_test.go`

@@ -84,8 +84,9 @@ func (p *ParsedPURL) Version() string {
 	return p.packageURL.Version
 }
 
-// IsStableVersion reports whether a version lacks known prerelease qualifiers.
-// Build metadata after '+' is ignored. See ADR-0035.
+// IsStableVersion reports whether a non-empty version lacks known prerelease
+// qualifiers. An empty version is not stable. Build metadata after '+' is
+// ignored. See ADR-0035.
 func IsStableVersion(version string) bool {
 	if version == "" {
 		return false

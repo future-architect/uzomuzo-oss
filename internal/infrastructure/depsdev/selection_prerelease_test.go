@@ -50,13 +50,21 @@ func TestPickStableDevAndMax_PrereleaseDefaults(t *testing.T) {
 
 		{"npm parser prereleases only", "npm", "", []release{{"2.0.0-beta.3", new, true}, {"2.0.0-next.4", mid, false}, {"1.0.0-canary.1", old, false}}, "2.0.0-beta.3", "2.0.0-beta.3", "2.0.0-next.4", false},
 		{"npm parser prereleases and GA", "npm", "", []release{{"2.0.0-beta.3", new, true}, {"2.0.0-next.4", mid, false}, {"1.0.0", old, false}}, "1.0.0", "2.0.0-beta.3", "2.0.0-next.4", false},
-		{"cargo parser prerelease", "cargo", "", []release{{"2.0.0-rc1", new, true}, {"2.0.0-next.1", mid, false}, {"1.0.0", old, false}}, "1.0.0", "2.0.0-rc1", "2.0.0-rc1", false},
+		{"npm parser-only default", "npm", "", []release{{"2.0.0-next.4", new, true}, {"1.0.0", old, false}}, "1.0.0", "", "2.0.0-next.4", true},
+		{"cargo parser prerelease", "cargo", "", []release{{"2.0.0-rc1", mid, true}, {"2.0.0-next.1", new, false}, {"1.0.0", old, false}}, "1.0.0", "2.0.0-rc1", "2.0.0-rc1", false},
+		{"cargo parser-only default", "cargo", "", []release{{"2.0.0-next.4", new, true}, {"1.0.0", old, false}}, "1.0.0", "", "2.0.0-next.4", true},
 		{"pypi short prerelease and GA", "pypi", "", []release{{"2.0rc1", new, true}, {"2.0b3", mid, false}, {"1.9.0", old, false}}, "1.9.0", "2.0rc1", "1.9.0", false},
 		{"pypi short prerelease only", "pypi", "", []release{{"2.0rc1", new, true}, {"2.0b3", mid, false}}, "2.0rc1", "2.0rc1", "2.0rc1", false},
+		{"pypi parser-only default", "pypi", "", []release{{"2.0b3", new, true}, {"1.9.0", old, false}}, "1.9.0", "", "1.9.0", true},
+		{"npm mixed parse numeric fallback", "npm", "", []release{{"2.0.0-rc1", new, true}, {"1.0.0.0", mid, false}, {"0.9.0", old, false}}, "1.0.0.0", "2.0.0-rc1", "2.0.0-rc1", true},
+		{"pypi mixed parse numeric fallback", "pypi", "", []release{{"4.0rc1", new, true}, {"3.20.0.Final", mid, false}, {"3.19.0", old, false}}, "3.20.0.Final", "4.0rc1", "3.19.0", true},
+		{"maven numeric v prefix", "maven", "", []release{{"2.0.0-M1", new, true}, {"v3.0.0.Final", mid, false}, {"2.9.0.Final", old, false}}, "v3.0.0.Final", "2.0.0-M1", "2.0.0-M1", true},
+		{"maven equal core publication tie", "maven", "", []release{{"34.0-rc1", new, true}, {"33.8.0-jre", old, false}, {"33.8.0-android", mid, false}}, "33.8.0-android", "34.0-rc1", "34.0-rc1", true},
 
 		{"go stable tag and tied pseudos", "golang", "", []release{{"v0.9.1", old, true}, {"v0.0.0-20260327151000-87f8819acf6d", same, false}, {"v0.9.1-0.20260327151000-87f8819acf6d", same, false}, {"v0.9.2-0.20260327151000-87f8819acf6d", same, false}}, "v0.9.1", "", "v0.9.2-0.20260327151000-87f8819acf6d", true},
 		{"go lipgloss pseudo exclusion", "golang", "", []release{{"v2.0.0-beta1", new, true}, {"v2.0.0-20241029194924-049a2d260c67", old, false}, {"v2.0.0-20250917201909-41ff0bf215ea", mid, false}}, "v2.0.0-beta1", "v2.0.0-beta1", "v2.0.0-beta1", true},
 		{"go override tagged GA", "golang", "", []release{{"v1.1.0-rc.1", new, true}, {"v1.0.0", old, false}, {"v1.1.0-0.20260327151000-87f8819acf6d", mid, false}}, "v1.0.0", "v1.1.0-rc.1", "v1.1.0-rc.1", true},
+		{"go next tag excluded from override", "golang", "", []release{{"v2.0.0-beta1", new, true}, {"v2.0.0-next.3", mid, false}, {"v1.9.0", old, false}}, "v1.9.0", "v2.0.0-beta1", "v2.0.0-next.3", true},
 		{"go ea hash enters Dev", "golang", "", []release{{"v1.0.0", old, true}, {"v0.0.0-20260327151000-ea1234567890", new, false}}, "v1.0.0", "v0.0.0-20260327151000-ea1234567890", "v1.0.0", false},
 		{"excluded system default first", "nuget", "", []release{{"2.0.0-rc1", mid, true}, {"2.0.0-next.1", new, false}}, "2.0.0-rc1", "2.0.0-rc1", "2.0.0-rc1", false},
 
@@ -99,5 +107,23 @@ func TestPickStableDevAndMax_PrereleaseDefaults(t *testing.T) {
 				check("reverse", versions)
 			}
 		})
+	}
+}
+
+func TestPickStableDevAndMax_UnstableCargoDefaultSkipsYankedGA(t *testing.T) {
+	versions := []Version{
+		cargoVersion(t, "2.0.0-rc.1", "2027-01-01T00:00:00Z", true, false, ""),
+		cargoVersion(t, "1.5.0", "2026-01-01T00:00:00Z", false, true, "yanked"),
+		cargoVersion(t, "1.4.0", "2025-01-01T00:00:00Z", false, false, ""),
+	}
+	stable, dev, max := pickStableDevAndMax(versions, "")
+	if got := stable.VersionKey.Version; got != "1.4.0" {
+		t.Errorf("Stable = %q, want 1.4.0", got)
+	}
+	if got := dev.VersionKey.Version; got != "2.0.0-rc.1" {
+		t.Errorf("Dev = %q, want 2.0.0-rc.1", got)
+	}
+	if got := max.VersionKey.Version; got != "2.0.0-rc.1" {
+		t.Errorf("Max = %q, want 2.0.0-rc.1 (unfiltered)", got)
 	}
 }
