@@ -36,7 +36,9 @@ func TestAnalyzeFromGitHubURLsRetainsCVSS4Fallback(t *testing.T) {
 	oc := osv.NewClient()
 	oc.SetCacheTTL(0)
 	oc.SetHTTPClient(&http.Client{Transport: withdrawnRoundTrip(func(r *http.Request) (*http.Response, error) {
-		calls.Add(1)
+		if r.URL.Path == "/v1/vulns/"+id {
+			calls.Add(1)
+		}
 		body := `{"id":"` + id + `","severity":[{"type":"CVSS_V4","score":"` + vector + `"}]}`
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
 	})})
