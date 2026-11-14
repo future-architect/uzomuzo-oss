@@ -28,11 +28,13 @@ const depsDevYankedReason = "yanked"
 //	 2. preferredStable set and PEP 440 parseable -> greatest version
 //	    <= preferredStable, ties broken by latest PublishedAt then version string.
 //	    No such version leaves Stable empty; the bound is never exceeded.
-//	 3. preferredStable empty or not PEP 440 parseable -> a stable deps.dev
-//	    default; an unstable default yields the highest eligible GA in supported
-//	    PURL types, or the default when none exists. With no default, Maven,
-//	    npm, cargo, and PyPI choose the highest eligible GA when one exists;
-//	    otherwise the latest heuristic-stable version by PublishedAt wins.
+//	 3. preferredStable empty or not PEP 440 parseable -> latest deps.dev
+//	    default by PublishedAt. In supported PURL types, an unstable default
+//	    yields the highest eligible GA, skipping deps.dev-deprecated GA only
+//	    for this override and keeping the default if none remains (ADR-0035).
+//	    With no default, Maven, npm, cargo, and PyPI choose the highest eligible
+//	    GA without that deprecation filter; otherwise the latest
+//	    heuristic-stable version by PublishedAt wins.
 //
 // Dev:
 //   - Latest among non-stable by PublishedAt

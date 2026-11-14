@@ -148,9 +148,9 @@ func TestWithdrawnFromStable(t *testing.T) {
 	}
 }
 
-// TestPickStableDevAndMax_NonCargoDeprecatedUnaffected guards the pypi path added
-// in ADR-0023: deps.dev does not report pypi yanks through isDeprecated, so a
-// deprecated pypi release must still be selectable as Stable.
+// TestPickStableDevAndMax_NonCargoDeprecatedUnaffected guards the PyPI default
+// path from ADR-0023: a deprecated default remains selectable as Stable. The
+// PyPI no-default path also preserves deprecated GA candidates; see ADR-0035.
 func TestPickStableDevAndMax_NonCargoDeprecatedUnaffected(t *testing.T) {
 	published, err := time.Parse(time.RFC3339, "2026-01-01T00:00:00Z")
 	if err != nil {

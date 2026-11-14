@@ -42,6 +42,8 @@ func TestPickStableDevAndMax_PrereleaseDefaults(t *testing.T) {
 		{"quarkus Final", "maven", "", []release{{"4.0.0.Beta1", new, true}, {"3.20.0.Final", old, false}}, "3.20.0.Final", "4.0.0.Beta1", "4.0.0.Beta1", false},
 		{"wildfly elytron Final", "maven", "", []release{{"3.0.0.Alpha1", new, true}, {"2.9.0.Final", old, false}}, "2.9.0.Final", "3.0.0.Alpha1", "3.0.0.Alpha1", false},
 		{"maintenance line", "maven", "", []release{{"4.2.0-RC1", new, true}, {"4.1.2", old, false}, {"3.5.9", mid, false}}, "4.1.2", "4.2.0-RC1", "4.2.0-RC1", false},
+		{"maven numeric core length", "maven", "", []release{{"3.0.0-RC1", new, true}, {"2.0.1", old, false}, {"2.0", mid, false}}, "2.0.1", "3.0.0-RC1", "3.0.0-RC1", true},
+		{"maven leading zero component", "maven", "", []release{{"3.0.0-RC1", new, true}, {"1.01.0.Final", mid, false}, {"1.2.0.Final", old, false}}, "1.2.0.Final", "3.0.0-RC1", "3.0.0-RC1", true},
 		{"maven Final ordering", "maven", "", []release{{"4.0.0-CR1", new, true}, {"3.20.0.Final", old, false}, {"3.19.0.Final", mid, false}}, "3.20.0.Final", "4.0.0-CR1", "4.0.0-CR1", false},
 		{"maven jre stable default", "maven", "", []release{{"33.8.0-jre", new, true}, {"23.0", mid, false}, {"22.0", old, false}}, "33.8.0-jre", "", "33.8.0-jre", false},
 		{"maven jre android tie", "maven", "", []release{{"34.0-rc1", new, true}, {"33.8.0-jre", same, false}, {"33.8.0-android", same, false}}, "33.8.0-jre", "34.0-rc1", "34.0-rc1", true},
