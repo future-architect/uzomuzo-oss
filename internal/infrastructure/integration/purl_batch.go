@@ -49,10 +49,9 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 		analysis.EnsureCanonical()
 		if batchResult, ok := batchResults[p]; ok && batchResult != nil {
 			s.populateAnalysisFromBatchResult(ctx, analysis, batchResult)
-			// Mark entries without package or release data as not found so downstream
-			// registry and catalog fallbacks can recognise the typed error.
-			// A failed GA metadata lookup can still leave valid release data; see ADR-0035.
-			if batchResult.Package == nil && !batchResult.ReleaseInfo.HasAnyVersion() && analysis.Error == nil {
+			// A failed GA metadata lookup can retain the overridden release; see ADR-0035.
+			// Other missing package metadata stays not found for downstream fallbacks.
+			if batchResult.Package == nil && (!batchResult.StableDefaultOverridden || !batchResult.ReleaseInfo.HasAnyVersion()) && analysis.Error == nil {
 				analysis.Error = common.NewResourceNotFoundError(
 					fmt.Sprintf("package not found in deps.dev: %s", p),
 				)

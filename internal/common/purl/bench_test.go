@@ -34,7 +34,7 @@ func BenchmarkParserParse(b *testing.B) {
 	}
 }
 
-// BenchmarkIsStableVersion measures the version-stability check, an allocation-free
+// BenchmarkIsStableVersionFor measures the version-stability check, an allocation-free
 // string classification applied to every resolved version.
 func BenchmarkIsStableVersionFor(b *testing.B) {
 	versions := []string{"1.2.3", "v1.10.0", "2.0.0-rc.1", "0.0.0-20240101120000-abcdef123456", "7.24.0"}

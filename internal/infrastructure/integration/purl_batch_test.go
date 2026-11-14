@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
@@ -86,37 +87,51 @@ type stubDepsDevClient struct {
 	advisoryDetails           map[string]*depsdev.AdvisoryDetail
 }
 
-type releaseOnlyDepsDevClient struct{ stubDepsDevClient }
+type missingPackageDepsDevClient struct {
+	stubDepsDevClient
+	withRelease, overridden bool
+}
 
-func (c *releaseOnlyDepsDevClient) GetDetailsForPURLs(_ context.Context, purls []string) (map[string]*depsdev.BatchResult, error) {
+func (c *missingPackageDepsDevClient) GetDetailsForPURLs(_ context.Context, purls []string) (map[string]*depsdev.BatchResult, error) {
 	result := make(map[string]*depsdev.BatchResult, len(purls))
 	for _, p := range purls {
-		result[p] = &depsdev.BatchResult{
-			PURL: p,
-			ReleaseInfo: depsdev.ReleaseInfo{StableVersion: depsdev.Version{
+		result[p] = &depsdev.BatchResult{PURL: p, StableDefaultOverridden: c.overridden}
+		if c.withRelease {
+			result[p].ReleaseInfo = depsdev.ReleaseInfo{StableVersion: depsdev.Version{
 				VersionKey: depsdev.VersionKey{Version: "1.5.7"}, PURL: p + "@1.5.7",
-			}},
+			}}
 		}
 	}
 	return result, nil
 }
 
-func TestAnalyzeFromPURLs_FailedGAMetadataKeepsRelease(t *testing.T) {
+func TestAnalyzeFromPURLs_MissingPackageMetadataErrorScope(t *testing.T) {
 	const p = "pkg:maven/org.apache.directory.server/apacheds-core"
-	svc := NewIntegrationService(github.NewClient(&config.Config{}), &releaseOnlyDepsDevClient{})
-	analyses, err := svc.AnalyzeFromPURLs(context.Background(), []string{p})
-	if err != nil {
-		t.Fatalf("AnalyzeFromPURLs: %v", err)
-	}
-	a := analyses[p]
-	if a == nil {
-		t.Fatal("missing analysis")
-	}
-	if a.Error != nil {
-		t.Errorf("Error = %v, want nil when selected release survives the GA lookup failure", a.Error)
-	}
-	if a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || a.ReleaseInfo.StableVersion.Version != "1.5.7" {
-		t.Errorf("ReleaseInfo = %+v, want Stable 1.5.7", a.ReleaseInfo)
+	for _, tc := range []struct {
+		name, purl                           string
+		withRelease, overridden, wantNoError bool
+	}{
+		{"GA override with release", p, true, true, true},
+		{"ordinary failed metadata with release", "pkg:npm/example", true, false, false},
+		{"no package or release", "pkg:npm/empty", false, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := NewIntegrationService(github.NewClient(&config.Config{}), &missingPackageDepsDevClient{withRelease: tc.withRelease, overridden: tc.overridden})
+			analyses, err := svc.AnalyzeFromPURLs(context.Background(), []string{tc.purl})
+			if err != nil {
+				t.Fatalf("AnalyzeFromPURLs: %v", err)
+			}
+			a := analyses[tc.purl]
+			if a == nil {
+				t.Fatal("missing analysis")
+			}
+			if got := common.IsResourceNotFoundError(a.Error); got != !tc.wantNoError {
+				t.Errorf("resource-not-found = %v, want %v (error: %v)", got, !tc.wantNoError, a.Error)
+			}
+			if tc.withRelease && (a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || a.ReleaseInfo.StableVersion.Version != "1.5.7") {
+				t.Errorf("ReleaseInfo = %+v, want Stable 1.5.7", a.ReleaseInfo)
+			}
+		})
 	}
 }
 

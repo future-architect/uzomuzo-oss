@@ -93,6 +93,9 @@ func TestFetchBatchPURLs_MissingGAKeepsNonGitHubDefaultRepo(t *testing.T) {
 			if result == nil {
 				t.Fatal("missing batch result")
 			}
+			if !result.StableDefaultOverridden {
+				t.Error("StableDefaultOverridden = false, want true")
+			}
 			if got := result.ReleaseInfo.StableVersion.PURL; got != tc.stablePURL {
 				t.Errorf("Stable PURL = %q, want %q", got, tc.stablePURL)
 			}

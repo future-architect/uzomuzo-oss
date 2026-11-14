@@ -219,6 +219,9 @@ type BatchResult struct {
 	RepoURL     string      `json:"repo_url,omitempty"`
 	Error       *string     `json:"error,omitempty"`
 	ReleaseInfo ReleaseInfo `json:"release_info,omitempty"`
+	// StableDefaultOverridden distinguishes a failed selected-GA metadata lookup
+	// from ordinary missing package metadata. See ADR-0035.
+	StableDefaultOverridden bool `json:"-"`
 }
 
 // AdvisoryKey represents each object within advisoryKeys.
