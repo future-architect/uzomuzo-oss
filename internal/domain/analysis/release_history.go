@@ -254,7 +254,7 @@ func releaseLine(v string) (string, bool) {
 // IsPrerelease reports whether v carries a semver prerelease suffix
 // ("2.0.0-alpha.0"). Build metadata ("+build") alone is not a prerelease.
 // Not purl.IsStableVersionFor: it matches keywords, so "1.0.0-next.3" passes
-// as stable for non-Maven types, while semver ranges never select any "-" version.
+// as stable for every PURL type, while semver ranges never select any "-" version.
 func IsPrerelease(v string) bool {
 	core, _, _ := strings.Cut(v, "+")
 	return strings.Contains(core, "-")
