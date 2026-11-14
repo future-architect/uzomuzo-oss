@@ -84,6 +84,10 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 			packageInfoMap[orig] = pkg
 		} else {
 			missingPkgCount++
+			if releaseInfoMap[orig].replacedDefault.PURL != "" {
+				// See ADR-0035.
+				packageInfoMap[orig] = nil
+			}
 		}
 	}
 	if missingPkgCount > 0 && float64(missingPkgCount) >= 0.05*float64(len(purls)) {
@@ -201,13 +205,13 @@ func (c *DepsDevClient) resolveRepoURLsBatch(ctx context.Context, packageInfoMap
 		for p := range jobs {
 			pkg := packageInfoMap[p]
 			url := c.resolveRepoURL(ctx, pkg, p)
-			if replaced := releaseInfoMap[p].replacedDefault; replaced.PURL != "" && !common.IsValidGitHubURL(url) {
+			if replaced := releaseInfoMap[p].replacedDefault; replaced.PURL != "" && convertRepoURLToProjectKey(url) == "" {
 				// See ADR-0035.
 				defaultPkg := &PackageResponse{Version: replaced}
 				if fetched, err := c.fetchPackageInfo(ctx, replaced.PURL); err == nil && fetched != nil {
 					defaultPkg = fetched
 				}
-				if candidate := c.resolveRepoURL(ctx, defaultPkg, replaced.PURL); common.IsValidGitHubURL(candidate) {
+				if candidate := c.resolveRepoURL(ctx, defaultPkg, replaced.PURL); convertRepoURLToProjectKey(candidate) != "" {
 					url = candidate
 				}
 			}

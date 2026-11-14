@@ -32,13 +32,16 @@ func TestFetchBatchPURLs_OverrideKeepsDefaultGitHubRepo(t *testing.T) {
 
 	for _, tc := range []struct {
 		name, stableRepo, defaultRepo, wantRepo string
-		defaultNotFound                         bool
+		gaNotFound, defaultNotFound             bool
 		wantDefaultLookups, wantPOMLookups      int32
 	}{
-		{"stable SVN, default POM GitHub", stableSVN, "", defaultGitHub, false, 1, 1},
-		{"stable GitHub stays", stableGitHub, "", stableGitHub, false, 0, 0},
-		{"default also SVN", stableSVN, defaultSVN, stableSVN, false, 1, 0},
-		{"default package lookup fails, POM GitHub", stableSVN, "", defaultGitHub, true, 1, 1},
+		{"stable SVN, default POM GitHub", stableSVN, "", defaultGitHub, false, false, 1, 1},
+		{"stable GitHub stays", stableGitHub, "", stableGitHub, false, false, 0, 0},
+		{"stable SCM GitHub stays", "scm:git:" + stableGitHub + ".git", "", stableGitHub, false, false, 0, 0},
+		{"default SCM GitHub accepted", stableSVN, "scm:git:" + defaultGitHub + ".git", defaultGitHub, false, false, 1, 0},
+		{"default also SVN", stableSVN, defaultSVN, stableSVN, false, false, 1, 0},
+		{"GA package lookup fails, default POM GitHub", stableSVN, "", defaultGitHub, true, false, 1, 1},
+		{"default package lookup fails, POM GitHub", stableSVN, "", defaultGitHub, false, true, 1, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var defaultLookups, pomLookups atomic.Int32
@@ -48,6 +51,9 @@ func TestFetchBatchPURLs_OverrideKeepsDefaultGitHubRepo(t *testing.T) {
 				case "/v3alpha/systems/maven/packages/org.apache.directory.server:apacheds-core":
 					body = `{"versions":[{"versionKey":{"version":"1.5.7"},"publishedAt":"2010-01-01T00:00:00Z"},{"versionKey":{"version":"2.0.0.AM27"},"publishedAt":"2023-10-09T00:00:00Z","isDefault":true}]}`
 				case "/v3alpha/purl/" + url.PathEscape(stable):
+					if tc.gaNotFound {
+						return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header), Request: r}, nil
+					}
 					body = `{"version":{"versionKey":{"system":"maven","name":"org.apache.directory.server:apacheds-core","version":"1.5.7"},"purl":"` + stable + `","links":[{"label":"SOURCE_REPO","url":"` + tc.stableRepo + `"}]}}`
 				case "/v3alpha/purl/" + url.PathEscape(replacedDefault):
 					defaultLookups.Add(1)
@@ -98,6 +104,12 @@ func TestFetchBatchPURLs_OverrideKeepsDefaultGitHubRepo(t *testing.T) {
 			}
 			if got := result.ReleaseInfo.StableVersion.VersionKey.Version; got != "1.5.7" {
 				t.Errorf("Stable = %q, want 1.5.7", got)
+			}
+			if got := result.ReleaseInfo.StableVersion.PURL; got != stable {
+				t.Errorf("Stable PURL = %q, want %q", got, stable)
+			}
+			if tc.gaNotFound && result.Package != nil {
+				t.Errorf("Package = %+v, want nil after GA metadata lookup fails", result.Package)
 			}
 			if got := result.RepoURL; got != tc.wantRepo {
 				t.Errorf("RepoURL = %q, want %q", got, tc.wantRepo)
