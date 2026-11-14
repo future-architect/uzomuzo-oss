@@ -158,12 +158,12 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 
 	// Advisory severity enrichment (best-effort).
 	// Runs after populateReleaseInfo (via populateAnalysisFromBatchResult) so advisory IDs are available.
-	s.enrichAdvisorySeverity(ctx, analyses)
+	confirmedDirect := s.enrichAdvisorySeverity(ctx, analyses, true)
 
 	// Transitive advisory enrichment (best-effort).
 	// Reuses dependency graph data from enrichDependencyCounts to avoid redundant API calls.
 	// Runs after enrichAdvisorySeverity so direct advisories are already enriched.
-	s.enrichTransitiveAdvisories(ctx, purls, analyses, depsGraphResults)
+	s.enrichTransitiveAdvisories(ctx, purls, analyses, depsGraphResults, confirmedDirect)
 
 	total := len(analyses)
 	pct := func(n int) float64 {

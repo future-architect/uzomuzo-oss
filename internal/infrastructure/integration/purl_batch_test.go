@@ -83,6 +83,7 @@ type stubDepsDevClient struct {
 	dependenciesResults       map[string]*depsdev.DependenciesResponse
 	transitiveAdvisoryResults map[string][]depsdev.AdvisoryKey
 	advisoryDetails           map[string]*depsdev.AdvisoryDetail
+	advisoryMissing           map[string]struct{}
 }
 
 func (s *stubDepsDevClient) GetDetailsForPURLs(_ context.Context, _ []string) (map[string]*depsdev.BatchResult, error) {
@@ -205,11 +206,11 @@ func (s *stubDepsDevClient) FetchDependenciesBatch(_ context.Context, _ []string
 	return s.dependenciesResults
 }
 
-func (s *stubDepsDevClient) FetchAdvisoriesBatch(_ context.Context, _ []string) map[string]*depsdev.AdvisoryDetail {
+func (s *stubDepsDevClient) FetchAdvisoriesBatchWithStatus(_ context.Context, _ []string) (map[string]*depsdev.AdvisoryDetail, map[string]struct{}) {
 	if s.advisoryDetails != nil {
-		return s.advisoryDetails
+		return s.advisoryDetails, s.advisoryMissing
 	}
-	return make(map[string]*depsdev.AdvisoryDetail)
+	return make(map[string]*depsdev.AdvisoryDetail), s.advisoryMissing
 }
 
 func (s *stubDepsDevClient) FetchTransitiveAdvisoryKeys(_ context.Context, deps *depsdev.DependenciesResponse) (map[string][]depsdev.AdvisoryKey, error) {

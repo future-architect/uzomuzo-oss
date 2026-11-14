@@ -35,10 +35,8 @@ type Client interface {
 	// Supported ecosystems: npm, cargo, maven, pypi. PURLs that fail, return 404,
 	// or whose graph deps.dev reports as unresolved are omitted.
 	FetchDependenciesBatch(ctx context.Context, purls []string) map[string]*DependenciesResponse
-	// FetchAdvisoriesBatch fetches advisory details (CVSS3 score, title) for multiple advisory IDs in parallel.
-	// Returns a map of advisory ID -> AdvisoryDetail. Unknown/failed IDs are silently omitted.
-	// Results are cached in-memory since advisory metadata is immutable.
-	FetchAdvisoriesBatch(ctx context.Context, advisoryIDs []string) map[string]*AdvisoryDetail
+	// FetchAdvisoriesBatchWithStatus fetches advisory details and reports confirmed HTTP 404 IDs separately.
+	FetchAdvisoriesBatchWithStatus(ctx context.Context, advisoryIDs []string) (map[string]*AdvisoryDetail, map[string]struct{})
 	// FetchTransitiveAdvisoryKeys fetches advisory keys for dependency graph nodes (excluding SELF).
 	// Returns a map of "name@version" -> []AdvisoryKey.
 	// Supported ecosystems: npm, cargo, maven, pypi (same as GetDependencies).

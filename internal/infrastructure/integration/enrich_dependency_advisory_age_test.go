@@ -95,7 +95,7 @@ func TestDependencyAdvisoryAge_FetchEnrichDecide(t *testing.T) {
 		}},
 	}
 
-	svc.enrichTransitiveAdvisories(context.Background(), purls, analyses, pkgs)
+	svc.enrichTransitiveAdvisories(context.Background(), purls, analyses, pkgs, nil)
 
 	mu.Lock()
 	sort.Strings(asked)
