@@ -49,10 +49,10 @@ func (s *IntegrationService) AnalyzeFromPURLs(ctx context.Context, purls []strin
 		analysis.EnsureCanonical()
 		if batchResult, ok := batchResults[p]; ok && batchResult != nil {
 			s.populateAnalysisFromBatchResult(ctx, analysis, batchResult)
-			// When deps.dev returned no package data but a repo URL was synthesized
-			// (e.g. Go module fallback), mark as not-found so downstream fallback
-			// logic (registry / catalog) can recognise the typed error.
-			if batchResult.Package == nil && analysis.Error == nil {
+			// Mark entries without package or release data as not found so downstream
+			// registry and catalog fallbacks can recognise the typed error.
+			// A failed GA metadata lookup can still leave valid release data; see ADR-0035.
+			if batchResult.Package == nil && !batchResult.ReleaseInfo.HasAnyVersion() && analysis.Error == nil {
 				analysis.Error = common.NewResourceNotFoundError(
 					fmt.Sprintf("package not found in deps.dev: %s", p),
 				)

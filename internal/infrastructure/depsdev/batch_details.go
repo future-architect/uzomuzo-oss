@@ -210,6 +210,8 @@ func (c *DepsDevClient) resolveRepoURLsBatch(ctx context.Context, packageInfoMap
 				defaultPkg := &PackageResponse{Version: replaced}
 				if fetched, err := c.fetchPackageInfo(ctx, replaced.PURL); err == nil && fetched != nil {
 					defaultPkg = fetched
+				} else if err != nil {
+					slog.Debug("Failed to fetch package info", "purl", replaced.PURL, "error", err)
 				}
 				if candidate := c.resolveRepoURL(ctx, defaultPkg, replaced.PURL); candidate != "" && (url == "" || convertRepoURLToProjectKey(candidate) != "") {
 					url = candidate

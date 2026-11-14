@@ -14,6 +14,7 @@ import (
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
 )
@@ -83,6 +84,40 @@ type stubDepsDevClient struct {
 	dependenciesResults       map[string]*depsdev.DependenciesResponse
 	transitiveAdvisoryResults map[string][]depsdev.AdvisoryKey
 	advisoryDetails           map[string]*depsdev.AdvisoryDetail
+}
+
+type releaseOnlyDepsDevClient struct{ stubDepsDevClient }
+
+func (c *releaseOnlyDepsDevClient) GetDetailsForPURLs(_ context.Context, purls []string) (map[string]*depsdev.BatchResult, error) {
+	result := make(map[string]*depsdev.BatchResult, len(purls))
+	for _, p := range purls {
+		result[p] = &depsdev.BatchResult{
+			PURL: p,
+			ReleaseInfo: depsdev.ReleaseInfo{StableVersion: depsdev.Version{
+				VersionKey: depsdev.VersionKey{Version: "1.5.7"}, PURL: p + "@1.5.7",
+			}},
+		}
+	}
+	return result, nil
+}
+
+func TestAnalyzeFromPURLs_FailedGAMetadataKeepsRelease(t *testing.T) {
+	const p = "pkg:maven/org.apache.directory.server/apacheds-core"
+	svc := NewIntegrationService(github.NewClient(&config.Config{}), &releaseOnlyDepsDevClient{})
+	analyses, err := svc.AnalyzeFromPURLs(context.Background(), []string{p})
+	if err != nil {
+		t.Fatalf("AnalyzeFromPURLs: %v", err)
+	}
+	a := analyses[p]
+	if a == nil {
+		t.Fatal("missing analysis")
+	}
+	if a.Error != nil {
+		t.Errorf("Error = %v, want nil when selected release survives the GA lookup failure", a.Error)
+	}
+	if a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || a.ReleaseInfo.StableVersion.Version != "1.5.7" {
+		t.Errorf("ReleaseInfo = %+v, want Stable 1.5.7", a.ReleaseInfo)
+	}
 }
 
 func (s *stubDepsDevClient) GetDetailsForPURLs(_ context.Context, _ []string) (map[string]*depsdev.BatchResult, error) {

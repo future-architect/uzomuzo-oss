@@ -84,20 +84,6 @@ func (p *ParsedPURL) Version() string {
 	return p.packageURL.Version
 }
 
-// IsStableVersion reports whether a non-empty version lacks the shared
-// prerelease keywords. An empty version is not stable. Build metadata after
-// '+' is ignored. See ADR-0035.
-func IsStableVersion(version string) bool {
-	return isStableVersionFor("", version)
-}
-
-// IsStableVersionFor reports stability using the PURL type. Maven adds bounded
-// qualifier tokens to the shared keyword rule; empty versions are unstable and
-// build metadata is ignored for every type. See ADR-0035.
-func IsStableVersionFor(purlType, version string) bool {
-	return isStableVersionFor(purlType, version)
-}
-
 // ParseError represents a PURL parsing error
 type ParseError struct {
 	Message string
@@ -117,7 +103,10 @@ func (e *ParseError) Error() string {
 	return e.Message + ": " + e.PURL
 }
 
-func isStableVersionFor(purlType, version string) bool {
+// IsStableVersionFor reports stability using the PURL type. Maven adds bounded
+// qualifier tokens to the shared keyword rule; empty versions are unstable and
+// build metadata is ignored for every type. See ADR-0035.
+func IsStableVersionFor(purlType, version string) bool {
 	if version == "" {
 		return false
 	}

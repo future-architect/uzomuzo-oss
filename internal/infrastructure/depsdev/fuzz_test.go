@@ -2,6 +2,7 @@ package depsdev
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -34,10 +35,11 @@ func FuzzConvertRepoURLToProjectKey(f *testing.F) {
 }
 
 // FuzzPickStableDevAndMax checks version parsing safety and Stable's input-order
-// independence when publication dates are distinct.
+// independence, including equal publication dates.
 func FuzzPickStableDevAndMax(f *testing.F) {
 	for _, seed := range [][3]string{
 		{"maven", "3.20.0.Final", "r09"},
+		{"maven", "1.0.0.Final", "1.0.0-jre"},
 		{"npm", "1.0.0.0", "0.9.0"},
 		{"pypi", "2.0b3", "1.9.0"},
 		{"golang", "v1.1.0-0.20260327151000-87f8819acf6d", "v1.0.0"},
@@ -46,10 +48,14 @@ func FuzzPickStableDevAndMax(f *testing.F) {
 		f.Add(seed[0], seed[1], seed[2])
 	}
 	f.Fuzz(func(t *testing.T, system, first, second string) {
+		secondDate := "2027-01-01T00:00:00Z"
+		if strings.EqualFold(system, "maven") {
+			secondDate = "2026-01-01T00:00:00Z"
+		}
 		versions := []Version{
 			v("2.0.0-rc1", "2025-01-01T00:00:00Z", true),
 			v(first, "2026-01-01T00:00:00Z", false),
-			v(second, "2027-01-01T00:00:00Z", false),
+			v(second, secondDate, false),
 		}
 		for i := range versions {
 			versions[i].VersionKey.System = system

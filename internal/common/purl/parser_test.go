@@ -282,7 +282,7 @@ func TestParsedPURL_ComponentMethods(t *testing.T) {
 	}
 }
 
-func TestIsStableVersion(t *testing.T) {
+func TestIsStableVersionFor(t *testing.T) {
 	tests := []struct {
 		name     string
 		version  string
@@ -386,12 +386,9 @@ func TestIsStableVersion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := IsStableVersion(tt.version)
-			if tt.purlType != "" {
-				result = IsStableVersionFor(tt.purlType, tt.version)
-			}
+			result := IsStableVersionFor(tt.purlType, tt.version)
 			if result != tt.expected {
-				t.Errorf("IsStableVersion(%q) = %v, want %v", tt.version, result, tt.expected)
+				t.Errorf("IsStableVersionFor(%q, %q) = %v, want %v", tt.purlType, tt.version, result, tt.expected)
 			}
 		})
 	}

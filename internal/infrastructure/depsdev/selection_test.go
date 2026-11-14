@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+func pickStableDevAndMax(versions []Version, preferredStable string) (stable Version, dev Version, max Version) {
+	stable, dev, max, _ = pickStableDevAndMaxWithReplaced(versions, preferredStable)
+	return stable, dev, max
+}
+
 func v(version string, published string, isDefault bool) Version {
 	t := time.Time{}
 	if published != "" {

@@ -14,7 +14,8 @@ import (
 // release the registry has withdrawn. See ADR-0024.
 const depsDevYankedReason = "yanked"
 
-// pickStableDevAndMax selects Stable, Dev, and the maximum SemVer version from the list.
+// pickStableDevAndMaxWithReplaced selects Stable, Dev, and the maximum SemVer
+// version from the list, and returns a default replaced by an eligible GA.
 //
 // Versions the registry has withdrawn are excluded from Stable selection before
 // any rule below applies; see withdrawnFromStable. Dev and Max are unaffected.
@@ -45,11 +46,6 @@ const depsDevYankedReason = "yanked"
 //   - Highest SemVer using Masterminds semver; if none are valid SemVer, fallback to latest by PublishedAt
 //
 // See ADR-0023, ADR-0024, and ADR-0035.
-func pickStableDevAndMax(versions []Version, preferredStable string) (stable Version, dev Version, max Version) {
-	stable, dev, max, _ = pickStableDevAndMaxWithReplaced(versions, preferredStable)
-	return stable, dev, max
-}
-
 func pickStableDevAndMaxWithReplaced(versions []Version, preferredStable string) (stable Version, dev Version, max Version, replacedDefault Version) {
 	if len(versions) == 0 {
 		return Version{}, Version{}, Version{}, Version{}
