@@ -48,7 +48,7 @@ func TestWithdrawnAdvisoryDecision(t *testing.T) {
 		{name: "case variant withdrawal key", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","Withdrawn":"2026-10-22T19:21:04Z"}`, wantKeep: true, wantCalls: 1},
 		{name: "duplicate ID key", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-other","id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z"}`, wantKeep: true, wantCalls: 1},
 		{name: "case variant ID key", missing: true, osvStatus: 200, osvBody: `{"ID":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z"}`, wantKeep: true, wantCalls: 1},
-		{name: "mismatched ID", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-other"}`, wantKeep: true, wantCalls: 1},
+		{name: "mismatched ID", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-other","withdrawn":"2026-10-22T19:21:04Z"}`, wantKeep: true, wantCalls: 1},
 		{name: "no osv client", missing: true, noOSV: true, wantKeep: true},
 		{name: "depsdev transient failure", osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z"}`, wantKeep: true},
 		{name: "detail success", osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z"}`, detail: &depsdev.AdvisoryDetail{CVSS3Score: 2.0, Title: "Known low"}, wantKeep: true, wantSeverity: "LOW"},
@@ -267,8 +267,8 @@ func TestWithdrawnAdvisoryLifecycle(t *testing.T) {
 					if len(vd.Advisories) != 0 || res.Label != string(domain.LabelLegacySafe) {
 						t.Errorf("withdrawn: advisories=%v label=%s", vd.Advisories, res.Label)
 					}
-				} else if len(vd.Advisories) != 1 || res.Label == string(domain.LabelLegacySafe) || res.Label == string(domain.LabelActive) {
-					t.Errorf("active: advisories=%v label=%s", vd.Advisories, res.Label)
+				} else if len(vd.Advisories) != 1 || res.Label != string(domain.LabelStalled) {
+					t.Errorf("active: advisories=%v label=%s, want Stalled", vd.Advisories, res.Label)
 				}
 			})
 		}

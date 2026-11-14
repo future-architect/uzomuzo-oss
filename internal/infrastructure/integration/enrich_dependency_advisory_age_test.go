@@ -3,9 +3,11 @@ package integration
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +16,42 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/osv"
 )
+
+func TestDependencyAdvisoryAge_NullOrEmptyWithdrawal(t *testing.T) {
+	const id = "GHSA-aged-unwithdrawn"
+	for _, tc := range []struct {
+		name  string
+		value string
+	}{
+		{"null", "null"},
+		{"empty", `""`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			oc := osv.NewClient()
+			oc.SetHTTPClient(&http.Client{Transport: withdrawnRoundTrip(func(r *http.Request) (*http.Response, error) {
+				body := `{"id":"GHSA-aged-unwithdrawn","published":"2018-07-24T00:00:00Z","withdrawn":` + tc.value + `,"database_specific":{"severity":"HIGH"}}`
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
+			})})
+			old := time.Now().AddDate(-4, 0, 0)
+			vd := &domain.VersionDetail{Version: "1.0.0", PublishedAt: old}
+			a := &domain.Analysis{RepoState: &domain.RepoState{DaysSinceLastCommit: 1500, LatestHumanCommit: &old, CommitStats: &domain.CommitStats{}}, ReleaseInfo: &domain.ReleaseInfo{StableVersion: vd}}
+			dd := &stubDepsDevClient{advisoryDetails: map[string]*depsdev.AdvisoryDetail{id: {CVSS3Score: 9.8}}, transitiveAdvisoryResults: map[string][]depsdev.AdvisoryKey{"dep@1.0.0": {{ID: id}}}}
+			svc := &IntegrationService{depsdevClient: dd, osvClient: oc}
+			graph := &depsdev.DependenciesResponse{Nodes: []depsdev.DependencyNode{{VersionKey: depsdev.DependencyVersionKey{Name: "self", Version: "1.0.0"}, Relation: "SELF"}}}
+			svc.enrichTransitiveAdvisories(context.Background(), []string{"p"}, map[string]*domain.Analysis{"p": a}, map[string]*depsdev.DependenciesResponse{"p": graph}, nil)
+			if len(vd.Advisories) != 1 || vd.Advisories[0].RecordLookup != domain.AdvisoryRecordFound || vd.Advisories[0].Published.IsZero() {
+				t.Fatalf("age facts = %v, want found published advisory", vd.Advisories)
+			}
+			res, err := domain.NewLifecycleAssessorService().Assess(context.Background(), domain.AssessmentInput{Analysis: a, Scores: map[string]*domain.ScoreEntity{"Maintained": domain.NewScoreEntity("Maintained", 0, 10, "")}, EOL: domain.EOLStatus{State: domain.EOLNotEOL}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Label != string(domain.LabelEOLEffective) || res.DependencyAdvisoryAge == nil || res.DependencyAdvisoryAge.Status != domain.DependencyAdvisoryAged {
+				t.Errorf("label=%q age=%+v, want EOL-Effective aged", res.Label, res.DependencyAdvisoryAge)
+			}
+		})
+	}
+}
 
 // TestDependencyAdvisoryAge_FetchEnrichDecide runs the OSV fact lookup, the
 // enrichment and the lifecycle decision together, with OSV failing for one ID.

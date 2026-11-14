@@ -22,8 +22,6 @@ func TestClient_GetVulnRejectsInvalidWithdrawalEvidence(t *testing.T) {
 		body string
 	}{
 		{"invalid timestamp", `{"id":"GHSA-invalid-evidence","withdrawn":"not-a-timestamp"}`},
-		{"null timestamp", `{"id":"GHSA-invalid-evidence","withdrawn":null}`},
-		{"empty timestamp", `{"id":"GHSA-invalid-evidence","withdrawn":""}`},
 		{"duplicate withdrawn", `{"id":"GHSA-invalid-evidence","withdrawn":"2026-10-22T19:21:04Z","withdrawn":"2026-10-23T00:00:00Z"}`},
 		{"case variant withdrawn", `{"id":"GHSA-invalid-evidence","Withdrawn":"2026-10-22T19:21:04Z"}`},
 		{"duplicate id", `{"id":"GHSA-other","id":"GHSA-invalid-evidence","withdrawn":"2026-10-22T19:21:04Z"}`},
@@ -46,6 +44,36 @@ func TestClient_GetVulnRejectsInvalidWithdrawalEvidence(t *testing.T) {
 			}
 			if got := calls.Load(); got != 2 {
 				t.Errorf("calls=%d, want 2 because failures are not cached", got)
+			}
+		})
+	}
+}
+
+func TestClient_GetVulnAcceptsNullOrEmptyWithdrawal(t *testing.T) {
+	const id = "GHSA-unwithdrawn"
+	for _, tc := range []struct {
+		name  string
+		value string
+	}{
+		{"null", "null"},
+		{"empty", `""`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			c := NewClient()
+			c.SetHTTPClient(&http.Client{Transport: byIDRoundTripper(func(r *http.Request) (*http.Response, error) {
+				calls.Add(1)
+				body := `{"id":"GHSA-unwithdrawn","published":"2018-04-26T17:21:53Z","withdrawn":` + tc.value + `,"database_specific":{"severity":"HIGH"}}`
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
+			})})
+			for range 2 {
+				rec, found, err := c.GetVuln(context.Background(), id)
+				if err != nil || !found || rec.Withdrawn || rec.Published.IsZero() || rec.Severity != "HIGH" {
+					t.Errorf("GetVuln: rec=%+v found=%v err=%v", rec, found, err)
+				}
+			}
+			if got := calls.Load(); got != 1 {
+				t.Errorf("OSV calls=%d, want 1 cached valid answer", got)
 			}
 		})
 	}

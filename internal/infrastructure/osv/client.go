@@ -471,8 +471,11 @@ func checkUnambiguousByIDKeys(raw []byte) error {
 		}
 		if expected == "withdrawn" {
 			var timestamp *string
-			if err := json.Unmarshal(value, &timestamp); err != nil || timestamp == nil {
+			if err := json.Unmarshal(value, &timestamp); err != nil {
 				return errors.New("invalid withdrawn timestamp")
+			}
+			if timestamp == nil || *timestamp == "" {
+				continue
 			}
 			if _, err := time.Parse(time.RFC3339, *timestamp); err != nil {
 				return fmt.Errorf("invalid withdrawn timestamp: %w", err)
