@@ -26,22 +26,25 @@ func (f withdrawnRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) {
 func TestWithdrawnAdvisoryDecision(t *testing.T) {
 	const id = "GHSA-withdrawn-test"
 	for _, tc := range []struct {
-		name      string
-		missing   bool
-		osvStatus int
-		osvBody   string
-		noOSV     bool
-		wantKeep  bool
-		wantCalls int32
+		name         string
+		missing      bool
+		osvStatus    int
+		osvBody      string
+		noOSV        bool
+		detail       *depsdev.AdvisoryDetail
+		wantKeep     bool
+		wantCalls    int32
+		wantSeverity string
 	}{
-		{"confirmed", true, 200, `{"id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z"}`, false, false, 1},
-		{"active", true, 200, `{"id":"GHSA-withdrawn-test"}`, false, true, 1},
-		{"osv missing", true, 404, ``, false, true, 1},
-		{"osv error", true, 400, ``, false, true, 1},
-		{"mismatched ID", true, 200, `{"id":"GHSA-other"}`, false, true, 1},
-		{"no osv client", true, 0, ``, true, true, 0},
-		{"depsdev transient failure", false, 200, `{"id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z"}`, false, true, 0},
-		{"detail success", false, 200, `{"id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z"}`, false, true, 0},
+		{name: "confirmed", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z"}`, wantCalls: 1},
+		{name: "active", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test"}`, wantKeep: true, wantCalls: 1},
+		{name: "osv missing", missing: true, osvStatus: 404, wantKeep: true, wantCalls: 1},
+		{name: "osv error", missing: true, osvStatus: 400, wantKeep: true, wantCalls: 1},
+		{name: "malformed OSV JSON", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19`, wantKeep: true, wantCalls: 1},
+		{name: "mismatched ID", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-other"}`, wantKeep: true, wantCalls: 1},
+		{name: "no osv client", missing: true, noOSV: true, wantKeep: true},
+		{name: "depsdev transient failure", osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z"}`, wantKeep: true},
+		{name: "detail success", osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z"}`, detail: &depsdev.AdvisoryDetail{CVSS3Score: 2.0, Title: "Known low"}, wantKeep: true, wantSeverity: "LOW"},
 	} {
 		for _, path := range []string{"direct", "dependency"} {
 			t.Run(path+"/"+tc.name, func(t *testing.T) {
@@ -62,8 +65,8 @@ func TestWithdrawnAdvisoryDecision(t *testing.T) {
 					missing[id] = struct{}{}
 				}
 				dd := &stubDepsDevClient{advisoryMissing: missing, transitiveAdvisoryResults: map[string][]depsdev.AdvisoryKey{"dep@1.0.0": {{ID: id}}}}
-				if tc.name == "detail success" {
-					dd.advisoryDetails = map[string]*depsdev.AdvisoryDetail{id: {CVSS3Score: 2.0, Title: "Known low"}}
+				if tc.detail != nil {
+					dd.advisoryDetails = map[string]*depsdev.AdvisoryDetail{id: tc.detail}
 				}
 				svc := &IntegrationService{depsdevClient: dd, osvClient: oc}
 				vd := &domain.VersionDetail{Version: "1.0.0"}
@@ -84,14 +87,11 @@ func TestWithdrawnAdvisoryDecision(t *testing.T) {
 				if got := calls.Load(); got != tc.wantCalls {
 					t.Errorf("OSV calls = %d, want %d", got, tc.wantCalls)
 				}
-				if tc.wantKeep && tc.name != "detail success" && len(vd.Advisories) == 1 {
+				if tc.wantKeep && len(vd.Advisories) == 1 {
 					adv := vd.Advisories[0]
-					if adv.RecordLookup != "" || !adv.Published.IsZero() || adv.ReviewedSeverity != "" || adv.Severity != "" {
-						t.Errorf("retained unknown-severity advisory has facts: %+v", adv)
+					if adv.RecordLookup != "" || !adv.Published.IsZero() || adv.ReviewedSeverity != "" || adv.Severity != tc.wantSeverity {
+						t.Errorf("retained advisory facts: %+v; want severity %q and no age facts", adv, tc.wantSeverity)
 					}
-				}
-				if tc.name == "detail success" && len(vd.Advisories) == 1 && vd.Advisories[0].Severity != "LOW" {
-					t.Errorf("detail severity = %q, want LOW", vd.Advisories[0].Severity)
 				}
 			})
 		}
@@ -125,28 +125,33 @@ func TestWithdrawnAdvisorySharedDirectAndDependency(t *testing.T) {
 
 func TestWithdrawnAdvisorySelectedFallback(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		withPre bool
-		wantPre int
-		wantReq int
+		name       string
+		withPre    bool
+		wantPre    int
+		wantReq    int
+		wantDetail string
 	}{
-		{"prerelease selected", true, 0, 1},
-		{"requested selected", false, 1, 0},
+		{"prerelease selected", true, 0, 1, "GHSA-pre"},
+		{"requested selected", false, 1, 0, "GHSA-req"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			const id = "GHSA-fallback"
 			oc := osv.NewClient()
 			oc.SetHTTPClient(&http.Client{Transport: withdrawnRoundTrip(func(r *http.Request) (*http.Response, error) {
-				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"GHSA-fallback","withdrawn":"2026-10-22T00:00:00Z"}`)), Header: make(http.Header), Request: r}, nil
+				body := fmt.Sprintf(`{"id":%q,"withdrawn":"2026-10-22T00:00:00Z"}`, tc.wantDetail)
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
 			})})
-			pre := &domain.VersionDetail{Advisories: []domain.Advisory{{ID: id}}}
-			req := &domain.VersionDetail{Advisories: []domain.Advisory{{ID: id}}}
+			pre := &domain.VersionDetail{Advisories: []domain.Advisory{{ID: "GHSA-pre"}}}
+			req := &domain.VersionDetail{Advisories: []domain.Advisory{{ID: "GHSA-req"}}}
 			ri := &domain.ReleaseInfo{RequestedVersion: req}
 			if tc.withPre {
 				ri.PreReleaseVersion = pre
 			}
-			svc := &IntegrationService{depsdevClient: &stubDepsDevClient{advisoryMissing: map[string]struct{}{id: {}}}, osvClient: oc}
+			dd := &recordingAdvisoryDepsDev{stubDepsDevClient: stubDepsDevClient{advisoryMissing: map[string]struct{}{"GHSA-pre": {}, "GHSA-req": {}}}}
+			svc := &IntegrationService{depsdevClient: dd, osvClient: oc}
 			svc.enrichAdvisorySeverity(context.Background(), map[string]*domain.Analysis{"p": {ReleaseInfo: ri}}, true)
+			if len(dd.requested) != 1 || dd.requested[0] != tc.wantDetail {
+				t.Errorf("detail requests = %v, want only %s", dd.requested, tc.wantDetail)
+			}
 			if len(pre.Advisories) != tc.wantPre || len(req.Advisories) != tc.wantReq {
 				t.Errorf("fallback scope: prerelease=%v requested=%v", pre.Advisories, req.Advisories)
 			}

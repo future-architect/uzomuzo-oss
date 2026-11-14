@@ -122,16 +122,7 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 	slog.Debug("fetching_transitive_advisory_severity", "unique_ids", len(ids))
 	details, missing := s.depsdevClient.FetchAdvisoriesBatchWithStatus(ctx, ids)
 	threshold := assessorHighSeverityThreshold()
-	lookupIDs := make(map[string]struct{}, len(missing))
-	for id := range missing {
-		lookupIDs[id] = struct{}{}
-	}
-	for id, detail := range details {
-		if detail != nil && domain.IsKnownHighCVSS3(detail.CVSS3Score, threshold) {
-			lookupIDs[id] = struct{}{}
-		}
-	}
-	osvFacts := s.fetchAdvisoryOSVFacts(ctx, sortedIDs(lookupIDs))
+	osvFacts := s.fetchDependencyAdvisoryOSVFacts(ctx, details, missing)
 
 	// Append enriched transitive advisories to lifecycle-relevant versions.
 	// Only attach to versions whose dependency graph was actually fetched.
@@ -145,7 +136,7 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 		kept := entries[:0]
 		for i := range entries {
 			if _, isMissing := missing[entries[i].ID]; isMissing && osvFacts[entries[i].ID].lookup == domain.AdvisoryRecordWithdrawn {
-				slog.Debug("withdrawn_advisory_removed", "id", entries[i].ID, "relation", entries[i].Relation)
+				slog.Debug("withdrawn_advisory_removed", "id", entries[i].ID, "relation", domain.AdvisoryRelationTransitive)
 				continue
 			}
 			if detail, ok := details[entries[i].ID]; ok {
@@ -186,23 +177,23 @@ type osvFact struct {
 	lookup domain.AdvisoryRecordLookup
 }
 
-// fetchDependencyAdvisoryOSVFacts selects known-HIGH dependency IDs for OSV
-// publication and severity facts. See ADR-0032 and ADR-0036.
-func (s *IntegrationService) fetchDependencyAdvisoryOSVFacts(ctx context.Context, details map[string]*depsdev.AdvisoryDetail) map[string]osvFact {
-	if s.osvClient == nil || len(details) == 0 {
-		return nil
-	}
+// fetchDependencyAdvisoryOSVFacts selects known-HIGH dependency IDs for age
+// facts and unions optional deps.dev 404 IDs for withdrawal checks. It makes
+// one bounded OSV request per unique ID. See ADR-0032 and ADR-0036.
+func (s *IntegrationService) fetchDependencyAdvisoryOSVFacts(ctx context.Context, details map[string]*depsdev.AdvisoryDetail, missingIDs ...map[string]struct{}) map[string]osvFact {
 	threshold := assessorHighSeverityThreshold()
-	var ids []string
+	lookupIDs := make(map[string]struct{})
 	for id, d := range details {
 		if d != nil && domain.IsKnownHighCVSS3(d.CVSS3Score, threshold) {
-			ids = append(ids, id)
+			lookupIDs[id] = struct{}{}
 		}
 	}
-	if len(ids) == 0 {
-		return nil
+	for _, missing := range missingIDs {
+		for id := range missing {
+			lookupIDs[id] = struct{}{}
+		}
 	}
-	return s.fetchAdvisoryOSVFacts(ctx, ids)
+	return s.fetchAdvisoryOSVFacts(ctx, sortedIDs(lookupIDs))
 }
 
 func sortedIDs(ids map[string]struct{}) []string {
@@ -283,7 +274,7 @@ dispatch:
 			failed++
 		}
 	}
-	slog.Debug("osv_dependency_advisory_facts", "ids", len(ids), "failed", failed)
+	slog.Debug("osv_advisory_facts", "ids", len(ids), "failed", failed)
 	return out
 }
 

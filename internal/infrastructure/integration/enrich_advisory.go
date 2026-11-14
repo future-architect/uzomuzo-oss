@@ -75,7 +75,7 @@ func filterWithdrawnAdvisories(vd *domain.VersionDetail, withdrawn map[string]st
 	kept := make([]domain.Advisory, 0, len(vd.Advisories))
 	for _, adv := range vd.Advisories {
 		if _, drop := withdrawn[adv.ID]; drop {
-			slog.Debug("withdrawn_advisory_removed", "id", adv.ID, "relation", adv.Relation)
+			slog.Debug("withdrawn_advisory_removed", "id", adv.ID, "relation", domain.AdvisoryRelationDirect)
 			continue
 		}
 		kept = append(kept, adv)
