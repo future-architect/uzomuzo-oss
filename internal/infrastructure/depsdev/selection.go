@@ -46,8 +46,13 @@ const depsDevYankedReason = "yanked"
 //
 // See ADR-0023, ADR-0024, and ADR-0035.
 func pickStableDevAndMax(versions []Version, preferredStable string) (stable Version, dev Version, max Version) {
+	stable, dev, max, _ = pickStableDevAndMaxWithReplaced(versions, preferredStable)
+	return stable, dev, max
+}
+
+func pickStableDevAndMaxWithReplaced(versions []Version, preferredStable string) (stable Version, dev Version, max Version, replacedDefault Version) {
 	if len(versions) == 0 {
-		return Version{}, Version{}, Version{}
+		return Version{}, Version{}, Version{}, Version{}
 	}
 
 	var defaults, stables, nonStables []Version
@@ -76,7 +81,6 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 
 	// Stable selection. A zero picked with governs=true is intended: the bound
 	// applies and excludes every candidate, so Stable stays empty.
-	var replacedDefault Version
 	if picked, governs := pickByRegistryStable(stableEligible, preferredStable); governs {
 		stable = picked
 	} else if len(defaults) > 0 {
@@ -106,7 +110,7 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 		max = latestByPublishedAt(versions)
 	}
 
-	return stable, dev, max
+	return stable, dev, max, replacedDefault
 }
 
 func supportedGASystem(system string) string {

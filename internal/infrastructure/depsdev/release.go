@@ -213,8 +213,9 @@ func (c *DepsDevClient) fetchLatestRelease(ctx context.Context, purlStr string) 
 		releaseInfo.Error = err
 		return releaseInfo, err
 	}
-	stable, dev, max := pickStableDevAndMax(builtVersions, preferredStable)
+	stable, dev, max, replacedDefault := pickStableDevAndMaxWithReplaced(builtVersions, preferredStable)
 	releaseInfo.StableVersion = stable
+	releaseInfo.replacedDefault = replacedDefault
 	if dev.VersionKey.Version != "" {
 		releaseInfo.PreReleaseVersion = dev
 	}
