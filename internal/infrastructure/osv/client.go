@@ -949,7 +949,10 @@ func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord,
 		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln: answer for %q did not name it", id)
 	}
 	if !rec.Withdrawn {
-		rec.CVSS4Score, rec.CVSS4Known = scoreCVSS4(v.Severity)
+		// A duplicate or variant-spelled key must not select a low score. See ADR-0037.
+		if _, err := strictFields(raw, "severity"); err == nil {
+			rec.CVSS4Score, rec.CVSS4Known = scoreCVSS4(v.Severity)
+		}
 	}
 	// Keep only what callers read; affected ranges can be large.
 	rec = domain.AdvisoryRecord{ID: rec.ID, Published: rec.Published, Withdrawn: rec.Withdrawn, Severity: rec.Severity, CVSS4Score: rec.CVSS4Score, CVSS4Known: rec.CVSS4Known}

@@ -246,7 +246,8 @@ func sortedIDs(ids map[string]struct{}) []string {
 	return out
 }
 
-// fetchAdvisoryOSVFacts uses the bounded OSV by-ID worker for selected IDs.
+// fetchAdvisoryOSVFacts dispatches IDs in caller order within its bounded budget;
+// IDs still queued when the budget expires fail from the tail of that order.
 // Callers must require a deps.dev 404 before treating withdrawal as removal.
 // See ADR-0036.
 func (s *IntegrationService) fetchAdvisoryOSVFacts(ctx context.Context, ids []string) map[string]osvFact {
@@ -346,7 +347,7 @@ func markDirectAdvisories(vd *domain.VersionDetail) {
 }
 
 // appendTransitiveAdvisories appends transitive advisories to a VersionDetail, deduplicating
-// by advisory ID against existing entries. Maintains CVSS3 descending sort order.
+// by advisory ID against existing entries. Sorts by effective severity score.
 func appendTransitiveAdvisories(vd *domain.VersionDetail, advisories []domain.Advisory) {
 	if vd == nil || len(advisories) == 0 {
 		return

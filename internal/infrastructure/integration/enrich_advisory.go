@@ -10,18 +10,22 @@ import (
 )
 
 // enrichAdvisorySeverity enriches Stable and MaxSemver severity. When
-// verifyWithdrawal is true, it also removes advisories whose deps.dev detail is
-// missing and whose OSV record confirms withdrawal, including on the selected
-// fallback version. Successful zero-v3 details also receive v4 fallback.
+// verifyWithdrawal is true, it makes OSV by-ID requests to confirm withdrawal
+// (including on the selected fallback version) and to score zero-v3 details
+// on Stable and MaxSemver. When false, it preserves prior v4 evidence without
+// making by-ID requests.
 // See ADR-0010, ADR-0036, and ADR-0037.
 func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyses map[string]*domain.Analysis, verifyWithdrawal bool) map[string]struct{} {
 	idSet := make(map[string]struct{})
+	v4Scope := make(map[string]struct{})
 	for _, a := range analyses {
 		if a == nil || a.ReleaseInfo == nil {
 			continue
 		}
 		collectAdvisoryIDs(a.ReleaseInfo.StableVersion, idSet)
 		collectAdvisoryIDs(a.ReleaseInfo.MaxSemverVersion, idSet)
+		collectAdvisoryIDs(a.ReleaseInfo.StableVersion, v4Scope)
+		collectAdvisoryIDs(a.ReleaseInfo.MaxSemverVersion, v4Scope)
 		if verifyWithdrawal && a.ReleaseInfo.StableVersion == nil && a.ReleaseInfo.MaxSemverVersion == nil {
 			collectAdvisoryIDs(a.ReleaseInfo.LatestVersionDetail(), idSet)
 		}
@@ -43,7 +47,7 @@ func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyse
 	if verifyWithdrawal {
 		v4IDs := make(map[string]struct{})
 		for id, detail := range details {
-			if detail != nil && detail.CVSS3Score == 0 {
+			if _, selected := v4Scope[id]; selected && detail != nil && detail.CVSS3Score == 0 {
 				v4IDs[id] = struct{}{}
 			}
 		}

@@ -42,6 +42,9 @@ func TestScanCVSS4Output(t *testing.T) {
 			if tc.v4 == "0.0" && obj["max_cvss4_score"] != float64(0) {
 				t.Fatalf("JSON NONE=%v", obj["max_cvss4_score"])
 			}
+			if _, present := obj["max_transitive_cvss4_score"]; present {
+				t.Fatalf("direct-only JSON has transitive v4 score: %s", data)
+			}
 			var buf bytes.Buffer
 			if err := renderScanCSV(&buf, []domainaudit.AuditEntry{e}); err != nil {
 				t.Fatal(err)
@@ -56,6 +59,9 @@ func TestScanCVSS4Output(t *testing.T) {
 			}
 			if row[len(row)-2] != tc.v4 {
 				t.Fatalf("CSV v4=%q want %q", row[len(row)-2], tc.v4)
+			}
+			if row[len(row)-1] != "" {
+				t.Fatalf("direct-only CSV transitive v4=%q", row[len(row)-1])
 			}
 		})
 	}

@@ -407,7 +407,7 @@ func appendRepoStateMarkers(cell string, a *domain.Analysis) string {
 }
 
 // maxCSVColumns is the widest a CSV row gets: verdict and purl, the two
-// conditional relation columns, then the eighteen fixed columns. Rows without
+// conditional relation columns, then the twenty fixed columns. Rows without
 // relation info are shorter — this is the buffer's capacity, not its length.
 // Keep in step with the header built in renderScanCSV.
 const maxCSVColumns = 24

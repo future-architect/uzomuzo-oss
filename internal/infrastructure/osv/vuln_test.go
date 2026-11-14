@@ -52,6 +52,29 @@ func TestGetVulnCVSS4(t *testing.T) {
 	}
 }
 
+func TestGetVulnAmbiguousSeverityKey(t *testing.T) {
+	const id = "GHSA-ambiguous-severity"
+	const zero = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:N/SC:N/SI:N/SA:N"
+	for _, tc := range []struct{ name, field string }{
+		{"duplicate key", `"severity":[],"severity":[{"type":"CVSS_V4","score":"` + zero + `"}]`},
+		{"variant spelling", `"Severity":[{"type":"CVSS_V4","score":"` + zero + `"}]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := NewClient()
+			var calls atomic.Int32
+			c.SetHTTPClient(&http.Client{Transport: byIDRoundTripper(func(r *http.Request) (*http.Response, error) {
+				calls.Add(1)
+				body := `{"id":"` + id + `",` + tc.field + `}`
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
+			})})
+			rec, found, err := c.GetVuln(context.Background(), id)
+			if err != nil || !found || rec.CVSS4Known || rec.CVSS4Score != 0 || calls.Load() != 1 {
+				t.Fatalf("record=%+v found=%v err=%v calls=%d", rec, found, err, calls.Load())
+			}
+		})
+	}
+}
+
 func TestMalformedTopLevelSeverityDoesNotBreakPackageResponses(t *testing.T) {
 	const malicious = `{"id":"MAL-2026-0001","summary":"Malicious package","severity":{"unexpected":"shape"},"affected":[{"package":{"name":"evil","ecosystem":"npm"},"versions":["1.0.0"]}]}`
 	var query queryResponse
