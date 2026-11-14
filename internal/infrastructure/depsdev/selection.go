@@ -6,7 +6,6 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	pep440 "github.com/aquasecurity/go-pep440-version"
-	"golang.org/x/mod/module"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 )
@@ -37,8 +36,9 @@ const depsDevYankedReason = "yanked"
 //	    heuristic-stable version by PublishedAt wins.
 //
 // Dev:
-//   - Latest heuristic non-stable by PublishedAt. After an unstable-default
-//     override, use the replaced default if that Dev is empty or older.
+//   - Latest version called unstable by purl.IsStableVersionFor, by PublishedAt.
+//     After an unstable-default override, use the replaced default if that
+//     Dev is empty or older.
 //     See ADR-0035.
 //
 // Max:
@@ -55,7 +55,7 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 	stableEligible := make([]Version, 0, len(versions))
 
 	for _, v := range versions {
-		isStable := purl.IsStableVersion(v.VersionKey.Version)
+		isStable := purl.IsStableVersionFor(v.VersionKey.System, v.VersionKey.Version)
 		if !withdrawnFromStable(v) {
 			stableEligible = append(stableEligible, v)
 			if v.IsDefault {
@@ -81,7 +81,7 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 		stable = picked
 	} else if len(defaults) > 0 {
 		stable = latestByPublishedAt(defaults)
-		if system := stable.VersionKey.System; supportsGAOverride(system) && !eligibleGA(stable) {
+		if system := stable.VersionKey.System; supportedGASystem(system) != "" && !eligibleGA(stable) {
 			if picked := highestEligibleGA(stableEligible, system, true); picked.VersionKey.Version != "" {
 				replacedDefault = stable
 				stable = picked
@@ -109,20 +109,21 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 	return stable, dev, max
 }
 
-func supportsGAOverride(system string) bool {
-	switch strings.ToLower(system) {
+func supportedGASystem(system string) string {
+	system = strings.ToLower(system)
+	switch system {
 	case "maven", "npm", "cargo", "pypi", "golang":
-		return true
+		return system
 	default:
-		return false
+		return ""
 	}
 }
 
 func eligibleGA(v Version) bool {
-	if !purl.IsStableVersion(v.VersionKey.Version) {
+	if !purl.IsStableVersionFor(v.VersionKey.System, v.VersionKey.Version) {
 		return false
 	}
-	switch strings.ToLower(v.VersionKey.System) {
+	switch supportedGASystem(v.VersionKey.System) {
 	case "npm", "cargo":
 		parsed, err := semver.NewVersion(v.VersionKey.Version)
 		return err != nil || parsed.Prerelease() == ""
@@ -136,7 +137,7 @@ func eligibleGA(v Version) bool {
 
 func pickWithoutDefault(eligible, heuristicStable []Version) Version {
 	if len(eligible) > 0 {
-		system := strings.ToLower(eligible[0].VersionKey.System)
+		system := supportedGASystem(eligible[0].VersionKey.System)
 		switch system {
 		case "maven", "npm", "cargo", "pypi":
 			if picked := highestEligibleGA(eligible, system, false); picked.VersionKey.Version != "" {
@@ -153,10 +154,7 @@ func highestEligibleGA(versions []Version, system string, override bool) Version
 		if !eligibleGA(v) || (override && v.IsDeprecated) {
 			continue
 		}
-		if override && strings.EqualFold(system, "golang") {
-			if module.IsPseudoVersion(v.VersionKey.Version) {
-				continue
-			}
+		if override && supportedGASystem(system) == "golang" {
 			parsed, err := semver.NewVersion(v.VersionKey.Version)
 			if err != nil || parsed.Prerelease() != "" {
 				continue
@@ -171,10 +169,10 @@ func highestByVersionOrder(versions []Version, system string) Version {
 	if len(versions) == 0 {
 		return Version{}
 	}
-	system = strings.ToLower(system)
+	system = supportedGASystem(system)
 	semvers := make([]*semver.Version, len(versions))
 	pepvers := make([]pep440.Version, len(versions))
-	allParsed := system == "npm" || system == "cargo" || system == "golang" || system == "pypi"
+	allParsed := system != "" && system != "maven"
 	for i, v := range versions {
 		switch system {
 		case "npm", "cargo", "golang":
@@ -384,10 +382,7 @@ func (c stableCandidate) outranks(other stableCandidate) bool {
 	if cmp := c.parsed.Compare(other.parsed); cmp != 0 {
 		return cmp > 0
 	}
-	if !c.raw.PublishedAt.Equal(other.raw.PublishedAt) {
-		return c.raw.PublishedAt.After(other.raw.PublishedAt)
-	}
-	return c.raw.VersionKey.Version > other.raw.VersionKey.Version
+	return laterCandidate(c.raw, other.raw)
 }
 
 func latestByPublishedAt(vs []Version) Version {

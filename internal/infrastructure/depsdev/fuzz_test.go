@@ -54,11 +54,15 @@ func FuzzPickStableDevAndMax(f *testing.F) {
 		for i := range versions {
 			versions[i].VersionKey.System = system
 		}
-		forward, _, _ := pickStableDevAndMax(versions, "")
-		versions[0], versions[2] = versions[2], versions[0]
-		reverse, _, _ := pickStableDevAndMax(versions, "")
-		if forward.VersionKey.Version != reverse.VersionKey.Version {
-			t.Fatalf("Stable changed with input order: %q vs %q", forward.VersionKey.Version, reverse.VersionKey.Version)
+		for _, hasDefault := range []bool{true, false} {
+			versions[0].IsDefault = hasDefault
+			forward, _, _ := pickStableDevAndMax(versions, "")
+			versions[0], versions[2] = versions[2], versions[0]
+			reverse, _, _ := pickStableDevAndMax(versions, "")
+			if forward.VersionKey.Version != reverse.VersionKey.Version {
+				t.Fatalf("Stable changed with input order (default=%v): %q vs %q", hasDefault, forward.VersionKey.Version, reverse.VersionKey.Version)
+			}
+			versions[0], versions[2] = versions[2], versions[0]
 		}
 	})
 }

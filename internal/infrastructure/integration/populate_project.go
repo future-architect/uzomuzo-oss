@@ -86,13 +86,13 @@ func (s *IntegrationService) populateReleaseInfo(analysis *domain.Analysis, batc
 	if releaseInfo.MaxSemverVersion.VersionKey.Version != "" {
 		analysis.ReleaseInfo.MaxSemverVersion = s.buildVersionDetail(&releaseInfo.MaxSemverVersion, analysis)
 		if analysis.ReleaseInfo.MaxSemverVersion != nil {
-			analysis.ReleaseInfo.MaxSemverVersion.IsPrerelease = !purl.IsStableVersion(releaseInfo.MaxSemverVersion.VersionKey.Version)
+			analysis.ReleaseInfo.MaxSemverVersion.IsPrerelease = !purl.IsStableVersionFor(releaseInfo.MaxSemverVersion.VersionKey.System, releaseInfo.MaxSemverVersion.VersionKey.Version)
 		}
 	}
 	if releaseInfo.RequestedVersion.VersionKey.Version != "" {
 		analysis.ReleaseInfo.RequestedVersion = s.buildVersionDetail(&releaseInfo.RequestedVersion, analysis)
 		if analysis.ReleaseInfo.RequestedVersion != nil {
-			analysis.ReleaseInfo.RequestedVersion.IsPrerelease = !purl.IsStableVersion(releaseInfo.RequestedVersion.VersionKey.Version)
+			analysis.ReleaseInfo.RequestedVersion.IsPrerelease = !purl.IsStableVersionFor(releaseInfo.RequestedVersion.VersionKey.System, releaseInfo.RequestedVersion.VersionKey.Version)
 		}
 	}
 

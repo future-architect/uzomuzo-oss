@@ -170,3 +170,19 @@ func TestPickStableDevAndMax_NonCargoDeprecatedUnaffected(t *testing.T) {
 		t.Errorf("Stable = %q, want %q (non-cargo must be unaffected)", got, want)
 	}
 }
+
+func TestPickStableDevAndMax_PyPINoDefaultKeepsDeprecatedGA(t *testing.T) {
+	versions := []Version{
+		{VersionKey: VersionKey{System: "pypi", Version: "1.0.0"}, PublishedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{VersionKey: VersionKey{System: "pypi", Version: "2.0.0"}, PublishedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), IsDeprecated: true},
+	}
+	for _, order := range []string{"forward", "reverse"} {
+		t.Run(order, func(t *testing.T) {
+			stable, _, _ := pickStableDevAndMax(versions, "")
+			if got := stable.VersionKey.Version; got != "2.0.0" {
+				t.Errorf("Stable = %q, want 2.0.0", got)
+			}
+			versions[0], versions[1] = versions[1], versions[0]
+		})
+	}
+}

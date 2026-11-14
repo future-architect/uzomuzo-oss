@@ -49,16 +49,16 @@ func TestPopulateHomepagePriority(t *testing.T) {
 
 func TestPopulateReleaseInfo_SharedStabilityClassifier(t *testing.T) {
 	for _, tc := range []struct {
-		name, version string
-		prerelease    bool
+		name, version, system string
+		prerelease            bool
 	}{
-		{"maven milestone", "2.0.0.AM27", true},
-		{"build metadata", "0.11.0+wasi-snapshot-preview1", false},
-		{"go hash collision", "v0.0.0-20260327151000-ea1234567890", true},
+		{"maven milestone", "2.0.0.AM27", "maven", true},
+		{"build metadata", "0.11.0+wasi-snapshot-preview1", "maven", false},
+		{"go hash collision", "v0.0.0-20260327151000-ea1234567890", "golang", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			analysis := &domain.Analysis{}
-			version := depsdev.Version{VersionKey: depsdev.VersionKey{Version: tc.version}}
+			analysis := &domain.Analysis{Package: &domain.Package{Ecosystem: tc.system}}
+			version := depsdev.Version{VersionKey: depsdev.VersionKey{System: tc.system, Version: tc.version}}
 			batch := &depsdev.BatchResult{ReleaseInfo: depsdev.ReleaseInfo{
 				MaxSemverVersion: version,
 				RequestedVersion: version,

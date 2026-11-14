@@ -84,22 +84,52 @@ func (p *ParsedPURL) Version() string {
 	return p.packageURL.Version
 }
 
-// IsStableVersion reports whether a non-empty version lacks known prerelease
-// qualifiers. An empty version is not stable. Build metadata after '+' is
-// ignored. See ADR-0035.
+// IsStableVersion reports whether a non-empty version lacks the shared
+// prerelease keywords. An empty version is not stable. Build metadata after
+// '+' is ignored. See ADR-0035.
 func IsStableVersion(version string) bool {
+	return isStableVersionFor("", version)
+}
+
+// IsStableVersionFor reports stability using the PURL type. Maven adds bounded
+// qualifier tokens to the shared keyword rule; empty versions are unstable and
+// build metadata is ignored for every type. See ADR-0035.
+func IsStableVersionFor(purlType, version string) bool {
+	return isStableVersionFor(purlType, version)
+}
+
+// ParseError represents a PURL parsing error
+type ParseError struct {
+	Message string
+	PURL    string
+}
+
+// NewParseError creates a new parse error
+func NewParseError(message, purl string) *ParseError {
+	return &ParseError{
+		Message: message,
+		PURL:    purl,
+	}
+}
+
+// Error implements the error interface
+func (e *ParseError) Error() string {
+	return e.Message + ": " + e.PURL
+}
+
+func isStableVersionFor(purlType, version string) bool {
 	if version == "" {
 		return false
 	}
-
 	version, _, _ = strings.Cut(version, "+")
 	version = strings.ToLower(version)
-	unstableKeywords := []string{"alpha", "beta", "rc", "dev", "snapshot", "pre", "preview"}
-
-	for _, keyword := range unstableKeywords {
+	for _, keyword := range []string{"alpha", "beta", "rc", "dev", "snapshot", "pre", "preview"} {
 		if strings.Contains(version, keyword) {
 			return false
 		}
+	}
+	if !strings.EqualFold(purlType, "maven") {
+		return true
 	}
 	for len(version) > 0 {
 		end := strings.IndexAny(version, ".-_")
@@ -114,7 +144,6 @@ func IsStableVersion(version string) bool {
 		}
 		version = version[end+1:]
 	}
-
 	return true
 }
 
@@ -137,23 +166,4 @@ func allASCIIDigits(s string) bool {
 		}
 	}
 	return true
-}
-
-// ParseError represents a PURL parsing error
-type ParseError struct {
-	Message string
-	PURL    string
-}
-
-// NewParseError creates a new parse error
-func NewParseError(message, purl string) *ParseError {
-	return &ParseError{
-		Message: message,
-		PURL:    purl,
-	}
-}
-
-// Error implements the error interface
-func (e *ParseError) Error() string {
-	return e.Message + ": " + e.PURL
 }
