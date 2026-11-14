@@ -37,7 +37,9 @@ const depsDevYankedReason = "yanked"
 //	    heuristic-stable version by PublishedAt wins.
 //
 // Dev:
-//   - Latest among non-stable by PublishedAt
+//   - Latest heuristic non-stable by PublishedAt. After an unstable-default
+//     override, use the replaced default if that Dev is empty or older.
+//     See ADR-0035.
 //
 // Max:
 //   - Highest SemVer using Masterminds semver; if none are valid SemVer, fallback to latest by PublishedAt
@@ -74,12 +76,14 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 
 	// Stable selection. A zero picked with governs=true is intended: the bound
 	// applies and excludes every candidate, so Stable stays empty.
+	var replacedDefault Version
 	if picked, governs := pickByRegistryStable(stableEligible, preferredStable); governs {
 		stable = picked
 	} else if len(defaults) > 0 {
 		stable = latestByPublishedAt(defaults)
 		if system := stable.VersionKey.System; supportsGAOverride(system) && !eligibleGA(stable) {
 			if picked := highestEligibleGA(stableEligible, system, true); picked.VersionKey.Version != "" {
+				replacedDefault = stable
 				stable = picked
 			}
 		}
@@ -90,6 +94,9 @@ func pickStableDevAndMax(versions []Version, preferredStable string) (stable Ver
 	// Dev selection
 	if len(nonStables) > 0 {
 		dev = latestByPublishedAt(nonStables)
+	}
+	if replacedDefault.VersionKey.Version != "" && (dev.VersionKey.Version == "" || replacedDefault.PublishedAt.After(dev.PublishedAt)) {
+		dev = replacedDefault
 	}
 
 	// Max SemVer selection
@@ -221,6 +228,15 @@ func compareNumericCore(a, b string) int {
 		}
 		return -1
 	}
+	if aOK && bOK {
+		aDate, bDate := hasDateFormNumericCore(a), hasDateFormNumericCore(b)
+		if aDate != bDate {
+			if aDate {
+				return -1
+			}
+			return 1
+		}
+	}
 	for i := 0; i < len(aParts) || i < len(bParts); i++ {
 		aPart, bPart := "0", "0"
 		if i < len(aParts) {
@@ -243,6 +259,17 @@ func compareNumericCore(a, b string) int {
 		}
 	}
 	return 0
+}
+
+func hasDateFormNumericCore(version string) bool {
+	if len(version) > 0 && (version[0] == 'v' || version[0] == 'V') {
+		version = version[1:]
+	}
+	i := 0
+	for i < len(version) && version[i] >= '0' && version[i] <= '9' {
+		i++
+	}
+	return i >= 8
 }
 
 func numericCore(version string) ([]string, bool) {
