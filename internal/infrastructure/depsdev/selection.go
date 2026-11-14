@@ -141,7 +141,7 @@ func pickWithoutDefault(eligible, heuristicStable []Version) Version {
 func highestEligibleGA(versions []Version, system string, override bool) Version {
 	candidates := make([]Version, 0, len(versions))
 	for _, v := range versions {
-		if !eligibleGA(v) {
+		if !eligibleGA(v) || (override && v.IsDeprecated) {
 			continue
 		}
 		if override && strings.EqualFold(system, "golang") {

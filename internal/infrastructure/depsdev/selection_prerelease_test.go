@@ -65,6 +65,7 @@ func TestPickStableDevAndMax_PrereleaseDefaults(t *testing.T) {
 		{"go lipgloss pseudo exclusion", "golang", "", []release{{"v2.0.0-beta1", new, true}, {"v2.0.0-20241029194924-049a2d260c67", old, false}, {"v2.0.0-20250917201909-41ff0bf215ea", mid, false}}, "v2.0.0-beta1", "v2.0.0-beta1", "v2.0.0-beta1", true},
 		{"go override tagged GA", "golang", "", []release{{"v1.1.0-rc.1", new, true}, {"v1.0.0", old, false}, {"v1.1.0-0.20260327151000-87f8819acf6d", mid, false}}, "v1.0.0", "v1.1.0-rc.1", "v1.1.0-rc.1", true},
 		{"go next tag excluded from override", "golang", "", []release{{"v2.0.0-beta1", new, true}, {"v2.0.0-next.3", mid, false}, {"v1.9.0", old, false}}, "v1.9.0", "v2.0.0-beta1", "v2.0.0-next.3", true},
+		{"go next default stays", "golang", "", []release{{"v2.0.0-next.3", new, true}, {"v1.9.0", old, false}}, "v2.0.0-next.3", "", "v2.0.0-next.3", true},
 		{"go ea hash enters Dev", "golang", "", []release{{"v1.0.0", old, true}, {"v0.0.0-20260327151000-ea1234567890", new, false}}, "v1.0.0", "v0.0.0-20260327151000-ea1234567890", "v1.0.0", false},
 		{"excluded system default first", "nuget", "", []release{{"2.0.0-rc1", mid, true}, {"2.0.0-next.1", new, false}}, "2.0.0-rc1", "2.0.0-rc1", "2.0.0-rc1", false},
 
@@ -72,6 +73,7 @@ func TestPickStableDevAndMax_PrereleaseDefaults(t *testing.T) {
 		{"no default npm version order", "npm", "", []release{{"4.1.2", old, false}, {"3.5.9", new, false}}, "4.1.2", "", "4.1.2", false},
 		{"no default cargo version order", "cargo", "", []release{{"4.1.2", old, false}, {"3.5.9", new, false}}, "4.1.2", "", "4.1.2", false},
 		{"no default pypi version order", "pypi", "", []release{{"4.1.2", old, false}, {"3.5.9", new, false}}, "4.1.2", "", "4.1.2", false},
+		{"no default pypi post release", "pypi", "", []release{{"1.0.post1", old, false}, {"1.0", new, false}}, "1.0.post1", "", "1.0", true},
 		{"no default go publication order", "golang", "", []release{{"v4.1.2", old, false}, {"v3.5.9", new, false}}, "v3.5.9", "", "v4.1.2", false},
 		{"no default excluded publication order", "", "", []release{{"4.1.2", old, false}, {"3.5.9", new, false}}, "3.5.9", "", "4.1.2", false},
 		{"no default npm parser only", "npm", "", []release{{"1.0.0-next.1", mid, false}}, "1.0.0-next.1", "", "1.0.0-next.1", false},
@@ -125,5 +127,73 @@ func TestPickStableDevAndMax_UnstableCargoDefaultSkipsYankedGA(t *testing.T) {
 	}
 	if got := max.VersionKey.Version; got != "2.0.0-rc.1" {
 		t.Errorf("Max = %q, want 2.0.0-rc.1 (unfiltered)", got)
+	}
+}
+
+func TestPickStableDevAndMax_UnstableDefaultSkipsDeprecatedGA(t *testing.T) {
+	makeVersion := func(version, date string, isDefault, deprecated bool) Version {
+		entry := v(version, date, isDefault)
+		entry.VersionKey.System = "npm"
+		entry.IsDeprecated = deprecated
+		return entry
+	}
+	for _, tc := range []struct {
+		name     string
+		versions []Version
+		stable   string
+		dev      string
+		max      string
+	}{
+		{
+			name: "live older GA wins",
+			versions: []Version{
+				makeVersion("3.0.0-beta.1", "2027-01-01T00:00:00Z", true, false),
+				makeVersion("2.9.0", "2026-01-01T00:00:00Z", false, true),
+				makeVersion("2.8.0", "2025-01-01T00:00:00Z", false, false),
+			},
+			stable: "2.8.0",
+			dev:    "3.0.0-beta.1",
+			max:    "3.0.0-beta.1",
+		},
+		{
+			name: "all GA deprecated keeps default",
+			versions: []Version{
+				makeVersion("3.0.0-beta.1", "2027-01-01T00:00:00Z", true, false),
+				makeVersion("2.9.0", "2026-01-01T00:00:00Z", false, true),
+			},
+			stable: "3.0.0-beta.1",
+			dev:    "3.0.0-beta.1",
+			max:    "3.0.0-beta.1",
+		},
+		{
+			name: "no default keeps existing behavior",
+			versions: []Version{
+				makeVersion("2.9.0", "2026-01-01T00:00:00Z", false, true),
+				makeVersion("2.8.0", "2025-01-01T00:00:00Z", false, false),
+			},
+			stable: "2.9.0",
+			max:    "2.9.0",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, reverse := range []bool{false, true} {
+				entries := append([]Version(nil), tc.versions...)
+				if reverse {
+					for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
+						entries[i], entries[j] = entries[j], entries[i]
+					}
+				}
+				stable, dev, max := pickStableDevAndMax(entries, "")
+				if got := stable.VersionKey.Version; got != tc.stable {
+					t.Errorf("reverse=%v Stable = %q, want %q", reverse, got, tc.stable)
+				}
+				if got := dev.VersionKey.Version; got != tc.dev {
+					t.Errorf("reverse=%v Dev = %q, want %q", reverse, got, tc.dev)
+				}
+				if got := max.VersionKey.Version; got != tc.max {
+					t.Errorf("reverse=%v Max = %q, want %q", reverse, got, tc.max)
+				}
+			}
+		})
 	}
 }
