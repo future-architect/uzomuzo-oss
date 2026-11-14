@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,7 +23,11 @@ func TestAnalyzeFromGitHubURLsRetainsCVSS4Fallback(t *testing.T) {
 	const githubURL = "https://github.com/example/withdrawn-test"
 	const id = "GHSA-vcc3-ghjq-m6fr"
 	const vector = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N/E:U/S:N/AU:Y/R:U/V:D/RE:M/U:Amber"
-	const graphQLBody = `{"data":{"repository":{"isArchived":false,"isDisabled":false,"isFork":false,"stargazerCount":1,"forkCount":1,"dependencyGraphManifests":{"nodes":[{"filename":"requirements.txt","dependencies":{"nodes":[{"packageManager":"PIP","packageName":"demo"}]}}]}}},"rateLimit":{"cost":1,"remaining":4999,"resetAt":""}}`
+	const graphQLBody = `{"data":{"repository":{"isArchived":false,"isDisabled":false,"isFork":false,"stargazerCount":1,"forkCount":1,"dependencyGraphManifests":{"nodes":[{"filename":"requirements.txt","dependencies":{"nodes":[{"packageManager":"PIP","packageName":"demo"}]}}]}},"rateLimit":{"cost":1,"remaining":4999,"resetAt":""}}}`
+	var decoded github.GraphQLResponse
+	if err := json.Unmarshal([]byte(graphQLBody), &decoded); err != nil || decoded.Data.RateLimit.Remaining != 4999 {
+		t.Fatalf("invalid GitHub GraphQL fixture: remaining=%d err=%v", decoded.Data.RateLimit.Remaining, err)
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(graphQLBody)) }))
 	defer srv.Close()
 	cfg := &config.Config{}
