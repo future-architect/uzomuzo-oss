@@ -44,7 +44,7 @@ func TestWithdrawnAdvisoryDecision(t *testing.T) {
 		{name: "invalid withdrawal timestamp", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"not-a-timestamp"}`, wantKeep: true, wantCalls: 1},
 		{name: "null withdrawal timestamp", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":null}`, wantKeep: true, wantCalls: 1},
 		{name: "empty withdrawal timestamp", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":""}`, wantKeep: true, wantCalls: 1},
-		{name: "duplicate withdrawal key", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"not-a-timestamp","withdrawn":"2026-10-22T19:21:04Z"}`, wantKeep: true, wantCalls: 1},
+		{name: "duplicate withdrawal key", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z","withdrawn":"2026-10-23T00:00:00Z"}`, wantKeep: true, wantCalls: 1},
 		{name: "case variant withdrawal key", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","Withdrawn":"not-a-timestamp","withdrawn":"2026-10-22T19:21:04Z"}`, wantKeep: true, wantCalls: 1},
 		{name: "duplicate ID key", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-other","id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z"}`, wantKeep: true, wantCalls: 1},
 		{name: "case variant ID key", missing: true, osvStatus: 200, osvBody: `{"ID":"GHSA-other","id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19:21:04Z"}`, wantKeep: true, wantCalls: 1},

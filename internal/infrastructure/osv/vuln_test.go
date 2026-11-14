@@ -24,7 +24,7 @@ func TestClient_GetVulnRejectsInvalidWithdrawalEvidence(t *testing.T) {
 		{"invalid timestamp", `{"id":"GHSA-invalid-evidence","withdrawn":"not-a-timestamp"}`},
 		{"null timestamp", `{"id":"GHSA-invalid-evidence","withdrawn":null}`},
 		{"empty timestamp", `{"id":"GHSA-invalid-evidence","withdrawn":""}`},
-		{"duplicate withdrawn", `{"id":"GHSA-invalid-evidence","withdrawn":"not-a-timestamp","withdrawn":"2026-10-22T19:21:04Z"}`},
+		{"duplicate withdrawn", `{"id":"GHSA-invalid-evidence","withdrawn":"2026-10-22T19:21:04Z","withdrawn":"2026-10-23T00:00:00Z"}`},
 		{"case variant withdrawn", `{"id":"GHSA-invalid-evidence","Withdrawn":"not-a-timestamp","withdrawn":"2026-10-22T19:21:04Z"}`},
 		{"duplicate id", `{"id":"GHSA-other","id":"GHSA-invalid-evidence","withdrawn":"2026-10-22T19:21:04Z"}`},
 		{"case variant id", `{"ID":"GHSA-other","id":"GHSA-invalid-evidence","withdrawn":"2026-10-22T19:21:04Z"}`},
