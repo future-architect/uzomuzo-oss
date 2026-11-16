@@ -748,6 +748,10 @@ func OSVPackageFor(parsed *purl.ParsedPURL) (string, string, bool) {
 		if namespace != "" && name != "" {
 			return "Packagist", namespace + "/" + name, true
 		}
+	case "hex":
+		if namespace == "" {
+			return "Hex", name, name != ""
+		}
 	}
 	return "", "", false
 }

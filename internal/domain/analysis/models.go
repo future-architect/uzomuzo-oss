@@ -154,8 +154,8 @@ type VersionDetail struct {
 	//
 	// Consumed as a fallback EOL signal by eolevaluator's applyDepsDevDeprecated rule
 	// for ecosystems without authoritative ecosystem-specific rules (golang, gem, pub,
-	// hex, conan). For ecosystems with authoritative rules (npm, NuGet, Packagist,
-	// Maven, PyPI, cargo), this field remains informational and the ecosystem-specific
+	// conan). For ecosystems with authoritative rules (npm, NuGet, Packagist,
+	// Maven, PyPI, cargo, hex), this field remains informational and the ecosystem-specific
 	// rule's verdict takes precedence via short-circuiting in the rule chain.
 	IsDeprecated bool
 	// RegistryURL points to the registry page specific to this version (flattened from former VersionLinks)
@@ -403,6 +403,8 @@ const (
 	RegistryPyPI = "PyPI"
 	// RegistryCrates identifies crates.io.
 	RegistryCrates = "crates.io"
+	// RegistryHex identifies hex.pm.
+	RegistryHex = "hex.pm"
 )
 
 // RegistryState captures package-level facts asserted by the package registry

@@ -618,6 +618,7 @@ Environment variable-centric (12-factor). Unset / 0 falls back to safe defaults.
 | `APP_SAMPLE_SIZE` | Batch input sampling size (0 = disabled) | `0` |
 | `APP_OUTPUT_FORMAT` | Output format (`csv`) | `csv` |
 | `APP_MAX_PURLS` | Maximum PURLs per run (safety guard) | `5000` |
+| `HEX_API_KEY` | Optional hex.pm API key, sent as the `Authorization` header to raise the rate limit. On HTTP 429 the client waits for `Retry-After` (up to 60s, 3 retries) | unset |
 
 ### GitHub Client
 

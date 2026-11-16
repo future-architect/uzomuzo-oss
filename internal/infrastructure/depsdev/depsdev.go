@@ -10,6 +10,7 @@ import (
 	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/goproxy"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/hex"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
@@ -73,6 +74,7 @@ type DepsDevClient struct {
 	// optional helpers
 	rubygems  *rubygems.Client
 	packagist *packagist.Client
+	hex       *hex.Client
 	npm       *npmjs.Client
 	nuget     *nuget.Client
 	maven     *maven.Client
@@ -118,6 +120,12 @@ func (c *DepsDevClient) WithRubyGems(g *rubygems.Client) *DepsDevClient {
 // WithPackagist enables a Packagist client for fallback resolution (used in wiring/tests).
 func (c *DepsDevClient) WithPackagist(p *packagist.Client) *DepsDevClient {
 	c.packagist = p
+	return c
+}
+
+// WithHex enables a hex.pm client for fallback resolution (deps.dev does not index Hex).
+func (c *DepsDevClient) WithHex(h *hex.Client) *DepsDevClient {
+	c.hex = h
 	return c
 }
 

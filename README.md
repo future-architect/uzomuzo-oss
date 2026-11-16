@@ -704,11 +704,11 @@ Workflow scan extracts `uses:` directives and evaluates each referenced Action a
 
 ## Supported Ecosystems
 
-npm / PyPI / Maven / Cargo / Go modules / NuGet / RubyGems / Packagist
+npm / PyPI / Maven / Cargo / Go modules / NuGet / RubyGems / Packagist / Hex
 
 ## Features
 
-- **Multi-ecosystem support**: 8 ecosystems with full PURL (Package URL) spec compliance
+- **Multi-ecosystem support**: 9 ecosystems with full PURL (Package URL) spec compliance
 - **Build integrity grading**: Supply chain build tamper resistance assessment using Scorecard checks and SLSA provenance — [details](docs/build-integrity.md)
 - **OpenSSF Scorecard integration**: Automated security maturity metrics
 - **Parallel-optimized batch processing**: 5,000+ PURLs/run with concurrent API orchestration

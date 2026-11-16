@@ -16,6 +16,7 @@ func SupportedEcosystems() []string {
 		"golang",
 		"gem",
 		"composer",
+		"hex",
 		"github",
 	}
 }

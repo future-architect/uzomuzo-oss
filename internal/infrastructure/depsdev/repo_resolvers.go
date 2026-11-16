@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/hex"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/maven"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/nuget"
@@ -86,6 +87,25 @@ func (r *packagistResolver) Resolve(ctx context.Context, pkg *PackageResponse) (
 	}
 	ver := strings.TrimSpace(parsed.Version())
 	return r.client.GetRepoURL(ctx, vendor, name, ver)
+}
+
+// hexResolver resolves from hex.pm package metadata (meta.links) for the hex ecosystem.
+// Organization-scoped (namespaced) packages are private and not resolvable.
+type hexResolver struct{ client *hex.Client }
+
+func (r *hexResolver) Name() string { return "hex" }
+func (r *hexResolver) Resolve(ctx context.Context, pkg *PackageResponse) (string, error) {
+	if pkg == nil || r.client == nil {
+		return "", nil
+	}
+	if strings.ToLower(strings.TrimSpace(pkg.Version.VersionKey.System)) != "hex" {
+		return "", nil
+	}
+	parsed, err := purl.NewParser().Parse(pkg.Version.PURL)
+	if err != nil || parsed.Namespace() != "" {
+		return "", nil
+	}
+	return r.client.GetRepoURL(ctx, parsed.Name())
 }
 
 // npmjsResolver resolves from npm registry metadata for npm ecosystem.
@@ -214,6 +234,9 @@ func (c *DepsDevClient) buildRepoResolvers() []RepoResolver {
 	if c.packagist != nil {
 		resolvers = append(resolvers, &packagistResolver{client: c.packagist})
 	}
+	if c.hex != nil {
+		resolvers = append(resolvers, &hexResolver{client: c.hex})
+	}
 	if c.nuget != nil {
 		resolvers = append(resolvers, &nugetResolver{client: c.nuget})
 	}
@@ -247,7 +270,7 @@ func (c *DepsDevClient) resolveRepoURL(ctx context.Context, pkg *PackageResponse
 // (i.e., without deps.dev package data).
 func hasRegistryResolver(eco string) bool {
 	switch eco {
-	case "npm", "nuget", "maven", "gem", "rubygems", "composer", "packagist", "pypi":
+	case "npm", "nuget", "maven", "gem", "rubygems", "composer", "packagist", "pypi", "hex":
 		return true
 	default:
 		return false
