@@ -16,7 +16,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/npmjs"
 )
 
-func TestFetchBatchPURLs_MissingGAKeepsNonGitHubDefaultRepo(t *testing.T) {
+func TestFetchBatchPURLs_OverrideNonGitHubRepoFallback(t *testing.T) {
 	for _, tc := range []struct {
 		name, input, packagePath, stablePURL, defaultPURL, sourceRepo, wantRepo string
 		gaFound, defaultNotFound                                                bool
@@ -172,10 +172,12 @@ func TestFetchBatchPURLs_NoOverrideFailedPackageLookup(t *testing.T) {
 func TestResolveRepoURLsBatch_GoOverrideMissingGAMetadata(t *testing.T) {
 	const original = "pkg:golang/github.com/acme/demo"
 	const replacedDefault = original + "@v2.0.0-beta1"
+	var defaultLookups atomic.Int32
 	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		if r.URL.EscapedPath() != "/v3alpha/purl/"+url.PathEscape(replacedDefault) {
 			return nil, fmt.Errorf("unexpected request: %s", r.URL.String())
 		}
+		defaultLookups.Add(1)
 		return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header), Request: r}, nil
 	})
 	c := NewDepsDevClient(&config.DepsDevConfig{BaseURL: "https://deps.example", Timeout: time.Second})
@@ -189,5 +191,8 @@ func TestResolveRepoURLsBatch_GoOverrideMissingGAMetadata(t *testing.T) {
 	}
 	if len(missing) != 0 {
 		t.Errorf("missing repository PURLs = %v, want none", missing)
+	}
+	if got := defaultLookups.Load(); got != 1 {
+		t.Errorf("replaced default lookups = %d, want 1", got)
 	}
 }

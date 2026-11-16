@@ -119,6 +119,14 @@ func supportedGASystem(system string) string {
 	}
 }
 
+func usesVersionOrderWithoutDefault(system string) bool {
+	return system != "" && system != "golang"
+}
+
+func usesParsedVersionOrder(system string) bool {
+	return system != "" && system != "maven"
+}
+
 func eligibleGA(v Version) bool {
 	if !purl.IsStableVersionFor(v.VersionKey.System, v.VersionKey.Version) {
 		return false
@@ -138,8 +146,7 @@ func eligibleGA(v Version) bool {
 func pickWithoutDefault(eligible, heuristicStable []Version) Version {
 	if len(eligible) > 0 {
 		system := supportedGASystem(eligible[0].VersionKey.System)
-		switch system {
-		case "maven", "npm", "cargo", "pypi":
+		if usesVersionOrderWithoutDefault(system) {
 			if picked := highestEligibleGA(eligible, system, false); picked.VersionKey.Version != "" {
 				return picked
 			}
@@ -172,7 +179,7 @@ func highestByVersionOrder(versions []Version, system string) Version {
 	system = supportedGASystem(system)
 	semvers := make([]*semver.Version, len(versions))
 	pepvers := make([]pep440.Version, len(versions))
-	allParsed := system != "" && system != "maven"
+	allParsed := usesParsedVersionOrder(system)
 	for i, v := range versions {
 		switch system {
 		case "npm", "cargo", "golang":

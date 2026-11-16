@@ -90,12 +90,13 @@ type stubDepsDevClient struct {
 type missingPackageDepsDevClient struct {
 	stubDepsDevClient
 	withRelease bool
+	repoURL     string
 }
 
 func (c *missingPackageDepsDevClient) GetDetailsForPURLs(_ context.Context, purls []string) (map[string]*depsdev.BatchResult, error) {
 	result := make(map[string]*depsdev.BatchResult, len(purls))
 	for _, p := range purls {
-		result[p] = &depsdev.BatchResult{PURL: p}
+		result[p] = &depsdev.BatchResult{PURL: p, RepoURL: c.repoURL}
 		if c.withRelease {
 			result[p].ReleaseInfo = depsdev.ReleaseInfo{StableVersion: depsdev.Version{
 				VersionKey: depsdev.VersionKey{Version: "1.5.7"}, PURL: p + "@1.5.7",
@@ -108,15 +109,14 @@ func (c *missingPackageDepsDevClient) GetDetailsForPURLs(_ context.Context, purl
 func TestAnalyzeFromPURLs_MissingPackageMetadataStaysNotFound(t *testing.T) {
 	const p = "pkg:maven/org.apache.directory.server/apacheds-core"
 	for _, tc := range []struct {
-		name, purl  string
-		withRelease bool
+		name, purl, repoURL, wantStable string
 	}{
-		{"selected GA release survives", p, true},
-		{"ordinary release survives", "pkg:npm/example", true},
-		{"no package or release", "pkg:npm/empty", false},
+		{"selected GA release survives", p, "", "1.5.7"},
+		{"selected GA release with repository", p, "https://gitlab.example/org/example", "1.5.7"},
+		{"no package or release", "pkg:npm/empty", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := NewIntegrationService(github.NewClient(&config.Config{}), &missingPackageDepsDevClient{withRelease: tc.withRelease})
+			svc := NewIntegrationService(github.NewClient(&config.Config{}), &missingPackageDepsDevClient{withRelease: tc.wantStable != "", repoURL: tc.repoURL})
 			analyses, err := svc.AnalyzeFromPURLs(context.Background(), []string{tc.purl})
 			if err != nil {
 				t.Fatalf("AnalyzeFromPURLs: %v", err)
@@ -128,8 +128,28 @@ func TestAnalyzeFromPURLs_MissingPackageMetadataStaysNotFound(t *testing.T) {
 			if !common.IsResourceNotFoundError(a.Error) {
 				t.Errorf("Error = %v, want resource-not-found", a.Error)
 			}
-			if tc.withRelease && (a.ReleaseInfo == nil || a.ReleaseInfo.StableVersion == nil || a.ReleaseInfo.StableVersion.Version != "1.5.7") {
-				t.Errorf("ReleaseInfo = %+v, want Stable 1.5.7", a.ReleaseInfo)
+			gotStable := ""
+			if a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
+				gotStable = a.ReleaseInfo.StableVersion.Version
+			}
+			if gotStable != tc.wantStable {
+				t.Errorf("Stable version = %q, want %q", gotStable, tc.wantStable)
+			}
+			if (a.ReleaseInfo != nil) != (tc.wantStable != "") {
+				t.Errorf("ReleaseInfo = %+v, want presence %v", a.ReleaseInfo, tc.wantStable != "")
+			}
+			if a.RepoURL != tc.repoURL {
+				t.Errorf("RepoURL = %q, want %q", a.RepoURL, tc.repoURL)
+			}
+			gotRepositoryURL := ""
+			if a.Repository != nil {
+				gotRepositoryURL = a.Repository.URL
+			}
+			if gotRepositoryURL != tc.repoURL {
+				t.Errorf("Repository.URL = %q, want %q", gotRepositoryURL, tc.repoURL)
+			}
+			if (a.Repository != nil) != (tc.repoURL != "") {
+				t.Errorf("Repository = %+v, want presence %v", a.Repository, tc.repoURL != "")
 			}
 		})
 	}

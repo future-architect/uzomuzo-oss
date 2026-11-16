@@ -382,7 +382,7 @@ func TestPickStableDevAndMax_EmptyVersionList(t *testing.T) {
 // short-form spellings `1.0a1`, `1.0b1`, `1.0c1` (which pep440.Parse
 // normalizes to `1.0rc1` — verified directly against the library before this
 // assertion was written) and `1.0.dev1`. ADR-0023 is explicit that
-// purl.IsStableVersionFor is deliberately NOT used inside the bound because it
+// the keyword heuristic is deliberately NOT used inside the bound because it
 // wrongly classifies these short forms as stable; this test proves the bound
 // rule does not exclude them for "looking like" a pre-release. Each is used
 // alone in the version list with a generous bound, so it is the only

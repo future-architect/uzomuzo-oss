@@ -35,7 +35,7 @@ func FuzzConvertRepoURLToProjectKey(f *testing.F) {
 }
 
 // FuzzPickStableDevAndMax checks version parsing safety and Stable's input-order
-// independence, including equal publication dates.
+// independence, including equal publication dates for Maven.
 func FuzzPickStableDevAndMax(f *testing.F) {
 	for _, seed := range [][3]string{
 		{"maven", "3.20.0.Final", "r09"},

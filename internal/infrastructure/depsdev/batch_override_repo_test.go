@@ -108,8 +108,8 @@ func TestFetchBatchPURLs_OverrideKeepsDefaultGitHubRepo(t *testing.T) {
 			if got := result.ReleaseInfo.StableVersion.PURL; got != stable {
 				t.Errorf("Stable PURL = %q, want %q", got, stable)
 			}
-			if tc.gaNotFound && result.Package != nil {
-				t.Errorf("Package = %+v, want nil after GA metadata lookup fails", result.Package)
+			if (result.Package != nil) == tc.gaNotFound {
+				t.Errorf("Package = %+v, want presence %v", result.Package, !tc.gaNotFound)
 			}
 			if got := result.RepoURL; got != tc.wantRepo {
 				t.Errorf("RepoURL = %q, want %q", got, tc.wantRepo)
