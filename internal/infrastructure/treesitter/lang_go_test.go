@@ -6,9 +6,173 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"testing"
 )
+
+func TestMain(m *testing.M) {
+	cache, err := os.MkdirTemp("", "treesitter-gomodcache-")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("GOMODCACHE", cache); err != nil {
+		panic(err)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(cache)
+	os.Exit(code)
+}
+
+func TestAnalyzer_GoPackageName_IssueCases(t *testing.T) {
+	cases := []struct {
+		name, importPath, modulePath, version, cachePath, packageName string
+	}{
+		{"signer_v4", "github.com/aws/aws-sdk-go-v2/aws/signer/v4", "github.com/aws/aws-sdk-go-v2", "v1.30.0", "github.com/aws/aws-sdk-go-v2@v1.30.0/aws/signer/v4", "v4"},
+		{"kubernetes_v1", "k8s.io/api/core/v1", "k8s.io/api", "v0.31.0", "k8s.io/api@v0.31.0/core/v1", "v1"},
+		{"jsoniter", "github.com/json-iterator/go", "github.com/json-iterator/go", "v1.1.12", "github.com/json-iterator/go@v1.1.12", "jsoniter"},
+		{"golang_lru", "github.com/hashicorp/golang-lru", "github.com/hashicorp/golang-lru", "v1.0.2", "github.com/hashicorp/golang-lru@v1.0.2", "lru"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cache := t.TempDir()
+			t.Setenv("GOMODCACHE", cache)
+			writeGoPackageFixture(t, cache, tc.cachePath+"/pkg.go", "package "+tc.packageName+"\n")
+			source := "package main\nimport \"" + tc.importPath + "\"\nfunc use() { " + tc.packageName + ".First(); " + tc.packageName + ".Second() }\n"
+			if tc.name == "signer_v4" {
+				source += "func local() { signer := struct{ First func() }{}; signer.First() }\n"
+			}
+			purl := "pkg:golang/" + tc.modulePath + "@" + tc.version
+			assertGoPackageCoupling(t, source, map[string][]string{purl: {tc.modulePath}}, purl, 2, []string{"First", "Second"})
+		})
+	}
+}
+
+func TestAnalyzer_GoPackageName_Resolution(t *testing.T) {
+	cases := []struct {
+		name, importPath, modulePath, purlPath, cachePath, sourceName string
+		files                                                         map[string]string
+		versions                                                      []string
+		wantCalls                                                     int
+		wantSymbols                                                   []string
+	}{
+		// semverx is synthetic so an import-path guess cannot satisfy this case.
+		{"mixed_case", "github.com/Masterminds/semver/v3", "github.com/Masterminds/semver/v3", "github.com/masterminds/semver/v3", "github.com/!masterminds/semver/v3", "semverx", map[string]string{"pkg.go": "package semverx\n"}, []string{"v3.2.1"}, 1, []string{"Call"}},
+		{"ambiguous", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "bar", map[string]string{"a.go": "package alpha\n", "b.go": "package beta\n"}, []string{"v1.0.0"}, 1, []string{"Call"}},
+		{"ignore_build_tag", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "realname", map[string]string{"real.go": "package realname\n", "ignored.go": "//go:build linux && (ignore || darwin)\n\npackage main\n"}, []string{"v1.0.0"}, 1, []string{"Call"}},
+		{"legacy_plus_build_ignore", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "realname", map[string]string{"real.go": "package realname\n", "ignored.go": "// +build ignore\n\npackage main\n"}, []string{"v1.0.0"}, 1, []string{"Call"}},
+		{"test_file", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "realname", map[string]string{"real.go": "package realname\n", "real_test.go": "package realname_test\n"}, []string{"v1.0.0"}, 1, []string{"Call"}},
+		{"missing_directory", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "bar", nil, []string{"v1.0.0"}, 1, []string{"Call"}},
+		{"missing_version", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "bar", map[string]string{"real.go": "package realname\n"}, []string{""}, 1, []string{"Call"}},
+		{"disagreeing_versions", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "bar", map[string]string{"real.go": "package realname\n"}, []string{"v1.0.0", "v1.1.0"}, 1, []string{"Call"}},
+		{"agreeing_versions", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "example.com/foo/bar", "realname", map[string]string{"real.go": "package realname\n"}, []string{"v1.0.0", "v1.1.0"}, 1, []string{"Call"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cache := t.TempDir()
+			t.Setenv("GOMODCACHE", cache)
+			var paths = make(map[string][]string)
+			for _, version := range tc.versions {
+				purl := "pkg:golang/" + tc.purlPath
+				if version != "" {
+					purl += "@" + version
+				}
+				paths[purl] = []string{tc.modulePath}
+				if version != "" {
+					for name, contents := range tc.files {
+						if tc.name == "disagreeing_versions" && version == "v1.1.0" {
+							contents = "package othername\n"
+						}
+						writeGoPackageFixture(t, cache, tc.cachePath+"@"+version+"/"+name, contents)
+					}
+				}
+			}
+			purl := "pkg:golang/" + tc.purlPath
+			if tc.versions[0] != "" {
+				purl += "@" + tc.versions[0]
+			}
+			assertGoPackageCoupling(t, "package main\nimport \""+tc.importPath+"\"\nfunc use() { "+tc.sourceName+".Call() }\n", paths, purl, tc.wantCalls, tc.wantSymbols)
+		})
+	}
+}
+
+func TestAnalyzer_GoPackageName_TraversalFallsBack(t *testing.T) {
+	root := t.TempDir()
+	cache := filepath.Join(root, "cache")
+	if err := os.Mkdir(cache, 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GOMODCACHE", cache)
+	writeGoPackageFixture(t, root, "evil/pkg.go", "package othername\n")
+	purl := "pkg:golang/github.com/foo/bar@v1.0.0"
+	importPath := "github.com/foo/bar/../../../evil"
+	source := "package main\nimport \"" + importPath + "\"\nfunc use() { evil.Call() }\n"
+	assertGoPackageCoupling(t, source, map[string][]string{purl: {"github.com/foo/bar"}}, purl, 1, []string{"Call"})
+}
+
+func TestAnalyzer_GoPackageName_CacheDoesNotCrossCalls(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("GOMODCACHE", cache)
+	file := "example.com/foo/bar@v1.0.0/pkg.go"
+	writeGoPackageFixture(t, cache, file, "package first\n")
+	project := t.TempDir()
+	source := filepath.Join(project, "main.go")
+	purl := "pkg:golang/example.com/foo/bar@v1.0.0"
+	paths := map[string][]string{purl: {"example.com/foo/bar"}}
+	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
+	for _, name := range []string{"first", "second"} {
+		writeGoPackageFixture(t, cache, file, "package "+name+"\n")
+		if err := os.WriteFile(source, []byte("package main\nimport \"example.com/foo/bar\"\nfunc use() { "+name+".Call() }\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		got, err := analyzer.AnalyzeCoupling(context.Background(), project, paths)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got[purl] == nil || got[purl].CallSiteCount != 1 {
+			t.Fatalf("package %s: coupling = %+v", name, got[purl])
+		}
+	}
+}
+
+func writeGoPackageFixture(t *testing.T, root, path, contents string) {
+	t.Helper()
+	full := filepath.Join(root, path)
+	if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(full, []byte(contents), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertGoPackageCoupling(t *testing.T, source string, paths map[string][]string, purl string, calls int, symbols []string) {
+	t.Helper()
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, "main.go"), []byte(source), 0644); err != nil {
+		t.Fatal(err)
+	}
+	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
+	got, err := analyzer.AnalyzeCoupling(context.Background(), project, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca := got[purl]
+	if ca == nil {
+		t.Fatalf("missing coupling for %s", purl)
+	}
+	if ca.CallSiteCount != calls {
+		t.Errorf("CallSiteCount = %d, want %d", ca.CallSiteCount, calls)
+	}
+	if ca.APIBreadth != len(symbols) {
+		t.Errorf("APIBreadth = %d, want %d", ca.APIBreadth, len(symbols))
+	}
+	if !reflect.DeepEqual(ca.Symbols, symbols) {
+		t.Errorf("Symbols = %v, want %v", ca.Symbols, symbols)
+	}
+}
 
 func TestAnalyzer_Go(t *testing.T) {
 	dir := t.TempDir()

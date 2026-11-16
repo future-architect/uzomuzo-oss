@@ -246,6 +246,7 @@ func (a *Analyzer) AnalyzeCoupling(
 	importPaths map[string][]string,
 ) (map[string]*domaindiet.CouplingAnalysis, error) {
 	importToPURL := buildImportToPURL(importPaths)
+	goNames := newGoPackageNameResolver()
 
 	type fileJob struct{ path, relPath string }
 	var jobs []fileJob
@@ -300,7 +301,7 @@ func (a *Analyzer) AnalyzeCoupling(
 			defer parser.Close()
 			local := make(map[string]*accumulator)
 			for j := range jobCh {
-				a.analyzeFile(j.path, j.relPath, parser, importToPURL, local)
+				a.analyzeFile(j.path, j.relPath, parser, importToPURL, goNames, local)
 			}
 			partials[idx] = local
 		}(w)
@@ -395,6 +396,7 @@ func (a *Analyzer) analyzeFile(
 	path, relPath string,
 	parser *sitter.Parser,
 	importToPURL map[string][]string,
+	goNames *goPackageNameResolver,
 	accum map[string]*accumulator,
 ) {
 	info, err := os.Stat(path)
@@ -448,7 +450,7 @@ func (a *Analyzer) analyzeFile(
 	cursor := sitter.NewQueryCursor()
 
 	// Phase 1: Extract imports and build alias->PURL map for this file.
-	fileAliases := a.extractImports(cfg, root, src, importToPURL, lid, cursor)
+	fileAliases := a.extractImports(cfg, root, src, importToPURL, goNames, lid, cursor)
 
 	// Record import files
 	for alias, purls := range fileAliases {
@@ -549,6 +551,7 @@ func (a *Analyzer) extractImports(
 	root *sitter.Node,
 	src []byte,
 	importToPURL map[string][]string,
+	goNames *goPackageNameResolver,
 	lid langID,
 	cursor *sitter.QueryCursor,
 ) map[string][]string {
@@ -588,7 +591,7 @@ func (a *Analyzer) extractImports(
 
 			// For Go, check for explicit alias.
 			if lid == langGo {
-				a.handleGoImport(node, src, value, importToPURL, aliasMap)
+				a.handleGoImport(node, src, value, importToPURL, goNames, aliasMap)
 				continue
 			}
 

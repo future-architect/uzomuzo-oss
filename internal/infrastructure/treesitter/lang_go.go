@@ -60,12 +60,14 @@ func (a *Analyzer) handleGoImport(
 	src []byte,
 	importPath string,
 	importToPURL map[string][]string,
+	goNames *goPackageNameResolver,
 	aliasMap map[string][]string,
 ) {
 	// Lowercase the import path for matching — importToPURL keys are already lowercased
 	// to handle PURL case-insensitivity (see AnalyzeCoupling).
 	lowerPath := strings.ToLower(importPath)
 	purls, ok := importToPURL[lowerPath]
+	matchedKey := lowerPath
 	if !ok {
 		// Also try prefix matching for subpackages.
 		// Pick the longest matching prefix to handle nested modules
@@ -76,6 +78,7 @@ func (a *Analyzer) handleGoImport(
 				purls = p
 				ok = true
 				bestLen = len(ip)
+				matchedKey = ip
 			}
 		}
 	}
@@ -112,7 +115,10 @@ func (a *Analyzer) handleGoImport(
 	}
 
 	if alias == "" {
-		alias = goAliasFromImportPath(importPath)
+		alias = goNames.resolve(importPath, matchedKey, purls)
+		if alias == "" {
+			alias = goAliasFromImportPath(importPath)
+		}
 	}
 
 	aliasMap[alias] = appendUniquePURLs(aliasMap[alias], purls)

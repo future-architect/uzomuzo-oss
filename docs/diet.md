@@ -32,7 +32,7 @@ Known causes of a used dependency being reported as unused or trivial:
 | The wheel fallback that finds a distribution's import name skips wheels over 5 MiB (scikit-learn, opencv-python) and can miss namespace packages (`google.*`, `azure.*`) | Python | [#548](https://github.com/future-architect/uzomuzo-oss/issues/548) |
 | `.cjs` / `.mts` / `.cts` / `.vue` / `.svelte` files, `import x = require()`, template-literal `require`; `@types/*` and type-only packages | JS/TS | [#549](https://github.com/future-architect/uzomuzo-oss/issues/549) |
 | Dynamic `import()` and inline `require('pkg').f()` are rated `trivial` when no other use is counted, however many files use them; dot-imported calls are not counted | JS/TS, Go | [#550](https://github.com/future-architect/uzomuzo-oss/issues/550) |
-| Package name differs from the import path (`aws/signer/v4`, `k8s.io/api/core/v1`, `json-iterator/go`) | Go | [#551](https://github.com/future-architect/uzomuzo-oss/issues/551) |
+| A dependency is absent from the local Go module cache, or its directory contains more than one package name; import-path guessing can then miss calls to `v4`, `v1`, or `jsoniter` | Go | [#551](https://github.com/future-architect/uzomuzo-oss/issues/551) |
 | Uses the per-language queries do not cover, which differ by language: methods on returned objects (all), values passed as arguments (JS/TS, Python), bare imported names used as a base class or in `except` (Python) | all | [#552](https://github.com/future-architect/uzomuzo-oss/issues/552) |
 | Dependencies loaded by configuration, plugins, reflection, or `ServiceLoader` | all | [Understanding "Unused" Dependencies](#understanding-unused-dependencies) |
 
@@ -402,8 +402,8 @@ All languages use tree-sitter for AST-based analysis. Of a file larger than 1 Mi
 | Dot imports | `import . "pkg"` — detected, marked as uncountable (symbols callable without prefix) |
 | Call sites | Selector expressions (`pkg.Func`), qualified types (`pkg.Type`) |
 | Ecosystem features | Go tool directives (`go.mod tool`, Go 1.24+) excluded from unused detection |
-| Import path handling | Strips major version suffixes (`/v2`), `gopkg.in` version suffixes (`.v3`), hyphenated package aliases (`go-loser` -> `loser`, `geoip2-golang` -> `geoip2`) |
-| Limitations | Dot-imported symbols cannot be attributed to a specific dependency. Calls are missed when the package name differs from the last path element (`v4`, `v1`, `jsoniter`; [#551](https://github.com/future-architect/uzomuzo-oss/issues/551)). Methods called on returned values are not counted. |
+| Import path handling | Reads the `package` clause from the local Go module cache (`GOMODCACHE`, otherwise `GOPATH/pkg/mod`). If the name cannot be determined, guesses from the import path, including major version suffixes (`/v2`), `gopkg.in` suffixes (`.v3`), and hyphenated names. |
+| Limitations | Dot-imported symbols cannot be attributed to a specific dependency. When the dependency is absent from the cache or its directory contains more than one package name, diet falls back to import-path guessing and can still miss calls to `v4`, `v1`, or `jsoniter` ([#551](https://github.com/future-architect/uzomuzo-oss/issues/551)). Methods called on returned values are not counted. |
 
 ### Python
 
