@@ -114,8 +114,8 @@ func TestFetchBatchPURLs_OverrideKeepsDefaultGitHubRepo(t *testing.T) {
 			if got := result.RepoURL; got != tc.wantRepo {
 				t.Errorf("RepoURL = %q, want %q", got, tc.wantRepo)
 			}
-			if strings.HasPrefix(tc.wantRepo, "https://github.com/") && result.Project == nil {
-				t.Error("Project = nil, want GitHub project details")
+			if (result.Project != nil) != strings.HasPrefix(tc.wantRepo, "https://github.com/") {
+				t.Errorf("Project = %+v, want presence %v", result.Project, strings.HasPrefix(tc.wantRepo, "https://github.com/"))
 			}
 			if got := defaultLookups.Load(); got != tc.wantDefaultLookups {
 				t.Errorf("replaced default lookups = %d, want %d", got, tc.wantDefaultLookups)

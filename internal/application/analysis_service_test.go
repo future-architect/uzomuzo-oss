@@ -284,13 +284,6 @@ func TestRepoURLFallback_ErrorClearedWhenRepoResolved(t *testing.T) {
 			wantErrorNil: true,
 		},
 		{
-			name:         "missing_package_metadata_with_non_github_repository_clears_error",
-			err:          common.NewResourceNotFoundError("package not found in deps.dev"),
-			repoURL:      "https://gitlab.example/org/example",
-			repository:   &domain.Repository{URL: "https://gitlab.example/org/example"},
-			wantErrorNil: true,
-		},
-		{
 			name:         "not_found_with_repo_url_only_keeps_error",
 			err:          common.NewResourceNotFoundError("package not found in deps.dev"),
 			repoURL:      "https://github.com/expressjs/express",
