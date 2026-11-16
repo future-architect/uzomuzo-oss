@@ -196,3 +196,30 @@ func TestResolveRepoURLsBatch_GoOverrideMissingGAMetadata(t *testing.T) {
 		t.Errorf("replaced default lookups = %d, want 1", got)
 	}
 }
+
+// TestResolveRepoURLsBatch_StopsDispatchAfterCancel pins issue #450: once ctx is
+// cancelled, resolveRepoURLsBatch must not keep starting new resolutions.
+func TestResolveRepoURLsBatch_StopsDispatchAfterCancel(t *testing.T) {
+	const total = 60
+	pkgs := make(map[string]*PackageResponse, total)
+	for i := 0; i < total; i++ {
+		pkgs[fmt.Sprintf("pkg:golang/github.com/acme/demo%d", i)] = nil
+	}
+	c := NewDepsDevClient(&config.DepsDevConfig{BaseURL: "https://deps.example", Timeout: time.Second})
+	c.client = httpclient.NewClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("unexpected request: %s", r.URL.String())
+	})}, httpclient.RetryConfig{})
+	c.goproxy = nil
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	repos, missing := c.resolveRepoURLsBatch(ctx, pkgs, nil)
+
+	started := len(missing)
+	for _, ps := range repos {
+		started += len(ps)
+	}
+	if started >= total {
+		t.Errorf("resolved %d of %d PURLs after ctx was cancelled; want dispatch to stop early", started, total)
+	}
+}
