@@ -11,9 +11,11 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/future-architect/uzomuzo-oss/internal/common"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/depsdev"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/github"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/packagist"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/rubygems"
 )
@@ -83,6 +85,74 @@ type stubDepsDevClient struct {
 	dependenciesResults       map[string]*depsdev.DependenciesResponse
 	transitiveAdvisoryResults map[string][]depsdev.AdvisoryKey
 	advisoryDetails           map[string]*depsdev.AdvisoryDetail
+}
+
+type missingPackageDepsDevClient struct {
+	stubDepsDevClient
+	withRelease bool
+	repoURL     string
+}
+
+func (c *missingPackageDepsDevClient) GetDetailsForPURLs(_ context.Context, purls []string) (map[string]*depsdev.BatchResult, error) {
+	result := make(map[string]*depsdev.BatchResult, len(purls))
+	for _, p := range purls {
+		result[p] = &depsdev.BatchResult{PURL: p, RepoURL: c.repoURL}
+		if c.withRelease {
+			result[p].ReleaseInfo = depsdev.ReleaseInfo{StableVersion: depsdev.Version{
+				VersionKey: depsdev.VersionKey{Version: "1.5.7"}, PURL: p + "@1.5.7",
+			}}
+		}
+	}
+	return result, nil
+}
+
+func TestAnalyzeFromPURLs_MissingPackageMetadataStaysNotFound(t *testing.T) {
+	const p = "pkg:maven/org.apache.directory.server/apacheds-core"
+	for _, tc := range []struct {
+		name, purl, repoURL, wantStable string
+	}{
+		{"selected GA release survives", p, "", "1.5.7"},
+		{"selected GA release with repository", p, "https://gitlab.example/org/example", "1.5.7"},
+		{"no package or release", "pkg:npm/empty", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := NewIntegrationService(github.NewClient(&config.Config{}), &missingPackageDepsDevClient{withRelease: tc.wantStable != "", repoURL: tc.repoURL})
+			analyses, err := svc.AnalyzeFromPURLs(context.Background(), []string{tc.purl})
+			if err != nil {
+				t.Fatalf("AnalyzeFromPURLs: %v", err)
+			}
+			a := analyses[tc.purl]
+			if a == nil {
+				t.Fatal("missing analysis")
+			}
+			if !common.IsResourceNotFoundError(a.Error) {
+				t.Errorf("Error = %v, want resource-not-found", a.Error)
+			}
+			gotStable := ""
+			if a.ReleaseInfo != nil && a.ReleaseInfo.StableVersion != nil {
+				gotStable = a.ReleaseInfo.StableVersion.Version
+			}
+			if gotStable != tc.wantStable {
+				t.Errorf("Stable version = %q, want %q", gotStable, tc.wantStable)
+			}
+			if (a.ReleaseInfo != nil) != (tc.wantStable != "") {
+				t.Errorf("ReleaseInfo = %+v, want presence %v", a.ReleaseInfo, tc.wantStable != "")
+			}
+			if a.RepoURL != tc.repoURL {
+				t.Errorf("RepoURL = %q, want %q", a.RepoURL, tc.repoURL)
+			}
+			gotRepositoryURL := ""
+			if a.Repository != nil {
+				gotRepositoryURL = a.Repository.URL
+			}
+			if gotRepositoryURL != tc.repoURL {
+				t.Errorf("Repository.URL = %q, want %q", gotRepositoryURL, tc.repoURL)
+			}
+			if (a.Repository != nil) != (tc.repoURL != "") {
+				t.Errorf("Repository = %+v, want presence %v", a.Repository, tc.repoURL != "")
+			}
+		})
+	}
 }
 
 func (s *stubDepsDevClient) GetDetailsForPURLs(_ context.Context, _ []string) (map[string]*depsdev.BatchResult, error) {

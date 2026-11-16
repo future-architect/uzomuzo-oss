@@ -65,12 +65,14 @@ func FuzzIsStableVersion(f *testing.F) {
 	seeds := []string{
 		"1.0.0", "2.0.0-alpha", "3.0.0-beta.1", "4.0.0-rc1",
 		"1.0.0-SNAPSHOT", "v1.2.3", "", "dev-master", "1.0.0-preview.2",
+		"2.0.0-M1", "2.0.0.AM27", "3.0.0-CR1", "28-ea+12",
 	}
 	for _, s := range seeds {
 		f.Add(s)
 	}
 
 	f.Fuzz(func(t *testing.T, input string) {
-		_ = IsStableVersion(input)
+		_ = IsStableVersionFor("", input)
+		_ = IsStableVersionFor("maven", input)
 	})
 }

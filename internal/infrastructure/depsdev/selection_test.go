@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+func pickStableDevAndMax(versions []Version, preferredStable string) (stable Version, dev Version, max Version) {
+	stable, dev, max, _ = pickStableDevAndMaxWithReplaced(versions, preferredStable)
+	return stable, dev, max
+}
+
 func v(version string, published string, isDefault bool) Version {
 	t := time.Time{}
 	if published != "" {
@@ -77,7 +82,7 @@ func TestPickStableDevAndMax_NoStable_DefaultsAbsent(t *testing.T) {
 // registry-hint path (pickByRegistryStable) must be a no-op when there is no
 // hint, falling straight through to the deps.dev rules. The expected values
 // below are literal, independently derived from the deps.dev rules
-// documented on pickStableDevAndMax — not computed by a second call to the
+// documented on pickStableDevAndMaxWithReplaced — not computed by a second call to the
 // function under test, which would make this assertion unable to catch a
 // regression in the very function it is meant to pin.
 func TestPickStableDevAndMax_HintEmpty_MatchesOldBehavior(t *testing.T) {
@@ -156,7 +161,7 @@ func TestPickStableDevAndMax_Hint_NothingBelowBound_LeavesStableEmpty(t *testing
 		t.Fatalf("stable=%s, want empty (bound governs, nothing qualifies below it)", stable.VersionKey.Version)
 	}
 	if dev.VersionKey.Version != "2.0.0-rc1" {
-		t.Fatalf("dev=%s, want 2.0.0-rc1 (Dev is unaffected by the bound: it is the latest non-stable by purl.IsStableVersion)", dev.VersionKey.Version)
+		t.Fatalf("dev=%s, want 2.0.0-rc1 (Dev is unaffected by the bound: it is the latest non-stable by purl.IsStableVersionFor)", dev.VersionKey.Version)
 	}
 	if max.VersionKey.Version != "3.0.0" {
 		t.Fatalf("max=%s, want 3.0.0 (Max is unaffected by the bound)", max.VersionKey.Version)
@@ -172,7 +177,7 @@ func TestPickStableDevAndMax_Hint_NothingBelowBound_LeavesStableEmpty(t *testing
 // ADR-0023), a bug existed where every deps.dev version was excluded by the
 // PyPI bound AND every excluded version was a keyword-free final release
 // (e.g. "2.0.0", "3.0.0" — no alpha/beta/rc/dev/snapshot/pre/preview
-// substring, so purl.IsStableVersion classifies both as "stable" and neither
+// substring, so purl.IsStableVersionFor classifies both as "stable" and neither
 // lands in the Dev/non-stable bucket). That combination made Stable AND Dev
 // both empty while Max stayed populated — the exact state the old
 // `Stable != "" || PreRelease != ""` gate in batch_details.go dropped
@@ -377,7 +382,7 @@ func TestPickStableDevAndMax_EmptyVersionList(t *testing.T) {
 // short-form spellings `1.0a1`, `1.0b1`, `1.0c1` (which pep440.Parse
 // normalizes to `1.0rc1` — verified directly against the library before this
 // assertion was written) and `1.0.dev1`. ADR-0023 is explicit that
-// purl.IsStableVersion is deliberately NOT used inside the bound because it
+// the keyword heuristic is deliberately NOT used inside the bound because it
 // wrongly classifies these short forms as stable; this test proves the bound
 // rule does not exclude them for "looking like" a pre-release. Each is used
 // alone in the version list with a generous bound, so it is the only
@@ -440,7 +445,7 @@ func TestPickStableDevAndMax_Hint_AllVersionsUnparseable(t *testing.T) {
 		t.Fatalf("stable=%s, want empty (no candidate is PEP 440 orderable or an exact match)", stable.VersionKey.Version)
 	}
 	if dev.VersionKey.Version != "build-xyz-dev" {
-		t.Fatalf("dev=%s, want build-xyz-dev (Dev is unaffected: latest non-stable by purl.IsStableVersion)", dev.VersionKey.Version)
+		t.Fatalf("dev=%s, want build-xyz-dev (Dev is unaffected: latest non-stable by purl.IsStableVersionFor)", dev.VersionKey.Version)
 	}
 	if max.VersionKey.Version == "" {
 		t.Fatalf("max should be populated by the PublishedAt fallback when nothing is valid SemVer")

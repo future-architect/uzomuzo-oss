@@ -3,13 +3,16 @@ package depsdev
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/future-architect/uzomuzo-oss/internal/domain/config"
+	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
 )
 
 func TestFetchDependencies_Success(t *testing.T) {
@@ -403,6 +406,46 @@ func TestFetchDependenciesBatch_VersionFallback_PrefersClosestSemver(t *testing.
 	}
 	if len(got) < 2 || got[0] != "19.2.5" || got[1] != "19.2.4" {
 		t.Errorf("call sequence = %v, want primary=19.2.5 then fallback=19.2.4 (highest semver < primary)", got)
+	}
+}
+
+// TestFetchDependenciesBatch_VersionFallback_PrefersMavenFinalOverNewerMilestone
+// pins the PURL-type-aware non-SemVer fallback ordering. See ADR-0035.
+func TestFetchDependenciesBatch_VersionFallback_PrefersMavenFinalOverNewerMilestone(t *testing.T) {
+	const requested = "pkg:maven/org.hibernate.orm/hibernate-core@6.6.0.Final"
+	const path = "/v3alpha/systems/maven/packages/org.hibernate.orm:hibernate-core"
+	var calls []string
+	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		status := http.StatusOK
+		body := ""
+		switch r.URL.Path {
+		case path:
+			body = `{"versions":[
+				{"versionKey":{"version":"7.0.0.CR1"},"publishedAt":"2026-04-15T00:00:00Z"},
+				{"versionKey":{"version":"6.5.3.Final"},"publishedAt":"2026-02-01T00:00:00Z"}
+			]}`
+		case path + "/versions/6.6.0.Final:dependencies":
+			calls = append(calls, "6.6.0.Final")
+			status = http.StatusNotFound
+		case path + "/versions/6.5.3.Final:dependencies":
+			calls = append(calls, "6.5.3.Final")
+			body = `{"nodes":[{"relation":"SELF"}],"edges":[]}`
+		case path + "/versions/7.0.0.CR1:dependencies":
+			calls = append(calls, "7.0.0.CR1")
+			status = http.StatusNotFound
+		default:
+			return nil, fmt.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
+	})
+	c := NewDepsDevClient(&config.DepsDevConfig{BaseURL: "https://deps.example", Timeout: time.Second, MaxRetries: 0, BatchSize: 10})
+	c.client = httpclient.NewClient(&http.Client{Transport: transport}, httpclient.RetryConfig{})
+	results := c.FetchDependenciesBatch(context.Background(), []string{requested})
+	if results[requested] == nil {
+		t.Fatalf("no dependency graph recovered; calls = %v", calls)
+	}
+	if len(calls) != 2 || calls[0] != "6.6.0.Final" || calls[1] != "6.5.3.Final" {
+		t.Errorf("dependency call order = %v, want [6.6.0.Final 6.5.3.Final]", calls)
 	}
 }
 
