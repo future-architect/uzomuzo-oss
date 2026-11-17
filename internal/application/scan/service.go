@@ -23,6 +23,48 @@ type Result struct {
 	Entries []domainaudit.AuditEntry
 	// HasFailure is true if any entry matches the fail policy.
 	HasFailure bool
+	// TransitiveSkipped reports the transitive dependencies that were dropped
+	// before evaluation. It is nil when nothing was skipped, including when
+	// ShowTransitive is set.
+	TransitiveSkipped *TransitiveSkipped
+}
+
+// TransitiveSkipped summarizes transitive dependencies that were not evaluated
+// because --show-transitive is off.
+type TransitiveSkipped struct {
+	// Count is the number of unique skipped PURLs. A PURL that the parser also
+	// lists as direct is evaluated, so it is not counted here.
+	Count int
+	// Via maps a direct dependency's short name to the number of skipped PURLs
+	// it pulls in. A PURL reached through several parents counts once under
+	// each, so the values can add up to more than Count. Empty when the parser
+	// gives no parent information.
+	Via map[string]int
+}
+
+// ViaCount is one entry of TransitiveSkipped.Via.
+type ViaCount struct {
+	Name  string
+	Count int
+}
+
+// TopVia returns up to n parents ordered by skipped count (descending), then
+// name (ascending) so the output is deterministic.
+func (s *TransitiveSkipped) TopVia(n int) []ViaCount {
+	out := make([]ViaCount, 0, len(s.Via))
+	for name, c := range s.Via {
+		out = append(out, ViaCount{Name: name, Count: c})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Name < out[j].Name
+	})
+	if n >= 0 && len(out) > n {
+		out = out[:n]
+	}
+	return out
 }
 
 // Service orchestrates the unified scan pipeline.
@@ -77,8 +119,12 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 	}
 
 	purls, relations, viaParents, locations := selectDependencies(deps, parserCfg.ShowTransitive)
+	var skipped *TransitiveSkipped
+	if !parserCfg.ShowTransitive {
+		skipped = summarizeSkippedTransitive(deps, relations)
+	}
 	if len(purls) == 0 {
-		return &Result{}, nil
+		return &Result{TransitiveSkipped: skipped}, nil
 	}
 
 	slog.Info("scan: evaluating dependencies", "count", len(purls), "parser", parser.FormatName(),
@@ -100,7 +146,7 @@ func (s *Service) RunFromParser(ctx context.Context, parser depparser.Dependency
 	warnMaliciousLookupFailures(analyses)
 	warnDependencyAdvisoryLookupFailures(analyses)
 
-	return &Result{Entries: entries, HasFailure: hasFailure}, nil
+	return &Result{Entries: entries, HasFailure: hasFailure, TransitiveSkipped: skipped}, nil
 }
 
 // selectDependencies deduplicates parser output by PURL, keeping first-seen
@@ -134,6 +180,43 @@ func selectDependencies(deps []depparser.ParsedDependency, showTransitive bool) 
 		purls = append(purls, d.PURL)
 	}
 	return purls, relations, viaParents, locations
+}
+
+// summarizeSkippedTransitive counts the unique transitive PURLs that
+// selectDependencies dropped (those absent from kept) and the direct
+// dependencies that pull them in. It returns nil when nothing was dropped.
+func summarizeSkippedTransitive(deps []depparser.ParsedDependency, kept map[string]depparser.DependencyRelation) *TransitiveSkipped {
+	seen := make(map[string]struct{})
+	via := make(map[string]int)
+	for _, d := range deps {
+		if d.Relation != depparser.RelationTransitive {
+			continue
+		}
+		if _, ok := kept[d.PURL]; ok {
+			continue
+		}
+		if _, dup := seen[d.PURL]; dup {
+			continue
+		}
+		seen[d.PURL] = struct{}{}
+		for _, parent := range uniqueStrings(d.ViaParents) {
+			via[parent]++
+		}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	return &TransitiveSkipped{Count: len(seen), Via: via}
+}
+
+func uniqueStrings(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		if !slices.Contains(out, v) {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // ActionsDiscoverer abstracts the actions discovery infrastructure.

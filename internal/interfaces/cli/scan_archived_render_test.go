@@ -30,7 +30,7 @@ func TestArchivedDisabledScanOutputs(t *testing.T) {
 	entries := []audit.AuditEntry{archived, quiet, disabled, errored}
 
 	var buf bytes.Buffer
-	if err := renderScanTable(&buf, entries, entries, false); err != nil {
+	if err := renderScanTable(&buf, entries, entries, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	rows := map[string]string{}
@@ -55,7 +55,7 @@ func TestArchivedDisabledScanOutputs(t *testing.T) {
 	}
 
 	buf.Reset()
-	if err := renderScanJSON(&buf, entries, entries, false, nil); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	var out struct {
@@ -143,7 +143,7 @@ func TestArchivedMarkerFollowsOtherMarkers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			e := []audit.AuditEntry{{PURL: "pkg:npm/x@2.0.1", Verdict: audit.VerdictReplace, Analysis: tt.a}}
 			var buf bytes.Buffer
-			if err := renderScanTable(&buf, e, e, false); err != nil {
+			if err := renderScanTable(&buf, e, e, false, nil); err != nil {
 				t.Fatal(err)
 			}
 			if !strings.Contains(buf.String(), tt.want) {

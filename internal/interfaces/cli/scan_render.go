@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	scanapp "github.com/future-architect/uzomuzo-oss/internal/application/scan"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domainaudit "github.com/future-architect/uzomuzo-oss/internal/domain/audit"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
@@ -164,11 +165,11 @@ func renderScanOutput(w io.Writer, allEntries, displayEntries []domainaudit.Audi
 	case FormatSARIF:
 		return renderScanSARIF(w, displayEntries, opts)
 	case FormatDetailed:
-		return renderScanDetailed(w, allEntries, displayEntries, filterActive)
+		return renderScanDetailed(w, allEntries, displayEntries, filterActive, opts.TransitiveSkipped)
 	case FormatTable:
-		return renderScanTable(w, allEntries, displayEntries, filterActive)
+		return renderScanTable(w, allEntries, displayEntries, filterActive, opts.TransitiveSkipped)
 	case FormatJSON:
-		return renderScanJSON(w, allEntries, displayEntries, filterActive, bootstrap)
+		return renderScanJSON(w, allEntries, displayEntries, filterActive, bootstrap, opts.TransitiveSkipped)
 	case FormatCSV:
 		return renderScanCSV(w, displayEntries)
 	default:
@@ -243,12 +244,12 @@ func formatRelation(e *domainaudit.AuditEntry) string {
 // The two sections are separated by markers for machine extraction.
 // allEntries is used for summary counts; displayEntries for the table rows and detailed boxes.
 // filterActive indicates whether --show-only was explicitly provided.
-func renderScanDetailed(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool) error {
+func renderScanDetailed(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool, skipped *scanapp.TransitiveSkipped) error {
 	// Summary table section
 	if _, err := fmt.Fprintln(w, MarkerSummaryTableBegin); err != nil {
 		return fmt.Errorf("failed to write marker: %w", err)
 	}
-	if err := renderScanTable(w, allEntries, displayEntries, filterActive); err != nil {
+	if err := renderScanTable(w, allEntries, displayEntries, filterActive, skipped); err != nil {
 		return fmt.Errorf("failed to write summary table: %w", err)
 	}
 
@@ -319,7 +320,7 @@ func formatTableVerdictCell(v domainaudit.Verdict) string {
 // allEntries is used for summary counts; displayEntries for the table rows.
 // filterActive indicates whether --show-only was explicitly provided.
 // Conditional columns: SOURCE (when multiple sources), RELATION (when relation info present).
-func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool) error {
+func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool, skipped *scanapp.TransitiveSkipped) error {
 	showSource := hasMultipleSources(displayEntries)
 	showRelation := hasRelationInfo(displayEntries)
 
@@ -386,7 +387,7 @@ func renderScanTable(w io.Writer, allEntries, displayEntries []domainaudit.Audit
 		return fmt.Errorf("failed to flush table output: %w", err)
 	}
 	// Summary box (always based on all entries)
-	if err := renderSummaryBox(w, allEntries, len(displayEntries), filterActive); err != nil {
+	if err := renderSummaryBox(w, allEntries, len(displayEntries), filterActive, skipped); err != nil {
 		return fmt.Errorf("failed to write summary box: %w", err)
 	}
 	return nil
@@ -437,18 +438,59 @@ func appendTabbedRow(dst []byte, cells []string) []byte {
 
 // renderSummaryBox renders the summary line in a left-border box.
 // When isFiltered is true, appends "showing X of Y" to indicate filtered output.
-func renderSummaryBox(w io.Writer, allEntries []domainaudit.AuditEntry, shownCount int, isFiltered bool) error {
+func renderSummaryBox(w io.Writer, allEntries []domainaudit.AuditEntry, shownCount int, isFiltered bool, skipped *scanapp.TransitiveSkipped) error {
 	s := computeSummary(allEntries)
 	summaryLine := fmt.Sprintf("%d dependencies | ✅ %d ok | ⚠️ %d caution | 🔴 %d replace | 🔍 %d review",
 		s.Total, s.OK, s.Caution, s.Replace, s.Review)
 	if isFiltered {
 		summaryLine += fmt.Sprintf(" | showing %d of %d", shownCount, s.Total)
 	}
+	if skipped != nil {
+		summaryLine += " | " + formatTransitiveSkipped(skipped)
+	}
 	bar := buildBar("── ", "Summary ", defaultBarWidth)
 	if _, err := fmt.Fprintf(w, "\n%s\n│ %s\n└%s\n", bar, summaryLine, strings.Repeat("─", defaultBarWidth-1)); err != nil {
 		return fmt.Errorf("failed to write summary box: %w", err)
 	}
 	return nil
+}
+
+// maxSkippedViaShown caps how many parent names the human-readable hint lists.
+const maxSkippedViaShown = 3
+
+// formatTransitiveSkipped renders the "N transitive not evaluated (...)" hint
+// used in the summary box.
+func formatTransitiveSkipped(s *scanapp.TransitiveSkipped) string {
+	return fmt.Sprintf("%d transitive not evaluated (%suse --show-transitive)", s.Count, formatSkippedVia(s))
+}
+
+// formatSkippedVia renders "via a 7, b 5, +2 more; " or "" when no parent is known.
+func formatSkippedVia(s *scanapp.TransitiveSkipped) string {
+	if len(s.Via) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, maxSkippedViaShown+1)
+	for _, v := range s.TopVia(maxSkippedViaShown) {
+		parts = append(parts, fmt.Sprintf("%s %d", v.Name, v.Count))
+	}
+	if more := len(s.Via) - len(parts); more > 0 {
+		parts = append(parts, fmt.Sprintf("+%d more", more))
+	}
+	return "via " + strings.Join(parts, ", ") + "; "
+}
+
+// writeTransitiveSkippedNotice prints a one-line stderr notice so CI logs show
+// that transitive dependencies were not evaluated. It writes nothing when s is nil.
+// The write is best-effort: a failed stderr write must not fail the scan.
+func writeTransitiveSkippedNotice(w io.Writer, s *scanapp.TransitiveSkipped) {
+	if s == nil {
+		return
+	}
+	noun := "dependencies"
+	if s.Count == 1 {
+		noun = "dependency"
+	}
+	_, _ = fmt.Fprintf(w, "scan: %d transitive %s not evaluated (%suse --show-transitive to evaluate them)\n", s.Count, noun, formatSkippedVia(s))
 }
 
 // buildIntegrityDisplay returns the BUILD column text for table output.
@@ -643,6 +685,15 @@ type enrichedJSONOutput struct {
 	Filtered      bool                `json:"filtered,omitempty"`
 	Shown         int                 `json:"shown"`
 	RDAPBootstrap *rdapBootstrapJSON  `json:"rdap_bootstrap,omitempty"`
+	// TransitiveSkipped is omitted when nothing was skipped (no transitive
+	// dependencies, or --show-transitive was set).
+	TransitiveSkipped *transitiveSkippedJSON `json:"transitive_skipped,omitempty"`
+}
+
+// transitiveSkippedJSON reports transitive dependencies dropped before evaluation.
+type transitiveSkippedJSON struct {
+	Count int            `json:"count"`
+	Via   map[string]int `json:"via"`
 }
 
 // rdapBootstrapJSON reports the IANA RDAP service list --maintainer-domain used.
@@ -654,13 +705,20 @@ type rdapBootstrapJSON struct {
 // renderScanJSON renders the JSON output format.
 // filterActive indicates whether --show-only was explicitly provided.
 // bootstrap, when non-nil, is written as rdap_bootstrap.
-func renderScanJSON(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool, bootstrap *domain.RDAPBootstrapInfo) error {
+func renderScanJSON(w io.Writer, allEntries, displayEntries []domainaudit.AuditEntry, filterActive bool, bootstrap *domain.RDAPBootstrapInfo, skipped *scanapp.TransitiveSkipped) error {
 	out := enrichedJSONOutput{
 		Summary: computeSummary(allEntries),
 		Entries: make([]enrichedJSONEntry, 0, len(displayEntries)),
 	}
 	if bootstrap != nil {
 		out.RDAPBootstrap = &rdapBootstrapJSON{Source: bootstrap.Source, Publication: bootstrap.Publication}
+	}
+	if skipped != nil {
+		via := skipped.Via
+		if via == nil {
+			via = map[string]int{}
+		}
+		out.TransitiveSkipped = &transitiveSkippedJSON{Count: skipped.Count, Via: via}
 	}
 	if filterActive {
 		out.Filtered = true
