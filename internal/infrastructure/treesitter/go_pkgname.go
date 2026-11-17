@@ -215,7 +215,11 @@ func (x *goDirIndex) declared(dir, pkg string) (map[string]bool, bool) {
 
 func (x *goDirIndex) scan(dir string) map[string]map[string]bool {
 	unusable := func(reason, file string, err error) map[string]map[string]bool {
-		slog.Debug("go_dir_index_unusable", "dir", dir, "file", file, "reason", reason, "error", err)
+		args := []any{"dir", dir, "file", file, "reason", reason}
+		if err != nil {
+			args = append(args, "error", err)
+		}
+		slog.Debug("go_dir_index_unusable", args...)
 		return nil
 	}
 	entries, err := os.ReadDir(dir)
