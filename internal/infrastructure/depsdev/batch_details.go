@@ -183,7 +183,8 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 // - purlsWithoutRepo: list of PURLs for which no repo URL could be determined
 //
 // If ctx is cancelled mid-run, PURLs that were never dispatched appear in neither output,
-// and PURLs in flight at cancel time may land in purlsWithoutRepo with a wrong value.
+// and PURLs in flight at cancel time may be listed in purlsWithoutRepo, or under a guessed
+// URL in repoURLMap (golang), even though a repo URL exists.
 // Callers must discard both outputs when ctx.Err() != nil.
 //
 // DDD Layer: Infrastructure (parallel processing)
