@@ -96,6 +96,10 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 
 	// Step 4: Extract repository URLs and group by unique repos (keyed by original PURLs)
 	repoURLMap, purlsWithoutRepo := c.resolveRepoURLsBatch(ctx, packageInfoMap, releaseInfoMap)
+	if err := ctx.Err(); err != nil {
+		// Undispatched PURLs are missing from both outputs; fail instead of reporting them as "not found".
+		return nil, fmt.Errorf("resolve repository URLs: %w", err)
+	}
 	if len(purlsWithoutRepo) > 0 {
 		slog.Info("PURLsWithoutRepoURL", "count", len(purlsWithoutRepo))
 	}

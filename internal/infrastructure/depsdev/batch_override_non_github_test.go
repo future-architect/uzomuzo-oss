@@ -2,6 +2,7 @@ package depsdev
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -221,5 +222,22 @@ func TestResolveRepoURLsBatch_StopsDispatchAfterCancel(t *testing.T) {
 	}
 	if started >= total {
 		t.Errorf("resolved %d of %d PURLs after ctx was cancelled; want dispatch to stop early", started, total)
+	}
+}
+
+// TestGetDetailsForPURLs_CancelledContextReturnsError ensures a cancelled ctx surfaces
+// as an error rather than as per-PURL "not found" results (issue #450).
+func TestGetDetailsForPURLs_CancelledContextReturnsError(t *testing.T) {
+	c := NewDepsDevClient(&config.DepsDevConfig{BaseURL: "https://deps.example", Timeout: time.Second})
+	c.client = httpclient.NewClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("unexpected request: %s", r.URL.String())
+	})}, httpclient.RetryConfig{})
+	c.goproxy = nil
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := c.GetDetailsForPURLs(ctx, []string{"pkg:golang/github.com/acme/demo"})
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err = %v, want context.Canceled", err)
 	}
 }
