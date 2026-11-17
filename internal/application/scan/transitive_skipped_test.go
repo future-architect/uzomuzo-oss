@@ -155,7 +155,11 @@ func TestRunFromParser_SkippedTransitiveReported(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.TransitiveSkipped == nil || res.TransitiveSkipped.Count != 1 || res.TransitiveSkipped.Via["express"] != 1 {
-		t.Errorf("TransitiveSkipped = %+v, want count 1 via express", res.TransitiveSkipped)
+	if len(res.Entries) != 0 {
+		t.Errorf("entries = %d, want 0", len(res.Entries))
+	}
+	want := &TransitiveSkipped{Count: 1, Via: map[string]int{"express": 1}}
+	if !reflect.DeepEqual(res.TransitiveSkipped, want) {
+		t.Errorf("TransitiveSkipped = %+v, want %+v", res.TransitiveSkipped, want)
 	}
 }

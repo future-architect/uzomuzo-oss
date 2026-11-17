@@ -53,7 +53,7 @@ type ViaCount struct {
 	Count int
 }
 
-// TopVia returns up to n (n >= 0) parents ordered by skipped count (descending), then
+// TopVia returns up to n parents (it panics if n < 0) ordered by skipped count (descending), then
 // name (ascending) so the output is deterministic.
 func (s *TransitiveSkipped) TopVia(n int) []ViaCount {
 	out := make([]ViaCount, 0, len(s.Via))

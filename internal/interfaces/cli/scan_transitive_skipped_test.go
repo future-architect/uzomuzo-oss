@@ -154,33 +154,6 @@ func (skippedFlowParser) Parse(context.Context, []byte) ([]depparser.ParsedDepen
 	}, nil
 }
 
-// captureRunOutput runs fn with os.Stdout and os.Stderr redirected to files.
-func captureRunOutput(t *testing.T, fn func() error) (stdout, stderr string, err error) {
-	t.Helper()
-	outF, e := os.CreateTemp(t.TempDir(), "stdout")
-	if e != nil {
-		t.Fatal(e)
-	}
-	errF, e := os.CreateTemp(t.TempDir(), "stderr")
-	if e != nil {
-		t.Fatal(e)
-	}
-	prevOut, prevErr := os.Stdout, os.Stderr
-	os.Stdout, os.Stderr = outF, errF
-	t.Cleanup(func() { os.Stdout, os.Stderr = prevOut, prevErr; _ = outF.Close(); _ = errF.Close() })
-	err = fn()
-	os.Stdout, os.Stderr = prevOut, prevErr
-	o, e := os.ReadFile(outF.Name())
-	if e != nil {
-		t.Fatal(e)
-	}
-	r, e := os.ReadFile(errF.Name())
-	if e != nil {
-		t.Fatal(e)
-	}
-	return string(o), string(r), err
-}
-
 // Drives the real runScanSBOM path so the wiring from the scan result to the
 // renderers and to stderr is covered end to end.
 func TestRunScanSBOM_TransitiveSkippedReachesOutput(t *testing.T) {
@@ -207,14 +180,15 @@ func TestRunScanSBOM_TransitiveSkippedReachesOutput(t *testing.T) {
 		{"json default", FormatJSON, false,
 			[]string{`"transitive_skipped": {`, `"count": 1`, `"express": 1`},
 			"scan: 1 transitive dependency not evaluated (via express 1; use --show-transitive to evaluate them)\n"},
-		{"table with --show-transitive", FormatTable, true, nil, ""},
-		{"json with --show-transitive", FormatJSON, true, nil, ""},
+		{"table with --show-transitive", FormatTable, true, []string{"2 dependencies |"}, ""},
+		{"json with --show-transitive", FormatJSON, true, []string{`"total": 2`}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			opts := ScanOptions{Format: tt.format, SBOMPath: sbom, ShowTransitive: tt.showTransitive}
-			stdout, stderr, err := captureRunOutput(t, func() error {
-				return runScanSBOM(context.Background(), svc, opts, parsers, scan.FailPolicy{})
+			var err error
+			stdout, stderr := captureStdoutStderr(t, func() {
+				err = runScanSBOM(context.Background(), svc, opts, parsers, scan.FailPolicy{})
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -224,7 +198,7 @@ func TestRunScanSBOM_TransitiveSkippedReachesOutput(t *testing.T) {
 					t.Errorf("stdout missing %q:\n%s", w, stdout)
 				}
 			}
-			if tt.wantStdout == nil && (strings.Contains(stdout, "transitive not evaluated") || strings.Contains(stdout, "transitive_skipped")) {
+			if tt.showTransitive && (strings.Contains(stdout, "transitive not evaluated") || strings.Contains(stdout, "transitive_skipped")) {
 				t.Errorf("unexpected hint on stdout:\n%s", stdout)
 			}
 			if got := skippedNoticeLine(stderr); got != tt.wantStderr {
