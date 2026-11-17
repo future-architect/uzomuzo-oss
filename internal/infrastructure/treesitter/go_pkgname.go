@@ -39,7 +39,8 @@ type goFileNames struct {
 	// operands are names used as X in X.Y or in a qualified type X.T.
 	operands map[string]bool
 	// others are names seen anywhere else (declarations, plain uses, fields,
-	// labels, aliases, the package clause).
+	// labels, aliases). The package clause is left out: it names the
+	// importing package, so package v1 does not hide the v1 of an import.
 	others map[string]bool
 }
 
@@ -50,7 +51,9 @@ func collectGoNames(query *sitter.Query, root *sitter.Node, src []byte, cursor *
 		return f
 	}
 	names := query.CaptureNames()
-	selectorParts := make(map[uint]bool)
+	// notOthers holds the start bytes of identifiers that are not added to
+	// others: the parts of X.Y and the package clause.
+	notOthers := make(map[uint]bool)
 	type ident struct {
 		start uint
 		text  string
@@ -70,16 +73,17 @@ func collectGoNames(query *sitter.Query, root *sitter.Node, src []byte, cursor *
 			node := c.Node
 			switch names[c.Index] {
 			case "operand":
-				selectorParts[node.StartByte()] = true
+				notOthers[node.StartByte()] = true
 				f.operands[node.Utf8Text(src)] = true
 			case "field":
 				// Only the field of a selector whose operand is a plain identifier is
 				// excluded. The c of a.b.c stays in others, which can only keep a
 				// guess, never hand out a wrong name.
-				selectorParts[node.StartByte()] = true
+				notOthers[node.StartByte()] = true
 			case "ident":
 				idents = append(idents, ident{node.StartByte(), node.Utf8Text(src)})
 			case "package":
+				notOthers[node.StartByte()] = true
 				f.pkg = node.Utf8Text(src)
 			case "import":
 				f.imports = append(f.imports, goImportFromSpec(&node, src))
@@ -87,7 +91,7 @@ func collectGoNames(query *sitter.Query, root *sitter.Node, src []byte, cursor *
 		}
 	}
 	for _, id := range idents {
-		if !selectorParts[id.start] {
+		if !notOthers[id.start] {
 			f.others[id.text] = true
 		}
 	}
@@ -343,12 +347,22 @@ func inferGoNames(
 
 // hasUnaliasedGoDependency reports whether the file has an import without a
 // name that matches a dependency. Imports are only allowed at the top of a Go
-// file, so the top-level import declarations are enough.
+// file, so the walk stops at the first declaration after them. A TreeCursor
+// is used because NamedChild(i) counts from the first child on every call.
 func hasUnaliasedGoDependency(root *sitter.Node, src []byte, importToPURL map[string][]string) bool {
-	for i := range root.NamedChildCount() {
-		decl := root.NamedChild(i)
-		if decl == nil || decl.Kind() != "import_declaration" {
+	walk := root.Walk()
+	defer walk.Close()
+	for ok := walk.GotoFirstChild(); ok; ok = walk.GotoNextSibling() {
+		decl := walk.Node()
+		if !decl.IsNamed() {
 			continue
+		}
+		switch decl.Kind() {
+		case "package_clause", "comment":
+			continue
+		case "import_declaration":
+		default:
+			return false
 		}
 		for j := range decl.NamedChildCount() {
 			child := decl.NamedChild(j)

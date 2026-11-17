@@ -140,8 +140,9 @@ type Analyzer struct {
 	configs map[langID]*langConfig
 }
 
-// compileQueries compiles import and call queries for a langConfig.
-// Call this after setting importQuery and callQuery.
+// compileQueries compiles the import and call queries for a langConfig, and
+// the names query when namesQuery is set (Go only). Call this after setting
+// importQuery, callQuery and namesQuery.
 //
 // Argument order in tree_sitter.NewQuery is (language, source string) — the
 // inverse of smacker/go-tree-sitter, which took ([]byte, language). Source is
@@ -174,9 +175,10 @@ func compileQueries(cfg *langConfig) {
 // tree-sitter Go bindings do not use runtime finalizers due to known CGO
 // interactions, so explicit cleanup is required. Multiple calls are safe.
 //
-// Close is idempotent: a nil compiledImport/compiledCall (compilation failure,
-// or a language never used) is treated as already-released, and calling Close
-// twice is safe because each compiled query is set to nil after release.
+// Close is idempotent: a nil compiledImport, compiledCall or compiledNames
+// (compilation failure, a language never used, or no names query) is treated
+// as already-released, and calling Close twice is safe because each compiled
+// query is set to nil after release.
 //
 // Close must NOT be called concurrently with AnalyzeCoupling; the Analyzer
 // holds no internal mutex. After Close returns, subsequent AnalyzeCoupling

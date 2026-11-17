@@ -198,6 +198,46 @@ func TestLocal(t *testing.T) {
 			},
 			want: map[string]wantCoupling{purlJSONIter: {1, []string{"Marshal"}}},
 		},
+		{
+			// metav1 is explained by its alias, so v1 is the only name left.
+			name: "aliased import beside an unaliased one",
+			files: map[string]string{"main.go": `package main
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/api/core/v1"
+)
+
+var _ = v1.Pod{ObjectMeta: metav1.ObjectMeta{}}
+`},
+			want: map[string]wantCoupling{purlK8sAPI: {1, []string{"Pod"}}},
+		},
+		{
+			name: "blank imports beside the import to name",
+			files: map[string]string{"main.go": `package main
+
+import (
+	_ "embed"
+	_ "net/http/pprof"
+	"github.com/json-iterator/go"
+)
+
+func main() { _, _ = jsoniter.Marshal(nil) }
+`},
+			want: map[string]wantCoupling{purlJSONIter: {1, []string{"Marshal"}}},
+		},
+		{
+			// The package clause names the importing package, not anything the
+			// file uses, so package v1 does not hide the import's v1.
+			name: "package clause with the import's real name",
+			files: map[string]string{"pod.go": `package v1
+
+import "k8s.io/api/core/v1"
+
+var _ = v1.Pod{}
+`},
+			want: map[string]wantCoupling{purlK8sAPI: {1, []string{"Pod"}}},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -223,6 +263,62 @@ func codec(x any) { _, _ = jsoniter.Marshal(x) }
 		sbom map[string][]string
 		want map[string]wantCoupling
 	}{
+		{
+			name: "real name is a struct field in a sibling file",
+			files: map[string]string{
+				"config.go": "package main\n\ntype config struct{ v1 int }\n",
+				"main.go":   "package main\n\nimport \"k8s.io/api/core/v1\"\n\nvar _ = v1.Pod{}\n",
+			},
+			want: map[string]wantCoupling{purlK8sAPI: {0, nil}},
+		},
+		{
+			name: "real name is a label in a sibling file",
+			files: map[string]string{
+				"loop.go": "package main\n\nfunc loop() {\nv1:\n\tfor {\n\t\tbreak v1\n\t}\n}\n",
+				"main.go": "package main\n\nimport \"k8s.io/api/core/v1\"\n\nvar _ = v1.Pod{}\n",
+			},
+			want: map[string]wantCoupling{purlK8sAPI: {0, nil}},
+		},
+		{
+			name: "real name is a local type in a sibling file",
+			files: map[string]string{
+				"kind.go": "package main\n\nfunc kind() {\n\ttype v1 int\n\tvar _ v1\n}\n",
+				"main.go": "package main\n\nimport \"k8s.io/api/core/v1\"\n\nvar _ = v1.Pod{}\n",
+			},
+			want: map[string]wantCoupling{purlK8sAPI: {0, nil}},
+		},
+		{
+			// Only the sibling's aliased call is counted.
+			name: "real name is an import alias in a sibling file",
+			files: map[string]string{
+				"alias.go": "package main\n\nimport v1 \"k8s.io/api/core/v1\"\n\nvar _ = v1.Pod{}\n",
+				"main.go":  "package main\n\nimport \"k8s.io/api/core/v1\"\n\nvar _ = v1.Pod{}\n",
+			},
+			want: map[string]wantCoupling{purlK8sAPI: {1, []string{"Pod"}}},
+		},
+		{
+			// k8s.io/api/core is guessed as core, the alias of the other import.
+			// Its name corev1 is illustrative; with core also a field elsewhere,
+			// the shared name stops the inference instead of renaming it. As on
+			// main, core.Do is then credited to both imports named core.
+			name: "alias equal to another import's guess",
+			files: map[string]string{
+				"config.go": "package main\n\ntype config struct{ core int }\n",
+				"main.go": `package main
+
+import (
+	core "github.com/foo/bar"
+	"k8s.io/api/core"
+)
+
+func main() {
+	core.Do()
+	_ = corev1.Pod{}
+}
+`,
+			},
+			want: map[string]wantCoupling{purlBar: {1, []string{"Do"}}, purlK8sAPI: {1, []string{"Do"}}},
+		},
 		{
 			// error.Error is a method expression on the predeclared error type.
 			// bar is guessed correctly but also declared as a local in another
@@ -294,7 +390,7 @@ func main() {
 		{
 			// k8s.io/api is not in the SBOM here, but its import still takes part,
 			// so two imports remain unexplained.
-			name: "import outside the SBOM still counts as unexplained",
+			name: "two unexplained imports, one of them outside the SBOM",
 			files: map[string]string{"main.go": `package main
 
 import (
@@ -434,7 +530,7 @@ func TestAnalyzer_GoPackageNameSymlinkFallsBack(t *testing.T) {
 	}
 	dir := t.TempDir()
 	if err := os.Symlink(outside, filepath.Join(dir, "config.go")); err != nil {
-		t.Skipf("symlinks not supported: %v", err)
+		t.Fatalf("create symlink: %v", err)
 	}
 	files := map[string]string{"codec.go": `package main
 
