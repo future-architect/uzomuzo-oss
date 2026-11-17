@@ -33,13 +33,13 @@ func TestResolveRepoURLsBatch_Cancellation(t *testing.T) {
 		name        string
 		keyCount    int
 		cancel      string // "", "before", "midrun"
-		repeat      int    // the pre-cancelled case races a select, so run it many times
+		repeat      int    // without the ctx check the pre-cancelled case passes by luck about half the time per key, so repeat it
 		wantStarted int32
 		wantRepoLen int
 	}{
 		{name: "cancelled before call resolves nothing", keyCount: 30, cancel: "before", repeat: 50, wantStarted: 0, wantRepoLen: 0},
 		{name: "cancelled mid-run resolves only in-flight keys", keyCount: 30, cancel: "midrun", repeat: 1, wantStarted: workers, wantRepoLen: workers},
-		{name: "not cancelled resolves every key in sorted order", keyCount: 8, cancel: "", repeat: 1, wantStarted: 8, wantRepoLen: 8},
+		{name: "not cancelled resolves every key in sorted order", keyCount: 20, cancel: "", repeat: 1, wantStarted: 20, wantRepoLen: 20},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,7 +70,8 @@ func runResolveCancelCase(t *testing.T, keyCount int, cancelMode string, workers
 	pkgs := make(map[string]*PackageResponse, keyCount)
 	rel := make(map[string]ReleaseInfo, keyCount)
 	for i := 0; i < keyCount; i++ {
-		p := fmt.Sprintf("pkg:golang/github.com/acme/demo@v%02d", i)
+		// Insert in descending order with more than 8 keys so map iteration cannot mimic sorted order.
+		p := fmt.Sprintf("pkg:golang/github.com/acme/demo@v%02d", keyCount-1-i)
 		pkgs[p] = nil
 		rel[p] = ReleaseInfo{replacedDefault: Version{PURL: p + "-rc1"}}
 	}
