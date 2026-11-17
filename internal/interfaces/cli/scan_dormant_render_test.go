@@ -30,7 +30,7 @@ func TestDormantReleaseScanOutputs(t *testing.T) {
 	entries := []audit.AuditEntry{marked}
 
 	var buf bytes.Buffer
-	if err := renderScanJSON(&buf, entries, entries, false, nil); err != nil {
+	if err := renderScanJSON(&buf, entries, entries, false, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	var out struct {
@@ -81,7 +81,7 @@ func TestDormantReleaseScanOutputs(t *testing.T) {
 	}
 
 	buf.Reset()
-	if err := renderScanTable(&buf, entries, entries, false); err != nil {
+	if err := renderScanTable(&buf, entries, entries, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "Stalled ⚠ 400d silence") {
@@ -95,7 +95,7 @@ func TestDormantReleaseScanOutputs(t *testing.T) {
 	flagged.MaliciousState = &analysis.MaliciousState{Status: analysis.MaliciousStatusFlagged, AdvisoryID: "MAL-1", Scope: analysis.MaliciousScopeVersion}
 	both.Analysis = &flagged
 	buf.Reset()
-	if err := renderScanTable(&buf, []audit.AuditEntry{both}, []audit.AuditEntry{both}, false); err != nil {
+	if err := renderScanTable(&buf, []audit.AuditEntry{both}, []audit.AuditEntry{both}, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	if table := buf.String(); !strings.Contains(table, "Stalled ☠ MAL-1") || strings.Contains(table, "silence") {

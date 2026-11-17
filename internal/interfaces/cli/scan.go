@@ -52,7 +52,8 @@ type ScanOptions struct {
 	ShowTransitive      bool   // --show-transitive: include transitive dependencies in output
 	MaintainerDomain    bool   // --maintainer-domain: check npm maintainer e-mail domains
 
-	// renderOptions is filled by RunScan and the runScan* helpers, not by callers.
+	// renderOptions is filled by RunScan, the runScan* helpers and
+	// finalizeScanOutput (TransitiveSkipped), not by callers.
 	renderOptions scanRenderOptions
 }
 
@@ -331,6 +332,7 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 	if err != nil {
 		return fmt.Errorf("invalid --show-only filter: %w", err)
 	}
+	opts.renderOptions.TransitiveSkipped = result.TransitiveSkipped
 	displayEntries := filterEntriesByVerdict(result.Entries, showOnly)
 	filterActive := showOnly != nil
 
@@ -341,6 +343,8 @@ func finalizeScanOutput(svc *scanapp.Service, result *scanapp.Result, opts ScanO
 	if err := renderScanOutput(os.Stdout, result.Entries, displayEntries, format, filterActive, bootstrap, opts.renderOptions); err != nil {
 		return fmt.Errorf("failed to render output: %w", err)
 	}
+
+	writeTransitiveSkippedNotice(os.Stderr, result.TransitiveSkipped)
 
 	// Print GitHub API rate limit summary
 	if as := svc.AnalysisService(); as != nil {
