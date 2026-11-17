@@ -3,6 +3,7 @@
 package treesitter
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -162,11 +163,28 @@ func goUnexplained(f goFileNames, declared map[string]bool) (imports, names []st
 		explained[name] = true
 	}
 	for name := range used {
-		if !explained[name] {
+		if !explained[name] && !goPredeclared[name] {
 			names = append(names, name)
 		}
 	}
 	return imports, names, true
+}
+
+// goPredeclared holds Go's predeclared identifiers. They are never handed to
+// an import: error.Error is a valid method expression, and the error left
+// over would otherwise rename an import whose guess was right. They still
+// count as used, so an import guessed as, say, max keeps that guess.
+var goPredeclared = map[string]bool{
+	"any": true, "bool": true, "byte": true, "comparable": true,
+	"complex64": true, "complex128": true, "error": true, "float32": true,
+	"float64": true, "int": true, "int8": true, "int16": true, "int32": true,
+	"int64": true, "rune": true, "string": true, "uint": true, "uint8": true,
+	"uint16": true, "uint32": true, "uint64": true, "uintptr": true,
+	"true": true, "false": true, "iota": true, "nil": true,
+	"append": true, "cap": true, "clear": true, "close": true, "complex": true,
+	"copy": true, "delete": true, "imag": true, "len": true, "make": true,
+	"max": true, "min": true, "new": true, "panic": true, "print": true,
+	"println": true, "real": true, "recover": true,
 }
 
 // goDirIndex collects, per directory and package clause, the names that the
@@ -176,14 +194,19 @@ func goUnexplained(f goFileNames, declared map[string]bool) (imports, names []st
 // The scan parses every .go file of the directory again, including the one
 // analyzeFile already parsed. Reusing those trees would tie the result to the
 // order in which workers reach the files of a directory.
+//
+// ctx is the AnalyzeCoupling call's context. The index lives only for that
+// call, so it is kept here rather than threaded through analyzeFile, which
+// has no context parameter of its own.
 type goDirIndex struct {
+	ctx  context.Context
 	cfg  *langConfig
 	mu   sync.Mutex
 	dirs map[string]*goDirEntry
 }
 
-func newGoDirIndex(cfg *langConfig) *goDirIndex {
-	return &goDirIndex{cfg: cfg, dirs: make(map[string]*goDirEntry)}
+func newGoDirIndex(ctx context.Context, cfg *langConfig) *goDirIndex {
+	return &goDirIndex{ctx: ctx, cfg: cfg, dirs: make(map[string]*goDirEntry)}
 }
 
 type goDirEntry struct {
@@ -237,6 +260,11 @@ func (x *goDirIndex) scan(dir string) map[string]map[string]bool {
 	byPkg := make(map[string]map[string]bool)
 	for _, entry := range entries {
 		file := entry.Name()
+		// A canceled call discards the result anyway; stop reading the
+		// remaining files instead of keeping other workers waiting on once.
+		if err := x.ctx.Err(); err != nil {
+			return unusable("canceled", file, err)
+		}
 		if entry.IsDir() || filepath.Ext(file) != ".go" {
 			continue
 		}

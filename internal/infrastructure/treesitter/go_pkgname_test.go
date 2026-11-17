@@ -224,6 +224,26 @@ func codec(x any) { _, _ = jsoniter.Marshal(x) }
 		want map[string]wantCoupling
 	}{
 		{
+			// error.Error is a method expression on the predeclared error type.
+			// bar is guessed correctly but also declared as a local in another
+			// file, so error must not be the name that bar gets.
+			name: "predeclared error used as an operand",
+			files: map[string]string{
+				"other.go": "package main\n\nfunc other() { bar := 1; _ = bar }\n",
+				"main.go": `package main
+
+import "github.com/foo/bar"
+
+func main() {
+	bar.Do()
+	bar.Do()
+	_ = error.Error
+}
+`,
+			},
+			want: map[string]wantCoupling{purlBar: {2, []string{"Do"}}},
+		},
+		{
 			name: "two unexplained imports in one file",
 			files: map[string]string{"main.go": `package main
 
@@ -404,6 +424,26 @@ func codec(x any) {
 }
 `}
 	assertGoCoupling(t, analyzeGoProjectIn(t, dir, files), map[string]wantCoupling{purlJSONIter: {0, nil}})
+}
+
+// TestGoDirIndex_ScanStopsWhenCanceled checks that a canceled call gives up
+// on the directory instead of reading its files.
+func TestGoDirIndex_ScanStopsWhenCanceled(t *testing.T) {
+	dir := t.TempDir()
+	writeCorpusFile(t, filepath.Join(dir, "main.go"), "package main\n\nvar settings = 1\n")
+	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
+	cfg := analyzer.configs[langGo]
+	cfg.ensureCompiled()
+
+	if got := newGoDirIndex(context.Background(), cfg).scan(dir); !got["main"]["settings"] {
+		t.Fatalf("scan with a live context = %v, want main.settings", got)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := newGoDirIndex(ctx, cfg).scan(dir); got != nil {
+		t.Errorf("scan with a canceled context = %v, want nil", got)
+	}
 }
 
 func analyzeGoProject(t *testing.T, files map[string]string) map[string]wantCoupling {

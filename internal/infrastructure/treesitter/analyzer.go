@@ -263,7 +263,7 @@ func (a *Analyzer) AnalyzeCoupling(
 	importPaths map[string][]string,
 ) (map[string]*domaindiet.CouplingAnalysis, error) {
 	importToPURL := buildImportToPURL(importPaths)
-	goDirs := newGoDirIndex(a.configs[langGo])
+	goDirs := newGoDirIndex(ctx, a.configs[langGo])
 
 	type fileJob struct{ path, relPath string }
 	var jobs []fileJob
