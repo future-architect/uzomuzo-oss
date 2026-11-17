@@ -1,7 +1,7 @@
 # 0023. The registry's own current release bounds stable-version selection
 
 Date: 2026-09-01
-Status: Accepted — two cargo premises corrected, see [ADR-0024](0024-cargo-yank-from-depsdev.md)
+Status: Accepted — two cargo premises corrected, see [ADR-0024](0024-cargo-yank-from-depsdev.md); rule 3 fallback changed, see [ADR-0035](0035-prerelease-default-stable-selection.md)
 
 > **Corrections.** Two statements below about cargo were later found wrong. Both are
 > marked inline where they appear. **The decision this ADR records — bounding PyPI

@@ -293,13 +293,13 @@ func (c *DepsDevClient) listFallbackVersions(ctx context.Context, parsed *common
 		}
 		// Parse semver once and derive both stability (prerelease == "") and
 		// the sort key from a single NewVersion call. Non-semver strings fall
-		// through to the keyword heuristic in commonpurl.IsStableVersion.
+		// through to the PURL-type-aware heuristic in commonpurl.IsStableVersionFor.
 		c := candidate{version: ver}
 		if sv, perr := semver.NewVersion(ver); perr == nil {
 			c.semver = sv
 			c.isStable = sv.Prerelease() == ""
 		} else {
-			c.isStable = commonpurl.IsStableVersion(ver)
+			c.isStable = commonpurl.IsStableVersionFor(parsed.Ecosystem(), ver)
 		}
 		if v.PublishedAt != "" {
 			if t, terr := time.Parse(time.RFC3339, v.PublishedAt); terr == nil {

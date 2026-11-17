@@ -2,6 +2,7 @@ package depsdev
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -29,6 +30,45 @@ func FuzzConvertRepoURLToProjectKey(f *testing.F) {
 		got := convertRepoURLToProjectKey(in)
 		if got != "" && !projectKeyShape.MatchString(got) {
 			t.Fatalf("convertRepoURLToProjectKey(%q) = %q, not a github.com/<owner>/<repo> key", in, got)
+		}
+	})
+}
+
+// FuzzPickStableDevAndMax checks version parsing safety and Stable's input-order
+// independence, including equal publication dates for Maven.
+func FuzzPickStableDevAndMax(f *testing.F) {
+	for _, seed := range [][3]string{
+		{"maven", "3.20.0.Final", "r09"},
+		{"maven", "1.0.0.Final", "1.0.0-jre"},
+		{"npm", "1.0.0.0", "0.9.0"},
+		{"pypi", "2.0b3", "1.9.0"},
+		{"golang", "v1.1.0-0.20260327151000-87f8819acf6d", "v1.0.0"},
+		{"", "", "-"},
+	} {
+		f.Add(seed[0], seed[1], seed[2])
+	}
+	f.Fuzz(func(t *testing.T, system, first, second string) {
+		secondDate := "2027-01-01T00:00:00Z"
+		if strings.EqualFold(system, "maven") {
+			secondDate = "2026-01-01T00:00:00Z"
+		}
+		versions := []Version{
+			v("2.0.0-rc1", "2025-01-01T00:00:00Z", true),
+			v(first, "2026-01-01T00:00:00Z", false),
+			v(second, secondDate, false),
+		}
+		for i := range versions {
+			versions[i].VersionKey.System = system
+		}
+		for _, hasDefault := range []bool{true, false} {
+			versions[0].IsDefault = hasDefault
+			forward, _, _ := pickStableDevAndMax(versions, "")
+			versions[0], versions[2] = versions[2], versions[0]
+			reverse, _, _ := pickStableDevAndMax(versions, "")
+			if forward.VersionKey.Version != reverse.VersionKey.Version {
+				t.Fatalf("Stable changed with input order (default=%v): %q vs %q", hasDefault, forward.VersionKey.Version, reverse.VersionKey.Version)
+			}
+			versions[0], versions[2] = versions[2], versions[0]
 		}
 	})
 }
