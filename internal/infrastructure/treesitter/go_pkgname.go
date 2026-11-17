@@ -3,6 +3,7 @@
 package treesitter
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,6 +72,9 @@ func collectGoNames(query *sitter.Query, root *sitter.Node, src []byte, cursor *
 				selectorParts[node.StartByte()] = true
 				f.operands[node.Utf8Text(src)] = true
 			case "field":
+				// Only the field of a selector whose operand is a plain identifier is
+				// excluded. The c of a.b.c stays in others, which can only keep a
+				// guess, never hand out a wrong name.
 				selectorParts[node.StartByte()] = true
 			case "ident":
 				idents = append(idents, ident{node.StartByte(), node.Utf8Text(src)})
@@ -168,22 +172,27 @@ func goUnexplained(f goFileNames, declared map[string]bool) (imports, names []st
 // goDirIndex collects, per directory and package clause, the names that the
 // package's files use outside an X.Y operand. It is built lazily, once per
 // directory, for the duration of one AnalyzeCoupling call.
+//
+// The scan parses every .go file of the directory again, including the one
+// analyzeFile already parsed. Reusing those trees would tie the result to the
+// order in which workers reach the files of a directory.
 type goDirIndex struct {
 	cfg  *langConfig
 	mu   sync.Mutex
 	dirs map[string]*goDirEntry
 }
 
-type goDirEntry struct {
-	once sync.Once
-	// others is nil when the directory cannot be used: a .go file that is not
-	// a regular file, is larger than largeFileBytes, cannot be read, or does
-	// not parse cleanly. Its declarations are then unknown.
-	others map[string]map[string]bool
-}
-
 func newGoDirIndex(cfg *langConfig) *goDirIndex {
 	return &goDirIndex{cfg: cfg, dirs: make(map[string]*goDirEntry)}
+}
+
+type goDirEntry struct {
+	once sync.Once
+	// others is nil when the directory cannot be used: it cannot be read, or a
+	// .go file in it is not a regular file, is larger than largeFileBytes,
+	// cannot be read, or does not parse cleanly. Its declarations are then
+	// unknown.
+	others map[string]map[string]bool
 }
 
 // declared returns the names used outside an X.Y operand by the files of
@@ -205,44 +214,52 @@ func (x *goDirIndex) declared(dir, pkg string) (map[string]bool, bool) {
 }
 
 func (x *goDirIndex) scan(dir string) map[string]map[string]bool {
+	unusable := func(reason, file string, err error) map[string]map[string]bool {
+		slog.Debug("go_dir_index_unusable", "dir", dir, "file", file, "reason", reason, "error", err)
+		return nil
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil
+		return unusable("read_dir", "", err)
 	}
 	parser := sitter.NewParser()
 	defer parser.Close()
 	if err := parser.SetLanguage(x.cfg.language); err != nil {
-		return nil
+		return unusable("set_language", "", err)
 	}
 	cursor := sitter.NewQueryCursor()
 	defer cursor.Close()
 
 	byPkg := make(map[string]map[string]bool)
 	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".go" {
+		file := entry.Name()
+		if entry.IsDir() || filepath.Ext(file) != ".go" {
 			continue
 		}
 		// A symlinked file is still analyzed by analyzeFile, but its target
 		// may lie outside --source; give up on the directory instead.
 		if !entry.Type().IsRegular() {
-			return nil
+			return unusable("not_regular_file", file, nil)
 		}
 		info, err := entry.Info()
-		if err != nil || info.Size() > largeFileBytes {
-			return nil
-		}
-		src, err := os.ReadFile(filepath.Join(dir, entry.Name()))
 		if err != nil {
-			return nil
+			return unusable("stat", file, err)
+		}
+		if info.Size() > largeFileBytes {
+			return unusable("large_file", file, nil)
+		}
+		src, err := os.ReadFile(filepath.Join(dir, file))
+		if err != nil {
+			return unusable("read_file", file, err)
 		}
 		tree := parser.Parse(src, nil)
 		if tree == nil {
-			return nil
+			return unusable("parse", file, nil)
 		}
 		root := tree.RootNode()
 		if root.HasError() {
 			tree.Close()
-			return nil
+			return unusable("syntax_error", file, nil)
 		}
 		f := collectGoNames(x.cfg.compiledNames, root, src, cursor)
 		tree.Close()
@@ -260,7 +277,6 @@ func (x *goDirIndex) scan(dir string) map[string]map[string]bool {
 // unaliased imports of one Go file, using the declarations of its whole
 // package directory.
 func inferGoNames(
-	cfg *langConfig,
 	root *sitter.Node,
 	src []byte,
 	path string,
@@ -273,7 +289,7 @@ func inferGoNames(
 	if root.HasError() || !hasUnaliasedGoDependency(root, src, importToPURL) {
 		return nil
 	}
-	f := collectGoNames(cfg.compiledNames, root, src, cursor)
+	f := collectGoNames(dirs.cfg.compiledNames, root, src, cursor)
 	// The package-wide names are a superset of this file's, so they can only
 	// shrink the unexplained names and grow the unexplained imports. When the
 	// file alone has no unexplained name, or two unexplained imports, the

@@ -29,6 +29,17 @@ var goPackageNamePaths = map[string][]string{
 	purlTestify:  {"github.com/stretchr/testify"},
 }
 
+// goPathsWithoutK8s is goPackageNamePaths with k8s.io/api left out of the SBOM.
+var goPathsWithoutK8s = func() map[string][]string {
+	m := make(map[string][]string, len(goPackageNamePaths))
+	for purl, paths := range goPackageNamePaths {
+		if purl != purlK8sAPI {
+			m[purl] = paths
+		}
+	}
+	return m
+}()
+
 type wantCoupling struct {
 	calls   int
 	symbols []string
@@ -208,7 +219,9 @@ func codec(x any) { _, _ = jsoniter.Marshal(x) }
 	tests := []struct {
 		name  string
 		files map[string]string
-		want  map[string]wantCoupling
+		// sbom replaces goPackageNamePaths when set.
+		sbom map[string][]string
+		want map[string]wantCoupling
 	}{
 		{
 			name: "two unexplained imports in one file",
@@ -250,6 +263,7 @@ func main() {
 	_, _ = jsoniter.Marshal(v1.Pod{})
 }
 `},
+			sbom: goPathsWithoutK8s,
 			want: map[string]wantCoupling{purlJSONIter: {0, nil}},
 		},
 		{
@@ -272,6 +286,7 @@ func main() {
 }
 `,
 			},
+			sbom: goPathsWithoutK8s,
 			want: map[string]wantCoupling{purlBar: {1, []string{"Do"}}},
 		},
 		{
@@ -361,7 +376,7 @@ func TestX(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assertGoCoupling(t, analyzeGoProject(t, tc.files), tc.want)
+			assertGoCoupling(t, analyzeGoProjectWith(t, t.TempDir(), tc.files, tc.sbom), tc.want)
 		})
 	}
 }
@@ -398,14 +413,22 @@ func analyzeGoProject(t *testing.T, files map[string]string) map[string]wantCoup
 
 func analyzeGoProjectIn(t *testing.T, dir string, files map[string]string) map[string]wantCoupling {
 	t.Helper()
+	return analyzeGoProjectWith(t, dir, files, nil)
+}
+
+// analyzeGoProjectWith analyzes files written to dir against sbom, or against
+// goPackageNamePaths when sbom is nil.
+func analyzeGoProjectWith(t *testing.T, dir string, files map[string]string, sbom map[string][]string) map[string]wantCoupling {
+	t.Helper()
+	if sbom == nil {
+		sbom = goPackageNamePaths
+	}
 	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		writeCorpusFile(t, filepath.Join(dir, name), content)
 	}
 	analyzer := NewAnalyzer()
 	t.Cleanup(analyzer.Close)
-	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, goPackageNamePaths)
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, sbom)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,8 +442,15 @@ func analyzeGoProjectIn(t *testing.T, dir string, files map[string]string) map[s
 	return got
 }
 
+// assertGoCoupling checks the dependencies in want and that every other
+// dependency has no call, so a call credited to the wrong import fails.
 func assertGoCoupling(t *testing.T, got, want map[string]wantCoupling) {
 	t.Helper()
+	for purl, g := range got {
+		if _, ok := want[purl]; !ok && g.calls != 0 {
+			t.Errorf("%s: CallSiteCount = %d, want 0 (not expected to be used)", purl, g.calls)
+		}
+	}
 	for purl, w := range want {
 		g, ok := got[purl]
 		if !ok {

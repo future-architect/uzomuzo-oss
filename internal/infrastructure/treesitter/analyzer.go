@@ -469,7 +469,7 @@ func (a *Analyzer) analyzeFile(
 	// Phase 1: Extract imports and build alias->PURL map for this file.
 	var goNames map[string]string
 	if lid == langGo && !importsOnly {
-		goNames = inferGoNames(cfg, root, src, path, importToPURL, goDirs, cursor)
+		goNames = inferGoNames(root, src, path, importToPURL, goDirs, cursor)
 	}
 	fileAliases := a.extractImports(cfg, root, src, importToPURL, goNames, lid, cursor)
 
