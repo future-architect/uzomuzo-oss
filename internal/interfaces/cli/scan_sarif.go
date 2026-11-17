@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	scanapp "github.com/future-architect/uzomuzo-oss/internal/application/scan"
 	"github.com/future-architect/uzomuzo-oss/internal/common/purl"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/audit"
@@ -37,6 +38,8 @@ type scanRenderOptions struct {
 	ArtifactURI string
 	SBOM        bool
 	ToolVersion string
+	// TransitiveSkipped is set by finalizeScanOutput for the table, detailed and JSON renderers.
+	TransitiveSkipped *scanapp.TransitiveSkipped
 }
 
 type sarifLog struct {

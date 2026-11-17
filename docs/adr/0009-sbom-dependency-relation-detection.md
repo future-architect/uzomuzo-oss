@@ -124,6 +124,15 @@ Also corrected: the fallback section above says the `RELATION` column displays `
 for SBOMs without a `dependencies` section. The renderers omit the column (table) and the
 `relation` field (JSON) instead; no `Unknown` value is printed.
 
+### 2026-11-17 — the default stays direct-only, but the skip is now reported (#562, #564)
+
+#564 decided to keep `--show-transitive` off by default (speed first). The skip is no
+longer silent: when transitive dependencies were dropped, the table/detailed summary line
+ends with `N transitive not evaluated (via ...; use --show-transitive)`, JSON carries
+`transitive_skipped` (`count`, `via`; omitted when nothing was skipped), and one line goes
+to stderr. No extra API calls are made, and `--include-actions` does not count transitive
+composite Actions.
+
 ## References
 
 - [CycloneDX Specification — Dependencies](https://cyclonedx.org/docs/latest/json/#dependencies) (spec 1.2+)

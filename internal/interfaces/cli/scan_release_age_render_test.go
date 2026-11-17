@@ -27,7 +27,7 @@ func TestReleaseAgeDetailedAndJSONOnly(t *testing.T) {
 		}
 	}
 	var output bytes.Buffer
-	if err := renderScanJSON(&output, []audit.AuditEntry{entry}, []audit.AuditEntry{entry}, false, nil); err != nil {
+	if err := renderScanJSON(&output, []audit.AuditEntry{entry}, []audit.AuditEntry{entry}, false, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	var decoded struct {
@@ -52,7 +52,7 @@ func TestReleaseAgeDetailedAndJSONOnly(t *testing.T) {
 		t.Fatalf("release_age: %+v", got)
 	}
 	var table, csv bytes.Buffer
-	if err := renderScanTable(&table, []audit.AuditEntry{entry}, []audit.AuditEntry{entry}, false); err != nil {
+	if err := renderScanTable(&table, []audit.AuditEntry{entry}, []audit.AuditEntry{entry}, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := renderScanCSV(&csv, []audit.AuditEntry{entry}); err != nil {
@@ -75,7 +75,7 @@ func TestReleaseAgeUnknownJSONHasNoDetailedNotice(t *testing.T) {
 		t.Fatalf("unknown notice: %s", detailed.String())
 	}
 	var output bytes.Buffer
-	if err := renderScanJSON(&output, []audit.AuditEntry{entry}, []audit.AuditEntry{entry}, false, nil); err != nil {
+	if err := renderScanJSON(&output, []audit.AuditEntry{entry}, []audit.AuditEntry{entry}, false, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	var doc struct {
@@ -104,7 +104,7 @@ func TestOldReleaseOutputIsByteIdentical(t *testing.T) {
 	}}
 	encode := func() (string, string) {
 		var jsonOut, boxOut bytes.Buffer
-		if err := renderScanJSON(&jsonOut, []audit.AuditEntry{entry}, []audit.AuditEntry{entry}, false, nil); err != nil {
+		if err := renderScanJSON(&jsonOut, []audit.AuditEntry{entry}, []audit.AuditEntry{entry}, false, nil, nil); err != nil {
 			t.Fatal(err)
 		}
 		if err := renderBoxEntry(&boxOut, &entry); err != nil {
