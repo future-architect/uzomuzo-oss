@@ -174,6 +174,9 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 // - repoURLMap: normalized repo URL -> list of original PURLs that map to it
 // - purlsWithoutRepo: list of PURLs for which no repo URL could be determined
 //
+// If ctx is cancelled mid-run, PURLs that were never dispatched appear in neither output,
+// so callers must treat the result as partial when ctx.Err() != nil.
+//
 // DDD Layer: Infrastructure (parallel processing)
 // Notes:
 // - Bounded concurrency to avoid overwhelming registries (Maven Central, etc.)
