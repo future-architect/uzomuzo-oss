@@ -113,9 +113,11 @@ type langConfig struct {
 	language       *sitter.Language
 	importQuery    string
 	callQuery      string
+	namesQuery     string // Go only; see goNamesQuery
 	compileOnce    sync.Once
 	compiledImport *sitter.Query // nil until ensureCompiled runs
 	compiledCall   *sitter.Query // nil until ensureCompiled runs
+	compiledNames  *sitter.Query // nil until ensureCompiled runs, or when namesQuery is empty
 	stripQuotes    bool
 	aliasFromPkg   func(importPath string) string
 }
@@ -138,8 +140,9 @@ type Analyzer struct {
 	configs map[langID]*langConfig
 }
 
-// compileQueries compiles import and call queries for a langConfig.
-// Call this after setting importQuery and callQuery.
+// compileQueries compiles the import and call queries for a langConfig, and
+// the names query when namesQuery is set (Go only). Call this after setting
+// importQuery, callQuery and namesQuery.
 //
 // Argument order in tree_sitter.NewQuery is (language, source string) — the
 // inverse of smacker/go-tree-sitter, which took ([]byte, language). Source is
@@ -157,6 +160,14 @@ func compileQueries(cfg *langConfig) {
 		slog.Warn("failed to compile call query", "error", qErr2)
 	}
 	cfg.compiledCall = q2
+
+	if cfg.namesQuery != "" {
+		q3, qErr3 := sitter.NewQuery(cfg.language, cfg.namesQuery)
+		if qErr3 != nil {
+			slog.Warn("failed to compile names query", "error", qErr3)
+		}
+		cfg.compiledNames = q3
+	}
 }
 
 // Close releases the C-side resources held by compiled queries. Callers must
@@ -164,9 +175,10 @@ func compileQueries(cfg *langConfig) {
 // tree-sitter Go bindings do not use runtime finalizers due to known CGO
 // interactions, so explicit cleanup is required. Multiple calls are safe.
 //
-// Close is idempotent: a nil compiledImport/compiledCall (compilation failure,
-// or a language never used) is treated as already-released, and calling Close
-// twice is safe because each compiled query is set to nil after release.
+// Close is idempotent: a nil compiledImport, compiledCall or compiledNames
+// (compilation failure, a language never used, or no names query) is treated
+// as already-released, and calling Close twice is safe because each compiled
+// query is set to nil after release.
 //
 // Close must NOT be called concurrently with AnalyzeCoupling; the Analyzer
 // holds no internal mutex. After Close returns, subsequent AnalyzeCoupling
@@ -187,6 +199,10 @@ func (a *Analyzer) Close() {
 		if cfg.compiledCall != nil {
 			cfg.compiledCall.Close()
 			cfg.compiledCall = nil
+		}
+		if cfg.compiledNames != nil {
+			cfg.compiledNames.Close()
+			cfg.compiledNames = nil
 		}
 	}
 }
@@ -239,13 +255,17 @@ func extToLang(ext string) (langID, bool) {
 //
 // Why the result stays deterministic even though completion order is not: every
 // accumulator field is order-independent (two set unions, a counter sum, three
-// OR-ed flags), and buildCouplingResults sorts the slices it emits.
+// OR-ed flags), and buildCouplingResults sorts the slices it emits. The one
+// state workers share besides the queries, the Go directory index used to
+// infer package names, is built from a directory's files alone, whichever
+// worker builds it.
 func (a *Analyzer) AnalyzeCoupling(
 	ctx context.Context,
 	sourceRoot string,
 	importPaths map[string][]string,
 ) (map[string]*domaindiet.CouplingAnalysis, error) {
 	importToPURL := buildImportToPURL(importPaths)
+	goDirs := newGoDirIndex(ctx, a.configs[langGo])
 
 	type fileJob struct{ path, relPath string }
 	var jobs []fileJob
@@ -300,7 +320,7 @@ func (a *Analyzer) AnalyzeCoupling(
 			defer parser.Close()
 			local := make(map[string]*accumulator)
 			for j := range jobCh {
-				a.analyzeFile(j.path, j.relPath, parser, importToPURL, local)
+				a.analyzeFile(j.path, j.relPath, parser, importToPURL, goDirs, local)
 			}
 			partials[idx] = local
 		}(w)
@@ -395,6 +415,7 @@ func (a *Analyzer) analyzeFile(
 	path, relPath string,
 	parser *sitter.Parser,
 	importToPURL map[string][]string,
+	goDirs *goDirIndex,
 	accum map[string]*accumulator,
 ) {
 	info, err := os.Stat(path)
@@ -448,7 +469,11 @@ func (a *Analyzer) analyzeFile(
 	cursor := sitter.NewQueryCursor()
 
 	// Phase 1: Extract imports and build alias->PURL map for this file.
-	fileAliases := a.extractImports(cfg, root, src, importToPURL, lid, cursor)
+	var goNames map[string]string
+	if lid == langGo && !importsOnly {
+		goNames = inferGoNames(root, src, path, importToPURL, goDirs, cursor)
+	}
+	fileAliases := a.extractImports(cfg, root, src, importToPURL, goNames, lid, cursor)
 
 	// Record import files
 	for alias, purls := range fileAliases {
@@ -549,6 +574,7 @@ func (a *Analyzer) extractImports(
 	root *sitter.Node,
 	src []byte,
 	importToPURL map[string][]string,
+	goNames map[string]string,
 	lid langID,
 	cursor *sitter.QueryCursor,
 ) map[string][]string {
@@ -588,7 +614,7 @@ func (a *Analyzer) extractImports(
 
 			// For Go, check for explicit alias.
 			if lid == langGo {
-				a.handleGoImport(node, src, value, importToPURL, aliasMap)
+				a.handleGoImport(node, src, value, importToPURL, goNames, aliasMap)
 				continue
 			}
 

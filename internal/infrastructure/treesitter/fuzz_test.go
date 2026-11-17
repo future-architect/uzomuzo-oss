@@ -50,3 +50,35 @@ func FuzzAnalyzeJavaScriptRequire(f *testing.F) {
 		_, _ = analyzer.AnalyzeCoupling(context.Background(), dir, importPaths) // only panics and hangs matter here
 	})
 }
+
+// FuzzAnalyzeGoPackageNames feeds two arbitrary Go files of one directory
+// through the coupling analysis, including the package-name inference of
+// #551 and its directory scan, to check that malformed input does not panic
+// or hang.
+func FuzzAnalyzeGoPackageNames(f *testing.F) {
+	seeds := [][2]string{
+		{"package main\n\nimport \"github.com/json-iterator/go\"\n\nfunc main() { jsoniter.Marshal(nil) }\n", "package main\n"},
+		{"package main\n\nimport \"k8s.io/api/core/v1\"\n\nvar _ = v1.Pod{}\n", "package main\n\nfunc f() { v1 := 1; _ = v1 }\n"},
+		{"package main\n\nimport (\n\t. \"github.com/json-iterator/go\"\n\t\"C\"\n)\n", "package other\n"},
+		{"package main\n\nimport \"github.com/json-iterator/go\"\n\nfunc main() { jsoniter.", "package main\n\nfunc ("},
+		{"import \"github.com/json-iterator/go\"", ""},
+		{"", ""},
+	}
+	for _, s := range seeds {
+		f.Add(s[0], s[1])
+	}
+
+	analyzer := NewAnalyzer()
+	f.Cleanup(analyzer.Close)
+	importPaths := map[string][]string{"pkg:golang/github.com/json-iterator/go@v1.1.12": {"github.com/json-iterator/go"}}
+
+	f.Fuzz(func(t *testing.T, src, sibling string) {
+		dir := t.TempDir()
+		for name, content := range map[string]string{"main.go": src, "sibling.go": sibling} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		_, _ = analyzer.AnalyzeCoupling(context.Background(), dir, importPaths) // only panics and hangs matter here
+	})
+}

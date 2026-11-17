@@ -18,6 +18,7 @@ func registerGoConfig(a *Analyzer) {
 			`(selector_expression operand: (identifier) @pkg field: (field_identifier) @field)`,
 			`(qualified_type package: (package_identifier) @pkg name: (type_identifier) @field)`,
 		}, "\n"),
+		namesQuery:   goNamesQuery,
 		stripQuotes:  true,
 		aliasFromPkg: goAliasFromImportPath,
 	}
@@ -54,31 +55,18 @@ func goAliasFromImportPath(importPath string) string {
 	return alias
 }
 
-// handleGoImport processes a Go import spec node.
+// handleGoImport processes a Go import spec node. goNames holds the package
+// names decided by inferGoNames for this file's unaliased imports; any other
+// unaliased import is registered under the name guessed from its path.
 func (a *Analyzer) handleGoImport(
 	node *sitter.Node,
 	src []byte,
 	importPath string,
 	importToPURL map[string][]string,
+	goNames map[string]string,
 	aliasMap map[string][]string,
 ) {
-	// Lowercase the import path for matching — importToPURL keys are already lowercased
-	// to handle PURL case-insensitivity (see AnalyzeCoupling).
-	lowerPath := strings.ToLower(importPath)
-	purls, ok := importToPURL[lowerPath]
-	if !ok {
-		// Also try prefix matching for subpackages.
-		// Pick the longest matching prefix to handle nested modules
-		// (e.g., prefer "example.com/foo/bar" over "example.com/foo").
-		bestLen := 0
-		for ip, p := range importToPURL {
-			if (strings.HasPrefix(lowerPath, ip+"/") || lowerPath == ip) && len(ip) > bestLen {
-				purls = p
-				ok = true
-				bestLen = len(ip)
-			}
-		}
-	}
+	purls, ok := matchGoImport(importPath, importToPURL)
 	if !ok {
 		return
 	}
@@ -112,10 +100,36 @@ func (a *Analyzer) handleGoImport(
 	}
 
 	if alias == "" {
-		alias = goAliasFromImportPath(importPath)
+		if name, ok := goNames[importPath]; ok {
+			alias = name
+		} else {
+			alias = goAliasFromImportPath(importPath)
+		}
 	}
 
 	aliasMap[alias] = appendUniquePURLs(aliasMap[alias], purls)
+}
+
+// matchGoImport returns the PURLs of the dependency that provides importPath:
+// an exact match, or else the longest module path that is a prefix of it.
+func matchGoImport(importPath string, importToPURL map[string][]string) ([]string, bool) {
+	// Lowercase the import path for matching — importToPURL keys are already lowercased
+	// to handle PURL case-insensitivity (see AnalyzeCoupling).
+	lowerPath := strings.ToLower(importPath)
+	if purls, ok := importToPURL[lowerPath]; ok {
+		return purls, true
+	}
+	// Pick the longest matching prefix to handle nested modules
+	// (e.g., prefer "example.com/foo/bar" over "example.com/foo").
+	var purls []string
+	bestLen := 0
+	for ip, p := range importToPURL {
+		if strings.HasPrefix(lowerPath, ip+"/") && len(ip) > bestLen {
+			purls = p
+			bestLen = len(ip)
+		}
+	}
+	return purls, bestLen > 0
 }
 
 // goPackageFromHyphenated derives the Go package name from a hyphenated directory name.
