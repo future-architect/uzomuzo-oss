@@ -9,8 +9,8 @@ import (
 	"net/http"
 	neturl "net/url"
 	"regexp"
+	"sort"
 	"strings"
-	"sync"
 
 	"github.com/future-architect/uzomuzo-oss/internal/common"
 	commonpurl "github.com/future-architect/uzomuzo-oss/internal/common/purl"
@@ -96,6 +96,10 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 
 	// Step 4: Extract repository URLs and group by unique repos (keyed by original PURLs)
 	repoURLMap, purlsWithoutRepo := c.resolveRepoURLsBatch(ctx, packageInfoMap, releaseInfoMap)
+	if err := ctx.Err(); err != nil {
+		// Undispatched PURLs are missing from both outputs; fail instead of reporting them as "not found".
+		return nil, fmt.Errorf("fetch batch PURLs: %w", err)
+	}
 	if len(purlsWithoutRepo) > 0 {
 		slog.Info("PURLsWithoutRepoURL", "count", len(purlsWithoutRepo))
 	}
@@ -166,6 +170,10 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 		slog.Warn("ProjectBatchEmptyForRepos", "repo_count", len(repoURLs))
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fetch batch PURLs: %w", err)
+	}
+
 	// Step 6: Build final results (keyed by original PURLs)
 	return c.buildFinalResults(purls, packageInfoMap, purlsWithoutRepo, repoURLMap, projectInfoMap, releaseInfoMap), nil
 }
@@ -173,6 +181,11 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 // resolveRepoURLsBatch resolves repository URLs for many PURLs concurrently and returns:
 // - repoURLMap: normalized repo URL -> list of original PURLs that map to it
 // - purlsWithoutRepo: list of PURLs for which no repo URL could be determined
+//
+// If ctx is cancelled mid-run, PURLs that were never dispatched appear in neither output,
+// and PURLs in flight at cancel time may be listed in purlsWithoutRepo, or under a guessed
+// URL in repoURLMap (golang), even though a repo URL exists.
+// Callers must discard both outputs when ctx.Err() != nil.
 //
 // DDD Layer: Infrastructure (parallel processing)
 // Notes:
@@ -189,69 +202,55 @@ func (c *DepsDevClient) resolveRepoURLsBatch(ctx context.Context, packageInfoMap
 	repoURLMap := make(map[string][]string)
 	purlsWithoutRepo := make([]string, 0)
 
-	// Collect keys to iterate deterministically
+	// Sorted for deterministic dispatch and deterministic PURL order per repo URL.
 	keys := make([]string, 0, len(packageInfoMap))
 	for k := range packageInfoMap {
 		keys = append(keys, k)
 	}
+	sort.Strings(keys)
 
-	// Work queue
-	jobs := make(chan string, len(keys))
-	var mu sync.Mutex
-	var wg sync.WaitGroup
+	// collectBounded stops dispatching once ctx is cancelled. Keys never
+	// dispatched are absent from resolved and therefore from both outputs.
+	resolved := collectBounded[string](ctx, keys, maxWorkers, func(ctx context.Context, p string) (string, string, bool) {
+		pkg := packageInfoMap[p]
+		url := c.resolveRepoURL(ctx, pkg, p)
+		if replaced := releaseInfoMap[p].replacedDefault; replaced.PURL != "" && convertRepoURLToProjectKey(url) == "" {
+			// See ADR-0035.
+			defaultPkg := &PackageResponse{Version: replaced}
+			if fetched, err := c.fetchPackageInfo(ctx, replaced.PURL); err == nil && fetched != nil {
+				defaultPkg = fetched
+			} else if err != nil {
+				slog.Debug("Failed to fetch package info", "purl", replaced.PURL, "error", err)
+			}
+			if candidate := c.resolveRepoURL(ctx, defaultPkg, replaced.PURL); candidate != "" && (url == "" || convertRepoURLToProjectKey(candidate) != "") {
+				url = candidate
+			}
+		}
+		if url != "" {
+			url = normalizeRepoURLForProject(url)
+		}
+		// Small-step 2: If repo URL still missing and ecosystem is golang, attempt a best-effort fallback
+		if url == "" {
+			if pr, err := purlpkgToParsed(p); err == nil && pr != nil && strings.EqualFold(pr.Ecosystem(), "golang") {
+				if unescName, err := neturl.PathUnescape(pr.PackageName()); err == nil && unescName != "" {
+					url = synthesizeGoGitHubRepoURL(ctx, c.goproxy, unescName)
+				}
+			}
+		}
+		return p, url, true
+	})
 
-	worker := func() {
-		defer wg.Done()
-		for p := range jobs {
-			pkg := packageInfoMap[p]
-			url := c.resolveRepoURL(ctx, pkg, p)
-			if replaced := releaseInfoMap[p].replacedDefault; replaced.PURL != "" && convertRepoURLToProjectKey(url) == "" {
-				// See ADR-0035.
-				defaultPkg := &PackageResponse{Version: replaced}
-				if fetched, err := c.fetchPackageInfo(ctx, replaced.PURL); err == nil && fetched != nil {
-					defaultPkg = fetched
-				} else if err != nil {
-					slog.Debug("Failed to fetch package info", "purl", replaced.PURL, "error", err)
-				}
-				if candidate := c.resolveRepoURL(ctx, defaultPkg, replaced.PURL); candidate != "" && (url == "" || convertRepoURLToProjectKey(candidate) != "") {
-					url = candidate
-				}
-			}
-			if url != "" {
-				url = normalizeRepoURLForProject(url)
-			}
-			// Small-step 2: If repo URL still missing and ecosystem is golang, attempt a best-effort fallback
-			if url == "" {
-				if pr, err := purlpkgToParsed(p); err == nil && pr != nil && strings.EqualFold(pr.Ecosystem(), "golang") {
-					if unescName, err := neturl.PathUnescape(pr.PackageName()); err == nil && unescName != "" {
-						url = synthesizeGoGitHubRepoURL(ctx, c.goproxy, unescName)
-					}
-				}
-			}
-			mu.Lock()
-			if url == "" {
-				purlsWithoutRepo = append(purlsWithoutRepo, p)
-			} else {
-				repoURLMap[url] = append(repoURLMap[url], p)
-			}
-			mu.Unlock()
+	for _, p := range keys {
+		url, ok := resolved[p]
+		if !ok {
+			continue
+		}
+		if url == "" {
+			purlsWithoutRepo = append(purlsWithoutRepo, p)
+		} else {
+			repoURLMap[url] = append(repoURLMap[url], p)
 		}
 	}
-
-	// Start workers (bounded by keys size)
-	workers := maxWorkers
-	if workers > len(keys) {
-		workers = len(keys)
-	}
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go worker()
-	}
-	for _, k := range keys {
-		jobs <- k
-	}
-	close(jobs)
-	wg.Wait()
 
 	return repoURLMap, purlsWithoutRepo
 }
