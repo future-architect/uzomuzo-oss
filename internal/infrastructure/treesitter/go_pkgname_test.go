@@ -244,6 +244,29 @@ func main() {
 			want: map[string]wantCoupling{purlBar: {2, []string{"Do"}}},
 		},
 		{
+			// example.com/error is guessed as error, which error.Error seems to
+			// confirm. Its real name errors would then be handed to bar, whose
+			// guess was right.
+			name: "import guessed as a predeclared name",
+			files: map[string]string{
+				"other.go": "package main\n\nfunc other() { bar := 1; _ = bar }\n",
+				"main.go": `package main
+
+import (
+	"example.com/error"
+	"github.com/foo/bar"
+)
+
+func main() {
+	bar.Do()
+	_ = errors.New("x")
+	_ = error.Error
+}
+`,
+			},
+			want: map[string]wantCoupling{purlBar: {1, []string{"Do"}}},
+		},
+		{
 			name: "two unexplained imports in one file",
 			files: map[string]string{"main.go": `package main
 

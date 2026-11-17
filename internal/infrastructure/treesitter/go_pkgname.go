@@ -128,6 +128,8 @@ func inferGoImportNames(f goFileNames, declared map[string]bool) map[string]stri
 // explained by an import. ok is false when the operands cannot be matched to
 // imports:
 //   - a dot import: its names are used without a prefix;
+//   - an unaliased import guessed as a predeclared name: error.Error would
+//     seem to confirm a guess of error for example.com/error;
 //   - two imports with the same name or guessed name (apis/apiextensions and
 //     apis/apiextensions/v1beta1 are both guessed as apiextensions). Go rejects
 //     two imports with one name, so one guess is wrong, and the name it hides
@@ -152,6 +154,9 @@ func goUnexplained(f goFileNames, declared map[string]bool) (imports, names []st
 			name = "C"
 		case name == "":
 			name = goAliasFromImportPath(imp.path)
+			if goPredeclared[name] {
+				return nil, nil, false
+			}
 			if !used[name] {
 				imports = append(imports, imp.path)
 			}
@@ -170,10 +175,10 @@ func goUnexplained(f goFileNames, declared map[string]bool) (imports, names []st
 	return imports, names, true
 }
 
-// goPredeclared holds Go's predeclared identifiers. They are never handed to
-// an import: error.Error is a valid method expression, and the error left
-// over would otherwise rename an import whose guess was right. They still
-// count as used, so an import guessed as, say, max keeps that guess.
+// goPredeclared holds Go's predeclared identifiers. A use such as the method
+// expression error.Error says nothing about imports, so such a name is never
+// handed to an import, and an import guessed as one stops the inference for
+// the file (see goUnexplained).
 var goPredeclared = map[string]bool{
 	"any": true, "bool": true, "byte": true, "comparable": true,
 	"complex64": true, "complex128": true, "error": true, "float32": true,
