@@ -113,9 +113,11 @@ type langConfig struct {
 	language       *sitter.Language
 	importQuery    string
 	callQuery      string
+	namesQuery     string // Go only; see goNamesQuery
 	compileOnce    sync.Once
 	compiledImport *sitter.Query // nil until ensureCompiled runs
 	compiledCall   *sitter.Query // nil until ensureCompiled runs
+	compiledNames  *sitter.Query // nil until ensureCompiled runs, or when namesQuery is empty
 	stripQuotes    bool
 	aliasFromPkg   func(importPath string) string
 }
@@ -157,6 +159,14 @@ func compileQueries(cfg *langConfig) {
 		slog.Warn("failed to compile call query", "error", qErr2)
 	}
 	cfg.compiledCall = q2
+
+	if cfg.namesQuery != "" {
+		q3, qErr3 := sitter.NewQuery(cfg.language, cfg.namesQuery)
+		if qErr3 != nil {
+			slog.Warn("failed to compile names query", "error", qErr3)
+		}
+		cfg.compiledNames = q3
+	}
 }
 
 // Close releases the C-side resources held by compiled queries. Callers must
@@ -187,6 +197,10 @@ func (a *Analyzer) Close() {
 		if cfg.compiledCall != nil {
 			cfg.compiledCall.Close()
 			cfg.compiledCall = nil
+		}
+		if cfg.compiledNames != nil {
+			cfg.compiledNames.Close()
+			cfg.compiledNames = nil
 		}
 	}
 }
@@ -239,14 +253,17 @@ func extToLang(ext string) (langID, bool) {
 //
 // Why the result stays deterministic even though completion order is not: every
 // accumulator field is order-independent (two set unions, a counter sum, three
-// OR-ed flags), and buildCouplingResults sorts the slices it emits.
+// OR-ed flags), and buildCouplingResults sorts the slices it emits. The one
+// state workers share besides the queries, the Go directory index used to
+// infer package names, is built from a directory's files alone, whichever
+// worker builds it.
 func (a *Analyzer) AnalyzeCoupling(
 	ctx context.Context,
 	sourceRoot string,
 	importPaths map[string][]string,
 ) (map[string]*domaindiet.CouplingAnalysis, error) {
 	importToPURL := buildImportToPURL(importPaths)
-	goNames := newGoPackageNameResolver()
+	goDirs := newGoDirIndex(a.configs[langGo])
 
 	type fileJob struct{ path, relPath string }
 	var jobs []fileJob
@@ -301,7 +318,7 @@ func (a *Analyzer) AnalyzeCoupling(
 			defer parser.Close()
 			local := make(map[string]*accumulator)
 			for j := range jobCh {
-				a.analyzeFile(j.path, j.relPath, parser, importToPURL, goNames, local)
+				a.analyzeFile(j.path, j.relPath, parser, importToPURL, goDirs, local)
 			}
 			partials[idx] = local
 		}(w)
@@ -396,7 +413,7 @@ func (a *Analyzer) analyzeFile(
 	path, relPath string,
 	parser *sitter.Parser,
 	importToPURL map[string][]string,
-	goNames *goPackageNameResolver,
+	goDirs *goDirIndex,
 	accum map[string]*accumulator,
 ) {
 	info, err := os.Stat(path)
@@ -450,6 +467,10 @@ func (a *Analyzer) analyzeFile(
 	cursor := sitter.NewQueryCursor()
 
 	// Phase 1: Extract imports and build alias->PURL map for this file.
+	var goNames map[string]string
+	if lid == langGo && !importsOnly {
+		goNames = inferGoNames(cfg, root, src, path, importToPURL, goDirs, cursor)
+	}
 	fileAliases := a.extractImports(cfg, root, src, importToPURL, goNames, lid, cursor)
 
 	// Record import files
@@ -551,7 +572,7 @@ func (a *Analyzer) extractImports(
 	root *sitter.Node,
 	src []byte,
 	importToPURL map[string][]string,
-	goNames *goPackageNameResolver,
+	goNames map[string]string,
 	lid langID,
 	cursor *sitter.QueryCursor,
 ) map[string][]string {

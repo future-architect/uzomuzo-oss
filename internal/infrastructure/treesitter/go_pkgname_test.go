@@ -1,0 +1,439 @@
+//go:build cgo
+
+package treesitter
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+const (
+	purlAWS      = "pkg:golang/github.com/aws/aws-sdk-go-v2@v1.32.0"
+	purlK8sAPI   = "pkg:golang/k8s.io/api@v0.31.0"
+	purlJSONIter = "pkg:golang/github.com/json-iterator/go@v1.1.12"
+	purlLRU      = "pkg:golang/github.com/hashicorp/golang-lru@v1.0.2"
+	purlBar      = "pkg:golang/github.com/foo/bar@v1.0.0"
+	purlTestify  = "pkg:golang/github.com/stretchr/testify@v1.9.0"
+)
+
+var goPackageNamePaths = map[string][]string{
+	purlAWS:      {"github.com/aws/aws-sdk-go-v2"},
+	purlK8sAPI:   {"k8s.io/api"},
+	purlJSONIter: {"github.com/json-iterator/go"},
+	purlLRU:      {"github.com/hashicorp/golang-lru"},
+	purlBar:      {"github.com/foo/bar"},
+	purlTestify:  {"github.com/stretchr/testify"},
+}
+
+type wantCoupling struct {
+	calls   int
+	symbols []string
+}
+
+// TestAnalyzer_GoPackageNameFromUsage covers #551: the package name of an
+// unaliased import differs from the name guessed from its path, and is taken
+// from how the importing package uses it.
+func TestAnalyzer_GoPackageNameFromUsage(t *testing.T) {
+	tests := []struct {
+		name  string
+		files map[string]string
+		want  map[string]wantCoupling
+	}{
+		{
+			// Guess "signer"; the local variable named signer must not be counted.
+			name: "aws signer v4",
+			files: map[string]string{"sign.go": `package main
+
+import "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+
+type local struct{}
+
+func (local) First() {}
+
+func sign() {
+	s := v4.NewSigner()
+	_ = s
+	v4.GetSignedRequestSignature(nil)
+}
+
+func useLocal() {
+	signer := local{}
+	signer.First()
+}
+`},
+			want: map[string]wantCoupling{purlAWS: {2, []string{"GetSignedRequestSignature", "NewSigner"}}},
+		},
+		{
+			// Guess "core"; uses are qualified types and a selector.
+			name: "kubernetes core v1",
+			files: map[string]string{"pods.go": `package main
+
+import "k8s.io/api/core/v1"
+
+func pods() []v1.Pod { return []v1.Pod{{}} }
+
+func ns() string { return v1.NamespaceDefault }
+`},
+			want: map[string]wantCoupling{purlK8sAPI: {3, []string{"NamespaceDefault", "Pod"}}},
+		},
+		{
+			// Guess "go".
+			name: "json-iterator",
+			files: map[string]string{"codec.go": `package main
+
+import "github.com/json-iterator/go"
+
+func codec(x any) {
+	b, _ := jsoniter.Marshal(x)
+	_ = jsoniter.Unmarshal(b, &x)
+}
+`},
+			want: map[string]wantCoupling{purlJSONIter: {2, []string{"Marshal", "Unmarshal"}}},
+		},
+		{
+			// Guess "golanglru".
+			name: "golang-lru",
+			files: map[string]string{"cache.go": `package main
+
+import "github.com/hashicorp/golang-lru"
+
+func cache() {
+	c, _ := lru.New(128)
+	c.Add(1, 2)
+	_, _ = lru.NewWithEvict(8, nil)
+}
+`},
+			want: map[string]wantCoupling{purlLRU: {2, []string{"New", "NewWithEvict"}}},
+		},
+		{
+			// C.CString is explained by import "C", so jsoniter is the one name left.
+			name: "cgo import",
+			files: map[string]string{"codec.go": `package main
+
+import "C"
+
+import "github.com/json-iterator/go"
+
+func codec(x any) {
+	_ = C.CString("x")
+	_, _ = jsoniter.Marshal(x)
+}
+`},
+			want: map[string]wantCoupling{purlJSONIter: {1, []string{"Marshal"}}},
+		},
+		{
+			// settings is declared in another file of the package, so it is not
+			// mistaken for the jsoniter package name.
+			name: "declaration in a sibling file of the same package",
+			files: map[string]string{
+				"config.go": "package main\n\nvar settings = struct{ Debug bool }{}\n",
+				"codec.go": `package main
+
+import "github.com/json-iterator/go"
+
+func codec(x any) {
+	if settings.Debug {
+		_, _ = jsoniter.Marshal(x)
+	}
+}
+`,
+			},
+			want: map[string]wantCoupling{purlJSONIter: {1, []string{"Marshal"}}},
+		},
+		{
+			// An in-package _test.go file shares declarations with the non-test files.
+			name: "in-package test file uses a declaration from a non-test file",
+			files: map[string]string{
+				"helper.go": "package main\n\nvar helper = struct{ Name string }{}\n",
+				"codec_test.go": `package main
+
+import (
+	"testing"
+
+	"github.com/json-iterator/go"
+)
+
+func TestCodec(t *testing.T) {
+	_, _ = jsoniter.Marshal(helper.Name)
+}
+`,
+			},
+			want: map[string]wantCoupling{purlJSONIter: {1, []string{"Marshal"}}},
+		},
+		{
+			// A local named jsoniter in the external test package main_test does not
+			// hide the name in package main.
+			name: "external test package is a separate package",
+			files: map[string]string{
+				"codec.go": `package main
+
+import "github.com/json-iterator/go"
+
+func codec(x any) { _, _ = jsoniter.Marshal(x) }
+`,
+				"codec_test.go": `package main_test
+
+import "testing"
+
+func TestLocal(t *testing.T) {
+	jsoniter := struct{ Marshal func() }{}
+	jsoniter.Marshal()
+}
+`,
+			},
+			want: map[string]wantCoupling{purlJSONIter: {1, []string{"Marshal"}}},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assertGoCoupling(t, analyzeGoProject(t, tc.files), tc.want)
+		})
+	}
+}
+
+// TestAnalyzer_GoPackageNameFallsBack pins the cases where the usage does not
+// decide the name: the path-based guess is kept, so the result is unchanged.
+func TestAnalyzer_GoPackageNameFallsBack(t *testing.T) {
+	big := "package main\n\n// " + strings.Repeat("x", largeFileBytes) + "\n"
+	codec := `package main
+
+import "github.com/json-iterator/go"
+
+func codec(x any) { _, _ = jsoniter.Marshal(x) }
+`
+	tests := []struct {
+		name  string
+		files map[string]string
+		want  map[string]wantCoupling
+	}{
+		{
+			name: "two unexplained imports in one file",
+			files: map[string]string{"main.go": `package main
+
+import (
+	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/hashicorp/golang-lru"
+	"github.com/json-iterator/go"
+	"k8s.io/api/core/v1"
+)
+
+func main() {
+	v4.NewSigner()
+	_, _ = lru.New(1)
+	_, _ = jsoniter.Marshal(nil)
+	_ = v1.Pod{}
+}
+`},
+			want: map[string]wantCoupling{
+				purlAWS:      {0, nil},
+				purlLRU:      {0, nil},
+				purlJSONIter: {0, nil},
+				purlK8sAPI:   {0, nil},
+			},
+		},
+		{
+			// k8s.io/api is not in the SBOM here, but its import still takes part,
+			// so two imports remain unexplained.
+			name: "import outside the SBOM still counts as unexplained",
+			files: map[string]string{"main.go": `package main
+
+import (
+	"github.com/json-iterator/go"
+	"k8s.io/api/core/v1"
+)
+
+func main() {
+	_, _ = jsoniter.Marshal(v1.Pod{})
+}
+`},
+			want: map[string]wantCoupling{purlJSONIter: {0, nil}},
+		},
+		{
+			// bar is guessed correctly but also declared as a local in another file.
+			// Ignoring the import outside the SBOM would leave bar as the only
+			// unexplained import and give it the name v1.
+			name: "correct guess is kept when the only other unexplained import is outside the SBOM",
+			files: map[string]string{
+				"other.go": "package main\n\nfunc other() { bar := 1; _ = bar }\n",
+				"main.go": `package main
+
+import (
+	"github.com/foo/bar"
+	"k8s.io/api/core/v1"
+)
+
+func main() {
+	bar.Do()
+	_ = v1.Pod{}
+}
+`,
+			},
+			want: map[string]wantCoupling{purlBar: {1, []string{"Do"}}},
+		},
+		{
+			// Both apis/apiextensions and apis/apiextensions/v1beta1 are guessed as
+			// apiextensions, so one guess is wrong and v1beta1 is left over. bar's
+			// guess is right but bar is also a local elsewhere; handing it v1beta1
+			// would be wrong. Found in k8s.io/apiextensions-apiserver.
+			name: "two imports with the same guess",
+			files: map[string]string{
+				"other.go": "package main\n\nfunc other() { bar := 1; _ = bar }\n",
+				"main_test.go": `package main
+
+import (
+	"testing"
+
+	"github.com/foo/bar"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+)
+
+func TestX(t *testing.T) {
+	_ = apiextensions.CustomResourceDefinition{}
+	_ = v1beta1.KubeAPIApprovedAnnotation
+	bar.Do()
+}
+`,
+			},
+			want: map[string]wantCoupling{purlBar: {1, []string{"Do"}}},
+		},
+		{
+			name: "two unexplained names",
+			files: map[string]string{"main.go": `package main
+
+import "github.com/json-iterator/go"
+
+func main() {
+	_, _ = jsoniter.Marshal(nil)
+	mystery.Call()
+}
+`},
+			want: map[string]wantCoupling{purlJSONIter: {0, nil}},
+		},
+		{
+			name: "dot import in the file",
+			files: map[string]string{"main.go": `package main
+
+import (
+	. "strings"
+
+	"github.com/json-iterator/go"
+)
+
+func main() { _, _ = jsoniter.Marshal(ToUpper("x")) }
+`},
+			want: map[string]wantCoupling{purlJSONIter: {0, nil}},
+		},
+		{
+			name:  "a file in the directory is too large to read",
+			files: map[string]string{"codec.go": codec, "big.go": big},
+			want:  map[string]wantCoupling{purlJSONIter: {0, nil}},
+		},
+		{
+			name:  "a file in the directory has a syntax error",
+			files: map[string]string{"codec.go": codec, "broken.go": "package main\n\nfunc broken( {\n"},
+			want:  map[string]wantCoupling{purlJSONIter: {0, nil}},
+		},
+		{
+			// testify's assert := assert.New(t) shadows the package name with a
+			// local. The guess is right and nothing else is unexplained, so it stays;
+			// the local's calls are counted as before.
+			name: "test file shadowing a correctly guessed package",
+			files: map[string]string{"main_test.go": `package main
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestX(t *testing.T) {
+	assert := assert.New(t)
+	assert.Equal(1, 1)
+}
+`},
+			want: map[string]wantCoupling{purlTestify: {2, []string{"Equal", "New"}}},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assertGoCoupling(t, analyzeGoProject(t, tc.files), tc.want)
+		})
+	}
+}
+
+// TestAnalyzer_GoPackageNameSymlinkFallsBack: a symlinked .go file in the
+// directory may point outside --source, so its declarations are not read and
+// the directory is not used for inference.
+func TestAnalyzer_GoPackageNameSymlinkFallsBack(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "outside.go")
+	if err := os.WriteFile(outside, []byte("package main\n\nvar settings = struct{ Debug bool }{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(dir, "config.go")); err != nil {
+		t.Skipf("symlinks not supported: %v", err)
+	}
+	files := map[string]string{"codec.go": `package main
+
+import "github.com/json-iterator/go"
+
+func codec(x any) {
+	if settings.Debug {
+		_, _ = jsoniter.Marshal(x)
+	}
+}
+`}
+	assertGoCoupling(t, analyzeGoProjectIn(t, dir, files), map[string]wantCoupling{purlJSONIter: {0, nil}})
+}
+
+func analyzeGoProject(t *testing.T, files map[string]string) map[string]wantCoupling {
+	t.Helper()
+	return analyzeGoProjectIn(t, t.TempDir(), files)
+}
+
+func analyzeGoProjectIn(t *testing.T, dir string, files map[string]string) map[string]wantCoupling {
+	t.Helper()
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, goPackageNamePaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make(map[string]wantCoupling, len(result))
+	for purl, ca := range result {
+		if ca.APIBreadth != len(ca.Symbols) {
+			t.Errorf("%s: APIBreadth = %d, want len(Symbols) = %d", purl, ca.APIBreadth, len(ca.Symbols))
+		}
+		got[purl] = wantCoupling{ca.CallSiteCount, ca.Symbols}
+	}
+	return got
+}
+
+func assertGoCoupling(t *testing.T, got, want map[string]wantCoupling) {
+	t.Helper()
+	for purl, w := range want {
+		g, ok := got[purl]
+		if !ok {
+			t.Errorf("%s: no coupling result", purl)
+			continue
+		}
+		if g.calls != w.calls {
+			t.Errorf("%s: CallSiteCount = %d, want %d", purl, g.calls, w.calls)
+		}
+		if len(g.symbols) != 0 || len(w.symbols) != 0 {
+			if !reflect.DeepEqual(g.symbols, w.symbols) {
+				t.Errorf("%s: Symbols = %v, want %v", purl, g.symbols, w.symbols)
+			}
+		}
+	}
+}
