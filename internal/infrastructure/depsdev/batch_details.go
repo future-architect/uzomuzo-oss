@@ -98,7 +98,7 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 	repoURLMap, purlsWithoutRepo := c.resolveRepoURLsBatch(ctx, packageInfoMap, releaseInfoMap)
 	if err := ctx.Err(); err != nil {
 		// Undispatched PURLs are missing from both outputs; fail instead of reporting them as "not found".
-		return nil, fmt.Errorf("resolve repository URLs: %w", err)
+		return nil, fmt.Errorf("fetch batch PURLs: %w", err)
 	}
 	if len(purlsWithoutRepo) > 0 {
 		slog.Info("PURLsWithoutRepoURL", "count", len(purlsWithoutRepo))
@@ -170,6 +170,10 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 		slog.Warn("ProjectBatchEmptyForRepos", "repo_count", len(repoURLs))
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fetch batch PURLs: %w", err)
+	}
+
 	// Step 6: Build final results (keyed by original PURLs)
 	return c.buildFinalResults(purls, packageInfoMap, purlsWithoutRepo, repoURLMap, projectInfoMap, releaseInfoMap), nil
 }
@@ -179,7 +183,8 @@ func (c *DepsDevClient) fetchBatchPURLs(ctx context.Context, purls []string) (ma
 // - purlsWithoutRepo: list of PURLs for which no repo URL could be determined
 //
 // If ctx is cancelled mid-run, PURLs that were never dispatched appear in neither output,
-// so callers must treat the result as partial when ctx.Err() != nil.
+// and PURLs in flight at cancel time may land in purlsWithoutRepo with a wrong value.
+// Callers must discard both outputs when ctx.Err() != nil.
 //
 // DDD Layer: Infrastructure (parallel processing)
 // Notes:
