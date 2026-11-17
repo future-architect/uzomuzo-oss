@@ -238,6 +238,28 @@ var _ = v1.Pod{}
 `},
 			want: map[string]wantCoupling{purlK8sAPI: {1, []string{"Pod"}}},
 		},
+		{
+			// Comments before the package clause and a cgo preamble between it
+			// and the imports must not stop the walk over the import block.
+			name: "comments before and after the package clause",
+			files: map[string]string{"main.go": `// Copyright 2026 Example Authors.
+
+//go:build linux
+
+// Package main encodes.
+package main
+
+/*
+#include <stdlib.h>
+*/
+import "C"
+
+import "github.com/json-iterator/go"
+
+func main() { _, _ = jsoniter.Marshal(nil) }
+`},
+			want: map[string]wantCoupling{purlJSONIter: {1, []string{"Marshal"}}},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
