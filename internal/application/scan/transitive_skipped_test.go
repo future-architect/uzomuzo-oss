@@ -2,10 +2,12 @@ package scan
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/future-architect/uzomuzo-oss/internal/application"
+	"github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/domain/depparser"
 	domainscan "github.com/future-architect/uzomuzo-oss/internal/domain/scan"
 )
@@ -62,12 +64,77 @@ func TestSummarizeSkippedTransitive(t *testing.T) {
 
 func TestTransitiveSkipped_TopVia(t *testing.T) {
 	s := &TransitiveSkipped{Count: 20, Via: map[string]int{"b": 7, "a": 7, "c": 5, "d": 1}}
-	want := []ViaCount{{Name: "a", Count: 7}, {Name: "b", Count: 7}, {Name: "c", Count: 5}}
-	if got := s.TopVia(3); !reflect.DeepEqual(got, want) {
-		t.Errorf("TopVia(3) = %v, want %v", got, want)
+	tests := []struct {
+		name string
+		n    int
+		want []ViaCount
+	}{
+		{"cut at n, ties broken by name", 3, []ViaCount{{Name: "a", Count: 7}, {Name: "b", Count: 7}, {Name: "c", Count: 5}}},
+		{"n larger than parents returns all, ordered", 10, []ViaCount{{Name: "a", Count: 7}, {Name: "b", Count: 7}, {Name: "c", Count: 5}, {Name: "d", Count: 1}}},
+		{"n of zero returns none", 0, []ViaCount{}},
 	}
-	if got := s.TopVia(10); len(got) != 4 {
-		t.Errorf("TopVia(10) len = %d, want 4", len(got))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := s.TopVia(tt.n); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("TopVia(%d) = %v, want %v", tt.n, got, tt.want)
+			}
+		})
+	}
+}
+
+// fixtureSource answers every lookup with a failed analysis so RunFromParser
+// can run its full path (evaluation included) without a network.
+type fixtureSource struct{}
+
+func (fixtureSource) AnalyzeFromPURLs(_ context.Context, keys []string) (map[string]*analysis.Analysis, error) {
+	out := make(map[string]*analysis.Analysis, len(keys))
+	for _, k := range keys {
+		out[k] = &analysis.Analysis{OriginalPURL: k, Error: errors.New("fixture lookup failure")}
+	}
+	return out, nil
+}
+
+func (f fixtureSource) AnalyzeFromGitHubURLs(ctx context.Context, keys []string) (map[string]*analysis.Analysis, error) {
+	return f.AnalyzeFromPURLs(ctx, keys)
+}
+
+// With a direct dependency present the scan evaluates it and still reports the
+// skipped transitive ones; with ShowTransitive nothing is skipped, so nil.
+func TestRunFromParser_SkippedTransitiveWithDirect(t *testing.T) {
+	svc, err := NewService(application.NewAnalysisService(fixtureSource{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := domainscan.ParseFailPolicy("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := stubParser{deps: []depparser.ParsedDependency{
+		{PURL: "pkg:npm/express@1", Relation: depparser.RelationDirect},
+		{PURL: "pkg:npm/debug@1", Relation: depparser.RelationTransitive, ViaParents: []string{"express"}},
+	}}
+	tests := []struct {
+		name        string
+		cfg         ParserConfig
+		wantEntries int
+		wantSkipped *TransitiveSkipped
+	}{
+		{"default skips transitive and reports it", ParserConfig{}, 1, &TransitiveSkipped{Count: 1, Via: map[string]int{"express": 1}}},
+		{"ShowTransitive evaluates all and reports nothing", ParserConfig{ShowTransitive: true}, 2, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := svc.RunFromParser(context.Background(), p, nil, policy, tt.cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(res.Entries) != tt.wantEntries {
+				t.Errorf("entries = %d, want %d", len(res.Entries), tt.wantEntries)
+			}
+			if !reflect.DeepEqual(res.TransitiveSkipped, tt.wantSkipped) {
+				t.Errorf("TransitiveSkipped = %+v, want %+v", res.TransitiveSkipped, tt.wantSkipped)
+			}
+		})
 	}
 }
 

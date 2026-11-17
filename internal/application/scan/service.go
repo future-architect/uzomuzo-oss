@@ -25,7 +25,9 @@ type Result struct {
 	HasFailure bool
 	// TransitiveSkipped reports the transitive dependencies that were dropped
 	// before evaluation. It is nil when nothing was skipped, including when
-	// ShowTransitive is set.
+	// ShowTransitive is set. Only RunFromParser fills it: the PURL list,
+	// GitHub URL, workflow and --include-actions paths leave it nil (transitive
+	// composite Actions are not counted, since that would need extra fetches).
 	TransitiveSkipped *TransitiveSkipped
 }
 
@@ -37,8 +39,11 @@ type TransitiveSkipped struct {
 	Count int
 	// Via maps a direct dependency's short name to the number of skipped PURLs
 	// it pulls in. A PURL reached through several parents counts once under
-	// each, so the values can add up to more than Count. Empty when the parser
-	// gives no parent information.
+	// each, so the values can add up to more than Count. They can also add up
+	// to less: a skipped PURL whose parents the parser did not record (e.g. a
+	// CycloneDX component with a broken dependency ref, or go.mod // indirect)
+	// is in Count but under no parent. Empty when the parser gives no parent
+	// information at all.
 	Via map[string]int
 }
 
@@ -48,7 +53,7 @@ type ViaCount struct {
 	Count int
 }
 
-// TopVia returns up to n parents ordered by skipped count (descending), then
+// TopVia returns up to n (n >= 0) parents ordered by skipped count (descending), then
 // name (ascending) so the output is deterministic.
 func (s *TransitiveSkipped) TopVia(n int) []ViaCount {
 	out := make([]ViaCount, 0, len(s.Via))
@@ -61,7 +66,7 @@ func (s *TransitiveSkipped) TopVia(n int) []ViaCount {
 		}
 		return out[i].Name < out[j].Name
 	})
-	if n >= 0 && len(out) > n {
+	if len(out) > n {
 		out = out[:n]
 	}
 	return out
@@ -103,8 +108,9 @@ type ParserConfig struct {
 
 // RunFromParser executes the scan pipeline from a dependency parser (SBOM/go.mod).
 // By default, transitive dependencies are excluded when the parser provides relation info.
-// Set parserCfg.ShowTransitive to include them. Returns an empty Result when
-// the parser yields nothing or every dependency is filtered out.
+// Set parserCfg.ShowTransitive to include them. Returns an empty Result
+// (carrying TransitiveSkipped when the filter dropped anything) when the parser
+// yields nothing or every dependency is filtered out.
 func (s *Service) RunFromParser(ctx context.Context, parser depparser.DependencyParser, data []byte, policy domainscan.FailPolicy, parserCfg ParserConfig) (*Result, error) {
 	if parser == nil {
 		return nil, fmt.Errorf("scan service: parser is nil")
@@ -199,7 +205,7 @@ func summarizeSkippedTransitive(deps []depparser.ParsedDependency, kept map[stri
 			continue
 		}
 		seen[d.PURL] = struct{}{}
-		for _, parent := range uniqueStrings(d.ViaParents) {
+		for _, parent := range dedup(d.ViaParents) {
 			via[parent]++
 		}
 	}
@@ -207,16 +213,6 @@ func summarizeSkippedTransitive(deps []depparser.ParsedDependency, kept map[stri
 		return nil
 	}
 	return &TransitiveSkipped{Count: len(seen), Via: via}
-}
-
-func uniqueStrings(in []string) []string {
-	out := make([]string, 0, len(in))
-	for _, v := range in {
-		if !slices.Contains(out, v) {
-			out = append(out, v)
-		}
-	}
-	return out
 }
 
 // ActionsDiscoverer abstracts the actions discovery infrastructure.

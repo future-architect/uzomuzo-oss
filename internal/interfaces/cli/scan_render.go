@@ -464,7 +464,7 @@ func formatTransitiveSkipped(s *scanapp.TransitiveSkipped) string {
 	return fmt.Sprintf("%d transitive not evaluated (%suse --show-transitive)", s.Count, formatSkippedVia(s))
 }
 
-// formatSkippedVia renders "via a 7, b 5, +2 more; " or "" when no parent is known.
+// formatSkippedVia renders "via a 7, b 5, c 3, +2 more; " or "" when no parent is known.
 func formatSkippedVia(s *scanapp.TransitiveSkipped) string {
 	if len(s.Via) == 0 {
 		return ""
