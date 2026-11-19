@@ -42,6 +42,11 @@ func collectBounded[V any](
 	for _, key := range keys {
 		// Acquire semaphore or bail on context cancellation — before spawning
 		// the goroutine so we never accumulate parked goroutines after cancel.
+		// Check ctx first: when both the semaphore and ctx.Done() are ready,
+		// select picks at random and could start one more call after cancel.
+		if ctx.Err() != nil {
+			break
+		}
 		acquired := false
 		select {
 		case semaphore <- struct{}{}:

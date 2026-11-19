@@ -36,11 +36,11 @@ so `go test ./...` stays runnable in CI and restricted-network environments
 |---|---------|-----------|---------------------------|
 | 1 | `internal/infrastructure/treesitter` | `BenchmarkAnalyzeCoupling` | `AnalyzeCoupling` walks the entire source tree and tree-sitter-parses **every** matching file. This is the dominant cost of `diet` coupling analysis on any real repository. (At design time this ran through a single `*sitter.Parser` in one sequential `filepath.WalkDir`; the loop's first accepted change parallelized it across a worker pool — see the accepted-changes list in the PR.) |
 | 2 | `internal/infrastructure/depparser/cyclonedx` | `BenchmarkParseLargeSBOM` | Parses SBOMs with thousands of components; runs once per invocation but over large input. |
-| 3 | `internal/common/purl` | `BenchmarkParserParse`, `BenchmarkIsStableVersion` | Called once per component in every code path; small per-call cost multiplied by component count. |
+| 3 | `internal/common/purl` | `BenchmarkParserParse`, `BenchmarkIsStableVersionFor` | Called once per component in every code path; small per-call cost multiplied by component count. |
 | 4 | `internal/infrastructure/eoltext` | `BenchmarkDetectLifecycleReadme`, `BenchmarkDetectLifecyclePyPI` | Regex battery over README / PyPI description text. This is the pure-CPU core behind the EOL evaluator's text rules, and it is reachable with no client at all. |
 | 5 | `internal/interfaces/cli` | `BenchmarkRenderScanOutput` | Allocation-heavy string/box rendering over a large result set. |
 
-Target 3 shipped as `BenchmarkParserParse` (PURL parsing itself) and `BenchmarkIsStableVersion`
+Target 3 shipped as `BenchmarkParserParse` (PURL parsing itself) and `BenchmarkIsStableVersionFor`
 rather than the originally planned `BenchmarkNormalizeMavenCollapsedCoordinates` — parsing and
 version-stability classification turned out to be the calls actually repeated per component on
 the hot path; Maven coordinate normalization was not benchmarked in this pass.
