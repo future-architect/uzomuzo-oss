@@ -42,10 +42,10 @@ func TestWithdrawnAdvisoryDecision(t *testing.T) {
 		{name: "active", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test"}`, wantKeep: true, wantCalls: 1},
 		{name: "osv missing", missing: true, osvStatus: 404, wantKeep: true, wantCalls: 1},
 		{name: "osv error", missing: true, osvStatus: 400, wantKeep: true, wantCalls: 1},
-		// Retried by the client (429, 5xx, network error), so the call count is only checked to be >= 1 (wantCalls -1).
-		{name: "osv rate limited", missing: true, osvStatus: 429, wantKeep: true, wantCalls: -1},
-		{name: "osv server error", missing: true, osvStatus: 503, wantKeep: true, wantCalls: -1},
-		{name: "osv network error", missing: true, osvNetErr: true, wantKeep: true, wantCalls: -1},
+		// Retried by the client (RegistryRetryConfig: MaxRetries 2), so each of these makes exactly 3 OSV calls.
+		{name: "osv rate limited", missing: true, osvStatus: 429, wantKeep: true, wantCalls: 3},
+		{name: "osv server error", missing: true, osvStatus: 503, wantKeep: true, wantCalls: 3},
+		{name: "osv network error", missing: true, osvNetErr: true, wantKeep: true, wantCalls: 3},
 		{name: "malformed OSV JSON", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19`, wantKeep: true, wantCalls: 1},
 		{name: "invalid withdrawal timestamp", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"not-a-timestamp"}`, wantKeep: true, wantCalls: 1},
 		{name: "null withdrawal timestamp", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":null}`, wantKeep: true, wantCalls: 1},
@@ -61,6 +61,8 @@ func TestWithdrawnAdvisoryDecision(t *testing.T) {
 	} {
 		for _, path := range []string{"direct", "dependency"} {
 			t.Run(path+"/"+tc.name, func(t *testing.T) {
+				// Parallel so the retry backoff of the 429/5xx/network-error rows overlaps instead of adding up.
+				t.Parallel()
 				var calls atomic.Int32
 				var oc *osv.Client
 				if !tc.noOSV {
@@ -100,8 +102,8 @@ func TestWithdrawnAdvisoryDecision(t *testing.T) {
 				if got := len(vd.Advisories); (got == 1) != tc.wantKeep {
 					t.Errorf("advisories = %v, wantKeep %v", vd.Advisories, tc.wantKeep)
 				}
-				if got := calls.Load(); (tc.wantCalls >= 0 && got != tc.wantCalls) || (tc.wantCalls < 0 && got < 1) {
-					t.Errorf("OSV calls = %d, want %d (-1 = at least one)", got, tc.wantCalls)
+				if got := calls.Load(); got != tc.wantCalls {
+					t.Errorf("OSV calls = %d, want %d", got, tc.wantCalls)
 				}
 				if tc.wantKeep && len(vd.Advisories) == 1 {
 					adv := vd.Advisories[0]
