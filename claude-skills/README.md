@@ -75,7 +75,7 @@ Use when a library is being selected, compared, or recommended, and before a new
 - When it may ask, it shows the record and stops before adding; when told not to ask, it adds the dependency and records "Decided by: AI agent (delegated by the person; not reviewed by a person yet)"
 - A `replace` verdict on a package the person named does not block the addition; the verdict goes at the top of the reply and into the record
 - The exception is an OSV malicious-package advisory (the `malicious` field): the agent does not add the package, even when the person named it or said not to ask. It shows the advisory ID and waits, adds the package only after the person has seen the ID and says to add it anyway, and does not swap in another package or version on its own
-- `malicious` and `malicious_check` are copied into every record; a failed lookup (`malicious_check: "unknown"`) does not hold the addition, except when the package is also not found in its registry, and is recorded as not obtained. In that case the agent leaves the name as written, does not add or swap the package, and waits for the person to give the name
+- `malicious` and `malicious_check` are copied into every record; a failed lookup (`malicious_check: "unknown"`) does not hold the addition, except when the package is also not found in its registry, and is recorded as not obtained. In that case the agent leaves the name as written and does not add or swap the package; if the person named it, the agent waits for them to give the name, and if the agent is choosing or recommending, it drops that candidate
 - Every record carries two fixed statements: `ok` is a maintenance verdict, not a safety verdict; the verdicts have not been compared with human judgement
 
 ```bash
