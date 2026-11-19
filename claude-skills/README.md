@@ -139,7 +139,7 @@ Invocation is not the same as following every step. In one of the "add it" runs 
 | "add it" 2 | yes | once, the same 3 candidates | same | wrote that the relationship between `Maintained Score: 0/10` and `Active` was not investigated; copied `(unavailable)` |
 | "which should I use" | yes | once, 2 `ok` candidates | same | did not touch go.mod; "Decided by: not decided yet" |
 
-The case with fewer than two `ok`/`caution` candidates and the case without `GITHUB_TOKEN` have not been run with this wording. The hold on a malicious-package advisory was added later and was not part of these runs; it has only been tried in a small exploratory run.
+The case with fewer than two `ok`/`caution` candidates and the case without `GITHUB_TOKEN` have not been run with this wording. The hold on a malicious-package advisory was added later and was not part of these runs; an earlier wording of it was tried in a small exploratory run, and the current wording in one headless run described in the pull request that added it.
 
 **Prompts that do not mention a library.** Four more runs with the same setup asked for a feature only:
 
