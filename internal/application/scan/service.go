@@ -352,13 +352,15 @@ func warnMaliciousLookupFailures(analyses map[string]*analysis.Analysis) {
 }
 
 // warnDependencyAdvisoryLookupFailures reports aggregate age-check and CVSS v4
-// lookup failures; either can hide an EOL-Effective result. See ADR-0032, ADR-0037.
+// lookup failures, the latter including over-budget lookups. Only dependency
+// advisories can hide an EOL-Effective result this way: an own advisory left
+// unscored stays potentially HIGH. See ADR-0032, ADR-0037.
 func warnDependencyAdvisoryLookupFailures(analyses map[string]*analysis.Analysis) {
 	if unknown := analysis.CountDependencyAdvisoryAgeUnknown(analyses); unknown > 0 {
 		slog.Warn("dependency advisory age check incomplete: OSV lookup failed; these packages may be EOL-Effective", "count", unknown)
 	}
 	if failed := analysis.CountCVSS4LookupFailures(analyses); failed > 0 {
-		slog.Warn("CVSS v4 severity check incomplete: OSV lookup failed; these packages may be EOL-Effective", "count", failed)
+		slog.Warn("CVSS v4 severity check incomplete: OSV lookup failed or ran out of time budget for advisories of these packages; a package's own unscored advisory still counts as possibly HIGH, but an unscored dependency advisory may hide an EOL-Effective result", "count", failed)
 	}
 }
 

@@ -223,9 +223,11 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 	return plan, nil
 }
 
+// warnCVSS4LookupFailures reports, as one count of analyses, advisories whose
+// OSV v4 lookup failed or exceeded the request budget. See ADR-0037.
 func warnCVSS4LookupFailures(analyses map[string]*domain.Analysis) {
 	if failed := domain.CountCVSS4LookupFailures(analyses); failed > 0 {
-		slog.Warn("CVSS v4 severity check incomplete: OSV lookup failed; these packages may be EOL-Effective", "count", failed)
+		slog.Warn("CVSS v4 severity check incomplete: OSV lookup failed or ran out of time budget for advisories of these packages; a package's own unscored advisory still counts as possibly HIGH, but an unscored dependency advisory may hide an EOL-Effective result", "count", failed)
 	}
 }
 
