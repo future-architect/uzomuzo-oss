@@ -555,24 +555,32 @@ type wireVuln struct {
 	Affected   []wireAffected  `json:"affected"`
 }
 
-// scoreCVSS4 reads the published vector without changing threat metrics. See ADR-0037.
+// scoreCVSS4 reads the published vector without changing threat metrics. Each
+// severity entry is read with strictFields, so a duplicate or variant-spelled
+// "type" or "score" key supplies no score. See ADR-0037.
 func scoreCVSS4(raw json.RawMessage) (float64, bool) {
-	var entries []struct {
-		Type  string `json:"type"`
-		Score string `json:"score"`
-	}
+	var entries []json.RawMessage
 	if len(raw) == 0 || json.Unmarshal(raw, &entries) != nil {
 		return 0, false
 	}
 	var vector string
 	for _, entry := range entries {
-		if entry.Type != "CVSS_V4" {
-			continue
-		}
-		if vector != "" || entry.Score == "" {
+		fields, err := strictFields(entry, "type", "score")
+		if err != nil {
 			return 0, false
 		}
-		vector = entry.Score
+		typ, okType := optionalString(fields["type"])
+		score, okScore := optionalString(fields["score"])
+		if !okType || !okScore {
+			return 0, false
+		}
+		if typ != "CVSS_V4" {
+			continue
+		}
+		if vector != "" || score == "" {
+			return 0, false
+		}
+		vector = score
 	}
 	if vector == "" {
 		return 0, false
@@ -586,6 +594,15 @@ func scoreCVSS4(raw json.RawMessage) (float64, bool) {
 		return 0, false
 	}
 	return score, true
+}
+
+// optionalString decodes an absent or null value as empty, as a struct field would.
+func optionalString(raw json.RawMessage) (string, bool) {
+	var v string
+	if len(raw) == 0 {
+		return "", true
+	}
+	return v, json.Unmarshal(raw, &v) == nil
 }
 
 // ratingString decodes a JSON string as is. Any other JSON value, null
@@ -949,7 +966,8 @@ func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord,
 		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln: answer for %q did not name it", id)
 	}
 	if !rec.Withdrawn {
-		// A duplicate or variant-spelled key must not select a low score. See ADR-0037.
+		// A duplicate or variant-spelled key, at the top level or inside a
+		// severity entry, must not select a low score. See ADR-0037.
 		if _, err := strictFields(raw, "severity"); err == nil {
 			rec.CVSS4Score, rec.CVSS4Known = scoreCVSS4(v.Severity)
 		}

@@ -55,9 +55,14 @@ func TestGetVulnCVSS4(t *testing.T) {
 func TestGetVulnAmbiguousSeverityKey(t *testing.T) {
 	const id = "GHSA-ambiguous-severity"
 	const zero = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:N/SC:N/SI:N/SA:N"
+	const high = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:H/SI:H/SA:H"
 	for _, tc := range []struct{ name, field string }{
 		{"duplicate key", `"severity":[],"severity":[{"type":"CVSS_V4","score":"` + zero + `"}]`},
 		{"variant spelling", `"Severity":[{"type":"CVSS_V4","score":"` + zero + `"}]`},
+		{"duplicate score in entry", `"severity":[{"type":"CVSS_V4","score":"` + high + `","score":"` + zero + `"}]`},
+		{"variant score in entry", `"severity":[{"type":"CVSS_V4","score":"` + high + `","Score":"` + zero + `"}]`},
+		{"variant type in entry", `"severity":[{"type":"CVSS_V3","Type":"CVSS_V4","score":"` + zero + `"}]`},
+		{"long s in entry key", `"severity":[{"type":"CVSS_V4","score":"` + high + `","ſcore":"` + zero + `"}]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := NewClient()
