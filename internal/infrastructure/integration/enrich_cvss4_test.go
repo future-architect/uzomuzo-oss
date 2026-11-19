@@ -61,6 +61,23 @@ func TestAnalyzeFromGitHubURLsRetainsCVSS4Fallback(t *testing.T) {
 	}
 }
 
+// cancelWhenWorkersBlocked returns a context that is canceled, like an expired
+// budget, once osvFactWorkers requests are waiting in block. Requests are
+// dispatched in priority order and each frees its worker slot only after its
+// answer is stored, so at that point every earlier request has finished. This
+// avoids a wall-clock budget that a loaded machine could exhaust first.
+func cancelWhenWorkersBlocked() (context.Context, func(*http.Request) (*http.Response, error)) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var waiting atomic.Int32
+	return ctx, func(r *http.Request) (*http.Response, error) {
+		if waiting.Add(1) == osvFactWorkers {
+			cancel()
+		}
+		<-r.Context().Done()
+		return nil, r.Context().Err()
+	}
+}
+
 func TestCVSS4FallbackKeepsOSVFactPriority(t *testing.T) {
 	details := map[string]*depsdev.AdvisoryDetail{}
 	missing := map[string]struct{}{"GHSA-zzz-missing": {}}
@@ -68,17 +85,17 @@ func TestCVSS4FallbackKeepsOSVFactPriority(t *testing.T) {
 		details[fmt.Sprintf("GHSA-yyy-high-%d", i)] = &depsdev.AdvisoryDetail{CVSS3Score: 9.0}
 		details[fmt.Sprintf("GHSA-aaa-v4-%d", i)] = &depsdev.AdvisoryDetail{CVSS3Score: 0}
 	}
+	ctx, block := cancelWhenWorkersBlocked()
 	oc := osv.NewClient()
 	oc.SetHTTPClient(&http.Client{Transport: withdrawnRoundTrip(func(r *http.Request) (*http.Response, error) {
 		id := strings.TrimPrefix(r.URL.Path, "/v1/vulns/")
 		if strings.Contains(id, "-v4-") {
-			<-r.Context().Done()
-			return nil, r.Context().Err()
+			return block(r)
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"` + id + `"}`)), Header: make(http.Header), Request: r}, nil
 	})})
-	svc := &IntegrationService{osvClient: oc, osvFactsBudget: 200 * time.Millisecond}
-	facts := svc.fetchDependencyAdvisoryOSVFacts(context.Background(), details, missing)
+	svc := &IntegrationService{osvClient: oc}
+	facts := svc.fetchDependencyAdvisoryOSVFacts(ctx, details, missing)
 	for id := range missing {
 		if facts[id].lookup != domain.AdvisoryRecordFound {
 			t.Errorf("missing priority %s=%s", id, facts[id].lookup)
@@ -105,18 +122,18 @@ func TestDirectCVSS4FallbackKeepsWithdrawalPriority(t *testing.T) {
 		details[id] = &depsdev.AdvisoryDetail{CVSS3Score: 0}
 		vd.Advisories = append(vd.Advisories, domain.Advisory{ID: id})
 	}
+	ctx, block := cancelWhenWorkersBlocked()
 	oc := osv.NewClient()
 	oc.SetHTTPClient(&http.Client{Transport: withdrawnRoundTrip(func(r *http.Request) (*http.Response, error) {
 		id := strings.TrimPrefix(r.URL.Path, "/v1/vulns/")
 		if id != missingID {
-			<-r.Context().Done()
-			return nil, r.Context().Err()
+			return block(r)
 		}
 		missingCalls.Add(1)
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"` + id + `"}`)), Header: make(http.Header), Request: r}, nil
 	})})
-	svc := &IntegrationService{depsdevClient: &stubDepsDevClient{advisoryDetails: details, advisoryMissing: map[string]struct{}{missingID: {}}}, osvClient: oc, osvFactsBudget: 200 * time.Millisecond}
-	svc.enrichAdvisorySeverity(context.Background(), map[string]*domain.Analysis{"p": {ReleaseInfo: &domain.ReleaseInfo{StableVersion: vd}}}, true)
+	svc := &IntegrationService{depsdevClient: &stubDepsDevClient{advisoryDetails: details, advisoryMissing: map[string]struct{}{missingID: {}}}, osvClient: oc}
+	svc.enrichAdvisorySeverity(ctx, map[string]*domain.Analysis{"p": {ReleaseInfo: &domain.ReleaseInfo{StableVersion: vd}}}, true)
 	if missingCalls.Load() != 1 {
 		t.Fatalf("withdrawal requests=%d", missingCalls.Load())
 	}
@@ -224,7 +241,11 @@ func TestEnrichCVSS4UnknownAndFailure(t *testing.T) {
 				}
 				return &http.Response{StatusCode: tc.status, Body: io.NopCloser(strings.NewReader(tc.body)), Header: make(http.Header), Request: r}, nil
 			})})
-			svc := &IntegrationService{depsdevClient: &stubDepsDevClient{advisoryDetails: map[string]*depsdev.AdvisoryDetail{id: {CVSS3Score: 0}}}, osvClient: oc, osvFactsBudget: 25 * time.Millisecond}
+			svc := &IntegrationService{depsdevClient: &stubDepsDevClient{advisoryDetails: map[string]*depsdev.AdvisoryDetail{id: {CVSS3Score: 0}}}, osvClient: oc}
+			if tc.block {
+				// Only the blocking case may run out of time; the others keep the default budget.
+				svc.osvFactsBudget = 25 * time.Millisecond
+			}
 			vd := &domain.VersionDetail{Advisories: []domain.Advisory{{ID: id}}}
 			svc.enrichAdvisorySeverity(context.Background(), map[string]*domain.Analysis{"p": {ReleaseInfo: &domain.ReleaseInfo{StableVersion: vd}}}, true)
 			adv := vd.Advisories[0]
@@ -251,7 +272,11 @@ func TestTransitiveCVSS4LookupFailure(t *testing.T) {
 				return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header), Request: r}, nil
 			})})
 			dd := &stubDepsDevClient{advisoryDetails: map[string]*depsdev.AdvisoryDetail{id: {CVSS3Score: 0}}, transitiveAdvisoryResults: map[string][]depsdev.AdvisoryKey{"dep@1.0.0": {{ID: id}}}}
-			svc := &IntegrationService{depsdevClient: dd, osvClient: oc, osvFactsBudget: 25 * time.Millisecond}
+			svc := &IntegrationService{depsdevClient: dd, osvClient: oc}
+			if tc.block {
+				// Only the blocking case may run out of time; the OSV error case keeps the default budget.
+				svc.osvFactsBudget = 25 * time.Millisecond
+			}
 			vd := &domain.VersionDetail{Version: "1.0.0"}
 			a := &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{StableVersion: vd}}
 			analyses := map[string]*domain.Analysis{"p": a}
