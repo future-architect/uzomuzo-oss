@@ -75,7 +75,7 @@ Use when a library is being selected, compared, or recommended, and before a new
 - When it may ask, it shows the record and stops before adding; when told not to ask, it adds the dependency and records "Decided by: AI agent (delegated by the person; not reviewed by a person yet)"
 - A `replace` verdict on a package the person named does not block the addition; the verdict goes at the top of the reply and into the record
 - The exception is an OSV malicious-package advisory (the `malicious` field): the agent does not add the package, even when the person named it or said not to ask. It shows the advisory ID and waits, adds the package only after the person has seen the ID and says to add it anyway, and does not swap in another package or version on its own
-- `malicious` and `malicious_check` are copied into every record; a failed lookup (`malicious_check: "unknown"`) does not hold the addition and is recorded as not obtained
+- `malicious` and `malicious_check` are copied into every record; a failed lookup (`malicious_check: "unknown"`) does not hold the addition, except when the package is also not found in its registry, and is recorded as not obtained
 - Every record carries two fixed statements: `ok` is a maintenance verdict, not a safety verdict; the verdicts have not been compared with human judgement
 
 ```bash
@@ -139,7 +139,7 @@ Invocation is not the same as following every step. In one of the "add it" runs 
 | "add it" 2 | yes | once, the same 3 candidates | same | wrote that the relationship between `Maintained Score: 0/10` and `Active` was not investigated; copied `(unavailable)` |
 | "which should I use" | yes | once, 2 `ok` candidates | same | did not touch go.mod; "Decided by: not decided yet" |
 
-The case with fewer than two `ok`/`caution` candidates and the case without `GITHUB_TOKEN` have not been run with this wording. The hold on a malicious-package advisory was added later and was not part of these runs; an earlier wording of it was tried in a small exploratory run, and the current wording in one headless run described in the pull request that added it.
+The case with fewer than two `ok`/`caution` candidates and the case without `GITHUB_TOKEN` have not been run with this wording. The hold on a malicious-package advisory was added later and was not part of these runs; an earlier wording of it was tried in a small exploratory run, and the current wording in one headless run described in the pull request that added it (#646).
 
 **Prompts that do not mention a library.** Four more runs with the same setup asked for a feature only:
 
