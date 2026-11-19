@@ -40,10 +40,6 @@ func (missingPackageRepoDepsDevClient) FetchDependenciesBatch(context.Context, [
 	return nil
 }
 
-func (missingPackageRepoDepsDevClient) FetchAdvisoriesBatch(context.Context, []string) map[string]*depsdev.AdvisoryDetail {
-	return nil
-}
-
 func (missingPackageRepoDepsDevClient) FetchTransitiveAdvisoryKeys(context.Context, *depsdev.DependenciesResponse) (map[string][]depsdev.AdvisoryKey, error) {
 	return nil, nil
 }

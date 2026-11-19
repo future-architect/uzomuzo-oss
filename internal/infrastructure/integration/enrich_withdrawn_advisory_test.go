@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,6 +32,7 @@ func TestWithdrawnAdvisoryDecision(t *testing.T) {
 		osvStatus    int
 		osvBody      string
 		noOSV        bool
+		osvNetErr    bool
 		detail       *depsdev.AdvisoryDetail
 		wantKeep     bool
 		wantCalls    int32
@@ -40,6 +42,10 @@ func TestWithdrawnAdvisoryDecision(t *testing.T) {
 		{name: "active", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test"}`, wantKeep: true, wantCalls: 1},
 		{name: "osv missing", missing: true, osvStatus: 404, wantKeep: true, wantCalls: 1},
 		{name: "osv error", missing: true, osvStatus: 400, wantKeep: true, wantCalls: 1},
+		// Retried by the client (429, 5xx, network error), so the call count is only checked to be >= 1 (wantCalls -1).
+		{name: "osv rate limited", missing: true, osvStatus: 429, wantKeep: true, wantCalls: -1},
+		{name: "osv server error", missing: true, osvStatus: 503, wantKeep: true, wantCalls: -1},
+		{name: "osv network error", missing: true, osvNetErr: true, wantKeep: true, wantCalls: -1},
 		{name: "malformed OSV JSON", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"2026-10-22T19`, wantKeep: true, wantCalls: 1},
 		{name: "invalid withdrawal timestamp", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":"not-a-timestamp"}`, wantKeep: true, wantCalls: 1},
 		{name: "null withdrawal timestamp", missing: true, osvStatus: 200, osvBody: `{"id":"GHSA-withdrawn-test","withdrawn":null}`, wantKeep: true, wantCalls: 1},
@@ -64,6 +70,9 @@ func TestWithdrawnAdvisoryDecision(t *testing.T) {
 							t.Errorf("OSV path = %q", got)
 						}
 						calls.Add(1)
+						if tc.osvNetErr {
+							return nil, errors.New("simulated network error")
+						}
 						return &http.Response{StatusCode: tc.osvStatus, Body: io.NopCloser(strings.NewReader(tc.osvBody)), Header: make(http.Header), Request: r}, nil
 					})})
 				}
@@ -91,8 +100,8 @@ func TestWithdrawnAdvisoryDecision(t *testing.T) {
 				if got := len(vd.Advisories); (got == 1) != tc.wantKeep {
 					t.Errorf("advisories = %v, wantKeep %v", vd.Advisories, tc.wantKeep)
 				}
-				if got := calls.Load(); got != tc.wantCalls {
-					t.Errorf("OSV calls = %d, want %d", got, tc.wantCalls)
+				if got := calls.Load(); (tc.wantCalls >= 0 && got != tc.wantCalls) || (tc.wantCalls < 0 && got < 1) {
+					t.Errorf("OSV calls = %d, want %d (-1 = at least one)", got, tc.wantCalls)
 				}
 				if tc.wantKeep && len(vd.Advisories) == 1 {
 					adv := vd.Advisories[0]
