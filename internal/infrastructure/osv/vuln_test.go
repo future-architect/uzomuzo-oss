@@ -37,6 +37,11 @@ func TestGetVulnCVSS4(t *testing.T) {
 		{"duplicate v4 vectors", "GHSA-cvss4-test", `[{"type":"CVSS_V4","score":"` + full + `"},{"type":"CVSS_V4","score":"` + none + `"}]`, "", "", 0, false},
 		{"duplicate metric", "GHSA-cvss4-test", `[{"type":"CVSS_V4","score":"` + none + `/AV:N"}]`, "", "", 0, false},
 		{"v3 only", "GHSA-cvss4-test", `[{"type":"CVSS_V3","score":"CVSS:3.1/AV:N"}]`, "", "", 0, false},
+		{"null severity element", "GHSA-cvss4-test", `[null,{"type":"CVSS_V4","score":"` + full + `"}]`, "", "", 0, false},
+		{"non-string score on non-v4 entry", "GHSA-cvss4-test", `[{"type":"CVSS_V3","score":3},{"type":"CVSS_V4","score":"` + full + `"}]`, "", "", 0, false},
+		{"v3 and v4 entries", "GHSA-cvss4-test", `[{"type":"CVSS_V3","score":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"},{"type":"CVSS_V4","score":"` + full + `"}]`, "", "CRITICAL", 9.1, true},
+		{"v4 entry with extra key", "GHSA-cvss4-test", `[{"type":"CVSS_V4","score":"` + full + `","extra":1}]`, "", "CRITICAL", 9.1, true},
+		{"non-v4 entry without score before v4", "GHSA-cvss4-test", `[{"type":"Ubuntu"},{"type":"CVSS_V4","score":"` + full + `"}]`, "", "CRITICAL", 9.1, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := NewClient()

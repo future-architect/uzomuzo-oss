@@ -81,7 +81,7 @@ func cancelWhenWorkersBlocked() (context.Context, func(*http.Request) (*http.Res
 func TestCVSS4FallbackKeepsOSVFactPriority(t *testing.T) {
 	details := map[string]*depsdev.AdvisoryDetail{}
 	missing := map[string]struct{}{"GHSA-zzz-missing": {}}
-	for i := range 8 {
+	for i := range osvFactWorkers {
 		details[fmt.Sprintf("GHSA-yyy-high-%d", i)] = &depsdev.AdvisoryDetail{CVSS3Score: 9.0}
 		details[fmt.Sprintf("GHSA-aaa-v4-%d", i)] = &depsdev.AdvisoryDetail{CVSS3Score: 0}
 	}
@@ -117,7 +117,7 @@ func TestDirectCVSS4FallbackKeepsWithdrawalPriority(t *testing.T) {
 	var missingCalls atomic.Int32
 	details := map[string]*depsdev.AdvisoryDetail{}
 	vd := &domain.VersionDetail{Advisories: []domain.Advisory{{ID: missingID}}}
-	for i := range 8 {
+	for i := range osvFactWorkers {
 		id := fmt.Sprintf("GHSA-aaa-v4-%d", i)
 		details[id] = &depsdev.AdvisoryDetail{CVSS3Score: 0}
 		vd.Advisories = append(vd.Advisories, domain.Advisory{ID: id})
@@ -137,7 +137,7 @@ func TestDirectCVSS4FallbackKeepsWithdrawalPriority(t *testing.T) {
 	if missingCalls.Load() != 1 {
 		t.Fatalf("withdrawal requests=%d", missingCalls.Load())
 	}
-	if len(vd.Advisories) != 9 {
+	if len(vd.Advisories) != osvFactWorkers+1 {
 		t.Fatalf("advisories=%d", len(vd.Advisories))
 	}
 	for _, adv := range vd.Advisories {

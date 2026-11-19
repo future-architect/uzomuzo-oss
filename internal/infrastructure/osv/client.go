@@ -557,7 +557,10 @@ type wireVuln struct {
 
 // scoreCVSS4 reads the published vector without changing threat metrics. Each
 // severity entry is read with strictFields, so a duplicate or variant-spelled
-// "type" or "score" key supplies no score. See ADR-0037.
+// "type" or "score" key supplies no score. A null severity element, or a
+// non-V4 element whose score is not a string, also makes the v4 score unknown:
+// this deliberately fails toward "unknown" rather than skipping the entry and
+// scoring the remaining V4 vector. See ADR-0037.
 func scoreCVSS4(raw json.RawMessage) (float64, bool) {
 	var entries []json.RawMessage
 	if len(raw) == 0 || json.Unmarshal(raw, &entries) != nil {
