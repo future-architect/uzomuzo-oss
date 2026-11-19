@@ -64,8 +64,9 @@ func (s *IntegrationService) AnalyzeFromGitHubURLs(ctx context.Context, githubUR
 		analyses[r.githubURL] = r.analysis
 	}
 
-	// Advisory severity enrichment (best-effort, after all analyses are populated).
-	s.enrichAdvisorySeverity(ctx, analyses)
+	// Final severity-only pass: each PURL analysis already checked withdrawal.
+	// See ADR-0036.
+	s.enrichAdvisorySeverity(ctx, analyses, false)
 
 	slog.Debug("completed_github_url_batch", "total", len(analyses))
 	return analyses, nil

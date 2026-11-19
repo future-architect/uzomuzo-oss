@@ -48,7 +48,7 @@ func TestEnrichTransitiveAdvisories(t *testing.T) {
 			},
 		}
 
-		svc.enrichTransitiveAdvisories(context.Background(), purls, analyses, depsGraph)
+		svc.enrichTransitiveAdvisories(context.Background(), purls, analyses, depsGraph, nil)
 
 		a := analyses["pkg:npm/request@2.88.2"]
 		vd := a.ReleaseInfo.StableVersion
@@ -127,7 +127,7 @@ func TestEnrichTransitiveAdvisories(t *testing.T) {
 			},
 		}
 
-		svc.enrichTransitiveAdvisories(context.Background(), purls, analyses, depsGraph)
+		svc.enrichTransitiveAdvisories(context.Background(), purls, analyses, depsGraph, nil)
 
 		vd := analyses["pkg:npm/test@1.0.0"].ReleaseInfo.StableVersion
 		if len(vd.Advisories) != 2 {
@@ -147,14 +147,14 @@ func TestEnrichTransitiveAdvisories(t *testing.T) {
 			depsdevClient: &stubDepsDevClient{},
 		}
 		// Should not panic.
-		svc.enrichTransitiveAdvisories(context.Background(), nil, nil, nil)
+		svc.enrichTransitiveAdvisories(context.Background(), nil, nil, nil, nil)
 	})
 
 	t.Run("empty deps graph results is a no-op", func(t *testing.T) {
 		svc := &IntegrationService{
 			depsdevClient: &stubDepsDevClient{},
 		}
-		svc.enrichTransitiveAdvisories(context.Background(), []string{"pkg:npm/x@1.0.0"}, map[string]*domain.Analysis{}, map[string]*depsdev.DependenciesResponse{})
+		svc.enrichTransitiveAdvisories(context.Background(), []string{"pkg:npm/x@1.0.0"}, map[string]*domain.Analysis{}, map[string]*depsdev.DependenciesResponse{}, nil)
 	})
 }
 

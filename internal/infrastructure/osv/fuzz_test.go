@@ -229,6 +229,30 @@ func FuzzCheckUnambiguousKeys(f *testing.F) {
 	})
 }
 
+// FuzzCheckUnambiguousByIDKeys exercises the by-ID response parser on valid,
+// ambiguous, malformed, and truncated OSV bodies. It must not panic or hang.
+func FuzzCheckUnambiguousByIDKeys(f *testing.F) {
+	for _, s := range osvFuzzSeeds {
+		f.Add(s)
+	}
+	for _, s := range []string{
+		`{"id":"GHSA-x","withdrawn":"2026-10-22T19:21:04Z"}`,
+		`{"id":"GHSA-x","id":"GHSA-y"}`,
+		`{"id":"GHSA-x","ID":"GHSA-y"}`,
+		`{"id":"GHSA-x","withdrawn":"2026-10-22T19:21:04Z","withdrawn":"2026-10-23T00:00:00Z"}`,
+		`{"id":"GHSA-x","Withdrawn":"2026-10-22T19:21:04Z"}`,
+		`{"id":"GHSA-x","withdrawn":"not-a-timestamp"}`,
+		`{"id":"GHSA-x","withdrawn":"2026-10-22T19`,
+		`{}}`,
+		strings.Repeat(`{"a":[`, 300),
+	} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, body string) {
+		_ = checkUnambiguousByIDKeys([]byte(body))
+	})
+}
+
 // checkAdmissible restates every admission rule ClassifyUnmaintained applies,
 // so a positive verdict can be checked against the input that produced it.
 func checkAdmissible(rec *domain.AdvisoryRecord, name string, now time.Time) error {

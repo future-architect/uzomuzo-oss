@@ -12,9 +12,9 @@ import (
 )
 
 // FetchAdvisory fetches advisory detail (title, CVSS3 score) for a single advisory ID.
-// Returns nil without error for 404 (withdrawn advisory).
+// Returns nil without error when deps.dev has no detail for the ID (HTTP 404).
 func (c *DepsDevClient) FetchAdvisory(ctx context.Context, advisoryID string) (*AdvisoryDetail, error) {
-	// Normalize the ID the same way FetchAdvisoriesBatch does, so direct callers
+	// Normalize the ID the same way FetchAdvisoriesBatchWithStatus does, so direct callers
 	// don't pollute the cache with whitespace-padded keys or issue invalid
 	// requests for empty IDs.
 	advisoryID = strings.TrimSpace(advisoryID)
@@ -61,14 +61,16 @@ func (c *DepsDevClient) FetchAdvisory(ctx context.Context, advisoryID string) (*
 	return &detail, nil
 }
 
-// FetchAdvisoriesBatch fetches advisory details for multiple advisory IDs in parallel.
-// Returns a map of advisory ID -> AdvisoryDetail. Unknown/failed IDs are silently omitted.
-// Results are cached in-memory since advisory metadata is immutable.
+// FetchAdvisoriesBatchWithStatus fetches advisory details for multiple IDs.
+// The second map contains IDs whose detail request returned HTTP 404; failed
+// requests are omitted from both maps.
 //
 // DDD Layer: Infrastructure (parallel processing)
-func (c *DepsDevClient) FetchAdvisoriesBatch(ctx context.Context, advisoryIDs []string) map[string]*AdvisoryDetail {
+func (c *DepsDevClient) FetchAdvisoriesBatchWithStatus(ctx context.Context, advisoryIDs []string) (map[string]*AdvisoryDetail, map[string]struct{}) {
+	details := make(map[string]*AdvisoryDetail)
+	missing := make(map[string]struct{})
 	if len(advisoryIDs) == 0 {
-		return make(map[string]*AdvisoryDetail)
+		return details, missing
 	}
 
 	// Normalize and deduplicate IDs.
@@ -86,23 +88,34 @@ func (c *DepsDevClient) FetchAdvisoriesBatch(ctx context.Context, advisoryIDs []
 	}
 
 	const maxWorkers = 10
-	results := collectBounded[*AdvisoryDetail](ctx, unique, maxWorkers, func(ctx context.Context, advisoryID string) (string, *AdvisoryDetail, bool) {
+	type outcome struct {
+		detail  *AdvisoryDetail
+		missing bool
+	}
+	results := collectBounded[outcome](ctx, unique, maxWorkers, func(ctx context.Context, advisoryID string) (string, outcome, bool) {
 		detail, err := c.FetchAdvisory(ctx, advisoryID)
 		if err != nil {
 			slog.Debug("failed to fetch advisory detail", "id", advisoryID, "error", err)
-			return "", nil, false
+			return "", outcome{}, false
 		}
 		if detail == nil {
-			return "", nil, false
+			return advisoryID, outcome{missing: true}, true
 		}
-		return advisoryID, detail, true
+		return advisoryID, outcome{detail: detail}, true
 	})
+	for id, result := range results {
+		if result.missing {
+			missing[id] = struct{}{}
+		} else {
+			details[id] = result.detail
+		}
+	}
 
 	slog.Debug("advisory severity fetch complete",
 		"requested", len(advisoryIDs),
 		"unique", len(unique),
-		"fetched", len(results),
+		"fetched", len(details),
 	)
 
-	return results
+	return details, missing
 }

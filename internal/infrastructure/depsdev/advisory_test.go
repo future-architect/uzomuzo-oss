@@ -152,12 +152,15 @@ func TestFetchAdvisoriesBatch_EmptyInput(t *testing.T) {
 		MaxRetries: 0,
 	})
 
-	results := client.FetchAdvisoriesBatch(context.Background(), nil)
+	results, missing := client.FetchAdvisoriesBatchWithStatus(context.Background(), nil)
 	if results == nil {
 		t.Fatal("expected non-nil map")
 	}
 	if len(results) != 0 {
 		t.Errorf("expected empty map, got %d entries", len(results))
+	}
+	if len(missing) != 0 {
+		t.Errorf("expected no missing IDs, got %v", missing)
 	}
 }
 
@@ -184,12 +187,15 @@ func TestFetchAdvisoriesBatch_DeduplicatesIDs(t *testing.T) {
 	})
 
 	// Pass the same ID three times.
-	results := client.FetchAdvisoriesBatch(context.Background(), []string{
+	results, missing := client.FetchAdvisoriesBatchWithStatus(context.Background(), []string{
 		"GHSA-dup", "GHSA-dup", "GHSA-dup",
 	})
 
 	if len(results) != 1 {
 		t.Errorf("expected 1 result, got %d", len(results))
+	}
+	if len(missing) != 0 {
+		t.Errorf("missing IDs = %v, want none", missing)
 	}
 	// The server should only be called once due to dedup.
 	if got := callCount.Load(); got != 1 {
@@ -226,7 +232,7 @@ func TestFetchAdvisoriesBatch_MixedResults(t *testing.T) {
 		MaxRetries: 0,
 	})
 
-	results := client.FetchAdvisoriesBatch(context.Background(), []string{
+	results, missing := client.FetchAdvisoriesBatchWithStatus(context.Background(), []string{
 		"GHSA-ok", "GHSA-gone", "GHSA-err",
 	})
 
@@ -236,5 +242,51 @@ func TestFetchAdvisoriesBatch_MixedResults(t *testing.T) {
 	}
 	if d, ok := results["GHSA-ok"]; !ok || d.CVSS3Score != 9.8 {
 		t.Errorf("expected GHSA-ok with score 9.8, got %v", d)
+	}
+	if len(missing) != 1 {
+		t.Fatalf("missing IDs = %v, want only GHSA-gone", missing)
+	}
+	if _, ok := missing["GHSA-gone"]; !ok {
+		t.Errorf("missing IDs = %v, want GHSA-gone", missing)
+	}
+}
+
+func TestFetchAdvisoriesBatchWithStatus_OutcomesAndCache(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		status      int
+		body        string
+		wantDetail  bool
+		wantMissing bool
+		wantCalls   int32
+	}{
+		{"detail", http.StatusOK, `{"advisoryKey":{"id":"GHSA-test"},"cvss3Score":7.5}`, true, false, 1},
+		{"missing", http.StatusNotFound, ``, false, true, 1},
+		{"bad request", http.StatusBadRequest, ``, false, false, 2},
+		{"server error", http.StatusInternalServerError, ``, false, false, 2},
+		{"malformed JSON", http.StatusOK, `{`, false, false, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+			client := NewDepsDevClient(&config.DepsDevConfig{BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0})
+			for range 2 {
+				details, missing := client.FetchAdvisoriesBatchWithStatus(context.Background(), []string{" GHSA-test ", "GHSA-test"})
+				if _, ok := details["GHSA-test"]; ok != tc.wantDetail {
+					t.Errorf("details=%v, wantDetail=%v", details, tc.wantDetail)
+				}
+				if _, ok := missing["GHSA-test"]; ok != tc.wantMissing {
+					t.Errorf("missing=%v, wantMissing=%v", missing, tc.wantMissing)
+				}
+			}
+			if got := calls.Load(); got != tc.wantCalls {
+				t.Errorf("calls=%d, want=%d", got, tc.wantCalls)
+			}
+		})
 	}
 }

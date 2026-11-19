@@ -139,7 +139,9 @@ const (
 	// DependencyAdvisoryNotChecked means no OSV lookup was made.
 	DependencyAdvisoryNotChecked = domain.DependencyAdvisoryNotChecked
 
-	// AdvisoryRecordNotLookedUp (the zero value) means no OSV lookup was made.
+	// AdvisoryRecordNotLookedUp (the zero value) means no publication-date or
+	// reviewed-severity lookup result was recorded. A retained deps.dev-404
+	// advisory may still have been checked for withdrawal. See ADR-0036.
 	AdvisoryRecordNotLookedUp = domain.AdvisoryRecordNotLookedUp
 	// AdvisoryRecordFound means OSV returned the record.
 	AdvisoryRecordFound = domain.AdvisoryRecordFound
