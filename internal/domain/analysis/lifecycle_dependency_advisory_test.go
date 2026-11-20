@@ -2,7 +2,6 @@ package analysis
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -12,23 +11,29 @@ import (
 func TestLifecycleAssessor_CVSS4ClearsResidualOverride(t *testing.T) {
 	now := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
 	oldCommit := now.AddDate(0, 0, -800)
+	unknown := Advisory{ID: "GHSA-v4-only", Relation: AdvisoryRelationDirect}
+	v4Medium := Advisory{ID: "GHSA-v4-only", Relation: AdvisoryRelationDirect, CVSS4Score: 6.6, CVSS4Known: true, Severity: "MEDIUM"}
 	for _, tc := range []struct {
-		name     string
-		advisory Advisory
-		label    MaintenanceStatus
-		trace    string
+		name      string
+		published time.Time
+		advisory  Advisory
+		label     MaintenanceStatus
+		reason    string
+		trace     string
 	}{
-		{"unknown", Advisory{ID: "GHSA-v4-only", Relation: AdvisoryRelationDirect}, LabelEOLEffective, "residual_vuln_override"},
-		{"v4 medium", Advisory{ID: "GHSA-v4-only", Relation: AdvisoryRelationDirect, CVSS4Score: 6.6, CVSS4Known: true, Severity: "MEDIUM"}, LabelActive, "active_stable"},
+		{"recent release, unknown", now.AddDate(0, 0, -10), unknown, LabelEOLEffective, "Unmaintained, unpatched vulnerabilities", "residual_vuln_override"},
+		{"recent release, v4 medium", now.AddDate(0, 0, -10), v4Medium, LabelActive, "Actively maintained with recent releases", "active_stable"},
+		{"old release, unknown", now.AddDate(0, 0, -800), unknown, LabelEOLEffective, "Unmaintained, unpatched vulnerabilities", "residual_vuln_override"},
+		{"old release, v4 medium", now.AddDate(0, 0, -800), v4Medium, LabelStalled, "Long-term inactive, no recent releases", "inactive_commit_no_scores_old_publish"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			a := &Analysis{RepoState: &RepoState{DaysSinceLastCommit: 800, LatestHumanCommit: &oldCommit, CommitStats: &CommitStats{}}, ReleaseInfo: &ReleaseInfo{StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: now.AddDate(0, 0, -10), Advisories: []Advisory{tc.advisory}}}}
+			a := &Analysis{RepoState: &RepoState{DaysSinceLastCommit: 800, LatestHumanCommit: &oldCommit, CommitStats: &CommitStats{}}, ReleaseInfo: &ReleaseInfo{StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: tc.published, Advisories: []Advisory{tc.advisory}}}}
 			got, err := NewLifecycleAssessorService().Assess(context.Background(), AssessmentInput{Analysis: a, EOL: EOLStatus{State: EOLNotEOL}, Now: now})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got.Label != string(tc.label) || !strings.Contains(strings.Join(got.Trace, " "), tc.trace) {
-				t.Fatalf("label=%s trace=%v", got.Label, got.Trace)
+			if got.Label != string(tc.label) || got.Reason != tc.reason || !containsString(got.Trace, tc.trace) {
+				t.Fatalf("label=%s reason=%q trace=%v", got.Label, got.Reason, got.Trace)
 			}
 		})
 	}
