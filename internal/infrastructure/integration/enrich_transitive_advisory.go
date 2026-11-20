@@ -155,8 +155,14 @@ func (s *IntegrationService) enrichTransitiveAdvisories(
 			if detail, ok := details[entries[i].ID]; ok {
 				entries[i].Title = detail.Title
 				entries[i].CVSS3Score = detail.CVSS3Score
-				entries[i].Severity = domain.SeverityFromCVSS3(detail.CVSS3Score)
-				if f, ok := osvFacts[entries[i].ID]; ok && domain.IsKnownHighCVSS3(detail.CVSS3Score, threshold) {
+				if detail.CVSS3Score == 0 {
+					f := osvFacts[entries[i].ID]
+					entries[i].CVSS4Score, entries[i].CVSS4Known = f.rec.CVSS4Score, f.rec.CVSS4Known
+					entries[i].CVSS4LookupFailed = f.lookup == domain.AdvisoryRecordLookupFailed
+				}
+				score, known := entries[i].EffectiveSeverityScore()
+				entries[i].Severity = domain.SeverityFromScore(score, known)
+				if f, ok := osvFacts[entries[i].ID]; ok && entries[i].IsKnownHighSeverity(threshold) {
 					entries[i].RecordLookup = f.lookup
 					entries[i].Published = f.rec.Published
 					entries[i].ReviewedSeverity = f.rec.Severity
@@ -190,23 +196,45 @@ type osvFact struct {
 	lookup domain.AdvisoryRecordLookup
 }
 
-// fetchDependencyAdvisoryOSVFacts selects known-HIGH dependency IDs for age
-// facts and unions optional deps.dev 404 IDs for withdrawal checks. It makes
-// one bounded OSV request per unique ID. See ADR-0032 and ADR-0036.
+// fetchDependencyAdvisoryOSVFacts selects known-HIGH IDs for age facts, zero-v3
+// IDs for v4 fallback, and deps.dev 404 IDs for withdrawal checks. It makes
+// one bounded OSV request per unique ID. See ADR-0032, ADR-0036, ADR-0037.
 func (s *IntegrationService) fetchDependencyAdvisoryOSVFacts(ctx context.Context, details map[string]*depsdev.AdvisoryDetail, missingIDs ...map[string]struct{}) map[string]osvFact {
 	threshold := assessorHighSeverityThreshold()
-	lookupIDs := make(map[string]struct{})
+	highIDs := make(map[string]struct{})
+	v4IDs := make(map[string]struct{})
 	for id, d := range details {
-		if d != nil && domain.IsKnownHighCVSS3(d.CVSS3Score, threshold) {
-			lookupIDs[id] = struct{}{}
+		if d == nil {
+			continue
+		}
+		if d.CVSS3Score >= threshold {
+			highIDs[id] = struct{}{}
+		} else if d.CVSS3Score == 0 {
+			v4IDs[id] = struct{}{}
 		}
 	}
-	for _, missing := range missingIDs {
-		for id := range missing {
-			lookupIDs[id] = struct{}{}
+	missing := make(map[string]struct{})
+	for _, group := range missingIDs {
+		for id := range group {
+			missing[id] = struct{}{}
 		}
 	}
-	return s.fetchAdvisoryOSVFacts(ctx, sortedIDs(lookupIDs))
+	return s.fetchAdvisoryOSVFacts(ctx, orderedOSVFactIDs(missing, highIDs, v4IDs))
+}
+
+// orderedOSVFactIDs keeps existing withdrawal and age checks ahead of v4 fallback work.
+func orderedOSVFactIDs(missing, high, v4 map[string]struct{}) []string {
+	seen := make(map[string]struct{})
+	var ids []string
+	for _, group := range []map[string]struct{}{missing, high, v4} {
+		for _, id := range sortedIDs(group) {
+			if _, ok := seen[id]; !ok {
+				ids = append(ids, id)
+				seen[id] = struct{}{}
+			}
+		}
+	}
+	return ids
 }
 
 func sortedIDs(ids map[string]struct{}) []string {
@@ -218,7 +246,8 @@ func sortedIDs(ids map[string]struct{}) []string {
 	return out
 }
 
-// fetchAdvisoryOSVFacts uses the bounded OSV by-ID worker for selected IDs.
+// fetchAdvisoryOSVFacts dispatches IDs in caller order within its bounded budget;
+// IDs still queued when the budget expires fail from the tail of that order.
 // Callers must require a deps.dev 404 before treating withdrawal as removal.
 // See ADR-0036.
 func (s *IntegrationService) fetchAdvisoryOSVFacts(ctx context.Context, ids []string) map[string]osvFact {
@@ -226,10 +255,14 @@ func (s *IntegrationService) fetchAdvisoryOSVFacts(ctx context.Context, ids []st
 		return nil
 	}
 	unique := make(map[string]struct{}, len(ids))
+	ordered := make([]string, 0, len(ids))
 	for _, id := range ids {
-		unique[id] = struct{}{}
+		if _, ok := unique[id]; !ok {
+			unique[id] = struct{}{}
+			ordered = append(ordered, id)
+		}
 	}
-	ids = sortedIDs(unique)
+	ids = ordered
 	budget := osvFactsBudget
 	if s.osvFactsBudget > 0 {
 		budget = s.osvFactsBudget
@@ -314,7 +347,7 @@ func markDirectAdvisories(vd *domain.VersionDetail) {
 }
 
 // appendTransitiveAdvisories appends transitive advisories to a VersionDetail, deduplicating
-// by advisory ID against existing entries. Maintains CVSS3 descending sort order.
+// by advisory ID against existing entries. Sorts by effective severity score.
 func appendTransitiveAdvisories(vd *domain.VersionDetail, advisories []domain.Advisory) {
 	if vd == nil || len(advisories) == 0 {
 		return
@@ -331,8 +364,10 @@ func appendTransitiveAdvisories(vd *domain.VersionDetail, advisories []domain.Ad
 		existing[a.ID] = struct{}{}
 	}
 	sort.SliceStable(vd.Advisories, func(i, j int) bool {
-		if vd.Advisories[i].CVSS3Score != vd.Advisories[j].CVSS3Score {
-			return vd.Advisories[i].CVSS3Score > vd.Advisories[j].CVSS3Score
+		left, _ := vd.Advisories[i].EffectiveSeverityScore()
+		right, _ := vd.Advisories[j].EffectiveSeverityScore()
+		if left != right {
+			return left > right
 		}
 		return vd.Advisories[i].ID < vd.Advisories[j].ID
 	})

@@ -407,10 +407,10 @@ func appendRepoStateMarkers(cell string, a *domain.Analysis) string {
 }
 
 // maxCSVColumns is the widest a CSV row gets: verdict and purl, the two
-// conditional relation columns, then the eighteen fixed columns. Rows without
+// conditional relation columns, then the twenty fixed columns. Rows without
 // relation info are shorter — this is the buffer's capacity, not its length.
 // Keep in step with the header built in renderScanCSV.
-const maxCSVColumns = 22
+const maxCSVColumns = 24
 
 // initialRowBufBytes is the starting capacity of the reused table row buffer.
 // A row is a verdict cell, a PURL and four short fields, so most rows fit
@@ -538,13 +538,16 @@ type enrichedJSONEntry struct {
 	AdvisoryCount       int     `json:"advisory_count,omitempty"`
 	MaxAdvisorySeverity string  `json:"max_advisory_severity,omitempty"`
 	MaxCVSS3Score       float64 `json:"max_cvss3_score,omitempty"`
+	// MaxCVSS4Score covers only advisories without a deps.dev v3 score. See ADR-0037.
+	MaxCVSS4Score *float64 `json:"max_cvss4_score,omitempty"`
 
 	// DirectAdvisoryCount is the number of advisories affecting the package directly.
 	DirectAdvisoryCount int `json:"direct_advisory_count,omitempty"`
 	// TransitiveAdvisoryCount is the number of advisories from transitive dependencies.
-	TransitiveAdvisoryCount       int     `json:"transitive_advisory_count,omitempty"`
-	MaxTransitiveAdvisorySeverity string  `json:"max_transitive_advisory_severity,omitempty"`
-	MaxTransitiveCVSS3Score       float64 `json:"max_transitive_cvss3_score,omitempty"`
+	TransitiveAdvisoryCount       int      `json:"transitive_advisory_count,omitempty"`
+	MaxTransitiveAdvisorySeverity string   `json:"max_transitive_advisory_severity,omitempty"`
+	MaxTransitiveCVSS3Score       float64  `json:"max_transitive_cvss3_score,omitempty"`
+	MaxTransitiveCVSS4Score       *float64 `json:"max_transitive_cvss4_score,omitempty"`
 
 	Reason string `json:"reason,omitempty"`
 	// DependencyAdvisoryAge names the dependency advisory that decided the
@@ -813,12 +816,22 @@ func newEnrichedJSONEntry(e *domainaudit.AuditEntry) enrichedJSONEntry {
 			je.DirectAdvisoryCount = vd.DirectAdvisoryCount()
 			if maxScore := vd.MaxCVSS3(); maxScore > 0 {
 				je.MaxCVSS3Score = maxScore
-				je.MaxAdvisorySeverity = domain.SeverityFromCVSS3(maxScore)
+			}
+			if score, known := vd.MaxCVSS4(); known {
+				je.MaxCVSS4Score = &score
+			}
+			if score, known := vd.MaxEffectiveSeverityScore(); known {
+				je.MaxAdvisorySeverity = domain.SeverityFromScore(score, known)
 			}
 			je.TransitiveAdvisoryCount = vd.TransitiveAdvisoryCount()
 			if maxTScore := vd.MaxTransitiveCVSS3(); maxTScore > 0 {
 				je.MaxTransitiveCVSS3Score = maxTScore
-				je.MaxTransitiveAdvisorySeverity = domain.SeverityFromCVSS3(maxTScore)
+			}
+			if score, known := vd.MaxTransitiveCVSS4(); known {
+				je.MaxTransitiveCVSS4Score = &score
+			}
+			if score, known := vd.MaxTransitiveEffectiveSeverityScore(); known {
+				je.MaxTransitiveAdvisorySeverity = domain.SeverityFromScore(score, known)
 			}
 		}
 	}
@@ -855,7 +868,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 	}
 	header = append(header, "lifecycle", "build_integrity", "build_integrity_score", "successor", "advisory_count", "max_advisory_severity", "max_cvss3_score",
 		"direct_advisory_count", "transitive_advisory_count", "max_transitive_advisory_severity", "max_transitive_cvss3_score",
-		"repo_url", "source", "via", "malicious_advisory", "dormant_release", "archived", "disabled")
+		"repo_url", "source", "via", "malicious_advisory", "dormant_release", "archived", "disabled", "max_cvss4_score", "max_transitive_cvss4_score")
 	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
@@ -872,10 +885,12 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		advisoryCount := ""
 		maxSeverity := ""
 		maxCVSS3Score := ""
+		maxCVSS4Score := ""
 		directAdvisoryCount := ""
 		transitiveAdvisoryCount := ""
 		maxTransitiveSeverity := ""
 		maxTransitiveCVSS3Score := ""
+		maxTransitiveCVSS4Score := ""
 		maliciousAdvisory := ""
 		dormantRelease := ""
 		if a := e.Analysis; a != nil {
@@ -891,14 +906,24 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 				if vd := a.ReleaseInfo.LatestVersionDetail(); vd != nil {
 					advisoryCount = fmt.Sprintf("%d", len(vd.Advisories))
 					if maxScore := vd.MaxCVSS3(); maxScore > 0 {
-						maxSeverity = domain.SeverityFromCVSS3(maxScore)
 						maxCVSS3Score = fmt.Sprintf("%.1f", maxScore)
+					}
+					if score, known := vd.MaxCVSS4(); known {
+						maxCVSS4Score = fmt.Sprintf("%.1f", score)
+					}
+					if score, known := vd.MaxEffectiveSeverityScore(); known {
+						maxSeverity = domain.SeverityFromScore(score, known)
 					}
 					directAdvisoryCount = fmt.Sprintf("%d", vd.DirectAdvisoryCount())
 					transitiveAdvisoryCount = fmt.Sprintf("%d", vd.TransitiveAdvisoryCount())
 					if maxTScore := vd.MaxTransitiveCVSS3(); maxTScore > 0 {
-						maxTransitiveSeverity = domain.SeverityFromCVSS3(maxTScore)
 						maxTransitiveCVSS3Score = fmt.Sprintf("%.1f", maxTScore)
+					}
+					if score, known := vd.MaxTransitiveCVSS4(); known {
+						maxTransitiveCVSS4Score = fmt.Sprintf("%.1f", score)
+					}
+					if score, known := vd.MaxTransitiveEffectiveSeverityScore(); known {
+						maxTransitiveSeverity = domain.SeverityFromScore(score, known)
 					}
 				}
 			}
@@ -924,7 +949,7 @@ func renderScanCSV(w io.Writer, entries []domainaudit.AuditEntry) error {
 		row = append(row, maintenance, buildIntegrity, buildIntegrityScore, successor, advisoryCount, maxSeverity, maxCVSS3Score,
 			directAdvisoryCount, transitiveAdvisoryCount, maxTransitiveSeverity, maxTransitiveCVSS3Score,
 			repoURL, string(e.Source), e.Via, maliciousAdvisory, dormantRelease,
-			strconv.FormatBool(e.Analysis.IsArchived()), strconv.FormatBool(e.Analysis.IsDisabled()))
+			strconv.FormatBool(e.Analysis.IsArchived()), strconv.FormatBool(e.Analysis.IsDisabled()), maxCVSS4Score, maxTransitiveCVSS4Score)
 		if err := cw.Write(row); err != nil {
 			return fmt.Errorf("failed to write CSV row for %s: %w", e.PURL, err)
 		}

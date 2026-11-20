@@ -197,6 +197,7 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 	if unknown := domain.CountDependencyAdvisoryAgeUnknown(healthResults); unknown > 0 {
 		slog.Warn("dependency advisory age check incomplete: OSV lookup failed; these packages may be EOL-Effective", "count", unknown)
 	}
+	warnCVSS4LookupFailures(healthResults)
 
 	// Phase 4: Scoring and prioritization
 	slog.Info("Phase 4: Computing scores and ranking")
@@ -220,6 +221,14 @@ func (s *Service) Run(ctx context.Context, input DietInput) (*domaindiet.DietPla
 	)
 
 	return plan, nil
+}
+
+// warnCVSS4LookupFailures reports, as one count of analyses, advisories whose
+// OSV v4 lookup failed or exceeded the request budget. See ADR-0037.
+func warnCVSS4LookupFailures(analyses map[string]*domain.Analysis) {
+	if failed := domain.CountCVSS4LookupFailures(analyses); failed > 0 {
+		slog.Warn("CVSS v4 severity check incomplete: OSV lookup failed or ran out of time budget for advisories of these packages; a package's own unscored advisory still counts as possibly HIGH, but an unscored dependency advisory may hide an EOL-Effective result", "count", failed)
+	}
 }
 
 func (s *Service) buildEntries(
@@ -350,8 +359,8 @@ func computeHealthSignals(a *domain.Analysis) domaindiet.HealthSignals {
 		if vd := a.ReleaseInfo.LatestVersionDetail(); vd != nil {
 			for _, adv := range vd.Advisories {
 				h.VulnerabilityCount++
-				if adv.CVSS3Score > h.MaxCVSSScore {
-					h.MaxCVSSScore = adv.CVSS3Score
+				if score, known := adv.EffectiveSeverityScore(); known && score > h.MaxCVSSScore {
+					h.MaxCVSSScore = score
 				}
 			}
 			if h.VulnerabilityCount > 0 {

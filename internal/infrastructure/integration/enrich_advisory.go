@@ -10,17 +10,22 @@ import (
 )
 
 // enrichAdvisorySeverity enriches Stable and MaxSemver severity. When
-// verifyWithdrawal is true, it also removes advisories whose deps.dev detail is
-// missing and whose OSV record confirms withdrawal, including on the selected
-// fallback version. See ADR-0010 and ADR-0036.
+// verifyWithdrawal is true, it makes OSV by-ID requests to confirm withdrawal
+// (including on the selected fallback version) and to score zero-v3 details
+// on Stable and MaxSemver. When false, it preserves prior v4 evidence without
+// making by-ID requests.
+// See ADR-0010, ADR-0036, and ADR-0037.
 func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyses map[string]*domain.Analysis, verifyWithdrawal bool) map[string]struct{} {
 	idSet := make(map[string]struct{})
+	v4Scope := make(map[string]struct{})
 	for _, a := range analyses {
 		if a == nil || a.ReleaseInfo == nil {
 			continue
 		}
 		collectAdvisoryIDs(a.ReleaseInfo.StableVersion, idSet)
 		collectAdvisoryIDs(a.ReleaseInfo.MaxSemverVersion, idSet)
+		collectAdvisoryIDs(a.ReleaseInfo.StableVersion, v4Scope)
+		collectAdvisoryIDs(a.ReleaseInfo.MaxSemverVersion, v4Scope)
 		if verifyWithdrawal && a.ReleaseInfo.StableVersion == nil && a.ReleaseInfo.MaxSemverVersion == nil {
 			collectAdvisoryIDs(a.ReleaseInfo.LatestVersionDetail(), idSet)
 		}
@@ -38,8 +43,15 @@ func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyse
 	slog.Debug("fetching_advisory_severity", "unique_ids", len(ids))
 	details, missing := s.depsdevClient.FetchAdvisoriesBatchWithStatus(ctx, ids)
 	var withdrawn map[string]struct{}
-	if verifyWithdrawal && len(missing) > 0 {
-		facts := s.fetchAdvisoryOSVFacts(ctx, sortedIDs(missing))
+	var facts map[string]osvFact
+	if verifyWithdrawal {
+		v4IDs := make(map[string]struct{})
+		for id, detail := range details {
+			if _, selected := v4Scope[id]; selected && detail != nil && detail.CVSS3Score == 0 {
+				v4IDs[id] = struct{}{}
+			}
+		}
+		facts = s.fetchAdvisoryOSVFacts(ctx, orderedOSVFactIDs(missing, nil, v4IDs))
 		for id := range missing {
 			if facts[id].lookup == domain.AdvisoryRecordWithdrawn {
 				if withdrawn == nil {
@@ -55,8 +67,8 @@ func (s *IntegrationService) enrichAdvisorySeverity(ctx context.Context, analyse
 		if a == nil || a.ReleaseInfo == nil {
 			continue
 		}
-		enrichVersionAdvisories(a.ReleaseInfo.StableVersion, details)
-		enrichVersionAdvisories(a.ReleaseInfo.MaxSemverVersion, details)
+		enrichVersionAdvisories(a.ReleaseInfo.StableVersion, details, facts)
+		enrichVersionAdvisories(a.ReleaseInfo.MaxSemverVersion, details, facts)
 		if verifyWithdrawal {
 			filterSelectedWithdrawnAdvisories(a.ReleaseInfo, withdrawn)
 		}
@@ -109,8 +121,8 @@ func collectAdvisoryIDs(vd *domain.VersionDetail, idSet map[string]struct{}) {
 	}
 }
 
-// enrichVersionAdvisories fills severity data from fetched details and sorts by CVSS3 descending.
-func enrichVersionAdvisories(vd *domain.VersionDetail, details map[string]*depsdev.AdvisoryDetail) {
+// enrichVersionAdvisories fills severity data and sorts by effective score. See ADR-0037.
+func enrichVersionAdvisories(vd *domain.VersionDetail, details map[string]*depsdev.AdvisoryDetail, facts ...map[string]osvFact) {
 	if vd == nil || len(vd.Advisories) == 0 {
 		return
 	}
@@ -119,11 +131,23 @@ func enrichVersionAdvisories(vd *domain.VersionDetail, details map[string]*depsd
 		if detail, ok := details[adv.ID]; ok {
 			adv.Title = detail.Title
 			adv.CVSS3Score = detail.CVSS3Score
-			adv.Severity = domain.SeverityFromCVSS3(detail.CVSS3Score)
+			if detail.CVSS3Score > 0 {
+				adv.CVSS4LookupFailed = false
+			}
+			if detail.CVSS3Score == 0 && len(facts) > 0 {
+				if f, ok := facts[0][adv.ID]; ok {
+					adv.CVSS4Score, adv.CVSS4Known = f.rec.CVSS4Score, f.rec.CVSS4Known
+					adv.CVSS4LookupFailed = f.lookup == domain.AdvisoryRecordLookupFailed
+				}
+			}
+			score, known := adv.EffectiveSeverityScore()
+			adv.Severity = domain.SeverityFromScore(score, known)
 		}
 	}
 	// Use a stable sort so advisories with equal scores keep their existing order.
 	sort.SliceStable(vd.Advisories, func(i, j int) bool {
-		return vd.Advisories[i].CVSS3Score > vd.Advisories[j].CVSS3Score
+		left, _ := vd.Advisories[i].EffectiveSeverityScore()
+		right, _ := vd.Advisories[j].EffectiveSeverityScore()
+		return left > right
 	})
 }

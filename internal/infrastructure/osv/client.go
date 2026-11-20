@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -31,6 +32,7 @@ import (
 	"github.com/future-architect/uzomuzo-oss/internal/common/ttlcache"
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	"github.com/future-architect/uzomuzo-oss/internal/infrastructure/httpclient"
+	gocvss40 "github.com/pandatix/go-cvss/40"
 )
 
 // osvUserAgent identifies uzomuzo to OSV.dev.
@@ -531,9 +533,11 @@ type batchRequest struct {
 }
 
 type wireVuln struct {
-	ID               string   `json:"id"`
-	Aliases          []string `json:"aliases"`
-	Summary          string   `json:"summary"`
+	ID string `json:"id"`
+	// RawMessage keeps malformed severity data from breaking package queries.
+	Severity         json.RawMessage `json:"severity"`
+	Aliases          []string        `json:"aliases"`
+	Summary          string          `json:"summary"`
 	DatabaseSpecific struct {
 		CWEIDs []string `json:"cwe_ids"`
 		// Severity is the curator's reviewed rating (GitHub: LOW, MODERATE,
@@ -549,6 +553,59 @@ type wireVuln struct {
 	Withdrawn  string          `json:"withdrawn"`
 	References []wireReference `json:"references"`
 	Affected   []wireAffected  `json:"affected"`
+}
+
+// scoreCVSS4 reads the published vector without changing threat metrics. Each
+// severity entry is read with strictFields, so a duplicate or variant-spelled
+// "type" or "score" key supplies no score. A null severity element, or a
+// non-V4 element whose score is not a string, also makes the v4 score unknown:
+// this deliberately fails toward "unknown" rather than skipping the entry and
+// scoring the remaining V4 vector. See ADR-0037.
+func scoreCVSS4(raw json.RawMessage) (float64, bool) {
+	var entries []json.RawMessage
+	if len(raw) == 0 || json.Unmarshal(raw, &entries) != nil {
+		return 0, false
+	}
+	var vector string
+	for _, entry := range entries {
+		fields, err := strictFields(entry, "type", "score")
+		if err != nil {
+			return 0, false
+		}
+		typ, okType := optionalString(fields["type"])
+		score, okScore := optionalString(fields["score"])
+		if !okType || !okScore {
+			return 0, false
+		}
+		if typ != "CVSS_V4" {
+			continue
+		}
+		if vector != "" || score == "" {
+			return 0, false
+		}
+		vector = score
+	}
+	if vector == "" {
+		return 0, false
+	}
+	parsed, err := gocvss40.ParseVector(vector)
+	if err != nil {
+		return 0, false
+	}
+	score := parsed.Score()
+	if math.IsNaN(score) || math.IsInf(score, 0) || score < 0 || score > 10 {
+		return 0, false
+	}
+	return score, true
+}
+
+// optionalString decodes an absent or null value as empty, as a struct field would.
+func optionalString(raw json.RawMessage) (string, bool) {
+	var v string
+	if len(raw) == 0 {
+		return "", true
+	}
+	return v, json.Unmarshal(raw, &v) == nil
 }
 
 // ratingString decodes a JSON string as is. Any other JSON value, null
@@ -858,7 +915,7 @@ func sanitizeSummary(raw string) string {
 }
 
 // GetVuln fetches one advisory record by ID from /v1/vulns/{id}: its ID,
-// publication date, withdrawal and reviewed severity (other fields are left
+// publication date, withdrawal, reviewed severity, and v4 score (other fields are left
 // empty). found is false when OSV.dev has no record for the ID (404); that
 // answer is cached for the client's cache TTL, a transport or decode error is
 // not.
@@ -911,8 +968,15 @@ func (c *Client) GetVuln(ctx context.Context, id string) (domain.AdvisoryRecord,
 	if !ok || !strings.EqualFold(rec.ID, id) {
 		return domain.AdvisoryRecord{}, false, fmt.Errorf("osv vuln: answer for %q did not name it", id)
 	}
+	if !rec.Withdrawn {
+		// A duplicate or variant-spelled key, at the top level or inside a
+		// severity entry, must not select a low score. See ADR-0037.
+		if _, err := strictFields(raw, "severity"); err == nil {
+			rec.CVSS4Score, rec.CVSS4Known = scoreCVSS4(v.Severity)
+		}
+	}
 	// Keep only what callers read; affected ranges can be large.
-	rec = domain.AdvisoryRecord{ID: rec.ID, Published: rec.Published, Withdrawn: rec.Withdrawn, Severity: rec.Severity}
+	rec = domain.AdvisoryRecord{ID: rec.ID, Published: rec.Published, Withdrawn: rec.Withdrawn, Severity: rec.Severity, CVSS4Score: rec.CVSS4Score, CVSS4Known: rec.CVSS4Known}
 	c.storeVuln(gen, id, vulnAnswer{rec: rec, found: true})
 	return rec, true, nil
 }

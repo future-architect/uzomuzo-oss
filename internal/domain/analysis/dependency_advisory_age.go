@@ -22,7 +22,7 @@ const (
 	// DependencyAdvisoryNotAged: published too recently; EligibleOn is the
 	// first day it would count.
 	DependencyAdvisoryNotAged DependencyAdvisoryAgeStatus = "not_aged"
-	// DependencyAdvisoryRatedBelowHigh: HIGH by CVSS3, but the database rates
+	// DependencyAdvisoryRatedBelowHigh: HIGH by effective CVSS score, but the database rates
 	// it LOW, MODERATE or MEDIUM.
 	DependencyAdvisoryRatedBelowHigh DependencyAdvisoryAgeStatus = "rated_below_high"
 	// DependencyAdvisoryRatingUnrecognized: the database gives a rating this
@@ -69,7 +69,7 @@ var statusRank = map[DependencyAdvisoryAgeStatus]int{
 }
 
 // ClassifyDependencyAdvisoryAge picks the deciding advisory among vd's
-// dependency advisories with a known CVSS3 score at or above threshold.
+// dependency advisories with a known effective score at or above threshold.
 // Returns nil when there is none.
 //
 // Ages are counted in whole UTC days, so the time of day of the run does not
@@ -83,7 +83,7 @@ func ClassifyDependencyAdvisoryAge(vd *VersionDetail, threshold float64, eolDays
 	today := utcDay(now)
 	var found []DependencyAdvisoryAge
 	for _, adv := range vd.Advisories {
-		if adv.Relation != AdvisoryRelationTransitive || !IsKnownHighCVSS3(adv.CVSS3Score, threshold) {
+		if adv.Relation != AdvisoryRelationTransitive || !adv.IsKnownHighSeverity(threshold) {
 			continue
 		}
 		found = append(found, classifyOne(adv, eolDays, today))
@@ -123,7 +123,7 @@ func (d *DependencyAdvisoryAge) Reason(eolDays int) string {
 	case DependencyAdvisoryNotAged:
 		return fmt.Sprintf("HIGH advisories only in dependencies; oldest published %s, counts from %s (%s)", isoDate(d.Published), isoDate(d.EligibleOn), where)
 	case DependencyAdvisoryRatedBelowHigh:
-		return fmt.Sprintf("dependency advisories HIGH by CVSS3 only, rated %s by the advisory database (%s)", d.ReviewedSeverity, where)
+		return fmt.Sprintf("dependency advisories HIGH by CVSS score, rated %s by the advisory database (%s)", d.ReviewedSeverity, where)
 	case DependencyAdvisoryRatingUnrecognized:
 		return fmt.Sprintf("HIGH advisories only in dependencies; unrecognized advisory database rating (%s)", where)
 	case DependencyAdvisoryUndated:

@@ -56,7 +56,7 @@ Run `uzomuzo scan` on the exact version in the SBOM. Diet JSON does not carry th
 ```bash
 uzomuzo scan "pkg:npm/example@1.2.3" --format json \
   | jq '.packages[0] | {lifecycle, reason, stable_version, malicious, malicious_check, dormant_release,
-                       direct_advisory_count, transitive_advisory_count, max_cvss3_score}'
+                       direct_advisory_count, transitive_advisory_count, max_cvss3_score, max_cvss4_score}'
 ```
 
 - **`malicious` present**: Stop this flow. Moving off the malicious version comes before any removal plan, and it must not wait for an issue to be triaged. Report the advisory to the user and propose the fix: pin to a version the advisory does not name (or remove the package when `scope` is `"package"`), and run `/diet-assess-risk` to list the secrets to rotate (skip that if it already produced the incident verdict). Make the change only in PR mode and only after the user approves it; rotating credentials is the user's action, not yours. For an external project, do not open a public issue that describes an exploitable situation in detail; draft a private report for the maintainers' security contact (`SECURITY.md`) and send nothing until the user approves it.
