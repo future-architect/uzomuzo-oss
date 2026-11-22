@@ -10,6 +10,71 @@ import (
 	"testing"
 )
 
+func TestAnalyzer_JSTSSourceExtensions(t *testing.T) {
+	const controlPURL = "pkg:npm/p-control@1.0.0"
+	tests := []struct {
+		name         string
+		filename     string
+		code         string
+		purl         string
+		importPath   string
+		typeOnlyPURL string
+		typeOnlyPath string
+		wantRead     bool
+	}{
+		{"CommonJS file", "index.cjs", "const p = require('p-cjs'); p.run();", "pkg:npm/p-cjs@1.0.0", "p-cjs", "", "", true},
+		{"TypeScript ES module file", "index.mts", "import p from 'p-mts'; p.run();", "pkg:npm/p-mts@1.0.0", "p-mts", "", "", true},
+		{"TypeScript CommonJS file", "index.cts", "const p = require('p-cts'); p.run();", "pkg:npm/p-cts@1.0.0", "p-cts", "", "", true},
+		{"unsupported text file", "index.txt", "const p = require('p-text'); p.run();", "pkg:npm/p-text@1.0.0", "p-text", "", "", false},
+		{"type-only import in TypeScript ES module file", "mixed.mts", "import type { T } from 'p-type'; import q from 'p-run'; q.run();", "pkg:npm/p-run@1.0.0", "p-run", "pkg:npm/p-type@1.0.0", "p-type", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			importPaths := map[string][]string{tt.purl: {tt.importPath}}
+			if tt.typeOnlyPURL != "" {
+				importPaths[tt.typeOnlyPURL] = []string{tt.typeOnlyPath}
+			}
+			if !tt.wantRead {
+				if err := os.WriteFile(filepath.Join(dir, "control.js"), []byte("const q = require('p-control'); q.run();"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				importPaths[controlPURL] = []string{"p-control"}
+			}
+			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !tt.wantRead {
+				if _, ok := result[tt.purl]; ok {
+					t.Errorf("unexpected coupling for unsupported file %s", tt.filename)
+				}
+				if _, ok := result[controlPURL]; !ok {
+					t.Error("expected coupling for supported control file")
+				}
+				return
+			}
+			ca, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("expected coupling for %s", tt.purl)
+			}
+			if ca.ImportFileCount != 1 || ca.CallSiteCount != 1 || ca.IsUnused {
+				t.Errorf("coupling = (files %d, calls %d, unused %v), want (1, 1, false)", ca.ImportFileCount, ca.CallSiteCount, ca.IsUnused)
+			}
+			if tt.typeOnlyPURL != "" {
+				if _, ok := result[tt.typeOnlyPURL]; ok {
+					t.Errorf("unexpected coupling for type-only import %s", tt.typeOnlyPURL)
+				}
+			}
+		})
+	}
+}
+
 func TestAnalyzer_JavaScript(t *testing.T) {
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "index.js"), []byte(`import axios from "axios";

@@ -230,9 +230,9 @@ func extToLang(ext string) (langID, bool) {
 		return langGo, true
 	case ".py":
 		return langPython, true
-	case ".js", ".jsx", ".mjs":
+	case ".js", ".jsx", ".mjs", ".cjs":
 		return langJavaScript, true
-	case ".ts":
+	case ".ts", ".mts", ".cts":
 		return langTypeScript, true
 	case ".tsx":
 		return langTSX, true

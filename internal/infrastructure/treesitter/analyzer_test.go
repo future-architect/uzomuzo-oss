@@ -13,6 +13,33 @@ import (
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
 )
 
+func TestExtToLang(t *testing.T) {
+	tests := []struct {
+		name string
+		ext  string
+		lang langID
+		ok   bool
+	}{
+		{"JavaScript", ".js", langJavaScript, true},
+		{"JavaScript JSX", ".jsx", langJavaScript, true},
+		{"CommonJS", ".cjs", langJavaScript, true},
+		{"ES module JavaScript", ".mjs", langJavaScript, true},
+		{"TypeScript ES module", ".mts", langTypeScript, true},
+		{"TypeScript CommonJS", ".cts", langTypeScript, true},
+		{"TypeScript", ".ts", langTypeScript, true},
+		{"TSX", ".tsx", langTSX, true},
+		{"unsupported text", ".txt", 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lang, ok := extToLang(tt.ext)
+			if lang != tt.lang || ok != tt.ok {
+				t.Errorf("extToLang(%q) = (%v, %v), want (%v, %v)", tt.ext, lang, ok, tt.lang, tt.ok)
+			}
+		})
+	}
+}
+
 // TestAnalyzer_CloseIdempotent verifies that Analyzer.Close can be called
 // multiple times without panic and that subsequent AnalyzeCoupling calls
 // do not panic. The official tree-sitter Go bindings require explicit Close
