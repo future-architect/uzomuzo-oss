@@ -74,6 +74,8 @@ Use when a library is being selected, compared, or recommended, and before a new
 - When the agent is choosing, it scans the candidates it is considering before it picks one
 - When it may ask, it shows the record and stops before adding; when told not to ask, it adds the dependency and records "Decided by: AI agent (delegated by the person; not reviewed by a person yet)"
 - A `replace` verdict on a package the person named does not block the addition; the verdict goes at the top of the reply and into the record
+- The exception is an OSV malicious-package advisory (the `malicious` field): the agent does not add the package, even when the person named it or said not to ask. It shows the advisory ID and waits, adds the package only after the person has seen the ID and says to add it anyway, and does not swap in another package or version on its own
+- `malicious` and `malicious_check` are copied into every record; a failed lookup (`malicious_check: "unknown"`) does not hold the addition, except when the package is also not found in its registry, and is recorded as not obtained. In that case the agent leaves the name as written and does not add or swap the package; if the person named it, the agent waits for them to give the name, and if the agent is choosing or recommending, it drops that candidate
 - Every record carries two fixed statements: `ok` is a maintenance verdict, not a safety verdict; the verdicts have not been compared with human judgement
 
 ```bash
@@ -137,7 +139,7 @@ Invocation is not the same as following every step. In one of the "add it" runs 
 | "add it" 2 | yes | once, the same 3 candidates | same | wrote that the relationship between `Maintained Score: 0/10` and `Active` was not investigated; copied `(unavailable)` |
 | "which should I use" | yes | once, 2 `ok` candidates | same | did not touch go.mod; "Decided by: not decided yet" |
 
-The case with fewer than two `ok`/`caution` candidates and the case without `GITHUB_TOKEN` have not been run with this wording.
+The case with fewer than two `ok`/`caution` candidates and the case without `GITHUB_TOKEN` have not been run with this wording. The hold on a malicious-package advisory was added later and was not part of these runs; an earlier wording of it was tried in a small exploratory run, and the wording of the named-package branch in one headless run described in the pull request that added it (#646); later fixes to the other branches were not rerun.
 
 **Prompts that do not mention a library.** Four more runs with the same setup asked for a feature only:
 
@@ -150,7 +152,7 @@ The scratch projects had four files, so the agent saw the skill file while looki
 
 **Other runs**:
 - First wording of the skill, candidates passed by hand: Go, npm, and RubyGems verdicts copied as printed; a nonexistent npm name came back as `review` and the skill asked for a corrected PURL.
-- The wording before the recommend/add split, with the user's own settings loaded: a named package that came back `replace` (`github.com/mitchellh/go-homedir`) was added with the verdict first in the reply and `os.UserHomeDir()` suggested; PyPI candidates were scanned without a version while exploring, then the pinned version was scanned.
+- The wording before the recommend/add split, with the user's own settings loaded: a named package that came back `replace` for maintenance reasons, with no malicious-package advisory (`github.com/mitchellh/go-homedir`), was added with the verdict first in the reply and `os.UserHomeDir()` suggested; PyPI candidates were scanned without a version while exploring, then the pinned version was scanned.
 
 **Dependency footprint rule (2026-11-01 and 11-02, Sonnet, recommend only, `GITHUB_TOKEN` unset, 1,835 runs).** Sets were chosen so that the usual pick had a larger count than another `ok` candidate, so these numbers do not say how often real selections change. Whether the new picks are better choices was not evaluated.
 
