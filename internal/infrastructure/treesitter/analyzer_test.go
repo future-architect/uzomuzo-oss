@@ -20,6 +20,8 @@ func TestExtToLang(t *testing.T) {
 		lang langID
 		ok   bool
 	}{
+		{"JavaScript", ".js", langJavaScript, true},
+		{"JavaScript JSX", ".jsx", langJavaScript, true},
 		{"CommonJS", ".cjs", langJavaScript, true},
 		{"ES module JavaScript", ".mjs", langJavaScript, true},
 		{"TypeScript ES module", ".mts", langTypeScript, true},

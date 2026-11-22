@@ -19,13 +19,14 @@ func TestAnalyzer_JSTSSourceExtensions(t *testing.T) {
 		purl         string
 		importPath   string
 		typeOnlyPURL string
+		typeOnlyPath string
 		wantRead     bool
 	}{
-		{"CommonJS file", "index.cjs", "const p = require('p-cjs'); p.run();", "pkg:npm/p-cjs@1.0.0", "p-cjs", "", true},
-		{"TypeScript ES module file", "index.mts", "import p from 'p-mts'; p.run();", "pkg:npm/p-mts@1.0.0", "p-mts", "", true},
-		{"TypeScript CommonJS file", "index.cts", "const p = require('p-cts'); p.run();", "pkg:npm/p-cts@1.0.0", "p-cts", "", true},
-		{"unsupported text file", "index.txt", "const p = require('p-text'); p.run();", "pkg:npm/p-text@1.0.0", "p-text", "", false},
-		{"type-only import in TypeScript ES module file", "mixed.mts", "import type { T } from 'p-type'; import q from 'p-run'; q.run();", "pkg:npm/p-run@1.0.0", "p-run", "pkg:npm/p-type@1.0.0", true},
+		{"CommonJS file", "index.cjs", "const p = require('p-cjs'); p.run();", "pkg:npm/p-cjs@1.0.0", "p-cjs", "", "", true},
+		{"TypeScript ES module file", "index.mts", "import p from 'p-mts'; p.run();", "pkg:npm/p-mts@1.0.0", "p-mts", "", "", true},
+		{"TypeScript CommonJS file", "index.cts", "const p = require('p-cts'); p.run();", "pkg:npm/p-cts@1.0.0", "p-cts", "", "", true},
+		{"unsupported text file", "index.txt", "const p = require('p-text'); p.run();", "pkg:npm/p-text@1.0.0", "p-text", "", "", false},
+		{"type-only import in TypeScript ES module file", "mixed.mts", "import type { T } from 'p-type'; import q from 'p-run'; q.run();", "pkg:npm/p-run@1.0.0", "p-run", "pkg:npm/p-type@1.0.0", "p-type", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -35,7 +36,7 @@ func TestAnalyzer_JSTSSourceExtensions(t *testing.T) {
 			}
 			importPaths := map[string][]string{tt.purl: {tt.importPath}}
 			if tt.typeOnlyPURL != "" {
-				importPaths[tt.typeOnlyPURL] = []string{"p-type"}
+				importPaths[tt.typeOnlyPURL] = []string{tt.typeOnlyPath}
 			}
 			if !tt.wantRead {
 				if err := os.WriteFile(filepath.Join(dir, "control.js"), []byte("const q = require('p-control'); q.run();"), 0o644); err != nil {
