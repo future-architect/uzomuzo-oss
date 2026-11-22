@@ -51,6 +51,37 @@ func FuzzAnalyzeJavaScriptRequire(f *testing.F) {
 	})
 }
 
+// FuzzAnalyzeTypeScriptImportRequire feeds arbitrary TypeScript source through
+// both TypeScript grammars to check that import-require parsing does not panic
+// or hang on malformed input.
+func FuzzAnalyzeTypeScriptImportRequire(f *testing.F) {
+	seeds := []string{
+		`import x = require('pkg'); x.f();`,
+		`import type x = require('pkg');`,
+		`export import x = require('pkg'); x.f();`,
+		`import x = require('pkg'`,
+		`import x = require(`,
+		"",
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+
+	analyzer := NewAnalyzer()
+	f.Cleanup(analyzer.Close)
+	importPaths := map[string][]string{"pkg:npm/pkg@1.0.0": {"pkg"}}
+
+	f.Fuzz(func(t *testing.T, src string) {
+		dir := t.TempDir()
+		for _, name := range []string{"index.ts", "index.tsx"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		_, _ = analyzer.AnalyzeCoupling(context.Background(), dir, importPaths) // only panics and hangs matter here
+	})
+}
+
 // FuzzAnalyzeGoPackageNames feeds two arbitrary Go files of one directory
 // through the coupling analysis, including the package-name inference of
 // #551 and its directory scan, to check that malformed input does not panic
