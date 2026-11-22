@@ -417,6 +417,8 @@ Without `--show-transitive`, only `direct` entries are displayed — transitive 
 
 The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, scores, license info), making it suitable for CI pipelines and downstream tooling without needing a separate detailed run.
 
+For a v4-only advisory, JSON may also include `"max_cvss4_score": 6.6` (and `"max_transitive_cvss4_score"` for a dependency advisory). These fields are omitted when no v4 fallback score is known; a known zero is emitted as `0`. V4 maxima include only advisories without a deps.dev v3 score. `max_cvss3_score` and `max_transitive_cvss3_score` remain v3-only; `max_advisory_severity` uses the highest effective severity band across both versions.
+
 </details>
 
 <details>
@@ -425,8 +427,8 @@ The JSON format includes all analysis fields (verdict, lifecycle, EOL evidence, 
 <!-- begin:output:usage-request-csv -->
 ```text
 $ uzomuzo scan pkg:npm/request@2.88.2 --format csv
-verdict,purl,lifecycle,build_integrity,build_integrity_score,successor,advisory_count,max_advisory_severity,max_cvss3_score,direct_advisory_count,transitive_advisory_count,max_transitive_advisory_severity,max_transitive_cvss3_score,repo_url,source,via
-replace,pkg:npm/request@2.88.2,EOL-Confirmed,Ungraded,,,4,MEDIUM,6.5,1,3,MEDIUM,6.5,https://github.com/request/request,,
+verdict,purl,lifecycle,build_integrity,build_integrity_score,successor,advisory_count,max_advisory_severity,max_cvss3_score,direct_advisory_count,transitive_advisory_count,max_transitive_advisory_severity,max_transitive_cvss3_score,repo_url,source,via,malicious_advisory,dormant_release,archived,disabled,max_cvss4_score,max_transitive_cvss4_score
+replace,pkg:npm/request@2.88.2,EOL-Confirmed,Ungraded,,,4,MEDIUM,6.5,1,3,MEDIUM,6.5,https://github.com/request/request,,,,,false,false,,
 ```
 <!-- end:output:usage-request-csv -->
 

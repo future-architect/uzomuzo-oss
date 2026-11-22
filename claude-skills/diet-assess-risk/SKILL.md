@@ -51,7 +51,7 @@ Diet JSON does not carry the OSV malicious-package check or the npm dormant-rele
 ```bash
 uzomuzo scan "pkg:npm/example@1.2.3" --format json \
   | jq '.packages[0] | {lifecycle, reason, stable_version, malicious, malicious_check, dormant_release,
-                       direct_advisory_count, transitive_advisory_count, max_cvss3_score}'
+                       direct_advisory_count, transitive_advisory_count, max_cvss3_score, max_cvss4_score}'
 ```
 
 uzomuzo runs the malicious-package check only for npm, PyPI, crates.io, Go, and Maven. For other ecosystems (NuGet, GitHub Actions, ...) neither `malicious` nor `malicious_check` appears, which means "not checked", not "clean".

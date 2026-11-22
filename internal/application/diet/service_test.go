@@ -1,16 +1,33 @@
 package diet
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 	domaindiet "github.com/future-architect/uzomuzo-oss/internal/domain/diet"
 )
+
+func TestWarnCVSS4LookupFailures(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	warnCVSS4LookupFailures(map[string]*domain.Analysis{
+		"failed": {ReleaseInfo: &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Advisories: []domain.Advisory{{CVSS4LookupFailed: true}}}}},
+		"known":  {ReleaseInfo: &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Advisories: []domain.Advisory{{CVSS4Known: true}}}}},
+	})
+	if got := buf.String(); strings.Count(got, "CVSS v4 severity check incomplete") != 1 || !strings.Contains(got, "count=1") {
+		t.Fatalf("WARN=%q", got)
+	}
+}
 
 // --- Stub implementations ---
 
@@ -460,6 +477,26 @@ func TestComputeHealthSignals_Vulnerabilities(t *testing.T) {
 	}
 	if h.MaxCVSSScore != 9.8 {
 		t.Errorf("expected MaxCVSSScore = 9.8, got %f", h.MaxCVSSScore)
+	}
+}
+
+func TestComputeHealthSignals_CVSS4Fallback(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		advisories []domain.Advisory
+		want       float64
+	}{
+		{"v4 only", []domain.Advisory{{CVSS4Score: 7.7, CVSS4Known: true}}, 7.7},
+		{"v3 precedence", []domain.Advisory{{CVSS3Score: 5.0, CVSS4Score: 9.8, CVSS4Known: true}}, 5.0},
+		{"mixed", []domain.Advisory{{CVSS3Score: 6.5}, {CVSS4Score: 7.7, CVSS4Known: true}}, 7.7},
+		{"v4 none", []domain.Advisory{{CVSS4Known: true}}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &domain.Analysis{ReleaseInfo: &domain.ReleaseInfo{StableVersion: &domain.VersionDetail{Advisories: tc.advisories}}}
+			if got := computeHealthSignals(a).MaxCVSSScore; got != tc.want {
+				t.Fatalf("max score=%v want %v", got, tc.want)
+			}
+		})
 	}
 }
 

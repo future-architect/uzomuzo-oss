@@ -64,8 +64,9 @@ func (s *IntegrationService) AnalyzeFromGitHubURLs(ctx context.Context, githubUR
 		analyses[r.githubURL] = r.analysis
 	}
 
-	// Final severity-only pass: each PURL analysis already checked withdrawal.
-	// See ADR-0036.
+	// Final severity-only pass: PURL analysis already checked withdrawal and
+	// scored v4 fallback. The false flag preserves that evidence without by-ID
+	// requests. See ADR-0036 and ADR-0037.
 	s.enrichAdvisorySeverity(ctx, analyses, false)
 
 	slog.Debug("completed_github_url_batch", "total", len(analyses))

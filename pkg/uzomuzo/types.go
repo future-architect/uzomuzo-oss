@@ -128,7 +128,7 @@ const (
 	DependencyAdvisoryUnknown = domain.DependencyAdvisoryUnknown
 	// DependencyAdvisoryNotAged means the advisory is too recent; EligibleOn is the day it counts.
 	DependencyAdvisoryNotAged = domain.DependencyAdvisoryNotAged
-	// DependencyAdvisoryRatedBelowHigh means HIGH by CVSS3 but rated lower by the advisory database.
+	// DependencyAdvisoryRatedBelowHigh means HIGH by CVSS score but rated lower by the advisory database.
 	DependencyAdvisoryRatedBelowHigh = domain.DependencyAdvisoryRatedBelowHigh
 	// DependencyAdvisoryRatingUnrecognized means the advisory database gives a rating this tool does not know.
 	DependencyAdvisoryRatingUnrecognized = domain.DependencyAdvisoryRatingUnrecognized

@@ -3,6 +3,7 @@ package osv
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,30 @@ import (
 
 	domain "github.com/future-architect/uzomuzo-oss/internal/domain/analysis"
 )
+
+// FuzzCVSS4SeverityResponse checks the untrusted OSV severity decoding path.
+func FuzzCVSS4SeverityResponse(f *testing.F) {
+	for _, body := range []string{
+		`{"id":"GHSA-vcc3-ghjq-m6fr","severity":[{"type":"CVSS_V4","score":"CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N/E:U/S:N/AU:Y/R:U/V:D/RE:M/U:Amber"}]}`,
+		`{"id":"GHSA-ph9p-34f9-6g65","severity":[{"type":"CVSS_V4","score":"CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N/E:P"}]}`,
+		`{"id":"GHSA-v4","severity":[{"type":"CVSS_V4","score":"CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:N/SC:H/SI:H/SA:H"}]}`,
+		`{"id":"GHSA-v4","severity":{"type":"CVSS_V4"}}`,
+		`{"id":"GHSA-v4","severity":[{"type":"CVSS_V4","score":"invalid"}]}`,
+		`{"id":"GHSA-v4","severity":[{"type":"CVSS_V4","score":"CVSS:4.0/AV:P/AC:H/AT:P/PR:H/UI:A/VC:N/VI:N/VA:N/SC:N/SI:N/SA:N"}]}`,
+	} {
+		f.Add([]byte(body))
+	}
+	f.Fuzz(func(t *testing.T, body []byte) {
+		var vuln wireVuln
+		if err := json.Unmarshal(body, &vuln); err != nil {
+			return
+		}
+		score, known := scoreCVSS4(vuln.Severity)
+		if known && (math.IsNaN(score) || math.IsInf(score, 0) || score < 0 || score > 10) {
+			t.Fatalf("invalid score %v for %q", score, body)
+		}
+	})
+}
 
 // osvFuzzSeeds are response bodies covering the shapes the decoder must survive:
 // the real atty page, a withdrawn advisory, the version-bounded ring marker,

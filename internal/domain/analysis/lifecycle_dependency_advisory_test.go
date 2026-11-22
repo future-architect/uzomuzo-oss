@@ -8,6 +8,37 @@ import (
 	cfg "github.com/future-architect/uzomuzo-oss/internal/domain/config"
 )
 
+func TestLifecycleAssessor_CVSS4ClearsResidualOverride(t *testing.T) {
+	now := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
+	oldCommit := now.AddDate(0, 0, -800)
+	unknown := Advisory{ID: "GHSA-v4-only", Relation: AdvisoryRelationDirect}
+	v4Medium := Advisory{ID: "GHSA-v4-only", Relation: AdvisoryRelationDirect, CVSS4Score: 6.6, CVSS4Known: true, Severity: "MEDIUM"}
+	for _, tc := range []struct {
+		name      string
+		published time.Time
+		advisory  Advisory
+		label     MaintenanceStatus
+		reason    string
+		trace     string
+	}{
+		{"recent release, unknown", now.AddDate(0, 0, -10), unknown, LabelEOLEffective, "Unmaintained, unpatched vulnerabilities", "residual_vuln_override"},
+		{"recent release, v4 medium", now.AddDate(0, 0, -10), v4Medium, LabelActive, "Actively maintained with recent releases", "active_stable"},
+		{"old release, unknown", now.AddDate(0, 0, -800), unknown, LabelEOLEffective, "Unmaintained, unpatched vulnerabilities", "residual_vuln_override"},
+		{"old release, v4 medium", now.AddDate(0, 0, -800), v4Medium, LabelStalled, "Long-term inactive, no recent releases", "inactive_commit_no_scores_old_publish"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &Analysis{RepoState: &RepoState{DaysSinceLastCommit: 800, LatestHumanCommit: &oldCommit, CommitStats: &CommitStats{}}, ReleaseInfo: &ReleaseInfo{StableVersion: &VersionDetail{Version: "1.0.0", PublishedAt: tc.published, Advisories: []Advisory{tc.advisory}}}}
+			got, err := NewLifecycleAssessorService().Assess(context.Background(), AssessmentInput{Analysis: a, EOL: EOLStatus{State: EOLNotEOL}, Now: now})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Label != string(tc.label) || got.Reason != tc.reason || !containsString(got.Trace, tc.trace) {
+				t.Fatalf("label=%s reason=%q trace=%v", got.Label, got.Reason, got.Trace)
+			}
+		})
+	}
+}
+
 // TestLifecycleAssessor_DependencyAdvisories is the decision table for
 // advisories against dependencies (Relation TRANSITIVE) that were not looked
 // up in OSV: they never make a package EOL-Effective, and never move it to
@@ -337,6 +368,10 @@ func TestLifecycleAssessor_AgedDependencyAdvisory(t *testing.T) {
 	older := dep("GHSA-older", 7.5, AdvisoryRecordFound, olderDate, "")
 	fresh := dep("GHSA-fresh", 7.5, AdvisoryRecordFound, freshDate, "HIGH")
 	agedModerate := dep("GHSA-w5hq-like", 7.5, AdvisoryRecordFound, agedDate, "MODERATE")
+	agedV4High := dep("GHSA-v4-high", 0, AdvisoryRecordFound, agedDate, "HIGH")
+	agedV4High.CVSS4Score, agedV4High.CVSS4Known = 7.7, true
+	agedV4Moderate := dep("GHSA-v4-moderate", 0, AdvisoryRecordFound, agedDate, "MODERATE")
+	agedV4Moderate.CVSS4Score, agedV4Moderate.CVSS4Known = 7.7, true
 	agedOddRating := dep("GHSA-odd", 7.5, AdvisoryRecordFound, agedDate, "IMPORTANT")
 	withdrawnOld := dep("GHSA-hp3w-like", 9.8, AdvisoryRecordWithdrawn, olderDate, "HIGH")
 	failed := dep("GHSA-failed", 9.8, AdvisoryRecordLookupFailed, time.Time{}, "")
@@ -378,8 +413,14 @@ func TestLifecycleAssessor_AgedDependencyAdvisory(t *testing.T) {
 			LabelStalled, "Unmaintained; HIGH advisories only in dependencies; oldest published " + day(freshDate) + ", counts from " + day(freshDate.AddDate(0, 0, eol+1)) + " (GHSA-fresh in dep@1.0.0)",
 			"scorecard_incomplete residual_vuln_dependency_not_aged", DependencyAdvisoryNotAged, "GHSA-fresh"},
 		{"override: rated MODERATE by the database stays Stalled (exceljs today)", residual(agedModerate), maintained0,
-			LabelStalled, "Unmaintained; dependency advisories HIGH by CVSS3 only, rated MODERATE by the advisory database (GHSA-w5hq-like in dep@1.0.0)",
+			LabelStalled, "Unmaintained; dependency advisories HIGH by CVSS score, rated MODERATE by the advisory database (GHSA-w5hq-like in dep@1.0.0)",
 			"scorecard_incomplete residual_vuln_dependency_rated_below_high", DependencyAdvisoryRatedBelowHigh, "GHSA-w5hq-like"},
+		{"override: aged v4 HIGH dependency advisory is EOL-Effective", residual(agedV4High), maintained0,
+			LabelEOLEffective, "Unmaintained; HIGH dependency advisory published " + day(agedDate) + ", over 730 days ago (GHSA-v4-high in dep@1.0.0)",
+			"scorecard_incomplete residual_vuln_dependency_aged", DependencyAdvisoryAged, "GHSA-v4-high"},
+		{"override: aged v4 HIGH with MODERATE rating stays Stalled", residual(agedV4Moderate), maintained0,
+			LabelStalled, "Unmaintained; dependency advisories HIGH by CVSS score, rated MODERATE by the advisory database (GHSA-v4-moderate in dep@1.0.0)",
+			"scorecard_incomplete residual_vuln_dependency_rated_below_high", DependencyAdvisoryRatedBelowHigh, "GHSA-v4-moderate"},
 		{"override: an unrecognized rating is not called below HIGH", residual(agedOddRating), maintained0,
 			LabelStalled, "Unmaintained; HIGH advisories only in dependencies; unrecognized advisory database rating (GHSA-odd in dep@1.0.0)",
 			"scorecard_incomplete residual_vuln_dependency_rating_unrecognized", DependencyAdvisoryRatingUnrecognized, "GHSA-odd"},
@@ -413,7 +454,7 @@ func TestLifecycleAssessor_AgedDependencyAdvisory(t *testing.T) {
 			"advisory_db_unmaintained_dependency_aged", DependencyAdvisoryAged, "GHSA-aged"},
 		{"RustSec marker: rated MODERATE stays Stalled",
 			&Analysis{RepoState: dormantRepo(), AdvisoryDBState: flagged("RUSTSEC-2020-0095", "difference is unmaintained"), ReleaseInfo: stable(agedModerate)}, nil,
-			LabelStalled, "Flagged unmaintained by RUSTSEC-2020-0095: difference is unmaintained; dependency advisories HIGH by CVSS3 only, rated MODERATE by the advisory database (GHSA-w5hq-like in dep@1.0.0)",
+			LabelStalled, "Flagged unmaintained by RUSTSEC-2020-0095: difference is unmaintained; dependency advisories HIGH by CVSS score, rated MODERATE by the advisory database (GHSA-w5hq-like in dep@1.0.0)",
 			"advisory_db_unmaintained_dependency_rated_below_high", DependencyAdvisoryRatedBelowHigh, "GHSA-w5hq-like"},
 		{"no commit data, C2a: aged HIGH dependency advisory is EOL-Effective",
 			&Analysis{RepoState: noCommitRepo(), ReleaseInfo: stable(aged)}, maintained0,

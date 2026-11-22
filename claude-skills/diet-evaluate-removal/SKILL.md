@@ -54,7 +54,7 @@ Diet JSON does not carry the OSV malicious-package check or the npm dormant-rele
 ```bash
 uzomuzo scan "pkg:npm/example@1.2.3" --format json \
   | jq '.packages[0] | {lifecycle, reason, stable_version, malicious, malicious_check, dormant_release,
-                       direct_advisory_count, transitive_advisory_count, max_cvss3_score}'
+                       direct_advisory_count, transitive_advisory_count, max_cvss3_score, max_cvss4_score}'
 ```
 
 | Field | Meaning for this evaluation |
@@ -235,7 +235,7 @@ Rate each axis High/Med/Low using the data gathered in Phases 1-3. Each axis is 
 | **Production Scope** | Phase 2 classification | 0 production files (all test/CI/example) | < 50% production files | >= 50% production files |
 | **Coupling Depth** | `coupling_effort`, `import_file_count`, `call_site_count` | `coupling_effort` < 0.25 (trivial/easy) | 0.25 - 0.6 (moderate) | >= 0.6 (hard, deeply wired) |
 | **Replaceability** | Phase 3b symbol map | > 80% symbols have stdlib/existing-dep replacement | 50-80% replaceable | < 50%, or crypto/protocol involved |
-| **Security Urgency** | `has_vulnerabilities`, `max_cvss_score`, `lifecycle`, scan `direct_advisory_count` / `reason` / `dormant_release` | Direct advisories on the latest release with CVSS >= 7.0 (no upstream fix), or lifecycle EOL-Confirmed/EOL-Effective, or `dormant_release.kind = "burst_across_lines"` (whatever the label) | Direct advisories with CVSS 4.0-6.9, or lifecycle Stalled/EOL-Scheduled/Archived, or `Review Needed` for lack of data, or `dormant_release.kind = "fresh"` | No direct advisories on the latest release, or only ones with CVSS below 4.0 (transitive-only counts here), lifecycle Active/Legacy-Safe. A direct advisory with no CVSS score counts as Medium until its severity is looked up |
+| **Security Urgency** | `has_vulnerabilities`, `max_cvss_score`, `lifecycle`, scan `direct_advisory_count` / `max_cvss3_score` / `max_cvss4_score` / `reason` / `dormant_release` | Direct advisories on the latest release with CVSS >= 7.0 (no upstream fix), or lifecycle EOL-Confirmed/EOL-Effective, or `dormant_release.kind = "burst_across_lines"` (whatever the label) | Direct advisories with CVSS 4.0-6.9, or lifecycle Stalled/EOL-Scheduled/Archived, or `Review Needed` for lack of data, or `dormant_release.kind = "fresh"` | No direct advisories on the latest release, or only ones with CVSS below 4.0 (transitive-only counts here), lifecycle Active/Legacy-Safe. A direct advisory with neither a v3 nor a v4 score counts as Medium until its severity is looked up |
 | **Cascade Potential** | `exclusive_transitive`, project knowledge | Removing unblocks 3+ further removals | Unblocks 1-2 | Standalone, no cascade |
 
 ### Scoring overrides

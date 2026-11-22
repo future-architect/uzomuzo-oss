@@ -426,7 +426,7 @@ const (
 	// severityDependencyOnlyHigh: HIGH advisories exist only in dependencies.
 	severityDependencyOnlyHigh
 	// severityDependencyOnlyUnknown: no HIGH advisory anywhere, but a
-	// dependency advisory has no CVSS3 score.
+	// dependency advisory has no known CVSS score.
 	severityDependencyOnlyUnknown
 )
 
@@ -454,7 +454,7 @@ func (s *LifecycleAssessorService) advisorySeverityExcluding(a *Analysis, exclud
 	return severityLowOnly
 }
 
-// isPotentiallyHigh reports whether vd has an advisory with CVSS3 >= threshold,
+// isPotentiallyHigh reports whether vd has an advisory with effective CVSS >= threshold,
 // or an advisory of unknown severity (conservative fallback).
 func (s *LifecycleAssessorService) isPotentiallyHigh(vd *VersionDetail) bool {
 	if vd == nil || len(vd.Advisories) == 0 {
@@ -702,9 +702,8 @@ func (s *LifecycleAssessorService) collectAdvisorySignals(a *Analysis) []Signal 
 		if n := vd.TransitiveAdvisoryCount(); n > 0 {
 			signals = append(signals, sig(SignalTransitiveAdvisoryCount, fmt.Sprintf("%d", n)))
 		}
-		maxScore := vd.MaxCVSS3()
-		if maxScore > 0 {
-			signals = append(signals, sig(SignalMaxAdvisorySeverity, fmt.Sprintf("%s %.1f", SeverityFromCVSS3(maxScore), maxScore)))
+		if maxScore, known := vd.MaxEffectiveSeverityScore(); known {
+			signals = append(signals, sig(SignalMaxAdvisorySeverity, fmt.Sprintf("%s %.1f", SeverityFromScore(maxScore, known), maxScore)))
 		}
 	}
 	return signals
