@@ -2498,3 +2498,135 @@ func TestAnalyzer_TypeScriptImportRequire(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalyzer_JSTemplateLiteralRequire(t *testing.T) {
+	type wantCoupling struct {
+		imports int
+		calls   int
+		breadth int
+		symbols []string
+		unused  bool
+		blank   bool
+	}
+	tests := []struct {
+		name        string
+		filename    string
+		code        string
+		importPaths map[string][]string
+		want        map[string]wantCoupling
+	}{
+		{
+			name:        "JavaScript fixed template require tracks method",
+			filename:    "index.js",
+			code:        "const p = require(`tpl-pkg`);\np.run();\n",
+			importPaths: map[string][]string{"pkg:npm/tpl-pkg@1.0.0": {"tpl-pkg"}},
+			want: map[string]wantCoupling{
+				"pkg:npm/tpl-pkg@1.0.0": {imports: 1, calls: 1, breadth: 1, symbols: []string{"run"}},
+			},
+		},
+		{
+			name:        "destructured fixed template require tracks method",
+			filename:    "index.js",
+			code:        "const { run } = require(`tpl-destr`);\nrun();\n",
+			importPaths: map[string][]string{"pkg:npm/tpl-destr@1.0.0": {"tpl-destr"}},
+			want: map[string]wantCoupling{
+				"pkg:npm/tpl-destr@1.0.0": {imports: 1, calls: 1, breadth: 1, symbols: []string{"run"}},
+			},
+		},
+		{
+			name:        "bare fixed template require is a blank import",
+			filename:    "index.js",
+			code:        "require(`tpl-bare`);\n",
+			importPaths: map[string][]string{"pkg:npm/tpl-bare@1.0.0": {"tpl-bare"}},
+			want: map[string]wantCoupling{
+				"pkg:npm/tpl-bare@1.0.0": {imports: 1, calls: 1, blank: true},
+			},
+		},
+		{
+			name:        "TypeScript fixed template require tracks method",
+			filename:    "index.ts",
+			code:        "const p = require(`tpl-pkg`);\np.run();\n",
+			importPaths: map[string][]string{"pkg:npm/tpl-pkg@1.0.0": {"tpl-pkg"}},
+			want: map[string]wantCoupling{
+				"pkg:npm/tpl-pkg@1.0.0": {imports: 1, calls: 1, breadth: 1, symbols: []string{"run"}},
+			},
+		},
+		{
+			name:        "TSX fixed template require tracks method",
+			filename:    "index.tsx",
+			code:        "const p = require(`tpl-tsx`);\np.run();\n",
+			importPaths: map[string][]string{"pkg:npm/tpl-tsx@1.0.0": {"tpl-tsx"}},
+			want: map[string]wantCoupling{
+				"pkg:npm/tpl-tsx@1.0.0": {imports: 1, calls: 1, breadth: 1, symbols: []string{"run"}},
+			},
+		},
+		{
+			name:        "leading anchor skips template require with fixed text on both sides of substitution",
+			filename:    "index.js",
+			code:        "const p = require(`tpl-sub/${a}/x`);\np.run();\n",
+			importPaths: map[string][]string{"pkg:npm/tpl-sub@1.0.0": {"tpl-sub"}},
+		},
+		{
+			name:        "template require with suffix substitution is skipped",
+			filename:    "index.js",
+			code:        "const p = require(`tpl-sub/${name}`);\np.run();\n",
+			importPaths: map[string][]string{"pkg:npm/tpl-sub@1.0.0": {"tpl-sub"}},
+		},
+		{
+			name:     "dynamic template require does not suppress fixed sibling",
+			filename: "index.js",
+			code:     "const a = require(`tpl-a`);\nconst b = require(`tpl-b/${x}`);\na.run();\nb.run();\n",
+			importPaths: map[string][]string{
+				"pkg:npm/tpl-a@1.0.0": {"tpl-a"},
+				"pkg:npm/tpl-b@1.0.0": {"tpl-b"},
+			},
+			want: map[string]wantCoupling{
+				"pkg:npm/tpl-a@1.0.0": {imports: 1, calls: 1, breadth: 1, symbols: []string{"run"}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result) != len(tt.want) {
+				t.Errorf("coupling result count = %d, want %d; result = %+v", len(result), len(tt.want), result)
+			}
+			for purl, want := range tt.want {
+				got, ok := result[purl]
+				if !ok {
+					t.Errorf("missing coupling result for %s", purl)
+					continue
+				}
+				if got.ImportFileCount != want.imports {
+					t.Errorf("%s ImportFileCount = %d, want %d", purl, got.ImportFileCount, want.imports)
+				}
+				if got.CallSiteCount != want.calls {
+					t.Errorf("%s CallSiteCount = %d, want %d", purl, got.CallSiteCount, want.calls)
+				}
+				if got.APIBreadth != want.breadth {
+					t.Errorf("%s APIBreadth = %d, want %d", purl, got.APIBreadth, want.breadth)
+				}
+				if !slices.Equal(got.Symbols, want.symbols) {
+					t.Errorf("%s Symbols = %v, want %v", purl, got.Symbols, want.symbols)
+				}
+				if got.IsUnused != want.unused {
+					t.Errorf("%s IsUnused = %v, want %v", purl, got.IsUnused, want.unused)
+				}
+				if got.HasBlankImport != want.blank {
+					t.Errorf("%s HasBlankImport = %v, want %v", purl, got.HasBlankImport, want.blank)
+				}
+			}
+		})
+	}
+}
