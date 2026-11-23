@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"testing"
 )
@@ -2361,5 +2362,139 @@ export class FakeModule {}
 	}
 	if other.CallSiteCount != 0 {
 		t.Errorf("@other/lib CallSiteCount = %d, want 0 (CustomMeta decorator must not match the predicate)", other.CallSiteCount)
+	}
+}
+
+func TestAnalyzer_TypeScriptImportRequire(t *testing.T) {
+	type wantCoupling struct {
+		imports int
+		calls   int
+		breadth int
+		symbols []string
+	}
+	tests := []struct {
+		name        string
+		filename    string
+		code        string
+		importPaths map[string][]string
+		want        map[string]wantCoupling
+	}{
+		{
+			name:        "TypeScript import require tracks method",
+			filename:    "index.ts",
+			code:        "import mod = require('ts-pkg');\nmod.run();\n",
+			importPaths: map[string][]string{"pkg:npm/ts-pkg@1.0.0": {"ts-pkg"}},
+			want: map[string]wantCoupling{
+				"pkg:npm/ts-pkg@1.0.0": {imports: 1, calls: 1, breadth: 1, symbols: []string{"run"}},
+			},
+		},
+		{
+			name:        "TSX import require tracks method",
+			filename:    "index.tsx",
+			code:        "import mod = require('tsx-pkg');\nmod.render();\n",
+			importPaths: map[string][]string{"pkg:npm/tsx-pkg@1.0.0": {"tsx-pkg"}},
+			want: map[string]wantCoupling{
+				"pkg:npm/tsx-pkg@1.0.0": {imports: 1, calls: 1, breadth: 1, symbols: []string{"render"}},
+			},
+		},
+		{
+			name:        "TypeScript import require tracks distinct methods",
+			filename:    "index.ts",
+			code:        "import mod = require('multi-pkg');\nmod.run();\nmod.stop();\n",
+			importPaths: map[string][]string{"pkg:npm/multi-pkg@1.0.0": {"multi-pkg"}},
+			want: map[string]wantCoupling{
+				"pkg:npm/multi-pkg@1.0.0": {imports: 1, calls: 2, breadth: 2, symbols: []string{"run", "stop"}},
+			},
+		},
+		{
+			name:        "TypeScript type-only import require is skipped",
+			filename:    "index.ts",
+			code:        "import type mod = require('type-pkg');\n",
+			importPaths: map[string][]string{"pkg:npm/type-pkg@1.0.0": {"type-pkg"}},
+		},
+		{
+			name:        "TSX type-only import require is skipped",
+			filename:    "index.tsx",
+			code:        "import type mod = require('type-pkg');\n",
+			importPaths: map[string][]string{"pkg:npm/type-pkg@1.0.0": {"type-pkg"}},
+		},
+		{
+			name:     "type-only import does not suppress runtime sibling",
+			filename: "mixed.ts",
+			code: "import type typeMod = require('type-pkg');\n" +
+				"import runtimeMod = require('runtime-pkg');\nruntimeMod.run();\n",
+			importPaths: map[string][]string{
+				"pkg:npm/type-pkg@1.0.0":    {"type-pkg"},
+				"pkg:npm/runtime-pkg@1.0.0": {"runtime-pkg"},
+			},
+			want: map[string]wantCoupling{
+				"pkg:npm/runtime-pkg@1.0.0": {imports: 1, calls: 1, breadth: 1, symbols: []string{"run"}},
+			},
+		},
+		{
+			name:        "exported TypeScript import require remains unrecognized",
+			filename:    "index.ts",
+			code:        "export import mod = require('export-pkg');\nmod.run();\n",
+			importPaths: map[string][]string{"pkg:npm/export-pkg@1.0.0": {"export-pkg"}},
+		},
+		{
+			name:        "exported TSX import require remains unrecognized",
+			filename:    "index.tsx",
+			code:        "export import mod = require('export-pkg');\nmod.run();\n",
+			importPaths: map[string][]string{"pkg:npm/export-pkg@1.0.0": {"export-pkg"}},
+		},
+		{
+			name:        "JavaScript query still recognizes require",
+			filename:    "index.js",
+			code:        "const mod = require('js-pkg');\nmod.run();\n",
+			importPaths: map[string][]string{"pkg:npm/js-pkg@1.0.0": {"js-pkg"}},
+			want: map[string]wantCoupling{
+				"pkg:npm/js-pkg@1.0.0": {imports: 1, calls: 1, breadth: 1, symbols: []string{"run"}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, tt.importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result) != len(tt.want) {
+				t.Errorf("coupling result count = %d, want %d; result = %+v", len(result), len(tt.want), result)
+			}
+			for purl, want := range tt.want {
+				got, ok := result[purl]
+				if !ok {
+					t.Errorf("missing coupling result for %s", purl)
+					continue
+				}
+				if got.ImportFileCount != want.imports {
+					t.Errorf("%s ImportFileCount = %d, want %d", purl, got.ImportFileCount, want.imports)
+				}
+				if got.CallSiteCount != want.calls {
+					t.Errorf("%s CallSiteCount = %d, want %d", purl, got.CallSiteCount, want.calls)
+				}
+				if got.APIBreadth != want.breadth {
+					t.Errorf("%s APIBreadth = %d, want %d", purl, got.APIBreadth, want.breadth)
+				}
+				if !slices.Equal(got.Symbols, want.symbols) {
+					t.Errorf("%s Symbols = %v, want %v", purl, got.Symbols, want.symbols)
+				}
+				if got.HasBlankImport {
+					t.Errorf("%s HasBlankImport = true, want false", purl)
+				}
+				if got.IsUnused {
+					t.Errorf("%s IsUnused = true, want false", purl)
+				}
+			}
+		})
 	}
 }

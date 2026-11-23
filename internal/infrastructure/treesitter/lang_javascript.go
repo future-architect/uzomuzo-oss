@@ -12,7 +12,7 @@ import (
 
 // registerJavaScriptConfig registers the JavaScript language configuration on the Analyzer.
 func registerJavaScriptConfig(a *Analyzer) {
-	a.configs[langJavaScript] = newJSLikeConfig(loadLanguage(tree_sitter_javascript.Language()), true)
+	a.configs[langJavaScript] = newJSLikeConfig(loadLanguage(tree_sitter_javascript.Language()), true, false)
 }
 
 // registerTypeScriptConfig registers the TypeScript language configuration on the Analyzer.
@@ -20,28 +20,33 @@ func registerJavaScriptConfig(a *Analyzer) {
 // module: LanguageTypescript and LanguageTSX, so each registrar selects the
 // matching binding.
 func registerTypeScriptConfig(a *Analyzer) {
-	a.configs[langTypeScript] = newJSLikeConfig(loadLanguage(tree_sitter_typescript.LanguageTypescript()), false)
+	a.configs[langTypeScript] = newJSLikeConfig(loadLanguage(tree_sitter_typescript.LanguageTypescript()), false, true)
 }
 
 // registerTSXConfig registers the TSX language configuration on the Analyzer.
 func registerTSXConfig(a *Analyzer) {
-	a.configs[langTSX] = newJSLikeConfig(loadLanguage(tree_sitter_typescript.LanguageTSX()), true)
+	a.configs[langTSX] = newJSLikeConfig(loadLanguage(tree_sitter_typescript.LanguageTSX()), true, true)
 }
 
 // newJSLikeConfig creates a langConfig for JS-family languages (JS, TS, TSX).
 // When includeJSX is true, the call query also matches JSX element syntax
 // (e.g., <Camera /> and <Icon size={24}>) so that component usage is counted
 // as call sites. Pass true for languages whose grammar supports JSX nodes
-// (JavaScript and TSX).
-func newJSLikeConfig(lang *sitter.Language, includeJSX bool) *langConfig {
-	importQ := strings.Join([]string{
+// (JavaScript and TSX). TypeScript-only import patterns are added only for
+// TypeScript and TSX; the JavaScript grammar does not define those nodes.
+func newJSLikeConfig(lang *sitter.Language, includeJSX, isTypeScript bool) *langConfig {
+	importPatterns := []string{
 		`(import_statement source: (string) @import)`,
 		`(call_expression function: (identifier) @func (#eq? @func "require") arguments: (arguments (string) @import))`,
 		// Re-exports: export { foo } from "pkg", export * from "pkg"
 		`(export_statement source: (string) @import)`,
 		// Dynamic import(): const mod = await import("pkg")
 		`(call_expression function: (import) arguments: (arguments (string) @import))`,
-	}, "\n")
+	}
+	if isTypeScript {
+		importPatterns = append(importPatterns, `(import_require_clause source: (string) @import)`)
+	}
+	importQ := strings.Join(importPatterns, "\n")
 	callPatterns := []string{
 		`(member_expression object: (identifier) @obj property: (property_identifier) @prop)`,
 		// obj.alias.method() — nested member access where a qualified alias such as
@@ -237,6 +242,7 @@ func (a *Analyzer) handleJSImport(
 // CJS (variable): string → arguments → call_expression → variable_declarator → name
 // CJS (property): string → arguments → call_expression → assignment_expression → member_expression → property
 // CJS (member): string → arguments → call_expression → member_expression... → variable_declarator / assignment_expression
+// TS (import = require): string → import_require_clause → identifier
 //
 // Combined imports (e.g., `import def, * as ns from "pkg"`) produce multiple bindings.
 func extractJSBindings(node *sitter.Node, src []byte) []string {
@@ -251,6 +257,15 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 	// ESM: node is `source: (string)` inside `import_statement`
 	if parent.Kind() == "import_statement" {
 		return extractESMBindings(parent, src)
+	}
+	if parent.Kind() == "import_require_clause" {
+		for i := uint(0); i < parent.NamedChildCount(); i++ {
+			child := parent.NamedChild(i)
+			if child != nil && child.Kind() == "identifier" {
+				return []string{child.Utf8Text(src)}
+			}
+		}
+		return nil
 	}
 
 	// CJS: node is `(string)` inside `(arguments)` inside `(call_expression)`
@@ -591,10 +606,13 @@ func extractPropertyAssignBinding(callExpr *sitter.Node, src []byte) string {
 	return ""
 }
 
-// isTypeOnlyImport checks if a node's parent import_statement is a TypeScript
-// `import type` (no runtime coupling).
+// isTypeOnlyImport checks whether the enclosing import_statement is a
+// TypeScript `import type` (no runtime coupling).
 func isTypeOnlyImport(node *sitter.Node) bool {
 	parent := node.Parent()
+	if parent != nil && parent.Kind() == "import_require_clause" {
+		parent = parent.Parent()
+	}
 	if parent == nil || parent.Kind() != "import_statement" {
 		return false
 	}
