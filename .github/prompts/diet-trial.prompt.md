@@ -41,8 +41,39 @@ export PATH="$HOME/bin:$PATH"
 
 If the selected SBOM tool is missing, install it:
 
-- **trivy**: `curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ~/bin`
-- **syft**: `curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b ~/bin`
+- **trivy** / **syft**: run the matching block below (Linux x86_64 or aarch64). Each one pins the release version and the SHA-256 of that release's checksums file, checks the downloaded archive against it, and only then installs the binary. Do not pipe the upstream install scripts into `sh`: they fetch whatever release is newest at that moment and check the archive only against the checksums file from that same release, so a hijacked release (as with trivy v0.69.4, GHSA-69fq-xp46-6x23) ships matching checksums and passes. The checksums-file digest pinned here is what makes a replaced release fail. To move to a newer version, update both the version and the checksums-file digest (the `digest` field shown by `gh release view <tag> -R <repo> --json assets`).
+
+  ```bash
+  # trivy v0.76.2
+  ( set -eu
+    v=0.76.2 sum=802e4ac1418ed967cd3c4b901f4f71ca00b7363ede67778665a22d9f13f58c83
+    case "$(uname -sm)" in "Linux x86_64") a=Linux-64bit ;; "Linux aarch64") a=Linux-ARM64 ;; *) echo "unsupported platform" >&2; exit 1 ;; esac
+    d=$(mktemp -d); cd "$d"
+    u="https://github.com/aquasecurity/trivy/releases/download/v$v"
+    curl -sSfLO "$u/trivy_${v}_checksums.txt"
+    curl -sSfLO "$u/trivy_${v}_$a.tar.gz"
+    echo "$sum  trivy_${v}_checksums.txt" | sha256sum -c -
+    sha256sum -c --ignore-missing "trivy_${v}_checksums.txt"
+    tar -xzf "trivy_${v}_$a.tar.gz" trivy
+    mkdir -p "$HOME/bin"
+    install -m 0755 trivy "$HOME/bin/trivy"
+    cd / && rm -rf "$d" )
+
+  # syft v1.57.1
+  ( set -eu
+    v=1.57.1 sum=92466b2b1a4695ee908f8a1567f4ff074e0fbb4f34da28463927a2630901fe2c
+    case "$(uname -sm)" in "Linux x86_64") a=linux_amd64 ;; "Linux aarch64") a=linux_arm64 ;; *) echo "unsupported platform" >&2; exit 1 ;; esac
+    d=$(mktemp -d); cd "$d"
+    u="https://github.com/anchore/syft/releases/download/v$v"
+    curl -sSfLO "$u/syft_${v}_checksums.txt"
+    curl -sSfLO "$u/syft_${v}_$a.tar.gz"
+    echo "$sum  syft_${v}_checksums.txt" | sha256sum -c -
+    sha256sum -c --ignore-missing "syft_${v}_checksums.txt"
+    tar -xzf "syft_${v}_$a.tar.gz" syft
+    mkdir -p "$HOME/bin"
+    install -m 0755 syft "$HOME/bin/syft"
+    cd / && rm -rf "$d" )
+  ```
 
 ## Execution Pipeline
 
