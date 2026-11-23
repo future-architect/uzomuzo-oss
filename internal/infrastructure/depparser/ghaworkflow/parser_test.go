@@ -3,6 +3,7 @@ package ghaworkflow_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"testing"
 
@@ -100,6 +101,11 @@ func TestExtractGitHubURL_EdgeCases(t *testing.T) {
 			yaml:     "on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: \"  actions/checkout@v4  \"",
 			wantURLs: []string{"https://github.com/actions/checkout"},
 		},
+		{name: "same repo action", yaml: "jobs:\n  j:\n    steps:\n      - uses: $/actions/foo", wantURLs: nil},
+		{name: "same repo workflow", yaml: "jobs:\n  j:\n    uses: $/.github/workflows/reusable.yml", wantURLs: nil},
+		{name: "same repo action with ref", yaml: "jobs:\n  j:\n    steps:\n      - uses: $/actions/foo@v1", wantURLs: nil},
+		{name: "same repo traversal", yaml: "jobs:\n  j:\n    steps:\n      - uses: $/../secret", wantURLs: nil},
+		{name: "same repo single-segment action", yaml: "jobs:\n  j:\n    steps:\n      - uses: $/foo", wantURLs: nil},
 	}
 
 	for _, tt := range tests {
@@ -231,6 +237,11 @@ func TestExtractActionRef(t *testing.T) {
 			uses:   "./local-action",
 			wantOK: false,
 		},
+		{name: "same repo action", uses: "$/actions/foo", wantOK: false},
+		{name: "same repo workflow", uses: "$/.github/workflows/reusable.yml", wantOK: false},
+		{name: "same repo action with ref", uses: "$/actions/foo@v1", wantOK: false},
+		{name: "same repo traversal", uses: "$/../secret", wantOK: false},
+		{name: "same repo single-segment action", uses: "$/foo", wantOK: false},
 		{
 			name:   "docker reference",
 			uses:   "docker://alpine:3.18",
@@ -261,6 +272,9 @@ func TestExtractActionRef(t *testing.T) {
 				t.Fatalf("ExtractActionRef(%q) ok = %v, want %v", tt.uses, ok, tt.wantOK)
 			}
 			if !ok {
+				if got != (ghaworkflow.ActionRef{}) {
+					t.Errorf("ExtractActionRef(%q) = %+v, want zero value", tt.uses, got)
+				}
 				return
 			}
 			if got != tt.wantRef {
@@ -270,7 +284,7 @@ func TestExtractActionRef(t *testing.T) {
 	}
 }
 
-func TestParseCompositeActionURLs(t *testing.T) {
+func TestParseCompositeSteps(t *testing.T) {
 	tests := []struct {
 		name          string
 		file          string
@@ -302,10 +316,11 @@ func TestParseCompositeActionURLs(t *testing.T) {
 				t.Fatalf("failed to read testdata: %v", err)
 			}
 
-			refs, isComposite, err := ghaworkflow.ParseCompositeActionURLs(data)
+			steps, isComposite, err := ghaworkflow.ParseCompositeSteps(data)
 			if err != nil {
-				t.Fatalf("ParseCompositeActionURLs() error = %v", err)
+				t.Fatalf("ParseCompositeSteps() error = %v", err)
 			}
+			refs := steps.Refs
 			if isComposite != tt.wantComposite {
 				t.Errorf("isComposite = %v, want %v", isComposite, tt.wantComposite)
 			}
@@ -321,8 +336,8 @@ func TestParseCompositeActionURLs(t *testing.T) {
 	}
 }
 
-func TestParseCompositeActionURLs_InvalidYAML(t *testing.T) {
-	_, _, err := ghaworkflow.ParseCompositeActionURLs([]byte("{{invalid yaml"))
+func TestParseCompositeSteps_InvalidYAML(t *testing.T) {
+	_, _, err := ghaworkflow.ParseCompositeSteps([]byte("{{invalid yaml"))
 	if err == nil {
 		t.Fatal("expected error for invalid YAML, got nil")
 	}
@@ -378,6 +393,21 @@ func TestExtractLocalActionPath(t *testing.T) {
 		want string
 	}{
 		{name: "standard local action", uses: "./.github/actions/foo", want: ".github/actions/foo"},
+		{name: "same repo action", uses: "$/actions/foo", want: "actions/foo"},
+		{name: "same repo workflow path", uses: "$/.github/workflows/reusable.yml", want: ".github/workflows/reusable.yml"},
+		{name: "same repo action with ref", uses: "$/actions/foo@v1", want: ""},
+		{name: "same repo scoped path", uses: "$/actions/@scope/foo", want: ""},
+		{name: "same repo ref only", uses: "$/@v1", want: ""},
+		{name: "same repo trailing slash", uses: "$/actions/foo/", want: "actions/foo"},
+		{name: "dot slash retains at sign", uses: "./actions/foo@v1", want: "actions/foo@v1"},
+		{name: "same repo traversal", uses: "$/../secret", want: ""},
+		{name: "same repo prefix only", uses: "$/", want: ""},
+		{name: "same repo backslash", uses: "$/actions\\foo", want: ""},
+		{name: "same repo query", uses: "$/a?b", want: ""},
+		{name: "same repo fragment", uses: "$/a#b", want: ""},
+		{name: "same repo percent", uses: "$/a%2e", want: ""},
+		{name: "dot slash keeps query", uses: "./a?b", want: "a?b"},
+		{name: "same repo absolute path", uses: "$///actions/foo", want: ""},
 		{name: "local action with trailing slash", uses: "./.github/actions/bar/", want: ".github/actions/bar"},
 		{name: "deeply nested local", uses: "./actions/setup/build", want: "actions/setup/build"},
 		{name: "external action", uses: "actions/checkout@v4", want: ""},
@@ -403,6 +433,24 @@ func TestExtractLocalActionPath(t *testing.T) {
 				t.Errorf("ExtractLocalActionPath(%q) = %q, want %q", tt.uses, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseCompositeSteps_SameRepoPaths(t *testing.T) {
+	data := []byte("runs:\n  using: composite\n  steps:\n    - uses: $/sub/\n    - uses: ./local\n    - uses: other/y@v1\n    - uses: $/sub\n    - uses: $/bad@v1\n    - uses: $/a?b\n    - uses: $/a#b\n    - uses: $/a%2e\n    - uses: $/../secret\n    - uses: $/\n    - uses: $/a\\b\n")
+	steps, composite, err := ghaworkflow.ParseCompositeSteps(data)
+	if err != nil || !composite {
+		t.Fatalf("ParseCompositeSteps() composite = %t, err = %v", composite, err)
+	}
+	if len(steps.Refs) != 1 || steps.Refs[0] != (ghaworkflow.ActionRef{Owner: "other", Repo: "y", Ref: "v1"}) {
+		t.Errorf("refs = %v, want other/y@v1", steps.Refs)
+	}
+	if !reflect.DeepEqual(steps.SameRepoPaths, []string{"sub"}) {
+		t.Errorf("paths = %v, want [sub]", steps.SameRepoPaths)
+	}
+	wantInvalid := []string{"$/bad@v1", "$/a?b", "$/a#b", "$/a%2e", "$/../secret", "$/", "$/a\\b"}
+	if !reflect.DeepEqual(steps.InvalidSameRepoUses, wantInvalid) {
+		t.Errorf("invalid = %v, want %v", steps.InvalidSameRepoUses, wantInvalid)
 	}
 }
 
@@ -568,6 +616,42 @@ jobs:
 				}
 			}
 		})
+	}
+}
+
+func TestParseWorkflowAll_SameRepoRef(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "same-repo-ref.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	urls, localPaths, err := ghaworkflow.ParseWorkflowAll(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantURLs := []string{"https://github.com/actions/checkout"}
+	wantLocalPaths := []string{".github/actions/a", ".github/actions/b"}
+	if !reflect.DeepEqual(urls, wantURLs) || !reflect.DeepEqual(localPaths, wantLocalPaths) {
+		t.Errorf("ParseWorkflowAll() = %v, %v; want %v, %v", urls, localPaths, wantURLs, wantLocalPaths)
+	}
+	paths, err := ghaworkflow.ParseLocalActionPaths(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(paths, wantLocalPaths) {
+		t.Errorf("ParseLocalActionPaths() = %v; want %v", paths, wantLocalPaths)
+	}
+}
+
+func TestParseCompositeAll_SameRepoRef(t *testing.T) {
+	data := []byte("runs:\n  using: composite\n  steps:\n    - uses: ./.github/actions/a\n    - uses: $/.github/actions/b\n    - uses: actions/checkout@v4\n")
+	refs, localPaths, composite, err := ghaworkflow.ParseCompositeAll(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRefs := []ghaworkflow.ActionRef{{Owner: "actions", Repo: "checkout", Ref: "v4"}}
+	wantLocalPaths := []string{".github/actions/a", ".github/actions/b"}
+	if !composite || !reflect.DeepEqual(refs, wantRefs) || !reflect.DeepEqual(localPaths, wantLocalPaths) {
+		t.Errorf("ParseCompositeAll() = %v, %v, %v; want %v, %v, true", refs, localPaths, composite, wantRefs, wantLocalPaths)
 	}
 }
 

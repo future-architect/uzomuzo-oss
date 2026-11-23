@@ -207,6 +207,9 @@ func buildActionRefFromGitHubURL(rawURL string) (ghaworkflow.ActionRef, error) {
 // resolveTransitiveActions performs BFS to discover actions referenced by composite actions.
 // It fetches action.yml for each queued action, parses composite steps, and adds new
 // action URLs to the queue. The seen set tracks owner/repo/path to handle subdirectory actions.
+// A "$/" step inside a remote composite is followed in that action's repository,
+// reading its default branch like other remote actions. The sub-action is not added
+// to results because it belongs to the same repository.
 //
 // Returns a map of transitive URL → via URL (the direct action that caused the discovery).
 // For depth > 1 chains (A→B→C), C's via is A (the original direct action), not B.
@@ -250,7 +253,7 @@ func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initial
 				continue
 			}
 
-			refs, isComposite, err := ghaworkflow.ParseCompositeActionURLs(data)
+			steps, isComposite, err := ghaworkflow.ParseCompositeSteps(data)
 			if err != nil {
 				result.Errors[actionRefKey(item.ref)] = err
 				continue
@@ -258,8 +261,11 @@ func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initial
 			if !isComposite {
 				continue
 			}
+			for _, u := range steps.InvalidSameRepoUses {
+				slog.Debug("same_repo_action_ref_skipped", "owner", item.ref.Owner, "repo", item.ref.Repo, "path", item.ref.Path, "uses", u)
+			}
 
-			for _, ref := range refs {
+			for _, ref := range steps.Refs {
 				key := actionRefKey(ref)
 				if _, exists := seen[key]; exists {
 					continue
@@ -272,6 +278,15 @@ func (s *DiscoveryService) resolveTransitiveActions(ctx context.Context, initial
 					transitiveActions[ghURL] = item.via
 				}
 				queue = append(queue, queueItem{ref: ref, url: ghURL, via: item.via})
+			}
+			for _, p := range steps.SameRepoPaths {
+				ref := ghaworkflow.ActionRef{Owner: item.ref.Owner, Repo: item.ref.Repo, Path: p}
+				key := actionRefKey(ref)
+				if _, exists := seen[key]; exists {
+					continue
+				}
+				seen[key] = struct{}{}
+				queue = append(queue, queueItem{ref: ref, url: ref.GitHubURL(), via: item.via})
 			}
 		}
 	}
@@ -305,7 +320,7 @@ func (s *DiscoveryService) fetchActionYAML(ctx context.Context, ref ghaworkflow.
 
 // discoverFromRepo fetches workflow files from a single repository, parses them,
 // and resolves local composite actions to discover external action dependencies
-// that would otherwise be hidden behind ./ references.
+// that would otherwise be hidden behind ./ or $/ references.
 //
 // Returns:
 //   - directURLs: external action URLs referenced directly in workflow files
@@ -430,7 +445,7 @@ func (s *DiscoveryService) discoverFromRepo(ctx context.Context, owner, repo str
 
 // resolveLocalActions performs BFS over local composite actions within a repository,
 // fetching action.yml for each local path, extracting external action URLs, and
-// following nested local references (uses: ./) with cycle detection.
+// following nested local references (uses: ./ or $/) with cycle detection.
 // It returns a map of external GitHub URL → local action path that contained it (first-seen wins).
 func (s *DiscoveryService) resolveLocalActions(ctx context.Context, owner, repo string, initialPaths []string, errs map[string]error) map[string]string {
 	seen := make(map[string]struct{})

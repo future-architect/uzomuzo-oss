@@ -176,6 +176,74 @@ runs:
 	}
 }
 
+func TestResolveTransitive_SameRepoRefInRemoteComposite(t *testing.T) {
+	routes := map[string][]byte{
+		"myorg/myrepo/.github/workflows":        directoryJSON(t, []string{"ci.yml"}),
+		"myorg/myrepo/.github/workflows/ci.yml": []byte("jobs:\n  build:\n    steps:\n      - uses: owner/x@v1\n"),
+		"owner/x/action.yml":                    []byte("runs:\n  using: composite\n  steps:\n    - uses: $/sub\n    - uses: ./local\n"),
+		"owner/x/sub/action.yml":                []byte("runs:\n  using: composite\n  steps:\n    - uses: other/y@v1\n"),
+		"owner/x/local/action.yml":              []byte("runs:\n  using: composite\n  steps:\n    - uses: wrong/local@v1\n"),
+		"other/y/action.yml":                    []byte("runs:\n  using: node20\n  main: index.js\n"),
+	}
+	srv := fakeGitHubAPI(t, routes)
+	defer srv.Close()
+	svc := newTestService(t, srv.URL)
+	direct, local, transitive, _, err := svc.DiscoverActions(context.Background(), []string{"https://github.com/myorg/myrepo"}, true)
+	if err != nil {
+		t.Fatalf("DiscoverActions: %v", err)
+	}
+	if len(direct) != 1 || direct[0] != "https://github.com/owner/x" {
+		t.Errorf("direct = %v, want owner/x only", direct)
+	}
+	if len(local) != 0 {
+		t.Errorf("local = %v, want none", local)
+	}
+	if len(transitive) != 1 || transitive["https://github.com/other/y"] != "https://github.com/owner/x" {
+		t.Errorf("transitive = %v, want other/y via owner/x only", transitive)
+	}
+	if _, ok := transitive["https://github.com/wrong/local"]; ok {
+		t.Errorf("./local was followed in remote composite: %v", transitive)
+	}
+}
+
+func TestResolveTransitive_SameRepoRefCycle(t *testing.T) {
+	routes := map[string][]byte{
+		"owner/x/action.yml":   []byte("runs:\n  using: composite\n  steps:\n    - uses: $/a\n"),
+		"owner/x/a/action.yml": []byte("runs:\n  using: composite\n  steps:\n    - uses: $/b\n    - uses: other/y@v1\n"),
+		"owner/x/b/action.yml": []byte("runs:\n  using: composite\n  steps:\n    - uses: $/a\n"),
+		"other/y/action.yml":   []byte("runs:\n  using: node20\n  main: index.js\n"),
+	}
+	srv := fakeGitHubAPI(t, routes)
+	defer srv.Close()
+	svc := newTestService(t, srv.URL)
+	result := &DiscoveryResult{Actions: map[string]int{}, Errors: map[string]error{}}
+	transitive := svc.resolveTransitiveActions(context.Background(), []string{"https://github.com/owner/x"}, result)
+	if len(transitive) != 1 || transitive["https://github.com/other/y"] != "https://github.com/owner/x" {
+		t.Errorf("transitive = %v, want other/y via owner/x only", transitive)
+	}
+}
+
+func TestResolveTransitive_SameRepoRefIsRepoRootRelative(t *testing.T) {
+	routes := map[string][]byte{
+		"owner/x/action.yml":                 []byte("runs:\n  using: composite\n  steps:\n    - uses: $/tools/a\n"),
+		"owner/x/tools/a/action.yml":         []byte("runs:\n  using: composite\n  steps:\n    - uses: $/tools/b\n"),
+		"owner/x/tools/b/action.yml":         []byte("runs:\n  using: composite\n  steps:\n    - uses: other/z@v1\n"),
+		"owner/x/tools/a/tools/b/action.yml": []byte("runs:\n  using: composite\n  steps:\n    - uses: wrong/nested@v1\n"),
+		"other/z/action.yml":                 []byte("runs:\n  using: node20\n  main: index.js\n"),
+	}
+	srv := fakeGitHubAPI(t, routes)
+	defer srv.Close()
+	svc := newTestService(t, srv.URL)
+	result := &DiscoveryResult{Actions: map[string]int{}, Errors: map[string]error{}}
+	transitive := svc.resolveTransitiveActions(context.Background(), []string{"https://github.com/owner/x"}, result)
+	if len(transitive) != 1 || transitive["https://github.com/other/z"] != "https://github.com/owner/x" {
+		t.Errorf("transitive = %v, want other/z via owner/x only", transitive)
+	}
+	if _, ok := transitive["https://github.com/wrong/nested"]; ok {
+		t.Errorf("nested path was followed: %v", transitive)
+	}
+}
+
 // TestResolveTransitive_MultiLevel tests A → B → C chain.
 // Expected: both B and C appear in transitive; C's via is A (the root direct action).
 func TestResolveTransitive_MultiLevel(t *testing.T) {

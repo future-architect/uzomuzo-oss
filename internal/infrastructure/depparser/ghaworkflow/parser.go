@@ -30,7 +30,7 @@ type step struct {
 
 // ParseGitHubURLs reads a GitHub Actions workflow YAML file and returns
 // the unique GitHub repository URLs referenced in `uses:` directives.
-// Local actions (./path) and Docker references (docker://image) are skipped.
+// Local actions (./path and $/path) and Docker references (docker://image) are skipped.
 // Jobs are iterated in sorted key order for deterministic output.
 func ParseGitHubURLs(data []byte) ([]string, error) {
 	var wf workflowFile
@@ -77,8 +77,8 @@ func workflowURLs(wf workflowFile) []string {
 // ParseWorkflowAll reads a GitHub Actions workflow YAML file and returns both
 // the unique GitHub repository URLs and step-level local action paths from a
 // single unmarshal. Local action paths are extracted only from step `uses:`
-// values (matching ParseLocalActionPaths); job-level `uses:` values are not
-// included in localPaths.
+// values starting with "./" or "$/" (matching ParseLocalActionPaths);
+// job-level `uses:` values are not included in localPaths.
 // This avoids double-parsing for callers that need both results.
 // Jobs are iterated in sorted key order for deterministic output.
 func ParseWorkflowAll(data []byte) (urls []string, localPaths []string, err error) {
@@ -124,8 +124,14 @@ func ParseWorkflowAll(data []byte) (urls []string, localPaths []string, err erro
 	return urls, localPaths, nil
 }
 
+// hasLocalActionPrefix reports whether uses points into the same repository:
+// "./path" or "$/path", the same-repository form that gh actions-lock --migrate-local-actions writes.
+func hasLocalActionPrefix(uses string) bool {
+	return strings.HasPrefix(uses, "./") || strings.HasPrefix(uses, "$/")
+}
+
 // extractGitHubURL converts a `uses:` value to a GitHub repository URL.
-// Returns "" for empty strings, local actions (./path), and Docker references (docker://).
+// Returns "" for empty strings, local actions (./path or $/path), and Docker references (docker://).
 func extractGitHubURL(uses string) string {
 	uses = strings.TrimSpace(uses)
 	if uses == "" {
@@ -133,7 +139,7 @@ func extractGitHubURL(uses string) string {
 	}
 
 	// Skip local actions.
-	if strings.HasPrefix(uses, "./") || strings.HasPrefix(uses, "../") {
+	if hasLocalActionPrefix(uses) || strings.HasPrefix(uses, "../") {
 		return ""
 	}
 
@@ -180,13 +186,13 @@ func (r ActionRef) ActionYAMLPath(filename string) string {
 }
 
 // ExtractActionRef parses a uses: directive into an ActionRef.
-// Returns the zero value and false for local actions (./), docker references, or invalid formats.
+// Returns the zero value and false for local actions (./ or $/), docker references, or invalid formats.
 func ExtractActionRef(uses string) (ActionRef, bool) {
 	uses = strings.TrimSpace(uses)
 	if uses == "" {
 		return ActionRef{}, false
 	}
-	if strings.HasPrefix(uses, "./") || strings.HasPrefix(uses, "../") {
+	if hasLocalActionPrefix(uses) || strings.HasPrefix(uses, "../") {
 		return ActionRef{}, false
 	}
 	if strings.HasPrefix(uses, "docker://") {
@@ -225,45 +231,74 @@ type actionRuns struct {
 	Steps []step `yaml:"steps"`
 }
 
-// ParseCompositeActionURLs parses an action.yml file and extracts ActionRef values
-// from steps[].uses if the action is a composite action (runs.using: composite).
-//
-// Returns:
-//   - refs: parsed ActionRef values (owner/repo/path/ref) for each uses: directive found in composite steps
-//   - isComposite: true if runs.using == "composite"
-//   - err: non-nil if YAML parsing fails
-func ParseCompositeActionURLs(data []byte) (refs []ActionRef, isComposite bool, err error) {
+// CompositeSteps holds what a composite action's steps reference: external
+// actions (Refs), valid "$/" paths in the same repository (SameRepoPaths), and
+// the raw "$/" uses values that were rejected (InvalidSameRepoUses).
+type CompositeSteps struct {
+	Refs                []ActionRef
+	SameRepoPaths       []string
+	InvalidSameRepoUses []string
+}
+
+// ParseCompositeSteps parses composite steps, excluding "./" paths and reporting invalid "$/" uses.
+// isComposite is true when the manifest's runs.using is "composite" (case-insensitive).
+// When isComposite is false, steps is empty; err is also returned if YAML parsing fails.
+func ParseCompositeSteps(data []byte) (steps CompositeSteps, isComposite bool, err error) {
+	af, isComposite, err := parseCompositeActionFile(data)
+	if err != nil || !isComposite {
+		return CompositeSteps{}, isComposite, err
+	}
+	steps, _ = walkCompositeSteps(af.Runs.Steps)
+	return steps, true, nil
+}
+
+func parseCompositeActionFile(data []byte) (actionFile, bool, error) {
 	var af actionFile
 	if err := yaml.Unmarshal(data, &af); err != nil {
-		return nil, false, fmt.Errorf("failed to parse action manifest: %w", err)
+		return actionFile{}, false, fmt.Errorf("failed to parse action manifest: %w", err)
 	}
+	return af, strings.EqualFold(af.Runs.Using, "composite"), nil
+}
 
-	if !strings.EqualFold(af.Runs.Using, "composite") {
-		return nil, false, nil
+func walkCompositeSteps(steps []step) (result CompositeSteps, localPaths []string) {
+	refSeen := make(map[string]struct{})
+	sameRepoSeen := make(map[string]struct{})
+	localSeen := make(map[string]struct{})
+	for _, s := range steps {
+		if ref, ok := ExtractActionRef(s.Uses); ok {
+			key := ref.GitHubURL()
+			if ref.Path != "" {
+				key += "/" + ref.Path
+			}
+			if _, exists := refSeen[key]; !exists {
+				refSeen[key] = struct{}{}
+				result.Refs = append(result.Refs, ref)
+			}
+		}
+		isSameRepo := strings.HasPrefix(strings.TrimSpace(s.Uses), "$/")
+		if p := ExtractLocalActionPath(s.Uses); p != "" {
+			if _, exists := localSeen[p]; !exists {
+				localSeen[p] = struct{}{}
+				localPaths = append(localPaths, p)
+			}
+			if isSameRepo {
+				if _, exists := sameRepoSeen[p]; !exists {
+					sameRepoSeen[p] = struct{}{}
+					result.SameRepoPaths = append(result.SameRepoPaths, p)
+				}
+			}
+		} else if isSameRepo {
+			result.InvalidSameRepoUses = append(result.InvalidSameRepoUses, s.Uses)
+		}
 	}
-
-	seen := make(map[string]struct{})
-	for _, s := range af.Runs.Steps {
-		ref, ok := ExtractActionRef(s.Uses)
-		if !ok {
-			continue
-		}
-		key := ref.GitHubURL()
-		if ref.Path != "" {
-			key += "/" + ref.Path
-		}
-		if _, exists := seen[key]; exists {
-			continue
-		}
-		seen[key] = struct{}{}
-		refs = append(refs, ref)
-	}
-
-	return refs, true, nil
+	return result, localPaths
 }
 
 // ExtractLocalActionPath returns the cleaned local path from a uses: directive
-// that starts with "./" (e.g., "./.github/actions/foo" → ".github/actions/foo").
+// that starts with "./" or "$/" (e.g., "$/actions/foo" → "actions/foo").
+// A "$/" path containing "@" is invalid because GitHub rejects a ref on "$/";
+// "?", "#" and "%" are rejected because the path goes into a Contents API URL unescaped.
+// "./" paths retain "@" as part of the path.
 // Returns "" for non-local references, docker://, empty strings, or paths that
 // attempt directory traversal (e.g., "./../secret" or "./foo/../../../etc").
 func ExtractLocalActionPath(uses string) string {
@@ -271,15 +306,18 @@ func ExtractLocalActionPath(uses string) string {
 	if uses == "" {
 		return ""
 	}
-	if !strings.HasPrefix(uses, "./") {
+	if !hasLocalActionPrefix(uses) {
 		return ""
 	}
 	// Reject backslashes (non-POSIX path separators).
 	if strings.ContainsRune(uses, '\\') {
 		return ""
 	}
-	// Strip "./" prefix and any trailing slashes.
-	p := strings.TrimPrefix(uses, "./")
+	if strings.HasPrefix(uses, "$/") && strings.ContainsAny(uses, "@?#%") {
+		return ""
+	}
+	// Strip the local prefix and any trailing slashes.
+	p := uses[2:]
 	p = strings.TrimRight(p, "/")
 	if p == "" {
 		return ""
@@ -294,8 +332,8 @@ func ExtractLocalActionPath(uses string) string {
 
 // ParseLocalActionPaths reads a GitHub Actions workflow YAML file and returns
 // the unique local action paths referenced by step-level uses: directives
-// (those starting with "./").
-// Paths are cleaned (leading "./" and trailing "/" removed).
+// (those starting with "./" or "$/").
+// Paths are cleaned (local prefix and trailing "/" removed).
 // Jobs are iterated in sorted key order for deterministic output.
 func ParseLocalActionPaths(data []byte) ([]string, error) {
 	var wf workflowFile
@@ -332,42 +370,16 @@ func ParseLocalActionPaths(data []byte) ([]string, error) {
 // for callers that need both results (e.g., BFS over local composite actions).
 // Returns isComposite=false if runs.using != "composite".
 func ParseCompositeAll(data []byte) (refs []ActionRef, localPaths []string, isComposite bool, err error) {
-	var af actionFile
-	if err := yaml.Unmarshal(data, &af); err != nil {
-		return nil, nil, false, fmt.Errorf("failed to parse action manifest: %w", err)
+	af, isComposite, err := parseCompositeActionFile(data)
+	if err != nil || !isComposite {
+		return nil, nil, isComposite, err
 	}
-
-	if !strings.EqualFold(af.Runs.Using, "composite") {
-		return nil, nil, false, nil
-	}
-
-	refSeen := make(map[string]struct{})
-	localSeen := make(map[string]struct{})
-
-	for _, s := range af.Runs.Steps {
-		if ref, ok := ExtractActionRef(s.Uses); ok {
-			key := ref.GitHubURL()
-			if ref.Path != "" {
-				key += "/" + ref.Path
-			}
-			if _, exists := refSeen[key]; !exists {
-				refSeen[key] = struct{}{}
-				refs = append(refs, ref)
-			}
-		}
-		if p := ExtractLocalActionPath(s.Uses); p != "" {
-			if _, exists := localSeen[p]; !exists {
-				localSeen[p] = struct{}{}
-				localPaths = append(localPaths, p)
-			}
-		}
-	}
-
-	return refs, localPaths, true, nil
+	steps, localPaths := walkCompositeSteps(af.Runs.Steps)
+	return steps.Refs, localPaths, true, nil
 }
 
 // ParseCompositeLocalActionPaths parses an action.yml and extracts local action paths
-// from composite steps (uses: ./ references). Returns nil if not a composite action.
+// from composite steps (uses: ./ or $/ references). Returns nil if not a composite action.
 func ParseCompositeLocalActionPaths(data []byte) (paths []string, isComposite bool, err error) {
 	var af actionFile
 	if err := yaml.Unmarshal(data, &af); err != nil {
