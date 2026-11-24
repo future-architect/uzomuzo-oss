@@ -482,19 +482,16 @@ func (c *DepsDevClient) buildFinalResults(purls []string, packageInfoMap map[str
 
 		}
 	}
-	// A PURL without package info keeps its release info when that info has a
-	// version, and gets a not-found error when release info is absent or failed.
-	// Release info with no version and no error (for example, deps.dev answered
-	// 404) gets no entry, because the caller then reports "not found" with the
-	// PURL in the text.
-	// See ADR-0035.
+	// Package stays nil, so the caller reports the PURL as not found (ADR-0035).
+	// Keep versioned release info so it is not lost; omit version-less, error-free
+	// info (e.g. deps.dev 404) so the caller's not-found message includes the PURL.
 	for _, purl := range purls {
 		if _, ok := results[purl]; ok {
 			continue
 		}
 		if _, ok := packageInfoMap[purl]; !ok {
-			ri, ok := releaseInfoMap[purl]
-			if !ok || ri.Error != nil {
+			ri, hasRelease := releaseInfoMap[purl]
+			if !hasRelease || ri.Error != nil {
 				msg := "package not found in deps.dev"
 				results[purl] = &BatchResult{PURL: purl, Error: &msg}
 			} else if ri.HasAnyVersion() {

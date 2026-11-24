@@ -19,6 +19,8 @@ func TestGetDetailsForPURLs_ReleaseInfoWithoutPackageInfo(t *testing.T) {
 	const purl = "pkg:cargo/example"
 	const selected = purl + "@1.2.3"
 	var unexpected unexpectedRequests
+	// The versions endpoint returns a version, but its versioned PURL lookup is 404.
+	// Package info is therefore absent while release info remains available.
 	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		var status int
 		var body string
