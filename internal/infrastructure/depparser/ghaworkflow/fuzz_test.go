@@ -31,6 +31,7 @@ func FuzzExtractLocalActionPath(f *testing.F) {
 
 func FuzzParseCompositeSteps(f *testing.F) {
 	f.Add([]byte("runs:\n  using: composite\n  steps:\n    - uses: $/sub\n    - uses: $/bad@v1\n    - uses: ./local\n    - uses: other/y@v1\n    - uses: $/../secret\n"))
+	f.Add([]byte("runs:\n  using: composite\n  steps:\n    - uses: other/y@v1\n    - uses: other/y@v2\n    - uses: other/y/sub@v1\n    - uses: $/sub\n    - uses: $/sub/\n    - uses: $/bad@v1\n    - uses: $/bad@v1\n"))
 	f.Add([]byte("runs:\n  using: node20\n"))
 	f.Add([]byte(""))
 	f.Add([]byte("{{invalid yaml"))
@@ -69,10 +70,19 @@ func FuzzParseCompositeSteps(f *testing.F) {
 			seenInvalid[uses] = struct{}{}
 		}
 
+		seenRefs := make(map[string]struct{}, len(steps.Refs))
 		for _, ref := range steps.Refs {
 			if ref.Owner == "" || ref.Repo == "" {
 				t.Fatalf("action ref has empty owner or repo: %+v", ref)
 			}
+			key := ref.GitHubURL()
+			if ref.Path != "" {
+				key += "/" + ref.Path
+			}
+			if _, exists := seenRefs[key]; exists {
+				t.Fatalf("duplicate action ref: %q", key)
+			}
+			seenRefs[key] = struct{}{}
 		}
 	})
 }
