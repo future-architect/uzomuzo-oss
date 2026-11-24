@@ -38,6 +38,9 @@ func newJSLikeConfig(lang *sitter.Language, includeJSX, isTypeScript bool) *lang
 	importPatterns := []string{
 		`(import_statement source: (string) @import)`,
 		`(call_expression function: (identifier) @func (#eq? @func "require") arguments: (arguments (string) @import))`,
+		// A ${} part makes the module path known only at runtime; do not guess a package from a partly fixed path.
+		// Match only a template with a single fixed fragment.
+		`(call_expression function: (identifier) @func (#eq? @func "require") arguments: (arguments (template_string . (string_fragment) .) @import))`,
 		// Re-exports: export { foo } from "pkg", export * from "pkg"
 		`(export_statement source: (string) @import)`,
 		// Dynamic import(): const mod = await import("pkg")
@@ -138,7 +141,7 @@ func newJSLikeConfig(lang *sitter.Language, includeJSX, isTypeScript bool) *lang
 }
 
 // handleJSImport processes a JS/TS module specifier with subpath prefix matching.
-// node is the @import capture node (the source string literal); src is the file source.
+// node is the @import capture node (the string or template_string argument); src is the file source.
 func (a *Analyzer) handleJSImport(
 	node *sitter.Node,
 	src []byte,
@@ -239,9 +242,9 @@ func (a *Analyzer) handleJSImport(
 // extractJSBindings walks the AST from an import source node to find all JS binding names.
 //
 // ESM: import_statement → import_clause → identifier / namespace_import
-// CJS (variable): string → arguments → call_expression → variable_declarator → name
-// CJS (property): string → arguments → call_expression → assignment_expression → member_expression → property
-// CJS (member): string → arguments → call_expression → member_expression... → variable_declarator / assignment_expression
+// CJS (variable): string or template_string → arguments → call_expression → variable_declarator → name
+// CJS (property): string or template_string → arguments → call_expression → assignment_expression → member_expression → property
+// CJS (member): string or template_string → arguments → call_expression → member_expression... → variable_declarator / assignment_expression
 // TS (import = require): string → import_require_clause → identifier
 //
 // Combined imports (e.g., `import def, * as ns from "pkg"`) produce multiple bindings.
@@ -268,7 +271,7 @@ func extractJSBindings(node *sitter.Node, src []byte) []string {
 		return nil
 	}
 
-	// CJS: node is `(string)` inside `(arguments)` inside `(call_expression)`
+	// CJS: node is `(string)` or `(template_string)` inside `(arguments)` inside `(call_expression)`
 	// Pattern: const pkg = require('@scope/pkg')
 	// Also handles compound patterns like: var X = root.X || require('pkg')
 	// where binary_expression sits between call_expression and variable_declarator.
@@ -372,7 +375,7 @@ func extractRequireMemberBinding(top *sitter.Node, src []byte) []string {
 	return nil
 }
 
-// startsRequireMemberChain reports whether node (the string inside
+// startsRequireMemberChain reports whether node (the string or template_string inside
 // require()) is followed by member access, as in `require('pkg').member`.
 func startsRequireMemberChain(node *sitter.Node) bool {
 	args := node.Parent()
@@ -405,7 +408,7 @@ func requireMemberChainTop(callExpr *sitter.Node) *sitter.Node {
 }
 
 // isInlineRequireUsage checks whether a CJS require() call is used inline without
-// a variable binding. The node is the string literal inside require('pkg').
+// a variable binding. The node is the string or template_string argument inside require().
 //
 // Inline patterns detected:
 //   - require('x')()        — immediate invocation (parent call_expression is the function of an outer call)
@@ -416,12 +419,12 @@ func requireMemberChainTop(callExpr *sitter.Node) *sitter.Node {
 //     when the value is not bound to a name; `const v = require('x').prop` is
 //     handled by extractRequireMemberBinding and does not reach this function.
 //
-// AST walk: string → arguments → call_expression(require) → check parent type.
+// AST walk: string or template_string → arguments → call_expression(require) → check parent type.
 func isInlineRequireUsage(node *sitter.Node) bool {
 	if node == nil {
 		return false
 	}
-	// node is the string literal; its parent should be arguments.
+	// node is the string or template_string argument; its parent should be arguments.
 	args := node.Parent()
 	if args == nil || args.Kind() != "arguments" {
 		return false
