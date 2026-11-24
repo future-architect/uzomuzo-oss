@@ -90,21 +90,64 @@ type stubDepsDevClient struct {
 
 type missingPackageDepsDevClient struct {
 	stubDepsDevClient
-	withRelease bool
-	repoURL     string
+	withRelease   bool
+	withMaxSemver bool
+	noEntry       bool
+	repoURL       string
 }
 
 func (c *missingPackageDepsDevClient) GetDetailsForPURLs(_ context.Context, purls []string) (map[string]*depsdev.BatchResult, error) {
 	result := make(map[string]*depsdev.BatchResult, len(purls))
 	for _, p := range purls {
+		if c.noEntry {
+			continue
+		}
 		result[p] = &depsdev.BatchResult{PURL: p, RepoURL: c.repoURL}
 		if c.withRelease {
 			result[p].ReleaseInfo = depsdev.ReleaseInfo{StableVersion: depsdev.Version{
 				VersionKey: depsdev.VersionKey{Version: "1.5.7"}, PURL: p + "@1.5.7",
 			}}
 		}
+		if c.withMaxSemver {
+			result[p].ReleaseInfo = depsdev.ReleaseInfo{MaxSemverVersion: depsdev.Version{
+				VersionKey: depsdev.VersionKey{Version: "1.5.7"}, PURL: p + "@1.5.7",
+			}}
+		}
 	}
 	return result, nil
+}
+
+func TestAnalyzeFromPURLs_MissingPackageErrorIncludesPURL(t *testing.T) {
+	const purl = "pkg:npm/x"
+	const wantError = "package not found in deps.dev: pkg:npm/x"
+	for _, tc := range []struct {
+		name   string
+		client *missingPackageDepsDevClient
+	}{
+		{name: "no batch entry", client: &missingPackageDepsDevClient{noEntry: true}},
+		{name: "release without package", client: &missingPackageDepsDevClient{withMaxSemver: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := NewIntegrationService(github.NewClient(&config.Config{}), tc.client)
+			analyses, err := svc.AnalyzeFromPURLs(context.Background(), []string{purl})
+			if err != nil {
+				t.Fatalf("AnalyzeFromPURLs: %v", err)
+			}
+			analysis := analyses[purl]
+			if analysis == nil {
+				t.Fatal("missing analysis")
+			}
+			if analysis.Error == nil {
+				t.Fatalf("Error = nil, want %q", wantError)
+			}
+			if got := analysis.Error.Error(); got != wantError {
+				t.Errorf("Error = %q, want %q", got, wantError)
+			}
+			if !common.IsResourceNotFoundError(analysis.Error) {
+				t.Errorf("Error type = %T, want resource-not-found", analysis.Error)
+			}
+		})
+	}
 }
 
 func TestAnalyzeFromPURLs_MissingPackageMetadataStaysNotFound(t *testing.T) {

@@ -482,17 +482,20 @@ func (c *DepsDevClient) buildFinalResults(purls []string, packageInfoMap map[str
 
 		}
 	}
-	// Mark any completely missing entries as not found to aid upstream handling
+	// Package stays nil, so the caller reports the PURL as not found (ADR-0035).
+	// Keep versioned release info so it is not lost; omit version-less, error-free
+	// info (e.g. deps.dev 404) so the caller's not-found message includes the PURL.
 	for _, purl := range purls {
 		if _, ok := results[purl]; ok {
 			continue
 		}
-		// If we have neither package info nor release info, surface as not found
 		if _, ok := packageInfoMap[purl]; !ok {
-			if ri, ok := releaseInfoMap[purl]; !ok || ri.Error != nil {
+			ri, hasRelease := releaseInfoMap[purl]
+			if !hasRelease || ri.Error != nil {
 				msg := "package not found in deps.dev"
-				s := msg
-				results[purl] = &BatchResult{PURL: purl, Error: &s}
+				results[purl] = &BatchResult{PURL: purl, Error: &msg}
+			} else if ri.HasAnyVersion() {
+				results[purl] = &BatchResult{PURL: purl, ReleaseInfo: ri}
 			}
 		}
 	}
