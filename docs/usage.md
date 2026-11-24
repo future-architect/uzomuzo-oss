@@ -230,8 +230,8 @@ Output includes a `SOURCE` column to distinguish direct results from discovered 
 
 When combined with `--show-transitive`, `--include-actions` recursively resolves composite actions referenced by the discovered workflows. This includes:
 
-- **Remote composite actions**: Actions that reference other Actions via `uses:` in their `action.yml`
-- **Local composite actions**: `./` references resolved via the GitHub Contents API relative to the repository root
+- **Remote composite actions**: Actions that reference other Actions via `uses:` in their `action.yml`; a `$/` reference inside a remote composite action points to that action's own repository.
+- **Local composite actions**: `./` and `$/` references in scanned workflows are resolved via the GitHub Contents API relative to the repository root.
 
 ```bash
 # Include transitive composite action dependencies

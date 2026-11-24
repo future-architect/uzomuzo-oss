@@ -9,13 +9,13 @@ import (
 )
 
 func TestWorkflowLocations(t *testing.T) {
-	data := []byte("jobs:\n  reusable:\n    uses: owner/reusable/.github/workflows/build.yml@main\n  build:\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./local\n      - uses: docker://alpine\n      - uses: actions/checkout@v3\n")
+	data := []byte("jobs:\n  reusable:\n    uses: owner/reusable/.github/workflows/build.yml@main\n  same-repo:\n    uses: $/.github/workflows/reusable.yml\n  build:\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./local\n      - uses: $/actions/foo\n      - uses: docker://alpine\n      - uses: actions/checkout@v3\n")
 	urls, locs, err := ghaworkflow.ParseGitHubURLsWithLocations(data)
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantURLs := []string{"https://github.com/actions/checkout", "https://github.com/owner/reusable"}
-	wantLocs := map[string][]depparser.SourceLocation{wantURLs[0]: {{Line: 6}, {Line: 9}}, wantURLs[1]: {{Line: 3}}}
+	wantLocs := map[string][]depparser.SourceLocation{wantURLs[0]: {{Line: 8}, {Line: 12}}, wantURLs[1]: {{Line: 3}}}
 	if !reflect.DeepEqual(urls, wantURLs) || !reflect.DeepEqual(locs, wantLocs) {
 		t.Fatalf("got %v %v, want %v %v", urls, locs, wantURLs, wantLocs)
 	}
