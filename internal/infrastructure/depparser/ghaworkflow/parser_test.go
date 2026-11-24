@@ -437,7 +437,7 @@ func TestExtractLocalActionPath(t *testing.T) {
 }
 
 func TestParseCompositeSteps_SameRepoPaths(t *testing.T) {
-	data := []byte("runs:\n  using: composite\n  steps:\n    - uses: $/sub/\n    - uses: ./local\n    - uses: other/y@v1\n    - uses: $/sub\n    - uses: $/bad@v1\n    - uses: $/a?b\n    - uses: $/a#b\n    - uses: $/a%2e\n    - uses: $/../secret\n    - uses: $/\n    - uses: $/a\\b\n")
+	data := []byte("runs:\n  using: composite\n  steps:\n    - uses: $/sub/\n    - uses: ./local\n    - uses: other/y@v1\n    - uses: $/sub\n    - uses: $/bad@v1\n    - uses: $/a?b\n    - uses: $/bad@v1\n    - uses: $/a#b\n    - uses: $/a%2e\n    - uses: $/../secret\n    - uses: $/\n    - uses: $/a\\b\n")
 	steps, composite, err := ghaworkflow.ParseCompositeSteps(data)
 	if err != nil || !composite {
 		t.Fatalf("ParseCompositeSteps() composite = %t, err = %v", composite, err)

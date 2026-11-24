@@ -559,6 +559,31 @@ runs:
 	}
 }
 
+func TestLocalAction_SameRepoPrefix(t *testing.T) {
+	routes := map[string][]byte{
+		"owner/app/.github/workflows":        directoryJSON(t, []string{"ci.yml"}),
+		"owner/app/.github/workflows/ci.yml": []byte("jobs:\n  build:\n    steps:\n      - uses: $/actions/a\n"),
+		"owner/app/actions/a/action.yml":     []byte("runs:\n  using: composite\n  steps:\n    - uses: other/y@v1\n"),
+	}
+
+	srv := fakeGitHubAPI(t, routes)
+	defer srv.Close()
+
+	svc := newTestService(t, srv.URL)
+	directURLs, localActions, _, _, err := svc.DiscoverActions(
+		context.Background(), []string{"https://github.com/owner/app"}, false,
+	)
+	if err != nil {
+		t.Fatalf("DiscoverActions: %v", err)
+	}
+	if len(directURLs) != 0 {
+		t.Errorf("direct URLs = %v, want none", directURLs)
+	}
+	if len(localActions) != 1 || localActions["https://github.com/other/y"] != "actions/a" {
+		t.Errorf("local actions = %v, want other/y via actions/a", localActions)
+	}
+}
+
 // TestLocalAction_NestedLocals tests local action → local action → external action chain.
 func TestLocalAction_NestedLocals(t *testing.T) {
 	workflowYAML := []byte(`

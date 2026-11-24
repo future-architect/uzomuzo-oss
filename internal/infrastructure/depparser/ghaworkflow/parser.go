@@ -13,6 +13,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	localActionPrefix = "./"
+	sameRepoPrefix    = "$/"
+)
+
 // workflowFile is the minimal YAML structure needed to extract `uses:` references.
 type workflowFile struct {
 	Jobs map[string]job `yaml:"jobs"`
@@ -127,7 +132,12 @@ func ParseWorkflowAll(data []byte) (urls []string, localPaths []string, err erro
 // hasLocalActionPrefix reports whether uses points into the same repository:
 // "./path" or "$/path", the same-repository form that gh actions-lock --migrate-local-actions writes.
 func hasLocalActionPrefix(uses string) bool {
-	return strings.HasPrefix(uses, "./") || strings.HasPrefix(uses, "$/")
+	return strings.HasPrefix(uses, localActionPrefix) || hasSameRepoPrefix(uses)
+}
+
+// hasSameRepoPrefix reports whether uses starts with "$/". Callers pass a trimmed value.
+func hasSameRepoPrefix(uses string) bool {
+	return strings.HasPrefix(uses, sameRepoPrefix)
 }
 
 // extractGitHubURL converts a `uses:` value to a GitHub repository URL.
@@ -234,6 +244,7 @@ type actionRuns struct {
 // CompositeSteps holds what a composite action's steps reference: external
 // actions (Refs), valid "$/" paths in the same repository (SameRepoPaths), and
 // the raw "$/" uses values that were rejected (InvalidSameRepoUses).
+// Each slice contains unique values in first-seen order.
 type CompositeSteps struct {
 	Refs                []ActionRef
 	SameRepoPaths       []string
@@ -242,7 +253,9 @@ type CompositeSteps struct {
 
 // ParseCompositeSteps parses composite steps, excluding "./" paths and reporting invalid "$/" uses.
 // isComposite is true when the manifest's runs.using is "composite" (case-insensitive).
-// When isComposite is false, steps is empty; err is also returned if YAML parsing fails.
+// err is non-nil only when YAML parsing fails, in which case isComposite is false.
+// steps is the zero value when isComposite is false or err is non-nil.
+// "./" paths are excluded because they refer to the caller's workspace in a remote composite action.
 func ParseCompositeSteps(data []byte) (steps CompositeSteps, isComposite bool, err error) {
 	af, isComposite, err := parseCompositeActionFile(data)
 	if err != nil || !isComposite {
@@ -263,6 +276,7 @@ func parseCompositeActionFile(data []byte) (actionFile, bool, error) {
 func walkCompositeSteps(steps []step) (result CompositeSteps, localPaths []string) {
 	refSeen := make(map[string]struct{})
 	sameRepoSeen := make(map[string]struct{})
+	invalidSameRepoSeen := make(map[string]struct{})
 	localSeen := make(map[string]struct{})
 	for _, s := range steps {
 		if ref, ok := ExtractActionRef(s.Uses); ok {
@@ -275,7 +289,7 @@ func walkCompositeSteps(steps []step) (result CompositeSteps, localPaths []strin
 				result.Refs = append(result.Refs, ref)
 			}
 		}
-		isSameRepo := strings.HasPrefix(strings.TrimSpace(s.Uses), "$/")
+		isSameRepo := hasSameRepoPrefix(strings.TrimSpace(s.Uses))
 		if p := ExtractLocalActionPath(s.Uses); p != "" {
 			if _, exists := localSeen[p]; !exists {
 				localSeen[p] = struct{}{}
@@ -288,7 +302,10 @@ func walkCompositeSteps(steps []step) (result CompositeSteps, localPaths []strin
 				}
 			}
 		} else if isSameRepo {
-			result.InvalidSameRepoUses = append(result.InvalidSameRepoUses, s.Uses)
+			if _, exists := invalidSameRepoSeen[s.Uses]; !exists {
+				invalidSameRepoSeen[s.Uses] = struct{}{}
+				result.InvalidSameRepoUses = append(result.InvalidSameRepoUses, s.Uses)
+			}
 		}
 	}
 	return result, localPaths
@@ -298,7 +315,7 @@ func walkCompositeSteps(steps []step) (result CompositeSteps, localPaths []strin
 // that starts with "./" or "$/" (e.g., "$/actions/foo" → "actions/foo").
 // A "$/" path containing "@" is invalid because GitHub rejects a ref on "$/";
 // "?", "#" and "%" are rejected because the path goes into a Contents API URL unescaped.
-// "./" paths retain "@" as part of the path.
+// "./" paths intentionally retain "@", "?", "#", and "%" to preserve existing behavior.
 // Returns "" for non-local references, docker://, empty strings, or paths that
 // attempt directory traversal (e.g., "./../secret" or "./foo/../../../etc").
 func ExtractLocalActionPath(uses string) string {
@@ -313,11 +330,15 @@ func ExtractLocalActionPath(uses string) string {
 	if strings.ContainsRune(uses, '\\') {
 		return ""
 	}
-	if strings.HasPrefix(uses, "$/") && strings.ContainsAny(uses, "@?#%") {
+	if hasSameRepoPrefix(uses) && strings.ContainsAny(uses, "@?#%") {
 		return ""
 	}
 	// Strip the local prefix and any trailing slashes.
-	p := uses[2:]
+	prefixLen := len(localActionPrefix)
+	if hasSameRepoPrefix(uses) {
+		prefixLen = len(sameRepoPrefix)
+	}
+	p := uses[prefixLen:]
 	p = strings.TrimRight(p, "/")
 	if p == "" {
 		return ""
