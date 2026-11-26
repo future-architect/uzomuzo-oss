@@ -3,8 +3,10 @@ package depsdev
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -289,4 +291,130 @@ func TestFetchAdvisoriesBatchWithStatus_OutcomesAndCache(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFetchAdvisoriesBatchWithStatus_WarnsOnFetchFailures(t *testing.T) {
+	handler := &recordingAdvisoryLogHandler{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v3alpha/advisories/GHSA-ok":
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(AdvisoryDetail{AdvisoryKey: AdvisoryKey{ID: "GHSA-ok"}}); err != nil {
+				t.Errorf("encode advisory: %v", err)
+			}
+		case "/v3alpha/advisories/GHSA-gone":
+			http.NotFound(w, r)
+		case "/v3alpha/advisories/GHSA-fail1", "/v3alpha/advisories/GHSA-fail2":
+			http.Error(w, "server error", http.StatusInternalServerError)
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	client := NewDepsDevClient(&config.DepsDevConfig{BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0})
+	details, missing := client.FetchAdvisoriesBatchWithStatus(context.Background(), []string{
+		"GHSA-ok", "GHSA-gone", "GHSA-fail1", "GHSA-fail2",
+	})
+	if len(details) != 1 || details["GHSA-ok"] == nil {
+		t.Errorf("details = %v, want only GHSA-ok", details)
+	}
+	if len(missing) != 1 {
+		t.Errorf("missing = %v, want only GHSA-gone", missing)
+	} else if _, ok := missing["GHSA-gone"]; !ok {
+		t.Errorf("missing = %v, want only GHSA-gone", missing)
+	}
+
+	var warnings []slog.Record
+	for _, record := range handler.snapshot() {
+		if record.Level >= slog.LevelWarn {
+			warnings = append(warnings, record)
+		}
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("warning records = %d, want 1", len(warnings))
+	}
+	var failedCount int64
+	var foundFailed bool
+	warnings[0].Attrs(func(attr slog.Attr) bool {
+		if attr.Key == "failed" && attr.Value.Kind() == slog.KindInt64 {
+			failedCount = attr.Value.Int64()
+			foundFailed = true
+		}
+		return true
+	})
+	if !foundFailed || failedCount != 2 {
+		t.Errorf("warning failed attribute = %d (present: %t), want 2", failedCount, foundFailed)
+	}
+}
+
+func TestFetchAdvisoriesBatchWithStatus_NoWarnWithoutFailures(t *testing.T) {
+	handler := &recordingAdvisoryLogHandler{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v3alpha/advisories/GHSA-ok":
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(AdvisoryDetail{AdvisoryKey: AdvisoryKey{ID: "GHSA-ok"}}); err != nil {
+				t.Errorf("encode advisory: %v", err)
+			}
+		case "/v3alpha/advisories/GHSA-gone":
+			http.NotFound(w, r)
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	client := NewDepsDevClient(&config.DepsDevConfig{BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0})
+	details, missing := client.FetchAdvisoriesBatchWithStatus(context.Background(), []string{"GHSA-ok", "GHSA-gone"})
+	if len(details) != 1 || details["GHSA-ok"] == nil {
+		t.Errorf("details = %v, want only GHSA-ok", details)
+	}
+	if len(missing) != 1 {
+		t.Errorf("missing = %v, want only GHSA-gone", missing)
+	} else if _, ok := missing["GHSA-gone"]; !ok {
+		t.Errorf("missing = %v, want only GHSA-gone", missing)
+	}
+
+	for _, record := range handler.snapshot() {
+		if record.Level >= slog.LevelWarn {
+			t.Errorf("unexpected warning record: %s", record.Message)
+		}
+	}
+}
+
+type recordingAdvisoryLogHandler struct {
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func (h *recordingAdvisoryLogHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= slog.LevelDebug
+}
+
+func (h *recordingAdvisoryLogHandler) Handle(_ context.Context, record slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.records = append(h.records, record.Clone())
+	return nil
+}
+
+func (h *recordingAdvisoryLogHandler) WithAttrs(_ []slog.Attr) slog.Handler { return h }
+
+func (h *recordingAdvisoryLogHandler) WithGroup(_ string) slog.Handler { return h }
+
+func (h *recordingAdvisoryLogHandler) snapshot() []slog.Record {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]slog.Record(nil), h.records...)
 }
