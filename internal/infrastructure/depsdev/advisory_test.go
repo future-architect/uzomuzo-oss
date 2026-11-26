@@ -3,6 +3,7 @@ package depsdev
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -350,6 +351,74 @@ func TestFetchAdvisoriesBatchWithStatus_WarnsOnFetchFailures(t *testing.T) {
 	})
 	if !foundFailed || failedCount != 2 {
 		t.Errorf("warning failed attribute = %d (present: %t), want 2", failedCount, foundFailed)
+	}
+}
+
+func TestFetchAdvisoriesBatchWithStatus_WarnsWithContextErrorWhenCanceled(t *testing.T) {
+	handler := &recordingAdvisoryLogHandler{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	client := NewDepsDevClient(&config.DepsDevConfig{
+		BaseURL:    "http://127.0.0.1:0",
+		MaxRetries: 0,
+	})
+	details, missing := client.FetchAdvisoriesBatchWithStatus(ctx, []string{
+		"GHSA-first", "GHSA-second", "GHSA-third",
+	})
+	if len(details) != 0 {
+		t.Errorf("details = %v, want empty", details)
+	}
+	if len(missing) != 0 {
+		t.Errorf("missing = %v, want empty", missing)
+	}
+
+	var warnings []slog.Record
+	for _, record := range handler.snapshot() {
+		if record.Level >= slog.LevelWarn {
+			warnings = append(warnings, record)
+		}
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("warning records = %d, want 1", len(warnings))
+	}
+	if warnings[0].Message != "advisory_detail_fetch_incomplete" {
+		t.Errorf("warning message = %q, want advisory_detail_fetch_incomplete", warnings[0].Message)
+	}
+
+	var failed, unique int64
+	var foundFailed, foundUnique, foundError bool
+	var loggedError error
+	warnings[0].Attrs(func(attr slog.Attr) bool {
+		switch attr.Key {
+		case "failed":
+			if attr.Value.Kind() == slog.KindInt64 {
+				failed = attr.Value.Int64()
+				foundFailed = true
+			}
+		case "unique":
+			if attr.Value.Kind() == slog.KindInt64 {
+				unique = attr.Value.Int64()
+				foundUnique = true
+			}
+		case "error":
+			if attr.Value.Kind() == slog.KindAny {
+				loggedError, foundError = attr.Value.Any().(error)
+			}
+		}
+		return true
+	})
+	if !foundFailed || failed != 3 {
+		t.Errorf("warning failed attribute = %d (int64: %t), want 3", failed, foundFailed)
+	}
+	if !foundUnique || unique != 3 {
+		t.Errorf("warning unique attribute = %d (int64: %t), want 3", unique, foundUnique)
+	}
+	if !foundError || !errors.Is(loggedError, context.Canceled) {
+		t.Errorf("warning error attribute = %v (error in KindAny: %t), want context.Canceled", loggedError, foundError)
 	}
 }
 
