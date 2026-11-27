@@ -62,8 +62,8 @@ func (c *DepsDevClient) FetchAdvisory(ctx context.Context, advisoryID string) (*
 }
 
 // FetchAdvisoriesBatchWithStatus fetches advisory details for multiple IDs.
-// The second map contains IDs whose detail request returned HTTP 404; failed
-// requests are omitted from both maps.
+// The second map contains IDs whose detail request returned HTTP 404.
+// IDs whose request failed, or was skipped after cancellation, are absent from both maps and reported in one WARN with a count.
 //
 // DDD Layer: Infrastructure (parallel processing)
 func (c *DepsDevClient) FetchAdvisoriesBatchWithStatus(ctx context.Context, advisoryIDs []string) (map[string]*AdvisoryDetail, map[string]struct{}) {
@@ -109,6 +109,14 @@ func (c *DepsDevClient) FetchAdvisoriesBatchWithStatus(ctx context.Context, advi
 		} else {
 			details[id] = result.detail
 		}
+	}
+	failed := len(unique) - len(details) - len(missing)
+	if failed > 0 {
+		attrs := []any{"failed", failed, "unique", len(unique)}
+		if err := ctx.Err(); err != nil {
+			attrs = append(attrs, "error", err)
+		}
+		slog.Warn("advisory_detail_fetch_incomplete", attrs...)
 	}
 
 	slog.Debug("advisory severity fetch complete",
