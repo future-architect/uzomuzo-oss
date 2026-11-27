@@ -21,6 +21,7 @@ func TestScriptContents(t *testing.T) {
 		want  string
 		lang  langID
 		found bool
+		vue   bool
 	}{
 		{
 			name:  "quoted angle bracket and offsets",
@@ -95,6 +96,24 @@ func TestScriptContents(t *testing.T) {
 			lang:  langJavaScript, found: true,
 		},
 		{
+			name:  "Vue single brace is text",
+			input: "{<script>y</script>}",
+			want:  " " + openMask("<script>") + "y" + closeMask("</script>") + " ",
+			lang:  langJavaScript, found: true, vue: true,
+		},
+		{
+			name:  "Vue interpolation ends at the first double brace",
+			input: "{{ '<script>' }}<script>y</script>",
+			want:  strings.Repeat(" ", len("{{ '<script>' }}")) + openMask("<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true, vue: true,
+		},
+		{
+			name:  "Vue braces in an unquoted attribute do not hide the tag end",
+			input: "<p a={>t</p><script>y</script>",
+			want:  strings.Repeat(" ", len("<p a={>t</p>")) + openMask("<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true, vue: true,
+		},
+		{
 			name:  "strongest language across blocks",
 			input: "<script>one</script><SCRIPT LANG=typescript>two</SCRIPT><script lang=tsx>three</script>",
 			want:  openMask("<script>") + "one" + closeMask("</script>") + openMask("<SCRIPT LANG=typescript>") + "two" + closeMask("</SCRIPT>") + openMask("<script lang=tsx>") + "three" + closeMask("</script>"),
@@ -103,7 +122,7 @@ func TestScriptContents(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, lang, found := scriptContents([]byte(tt.input))
+			got, lang, found := scriptContents([]byte(tt.input), tt.vue)
 			if string(got) != tt.want || lang != tt.lang || found != tt.found {
 				t.Errorf("scriptContents() = (%q, %v, %v), want (%q, %v, %v)", got, lang, found, tt.want, tt.lang, tt.found)
 			}
@@ -121,7 +140,7 @@ func TestScriptContentsUnmatchedBracesStayLinear(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		got, _, found := scriptContents([]byte(input))
+		got, _, found := scriptContents([]byte(input), false)
 		if !found || !strings.Contains(string(got), "y") {
 			t.Errorf("script after unmatched braces not kept: found=%v", found)
 		}
@@ -130,5 +149,24 @@ func TestScriptContentsUnmatchedBracesStayLinear(t *testing.T) {
 	case <-done:
 	case <-time.After(10 * time.Second):
 		t.Fatal("scriptContents did not finish within 10s on unmatched braces")
+	}
+}
+
+// TestScriptContentsUnclosedVueInterpolationsStayLinear guards vueUnclosed:
+// without it, each `{{` would search to the end of input for `}}`.
+func TestScriptContentsUnclosedVueInterpolationsStayLinear(t *testing.T) {
+	input := strings.Repeat("{{", 1<<19) + "<script>y</script>"
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		got, _, found := scriptContents([]byte(input), true)
+		if !found || !strings.Contains(string(got), "y") {
+			t.Errorf("script after unclosed interpolations not kept: found=%v", found)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("scriptContents did not finish within 10s on unclosed interpolations")
 	}
 }

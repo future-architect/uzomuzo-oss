@@ -5,8 +5,9 @@ package treesitter
 import "bytes"
 
 // scriptContents keeps script bodies at their original byte offsets so that
-// tree-sitter sees no imports from component markup or styles.
-func scriptContents(src []byte) ([]byte, langID, bool) {
+// tree-sitter sees no imports from component markup or styles. vue selects
+// Vue's `{{ }}` interpolation; otherwise Svelte's `{ }` expressions apply.
+func scriptContents(src []byte, vue bool) ([]byte, langID, bool) {
 	masked := make([]byte, len(src))
 	for i, b := range src {
 		if b == '\n' || b == '\r' {
@@ -16,14 +17,14 @@ func scriptContents(src []byte) ([]byte, langID, bool) {
 		}
 	}
 
-	sc := markupScanner{src: src}
+	sc := markupScanner{src: src, vue: vue}
 	language := langJavaScript
 	found := false
 	for i := 0; i+7 <= len(src); {
 		// Vue `{{ }}` and Svelte `{ }` hold JavaScript, where `'<!--'` or
 		// `"<script>"` are just strings, not markup.
 		if src[i] == '{' {
-			if next, ok := sc.skipBraces(i); ok {
+			if next, ok := sc.skipExpression(i); ok {
 				i = next
 				continue
 			}
@@ -98,6 +99,13 @@ var rawTextTags = []string{"style", "textarea", "title"}
 // markupScanner reads component markup around script blocks.
 type markupScanner struct {
 	src []byte
+	// vue is set for .vue files. Vue writes expressions in text as `{{ }}`
+	// and in attributes only inside quotes, so a single `{` there is text.
+	// Svelte uses `{ }` in both places, and a literal `{` must be escaped.
+	vue bool
+	// vueUnclosed is set once a `{{` has no `}}` after it; later ones cannot
+	// have one either.
+	vueUnclosed bool
 	// bracesUnbalanced is set once a `{` has no matching `}`. From then on
 	// braces are plain text; retrying from every later `{` would make a file
 	// of unmatched braces take quadratic time.
@@ -141,6 +149,25 @@ func (sc *markupScanner) skipMarkupTag(at int) (next int, ok bool) {
 		return 0, false
 	}
 	return end + 1, true
+}
+
+// skipExpression returns the index after the template expression starting
+// at src[at] == '{': `{{ ... }}` in Vue (ending at the first `}}`, as Vue's
+// own parser does), a brace-matched `{ ... }` in Svelte. ok is false when
+// src[at] starts no expression.
+func (sc *markupScanner) skipExpression(at int) (next int, ok bool) {
+	if !sc.vue {
+		return sc.skipBraces(at)
+	}
+	if sc.vueUnclosed || !bytes.HasPrefix(sc.src[at:], []byte("{{")) {
+		return 0, false
+	}
+	end := bytes.Index(sc.src[at+2:], []byte("}}"))
+	if end < 0 {
+		sc.vueUnclosed = true
+		return 0, false
+	}
+	return at + 2 + end + 2, true
 }
 
 // skipBraces returns the index after the `}` that matches src[at] == '{',
@@ -209,7 +236,7 @@ func (sc *markupScanner) openingTagEnd(start int) (int, bool) {
 			quote = b
 			continue
 		}
-		if b == '{' {
+		if b == '{' && !sc.vue {
 			if next, ok := sc.skipBraces(i); ok {
 				i = next - 1
 			}

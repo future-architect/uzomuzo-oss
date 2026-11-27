@@ -443,7 +443,7 @@ func (a *Analyzer) analyzeFile(
 		return
 	}
 	if isSFC {
-		src, lid, ok = scriptContents(src)
+		src, lid, ok = scriptContents(src, ext == ".vue")
 		if !ok {
 			return
 		}

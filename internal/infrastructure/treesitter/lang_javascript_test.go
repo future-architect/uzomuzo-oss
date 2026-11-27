@@ -198,6 +198,18 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-raw@1.0.0", importPath: "p-raw",
 		},
 		{
+			name:     "literal brace in Vue template text is not an expression",
+			filename: "LiteralBrace.vue",
+			code:     "<template><p>{</p></template><script>import p from 'p-literal-brace'; p.run();</script><style>/* } */</style>",
+			purl:     "pkg:npm/p-literal-brace@1.0.0", importPath: "p-literal-brace", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Vue interpolation after an unmatched literal brace is still skipped",
+			filename: "BraceThenInterp.vue",
+			code:     "<template><p>{</p><p>{{ '<!--' }}</p></template><script>import p from 'p-brace-interp'; p.run();</script>",
+			purl:     "pkg:npm/p-brace-interp@1.0.0", importPath: "p-brace-interp", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
 			name:     "markup outside script has no coupling",
 			filename: "Markup.vue",
 			code:     "<template><div>require('p-markup')</div></template><script>const x = 1;</script>",
