@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
-	"strings"
 	"testing"
 )
 
@@ -214,15 +213,33 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-brace-interp@1.0.0", importPath: "p-brace-interp", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
-			name:     "brace in a regular expression does not end a Svelte expression",
-			filename: "Regex.svelte",
-			code:     "<p>{/[}]/.test('<!--')}</p>\n<script>import p from 'p-regex'; p.run();</script>",
-			purl:     "pkg:npm/p-regex@1.0.0", importPath: "p-regex", wantPresent: true, wantFiles: 1, wantCalls: 1,
+			name:     "Svelte block closer before a script",
+			filename: "Blocks.svelte",
+			code:     "<ul>{#if ok}<li>yes</li>{/if}</ul>\n<script>\n  import p from 'p-blocks';\n  p.run();\n</script>\n<p><b>ratio</b> {a / b}</p>",
+			purl:     "pkg:npm/p-blocks@1.0.0", importPath: "p-blocks", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "postfix increment then division before a script",
+			filename: "Divide.svelte",
+			code:     "{n++ / 2}<script>import p from 'p-divide'; function f() { const x = 1 / 2; p.run(); }</script>",
+			purl:     "pkg:npm/p-divide@1.0.0", importPath: "p-divide", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "upper-case style closing tag hides its CSS",
+			filename: "UpperStyle.vue",
+			code:     "<style>.a{content:\"<script>require('p-upper-style')</script>\"}</STYLE>\n<script>import q from 'p-kept'; q.run();</script>",
+			purl:     "pkg:npm/p-upper-style@1.0.0", importPath: "p-upper-style",
+		},
+		{
+			name:     "script tag with an unclosed quote does not hide later scripts",
+			filename: "BrokenScript.vue",
+			code:     "<script lang=\"ts</script><script>import p from 'p-broken-script'; p.run()</script>",
+			purl:     "pkg:npm/p-broken-script@1.0.0", importPath: "p-broken-script", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
 			name:     "brace in a comment does not end a Svelte expression",
 			filename: "BlockComment.svelte",
-			code:     "<p>{/* } */ '<!--'}</p>\n<script>import p from 'p-block-comment'; p.run();</script>",
+			code:     "<p>{/* } */ '<!--'}</p>\n<script>import p from 'p-block-comment'; p.run();</script><!-- end -->",
 			purl:     "pkg:npm/p-block-comment@1.0.0", importPath: "p-block-comment", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
@@ -271,14 +288,12 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 				if control.ImportFileCount != 1 || control.CallSiteCount != 1 || control.IsUnused {
 					t.Errorf("control coupling = (files %d, calls %d, unused %v), want (1, 1, false)", control.ImportFileCount, control.CallSiteCount, control.IsUnused)
 				}
-				if strings.Contains(tt.code, "p-kept") {
-					kept, ok := result[keptPURL]
-					if !ok {
-						t.Fatalf("missing coupling for the real script's %s", keptPURL)
-					}
-					if kept.ImportFileCount != 1 || kept.CallSiteCount != 1 || kept.IsUnused {
-						t.Errorf("kept coupling = (files %d, calls %d, unused %v), want (1, 1, false)", kept.ImportFileCount, kept.CallSiteCount, kept.IsUnused)
-					}
+				kept, ok := result[keptPURL]
+				if !ok {
+					t.Fatalf("missing coupling for the real script's %s", keptPURL)
+				}
+				if kept.ImportFileCount != 1 || kept.CallSiteCount != 1 || kept.IsUnused {
+					t.Errorf("kept coupling = (files %d, calls %d, unused %v), want (1, 1, false)", kept.ImportFileCount, kept.CallSiteCount, kept.IsUnused)
 				}
 				return
 			}

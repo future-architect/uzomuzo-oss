@@ -96,6 +96,9 @@ var vueSvelteSeeds = []string{
 	"<style>a{content:\"<script>\"}</style><script>y</script>",
 	"<textarea><script>x</script></textarea>\r\n<script>y</script>",
 	"\u3042<p title={1 > 0 ? '<!--' : ''}>{'it\\'s'}</p><script>y</script>",
+	"<ul>{#if a}b{/if}</ul><script>y</script>",
+	"{n++ / 2}{'<script>x</script>'}<script>y</script>",
+	"<STYLE>a</STYLE><script x='<script>y</script>",
 	"{",
 	"{{",
 	"<!--",
@@ -128,15 +131,17 @@ func FuzzAnalyzeVueSvelteScriptBlocks(f *testing.F) {
 
 // FuzzScriptContents checks the masking contract of scriptContents on
 // arbitrary input, for both component kinds: the output has the input's
-// length, every CR and LF stays where it was, and every other byte is either
-// copied from the input or a space, a newline or a semicolon.
+// length and keeps every CR and LF; any other byte is copied, or becomes a
+// space, or becomes the "\n;" that starts a masked closing tag (so an added
+// newline sits on a '<' and an added semicolon on a '/'); and with no script
+// block found, nothing is copied at all.
 func FuzzScriptContents(f *testing.F) {
 	for _, seed := range vueSvelteSeeds {
 		f.Add(seed, true)
 		f.Add(seed, false)
 	}
 	f.Fuzz(func(t *testing.T, src string, vue bool) {
-		got, _, _ := scriptContents([]byte(src), vue)
+		got, _, found := scriptContents([]byte(src), vue)
 		if len(got) != len(src) {
 			t.Fatalf("len = %d, want %d", len(got), len(src))
 		}
@@ -147,8 +152,14 @@ func FuzzScriptContents(f *testing.F) {
 				if out != in {
 					t.Fatalf("byte %d: line break %q became %q", i, in, out)
 				}
-			case out != in && out != ' ' && out != '\n' && out != ';':
-				t.Fatalf("byte %d: %q became %q, want a copy, space, newline or semicolon", i, in, out)
+			case out == in || out == ' ':
+			case out == '\n' && in == '<' && i+1 < len(got) && got[i+1] == ';':
+			case out == ';' && in == '/' && i > 0 && got[i-1] == '\n' && src[i-1] == '<':
+			default:
+				t.Fatalf("byte %d: %q became %q, want a copy, a space, or the \\n; of a closing tag", i, in, out)
+			}
+			if !found && out != ' ' && out != '\n' && out != '\r' {
+				t.Fatalf("byte %d: %q kept although no script block was found", i, out)
 			}
 		}
 	})

@@ -137,27 +137,69 @@ func TestScriptContents(t *testing.T) {
 			lang:  langJavaScript, found: true,
 		},
 		{
-			name:  "Svelte expression with a brace in a regular expression",
-			input: "{/[}]/.test('<!--')}<script>y</script>",
-			want:  openMask("{/[}]/.test('<!--')}<script>") + "y" + closeMask("</script>"),
-			lang:  langJavaScript, found: true,
-		},
-		{
 			name:  "Svelte expression with a brace in a block comment",
-			input: "{/* } */ '<!--'}<script>y</script>",
-			want:  openMask("{/* } */ '<!--'}<script>") + "y" + closeMask("</script>"),
+			input: "{/* } */ '<!--'}<script>y</script><!-- end -->",
+			want:  openMask("{/* } */ '<!--'}<script>") + "y" + closeMask("</script>") + openMask("<!-- end -->"),
 			lang:  langJavaScript, found: true,
 		},
 		{
 			name:  "Svelte expression with a brace in a line comment",
-			input: "{a // }\n '<!--'}<script>y</script>",
-			want:  openMask("{a // }") + "\n" + openMask(" '<!--'}<script>") + "y" + closeMask("</script>"),
+			input: "{a // }\n '<!--'}<script>y</script><!-- end -->",
+			want:  openMask("{a // }") + "\n" + openMask(" '<!--'}<script>") + "y" + closeMask("</script>") + openMask("<!-- end -->"),
 			lang:  langJavaScript, found: true,
 		},
 		{
-			name:  "Svelte expression with division is not a regular expression",
-			input: "{a / b / c}<script>y</script>",
-			want:  openMask("{a / b / c}<script>") + "y" + closeMask("</script>"),
+			name:  "Svelte block closers are not regular expressions",
+			input: "<ul>{#if ok}<li>yes</li>{/if}</ul>\n<script>y</script>\n<p>{a / b}</p>",
+			want:  openMask("<ul>{#if ok}<li>yes</li>{/if}</ul>") + "\n" + openMask("<script>") + "y" + closeMask("</script>") + "\n" + openMask("<p>{a / b}</p>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "string after a Svelte block closer stays a string",
+			input: "{#if a}b{/if}</p>{'<script>x</script>'}<script>y</script>",
+			want:  openMask("{#if a}b{/if}</p>{'<script>x</script>'}<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "postfix increment then division in a Svelte expression",
+			input: "{n++ / 2}{'<script>x</script>'}<script>y</script>",
+			want:  openMask("{n++ / 2}{'<script>x</script>'}<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "division in a Svelte expression",
+			input: "{a / b}{'<script>x</script>'}<script>y</script>",
+			want:  openMask("{a / b}{'<script>x</script>'}<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "upper-case raw-text closing tag",
+			input: "<style>a{content:\"<script>x</script>\"}</STYLE><script>y</script>",
+			want:  openMask("<style>a{content:\"<script>x</script>\"}</STYLE><script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true, vue: true,
+		},
+		{
+			name:  "upper-case raw-text element",
+			input: "<STYLE>a{content:\"<script>x</script>\"}</STYLE><script>y</script>",
+			want:  openMask("<STYLE>a{content:\"<script>x</script>\"}</STYLE><script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true, vue: true,
+		},
+		{
+			name:  "script tag with an unclosed quote is read on as text",
+			input: "<script lang=\"ts</script><script>y</script>",
+			want:  openMask("<script lang=\"ts</script><script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "script tag with an unclosed quote around another script",
+			input: "<script x='<script>y</script>",
+			want:  openMask("<script x='<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "raw-text tag after a broken tag is still skipped",
+			input: "<y don't <style>/* <!-- */</style><script>y</script><!-- end -->",
+			want:  openMask("<y don't <style>/* <!-- */</style><script>") + "y" + closeMask("</script>") + openMask("<!-- end -->"),
 			lang:  langJavaScript, found: true,
 		},
 		{
@@ -198,48 +240,50 @@ func TestScriptContents(t *testing.T) {
 	}
 }
 
-// TestScriptContentsUnmatchedBracesStayLinear guards the bracesUnbalanced
-// flag: without it, each of the 1 MiB of `{` would rescan to the end of input.
-func TestScriptContentsUnmatchedBracesStayLinear(t *testing.T) {
-	input := strings.Repeat("{", 1<<20) + "<script>y</script>"
-	type result struct {
-		got   []byte
-		found bool
+// TestScriptContentsStaysLinear feeds about 1 MiB of each pattern that once
+// made, or could make, the scan retry from every repeat: each would take
+// minutes at quadratic cost. Each case sets one of the scanner's flags.
+func TestScriptContentsStaysLinear(t *testing.T) {
+	tests := []struct {
+		name   string
+		repeat string
+		vue    bool
+	}{
+		{name: "unmatched Svelte braces (bracesUnbalanced)", repeat: "{"},
+		{name: "unclosed Vue interpolations (vueUnclosed)", repeat: "{{", vue: true},
+		{name: "unclosed comments (commentUnclosed)", repeat: "<!--"},
+		{name: "tags broken by the next tag", repeat: "<a b"},
+		{name: "tags after a stray quote (plainTags)", repeat: "<b c"},
+		{name: "unclosed style tags (rawUnclosed)", repeat: "<style>"},
+		{name: "slashes and classes in a Svelte expression", repeat: "(/["},
 	}
-	done := make(chan result, 1)
-	go func() {
-		got, _, found := scriptContents([]byte(input), false)
-		done <- result{got, found}
-	}()
-	select {
-	case r := <-done:
-		if !r.found || !strings.HasSuffix(string(r.got), "y\n;       ") {
-			t.Errorf("script after unmatched braces not kept: found=%v", r.found)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("scriptContents did not finish within 10s on unmatched braces")
-	}
-}
-
-// TestScriptContentsUnclosedVueInterpolationsStayLinear guards vueUnclosed:
-// without it, each `{{` would search to the end of input for `}}`.
-func TestScriptContentsUnclosedVueInterpolationsStayLinear(t *testing.T) {
-	input := strings.Repeat("{{", 1<<19) + "<script>y</script>"
-	type result struct {
-		got   []byte
-		found bool
-	}
-	done := make(chan result, 1)
-	go func() {
-		got, _, found := scriptContents([]byte(input), true)
-		done <- result{got, found}
-	}()
-	select {
-	case r := <-done:
-		if !r.found || !strings.HasSuffix(string(r.got), "y\n;       ") {
-			t.Errorf("script after unclosed interpolations not kept: found=%v", r.found)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("scriptContents did not finish within 10s on unclosed interpolations")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var prefix string
+			switch tt.repeat {
+			case "(/[":
+				prefix = "{"
+			case "<b c":
+				prefix = "<a '" // the stray quote turns on plain tag reading
+			}
+			input := prefix + strings.Repeat(tt.repeat, (1<<20)/len(tt.repeat)) + "<script>y</script>"
+			type result struct {
+				got   []byte
+				found bool
+			}
+			done := make(chan result, 1)
+			go func() {
+				got, _, found := scriptContents([]byte(input), tt.vue)
+				done <- result{got, found}
+			}()
+			select {
+			case r := <-done:
+				if !r.found || !strings.HasSuffix(string(r.got), "y\n;       ") {
+					t.Errorf("script after the repeats not kept: found=%v", r.found)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("scriptContents did not finish within 10s")
+			}
+		})
 	}
 }

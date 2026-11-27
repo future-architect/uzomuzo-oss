@@ -2,7 +2,10 @@
 
 package treesitter
 
-import "bytes"
+import (
+	"bytes"
+	"strings"
+)
 
 // scriptContents keeps script bodies at their original byte offsets so that
 // tree-sitter sees no imports from component markup or styles. vue selects
@@ -59,13 +62,16 @@ func scriptContents(src []byte, vue bool) ([]byte, langID, bool) {
 
 		end, selfClosing := sc.openingTagEnd(i + 7)
 		if end < 0 {
-			break
+			i++ // a broken `<script` tag is read on as text
+			continue
 		}
 		found = true
-		// When blocks name different languages, the latest in the order
-		// langJavaScript < langTypeScript < langTSX wins: TypeScript also
-		// parses plain JavaScript, and TSX adds JSX but rejects `<T>x` casts,
-		// so only a file mixing `lang="tsx"` with such casts parses with errors.
+		// All blocks are parsed with one grammar: the latest named in the
+		// order langJavaScript < langTypeScript < langTSX. TypeScript parses
+		// plain JavaScript, but not JSX; TSX adds JSX but rejects `<T>x`
+		// casts. A file whose blocks mix syntax only one grammar accepts (JSX
+		// in a plain block next to `lang="ts"`, or `<T>x` next to `lang="tsx"`)
+		// parses with errors, and uses in the broken part can be missed.
 		if blockLanguage := scriptLanguage(src[i+7 : end]); blockLanguage > language {
 			language = blockLanguage
 		}
@@ -100,9 +106,11 @@ func scriptContents(src []byte, vue bool) ([]byte, langID, bool) {
 }
 
 // rawTextTags are elements whose body is not scanned for `<script>` or `<!--`.
-// Matched in lower case only: the components `<Title>` or `<Textarea>` are
-// not these elements. A Svelte `<title>{x}</title>` expression is skipped too,
-// which is fine because diet reads no template expressions.
+// An opening tag counts only in all lower or all upper case, so the
+// components `<Title>` or `<Textarea>` are not these elements; the closing
+// tag is matched in any case, as HTML does. A Svelte `<title>{x}</title>`
+// expression is skipped too, which is fine because diet reads no template
+// expressions.
 var rawTextTags = [...]string{"style", "textarea", "title"}
 
 // markupScanner reads component markup around script blocks.
@@ -118,10 +126,10 @@ type markupScanner struct {
 	// commentUnclosed is set once a `<!--` has no `-->` after it; later ones
 	// cannot have one either.
 	commentUnclosed bool
-	// tagUnclosed is set once a tag has no `>` the quote- and brace-aware
-	// reader can find. Later markup `<` is then plain text, so each one does
-	// not rescan to the end of input.
-	tagUnclosed bool
+	// plainTags is set once a quote or brace in a tag runs to the end of
+	// input. Such a stray quote makes quote reading unreliable, so later tags
+	// end at the first `>`, and are broken at a `<` before it.
+	plainTags bool
 	// rawUnclosed[k] is set once rawTextTags[k] has no closing tag after it.
 	rawUnclosed [len(rawTextTags)]bool
 	// bracesUnbalanced is set once a `{` has no matching `}`. From then on
@@ -138,23 +146,19 @@ type markupScanner struct {
 // rather than ending the scan, so later script blocks are still found.
 func (sc *markupScanner) skipMarkupTag(at int) int {
 	src := sc.src
-	if sc.tagUnclosed {
-		return at + 1
-	}
 	for k, name := range rawTextTags {
-		if !hasTagName(src, at+1, name, false) {
+		if !hasTagName(src, at+1, name, false) && !hasTagName(src, at+1, strings.ToUpper(name), false) {
 			continue
 		}
 		end, selfClosing := sc.openingTagEnd(at + 1 + len(name))
 		if end < 0 {
-			sc.tagUnclosed = true
 			return at + 1
 		}
 		if selfClosing || sc.rawUnclosed[k] {
 			return end + 1
 		}
 		for j := end + 1; j+2+len(name) <= len(src); j++ {
-			if src[j] == '<' && src[j+1] == '/' && hasTagName(src, j+2, name, false) {
+			if src[j] == '<' && src[j+1] == '/' && hasTagName(src, j+2, name, true) {
 				return j + 2 + len(name)
 			}
 		}
@@ -170,7 +174,6 @@ func (sc *markupScanner) skipMarkupTag(at int) int {
 	}
 	end, _ := sc.openingTagEnd(nameStart)
 	if end < 0 {
-		sc.tagUnclosed = true
 		return at + 1
 	}
 	return end + 1
@@ -196,57 +199,43 @@ func (sc *markupScanner) skipExpression(at int) (next int, ok bool) {
 }
 
 // skipBraces returns the index after the `}` that matches src[at] == '{',
-// reading nested braces, JavaScript string literals, comments and regular
-// expression literals, so a `}` inside `'}'`, `/* } */` or `/[}]/` does not
-// end the expression. ok is false when no match exists, and every later call
-// then reports false at once.
+// reading nested braces, JavaScript string literals and comments, so a `}`
+// inside `'}'` or `/* } */` does not end the expression. ok is false when no
+// match exists, and every later call then reports false at once.
+//
+// Regular expression literals are not recognized: telling `/x/` from
+// division needs the previous token (`n++ / 2` divides, `typeof /x/` does
+// not), and guessing from one byte misread Svelte's `{/if}` as a regex. So a
+// `}` or quote inside a regex in a template expression can end or extend the
+// expression; see docs/diet.md.
 func (sc *markupScanner) skipBraces(at int) (next int, ok bool) {
 	if sc.bracesUnbalanced {
 		return 0, false
 	}
 	src := sc.src
 	depth := 0
-	// prev is the last byte outside whitespace, comments and literals; a
-	// literal is recorded as 'a'. It decides whether `/` starts a regular
-	// expression or divides.
-	var prev byte
 	for i := at; i < len(src); i++ {
-		b := src[i]
 		end := i
-		switch {
+		switch b := src[i]; {
 		case b == '\'' || b == '"' || b == '`':
 			end = skipQuoted(src, i)
-			prev = 'a'
 		case b == '/' && i+1 < len(src) && src[i+1] == '/':
-			if nl := bytes.IndexByte(src[i:], '\n'); nl >= 0 {
-				end = i + nl
-			} else {
-				end = -1
+			end = bytes.IndexByte(src[i:], '\n')
+			if end >= 0 {
+				end += i
 			}
 		case b == '/' && i+1 < len(src) && src[i+1] == '*':
-			if e := bytes.Index(src[i+2:], []byte("*/")); e >= 0 {
-				end = i + 2 + e + 1
-			} else {
-				end = -1
-			}
-		case b == '/' && regexCanStart(prev):
-			if e := skipRegex(src, i); e >= 0 {
-				end, prev = e, 'a'
-			} else {
-				prev = b
+			end = bytes.Index(src[i+2:], []byte("*/"))
+			if end >= 0 {
+				end += i + 3
 			}
 		case b == '{':
 			depth++
-			prev = b
 		case b == '}':
 			depth--
 			if depth == 0 {
 				return i + 1, true
 			}
-			prev = b
-		case isTagWhitespace(b):
-		default:
-			prev = b
 		}
 		if end < 0 {
 			break
@@ -267,37 +256,6 @@ func skipQuoted(src []byte, at int) int {
 			i++
 		case quote:
 			return i
-		}
-	}
-	return -1
-}
-
-// regexCanStart reports whether a `/` after prev starts a regular expression
-// rather than dividing. Keywords such as `return` are not tracked: a regex
-// after one is read as division, which matters only when it holds a brace.
-func regexCanStart(prev byte) bool {
-	return prev == 0 || bytes.IndexByte([]byte("({[,;:=!&|?+-*%<>~^"), prev) >= 0
-}
-
-// skipRegex returns the index of the `/` that closes the regular expression
-// literal opening at src[at], or -1 when the line ends first. A `/` inside a
-// `[...]` class does not close it.
-func skipRegex(src []byte, at int) int {
-	inClass := false
-	for i := at + 1; i < len(src); i++ {
-		switch src[i] {
-		case '\\':
-			i++
-		case '[':
-			inClass = true
-		case ']':
-			inClass = false
-		case '/':
-			if !inClass {
-				return i
-			}
-		case '\n', '\r':
-			return -1
 		}
 	}
 	return -1
@@ -326,8 +284,17 @@ func isASCIILetter(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
+// openingTagEnd returns the index of the `>` that ends the tag whose name or
+// attributes start at src[start], or -1, and whether the tag is self-closing.
+// Attribute values are read quote- and brace-aware until one tag fails that
+// way; see markupScanner.plainTags. A `<` outside quotes and braces breaks the
+// tag (returns -1): it is not valid inside one, and reading past it could
+// swallow the next `<script` tag.
 func (sc *markupScanner) openingTagEnd(start int) (int, bool) {
 	src := sc.src
+	if sc.plainTags {
+		return sc.plainTagEnd(start)
+	}
 	var quote byte
 	for i := start; i < len(src); i++ {
 		b := src[i]
@@ -347,17 +314,36 @@ func (sc *markupScanner) openingTagEnd(start int) (int, bool) {
 			}
 			continue
 		}
+		if b == '<' {
+			return -1, false
+		}
 		if b == '>' {
-			for j := i - 1; j >= start; j-- {
-				if isTagWhitespace(src[j]) {
-					continue
-				}
-				return i, src[j] == '/'
-			}
-			return i, false
+			return i, isSelfClosing(src, start, i)
 		}
 	}
+	sc.plainTags = true
 	return -1, false
+}
+
+// plainTagEnd is openingTagEnd without quote or brace reading: the tag ends
+// at the first `>`, and a `<` before it means the tag is broken.
+func (sc *markupScanner) plainTagEnd(start int) (int, bool) {
+	k := bytes.IndexAny(sc.src[start:], "<>")
+	if k < 0 || sc.src[start+k] == '<' {
+		return -1, false
+	}
+	return start + k, isSelfClosing(sc.src, start, start+k)
+}
+
+// isSelfClosing reports whether the last byte before src[gt] == '>' that is
+// not whitespace, within the tag starting at src[start], is `/`.
+func isSelfClosing(src []byte, start, gt int) bool {
+	for j := gt - 1; j >= start; j-- {
+		if !isTagWhitespace(src[j]) {
+			return src[j] == '/'
+		}
+	}
+	return false
 }
 
 func scriptLanguage(attrs []byte) langID {
