@@ -1,6 +1,9 @@
 package depsdev
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -69,6 +72,85 @@ func FuzzPickStableDevAndMax(f *testing.F) {
 				t.Fatalf("Stable changed with input order (default=%v): %q vs %q", hasDefault, forward.VersionKey.Version, reverse.VersionKey.Version)
 			}
 			versions[0], versions[2] = versions[2], versions[0]
+		}
+	})
+}
+
+// FuzzRestrictCargoGraph checks that cargo graph restriction returns a valid
+// graph for decoded requirements and dependency graphs.
+func FuzzRestrictCargoGraph(f *testing.F) {
+	requirements, err := os.ReadFile(filepath.Join("testdata", "cargo_dev_optional", "requirements.json"))
+	if err != nil {
+		f.Fatal(err)
+	}
+	dependencies, err := os.ReadFile(filepath.Join("testdata", "cargo_dev_optional", "dependencies.json"))
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(requirements, dependencies)
+
+	for _, seed := range [][2]string{
+		{
+			`{"cargo":{"dependencies":[{"name":"x","requirement":"^1","optional":true}],"features":[{"name":"default","implies":["a"]},{"name":"a","implies":["b"]},{"name":"b","implies":["a","x"]}]}}`,
+			`{"nodes":[{"relation":"SELF"},{"versionKey":{"name":"x"},"relation":"DIRECT"}],"edges":[{"fromNode":0,"toNode":1,"requirement":"^1"}]}`,
+		},
+		{
+			`{"cargo":{"dependencies":[{"name":"x","requirement":"^1"}]}}`,
+			`{"nodes":[{"relation":"SELF"},{"versionKey":{"name":"x"}}],"edges":[{"fromNode":0,"toNode":1,"requirement":"^1"},{"fromNode":0,"toNode":2},{"fromNode":-1,"toNode":1},{"fromNode":1,"toNode":-1}]}`,
+		},
+		{
+			`{"cargo":{"dependencies":[{"name":"x","requirement":"^1"}]}}`,
+			`{"nodes":[{"relation":"SELF"},{"versionKey":{"name":"x"}},{"relation":"SELF"}],"edges":[{"fromNode":0,"toNode":1,"requirement":"^1"},{"fromNode":1,"toNode":2}]}`,
+		},
+		{
+			`{"cargo":{"dependencies":[{"name":"x","requirement":"^1"}]}}`,
+			`{"nodes":[{"relation":"SELF"},{"relation":"SELF"}],"edges":[{"fromNode":0,"toNode":2}]}`,
+		},
+		{
+			`{"cargo":{"dependencies":[{"name":"x","requirement":"^1"}]}}`,
+			`{"nodes":[{"versionKey":{"name":"x"}}],"edges":[]}`,
+		},
+		{`{}`, `{"nodes":[{"relation":"SELF"}],"edges":[]}`},
+		{`{"cargo":`, `{"nodes":[]}`},
+		{`{"cargo":{}}`, `{"nodes":`},
+	} {
+		f.Add([]byte(seed[0]), []byte(seed[1]))
+	}
+
+	f.Fuzz(func(t *testing.T, requirementsJSON, graphJSON []byte) {
+		var req CargoRequirements
+		if err := json.Unmarshal(requirementsJSON, &req); err != nil {
+			return
+		}
+		var graph DependenciesResponse
+		if err := json.Unmarshal(graphJSON, &graph); err != nil {
+			return
+		}
+
+		result := restrictCargoGraph(&req, &graph)
+		if result == nil {
+			t.Fatal("restrictCargoGraph returned nil")
+		}
+		// An unchanged input is returned as deps.dev sent it; only a rebuilt
+		// graph must have consistent indexes.
+		if result != &graph {
+			for i, edge := range result.Edges {
+				if edge.FromNode < 0 || edge.FromNode >= len(result.Nodes) || edge.ToNode < 0 || edge.ToNode >= len(result.Nodes) {
+					t.Fatalf("result edge %d has invalid node indexes: %+v (nodes: %d)", i, edge, len(result.Nodes))
+				}
+			}
+			if len(result.Nodes) > len(graph.Nodes) {
+				t.Fatalf("result has %d nodes, input has %d", len(result.Nodes), len(graph.Nodes))
+			}
+			selfCount := 0
+			for _, node := range result.Nodes {
+				if node.Relation == "SELF" {
+					selfCount++
+				}
+			}
+			if selfCount > 1 {
+				t.Fatalf("result has %d SELF nodes", selfCount)
+			}
 		}
 	})
 }
