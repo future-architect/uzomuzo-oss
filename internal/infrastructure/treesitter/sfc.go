@@ -28,9 +28,16 @@ func scriptContents(src []byte) ([]byte, langID, bool) {
 			i += 4 + end + 3
 			continue
 		}
-		if src[i] != '<' || !asciiEqualFold(src[i:i+7], "<script") ||
-			(i+7 < len(src) && !isTagSeparator(src[i+7])) {
+		if src[i] != '<' {
 			i++
+			continue
+		}
+		if !isTagNamed(src, i+1, "script") {
+			next, ok := skipMarkupTag(src, i)
+			if !ok {
+				break
+			}
+			i = next
 			continue
 		}
 
@@ -52,8 +59,7 @@ func scriptContents(src []byte) ([]byte, langID, bool) {
 		contentStart := end + 1
 		contentEnd := len(src)
 		for j := contentStart; j+8 <= len(src); j++ {
-			if src[j] == '<' && asciiEqualFold(src[j:j+8], "</script") &&
-				(j+8 == len(src) || isTagSeparator(src[j+8])) {
+			if src[j] == '<' && src[j+1] == '/' && isTagNamed(src, j+2, "script") {
 				contentEnd = j
 				break
 			}
@@ -65,10 +71,62 @@ func scriptContents(src []byte) ([]byte, langID, bool) {
 		if contentEnd == len(src) {
 			break
 		}
+		// The semicolon keeps `export const x = p` and a next block starting
+		// with `[1]` from joining into one expression.
 		masked[contentEnd] = '\n'
+		masked[contentEnd+1] = ';'
 		i = contentEnd + 8
 	}
 	return masked, language, found
+}
+
+// skipMarkupTag returns where scanning resumes after the non-script markup
+// at src[at] == '<'. Attribute values are read quote-aware, so `title="<!--"`
+// cannot open a comment, and a style body is skipped whole, so CSS text such
+// as `content: "<script>"` is never read as code. ok is false when the rest
+// of the file cannot hold a script block (an unterminated tag or style).
+func skipMarkupTag(src []byte, at int) (next int, ok bool) {
+	if isTagNamed(src, at+1, "style") {
+		end, selfClosing := openingTagEnd(src, at+len("<style"))
+		if end < 0 {
+			return 0, false
+		}
+		if selfClosing {
+			return end + 1, true
+		}
+		for j := end + 1; j+len("</style") <= len(src); j++ {
+			if src[j] == '<' && src[j+1] == '/' && isTagNamed(src, j+2, "style") {
+				return j + len("</style"), true
+			}
+		}
+		return 0, false
+	}
+	nameStart := at + 1
+	if nameStart < len(src) && src[nameStart] == '/' {
+		nameStart++
+	}
+	if nameStart >= len(src) || !isASCIILetter(src[nameStart]) {
+		return at + 1, true // a bare '<', such as `a < b` in text
+	}
+	end, _ := openingTagEnd(src, nameStart)
+	if end < 0 {
+		return 0, false
+	}
+	return end + 1, true
+}
+
+// isTagNamed reports whether src[at:] starts with name (ASCII
+// case-insensitive) followed by a tag separator or the end of input, so
+// `<scripts>` and `</scripture` do not match "script".
+func isTagNamed(src []byte, at int, name string) bool {
+	if at+len(name) > len(src) || !asciiEqualFold(src[at:at+len(name)], name) {
+		return false
+	}
+	return at+len(name) == len(src) || isTagSeparator(src[at+len(name)])
+}
+
+func isASCIILetter(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
 func openingTagEnd(src []byte, start int) (int, bool) {

@@ -156,6 +156,24 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-adjacent@1.0.0", importPath: "p-adjacent", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
+			name:     "comment opener inside a quoted attribute does not hide scripts",
+			filename: "QuotedAttr.vue",
+			code:     "<template><div title=\"<!--\">text</div></template><script>import p from 'p-quoted-attr'; p.run();</script>",
+			purl:     "pkg:npm/p-quoted-attr@1.0.0", importPath: "p-quoted-attr", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "script text inside a style body is not read",
+			filename: "Styled.vue",
+			code:     "<style>.a::before { content: \"<script>require('p-style')</script>\"; }</style><script>const x = 1;</script>",
+			purl:     "pkg:npm/p-style@1.0.0", importPath: "p-style",
+		},
+		{
+			name:     "adjacent blocks stay separate statements",
+			filename: "Statements.svelte",
+			code:     "<script context=\"module\">import p from 'p-statements'; export const x = p</script><script>[1].forEach(() => {});</script>",
+			purl:     "pkg:npm/p-statements@1.0.0", importPath: "p-statements", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
 			name:     "markup outside script has no coupling",
 			filename: "Markup.vue",
 			code:     "<template><div>require('p-markup')</div></template><script>const x = 1;</script>",

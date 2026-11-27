@@ -8,9 +8,10 @@ import (
 )
 
 // openMask and closeMask are what a masked opening or closing tag becomes:
-// spaces, with a newline at the byte next to the script body.
+// spaces, with a newline at the byte next to the script body, and a semicolon
+// after the newline of a closing tag.
 func openMask(tag string) string  { return strings.Repeat(" ", len(tag)-1) + "\n" }
-func closeMask(tag string) string { return "\n" + strings.Repeat(" ", len(tag)-1) }
+func closeMask(tag string) string { return "\n;" + strings.Repeat(" ", len(tag)-2) }
 
 func TestScriptContents(t *testing.T) {
 	tests := []struct {
@@ -66,6 +67,24 @@ func TestScriptContents(t *testing.T) {
 			name:  "unclosed script keeps the body to the end",
 			input: "<script>a\nb",
 			want:  openMask("<script>") + "a\nb",
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "comment opener in a quoted attribute",
+			input: "<div title=\"<!--\">t</div><script>y</script>",
+			want:  strings.Repeat(" ", len("<div title=\"<!--\">t</div>")) + openMask("<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "style body is skipped",
+			input: "<style>a{content:\"<script>x</script>\"}</style><script>y</script>",
+			want:  strings.Repeat(" ", len("<style>a{content:\"<script>x</script>\"}</style>")) + openMask("<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "bare less-than in text",
+			input: "a < b<script>y</script>",
+			want:  strings.Repeat(" ", len("a < b")) + openMask("<script>") + "y" + closeMask("</script>"),
 			lang:  langJavaScript, found: true,
 		},
 		{
