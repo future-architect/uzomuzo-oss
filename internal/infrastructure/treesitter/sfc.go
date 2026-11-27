@@ -21,6 +21,7 @@ func scriptContents(src []byte, vue bool) ([]byte, langID, bool) {
 	}
 
 	sc := markupScanner{src: src, vue: vue}
+	sc.lastQuote = [2]int{bytes.LastIndexByte(src, '\'') + 1, bytes.LastIndexByte(src, '"') + 1}
 	language := langJavaScript
 	found := false
 	for i := 0; i+7 <= len(src); {
@@ -126,10 +127,11 @@ type markupScanner struct {
 	// commentUnclosed is set once a `<!--` has no `-->` after it; later ones
 	// cannot have one either.
 	commentUnclosed bool
-	// plainTags is set once a quote or brace in a tag runs to the end of
-	// input. Such a stray quote makes quote reading unreliable, so later tags
-	// end at the first `>`, and are broken at a `<` before it.
-	plainTags bool
+	// lastQuote[q] is one past the position of the last `'` (q == 0) or `"`
+	// (q == 1) in src, or 0 when there is none. A quote at or after it has
+	// no closing quote, so the tag holding it is read without quotes; see
+	// openingTagEnd.
+	lastQuote [2]int
 	// rawUnclosed[k] is set once rawTextTags[k] has no closing tag after it.
 	rawUnclosed [len(rawTextTags)]bool
 	// bracesUnbalanced is set once a `{` has no matching `}`. From then on
@@ -147,7 +149,10 @@ type markupScanner struct {
 func (sc *markupScanner) skipMarkupTag(at int) int {
 	src := sc.src
 	for k, name := range rawTextTags {
-		if !hasTagName(src, at+1, name, false) && !hasTagName(src, at+1, strings.ToUpper(name), false) {
+		// Vue also accepts the element in all upper case; in Svelte a
+		// capitalized name is always a component, `<TITLE>` included.
+		if !hasTagName(src, at+1, name, false) &&
+			(!sc.vue || !hasTagName(src, at+1, strings.ToUpper(name), false)) {
 			continue
 		}
 		end, selfClosing := sc.openingTagEnd(at + 1 + len(name))
@@ -286,26 +291,24 @@ func isASCIILetter(b byte) bool {
 
 // openingTagEnd returns the index of the `>` that ends the tag whose name or
 // attributes start at src[start], or -1, and whether the tag is self-closing.
-// Attribute values are read quote- and brace-aware until one tag fails that
-// way; see markupScanner.plainTags. A `<` outside quotes and braces breaks the
-// tag (returns -1): it is not valid inside one, and reading past it could
-// swallow the next `<script` tag.
+// Attribute values are read quote- and brace-aware. A `<` outside quotes and
+// braces breaks the tag (returns -1): it is not valid inside one, and reading
+// past it could swallow the next `<script` tag. A quote with no closing quote
+// after it (`<p don't`) makes only its own tag fall back to plainTagEnd;
+// later tags are still read with quotes.
 func (sc *markupScanner) openingTagEnd(start int) (int, bool) {
 	src := sc.src
-	if sc.plainTags {
-		return sc.plainTagEnd(start)
-	}
-	var quote byte
 	for i := start; i < len(src); i++ {
 		b := src[i]
-		if quote != 0 {
-			if b == quote {
-				quote = 0
-			}
-			continue
-		}
 		if b == '\'' || b == '"' {
-			quote = b
+			q := 0
+			if b == '"' {
+				q = 1
+			}
+			if i+1 >= sc.lastQuote[q] {
+				return sc.plainTagEnd(start)
+			}
+			i += 1 + bytes.IndexByte(src[i+1:], b)
 			continue
 		}
 		if b == '{' && !sc.vue {
@@ -321,7 +324,6 @@ func (sc *markupScanner) openingTagEnd(start int) (int, bool) {
 			return i, isSelfClosing(src, start, i)
 		}
 	}
-	sc.plainTags = true
 	return -1, false
 }
 

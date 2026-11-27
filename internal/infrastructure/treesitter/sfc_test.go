@@ -150,8 +150,8 @@ func TestScriptContents(t *testing.T) {
 		},
 		{
 			name:  "Svelte block closers are not regular expressions",
-			input: "<ul>{#if ok}<li>yes</li>{/if}</ul>\n<script>y</script>\n<p>{a / b}</p>",
-			want:  openMask("<ul>{#if ok}<li>yes</li>{/if}</ul>") + "\n" + openMask("<script>") + "y" + closeMask("</script>") + "\n" + openMask("<p>{a / b}</p>"),
+			input: "<ul>{#if ok}<li>yes</li>{/if}</ul>\n<script>y</script>\n<p><b>ratio</b> {a / b}</p>",
+			want:  openMask("<ul>{#if ok}<li>yes</li>{/if}</ul>") + "\n" + openMask("<script>") + "y" + closeMask("</script>") + "\n" + openMask("<p><b>ratio</b> {a / b}</p>"),
 			lang:  langJavaScript, found: true,
 		},
 		{
@@ -194,6 +194,24 @@ func TestScriptContents(t *testing.T) {
 			name:  "script tag with an unclosed quote around another script",
 			input: "<script x='<script>y</script>",
 			want:  openMask("<script x='<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "Svelte upper-case component named like a raw-text tag",
+			input: "<TITLE>{\"</TITLE><!--\"}</TITLE>\n<script>y</script>\n<!-- end -->",
+			want:  openMask("<TITLE>{\"</TITLE><!--\"}</TITLE>") + "\n" + openMask("<script>") + "y" + closeMask("</script>") + "\n" + openMask("<!-- end -->"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "quoted self-closing marker after a quote with no close",
+			input: "<x '<script data-x=\"/>\">y</script>",
+			want:  openMask("<x '<script data-x=\"/>\">") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "quoted comment opener after a quote with no close",
+			input: "<x '<div title=\"<!--\"></div><script>y</script><!-- end -->",
+			want:  openMask("<x '<div title=\"<!--\"></div><script>") + "y" + closeMask("</script>") + openMask("<!-- end -->"),
 			lang:  langJavaScript, found: true,
 		},
 		{
@@ -253,7 +271,9 @@ func TestScriptContentsStaysLinear(t *testing.T) {
 		{name: "unclosed Vue interpolations (vueUnclosed)", repeat: "{{", vue: true},
 		{name: "unclosed comments (commentUnclosed)", repeat: "<!--"},
 		{name: "tags broken by the next tag", repeat: "<a b"},
-		{name: "tags after a stray quote (plainTags)", repeat: "<b c"},
+		{name: "tags after a quote with no close", repeat: "<b c"},
+		{name: "tags that each open a quote", repeat: "<a '"},
+		{name: "tags with alternating quotes", repeat: "<a '<b \""},
 		{name: "unclosed style tags (rawUnclosed)", repeat: "<style>"},
 		{name: "slashes and classes in a Svelte expression", repeat: "(/["},
 	}
@@ -264,7 +284,7 @@ func TestScriptContentsStaysLinear(t *testing.T) {
 			case "(/[":
 				prefix = "{"
 			case "<b c":
-				prefix = "<a '" // the stray quote turns on plain tag reading
+				prefix = "<a '" // a quote with no close, so <a is read without quotes
 			}
 			input := prefix + strings.Repeat(tt.repeat, (1<<20)/len(tt.repeat)) + "<script>y</script>"
 			type result struct {

@@ -249,6 +249,24 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-broken@1.0.0", importPath: "p-broken", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
+			name:     "Svelte upper-case TITLE is a component, not a raw-text tag",
+			filename: "UpperTitle.svelte",
+			code:     "<TITLE>{\"</TITLE><!--\"}</TITLE>\n<script>import TITLE from \"p-upper-title\";</script>\n<!-- end -->",
+			purl:     "pkg:npm/p-upper-title@1.0.0", importPath: "p-upper-title", wantPresent: true, wantFiles: 1, wantCalls: 0,
+		},
+		{
+			name:     "quoted self-closing marker after a quote with no close",
+			filename: "QuotedSlash.vue",
+			code:     "<x '<script data-x=\"/>\">import p from \"p-quoted-slash\";p.run()</script>",
+			purl:     "pkg:npm/p-quoted-slash@1.0.0", importPath: "p-quoted-slash", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "quoted comment opener after a quote with no close",
+			filename: "QuotedComment.vue",
+			code:     "<x '<div title=\"<!--\"></div><script>import p from \"p-quoted-comment\";p.run()</script><!-- end -->",
+			purl:     "pkg:npm/p-quoted-comment@1.0.0", importPath: "p-quoted-comment", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
 			name:     "markup outside script has no coupling",
 			filename: "Markup.vue",
 			code:     "<template><div>require('p-markup')</div></template><script>import q from 'p-kept'; q.run();</script>",
