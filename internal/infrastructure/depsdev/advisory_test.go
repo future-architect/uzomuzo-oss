@@ -309,8 +309,11 @@ func TestFetchAdvisoriesBatchWithStatus_WarnsOnFetchFailures(t *testing.T) {
 			}
 		case "/v3alpha/advisories/GHSA-gone":
 			http.NotFound(w, r)
-		case "/v3alpha/advisories/GHSA-fail1", "/v3alpha/advisories/GHSA-fail2":
+		case "/v3alpha/advisories/GHSA-fail1":
 			http.Error(w, "server error", http.StatusInternalServerError)
+		case "/v3alpha/advisories/GHSA-fail2":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte("{not json")) // write error surfaces as a decode failure in the client
 		default:
 			t.Errorf("unexpected path: %s", r.URL.Path)
 			http.NotFound(w, r)
@@ -319,8 +322,9 @@ func TestFetchAdvisoriesBatchWithStatus_WarnsOnFetchFailures(t *testing.T) {
 	defer srv.Close()
 
 	client := NewDepsDevClient(&config.DepsDevConfig{BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0})
+	// Duplicates, padding and blank IDs must not count as failures.
 	details, missing := client.FetchAdvisoriesBatchWithStatus(context.Background(), []string{
-		"GHSA-ok", "GHSA-gone", "GHSA-fail1", "GHSA-fail2",
+		"GHSA-ok", "GHSA-gone", "GHSA-fail1", "GHSA-fail2", " GHSA-fail1 ", "GHSA-ok", "", "  ",
 	})
 	if len(details) != 1 || details["GHSA-ok"] == nil {
 		t.Errorf("details = %v, want only GHSA-ok", details)
@@ -340,17 +344,18 @@ func TestFetchAdvisoriesBatchWithStatus_WarnsOnFetchFailures(t *testing.T) {
 	if len(warnings) != 1 {
 		t.Fatalf("warning records = %d, want 1", len(warnings))
 	}
-	var failedCount int64
-	var foundFailed bool
+	ints := make(map[string]int64)
 	warnings[0].Attrs(func(attr slog.Attr) bool {
-		if attr.Key == "failed" && attr.Value.Kind() == slog.KindInt64 {
-			failedCount = attr.Value.Int64()
-			foundFailed = true
+		if attr.Value.Kind() == slog.KindInt64 {
+			ints[attr.Key] = attr.Value.Int64()
 		}
 		return true
 	})
-	if !foundFailed || failedCount != 2 {
-		t.Errorf("warning failed attribute = %d (present: %t), want 2", failedCount, foundFailed)
+	if got, ok := ints["failed"]; !ok || got != 2 {
+		t.Errorf("warning failed attribute = %d (present: %t), want 2", got, ok)
+	}
+	if got, ok := ints["unique"]; !ok || got != 4 {
+		t.Errorf("warning unique attribute = %d (present: %t), want 4", got, ok)
 	}
 }
 
