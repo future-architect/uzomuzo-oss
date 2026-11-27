@@ -1,0 +1,25 @@
+[package]
+name = "sample-crate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = "1"
+regex = "1"
+fast = { package = "fastrand", version = "2" }
+log = { version = "0.4", optional = true }
+indexmap = { version = "2", optional = true }
+
+[features]
+default = ["logging"]
+logging = ["dep:log"]
+preserve_order = ["dep:indexmap"]
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+memchr = "2"
+tar = "0.4"
+rand = "0.8"
+
+[build-dependencies]
+cc = "1"

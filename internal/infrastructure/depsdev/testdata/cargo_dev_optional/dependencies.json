@@ -1,0 +1,252 @@
+{
+  "nodes": [
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "sample-crate",
+        "version": "0.1.0"
+      },
+      "relation": "SELF",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "serde",
+        "version": "1.0.219"
+      },
+      "relation": "DIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "log",
+        "version": "0.4.27"
+      },
+      "relation": "DIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "indexmap",
+        "version": "2.9.0"
+      },
+      "relation": "DIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "hashbrown",
+        "version": "0.15.3"
+      },
+      "relation": "INDIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "regex",
+        "version": "1.11.1"
+      },
+      "relation": "DIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "aho-corasick",
+        "version": "1.1.3"
+      },
+      "relation": "INDIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "memchr",
+        "version": "2.7.4"
+      },
+      "relation": "DIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "fastrand",
+        "version": "2.3.0"
+      },
+      "relation": "DIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "cc",
+        "version": "1.2.20"
+      },
+      "relation": "DIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "shlex",
+        "version": "1.3.0"
+      },
+      "relation": "INDIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "tar",
+        "version": "0.4.40"
+      },
+      "relation": "DIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "filetime",
+        "version": "0.2.25"
+      },
+      "relation": "INDIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "libc",
+        "version": "0.2.172"
+      },
+      "relation": "INDIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "rand",
+        "version": "0.8.5"
+      },
+      "relation": "DIRECT",
+      "bundled": false,
+      "errors": []
+    },
+    {
+      "versionKey": {
+        "system": "CARGO",
+        "name": "rand_core",
+        "version": "0.6.4"
+      },
+      "relation": "INDIRECT",
+      "bundled": false,
+      "errors": []
+    }
+  ],
+  "edges": [
+    {
+      "fromNode": 0,
+      "toNode": 1,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 0,
+      "toNode": 2,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 0,
+      "toNode": 3,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 0,
+      "toNode": 5,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 0,
+      "toNode": 7,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 0,
+      "toNode": 8,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 0,
+      "toNode": 9,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 0,
+      "toNode": 11,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 0,
+      "toNode": 14,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 3,
+      "toNode": 4,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 5,
+      "toNode": 6,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 5,
+      "toNode": 7,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 6,
+      "toNode": 7,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 9,
+      "toNode": 10,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 11,
+      "toNode": 12,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 12,
+      "toNode": 13,
+      "requirement": "*"
+    },
+    {
+      "fromNode": 14,
+      "toNode": 15,
+      "requirement": "*"
+    }
+  ],
+  "error": ""
+}
