@@ -26,9 +26,11 @@ func blank(s string) string {
 }
 
 // nestedTemplates is a Svelte expression holding n template literals, each
-// nested in the `${ }` of the one before.
-func nestedTemplates(n int) string {
-	return "{" + strings.Repeat("`x${", n) + "'ok'" + strings.Repeat("}`", n) + "}"
+// nested in the `${ }` of the one before, with inner at the center.
+func nestedTemplates(n int) string { return nestedTemplatesAround(n, "'ok'") }
+
+func nestedTemplatesAround(n int, inner string) string {
+	return "{" + strings.Repeat("`x${", n) + inner + strings.Repeat("}`", n) + "}"
 }
 
 // afterExpression is the tail used to check that an expression was read to
@@ -323,6 +325,18 @@ func TestScriptContents(t *testing.T) {
 			lang:  langJavaScript,
 		},
 		{
+			name:  "brace in a string at the center of 65 nested template literals",
+			input: nestedTemplatesAround(65, "'{'") + "\n<script>y</script>\n{`}`}",
+			want:  blank(nestedTemplatesAround(65, "'{'")+"\n<script>") + "y" + closeMask("</script>") + blank("\n{`}`}"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "brace in a string at the center of 10000 nested template literals",
+			input: nestedTemplatesAround(10000, "'{'") + "\n<script>y</script>\n{`}`}",
+			want:  blank(nestedTemplatesAround(10000, "'{'")+"\n<script>") + "y" + closeMask("</script>") + blank("\n{`}`}"),
+			lang:  langJavaScript, found: true,
+		},
+		{
 			// Known limitation, pinned: after the stray `'`, title=" pairs with
 			// the `"` inside the later comment, and the script is read as part
 			// of that attribute value. See docs/diet.md.
@@ -425,7 +439,7 @@ func TestScriptContentsStaysLinear(t *testing.T) {
 		{name: "tags with alternating quotes", repeat: "<a '<b \""},
 		{name: "unclosed style tags (rawUnclosed)", repeat: "<style>"},
 		{name: "slashes and classes in a Svelte expression", repeat: "(/["},
-		{name: "deeply nested template literals (maxTemplateDepth)", repeat: "{`${"},
+		{name: "deeply nested template literals", repeat: "{`${"},
 		{name: "many short template literals", repeat: "{`a${b}c`}"},
 	}
 	for _, tt := range tests {

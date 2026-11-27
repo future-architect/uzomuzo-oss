@@ -268,6 +268,18 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-deep-template@1.0.0", importPath: "p-deep-template", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
+			name:     "brace in a string at the center of 65 nested template literals",
+			filename: "BraceInDeepTemplate65.svelte",
+			code:     "{" + strings.Repeat("`x${", 65) + "'{'" + strings.Repeat("}`", 65) + "}\n<script>import p from \"p-brace-deep\"; p.run();</script>\n{`}`}",
+			purl:     "pkg:npm/p-brace-deep@1.0.0", importPath: "p-brace-deep", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "brace in a string at the center of 10000 nested template literals",
+			filename: "BraceInDeepTemplate10000.svelte",
+			code:     "{" + strings.Repeat("`x${", 10000) + "'{'" + strings.Repeat("}`", 10000) + "}\n<script>import p from \"p-brace-deep\"; p.run();</script>\n{`}`}",
+			purl:     "pkg:npm/p-brace-deep@1.0.0", importPath: "p-brace-deep", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
 			name:     "line comment in ${} ends at CR",
 			filename: "CRComment.svelte",
 			code:     "{`outer ${ // comment\r 'ok' }`}\n{'<!--'}\n<script>import p from \"p-cr-comment\"; p.run();</script>\n<!-- end -->",

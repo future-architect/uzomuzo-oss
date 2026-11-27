@@ -216,57 +216,84 @@ func (sc *markupScanner) skipBraces(at int) (next int, ok bool) {
 	if sc.bracesUnbalanced {
 		return 0, false
 	}
-	if end := braceEnd(sc.src, at, 0); end >= 0 {
+	if end := braceEnd(sc.src, at); end >= 0 {
 		return end, true
 	}
 	sc.bracesUnbalanced = true
 	return 0, false
 }
 
-// maxTemplateDepth bounds how deeply template literals nest inside `${ }`
-// before they are read flatly (see flatBraceEnd); real code stays far below
-// it, and the bound keeps a file of nested backticks from growing the Go
-// stack without limit.
-const maxTemplateDepth = 64
-
 // braceEnd returns the index after the `}` that matches src[at] == '{', read
-// as skipBraces describes, or -1. depth counts the template literals around
-// this expression.
-func braceEnd(src []byte, at, depth int) int {
-	braces := 0
-	for i := at; i < len(src); i++ {
-		end := i
-		switch b := src[i]; {
-		case b == '\'' || b == '"' || b == '`':
-			end = skipQuoted(src, i, depth)
-		case b == '/' && i+1 < len(src) && src[i+1] == '/':
-			end = lineEnd(src, i+2)
-		case b == '/' && i+1 < len(src) && src[i+1] == '*':
-			end = bytes.Index(src[i+2:], []byte("*/"))
-			if end >= 0 {
-				end += i + 3
+// as skipBraces describes, or -1. Inside a template literal, each `${ }` part
+// is read as an expression again, so a backtick or `}` in `outer ${`}`}`
+// does not end the literal. The nesting of expressions and template literals
+// is kept on an explicit stack rather than in Go recursion, so every depth is
+// read the same way; the stack never grows past the input length, and each
+// byte is read once.
+func braceEnd(src []byte, at int) int {
+	// braces[k] is how many `{` are still open in the k-th open expression,
+	// the outermost first. inTemplate[k] is set while that expression is
+	// inside a template literal, which ends at its backtick or opens the next
+	// expression at `${`.
+	braces := []int{1}
+	inTemplate := []bool{false}
+	for i := at + 1; i < len(src); i++ {
+		top := len(braces) - 1
+		b := src[i]
+		if inTemplate[top] {
+			switch {
+			case b == '\\':
+				i++
+			case b == '`':
+				inTemplate[top] = false
+			case b == '$' && i+1 < len(src) && src[i+1] == '{':
+				braces = append(braces, 1)
+				inTemplate = append(inTemplate, false)
+				i++
 			}
+			continue
+		}
+		switch {
+		case b == '\'' || b == '"':
+			end := skipQuoted(src, i)
+			if end < 0 {
+				return -1
+			}
+			i = end
+		case b == '`':
+			inTemplate[top] = true
+		case b == '/' && i+1 < len(src) && src[i+1] == '/':
+			end := lineEnd(src, i+2)
+			if end < 0 {
+				return -1
+			}
+			i = end
+		case b == '/' && i+1 < len(src) && src[i+1] == '*':
+			end := bytes.Index(src[i+2:], []byte("*/"))
+			if end < 0 {
+				return -1
+			}
+			i += 2 + end + 1
 		case b == '{':
-			braces++
+			braces[top]++
 		case b == '}':
-			braces--
-			if braces == 0 {
+			braces[top]--
+			if braces[top] > 0 {
+				continue
+			}
+			if top == 0 {
 				return i + 1
 			}
+			// The `${ }` part ends; reading goes back into its template literal.
+			braces, inTemplate = braces[:top], inTemplate[:top]
 		}
-		if end < 0 {
-			return -1
-		}
-		i = end
 	}
 	return -1
 }
 
-// skipQuoted returns the index of the quote that closes the string literal
-// opening at src[at], or -1. In a template literal, each `${ }` part is read
-// as an expression, so a backtick or `}` inside it, as in
-// `outer ${`inner`}`, does not end the literal.
-func skipQuoted(src []byte, at, depth int) int {
+// skipQuoted returns the index of the quote that closes the '...' or "..."
+// string literal opening at src[at], or -1.
+func skipQuoted(src []byte, at int) int {
 	quote := src[at]
 	for i := at + 1; i < len(src); i++ {
 		switch src[i] {
@@ -274,41 +301,6 @@ func skipQuoted(src []byte, at, depth int) int {
 			i++
 		case quote:
 			return i
-		case '$':
-			if quote != '`' || i+1 >= len(src) || src[i+1] != '{' {
-				continue
-			}
-			// Past the depth bound, this one `${ }` is read flatly instead of
-			// failing, so the rest of the file is read as before.
-			var end int
-			if depth >= maxTemplateDepth {
-				end = flatBraceEnd(src, i+1)
-			} else {
-				end = braceEnd(src, i+1, depth+1)
-			}
-			if end < 0 {
-				return -1
-			}
-			i = end - 1
-		}
-	}
-	return -1
-}
-
-// flatBraceEnd returns the index after the `}` that matches src[at] == '{',
-// counting braces only, or -1. Strings and comments are not read, so a brace
-// inside one can end the part early; it is used only past maxTemplateDepth.
-func flatBraceEnd(src []byte, at int) int {
-	braces := 0
-	for i := at; i < len(src); i++ {
-		switch src[i] {
-		case '{':
-			braces++
-		case '}':
-			braces--
-			if braces == 0 {
-				return i + 1
-			}
 		}
 	}
 	return -1
