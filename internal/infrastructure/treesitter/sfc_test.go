@@ -179,10 +179,37 @@ func TestScriptContents(t *testing.T) {
 			lang:  langJavaScript, found: true, vue: true,
 		},
 		{
-			name:  "upper-case raw-text element",
+			name:  "upper-case STYLE is a component, as the Vue compiler reads it",
 			input: "<STYLE>a{content:\"<script>x</script>\"}</STYLE><script>y</script>",
-			want:  openMask("<STYLE>a{content:\"<script>x</script>\"}</STYLE><script>") + "y" + closeMask("</script>"),
+			want:  openMask("<STYLE>a{content:\"<script>") + "x" + closeMask("</script>") + openMask("\"}</STYLE><script>") + "y" + closeMask("</script>"),
 			lang:  langJavaScript, found: true, vue: true,
+		},
+		{
+			name:  "Vue upper-case TITLE component with a closing tag in an interpolation",
+			input: "<template><TITLE>{{ \"</TITLE><!--\" }}</TITLE></template> <script setup>y</script> <!-- end -->",
+			want:  openMask("<template><TITLE>{{ \"</TITLE><!--\" }}</TITLE></template> <script setup>") + "y" + closeMask("</script>") + openMask(" <!-- end -->"),
+			lang:  langJavaScript, found: true, vue: true,
+		},
+		{
+			name:  "Vue title body skips interpolations when looking for its end",
+			input: "<title>{{ \"</title><!--\" }}</title><script>y</script><!-- end -->",
+			want:  openMask("<title>{{ \"</title><!--\" }}</title><script>") + "y" + closeMask("</script>") + openMask("<!-- end -->"),
+			lang:  langJavaScript, found: true, vue: true,
+		},
+		{
+			name:  "Svelte title body skips expressions when looking for its end",
+			input: "<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>y</script> <!-- end -->",
+			want:  openMask("<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>") + "y" + closeMask("</script>") + openMask(" <!-- end -->"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			// Known limitation, pinned: after the stray `'`, title=" pairs with
+			// the `"` inside the later comment, and the script is read as part
+			// of that attribute value. See docs/diet.md.
+			name:  "limitation: quote after a broken tag pairs with one in a later comment",
+			input: "<x '<p title=\"oops><script>y</script><!-- \" -->",
+			want:  openMask("<x '<p title=\"oops><script>y</script><!-- \" -->"),
+			lang:  langJavaScript,
 		},
 		{
 			name:  "script tag with an unclosed quote is read on as text",
@@ -260,7 +287,9 @@ func TestScriptContents(t *testing.T) {
 
 // TestScriptContentsStaysLinear feeds about 1 MiB of each pattern that once
 // made, or could make, the scan retry from every repeat: each would take
-// minutes at quadratic cost. Each case sets one of the scanner's flags.
+// minutes at quadratic cost. The cases cover the failure flags
+// (bracesUnbalanced, vueUnclosed, commentUnclosed, rawUnclosed), tags broken
+// by a `<`, and quotes with no closing quote (lastQuote).
 func TestScriptContentsStaysLinear(t *testing.T) {
 	tests := []struct {
 		name   string

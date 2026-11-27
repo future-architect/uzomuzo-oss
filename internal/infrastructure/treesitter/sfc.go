@@ -2,10 +2,7 @@
 
 package treesitter
 
-import (
-	"bytes"
-	"strings"
-)
+import "bytes"
 
 // scriptContents keeps script bodies at their original byte offsets so that
 // tree-sitter sees no imports from component markup or styles. vue selects
@@ -107,11 +104,11 @@ func scriptContents(src []byte, vue bool) ([]byte, langID, bool) {
 }
 
 // rawTextTags are elements whose body is not scanned for `<script>` or `<!--`.
-// An opening tag counts only in all lower or all upper case, so the
-// components `<Title>` or `<Textarea>` are not these elements; the closing
-// tag is matched in any case, as HTML does. A Svelte `<title>{x}</title>`
-// expression is skipped too, which is fine because diet reads no template
-// expressions.
+// The opening tag counts only in lower case, as the Vue and Svelte compilers
+// treat any other spelling (`<Title>`, `<TITLE>`) as a component; the closing
+// tag is matched in any case, as HTML does. In a title or textarea body,
+// template expressions (`{{ }}` in Vue, `{ }` in Svelte) are skipped while
+// looking for the closing tag, so `{"</title>"}` does not end the body.
 var rawTextTags = [...]string{"style", "textarea", "title"}
 
 // markupScanner reads component markup around script blocks.
@@ -149,10 +146,7 @@ type markupScanner struct {
 func (sc *markupScanner) skipMarkupTag(at int) int {
 	src := sc.src
 	for k, name := range rawTextTags {
-		// Vue also accepts the element in all upper case; in Svelte a
-		// capitalized name is always a component, `<TITLE>` included.
-		if !hasTagName(src, at+1, name, false) &&
-			(!sc.vue || !hasTagName(src, at+1, strings.ToUpper(name), false)) {
+		if !hasTagName(src, at+1, name, false) {
 			continue
 		}
 		end, selfClosing := sc.openingTagEnd(at + 1 + len(name))
@@ -163,6 +157,13 @@ func (sc *markupScanner) skipMarkupTag(at int) int {
 			return end + 1
 		}
 		for j := end + 1; j+2+len(name) <= len(src); j++ {
+			// Style bodies hold CSS, where braces are not expressions.
+			if src[j] == '{' && name != "style" {
+				if next, ok := sc.skipExpression(j); ok {
+					j = next - 1
+				}
+				continue
+			}
 			if src[j] == '<' && src[j+1] == '/' && hasTagName(src, j+2, name, true) {
 				return j + 2 + len(name)
 			}
@@ -294,8 +295,11 @@ func isASCIILetter(b byte) bool {
 // Attribute values are read quote- and brace-aware. A `<` outside quotes and
 // braces breaks the tag (returns -1): it is not valid inside one, and reading
 // past it could swallow the next `<script` tag. A quote with no closing quote
-// after it (`<p don't`) makes only its own tag fall back to plainTagEnd;
-// later tags are still read with quotes.
+// after it (`<p don't`), known from lastQuote without reading ahead, makes
+// that tag be reread from its start by plainTagEnd, so each tag is read at
+// most twice; later tags are still read with quotes. A quote can still pair
+// with an unrelated one later in the file, such as a `"` inside a comment, so
+// a broken tag can hide a later script; see docs/diet.md.
 func (sc *markupScanner) openingTagEnd(start int) (int, bool) {
 	src := sc.src
 	for i := start; i < len(src); i++ {

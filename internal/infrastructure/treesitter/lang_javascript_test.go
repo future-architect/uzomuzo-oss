@@ -225,6 +225,18 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-divide@1.0.0", importPath: "p-divide", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
+			name:     "Vue upper-case TITLE component with a closing tag in an interpolation",
+			filename: "VueUpperTitle.vue",
+			code:     "<template><TITLE>{{ \"</TITLE><!--\" }}</TITLE></template> <script setup>import TITLE from \"p-vue-upper-title\";</script> <!-- end -->",
+			purl:     "pkg:npm/p-vue-upper-title@1.0.0", importPath: "p-vue-upper-title", wantPresent: true, wantFiles: 1, wantCalls: 0,
+		},
+		{
+			name:     "Svelte title body skips expressions when looking for its end",
+			filename: "SvelteHeadTitle.svelte",
+			code:     "<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>import p from \"p-head-title\";p.run()</script> <!-- end -->",
+			purl:     "pkg:npm/p-head-title@1.0.0", importPath: "p-head-title", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
 			name:     "upper-case style closing tag hides its CSS",
 			filename: "UpperStyle.vue",
 			code:     "<style>.a{content:\"<script>require('p-upper-style')</script>\"}</STYLE>\n<script>import q from 'p-kept'; q.run();</script>",
