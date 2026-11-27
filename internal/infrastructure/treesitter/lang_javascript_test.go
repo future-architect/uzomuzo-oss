@@ -138,6 +138,24 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-open@1.0.0", importPath: "p-open", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
+			name:     "script inside an HTML comment is not read",
+			filename: "Commented.vue",
+			code:     "<!-- <script>import p from 'p-commented'; p.run();</script> --><script>const x = 1;</script>",
+			purl:     "pkg:npm/p-commented@1.0.0", importPath: "p-commented",
+		},
+		{
+			name:     "closing tag needs a delimiter after script",
+			filename: "Scripture.vue",
+			code:     "<script>const text = '</scripture>'; import p from 'p-scripture'; p.run();</script>",
+			purl:     "pkg:npm/p-scripture@1.0.0", importPath: "p-scripture", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "line comment does not swallow the next script block",
+			filename: "Adjacent.svelte",
+			code:     "<script context=\"module\">// module comment</script><script>import p from 'p-adjacent'; p.run();</script>",
+			purl:     "pkg:npm/p-adjacent@1.0.0", importPath: "p-adjacent", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
 			name:     "markup outside script has no coupling",
 			filename: "Markup.vue",
 			code:     "<template><div>require('p-markup')</div></template><script>const x = 1;</script>",

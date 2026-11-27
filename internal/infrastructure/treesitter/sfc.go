@@ -2,6 +2,8 @@
 
 package treesitter
 
+import "bytes"
+
 // scriptContents keeps script bodies at their original byte offsets so that
 // tree-sitter sees no imports from component markup or styles.
 func scriptContents(src []byte) ([]byte, langID, bool) {
@@ -17,6 +19,15 @@ func scriptContents(src []byte) ([]byte, langID, bool) {
 	language := langJavaScript
 	found := false
 	for i := 0; i+7 <= len(src); {
+		// Markup comments may hold disabled script blocks; skip them whole.
+		if src[i] == '<' && bytes.HasPrefix(src[i:], []byte("<!--")) {
+			end := bytes.Index(src[i+4:], []byte("-->"))
+			if end < 0 {
+				break
+			}
+			i += 4 + end + 3
+			continue
+		}
 		if src[i] != '<' || !asciiEqualFold(src[i:i+7], "<script") ||
 			(i+7 < len(src) && !isTagSeparator(src[i+7])) {
 			i++
@@ -41,15 +52,20 @@ func scriptContents(src []byte) ([]byte, langID, bool) {
 		contentStart := end + 1
 		contentEnd := len(src)
 		for j := contentStart; j+8 <= len(src); j++ {
-			if src[j] == '<' && asciiEqualFold(src[j:j+8], "</script") {
+			if src[j] == '<' && asciiEqualFold(src[j:j+8], "</script") &&
+				(j+8 == len(src) || isTagSeparator(src[j+8])) {
 				contentEnd = j
 				break
 			}
 		}
 		copy(masked[contentStart:contentEnd], src[contentStart:contentEnd])
+		// A newline in place of each tag's edge byte ends a `//` comment at the
+		// block's end, so it cannot run into the next block's code.
+		masked[end] = '\n'
 		if contentEnd == len(src) {
 			break
 		}
+		masked[contentEnd] = '\n'
 		i = contentEnd + 8
 	}
 	return masked, language, found
