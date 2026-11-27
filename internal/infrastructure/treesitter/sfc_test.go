@@ -13,6 +13,32 @@ import (
 func openMask(tag string) string  { return strings.Repeat(" ", len(tag)) }
 func closeMask(tag string) string { return "\n;" + strings.Repeat(" ", len(tag)-2) }
 
+// blank is what masked markup becomes: CR and LF kept, every other byte a
+// space.
+func blank(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if c != '\n' && c != '\r' {
+			b[i] = ' '
+		}
+	}
+	return string(b)
+}
+
+// nestedTemplates is a Svelte expression holding n template literals, each
+// nested in the `${ }` of the one before.
+func nestedTemplates(n int) string {
+	return "{" + strings.Repeat("`x${", n) + "'ok'" + strings.Repeat("}`", n) + "}"
+}
+
+// afterExpression is the tail used to check that an expression was read to
+// its real end: a string holding `<!--`, which hides the script when read as
+// markup, then the script and a closed comment.
+const afterExpression = "\n{'<!--'}\n<script>y</script>\n<!-- end -->"
+
+// afterExpressionMask is afterExpression masked, with the script kept.
+var afterExpressionMask = blank("\n{'<!--'}\n<script>") + "y" + closeMask("</script>") + blank("\n<!-- end -->")
+
 func TestScriptContents(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -244,6 +270,57 @@ func TestScriptContents(t *testing.T) {
 			input: "<template><p v-pre>{{</p></template>\n<script setup>y; const s = \"}}\";</script>",
 			want:  openMask("<template><p v-pre>{{</p></template>") + "\n" + openMask("<script setup>y; const s = \"}}\";</script>"),
 			lang:  langJavaScript, vue: true,
+		},
+		{
+			name:  "template literals nested 63 deep",
+			input: nestedTemplates(63) + afterExpression,
+			want:  blank(nestedTemplates(63)) + afterExpressionMask,
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "template literals nested 64 deep",
+			input: nestedTemplates(64) + afterExpression,
+			want:  blank(nestedTemplates(64)) + afterExpressionMask,
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "template literals nested 65 deep",
+			input: nestedTemplates(65) + afterExpression,
+			want:  blank(nestedTemplates(65)) + afterExpressionMask,
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "line comment in ${} ends at LF",
+			input: "{`outer ${ // comment\n 'ok' }`}" + afterExpression,
+			want:  blank("{`outer ${ // comment\n 'ok' }`}") + afterExpressionMask,
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "line comment in ${} ends at CR",
+			input: "{`outer ${ // comment\r 'ok' }`}" + afterExpression,
+			want:  blank("{`outer ${ // comment\r 'ok' }`}") + afterExpressionMask,
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "line comment in ${} ends at U+2028",
+			input: "{`outer ${ // comment\u2028 'ok' }`}" + afterExpression,
+			want:  blank("{`outer ${ // comment\u2028 'ok' }`}") + afterExpressionMask,
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "line comment in ${} ends at U+2029",
+			input: "{`outer ${ // comment\u2029 'ok' }`}" + afterExpression,
+			want:  blank("{`outer ${ // comment\u2029 'ok' }`}") + afterExpressionMask,
+			lang:  langJavaScript, found: true,
+		},
+		{
+			// Known limitation, pinned: in a quoted Svelte attribute, the `"`
+			// inside the expression's string ends the attribute, and the
+			// `<!--` after it hides the script up to the final `-->`.
+			name:  "limitation: Svelte quoted attribute holding an expression with a quote",
+			input: "<div title=\"{ '\"> <!--' }\">x</div>\n<script>y</script>\n<!-- end -->",
+			want:  blank("<div title=\"{ '\"> <!--' }\">x</div>\n<script>y</script>\n<!-- end -->"),
+			lang:  langJavaScript,
 		},
 		{
 			// Known limitation, pinned: after the stray `'`, title=" pairs with

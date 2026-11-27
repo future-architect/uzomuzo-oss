@@ -224,8 +224,9 @@ func (sc *markupScanner) skipBraces(at int) (next int, ok bool) {
 }
 
 // maxTemplateDepth bounds how deeply template literals nest inside `${ }`
-// before braceEnd gives up; real code stays far below it, and the bound
-// keeps a file of nested backticks from growing the Go stack without limit.
+// before they are read flatly (see flatBraceEnd); real code stays far below
+// it, and the bound keeps a file of nested backticks from growing the Go
+// stack without limit.
 const maxTemplateDepth = 64
 
 // braceEnd returns the index after the `}` that matches src[at] == '{', read
@@ -239,10 +240,7 @@ func braceEnd(src []byte, at, depth int) int {
 		case b == '\'' || b == '"' || b == '`':
 			end = skipQuoted(src, i, depth)
 		case b == '/' && i+1 < len(src) && src[i+1] == '/':
-			end = bytes.IndexByte(src[i:], '\n')
-			if end >= 0 {
-				end += i
-			}
+			end = lineEnd(src, i+2)
 		case b == '/' && i+1 < len(src) && src[i+1] == '*':
 			end = bytes.Index(src[i+2:], []byte("*/"))
 			if end >= 0 {
@@ -280,14 +278,53 @@ func skipQuoted(src []byte, at, depth int) int {
 			if quote != '`' || i+1 >= len(src) || src[i+1] != '{' {
 				continue
 			}
+			// Past the depth bound, this one `${ }` is read flatly instead of
+			// failing, so the rest of the file is read as before.
+			var end int
 			if depth >= maxTemplateDepth {
-				return -1
+				end = flatBraceEnd(src, i+1)
+			} else {
+				end = braceEnd(src, i+1, depth+1)
 			}
-			end := braceEnd(src, i+1, depth+1)
 			if end < 0 {
 				return -1
 			}
 			i = end - 1
+		}
+	}
+	return -1
+}
+
+// flatBraceEnd returns the index after the `}` that matches src[at] == '{',
+// counting braces only, or -1. Strings and comments are not read, so a brace
+// inside one can end the part early; it is used only past maxTemplateDepth.
+func flatBraceEnd(src []byte, at int) int {
+	braces := 0
+	for i := at; i < len(src); i++ {
+		switch src[i] {
+		case '{':
+			braces++
+		case '}':
+			braces--
+			if braces == 0 {
+				return i + 1
+			}
+		}
+	}
+	return -1
+}
+
+// lineEnd returns the index of the first JavaScript line terminator at or
+// after src[from] (LF, CR, U+2028 or U+2029), or -1.
+func lineEnd(src []byte, from int) int {
+	for i := from; i < len(src); i++ {
+		switch src[i] {
+		case '\n', '\r':
+			return i
+		case 0xE2:
+			if i+2 < len(src) && src[i+1] == 0x80 && (src[i+2] == 0xA8 || src[i+2] == 0xA9) {
+				return i
+			}
 		}
 	}
 	return -1
@@ -325,7 +362,9 @@ func isASCIILetter(b byte) bool {
 // that tag be reread from its start by plainTagEnd, so each tag is read at
 // most twice; later tags are still read with quotes. A quote can still pair
 // with an unrelated one later in the file, such as a `"` inside a comment, so
-// a broken tag can hide a later script; see docs/diet.md.
+// a broken tag can hide a later script. Braces inside a quoted value are not
+// read, so in Svelte's `title="{ '"' }"` the `"` in the string ends the
+// value; see docs/diet.md.
 func (sc *markupScanner) openingTagEnd(start int) (int, bool) {
 	src := sc.src
 	for i := start; i < len(src); i++ {

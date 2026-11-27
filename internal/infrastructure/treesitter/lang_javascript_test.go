@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -261,6 +262,18 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-nested-template@1.0.0", importPath: "p-nested-template", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
+			name:     "template literals nested past the depth bound",
+			filename: "DeepTemplate.svelte",
+			code:     "{" + strings.Repeat("`x${", 65) + "'ok'" + strings.Repeat("}`", 65) + "}\n{'<!--'}\n<script>import p from \"p-deep-template\"; p.run();</script>\n<!-- end -->",
+			purl:     "pkg:npm/p-deep-template@1.0.0", importPath: "p-deep-template", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "line comment in ${} ends at CR",
+			filename: "CRComment.svelte",
+			code:     "{`outer ${ // comment\r 'ok' }`}\n{'<!--'}\n<script>import p from \"p-cr-comment\"; p.run();</script>\n<!-- end -->",
+			purl:     "pkg:npm/p-cr-comment@1.0.0", importPath: "p-cr-comment", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
 			name:     "upper-case style closing tag hides its CSS",
 			filename: "UpperStyle.vue",
 			code:     "<style>.a{content:\"<script>require('p-upper-style')</script>\"}</STYLE>\n<script>import q from 'p-kept'; q.run();</script>",
@@ -382,6 +395,15 @@ func TestAnalyzer_SFCKnownLimitation(t *testing.T) {
 			code:       "<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>import p from \"p-head-title\";p.run()</script> <!-- end -->",
 			purl:       "pkg:npm/p-head-title@1.0.0",
 			importPath: "p-head-title",
+		},
+		{
+			// A `"` inside an expression in a quoted Svelte attribute ends the
+			// attribute; the `<!--` after it runs to the `-->` after the script.
+			name:       "Svelte quoted attribute holding an expression with a quote",
+			filename:   "QuotedExprAttr.svelte",
+			code:       "<div title=\"{ '\"> <!--' }\">x</div>\n<script>import p from \"p-quoted-expr-attr\"; p.run();</script>\n<!-- end -->",
+			purl:       "pkg:npm/p-quoted-expr-attr@1.0.0",
+			importPath: "p-quoted-expr-attr",
 		},
 		{
 			// v-pre is not tracked: the `{{` is read as an interpolation that
