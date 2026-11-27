@@ -76,6 +76,125 @@ func TestAnalyzer_JSTSSourceExtensions(t *testing.T) {
 	}
 }
 
+func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
+	const controlPURL = "pkg:npm/p-control@1.0.0"
+	tests := []struct {
+		name        string
+		filename    string
+		code        string
+		purl        string
+		importPath  string
+		wantPresent bool
+		wantFiles   int
+		wantCalls   int
+		wantUnused  bool
+	}{
+		{
+			name:     "Vue script ignores template and style",
+			filename: "App.vue",
+			code:     "<template><div>{{ x }}</div></template><script>import p from 'p-vue'; export default { mounted() { p.run(); } }</script><style>.a{}</style>",
+			purl:     "pkg:npm/p-vue@1.0.0", importPath: "p-vue", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Vue TypeScript setup script",
+			filename: "App.vue",
+			code:     "<script setup lang=\"ts\">import { ref } from 'vue'; import p from 'p-vue-ts'; p.run();</script>",
+			purl:     "pkg:npm/p-vue-ts@1.0.0", importPath: "p-vue-ts", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Vue alias crosses script blocks",
+			filename: "App.vue",
+			code:     "<script lang=\"ts\">import p from 'p-both';</script><script setup lang=\"ts\">p.run();</script>",
+			purl:     "pkg:npm/p-both@1.0.0", importPath: "p-both", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Vue type-only import has no runtime coupling",
+			filename: "App.vue",
+			code:     "<script setup lang=\"ts\">import type { T } from 'p-type-only'; const a: T = 1;</script>",
+			purl:     "pkg:npm/p-type-only@1.0.0", importPath: "p-type-only",
+		},
+		{
+			name:     "Svelte alias crosses module and instance scripts",
+			filename: "Comp.svelte",
+			code:     "<script context=\"module\">import p from 'p-svelte-mod';</script><script>p.run();</script><h1>hi</h1>",
+			purl:     "pkg:npm/p-svelte-mod@1.0.0", importPath: "p-svelte-mod", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Svelte TypeScript require with single-quoted attribute",
+			filename: "Comp.svelte",
+			code:     "<script lang='ts'>const p = require('p-svelte-req'); p.run();</script>",
+			purl:     "pkg:npm/p-svelte-req@1.0.0", importPath: "p-svelte-req", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "uppercase tag with unquoted language",
+			filename: "Upper.vue",
+			code:     "<SCRIPT LANG=ts>import p from 'p-upper'; p.run();</SCRIPT>",
+			purl:     "pkg:npm/p-upper@1.0.0", importPath: "p-upper", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "unclosed script reads to file end",
+			filename: "Open.vue",
+			code:     "<template></template>\n<script>\nimport p from 'p-open';\np.run();\n",
+			purl:     "pkg:npm/p-open@1.0.0", importPath: "p-open", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "markup outside script has no coupling",
+			filename: "Markup.vue",
+			code:     "<template><div>require('p-markup')</div></template>",
+			purl:     "pkg:npm/p-markup@1.0.0", importPath: "p-markup",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			importPaths := map[string][]string{tt.purl: {tt.importPath}}
+			if !tt.wantPresent {
+				if err := os.WriteFile(filepath.Join(dir, "control.js"), []byte("const p = require('p-control'); p.run();"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				importPaths[controlPURL] = []string{"p-control"}
+			}
+
+			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !tt.wantPresent {
+				if _, ok := result[tt.purl]; ok {
+					t.Errorf("unexpected coupling for %s", tt.purl)
+				}
+				control, ok := result[controlPURL]
+				if !ok {
+					t.Fatalf("missing control coupling for %s", controlPURL)
+				}
+				if control.ImportFileCount != 1 || control.CallSiteCount != 1 || control.IsUnused {
+					t.Errorf("control coupling = (files %d, calls %d, unused %v), want (1, 1, false)", control.ImportFileCount, control.CallSiteCount, control.IsUnused)
+				}
+				return
+			}
+			coupling, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("missing coupling for %s", tt.purl)
+			}
+			if coupling.ImportFileCount != tt.wantFiles {
+				t.Errorf("ImportFileCount = %d, want %d", coupling.ImportFileCount, tt.wantFiles)
+			}
+			if coupling.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", coupling.CallSiteCount, tt.wantCalls)
+			}
+			if coupling.IsUnused != tt.wantUnused {
+				t.Errorf("IsUnused = %v, want %v", coupling.IsUnused, tt.wantUnused)
+			}
+		})
+	}
+}
+
 func TestAnalyzer_JavaScript(t *testing.T) {
 	dir := t.TempDir()
 	err := os.WriteFile(filepath.Join(dir, "index.js"), []byte(`import axios from "axios";

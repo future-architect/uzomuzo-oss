@@ -82,6 +82,38 @@ func FuzzAnalyzeTypeScriptImportRequire(f *testing.F) {
 	})
 }
 
+// FuzzAnalyzeVueSvelteScriptBlocks checks that malformed component files do
+// not make source coupling analysis panic or return an error.
+func FuzzAnalyzeVueSvelteScriptBlocks(f *testing.F) {
+	seeds := []string{
+		"<script>import p from 'pkg'; p.run();</script>",
+		"<script lang='ts'>const p = require('pkg'); p.run();</script>",
+		"<SCRIPT LANG=tsx>import p from 'pkg'; p.run();</SCRIPT>",
+		"<template>require('pkg')</template><script>import p from 'pkg';",
+		"<script setup lang=\"typescript\">import type { T } from 'pkg';</script>",
+		"",
+	}
+	for _, seed := range seeds {
+		f.Add(seed)
+	}
+
+	analyzer := NewAnalyzer()
+	f.Cleanup(analyzer.Close)
+	importPaths := map[string][]string{"pkg:npm/pkg@1.0.0": {"pkg"}}
+
+	f.Fuzz(func(t *testing.T, src string) {
+		dir := t.TempDir()
+		for _, filename := range []string{"App.vue", "Comp.svelte"} {
+			if err := os.WriteFile(filepath.Join(dir, filename), []byte(src), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
 // FuzzAnalyzeGoPackageNames feeds two arbitrary Go files of one directory
 // through the coupling analysis, including the package-name inference of
 // #551 and its directory scan, to check that malformed input does not panic

@@ -265,6 +265,41 @@ func TestComputeSummary_EasyWinsWithNewScoring(t *testing.T) {
 	}
 }
 
+func TestComputeSummary_TypesPackagesAreNotEasyWins(t *testing.T) {
+	qualifying := ImpactScore{Difficulty: DifficultyTrivial, PriorityScore: 0.65}
+	tests := []struct {
+		name    string
+		entries []DietEntry
+		want    int
+	}{
+		{
+			name: "npm type definitions excluded while other npm packages count",
+			entries: []DietEntry{
+				{Name: "foo", Ecosystem: "npm", Relation: RelationDirect, Coupling: CouplingAnalysis{IsUnused: false}, Scores: qualifying},
+				{Name: "@types/foo", Ecosystem: "npm", Relation: RelationDirect, Coupling: CouplingAnalysis{IsUnused: true}, Scores: qualifying},
+				{Name: "bar", Ecosystem: "npm", Relation: RelationDirect, Coupling: CouplingAnalysis{IsUnused: true}, Scores: qualifying},
+			},
+			want: 2,
+		},
+		{
+			name: "same prefix in another ecosystem still counts",
+			entries: []DietEntry{
+				{Name: "@types/foo", Ecosystem: "golang", Relation: RelationDirect, Coupling: CouplingAnalysis{IsUnused: true}, Scores: qualifying},
+			},
+			want: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summary := ComputeSummary(tt.entries, 0)
+			if summary.EasyWins != tt.want {
+				t.Errorf("EasyWins = %d, want %d", summary.EasyWins, tt.want)
+			}
+		})
+	}
+}
+
 func TestComputeImpactScore_LifecycleScoreFloor(t *testing.T) {
 	tests := []struct {
 		name           string
