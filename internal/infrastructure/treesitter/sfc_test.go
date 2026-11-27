@@ -5,6 +5,7 @@ package treesitter
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // openMask and closeMask are what a masked opening or closing tag becomes:
@@ -88,6 +89,12 @@ func TestScriptContents(t *testing.T) {
 			lang:  langJavaScript, found: true,
 		},
 		{
+			name:  "unmatched brace is plain text",
+			input: "a { b<script>y</script>",
+			want:  strings.Repeat(" ", len("a { b")) + openMask("<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
 			name:  "strongest language across blocks",
 			input: "<script>one</script><SCRIPT LANG=typescript>two</SCRIPT><script lang=tsx>three</script>",
 			want:  openMask("<script>") + "one" + closeMask("</script>") + openMask("<SCRIPT LANG=typescript>") + "two" + closeMask("</SCRIPT>") + openMask("<script lang=tsx>") + "three" + closeMask("</script>"),
@@ -104,5 +111,24 @@ func TestScriptContents(t *testing.T) {
 				t.Errorf("length = %d, want %d", len(got), len(tt.input))
 			}
 		})
+	}
+}
+
+// TestScriptContentsUnmatchedBracesStayLinear guards the bracesUnbalanced
+// flag: without it, each of the 1 MiB of `{` would rescan to the end of input.
+func TestScriptContentsUnmatchedBracesStayLinear(t *testing.T) {
+	input := strings.Repeat("{", 1<<20) + "<script>y</script>"
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		got, _, found := scriptContents([]byte(input))
+		if !found || !strings.Contains(string(got), "y") {
+			t.Errorf("script after unmatched braces not kept: found=%v", found)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("scriptContents did not finish within 10s on unmatched braces")
 	}
 }

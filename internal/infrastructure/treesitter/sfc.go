@@ -16,9 +16,20 @@ func scriptContents(src []byte) ([]byte, langID, bool) {
 		}
 	}
 
+	sc := markupScanner{src: src}
 	language := langJavaScript
 	found := false
 	for i := 0; i+7 <= len(src); {
+		// Vue `{{ }}` and Svelte `{ }` hold JavaScript, where `'<!--'` or
+		// `"<script>"` are just strings, not markup.
+		if src[i] == '{' {
+			if next, ok := sc.skipBraces(i); ok {
+				i = next
+				continue
+			}
+			i++
+			continue
+		}
 		// Markup comments may hold disabled script blocks; skip them whole.
 		if src[i] == '<' && bytes.HasPrefix(src[i:], []byte("<!--")) {
 			end := bytes.Index(src[i+4:], []byte("-->"))
@@ -33,7 +44,7 @@ func scriptContents(src []byte) ([]byte, langID, bool) {
 			continue
 		}
 		if !isTagNamed(src, i+1, "script") {
-			next, ok := skipMarkupTag(src, i)
+			next, ok := sc.skipMarkupTag(i)
 			if !ok {
 				break
 			}
@@ -41,7 +52,7 @@ func scriptContents(src []byte) ([]byte, langID, bool) {
 			continue
 		}
 
-		end, selfClosing := openingTagEnd(src, i+7)
+		end, selfClosing := sc.openingTagEnd(i + 7)
 		if end < 0 {
 			break
 		}
@@ -80,23 +91,40 @@ func scriptContents(src []byte) ([]byte, langID, bool) {
 	return masked, language, found
 }
 
+// rawTextTags hold text that is never markup or code, so `<script>` written
+// inside one is only text.
+var rawTextTags = []string{"style", "textarea", "title"}
+
+// markupScanner reads component markup around script blocks.
+type markupScanner struct {
+	src []byte
+	// bracesUnbalanced is set once a `{` has no matching `}`. From then on
+	// braces are plain text; retrying from every later `{` would make a file
+	// of unmatched braces take quadratic time.
+	bracesUnbalanced bool
+}
+
 // skipMarkupTag returns where scanning resumes after the non-script markup
-// at src[at] == '<'. Attribute values are read quote-aware, so `title="<!--"`
-// cannot open a comment, and a style body is skipped whole, so CSS text such
-// as `content: "<script>"` is never read as code. ok is false when the rest
-// of the file cannot hold a script block (an unterminated tag or style).
-func skipMarkupTag(src []byte, at int) (next int, ok bool) {
-	if isTagNamed(src, at+1, "style") {
-		end, selfClosing := openingTagEnd(src, at+len("<style"))
+// at src[at] == '<'. Attribute values are read quote- and brace-aware, so
+// `title="<!--"` or `title={a > b}` cannot open a comment or end the tag, and
+// the body of a raw-text tag such as style is skipped whole. ok is false when
+// the rest of the file cannot hold a script block (an unterminated tag).
+func (sc *markupScanner) skipMarkupTag(at int) (next int, ok bool) {
+	src := sc.src
+	for _, name := range rawTextTags {
+		if !isTagNamed(src, at+1, name) {
+			continue
+		}
+		end, selfClosing := sc.openingTagEnd(at + 1 + len(name))
 		if end < 0 {
 			return 0, false
 		}
 		if selfClosing {
 			return end + 1, true
 		}
-		for j := end + 1; j+len("</style") <= len(src); j++ {
-			if src[j] == '<' && src[j+1] == '/' && isTagNamed(src, j+2, "style") {
-				return j + len("</style"), true
+		for j := end + 1; j+2+len(name) <= len(src); j++ {
+			if src[j] == '<' && src[j+1] == '/' && isTagNamed(src, j+2, name) {
+				return j + 2 + len(name), true
 			}
 		}
 		return 0, false
@@ -108,11 +136,48 @@ func skipMarkupTag(src []byte, at int) (next int, ok bool) {
 	if nameStart >= len(src) || !isASCIILetter(src[nameStart]) {
 		return at + 1, true // a bare '<', such as `a < b` in text
 	}
-	end, _ := openingTagEnd(src, nameStart)
+	end, _ := sc.openingTagEnd(nameStart)
 	if end < 0 {
 		return 0, false
 	}
 	return end + 1, true
+}
+
+// skipBraces returns the index after the `}` that matches src[at] == '{',
+// reading nested braces and JavaScript string literals. ok is false when no
+// match exists, and every later call then reports false at once.
+func (sc *markupScanner) skipBraces(at int) (next int, ok bool) {
+	if sc.bracesUnbalanced {
+		return 0, false
+	}
+	src := sc.src
+	depth := 0
+	var quote byte
+	for i := at; i < len(src); i++ {
+		b := src[i]
+		if quote != 0 {
+			switch b {
+			case '\\':
+				i++
+			case quote:
+				quote = 0
+			}
+			continue
+		}
+		switch b {
+		case '\'', '"', '`':
+			quote = b
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i + 1, true
+			}
+		}
+	}
+	sc.bracesUnbalanced = true
+	return 0, false
 }
 
 // isTagNamed reports whether src[at:] starts with name (ASCII
@@ -129,7 +194,8 @@ func isASCIILetter(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
-func openingTagEnd(src []byte, start int) (int, bool) {
+func (sc *markupScanner) openingTagEnd(start int) (int, bool) {
+	src := sc.src
 	var quote byte
 	for i := start; i < len(src); i++ {
 		b := src[i]
@@ -141,6 +207,12 @@ func openingTagEnd(src []byte, start int) (int, bool) {
 		}
 		if b == '\'' || b == '"' {
 			quote = b
+			continue
+		}
+		if b == '{' {
+			if next, ok := sc.skipBraces(i); ok {
+				i = next - 1
+			}
 			continue
 		}
 		if b == '>' {

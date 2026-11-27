@@ -174,6 +174,30 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-statements@1.0.0", importPath: "p-statements", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
+			name:     "comment opener inside a Vue interpolation does not hide scripts",
+			filename: "Interp.vue",
+			code:     "<template><p>{{ '<!--' }}</p></template><script>import p from 'p-interp'; p.run();</script>",
+			purl:     "pkg:npm/p-interp@1.0.0", importPath: "p-interp", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "script text inside a Svelte expression is not read",
+			filename: "Expr.svelte",
+			code:     "<script>const x = 1;</script><p>{\"<script>require('p-expr')</script>\"}</p>",
+			purl:     "pkg:npm/p-expr@1.0.0", importPath: "p-expr",
+		},
+		{
+			name:     "comparison inside a Svelte attribute expression does not end the tag",
+			filename: "Attr.svelte",
+			code:     "<p title={1 > 0 ? '<!--' : ''}>t</p><p title={'it\\'s'}>u</p><script>import p from 'p-attr-expr'; p.run();</script>",
+			purl:     "pkg:npm/p-attr-expr@1.0.0", importPath: "p-attr-expr", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "script text inside textarea and title is not read",
+			filename: "Raw.vue",
+			code:     "<template><textarea><script>require('p-raw')</script></textarea><title><script>require('p-raw')</script></title></template><script>const x = 1;</script>",
+			purl:     "pkg:npm/p-raw@1.0.0", importPath: "p-raw",
+		},
+		{
 			name:     "markup outside script has no coupling",
 			filename: "Markup.vue",
 			code:     "<template><div>require('p-markup')</div></template><script>const x = 1;</script>",
