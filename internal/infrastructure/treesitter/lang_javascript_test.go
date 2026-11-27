@@ -140,7 +140,7 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 		{
 			name:     "markup outside script has no coupling",
 			filename: "Markup.vue",
-			code:     "<template><div>require('p-markup')</div></template>",
+			code:     "<template><div>require('p-markup')</div></template><script>const x = 1;</script>",
 			purl:     "pkg:npm/p-markup@1.0.0", importPath: "p-markup",
 		},
 	}

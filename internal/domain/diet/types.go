@@ -1,5 +1,7 @@
 package diet
 
+import "strings"
+
 // Scope constants for DietEntry.Scope.
 const (
 	// ScopeTool indicates a Go tool directive dependency (Go 1.24+).
@@ -27,6 +29,10 @@ type DietEntry struct {
 	Coupling CouplingAnalysis
 	Health   HealthSignals
 	Scores   ImpactScore
+}
+
+func (e DietEntry) isTypeDefinitionPackage() bool {
+	return e.Ecosystem == "npm" && strings.HasPrefix(e.Name, "@types/")
 }
 
 // GraphResult contains the full graph analysis output.

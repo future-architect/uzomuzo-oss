@@ -111,7 +111,10 @@ func ComputeSummary(entries []DietEntry, totalTransitive int) DietSummary {
 		if e.Coupling.IsUnused && e.Relation == RelationDirect {
 			s.UnusedDirect++
 		}
-		if e.Scores.Difficulty == DifficultyTrivial || e.Scores.Difficulty == DifficultyEasy {
+		// npm @types/* packages have no runtime import, so they always look
+		// unused, yet removing one breaks tsc. Not counted even when the typed
+		// package itself is unused: diet does not check that pairing.
+		if !e.isTypeDefinitionPackage() && (e.Scores.Difficulty == DifficultyTrivial || e.Scores.Difficulty == DifficultyEasy) {
 			if e.Scores.PriorityScore > easyWinScoreThreshold {
 				s.EasyWins++
 			}
