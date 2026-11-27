@@ -302,6 +302,7 @@ type CargoRequirementsData struct {
 // CargoRequirementDependency contains fields needed to scope a cargo graph.
 type CargoRequirementDependency struct {
 	Name         string `json:"name"`
+	Requirement  string `json:"requirement"`
 	Kind         string `json:"kind"`
 	Optional     bool   `json:"optional"`
 	PackageAlias string `json:"packageAlias"`

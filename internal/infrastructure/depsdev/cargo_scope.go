@@ -21,20 +21,26 @@ func enabledCargoDependencies(cargo *CargoRequirementsData) map[string]bool {
 		if isCargoDevDependency(dep) || !dep.Optional {
 			continue
 		}
-		optional[cargoName(dep.Name)] = true
+		localName := dep.Name
 		if dep.PackageAlias != "" {
-			optional[cargoName(dep.PackageAlias)] = true
+			localName = dep.PackageAlias
 		}
+		optional[localName] = true
 	}
 	features := make(map[string][]string)
+	explicitDependencies := make(map[string]bool)
 	for _, feature := range cargo.Features {
-		features[cargoName(feature.Name)] = feature.Implies
+		features[feature.Name] = feature.Implies
+		for _, token := range feature.Implies {
+			if strings.HasPrefix(token, "dep:") {
+				explicitDependencies[strings.TrimPrefix(token, "dep:")] = true
+			}
+		}
 	}
 	enabled := make(map[string]bool)
 	visited := make(map[string]bool)
 	var visit func(string)
 	visit = func(name string) {
-		name = cargoName(name)
 		if visited[name] {
 			return
 		}
@@ -42,23 +48,23 @@ func enabledCargoDependencies(cargo *CargoRequirementsData) map[string]bool {
 		for _, token := range features[name] {
 			switch {
 			case strings.HasPrefix(token, "dep:"):
-				key := cargoName(strings.TrimPrefix(token, "dep:"))
+				key := strings.TrimPrefix(token, "dep:")
 				if optional[key] {
 					enabled[key] = true
 				}
 			case strings.Contains(token, "?/"):
 				continue
 			case strings.Contains(token, "/"):
-				key := cargoName(strings.SplitN(token, "/", 2)[0])
+				key := strings.SplitN(token, "/", 2)[0]
 				if optional[key] {
 					enabled[key] = true
 				}
 			default:
-				key := cargoName(token)
-				if optional[key] {
-					enabled[key] = true
+				if _, exists := features[token]; exists {
+					visit(token)
+				} else if optional[token] && !explicitDependencies[token] {
+					enabled[token] = true
 				}
-				visit(key)
 			}
 		}
 	}
@@ -88,17 +94,30 @@ func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResp
 	}
 
 	enabled := enabledCargoDependencies(requirements.Cargo)
-	kept := make(map[string]bool)
+	kept := make(map[string]map[string]bool)
 	for _, dep := range requirements.Cargo.Dependencies {
 		if isCargoDevDependency(dep) {
 			continue
 		}
-		if dep.Optional && !enabled[cargoName(dep.Name)] && !enabled[cargoName(dep.PackageAlias)] {
+		localName := dep.Name
+		if dep.PackageAlias != "" {
+			localName = dep.PackageAlias
+		}
+		if dep.Optional && !enabled[localName] {
 			continue
 		}
-		kept[cargoName(dep.Name)] = true
+		requirement := strings.TrimSpace(dep.Requirement)
+		name := cargoName(dep.Name)
+		if kept[name] == nil {
+			kept[name] = make(map[string]bool)
+		}
+		kept[name][requirement] = true
 		if dep.PackageAlias != "" {
-			kept[cargoName(dep.PackageAlias)] = true
+			name = cargoName(dep.PackageAlias)
+			if kept[name] == nil {
+				kept[name] = make(map[string]bool)
+			}
+			kept[name][requirement] = true
 		}
 	}
 	if len(kept) == 0 {
@@ -106,18 +125,30 @@ func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResp
 	}
 
 	adjacent := make([][]int, len(graph.Nodes))
+	matchedRequirement := make(map[string]bool)
 	for _, edge := range graph.Edges {
 		if edge.FromNode < 0 || edge.FromNode >= len(graph.Nodes) || edge.ToNode < 0 || edge.ToNode >= len(graph.Nodes) {
 			continue
 		}
 		adjacent[edge.FromNode] = append(adjacent[edge.FromNode], edge.ToNode)
+		if edge.FromNode == self {
+			name := cargoName(graph.Nodes[edge.ToNode].VersionKey.Name)
+			if kept[name][strings.TrimSpace(edge.Requirement)] {
+				matchedRequirement[name] = true
+			}
+		}
 	}
 	reached := make([]bool, len(graph.Nodes))
 	direct := make([]bool, len(graph.Nodes))
 	reached[self] = true
 	queue := make([]int, 0, len(graph.Nodes))
-	for _, target := range adjacent[self] {
-		if !kept[cargoName(graph.Nodes[target].VersionKey.Name)] {
+	for _, edge := range graph.Edges {
+		if edge.FromNode != self || edge.ToNode < 0 || edge.ToNode >= len(graph.Nodes) {
+			continue
+		}
+		target := edge.ToNode
+		name := cargoName(graph.Nodes[target].VersionKey.Name)
+		if kept[name] == nil || matchedRequirement[name] && !kept[name][strings.TrimSpace(edge.Requirement)] {
 			continue
 		}
 		direct[target] = true
