@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -71,6 +72,375 @@ func TestAnalyzer_JSTSSourceExtensions(t *testing.T) {
 				if _, ok := result[tt.typeOnlyPURL]; ok {
 					t.Errorf("unexpected coupling for type-only import %s", tt.typeOnlyPURL)
 				}
+			}
+		})
+	}
+}
+
+func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
+	const controlPURL = "pkg:npm/p-control@1.0.0"
+	// keptPURL is imported by the real script block of the "not read" cases,
+	// so each also checks that skipping the markup did not drop that block.
+	const keptPURL = "pkg:npm/p-kept@1.0.0"
+	tests := []struct {
+		name        string
+		filename    string
+		code        string
+		purl        string
+		importPath  string
+		wantPresent bool
+		wantFiles   int
+		wantCalls   int
+		wantUnused  bool
+	}{
+		{
+			name:     "Vue script ignores template and style",
+			filename: "App.vue",
+			code:     "<template><div>{{ x }}</div></template><script>import p from 'p-vue'; export default { mounted() { p.run(); } }</script><style>.a{}</style>",
+			purl:     "pkg:npm/p-vue@1.0.0", importPath: "p-vue", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Vue TypeScript setup script",
+			filename: "App.vue",
+			code:     "<script setup lang=\"ts\">import { ref } from 'vue'; import p from 'p-vue-ts'; p.run();</script>",
+			purl:     "pkg:npm/p-vue-ts@1.0.0", importPath: "p-vue-ts", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Vue alias crosses script blocks",
+			filename: "App.vue",
+			code:     "<script lang=\"ts\">import p from 'p-both';</script><script setup lang=\"ts\">p.run();</script>",
+			purl:     "pkg:npm/p-both@1.0.0", importPath: "p-both", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Vue type-only import has no runtime coupling",
+			filename: "App.vue",
+			code:     "<script setup lang=\"ts\">import type { T } from 'p-type-only'; import q from 'p-kept'; const a: T = q.run();</script>",
+			purl:     "pkg:npm/p-type-only@1.0.0", importPath: "p-type-only",
+		},
+		{
+			name:     "Svelte alias crosses module and instance scripts",
+			filename: "Comp.svelte",
+			code:     "<script context=\"module\">import p from 'p-svelte-mod';</script><script>p.run();</script><h1>hi</h1>",
+			purl:     "pkg:npm/p-svelte-mod@1.0.0", importPath: "p-svelte-mod", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Svelte TypeScript require with single-quoted attribute",
+			filename: "Comp.svelte",
+			code:     "<script lang='ts'>const p = require('p-svelte-req'); p.run();</script>",
+			purl:     "pkg:npm/p-svelte-req@1.0.0", importPath: "p-svelte-req", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "uppercase tag with unquoted language",
+			filename: "Upper.vue",
+			code:     "<SCRIPT LANG=ts>import p from 'p-upper'; p.run();</SCRIPT>",
+			purl:     "pkg:npm/p-upper@1.0.0", importPath: "p-upper", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "unclosed script reads to file end",
+			filename: "Open.vue",
+			code:     "<template></template>\n<script>\nimport p from 'p-open';\np.run();\n",
+			purl:     "pkg:npm/p-open@1.0.0", importPath: "p-open", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "script inside an HTML comment is not read",
+			filename: "Commented.vue",
+			code:     "<!-- <script>import p from 'p-commented'; p.run();</script> --><script>import q from 'p-kept'; q.run();</script>",
+			purl:     "pkg:npm/p-commented@1.0.0", importPath: "p-commented",
+		},
+		{
+			name:     "closing tag needs a delimiter after script",
+			filename: "Scripture.vue",
+			code:     "<script>const text = '</scripture>'; import p from 'p-scripture'; p.run();</script>",
+			purl:     "pkg:npm/p-scripture@1.0.0", importPath: "p-scripture", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "line comment does not swallow the next script block",
+			filename: "Adjacent.svelte",
+			code:     "<script context=\"module\">// module comment</script><script>import p from 'p-adjacent'; p.run();</script>",
+			purl:     "pkg:npm/p-adjacent@1.0.0", importPath: "p-adjacent", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "comment opener inside a quoted attribute does not hide scripts",
+			filename: "QuotedAttr.vue",
+			code:     "<template><div title=\"<!--\">text</div></template><script>import p from 'p-quoted-attr'; p.run();</script>",
+			purl:     "pkg:npm/p-quoted-attr@1.0.0", importPath: "p-quoted-attr", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "script text inside a style body is not read",
+			filename: "Styled.vue",
+			code:     "<style>.a::before { content: \"<script>require('p-style')</script>\"; }</style><script>import q from 'p-kept'; q.run();</script>",
+			purl:     "pkg:npm/p-style@1.0.0", importPath: "p-style",
+		},
+		{
+			name:     "adjacent blocks stay separate statements",
+			filename: "Statements.svelte",
+			code:     "<script context=\"module\">import p from 'p-statements'; export const x = p</script><script>[1].forEach(() => {});</script>",
+			purl:     "pkg:npm/p-statements@1.0.0", importPath: "p-statements", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "comment opener inside a Vue interpolation does not hide scripts",
+			filename: "Interp.vue",
+			code:     "<template><p>{{ '<!--' }}</p></template><script>import p from 'p-interp'; p.run();</script>",
+			purl:     "pkg:npm/p-interp@1.0.0", importPath: "p-interp", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "script text inside a Svelte expression is not read",
+			filename: "Expr.svelte",
+			code:     "<script>import q from 'p-kept'; q.run();</script><p>{\"<script>require('p-expr')</script>\"}</p>",
+			purl:     "pkg:npm/p-expr@1.0.0", importPath: "p-expr",
+		},
+		{
+			name:     "comparison inside a Svelte attribute expression does not end the tag",
+			filename: "Attr.svelte",
+			code:     "<p title={1 > 0 ? '<!--' : ''}>t</p><p title={'it\\'s'}>u</p><script>import p from 'p-attr-expr'; p.run();</script>",
+			purl:     "pkg:npm/p-attr-expr@1.0.0", importPath: "p-attr-expr", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "script text inside textarea and title is not read",
+			filename: "Raw.vue",
+			code:     "<template><textarea><script>require('p-raw')</script></textarea><title><script>require('p-raw')</script></title></template><script>import q from 'p-kept'; q.run();</script>",
+			purl:     "pkg:npm/p-raw@1.0.0", importPath: "p-raw",
+		},
+		{
+			name:     "literal brace in Vue template text is not an expression",
+			filename: "LiteralBrace.vue",
+			code:     "<template><p>{</p></template><script>import p from 'p-literal-brace'; p.run();</script><style>/* } */</style>",
+			purl:     "pkg:npm/p-literal-brace@1.0.0", importPath: "p-literal-brace", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Vue interpolation after an unmatched literal brace is still skipped",
+			filename: "BraceThenInterp.vue",
+			code:     "<template><p>{</p><p>{{ '<!--' }}</p></template><script>import p from 'p-brace-interp'; p.run();</script>",
+			purl:     "pkg:npm/p-brace-interp@1.0.0", importPath: "p-brace-interp", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Svelte block closer before a script",
+			filename: "Blocks.svelte",
+			code:     "<ul>{#if ok}<li>yes</li>{/if}</ul>\n<script>\n  import p from 'p-blocks';\n  p.run();\n</script>\n<p><b>ratio</b> {a / b}</p>",
+			purl:     "pkg:npm/p-blocks@1.0.0", importPath: "p-blocks", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "postfix increment then division before a script",
+			filename: "Divide.svelte",
+			code:     "{n++ / 2}<script>import p from 'p-divide'; function f() { const x = 1 / 2; p.run(); }</script>",
+			purl:     "pkg:npm/p-divide@1.0.0", importPath: "p-divide", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Vue upper-case TITLE component with a closing tag in an interpolation",
+			filename: "VueUpperTitle.vue",
+			code:     "<template><TITLE>{{ \"</TITLE><!--\" }}</TITLE></template> <script setup>import TITLE from \"p-vue-upper-title\";</script> <!-- end -->",
+			purl:     "pkg:npm/p-vue-upper-title@1.0.0", importPath: "p-vue-upper-title", wantPresent: true, wantFiles: 1, wantCalls: 0,
+		},
+		{
+			name:     "Vue v-pre textarea followed by a comment holding its closing tag",
+			filename: "VPreComment.vue",
+			code:     "<template><textarea v-pre>{{</textarea><p>}}</p><!-- </textarea>{{ --></template><script setup>import p from \"p-vpre-comment\"; p.run(); const s = \"}}\";</script>",
+			purl:     "pkg:npm/p-vpre-comment@1.0.0", importPath: "p-vpre-comment", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Svelte title string then a regular expression with a brace",
+			filename: "TitleThenRegex.svelte",
+			code:     "<svelte:head><title>{\"</title>{\"}</title></svelte:head><p>{(/[{]/).test(\"\")}</p><script>import p from \"p-title-then-regex\"; p.run(); const r = /[}]/;</script>",
+			purl:     "pkg:npm/p-title-then-regex@1.0.0", importPath: "p-title-then-regex", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Vue v-pre textarea keeps its {{ as text",
+			filename: "VPre.vue",
+			code:     "<template><textarea v-pre>{{</textarea></template>\n<script setup>import p from \"p-vpre\"; p.run(); const s = \"}}\";</script>",
+			purl:     "pkg:npm/p-vpre@1.0.0", importPath: "p-vpre", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Svelte title expression with a brace in a regular expression",
+			filename: "TitleRegex.svelte",
+			code:     "<svelte:head><title>{(/[{]/).test(\"\")}</title></svelte:head>\n<script>import p from \"p-title-regex\";p.run();const r=/[}]/;</script>",
+			purl:     "pkg:npm/p-title-regex@1.0.0", importPath: "p-title-regex", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Svelte nested template literal with a backtick inside ${}",
+			filename: "NestedTemplate.svelte",
+			code:     "{`outer ${`}<!--`}`}\n<script>import p from \"p-nested-template\"; p.run();</script>\n<!-- end -->",
+			purl:     "pkg:npm/p-nested-template@1.0.0", importPath: "p-nested-template", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "template literals nested past the depth bound",
+			filename: "DeepTemplate.svelte",
+			code:     "{" + strings.Repeat("`x${", 65) + "'ok'" + strings.Repeat("}`", 65) + "}\n{'<!--'}\n<script>import p from \"p-deep-template\"; p.run();</script>\n<!-- end -->",
+			purl:     "pkg:npm/p-deep-template@1.0.0", importPath: "p-deep-template", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "brace in a string at the center of 65 nested template literals",
+			filename: "BraceInDeepTemplate65.svelte",
+			code:     "{" + strings.Repeat("`x${", 65) + "'{'" + strings.Repeat("}`", 65) + "}\n<script>import p from \"p-brace-deep\"; p.run();</script>\n{`}`}",
+			purl:     "pkg:npm/p-brace-deep@1.0.0", importPath: "p-brace-deep", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "brace in a string at the center of 10000 nested template literals",
+			filename: "BraceInDeepTemplate10000.svelte",
+			code:     "{" + strings.Repeat("`x${", 10000) + "'{'" + strings.Repeat("}`", 10000) + "}\n<script>import p from \"p-brace-deep\"; p.run();</script>\n{`}`}",
+			purl:     "pkg:npm/p-brace-deep@1.0.0", importPath: "p-brace-deep", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "line comment in ${} ends at CR",
+			filename: "CRComment.svelte",
+			code:     "{`outer ${ // comment\r 'ok' }`}\n{'<!--'}\n<script>import p from \"p-cr-comment\"; p.run();</script>\n<!-- end -->",
+			purl:     "pkg:npm/p-cr-comment@1.0.0", importPath: "p-cr-comment", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "upper-case style closing tag hides its CSS",
+			filename: "UpperStyle.vue",
+			code:     "<style>.a{content:\"<script>require('p-upper-style')</script>\"}</STYLE>\n<script>import q from 'p-kept'; q.run();</script>",
+			purl:     "pkg:npm/p-upper-style@1.0.0", importPath: "p-upper-style",
+		},
+		{
+			name:     "script tag with an unclosed quote does not hide later scripts",
+			filename: "BrokenScript.vue",
+			code:     "<script lang=\"ts</script><script>import p from 'p-broken-script'; p.run()</script>",
+			purl:     "pkg:npm/p-broken-script@1.0.0", importPath: "p-broken-script", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "brace in a comment does not end a Svelte expression",
+			filename: "BlockComment.svelte",
+			code:     "<p>{/* } */ '<!--'}</p>\n<script>import p from 'p-block-comment'; p.run();</script><!-- end -->",
+			purl:     "pkg:npm/p-block-comment@1.0.0", importPath: "p-block-comment", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "tag with no closing bracket does not hide later scripts",
+			filename: "Broken.vue",
+			code:     "<p>x <y don't</p><script>import p from 'p-broken'; p.run()</script>",
+			purl:     "pkg:npm/p-broken@1.0.0", importPath: "p-broken", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Svelte upper-case TITLE is a component, not a raw-text tag",
+			filename: "UpperTitle.svelte",
+			code:     "<TITLE>{\"</TITLE><!--\"}</TITLE>\n<script>import TITLE from \"p-upper-title\";</script>\n<!-- end -->",
+			purl:     "pkg:npm/p-upper-title@1.0.0", importPath: "p-upper-title", wantPresent: true, wantFiles: 1, wantCalls: 0,
+		},
+		{
+			name:     "quoted self-closing marker after a quote with no close",
+			filename: "QuotedSlash.vue",
+			code:     "<x '<script data-x=\"/>\">import p from \"p-quoted-slash\";p.run()</script>",
+			purl:     "pkg:npm/p-quoted-slash@1.0.0", importPath: "p-quoted-slash", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "quoted comment opener after a quote with no close",
+			filename: "QuotedComment.vue",
+			code:     "<x '<div title=\"<!--\"></div><script>import p from \"p-quoted-comment\";p.run()</script><!-- end -->",
+			purl:     "pkg:npm/p-quoted-comment@1.0.0", importPath: "p-quoted-comment", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "markup outside script has no coupling",
+			filename: "Markup.vue",
+			code:     "<template><div>require('p-markup')</div></template><script>import q from 'p-kept'; q.run();</script>",
+			purl:     "pkg:npm/p-markup@1.0.0", importPath: "p-markup",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			importPaths := map[string][]string{tt.purl: {tt.importPath}}
+			if !tt.wantPresent {
+				if err := os.WriteFile(filepath.Join(dir, "control.js"), []byte("const p = require('p-control'); p.run();"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				importPaths[controlPURL] = []string{"p-control"}
+				importPaths[keptPURL] = []string{"p-kept"}
+			}
+
+			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, importPaths)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !tt.wantPresent {
+				if _, ok := result[tt.purl]; ok {
+					t.Errorf("unexpected coupling for %s", tt.purl)
+				}
+				control, ok := result[controlPURL]
+				if !ok {
+					t.Fatalf("missing control coupling for %s", controlPURL)
+				}
+				if control.ImportFileCount != 1 || control.CallSiteCount != 1 || control.IsUnused {
+					t.Errorf("control coupling = (files %d, calls %d, unused %v), want (1, 1, false)", control.ImportFileCount, control.CallSiteCount, control.IsUnused)
+				}
+				kept, ok := result[keptPURL]
+				if !ok {
+					t.Fatalf("missing coupling for the real script's %s", keptPURL)
+				}
+				if kept.ImportFileCount != 1 || kept.CallSiteCount != 1 || kept.IsUnused {
+					t.Errorf("kept coupling = (files %d, calls %d, unused %v), want (1, 1, false)", kept.ImportFileCount, kept.CallSiteCount, kept.IsUnused)
+				}
+				return
+			}
+			coupling, ok := result[tt.purl]
+			if !ok {
+				t.Fatalf("missing coupling for %s", tt.purl)
+			}
+			if coupling.ImportFileCount != tt.wantFiles {
+				t.Errorf("ImportFileCount = %d, want %d", coupling.ImportFileCount, tt.wantFiles)
+			}
+			if coupling.CallSiteCount != tt.wantCalls {
+				t.Errorf("CallSiteCount = %d, want %d", coupling.CallSiteCount, tt.wantCalls)
+			}
+			if coupling.IsUnused != tt.wantUnused {
+				t.Errorf("IsUnused = %v, want %v", coupling.IsUnused, tt.wantUnused)
+			}
+		})
+	}
+}
+
+// TestAnalyzer_SFCKnownLimitation pins documented limitations on valid
+// input, where a used dependency is reported unused. See docs/diet.md.
+func TestAnalyzer_SFCKnownLimitation(t *testing.T) {
+	tests := []struct {
+		name, filename, code, purl, importPath string
+	}{
+		{
+			// The title body ends at the `</title>` inside the string, and the
+			// `<!--` after it runs to the `-->` after the script.
+			name:       "closing tag inside a title expression",
+			filename:   "SvelteHeadTitle.svelte",
+			code:       "<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>import p from \"p-head-title\";p.run()</script> <!-- end -->",
+			purl:       "pkg:npm/p-head-title@1.0.0",
+			importPath: "p-head-title",
+		},
+		{
+			// A `"` inside an expression in a quoted Svelte attribute ends the
+			// attribute; the `<!--` after it runs to the `-->` after the script.
+			name:       "Svelte quoted attribute holding an expression with a quote",
+			filename:   "QuotedExprAttr.svelte",
+			code:       "<div title=\"{ '\"> <!--' }\">x</div>\n<script>import p from \"p-quoted-expr-attr\"; p.run();</script>\n<!-- end -->",
+			purl:       "pkg:npm/p-quoted-expr-attr@1.0.0",
+			importPath: "p-quoted-expr-attr",
+		},
+		{
+			// v-pre is not tracked: the `{{` is read as an interpolation that
+			// ends at the `}}` inside the script.
+			name:       "Vue v-pre {{ before a script holding }}",
+			filename:   "VPre.vue",
+			code:       "<template><p v-pre>{{</p></template>\n<script setup>import p from \"p-vpre-limit\"; p.run(); const s = \"}}\";</script>",
+			purl:       "pkg:npm/p-vpre-limit@1.0.0",
+			importPath: "p-vpre-limit",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, map[string][]string{tt.purl: {tt.importPath}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := result[tt.purl]; ok {
+				t.Errorf("coupling found for %s; the limitation is gone, so update docs/diet.md and this test", tt.purl)
 			}
 		})
 	}

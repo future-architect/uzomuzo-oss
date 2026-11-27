@@ -82,6 +82,89 @@ func FuzzAnalyzeTypeScriptImportRequire(f *testing.F) {
 	})
 }
 
+// vueSvelteSeeds are component snippets shared by the two Vue/Svelte fuzz
+// targets: script blocks plus the markup forms the scanner skips.
+var vueSvelteSeeds = []string{
+	"<script>import p from 'pkg'; p.run();</script>",
+	"<script lang='ts'>const p = require('pkg'); p.run();</script>",
+	"<SCRIPT LANG=tsx>import p from 'pkg'; p.run();</SCRIPT>",
+	"<template>require('pkg')</template><script>import p from 'pkg';",
+	"<script setup lang=\"typescript\">import type { T } from 'pkg';</script>",
+	"<p>{/[}]/.test('<!--')}</p><script>import p from 'pkg';</script>",
+	"<p>{{ '<!--' }}</p><script>p()</script>",
+	"<!-- <script>x</script> --><script>y</script>",
+	"<style>a{content:\"<script>\"}</style><script>y</script>",
+	"<textarea><script>x</script></textarea>\r\n<script>y</script>",
+	"\u3042<p title={1 > 0 ? '<!--' : ''}>{'it\\'s'}</p><script>y</script>",
+	"<ul>{#if a}b{/if}</ul><script>y</script>",
+	"{n++ / 2}{'<script>x</script>'}<script>y</script>",
+	"<STYLE>a</STYLE><script x='<script>y</script>",
+	"{",
+	"{{",
+	"<!--",
+	"<style>",
+	"<textarea>",
+	"",
+}
+
+// FuzzAnalyzeVueSvelteScriptBlocks checks that malformed component files do
+// not make source coupling analysis panic or hang.
+func FuzzAnalyzeVueSvelteScriptBlocks(f *testing.F) {
+	for _, seed := range vueSvelteSeeds {
+		f.Add(seed)
+	}
+
+	analyzer := NewAnalyzer()
+	f.Cleanup(analyzer.Close)
+	importPaths := map[string][]string{"pkg:npm/pkg@1.0.0": {"pkg"}}
+
+	f.Fuzz(func(t *testing.T, src string) {
+		dir := t.TempDir()
+		for _, filename := range []string{"App.vue", "Comp.svelte"} {
+			if err := os.WriteFile(filepath.Join(dir, filename), []byte(src), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		_, _ = analyzer.AnalyzeCoupling(context.Background(), dir, importPaths) // only panics and hangs matter here
+	})
+}
+
+// FuzzScriptContents checks the masking contract of scriptContents on
+// arbitrary input, for both component kinds: the output has the input's
+// length and keeps every CR and LF; any other byte is copied, or becomes a
+// space, or becomes the "\n;" that starts a masked closing tag (so an added
+// newline sits on a '<' and an added semicolon on a '/'); and with no script
+// block found, nothing is copied at all.
+func FuzzScriptContents(f *testing.F) {
+	for _, seed := range vueSvelteSeeds {
+		f.Add(seed, true)
+		f.Add(seed, false)
+	}
+	f.Fuzz(func(t *testing.T, src string, vue bool) {
+		got, _, found := scriptContents([]byte(src), vue)
+		if len(got) != len(src) {
+			t.Fatalf("len = %d, want %d", len(got), len(src))
+		}
+		for i := range got {
+			in, out := src[i], got[i]
+			switch {
+			case in == '\n' || in == '\r':
+				if out != in {
+					t.Fatalf("byte %d: line break %q became %q", i, in, out)
+				}
+			case out == in || out == ' ':
+			case out == '\n' && in == '<' && i+1 < len(got) && got[i+1] == ';':
+			case out == ';' && in == '/' && i > 0 && got[i-1] == '\n' && src[i-1] == '<':
+			default:
+				t.Fatalf("byte %d: %q became %q, want a copy, a space, or the \\n; of a closing tag", i, in, out)
+			}
+			if !found && out != ' ' && out != '\n' && out != '\r' {
+				t.Fatalf("byte %d: %q kept although no script block was found", i, out)
+			}
+		}
+	})
+}
+
 // FuzzAnalyzeGoPackageNames feeds two arbitrary Go files of one directory
 // through the coupling analysis, including the package-name inference of
 // #551 and its directory scan, to check that malformed input does not panic

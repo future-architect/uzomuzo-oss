@@ -265,6 +265,60 @@ func TestComputeSummary_EasyWinsWithNewScoring(t *testing.T) {
 	}
 }
 
+func TestComputeSummary_TypesPackagesAreNotEasyWins(t *testing.T) {
+	qualifying := ImpactScore{Difficulty: DifficultyTrivial, PriorityScore: 0.65}
+	tests := []struct {
+		name          string
+		entries       []DietEntry
+		want          int
+		wantUnused    int
+		wantRemovable int
+	}{
+		{
+			name: "npm type definitions excluded while other npm packages count",
+			entries: []DietEntry{
+				{Name: "foo", Ecosystem: "npm", Relation: RelationDirect, Coupling: CouplingAnalysis{IsUnused: false}, Scores: qualifying},
+				{Name: "@types/foo", Ecosystem: "npm", Relation: RelationDirect, Coupling: CouplingAnalysis{IsUnused: true}, Scores: qualifying},
+				{Name: "bar", Ecosystem: "npm", Relation: RelationDirect, Coupling: CouplingAnalysis{IsUnused: true}, Scores: qualifying},
+			},
+			// @types/foo is left out of Quick wins only; it is still unused
+			// and still counted as estimated removable.
+			want: 2, wantUnused: 2, wantRemovable: 3,
+		},
+		{
+			name: "same prefix in another ecosystem still counts",
+			entries: []DietEntry{
+				{Name: "@types/foo", Ecosystem: "golang", Relation: RelationDirect, Coupling: CouplingAnalysis{IsUnused: true}, Scores: qualifying},
+			},
+			want: 1, wantUnused: 1, wantRemovable: 1,
+		},
+		{
+			name: "npm names that only look like type definitions still count",
+			entries: []DietEntry{
+				{Name: "@typescript-eslint/parser", Ecosystem: "npm", Relation: RelationDirect, Coupling: CouplingAnalysis{IsUnused: true}, Scores: qualifying},
+				{Name: "@types-x/y", Ecosystem: "npm", Relation: RelationDirect, Coupling: CouplingAnalysis{IsUnused: true}, Scores: qualifying},
+				{Name: "types/foo", Ecosystem: "npm", Relation: RelationDirect, Coupling: CouplingAnalysis{IsUnused: true}, Scores: qualifying},
+			},
+			want: 3, wantUnused: 3, wantRemovable: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summary := ComputeSummary(tt.entries, 0)
+			if summary.EasyWins != tt.want {
+				t.Errorf("EasyWins = %d, want %d", summary.EasyWins, tt.want)
+			}
+			if summary.UnusedDirect != tt.wantUnused {
+				t.Errorf("UnusedDirect = %d, want %d", summary.UnusedDirect, tt.wantUnused)
+			}
+			if summary.EstimatedRemovable != tt.wantRemovable {
+				t.Errorf("EstimatedRemovable = %d, want %d", summary.EstimatedRemovable, tt.wantRemovable)
+			}
+		})
+	}
+}
+
 func TestComputeImpactScore_LifecycleScoreFloor(t *testing.T) {
 	tests := []struct {
 		name           string

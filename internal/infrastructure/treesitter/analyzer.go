@@ -426,15 +426,10 @@ func (a *Analyzer) analyzeFile(
 
 	ext := filepath.Ext(path)
 	lid, ok := extToLang(ext)
-	if !ok {
+	isSFC := ext == ".vue" || ext == ".svelte"
+	if !ok && !isSFC {
 		return
 	}
-
-	cfg, ok := a.configs[lid]
-	if !ok {
-		return
-	}
-	cfg.ensureCompiled()
 
 	var src []byte
 	if importsOnly {
@@ -447,6 +442,17 @@ func (a *Analyzer) analyzeFile(
 		slog.Debug("failed to read file", "path", path, "error", err)
 		return
 	}
+	if isSFC {
+		src, lid, ok = scriptContents(src, ext == ".vue")
+		if !ok {
+			return
+		}
+	}
+	cfg, ok := a.configs[lid]
+	if !ok {
+		return
+	}
+	cfg.ensureCompiled()
 
 	if err := parser.SetLanguage(cfg.language); err != nil {
 		slog.Debug("failed to set language", "path", path, "lang", lid, "error", err)

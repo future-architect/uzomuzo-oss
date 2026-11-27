@@ -1094,3 +1094,79 @@ func TestRun_RuntimeDepsNotFlaggedAsUnused(t *testing.T) {
 		})
 	}
 }
+
+// TestRun_TypesPackagesAreNotEasyWins checks, through Run and the PURL
+// parsing in buildEntries, that an npm @types package is left out of Quick
+// wins while the other counts still include it.
+func TestRun_TypesPackagesAreNotEasyWins(t *testing.T) {
+	t.Parallel()
+
+	const fooPURL = "pkg:npm/foo@1.0.0"
+	const barPURL = "pkg:npm/bar@1.0.0"
+	// An unused dependency with graph impact 1.0 and the default health
+	// risk 0.5 scores 0.3*1.0 + 0.3*0.5 + 0.2.
+	const wantUnusedScore = 0.65
+	tests := []struct {
+		name      string
+		typesPURL string
+	}{
+		{name: "encoded scope", typesPURL: "pkg:npm/%40types/foo@1.0.0"},
+		{name: "literal scope", typesPURL: "pkg:npm/@types/foo@1.0.0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			graphResult := &domaindiet.GraphResult{
+				DirectDeps: []string{fooPURL, tt.typesPURL, barPURL},
+				Metrics: map[string]*domaindiet.GraphMetrics{
+					fooPURL:      {ExclusiveTransitiveCount: 0},
+					tt.typesPURL: {ExclusiveTransitiveCount: 1},
+					barPURL:      {ExclusiveTransitiveCount: 1},
+				},
+			}
+			// Only foo is imported; @types/foo and bar have no coupling entry.
+			sourceResults := map[string]*domaindiet.CouplingAnalysis{
+				fooPURL: {ImportFileCount: 1, CallSiteCount: 1, ImportFiles: []string{"src/index.ts"}},
+			}
+			svc := NewService(&stubGraphAnalyzer{result: graphResult}, &stubSourceAnalyzer{result: sourceResults}, nil, nil)
+			plan, err := svc.Run(context.Background(), DietInput{SBOMData: []byte("fake-sbom"), SourceRoot: "/tmp/src"})
+			if err != nil {
+				t.Fatalf("Run() error: %v", err)
+			}
+
+			if plan.Summary.EasyWins != 1 {
+				t.Errorf("EasyWins = %d, want 1 (bar only)", plan.Summary.EasyWins)
+			}
+			if plan.Summary.UnusedDirect != 2 {
+				t.Errorf("UnusedDirect = %d, want 2 (@types/foo and bar)", plan.Summary.UnusedDirect)
+			}
+			if plan.Summary.EstimatedRemovable != 2 {
+				t.Errorf("EstimatedRemovable = %d, want 2 (@types/foo and bar)", plan.Summary.EstimatedRemovable)
+			}
+			entries := make(map[string]domaindiet.DietEntry, len(plan.Entries))
+			for _, e := range plan.Entries {
+				entries[e.PURL] = e
+			}
+			if len(entries) != 3 {
+				t.Fatalf("entries = %d, want 3", len(entries))
+			}
+			for _, purl := range []string{tt.typesPURL, barPURL} {
+				e, ok := entries[purl]
+				if !ok {
+					t.Fatalf("missing entry for %s", purl)
+				}
+				if !e.Coupling.IsUnused {
+					t.Errorf("%s IsUnused = false, want true", purl)
+				}
+				if math.Abs(e.Scores.PriorityScore-wantUnusedScore) > 1e-9 {
+					t.Errorf("%s PriorityScore = %v, want %v", purl, e.Scores.PriorityScore, wantUnusedScore)
+				}
+			}
+			if e := entries[tt.typesPURL]; e.Name != "@types/foo" || e.Ecosystem != "npm" {
+				t.Errorf("type definitions entry = (%q, %q), want (@types/foo, npm)", e.Name, e.Ecosystem)
+			}
+		})
+	}
+}
