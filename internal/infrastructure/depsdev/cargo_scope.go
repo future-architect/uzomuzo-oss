@@ -37,6 +37,11 @@ func enabledCargoDependencies(cargo *CargoRequirementsData) map[string]bool {
 			}
 		}
 	}
+	for name := range optional {
+		if _, exists := features[name]; !exists && !explicitDependencies[name] {
+			features[name] = []string{"dep:" + name}
+		}
+	}
 	enabled := make(map[string]bool)
 	visited := make(map[string]bool)
 	var visit func(string)
@@ -62,8 +67,6 @@ func enabledCargoDependencies(cargo *CargoRequirementsData) map[string]bool {
 			default:
 				if _, exists := features[token]; exists {
 					visit(token)
-				} else if optional[token] && !explicitDependencies[token] {
-					enabled[token] = true
 				}
 			}
 		}
@@ -79,7 +82,7 @@ func enabledCargoDependencies(cargo *CargoRequirementsData) map[string]bool {
 // requirements cannot be matched to it, so an uncertain reduction never hides
 // advisories. See ADR-0038.
 func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResponse) *DependenciesResponse {
-	if requirements == nil || requirements.Cargo == nil || graph == nil {
+	if requirements == nil || requirements.Cargo == nil || graph == nil || len(requirements.Cargo.Dependencies) == 0 {
 		return graph
 	}
 	self := -1
@@ -95,7 +98,13 @@ func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResp
 
 	enabled := enabledCargoDependencies(requirements.Cargo)
 	kept := make(map[string]map[string]bool)
+	declared := make(map[string]bool)
+	var keptDeclarations []CargoRequirementDependency
 	for _, dep := range requirements.Cargo.Dependencies {
+		declared[cargoName(dep.Name)] = true
+		if dep.PackageAlias != "" {
+			declared[cargoName(dep.PackageAlias)] = true
+		}
 		if isCargoDevDependency(dep) {
 			continue
 		}
@@ -106,6 +115,7 @@ func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResp
 		if dep.Optional && !enabled[localName] {
 			continue
 		}
+		keptDeclarations = append(keptDeclarations, dep)
 		requirement := strings.TrimSpace(dep.Requirement)
 		name := cargoName(dep.Name)
 		if kept[name] == nil {
@@ -120,12 +130,9 @@ func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResp
 			kept[name][requirement] = true
 		}
 	}
-	if len(kept) == 0 {
-		return &DependenciesResponse{Nodes: []DependencyNode{graph.Nodes[self]}}
-	}
-
 	adjacent := make([][]int, len(graph.Nodes))
 	matchedRequirements := make(map[string]map[string]bool)
+	directNames := make(map[string]bool)
 	for _, edge := range graph.Edges {
 		if edge.FromNode < 0 || edge.FromNode >= len(graph.Nodes) || edge.ToNode < 0 || edge.ToNode >= len(graph.Nodes) {
 			continue
@@ -133,6 +140,10 @@ func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResp
 		adjacent[edge.FromNode] = append(adjacent[edge.FromNode], edge.ToNode)
 		if edge.FromNode == self {
 			name := cargoName(graph.Nodes[edge.ToNode].VersionKey.Name)
+			if !declared[name] {
+				return graph
+			}
+			directNames[name] = true
 			requirement := strings.TrimSpace(edge.Requirement)
 			if kept[name][requirement] {
 				if matchedRequirements[name] == nil {
@@ -142,11 +153,20 @@ func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResp
 			}
 		}
 	}
+	for _, dep := range keptDeclarations {
+		if !directNames[cargoName(dep.Name)] && (dep.PackageAlias == "" || !directNames[cargoName(dep.PackageAlias)]) {
+			return graph
+		}
+	}
+	if len(kept) == 0 {
+		return &DependenciesResponse{Nodes: []DependencyNode{graph.Nodes[self]}}
+	}
 	reached := make([]bool, len(graph.Nodes))
 	direct := make([]bool, len(graph.Nodes))
+	accepted := make([]bool, len(graph.Edges))
 	reached[self] = true
 	queue := make([]int, 0, len(graph.Nodes))
-	for _, edge := range graph.Edges {
+	for edgeIndex, edge := range graph.Edges {
 		if edge.FromNode != self || edge.ToNode < 0 || edge.ToNode >= len(graph.Nodes) {
 			continue
 		}
@@ -155,6 +175,7 @@ func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResp
 		if kept[name] == nil || len(matchedRequirements[name]) == len(kept[name]) && !kept[name][strings.TrimSpace(edge.Requirement)] {
 			continue
 		}
+		accepted[edgeIndex] = true
 		direct[target] = true
 		if !reached[target] {
 			reached[target] = true
@@ -189,11 +210,11 @@ func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResp
 		}
 		result.Nodes = append(result.Nodes, node)
 	}
-	for _, edge := range graph.Edges {
+	for edgeIndex, edge := range graph.Edges {
 		if edge.FromNode < 0 || edge.FromNode >= len(reached) || edge.ToNode < 0 || edge.ToNode >= len(reached) || !reached[edge.FromNode] || !reached[edge.ToNode] {
 			continue
 		}
-		if edge.FromNode == self && !direct[edge.ToNode] {
+		if edge.FromNode == self && !accepted[edgeIndex] {
 			continue
 		}
 		edge.FromNode = index[edge.FromNode]

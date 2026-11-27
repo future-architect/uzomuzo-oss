@@ -9,7 +9,7 @@ deps.dev's cargo `:dependencies` graph includes dev dependencies and optional de
 
 ## Decision
 
-For cargo PURLs, fetch the matching version's `:requirements` response and retain declared normal and build dependencies. An optional dependency is retained only when the crate's `default` feature enables it, including through nested features, explicit `dep:x`, implicit dependency names, and `x/feat`; weak `x?/feat` does not enable it. Follow the retained direct dependencies through the graph to keep their transitive nodes. This behavior is on by default with no flag. If requirements are unavailable or cannot be matched to the graph, keep the full graph so advisories are not hidden by an uncertain reduction.
+For cargo PURLs, fetch the matching version's `:requirements` response and retain declared normal and build dependencies. An optional dependency is retained only when the crate's `default` feature enables it, including through nested features, explicit `dep:x`, implicit dependency names, and `x/feat`; weak `x?/feat` does not enable it. Follow the retained direct dependencies through the graph to keep their transitive nodes. This behavior is on by default with no flag. If requirements are missing or do not fully match the graph, keep the full graph so advisories are not hidden by an uncertain reduction.
 
 ## Limits
 

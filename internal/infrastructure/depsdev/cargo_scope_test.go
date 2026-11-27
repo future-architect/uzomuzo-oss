@@ -173,3 +173,72 @@ func TestRestrictCargoGraph_UnmatchedRequirementKeepsOriginal(t *testing.T) {
 		t.Error("unmatched requirement should preserve original graph")
 	}
 }
+
+func TestRestrictCargoGraph_ImplicitDefault(t *testing.T) {
+	graph := &DependenciesResponse{
+		Nodes: []DependencyNode{{Relation: "SELF"}, {VersionKey: DependencyVersionKey{Name: "foo"}}},
+		Edges: []DependencyEdge{{FromNode: 0, ToNode: 1}},
+	}
+	dep := CargoRequirementDependency{Name: "foo", PackageAlias: "default", Optional: true}
+	for _, tc := range []struct {
+		name     string
+		features []CargoFeature
+		wantFoo  bool
+	}{
+		{name: "implicit default enables dependency", wantFoo: true},
+		{name: "dep token suppresses implicit default", features: []CargoFeature{{Name: "extra", Implies: []string{"dep:default"}}}},
+		{name: "explicit default enables dependency", features: []CargoFeature{{Name: "default", Implies: []string{"dep:default"}}}, wantFoo: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := restrictCargoGraph(&CargoRequirements{Cargo: &CargoRequirementsData{Dependencies: []CargoRequirementDependency{dep}, Features: tc.features}}, graph)
+			if gotFoo := len(got.Nodes) == 2; gotFoo != tc.wantFoo {
+				t.Errorf("foo present = %v, want %v", gotFoo, tc.wantFoo)
+			}
+		})
+	}
+}
+
+func TestRestrictCargoGraph_IncompleteDeclarationsKeepOriginal(t *testing.T) {
+	graph := &DependenciesResponse{
+		Nodes: []DependencyNode{{Relation: "SELF"}, {VersionKey: DependencyVersionKey{Name: "a"}}, {VersionKey: DependencyVersionKey{Name: "actual-b"}}},
+		Edges: []DependencyEdge{{FromNode: 0, ToNode: 1}, {FromNode: 0, ToNode: 2}},
+	}
+	for _, tc := range []struct {
+		name string
+		deps []CargoRequirementDependency
+	}{
+		{name: "missing declarations"},
+		{name: "undeclared graph edge", deps: []CargoRequirementDependency{{Name: "a"}, {Name: "expected-b"}}},
+		{name: "kept declaration without edge", deps: []CargoRequirementDependency{{Name: "a"}, {Name: "actual-b", Kind: "dev"}, {Name: "missing"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := restrictCargoGraph(&CargoRequirements{Cargo: &CargoRequirementsData{Dependencies: tc.deps}}, graph)
+			if got != graph {
+				t.Error("incomplete declarations should preserve original graph")
+			}
+		})
+	}
+}
+
+func TestRestrictCargoGraph_DevOnlyMatchingGraphKeepsSelf(t *testing.T) {
+	graph := &DependenciesResponse{
+		Nodes: []DependencyNode{{Relation: "SELF"}, {VersionKey: DependencyVersionKey{Name: "x"}}},
+		Edges: []DependencyEdge{{FromNode: 0, ToNode: 1}},
+	}
+	got := restrictCargoGraph(&CargoRequirements{Cargo: &CargoRequirementsData{Dependencies: []CargoRequirementDependency{{Name: "x", Kind: "dev"}}}}, graph)
+	if got == graph || len(got.Nodes) != 1 || got.Nodes[0].Relation != "SELF" || len(got.Edges) != 0 {
+		t.Errorf("dev-only graph = %+v, want only SELF", got)
+	}
+}
+
+func TestRestrictCargoGraph_RebuiltEdgesFollowSelection(t *testing.T) {
+	graph := &DependenciesResponse{
+		Nodes: []DependencyNode{{Relation: "SELF"}, {VersionKey: DependencyVersionKey{Name: "x", Version: "1.0.0"}}},
+		Edges: []DependencyEdge{{FromNode: 0, ToNode: 1, Requirement: "^1"}, {FromNode: 0, ToNode: 1, Requirement: ">=1"}},
+	}
+	requirements := &CargoRequirements{Cargo: &CargoRequirementsData{Dependencies: []CargoRequirementDependency{{Name: "x", Requirement: "^1"}, {Name: "x", Kind: "dev", Requirement: ">=1"}}}}
+	got := restrictCargoGraph(requirements, graph)
+	if got == graph || len(got.Edges) != 1 || got.Edges[0].Requirement != "^1" {
+		t.Errorf("edges = %+v, want only ^1", got.Edges)
+	}
+}
