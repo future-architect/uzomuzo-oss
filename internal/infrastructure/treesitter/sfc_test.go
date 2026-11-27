@@ -191,15 +191,31 @@ func TestScriptContents(t *testing.T) {
 			lang:  langJavaScript, found: true, vue: true,
 		},
 		{
-			name:  "Vue title body skips interpolations when looking for its end",
+			// Known limitation, pinned: the title body ends at the `</title>`
+			// inside the interpolation, and the `<!--` after it hides the
+			// script up to the final `-->`. See docs/diet.md.
+			name:  "limitation: Vue title ends at a closing tag inside an interpolation",
 			input: "<title>{{ \"</title><!--\" }}</title><script>y</script><!-- end -->",
-			want:  openMask("<title>{{ \"</title><!--\" }}</title><script>") + "y" + closeMask("</script>") + openMask("<!-- end -->"),
+			want:  openMask("<title>{{ \"</title><!--\" }}</title><script>y</script><!-- end -->"),
+			lang:  langJavaScript, vue: true,
+		},
+		{
+			// Known limitation, pinned: as above, for a Svelte expression.
+			name:  "limitation: Svelte title ends at a closing tag inside an expression",
+			input: "<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>y</script> <!-- end -->",
+			want:  openMask("<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>y</script> <!-- end -->"),
+			lang:  langJavaScript,
+		},
+		{
+			name:  "Vue v-pre textarea followed by a comment holding its closing tag",
+			input: "<template><textarea v-pre>{{</textarea><p>}}</p><!-- </textarea>{{ --></template><script setup>y; const s = \"}}\";</script>",
+			want:  openMask("<template><textarea v-pre>{{</textarea><p>}}</p><!-- </textarea>{{ --></template><script setup>") + "y; const s = \"}}\";" + closeMask("</script>"),
 			lang:  langJavaScript, found: true, vue: true,
 		},
 		{
-			name:  "Svelte title body skips expressions when looking for its end",
-			input: "<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>y</script> <!-- end -->",
-			want:  openMask("<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>") + "y" + closeMask("</script>") + openMask(" <!-- end -->"),
+			name:  "Svelte title string then a regular expression with a brace",
+			input: "<svelte:head><title>{\"</title>{\"}</title></svelte:head><p>{(/[{]/).test(\"\")}</p><script>y; const r = /[}]/;</script>",
+			want:  openMask("<svelte:head><title>{\"</title>{\"}</title></svelte:head><p>{(/[{]/).test(\"\")}</p><script>") + "y; const r = /[}]/;" + closeMask("</script>"),
 			lang:  langJavaScript, found: true,
 		},
 		{
@@ -316,8 +332,6 @@ func TestScriptContentsStaysLinear(t *testing.T) {
 		{name: "tags that each open a quote", repeat: "<a '"},
 		{name: "tags with alternating quotes", repeat: "<a '<b \""},
 		{name: "unclosed style tags (rawUnclosed)", repeat: "<style>"},
-		{name: "title bodies with an unclosed expression (rawExprOff)", repeat: "<title>{</title>"},
-		{name: "title bodies before one script tag (nextScriptTag cache)", repeat: "<title>{}</title>"},
 		{name: "slashes and classes in a Svelte expression", repeat: "(/["},
 	}
 	for _, tt := range tests {

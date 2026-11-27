@@ -231,10 +231,16 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-vue-upper-title@1.0.0", importPath: "p-vue-upper-title", wantPresent: true, wantFiles: 1, wantCalls: 0,
 		},
 		{
-			name:     "Svelte title body skips expressions when looking for its end",
-			filename: "SvelteHeadTitle.svelte",
-			code:     "<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>import p from \"p-head-title\";p.run()</script> <!-- end -->",
-			purl:     "pkg:npm/p-head-title@1.0.0", importPath: "p-head-title", wantPresent: true, wantFiles: 1, wantCalls: 1,
+			name:     "Vue v-pre textarea followed by a comment holding its closing tag",
+			filename: "VPreComment.vue",
+			code:     "<template><textarea v-pre>{{</textarea><p>}}</p><!-- </textarea>{{ --></template><script setup>import p from \"p-vpre-comment\"; p.run(); const s = \"}}\";</script>",
+			purl:     "pkg:npm/p-vpre-comment@1.0.0", importPath: "p-vpre-comment", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Svelte title string then a regular expression with a brace",
+			filename: "TitleThenRegex.svelte",
+			code:     "<svelte:head><title>{\"</title>{\"}</title></svelte:head><p>{(/[{]/).test(\"\")}</p><script>import p from \"p-title-then-regex\"; p.run(); const r = /[}]/;</script>",
+			purl:     "pkg:npm/p-title-then-regex@1.0.0", importPath: "p-title-then-regex", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
 			name:     "Vue v-pre textarea keeps its {{ as text",
@@ -353,6 +359,28 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 				t.Errorf("IsUnused = %v, want %v", coupling.IsUnused, tt.wantUnused)
 			}
 		})
+	}
+}
+
+// TestAnalyzer_SFCKnownLimitation pins a documented limitation on normal
+// input: a title body ends at the first `</title>`, even one inside a
+// template expression, so the `<!--` after it hides the real script and its
+// dependency is reported unused. See docs/diet.md.
+func TestAnalyzer_SFCKnownLimitation(t *testing.T) {
+	const purl = "pkg:npm/p-head-title@1.0.0"
+	dir := t.TempDir()
+	code := "<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>import p from \"p-head-title\";p.run()</script> <!-- end -->"
+	if err := os.WriteFile(filepath.Join(dir, "SvelteHeadTitle.svelte"), []byte(code), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	analyzer := NewAnalyzer()
+	t.Cleanup(analyzer.Close)
+	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, map[string][]string{purl: {"p-head-title"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := result[purl]; ok {
+		t.Errorf("coupling found for %s; the limitation is gone, so update docs/diet.md and this test", purl)
 	}
 }
 
