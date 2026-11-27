@@ -106,9 +106,9 @@ func scriptContents(src []byte, vue bool) ([]byte, langID, bool) {
 // rawTextTags are elements whose body is not scanned for `<script>` or `<!--`.
 // The opening tag counts only in lower case, as the Vue and Svelte compilers
 // treat any other spelling (`<Title>`, `<TITLE>`) as a component; the closing
-// tag is matched in any case, as HTML does. In a title or textarea body,
-// template expressions (`{{ }}` in Vue, `{ }` in Svelte) are skipped while
-// looking for the closing tag, so `{"</title>"}` does not end the body.
+// tag is matched in any case, as HTML does. A title or textarea body may
+// hold template expressions; see rawEndSkippingExpressions for how a closing
+// tag written inside one, `{"</title>"}`, is handled.
 var rawTextTags = [...]string{"style", "textarea", "title"}
 
 // markupScanner reads component markup around script blocks.
@@ -135,6 +135,15 @@ type markupScanner struct {
 	// braces are plain text; retrying from every later `{` would make a file
 	// of unmatched braces take quadratic time.
 	bracesUnbalanced bool
+	// rawExprOff is set once rawEndSkippingExpressions has failed; later
+	// title and textarea bodies are then read without it, so a failing
+	// look-ahead is not repeated for each of them.
+	rawExprOff bool
+	// scriptFrom and scriptAt cache nextScriptTag: the first `<script` tag
+	// at or after scriptFrom starts at scriptAt (len(src) if none). Valid
+	// when scriptCached is set.
+	scriptCached         bool
+	scriptFrom, scriptAt int
 }
 
 // skipMarkupTag returns where scanning resumes after the non-script markup
@@ -156,14 +165,14 @@ func (sc *markupScanner) skipMarkupTag(at int) int {
 		if selfClosing || sc.rawUnclosed[k] {
 			return end + 1
 		}
-		for j := end + 1; j+2+len(name) <= len(src); j++ {
-			// Style bodies hold CSS, where braces are not expressions.
-			if src[j] == '{' && name != "style" {
-				if next, ok := sc.skipExpression(j); ok {
-					j = next - 1
-				}
-				continue
+		// Style bodies hold CSS, where braces are not expressions.
+		if name != "style" && !sc.rawExprOff {
+			if next := sc.rawEndSkippingExpressions(end+1, name); next >= 0 {
+				return next
 			}
+			sc.rawExprOff = true
+		}
+		for j := end + 1; j+2+len(name) <= len(src); j++ {
 			if src[j] == '<' && src[j+1] == '/' && hasTagName(src, j+2, name, true) {
 				return j + 2 + len(name)
 			}
@@ -183,6 +192,72 @@ func (sc *markupScanner) skipMarkupTag(at int) int {
 		return at + 1
 	}
 	return end + 1
+}
+
+// rawEndSkippingExpressions returns the index after the closing tag of the
+// title or textarea body starting at src[body], skipping template
+// expressions on the way, so the `</title>` in `{"</title>"}` does not end
+// the body. It returns -1 unless the closing tag lies before the next
+// `<script` tag and every expression it skipped also closes before that tag.
+// The caller then uses the first closing tag, ignoring expressions, as when
+// no expression was read here. This keeps a misread expression, such as
+// `{{` under Vue's v-pre or a `{` inside a Svelte regular expression, from
+// carrying the body into a script block. It changes no scanner flags, so a
+// failed look-ahead leaves the rest of the scan as it was.
+func (sc *markupScanner) rawEndSkippingExpressions(body int, name string) int {
+	src := sc.src
+	limit := sc.nextScriptTag(body)
+	for j := body; j < limit; j++ {
+		if src[j] == '{' {
+			next := sc.expressionEnd(j, limit)
+			if next < 0 {
+				return -1
+			}
+			j = next - 1
+			continue
+		}
+		if src[j] == '<' && j+2+len(name) <= len(src) && src[j+1] == '/' && hasTagName(src, j+2, name, true) {
+			return j + 2 + len(name)
+		}
+	}
+	return -1
+}
+
+// expressionEnd returns the index after the template expression starting at
+// src[at] == '{' that closes before src[limit], at+1 when src[at] starts no
+// expression (a single `{` in Vue), or -1. It sets no scanner flags.
+func (sc *markupScanner) expressionEnd(at, limit int) int {
+	src := sc.src[:limit]
+	if sc.vue {
+		if !bytes.HasPrefix(src[at:], []byte("{{")) {
+			return at + 1
+		}
+		end := bytes.Index(src[at+2:], []byte("}}"))
+		if end < 0 {
+			return -1
+		}
+		return at + 2 + end + 2
+	}
+	return braceEnd(src, at)
+}
+
+// nextScriptTag returns where the first `<script` tag at or after src[from]
+// starts, or len(src). Results are cached, so the bodies between two script
+// tags share one search.
+func (sc *markupScanner) nextScriptTag(from int) int {
+	if sc.scriptCached && from >= sc.scriptFrom && from <= sc.scriptAt {
+		return sc.scriptAt
+	}
+	src := sc.src
+	at := len(src)
+	for j := from; j+1 < len(src); j++ {
+		if src[j] == '<' && isTagNamed(src, j+1, "script") {
+			at = j
+			break
+		}
+	}
+	sc.scriptCached, sc.scriptFrom, sc.scriptAt = true, from, at
+	return at
 }
 
 // skipExpression returns the index after the template expression starting
@@ -218,7 +293,16 @@ func (sc *markupScanner) skipBraces(at int) (next int, ok bool) {
 	if sc.bracesUnbalanced {
 		return 0, false
 	}
-	src := sc.src
+	if end := braceEnd(sc.src, at); end >= 0 {
+		return end, true
+	}
+	sc.bracesUnbalanced = true
+	return 0, false
+}
+
+// braceEnd returns the index after the `}` that matches src[at] == '{', read
+// as skipBraces describes, or -1.
+func braceEnd(src []byte, at int) int {
 	depth := 0
 	for i := at; i < len(src); i++ {
 		end := i
@@ -240,16 +324,15 @@ func (sc *markupScanner) skipBraces(at int) (next int, ok bool) {
 		case b == '}':
 			depth--
 			if depth == 0 {
-				return i + 1, true
+				return i + 1
 			}
 		}
 		if end < 0 {
-			break
+			return -1
 		}
 		i = end
 	}
-	sc.bracesUnbalanced = true
-	return 0, false
+	return -1
 }
 
 // skipQuoted returns the index of the quote that closes the string literal

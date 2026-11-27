@@ -203,6 +203,18 @@ func TestScriptContents(t *testing.T) {
 			lang:  langJavaScript, found: true,
 		},
 		{
+			name:  "Vue v-pre textarea keeps its {{ as text",
+			input: "<template><textarea v-pre>{{</textarea></template>\n<script setup>y; const s = \"}}\";</script>",
+			want:  openMask("<template><textarea v-pre>{{</textarea></template>") + "\n" + openMask("<script setup>") + "y; const s = \"}}\";" + closeMask("</script>"),
+			lang:  langJavaScript, found: true, vue: true,
+		},
+		{
+			name:  "Svelte title expression with a brace in a regular expression",
+			input: "<svelte:head><title>{(/[{]/).test(\"\")}</title></svelte:head>\n<script>y;const r=/[}]/;</script>",
+			want:  openMask("<svelte:head><title>{(/[{]/).test(\"\")}</title></svelte:head>") + "\n" + openMask("<script>") + "y;const r=/[}]/;" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
 			// Known limitation, pinned: after the stray `'`, title=" pairs with
 			// the `"` inside the later comment, and the script is read as part
 			// of that attribute value. See docs/diet.md.
@@ -304,6 +316,8 @@ func TestScriptContentsStaysLinear(t *testing.T) {
 		{name: "tags that each open a quote", repeat: "<a '"},
 		{name: "tags with alternating quotes", repeat: "<a '<b \""},
 		{name: "unclosed style tags (rawUnclosed)", repeat: "<style>"},
+		{name: "title bodies with an unclosed expression (rawExprOff)", repeat: "<title>{</title>"},
+		{name: "title bodies before one script tag (nextScriptTag cache)", repeat: "<title>{}</title>"},
 		{name: "slashes and classes in a Svelte expression", repeat: "(/["},
 	}
 	for _, tt := range tests {

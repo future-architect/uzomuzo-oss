@@ -237,6 +237,18 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-head-title@1.0.0", importPath: "p-head-title", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
+			name:     "Vue v-pre textarea keeps its {{ as text",
+			filename: "VPre.vue",
+			code:     "<template><textarea v-pre>{{</textarea></template>\n<script setup>import p from \"p-vpre\"; p.run(); const s = \"}}\";</script>",
+			purl:     "pkg:npm/p-vpre@1.0.0", importPath: "p-vpre", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "Svelte title expression with a brace in a regular expression",
+			filename: "TitleRegex.svelte",
+			code:     "<svelte:head><title>{(/[{]/).test(\"\")}</title></svelte:head>\n<script>import p from \"p-title-regex\";p.run();const r=/[}]/;</script>",
+			purl:     "pkg:npm/p-title-regex@1.0.0", importPath: "p-title-regex", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
 			name:     "upper-case style closing tag hides its CSS",
 			filename: "UpperStyle.vue",
 			code:     "<style>.a{content:\"<script>require('p-upper-style')</script>\"}</STYLE>\n<script>import q from 'p-kept'; q.run();</script>",
