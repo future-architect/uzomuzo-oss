@@ -231,6 +231,21 @@ func TestScriptContents(t *testing.T) {
 			lang:  langJavaScript, found: true,
 		},
 		{
+			name:  "Svelte nested template literal with a backtick inside ${}",
+			input: "{`outer ${`}<!--`}`}\n<script>y</script>\n<!-- end -->",
+			want:  openMask("{`outer ${`}<!--`}`}") + "\n" + openMask("<script>") + "y" + closeMask("</script>") + "\n" + openMask("<!-- end -->"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			// Known limitation, pinned: Vue v-pre is not tracked, so the `{{`
+			// in it is read as an interpolation that ends at the `}}` in the
+			// script, and the script is not read. See docs/diet.md.
+			name:  "limitation: Vue v-pre {{ runs into the script",
+			input: "<template><p v-pre>{{</p></template>\n<script setup>y; const s = \"}}\";</script>",
+			want:  openMask("<template><p v-pre>{{</p></template>") + "\n" + openMask("<script setup>y; const s = \"}}\";</script>"),
+			lang:  langJavaScript, vue: true,
+		},
+		{
 			// Known limitation, pinned: after the stray `'`, title=" pairs with
 			// the `"` inside the later comment, and the script is read as part
 			// of that attribute value. See docs/diet.md.
@@ -333,6 +348,8 @@ func TestScriptContentsStaysLinear(t *testing.T) {
 		{name: "tags with alternating quotes", repeat: "<a '<b \""},
 		{name: "unclosed style tags (rawUnclosed)", repeat: "<style>"},
 		{name: "slashes and classes in a Svelte expression", repeat: "(/["},
+		{name: "deeply nested template literals (maxTemplateDepth)", repeat: "{`${"},
+		{name: "many short template literals", repeat: "{`a${b}c`}"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

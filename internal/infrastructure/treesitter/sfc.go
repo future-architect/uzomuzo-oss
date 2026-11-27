@@ -183,7 +183,10 @@ func (sc *markupScanner) skipMarkupTag(at int) int {
 // skipExpression returns the index after the template expression starting
 // at src[at] == '{': `{{ ... }}` in Vue (ending at the first `}}`, as Vue's
 // own parser does), a brace-matched `{ ... }` in Svelte. ok is false when
-// src[at] starts no expression.
+// src[at] starts no expression. Vue's v-pre is not tracked: following
+// element nesting is beyond this scanner, so `<p v-pre>{{</p>` is read as
+// an interpolation running to the next `}}`, possibly inside a script block;
+// see docs/diet.md.
 func (sc *markupScanner) skipExpression(at int) (next int, ok bool) {
 	if !sc.vue {
 		return sc.skipBraces(at)
@@ -213,13 +216,28 @@ func (sc *markupScanner) skipBraces(at int) (next int, ok bool) {
 	if sc.bracesUnbalanced {
 		return 0, false
 	}
-	src := sc.src
-	depth := 0
+	if end := braceEnd(sc.src, at, 0); end >= 0 {
+		return end, true
+	}
+	sc.bracesUnbalanced = true
+	return 0, false
+}
+
+// maxTemplateDepth bounds how deeply template literals nest inside `${ }`
+// before braceEnd gives up; real code stays far below it, and the bound
+// keeps a file of nested backticks from growing the Go stack without limit.
+const maxTemplateDepth = 64
+
+// braceEnd returns the index after the `}` that matches src[at] == '{', read
+// as skipBraces describes, or -1. depth counts the template literals around
+// this expression.
+func braceEnd(src []byte, at, depth int) int {
+	braces := 0
 	for i := at; i < len(src); i++ {
 		end := i
 		switch b := src[i]; {
 		case b == '\'' || b == '"' || b == '`':
-			end = skipQuoted(src, i)
+			end = skipQuoted(src, i, depth)
 		case b == '/' && i+1 < len(src) && src[i+1] == '/':
 			end = bytes.IndexByte(src[i:], '\n')
 			if end >= 0 {
@@ -231,25 +249,26 @@ func (sc *markupScanner) skipBraces(at int) (next int, ok bool) {
 				end += i + 3
 			}
 		case b == '{':
-			depth++
+			braces++
 		case b == '}':
-			depth--
-			if depth == 0 {
-				return i + 1, true
+			braces--
+			if braces == 0 {
+				return i + 1
 			}
 		}
 		if end < 0 {
-			break
+			return -1
 		}
 		i = end
 	}
-	sc.bracesUnbalanced = true
-	return 0, false
+	return -1
 }
 
 // skipQuoted returns the index of the quote that closes the string literal
-// opening at src[at], or -1. Template literal `${}` parts are read as text.
-func skipQuoted(src []byte, at int) int {
+// opening at src[at], or -1. In a template literal, each `${ }` part is read
+// as an expression, so a backtick or `}` inside it, as in
+// `outer ${`inner`}`, does not end the literal.
+func skipQuoted(src []byte, at, depth int) int {
 	quote := src[at]
 	for i := at + 1; i < len(src); i++ {
 		switch src[i] {
@@ -257,6 +276,18 @@ func skipQuoted(src []byte, at int) int {
 			i++
 		case quote:
 			return i
+		case '$':
+			if quote != '`' || i+1 >= len(src) || src[i+1] != '{' {
+				continue
+			}
+			if depth >= maxTemplateDepth {
+				return -1
+			}
+			end := braceEnd(src, i+1, depth+1)
+			if end < 0 {
+				return -1
+			}
+			i = end - 1
 		}
 	}
 	return -1

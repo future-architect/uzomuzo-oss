@@ -255,6 +255,12 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-title-regex@1.0.0", importPath: "p-title-regex", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
+			name:     "Svelte nested template literal with a backtick inside ${}",
+			filename: "NestedTemplate.svelte",
+			code:     "{`outer ${`}<!--`}`}\n<script>import p from \"p-nested-template\"; p.run();</script>\n<!-- end -->",
+			purl:     "pkg:npm/p-nested-template@1.0.0", importPath: "p-nested-template", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
 			name:     "upper-case style closing tag hides its CSS",
 			filename: "UpperStyle.vue",
 			code:     "<style>.a{content:\"<script>require('p-upper-style')</script>\"}</STYLE>\n<script>import q from 'p-kept'; q.run();</script>",
@@ -362,25 +368,47 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 	}
 }
 
-// TestAnalyzer_SFCKnownLimitation pins a documented limitation on normal
-// input: a title body ends at the first `</title>`, even one inside a
-// template expression, so the `<!--` after it hides the real script and its
-// dependency is reported unused. See docs/diet.md.
+// TestAnalyzer_SFCKnownLimitation pins documented limitations on valid
+// input, where a used dependency is reported unused. See docs/diet.md.
 func TestAnalyzer_SFCKnownLimitation(t *testing.T) {
-	const purl = "pkg:npm/p-head-title@1.0.0"
-	dir := t.TempDir()
-	code := "<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>import p from \"p-head-title\";p.run()</script> <!-- end -->"
-	if err := os.WriteFile(filepath.Join(dir, "SvelteHeadTitle.svelte"), []byte(code), 0o644); err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name, filename, code, purl, importPath string
+	}{
+		{
+			// The title body ends at the `</title>` inside the string, and the
+			// `<!--` after it runs to the `-->` after the script.
+			name:       "closing tag inside a title expression",
+			filename:   "SvelteHeadTitle.svelte",
+			code:       "<svelte:head><title>{\"</title><!--\"}</title></svelte:head> <script>import p from \"p-head-title\";p.run()</script> <!-- end -->",
+			purl:       "pkg:npm/p-head-title@1.0.0",
+			importPath: "p-head-title",
+		},
+		{
+			// v-pre is not tracked: the `{{` is read as an interpolation that
+			// ends at the `}}` inside the script.
+			name:       "Vue v-pre {{ before a script holding }}",
+			filename:   "VPre.vue",
+			code:       "<template><p v-pre>{{</p></template>\n<script setup>import p from \"p-vpre-limit\"; p.run(); const s = \"}}\";</script>",
+			purl:       "pkg:npm/p-vpre-limit@1.0.0",
+			importPath: "p-vpre-limit",
+		},
 	}
-	analyzer := NewAnalyzer()
-	t.Cleanup(analyzer.Close)
-	result, err := analyzer.AnalyzeCoupling(context.Background(), dir, map[string][]string{purl: {"p-head-title"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := result[purl]; ok {
-		t.Errorf("coupling found for %s; the limitation is gone, so update docs/diet.md and this test", purl)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, tt.filename), []byte(tt.code), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			analyzer := NewAnalyzer()
+			t.Cleanup(analyzer.Close)
+			result, err := analyzer.AnalyzeCoupling(context.Background(), dir, map[string][]string{tt.purl: {tt.importPath}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := result[tt.purl]; ok {
+				t.Errorf("coupling found for %s; the limitation is gone, so update docs/diet.md and this test", tt.purl)
+			}
+		})
 	}
 }
 
