@@ -288,6 +288,31 @@ type DependencyEdge struct {
 	Requirement string `json:"requirement"`
 }
 
+// CargoRequirements represents the cargo requirements response.
+type CargoRequirements struct {
+	Cargo *CargoRequirementsData `json:"cargo"`
+}
+
+// CargoRequirementsData contains declared dependencies and feature definitions.
+type CargoRequirementsData struct {
+	Dependencies []CargoRequirementDependency `json:"dependencies"`
+	Features     []CargoFeature               `json:"features"`
+}
+
+// CargoRequirementDependency contains fields needed to scope a cargo graph.
+type CargoRequirementDependency struct {
+	Name         string `json:"name"`
+	Kind         string `json:"kind"`
+	Optional     bool   `json:"optional"`
+	PackageAlias string `json:"packageAlias"`
+}
+
+// CargoFeature describes one cargo feature and its implications.
+type CargoFeature struct {
+	Name    string   `json:"name"`
+	Implies []string `json:"implies"`
+}
+
 // SelfVersion returns the version of the SELF node, which is the version the
 // graph actually describes. It can differ from the requested version when the
 // graph came from a version fallback. Empty when r is nil or no SELF node

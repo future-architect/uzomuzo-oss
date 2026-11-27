@@ -116,7 +116,8 @@ func (c *DepsDevClient) FetchDependencies(ctx context.Context, purlStr string) (
 // of one package keep separate graphs. A graph recovered by the version
 // fallback is stored under the requested PURL; use SelfVersion for the version
 // it describes. PURLs that fail, return 404, or whose graph deps.dev reports
-// as unresolved are silently omitted from the result.
+// as unresolved are silently omitted from the result. Cargo graphs are
+// restricted to dependencies enabled by default features. See ADR-0038.
 //
 // DDD Layer: Infrastructure (parallel processing)
 func (c *DepsDevClient) FetchDependenciesBatch(ctx context.Context, purls []string) map[string]*DependenciesResponse {
@@ -146,11 +147,50 @@ func (c *DepsDevClient) FetchDependenciesBatch(ctx context.Context, purls []stri
 				return "", nil, false
 			}
 		}
+		parsed, parseErr := commonpurl.NewParser().Parse(purl)
+		if parseErr == nil && strings.EqualFold(parsed.Ecosystem(), "cargo") && resp.SelfVersion() != "" {
+			requirements, reqErr := c.fetchCargoRequirements(ctx, parsed, resp.SelfVersion())
+			if reqErr != nil {
+				slog.Debug("cargo_requirements_fetch_failed", "purl", purl, "error", reqErr)
+			} else {
+				resp = restrictCargoGraph(requirements, resp)
+			}
+		}
 		return purl, resp, true
 	})
 
 	slog.Debug("Dependencies batch completed", "requested", len(purls), "successful", len(results))
 	return results
+}
+
+func (c *DepsDevClient) fetchCargoRequirements(ctx context.Context, parsed *commonpurl.ParsedPURL, version string) (*CargoRequirements, error) {
+	system, name, err := toDepsDevSystemAndName(parsed)
+	if err != nil {
+		return nil, fmt.Errorf("cargo requirements: normalize PURL: %w", err)
+	}
+	endpoint := fmt.Sprintf("%s/systems/%s/packages/%s/versions/%s:requirements", c.baseURL, system, name, neturl.PathEscape(version))
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cargo requirements request (url=%s): %w", endpoint, err)
+	}
+	req.Header.Set("User-Agent", "uzomuzo-depsdev-client/1.0 (+https://github.com/future-architect/uzomuzo-oss)")
+	resp, err := c.client.Do(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("cargo requirements HTTP request failed (url=%s): %w", endpoint, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("cargo requirements HTTP %d (url=%s): %s", resp.StatusCode, endpoint, truncateString(string(body), 1024))
+	}
+	var result CargoRequirements
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("cargo requirements JSON decode failed (url=%s): %w", endpoint, err)
+	}
+	return &result, nil
 }
 
 // fetchDependenciesVersionFallback attempts to recover a dependency graph when
