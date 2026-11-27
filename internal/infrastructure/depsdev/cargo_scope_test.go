@@ -62,31 +62,43 @@ func TestRestrictCargoGraph_DefaultFeatures(t *testing.T) {
 
 func TestRestrictCargoGraph_RequirementSelection(t *testing.T) {
 	cases := []struct {
-		name        string
-		declaration string
-		runtimeEdge string
-		devEdge     string
-		want        []string
+		name          string
+		declaration   string
+		declarations  []CargoRequirementDependency
+		runtimeEdge   string
+		devEdge       string
+		secondVersion string
+		want          []string
 	}{
 		{name: "same crate with different requirements", declaration: "^1", runtimeEdge: "^1", devEdge: "^2", want: []string{"root", "x@1.0.0"}},
 		{name: "requirements are trimmed", declaration: " ^1 ", runtimeEdge: "^1", devEdge: "^2", want: []string{"root", "x@1.0.0"}},
 		{name: "mismatched requirement falls back to name", declaration: "1", runtimeEdge: "^1", devEdge: "^2", want: []string{"root", "x@1.0.0", "x@2.0.0", "child"}},
+		{name: "unmatched build requirement falls back to name", declarations: []CargoRequirementDependency{{Name: "x", Requirement: "^1"}, {Name: "x", Kind: "build", Requirement: "2"}}, runtimeEdge: "^1", devEdge: "^2", want: []string{"root", "x@1.0.0", "x@2.0.0", "child"}},
+		{name: "unmatched alias requirement falls back to name", declarations: []CargoRequirementDependency{{Name: "x", PackageAlias: "first", Requirement: "^1"}, {Name: "x", PackageAlias: "second", Requirement: "1.2"}}, runtimeEdge: "^1", devEdge: "^1.2", secondVersion: "1.2.0", want: []string{"root", "x@1.0.0", "x@1.2.0", "child"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			secondVersion := tc.secondVersion
+			if secondVersion == "" {
+				secondVersion = "2.0.0"
+			}
 			graph := &DependenciesResponse{
 				Nodes: []DependencyNode{
 					{VersionKey: DependencyVersionKey{Name: "root"}, Relation: "SELF"},
 					{VersionKey: DependencyVersionKey{Name: "x", Version: "1.0.0"}, Relation: "DIRECT"},
-					{VersionKey: DependencyVersionKey{Name: "x", Version: "2.0.0"}, Relation: "DIRECT"},
+					{VersionKey: DependencyVersionKey{Name: "x", Version: secondVersion}, Relation: "DIRECT"},
 					{VersionKey: DependencyVersionKey{Name: "child"}, Relation: "INDIRECT"},
 				},
 				Edges: []DependencyEdge{{FromNode: 0, ToNode: 1, Requirement: tc.runtimeEdge}, {FromNode: 0, ToNode: 2, Requirement: tc.devEdge}, {FromNode: 2, ToNode: 3}},
 			}
-			requirements := &CargoRequirements{Cargo: &CargoRequirementsData{Dependencies: []CargoRequirementDependency{
-				{Name: "x", Requirement: tc.declaration},
-				{Name: "x", Kind: "dev", Requirement: "^2"},
-			}}}
+			declarations := tc.declarations
+			if declarations == nil {
+				declarations = []CargoRequirementDependency{
+					{Name: "x", Requirement: tc.declaration},
+					{Name: "x", Kind: "dev", Requirement: "^2"},
+				}
+			}
+			requirements := &CargoRequirements{Cargo: &CargoRequirementsData{Dependencies: declarations}}
 			got := restrictCargoGraph(requirements, graph)
 			var names []string
 			for _, node := range got.Nodes {

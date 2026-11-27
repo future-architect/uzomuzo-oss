@@ -125,7 +125,7 @@ func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResp
 	}
 
 	adjacent := make([][]int, len(graph.Nodes))
-	matchedRequirement := make(map[string]bool)
+	matchedRequirements := make(map[string]map[string]bool)
 	for _, edge := range graph.Edges {
 		if edge.FromNode < 0 || edge.FromNode >= len(graph.Nodes) || edge.ToNode < 0 || edge.ToNode >= len(graph.Nodes) {
 			continue
@@ -133,8 +133,12 @@ func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResp
 		adjacent[edge.FromNode] = append(adjacent[edge.FromNode], edge.ToNode)
 		if edge.FromNode == self {
 			name := cargoName(graph.Nodes[edge.ToNode].VersionKey.Name)
-			if kept[name][strings.TrimSpace(edge.Requirement)] {
-				matchedRequirement[name] = true
+			requirement := strings.TrimSpace(edge.Requirement)
+			if kept[name][requirement] {
+				if matchedRequirements[name] == nil {
+					matchedRequirements[name] = make(map[string]bool)
+				}
+				matchedRequirements[name][requirement] = true
 			}
 		}
 	}
@@ -148,7 +152,7 @@ func restrictCargoGraph(requirements *CargoRequirements, graph *DependenciesResp
 		}
 		target := edge.ToNode
 		name := cargoName(graph.Nodes[target].VersionKey.Name)
-		if kept[name] == nil || matchedRequirement[name] && !kept[name][strings.TrimSpace(edge.Requirement)] {
+		if kept[name] == nil || len(matchedRequirements[name]) == len(kept[name]) && !kept[name][strings.TrimSpace(edge.Requirement)] {
 			continue
 		}
 		direct[target] = true
