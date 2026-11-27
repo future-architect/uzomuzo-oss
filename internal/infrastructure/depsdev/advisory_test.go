@@ -3,8 +3,11 @@ package depsdev
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -289,4 +292,203 @@ func TestFetchAdvisoriesBatchWithStatus_OutcomesAndCache(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFetchAdvisoriesBatchWithStatus_WarnsOnFetchFailures(t *testing.T) {
+	handler := &recordingAdvisoryLogHandler{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v3alpha/advisories/GHSA-ok":
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(AdvisoryDetail{AdvisoryKey: AdvisoryKey{ID: "GHSA-ok"}}); err != nil {
+				t.Errorf("encode advisory: %v", err)
+			}
+		case "/v3alpha/advisories/GHSA-gone":
+			http.NotFound(w, r)
+		case "/v3alpha/advisories/GHSA-fail1":
+			http.Error(w, "server error", http.StatusInternalServerError)
+		case "/v3alpha/advisories/GHSA-fail2":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte("{not json")) // write error surfaces as a decode failure in the client
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	client := NewDepsDevClient(&config.DepsDevConfig{BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0})
+	// Duplicates, padding and blank IDs must not count as failures.
+	details, missing := client.FetchAdvisoriesBatchWithStatus(context.Background(), []string{
+		"GHSA-ok", "GHSA-gone", "GHSA-fail1", "GHSA-fail2", " GHSA-fail1 ", "GHSA-ok", "", "  ",
+	})
+	if len(details) != 1 || details["GHSA-ok"] == nil {
+		t.Errorf("details = %v, want only GHSA-ok", details)
+	}
+	if len(missing) != 1 {
+		t.Errorf("missing = %v, want only GHSA-gone", missing)
+	} else if _, ok := missing["GHSA-gone"]; !ok {
+		t.Errorf("missing = %v, want only GHSA-gone", missing)
+	}
+
+	var warnings []slog.Record
+	for _, record := range handler.snapshot() {
+		if record.Level >= slog.LevelWarn {
+			warnings = append(warnings, record)
+		}
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("warning records = %d, want 1", len(warnings))
+	}
+	ints := make(map[string]int64)
+	warnings[0].Attrs(func(attr slog.Attr) bool {
+		if attr.Value.Kind() == slog.KindInt64 {
+			ints[attr.Key] = attr.Value.Int64()
+		}
+		return true
+	})
+	if got, ok := ints["failed"]; !ok || got != 2 {
+		t.Errorf("warning failed attribute = %d (present: %t), want 2", got, ok)
+	}
+	if got, ok := ints["unique"]; !ok || got != 4 {
+		t.Errorf("warning unique attribute = %d (present: %t), want 4", got, ok)
+	}
+}
+
+func TestFetchAdvisoriesBatchWithStatus_WarnsWithContextErrorWhenCanceled(t *testing.T) {
+	handler := &recordingAdvisoryLogHandler{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	client := NewDepsDevClient(&config.DepsDevConfig{
+		BaseURL:    "http://127.0.0.1:0",
+		MaxRetries: 0,
+	})
+	details, missing := client.FetchAdvisoriesBatchWithStatus(ctx, []string{
+		"GHSA-first", "GHSA-second", "GHSA-third",
+	})
+	if len(details) != 0 {
+		t.Errorf("details = %v, want empty", details)
+	}
+	if len(missing) != 0 {
+		t.Errorf("missing = %v, want empty", missing)
+	}
+
+	var warnings []slog.Record
+	for _, record := range handler.snapshot() {
+		if record.Level >= slog.LevelWarn {
+			warnings = append(warnings, record)
+		}
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("warning records = %d, want 1", len(warnings))
+	}
+	if warnings[0].Message != "advisory_detail_fetch_incomplete" {
+		t.Errorf("warning message = %q, want advisory_detail_fetch_incomplete", warnings[0].Message)
+	}
+
+	var failed, unique int64
+	var foundFailed, foundUnique, foundError bool
+	var loggedError error
+	warnings[0].Attrs(func(attr slog.Attr) bool {
+		switch attr.Key {
+		case "failed":
+			if attr.Value.Kind() == slog.KindInt64 {
+				failed = attr.Value.Int64()
+				foundFailed = true
+			}
+		case "unique":
+			if attr.Value.Kind() == slog.KindInt64 {
+				unique = attr.Value.Int64()
+				foundUnique = true
+			}
+		case "error":
+			if attr.Value.Kind() == slog.KindAny {
+				loggedError, foundError = attr.Value.Any().(error)
+			}
+		}
+		return true
+	})
+	if !foundFailed || failed != 3 {
+		t.Errorf("warning failed attribute = %d (int64: %t), want 3", failed, foundFailed)
+	}
+	if !foundUnique || unique != 3 {
+		t.Errorf("warning unique attribute = %d (int64: %t), want 3", unique, foundUnique)
+	}
+	if !foundError || !errors.Is(loggedError, context.Canceled) {
+		t.Errorf("warning error attribute = %v (error in KindAny: %t), want context.Canceled", loggedError, foundError)
+	}
+}
+
+func TestFetchAdvisoriesBatchWithStatus_NoWarnWithoutFailures(t *testing.T) {
+	handler := &recordingAdvisoryLogHandler{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v3alpha/advisories/GHSA-ok":
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(AdvisoryDetail{AdvisoryKey: AdvisoryKey{ID: "GHSA-ok"}}); err != nil {
+				t.Errorf("encode advisory: %v", err)
+			}
+		case "/v3alpha/advisories/GHSA-gone":
+			http.NotFound(w, r)
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	client := NewDepsDevClient(&config.DepsDevConfig{BaseURL: srv.URL, Timeout: 5e9, MaxRetries: 0})
+	details, missing := client.FetchAdvisoriesBatchWithStatus(context.Background(), []string{"GHSA-ok", "GHSA-gone"})
+	if len(details) != 1 || details["GHSA-ok"] == nil {
+		t.Errorf("details = %v, want only GHSA-ok", details)
+	}
+	if len(missing) != 1 {
+		t.Errorf("missing = %v, want only GHSA-gone", missing)
+	} else if _, ok := missing["GHSA-gone"]; !ok {
+		t.Errorf("missing = %v, want only GHSA-gone", missing)
+	}
+
+	for _, record := range handler.snapshot() {
+		if record.Level >= slog.LevelWarn {
+			t.Errorf("unexpected warning record: %s", record.Message)
+		}
+	}
+}
+
+type recordingAdvisoryLogHandler struct {
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func (h *recordingAdvisoryLogHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= slog.LevelDebug
+}
+
+func (h *recordingAdvisoryLogHandler) Handle(_ context.Context, record slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.records = append(h.records, record.Clone())
+	return nil
+}
+
+func (h *recordingAdvisoryLogHandler) WithAttrs(_ []slog.Attr) slog.Handler { return h }
+
+func (h *recordingAdvisoryLogHandler) WithGroup(_ string) slog.Handler { return h }
+
+func (h *recordingAdvisoryLogHandler) snapshot() []slog.Record {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]slog.Record(nil), h.records...)
 }

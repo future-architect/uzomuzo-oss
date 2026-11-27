@@ -36,6 +36,7 @@ type Client interface {
 	// or whose graph deps.dev reports as unresolved are omitted.
 	FetchDependenciesBatch(ctx context.Context, purls []string) map[string]*DependenciesResponse
 	// FetchAdvisoriesBatchWithStatus fetches advisory details and reports confirmed HTTP 404 IDs separately.
+	// IDs whose request failed, or was skipped after cancellation, are absent from both maps and reported in one WARN with a count.
 	FetchAdvisoriesBatchWithStatus(ctx context.Context, advisoryIDs []string) (map[string]*AdvisoryDetail, map[string]struct{})
 	// FetchTransitiveAdvisoryKeys fetches advisory keys for dependency graph nodes (excluding SELF).
 	// Returns a map of "name@version" -> []AdvisoryKey.

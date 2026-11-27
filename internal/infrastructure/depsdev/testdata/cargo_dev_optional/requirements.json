@@ -1,0 +1,128 @@
+{
+  "cargo": {
+    "dependencies": [
+      {
+        "name": "serde",
+        "requirement": "^1",
+        "kind": "normal",
+        "optional": false,
+        "packageAlias": "",
+        "usesDefaultFeatures": true,
+        "features": [],
+        "target": ""
+      },
+      {
+        "name": "regex",
+        "requirement": "^1",
+        "kind": "normal",
+        "optional": false,
+        "packageAlias": "",
+        "usesDefaultFeatures": true,
+        "features": [],
+        "target": ""
+      },
+      {
+        "name": "fastrand",
+        "requirement": "^2",
+        "kind": "normal",
+        "optional": false,
+        "packageAlias": "fast",
+        "usesDefaultFeatures": true,
+        "features": [],
+        "target": ""
+      },
+      {
+        "name": "log",
+        "requirement": "^0.4",
+        "kind": "normal",
+        "optional": true,
+        "packageAlias": "",
+        "usesDefaultFeatures": true,
+        "features": [],
+        "target": ""
+      },
+      {
+        "name": "indexmap",
+        "requirement": "^2",
+        "kind": "normal",
+        "optional": true,
+        "packageAlias": "",
+        "usesDefaultFeatures": true,
+        "features": [],
+        "target": ""
+      },
+      {
+        "name": "serde",
+        "requirement": "^1",
+        "kind": "dev",
+        "optional": false,
+        "packageAlias": "",
+        "usesDefaultFeatures": true,
+        "features": [
+          "derive"
+        ],
+        "target": ""
+      },
+      {
+        "name": "memchr",
+        "requirement": "^2",
+        "kind": "dev",
+        "optional": false,
+        "packageAlias": "",
+        "usesDefaultFeatures": true,
+        "features": [],
+        "target": ""
+      },
+      {
+        "name": "tar",
+        "requirement": "^0.4",
+        "kind": "dev",
+        "optional": false,
+        "packageAlias": "",
+        "usesDefaultFeatures": true,
+        "features": [],
+        "target": ""
+      },
+      {
+        "name": "rand",
+        "requirement": "^0.8",
+        "kind": "dev",
+        "optional": false,
+        "packageAlias": "",
+        "usesDefaultFeatures": true,
+        "features": [],
+        "target": ""
+      },
+      {
+        "name": "cc",
+        "requirement": "^1",
+        "kind": "build",
+        "optional": false,
+        "packageAlias": "",
+        "usesDefaultFeatures": true,
+        "features": [],
+        "target": ""
+      }
+    ],
+    "features": [
+      {
+        "name": "default",
+        "implies": [
+          "logging"
+        ]
+      },
+      {
+        "name": "logging",
+        "implies": [
+          "dep:log"
+        ]
+      },
+      {
+        "name": "preserve_order",
+        "implies": [
+          "dep:indexmap"
+        ]
+      }
+    ]
+  }
+}
