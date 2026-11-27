@@ -9,9 +9,8 @@ import (
 )
 
 // openMask and closeMask are what a masked opening or closing tag becomes:
-// spaces, with a newline at the byte next to the script body, and a semicolon
-// after the newline of a closing tag.
-func openMask(tag string) string  { return strings.Repeat(" ", len(tag)-1) + "\n" }
+// spaces, except that a closing tag starts with a newline and a semicolon.
+func openMask(tag string) string  { return strings.Repeat(" ", len(tag)) }
 func closeMask(tag string) string { return "\n;" + strings.Repeat(" ", len(tag)-2) }
 
 func TestScriptContents(t *testing.T) {
@@ -54,10 +53,40 @@ func TestScriptContents(t *testing.T) {
 			lang:  langJavaScript, found: true,
 		},
 		{
-			name:  "unterminated HTML comment hides the rest",
+			name:  "unterminated HTML comment does not hide later scripts",
 			input: "<!-- <script>x</script>",
-			want:  strings.Repeat(" ", len("<!-- <script>x</script>")),
-			lang:  langJavaScript,
+			want:  openMask("<!-- <script>") + "x" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "multibyte text and CRLF keep their bytes",
+			input: "\u3042\r\n<script>let s='\u65e5\u672c';</script>\r\n",
+			want:  "   \r\n" + openMask("<script>") + "let s='\u65e5\u672c';" + closeMask("</script>") + "\r\n",
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "tag with no closing bracket is read on as text",
+			input: "<p>x <y don't</p><script>y</script>",
+			want:  openMask("<p>x <y don't</p><script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "style with no closing tag is read on as text",
+			input: "<style>a{}<script>y</script>",
+			want:  openMask("<style>a{}<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "script inside textarea is text",
+			input: "<textarea><script>x</script></textarea><script>y</script>",
+			want:  openMask("<textarea><script>x</script></textarea><script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "capitalized component named like a raw-text tag is not skipped",
+			input: "<Title><script>y</script></Title>",
+			want:  openMask("<Title><script>") + "y" + closeMask("</script>") + openMask("</Title>"),
+			lang:  langJavaScript, found: true,
 		},
 		{
 			name:  "closing tag prefix inside the body",
@@ -93,6 +122,42 @@ func TestScriptContents(t *testing.T) {
 			name:  "unmatched brace is plain text",
 			input: "a { b<script>y</script>",
 			want:  strings.Repeat(" ", len("a { b")) + openMask("<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "Svelte expression string holding a script tag",
+			input: "<p>{\"<script>x</script>\"}</p><script>y</script>",
+			want:  openMask("<p>{\"<script>x</script>\"}</p><script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "Svelte expression with an escaped quote",
+			input: "{'it\\'s <!--'}<script>y</script>",
+			want:  openMask("{'it\\'s <!--'}<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "Svelte expression with a brace in a regular expression",
+			input: "{/[}]/.test('<!--')}<script>y</script>",
+			want:  openMask("{/[}]/.test('<!--')}<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "Svelte expression with a brace in a block comment",
+			input: "{/* } */ '<!--'}<script>y</script>",
+			want:  openMask("{/* } */ '<!--'}<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "Svelte expression with a brace in a line comment",
+			input: "{a // }\n '<!--'}<script>y</script>",
+			want:  openMask("{a // }") + "\n" + openMask(" '<!--'}<script>") + "y" + closeMask("</script>"),
+			lang:  langJavaScript, found: true,
+		},
+		{
+			name:  "Svelte expression with division is not a regular expression",
+			input: "{a / b / c}<script>y</script>",
+			want:  openMask("{a / b / c}<script>") + "y" + closeMask("</script>"),
 			lang:  langJavaScript, found: true,
 		},
 		{
@@ -137,16 +202,20 @@ func TestScriptContents(t *testing.T) {
 // flag: without it, each of the 1 MiB of `{` would rescan to the end of input.
 func TestScriptContentsUnmatchedBracesStayLinear(t *testing.T) {
 	input := strings.Repeat("{", 1<<20) + "<script>y</script>"
-	done := make(chan struct{})
+	type result struct {
+		got   []byte
+		found bool
+	}
+	done := make(chan result, 1)
 	go func() {
-		defer close(done)
 		got, _, found := scriptContents([]byte(input), false)
-		if !found || !strings.Contains(string(got), "y") {
-			t.Errorf("script after unmatched braces not kept: found=%v", found)
-		}
+		done <- result{got, found}
 	}()
 	select {
-	case <-done:
+	case r := <-done:
+		if !r.found || !strings.HasSuffix(string(r.got), "y\n;       ") {
+			t.Errorf("script after unmatched braces not kept: found=%v", r.found)
+		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("scriptContents did not finish within 10s on unmatched braces")
 	}
@@ -156,16 +225,20 @@ func TestScriptContentsUnmatchedBracesStayLinear(t *testing.T) {
 // without it, each `{{` would search to the end of input for `}}`.
 func TestScriptContentsUnclosedVueInterpolationsStayLinear(t *testing.T) {
 	input := strings.Repeat("{{", 1<<19) + "<script>y</script>"
-	done := make(chan struct{})
+	type result struct {
+		got   []byte
+		found bool
+	}
+	done := make(chan result, 1)
 	go func() {
-		defer close(done)
 		got, _, found := scriptContents([]byte(input), true)
-		if !found || !strings.Contains(string(got), "y") {
-			t.Errorf("script after unclosed interpolations not kept: found=%v", found)
-		}
+		done <- result{got, found}
 	}()
 	select {
-	case <-done:
+	case r := <-done:
+		if !r.found || !strings.HasSuffix(string(r.got), "y\n;       ") {
+			t.Errorf("script after unclosed interpolations not kept: found=%v", r.found)
+		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("scriptContents did not finish within 10s on unclosed interpolations")
 	}

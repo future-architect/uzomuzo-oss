@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -78,6 +79,9 @@ func TestAnalyzer_JSTSSourceExtensions(t *testing.T) {
 
 func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 	const controlPURL = "pkg:npm/p-control@1.0.0"
+	// keptPURL is imported by the real script block of the "not read" cases,
+	// so each also checks that skipping the markup did not drop that block.
+	const keptPURL = "pkg:npm/p-kept@1.0.0"
 	tests := []struct {
 		name        string
 		filename    string
@@ -110,7 +114,7 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 		{
 			name:     "Vue type-only import has no runtime coupling",
 			filename: "App.vue",
-			code:     "<script setup lang=\"ts\">import type { T } from 'p-type-only'; const a: T = 1;</script>",
+			code:     "<script setup lang=\"ts\">import type { T } from 'p-type-only'; import q from 'p-kept'; const a: T = q.run();</script>",
 			purl:     "pkg:npm/p-type-only@1.0.0", importPath: "p-type-only",
 		},
 		{
@@ -140,7 +144,7 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 		{
 			name:     "script inside an HTML comment is not read",
 			filename: "Commented.vue",
-			code:     "<!-- <script>import p from 'p-commented'; p.run();</script> --><script>const x = 1;</script>",
+			code:     "<!-- <script>import p from 'p-commented'; p.run();</script> --><script>import q from 'p-kept'; q.run();</script>",
 			purl:     "pkg:npm/p-commented@1.0.0", importPath: "p-commented",
 		},
 		{
@@ -164,7 +168,7 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 		{
 			name:     "script text inside a style body is not read",
 			filename: "Styled.vue",
-			code:     "<style>.a::before { content: \"<script>require('p-style')</script>\"; }</style><script>const x = 1;</script>",
+			code:     "<style>.a::before { content: \"<script>require('p-style')</script>\"; }</style><script>import q from 'p-kept'; q.run();</script>",
 			purl:     "pkg:npm/p-style@1.0.0", importPath: "p-style",
 		},
 		{
@@ -182,7 +186,7 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 		{
 			name:     "script text inside a Svelte expression is not read",
 			filename: "Expr.svelte",
-			code:     "<script>const x = 1;</script><p>{\"<script>require('p-expr')</script>\"}</p>",
+			code:     "<script>import q from 'p-kept'; q.run();</script><p>{\"<script>require('p-expr')</script>\"}</p>",
 			purl:     "pkg:npm/p-expr@1.0.0", importPath: "p-expr",
 		},
 		{
@@ -194,7 +198,7 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 		{
 			name:     "script text inside textarea and title is not read",
 			filename: "Raw.vue",
-			code:     "<template><textarea><script>require('p-raw')</script></textarea><title><script>require('p-raw')</script></title></template><script>const x = 1;</script>",
+			code:     "<template><textarea><script>require('p-raw')</script></textarea><title><script>require('p-raw')</script></title></template><script>import q from 'p-kept'; q.run();</script>",
 			purl:     "pkg:npm/p-raw@1.0.0", importPath: "p-raw",
 		},
 		{
@@ -210,9 +214,27 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 			purl:     "pkg:npm/p-brace-interp@1.0.0", importPath: "p-brace-interp", wantPresent: true, wantFiles: 1, wantCalls: 1,
 		},
 		{
+			name:     "brace in a regular expression does not end a Svelte expression",
+			filename: "Regex.svelte",
+			code:     "<p>{/[}]/.test('<!--')}</p>\n<script>import p from 'p-regex'; p.run();</script>",
+			purl:     "pkg:npm/p-regex@1.0.0", importPath: "p-regex", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "brace in a comment does not end a Svelte expression",
+			filename: "BlockComment.svelte",
+			code:     "<p>{/* } */ '<!--'}</p>\n<script>import p from 'p-block-comment'; p.run();</script>",
+			purl:     "pkg:npm/p-block-comment@1.0.0", importPath: "p-block-comment", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
+			name:     "tag with no closing bracket does not hide later scripts",
+			filename: "Broken.vue",
+			code:     "<p>x <y don't</p><script>import p from 'p-broken'; p.run()</script>",
+			purl:     "pkg:npm/p-broken@1.0.0", importPath: "p-broken", wantPresent: true, wantFiles: 1, wantCalls: 1,
+		},
+		{
 			name:     "markup outside script has no coupling",
 			filename: "Markup.vue",
-			code:     "<template><div>require('p-markup')</div></template><script>const x = 1;</script>",
+			code:     "<template><div>require('p-markup')</div></template><script>import q from 'p-kept'; q.run();</script>",
 			purl:     "pkg:npm/p-markup@1.0.0", importPath: "p-markup",
 		},
 	}
@@ -229,6 +251,7 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 					t.Fatal(err)
 				}
 				importPaths[controlPURL] = []string{"p-control"}
+				importPaths[keptPURL] = []string{"p-kept"}
 			}
 
 			analyzer := NewAnalyzer()
@@ -247,6 +270,15 @@ func TestAnalyzer_VueSvelteScriptBlocks(t *testing.T) {
 				}
 				if control.ImportFileCount != 1 || control.CallSiteCount != 1 || control.IsUnused {
 					t.Errorf("control coupling = (files %d, calls %d, unused %v), want (1, 1, false)", control.ImportFileCount, control.CallSiteCount, control.IsUnused)
+				}
+				if strings.Contains(tt.code, "p-kept") {
+					kept, ok := result[keptPURL]
+					if !ok {
+						t.Fatalf("missing coupling for the real script's %s", keptPURL)
+					}
+					if kept.ImportFileCount != 1 || kept.CallSiteCount != 1 || kept.IsUnused {
+						t.Errorf("kept coupling = (files %d, calls %d, unused %v), want (1, 1, false)", kept.ImportFileCount, kept.CallSiteCount, kept.IsUnused)
+					}
 				}
 				return
 			}
